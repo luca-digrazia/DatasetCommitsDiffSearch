@@ -22,11 +22,11 @@
  */
 package com.oracle.max.graal.nodes;
 
+import com.oracle.max.cri.ci.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.calc.*;
 import com.oracle.max.graal.nodes.spi.*;
 import com.oracle.max.graal.nodes.type.*;
-import com.sun.cri.ci.*;
 
 /**
  * The {@code PhiNode} represents the merging of dataflow in the graph. It refers to a merge
@@ -36,7 +36,7 @@ public final class PhiNode extends FloatingNode implements Canonicalizable, Node
 
     @Input(notDataflow = true) private MergeNode merge;
 
-    @Input private final NodeInputList<ValueNode> values = new NodeInputList<ValueNode>(this);
+    @Input private final NodeInputList<ValueNode> values = new NodeInputList<>(this);
 
     public MergeNode merge() {
         return merge;
@@ -49,10 +49,6 @@ public final class PhiNode extends FloatingNode implements Canonicalizable, Node
     }
 
     private final PhiType type;
-
-    private PhiNode(CiKind kind, PhiType type) {
-        this(kind, null, type);
-    }
 
     public PhiNode(CiKind kind, MergeNode merge, PhiType type) {
         super(StampFactory.forKind(kind));
@@ -104,7 +100,7 @@ public final class PhiNode extends FloatingNode implements Canonicalizable, Node
         values.set(i, x);
     }
 
-    public ValueNode valueAt(FixedNode pred) {
+    public ValueNode valueAt(EndNode pred) {
         return valueAt(merge().phiPredecessorIndex(pred));
     }
 
@@ -164,74 +160,14 @@ public final class PhiNode extends FloatingNode implements Canonicalizable, Node
     }
 
     @Override
-    public Node canonical(CanonicalizerTool tool) {
+    public ValueNode canonical(CanonicalizerTool tool) {
         ValueNode singleValue = singleValue();
 
         if (singleValue != null) {
             return singleValue;
         }
 
-        return canonicalizeMaterializationPhi();
-    }
-
-    private Node canonicalizeMaterializationPhi() {
-        if (merge().endCount() != 2 || merge() instanceof LoopBeginNode) {
-            return this;
-        }
-        if (merge().usages().size() > 1) { // TODO(gd) disable canonicalization of multiple conditional while we are not able to fuse them and the potentially leftover If in the backend
-            return this;
-        }
-
-        Node end0 = merge().endAt(0);
-        Node end1 = merge().endAt(1);
-        Node endPred0 = end0.predecessor();
-        Node endPred1 = end1.predecessor();
-        if (!(endPred0 instanceof BeginNode) || !(endPred1 instanceof BeginNode)) {
-            return this;
-        }
-        if (endPred0.predecessor() != endPred1.predecessor() || !(endPred0.predecessor() instanceof IfNode)) {
-            return this;
-        }
-
-        // Get true/false value.
-        IfNode ifNode = (IfNode) endPred0.predecessor();
-        boolean inverted = ifNode.trueSuccessor() == endPred1;
-        ValueNode trueValue = valueAt(inverted ? 1 : 0);
-        ValueNode falseValue = valueAt(inverted ? 0 : 1);
-        if (trueValue.kind() != falseValue.kind()) {
-            return this;
-        }
-
-        // Only allow int constants.
-        if (trueValue.kind() != CiKind.Int || !trueValue.isConstant() || !falseValue.isConstant()) {
-            return this;
-        }
-
-        ConstantNode trueConstantNode = (ConstantNode) trueValue;
-        ConstantNode falseConstantNode = (ConstantNode) falseValue;
-        BooleanNode compare = ifNode.compare();
-        removeIfNode(ifNode);
-        return MaterializeNode.create(compare, ifNode.graph(), trueConstantNode, falseConstantNode);
-    }
-
-    private void removeIfNode(IfNode ifNode) {
-        FixedNode next = merge().next();
-        MergeNode merge = this.merge;
-        EndNode end1 = merge.endAt(0);
-        EndNode end2 = merge.endAt(1);
-        BeginNode trueSuccessor = ifNode.trueSuccessor();
-        BeginNode falseSuccessor = ifNode.falseSuccessor();
-        merge().setNext(null);
-        ifNode.setTrueSuccessor(null);
-        ifNode.setFalseSuccessor(null);
-        ifNode.replaceAndDelete(next);
-        updateUsages(this.merge, null);
-        this.merge = null;
-        merge.safeDelete();
-        trueSuccessor.safeDelete();
-        falseSuccessor.safeDelete();
-        end1.safeDelete();
-        end2.safeDelete();
+        return this;
     }
 
     public ValueNode firstValue() {

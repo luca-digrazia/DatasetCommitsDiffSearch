@@ -63,13 +63,14 @@ public class GraphUtil {
             FixedNode next = begin.next();
             begin.safeDelete();
             killCFG(next);
-        } else if (merge instanceof LoopBeginNode && ((LoopBeginNode) merge).loopEnds().isEmpty()) { // not a loop anymore
+        } else if (merge instanceof LoopBeginNode && ((LoopBeginNode) merge).loopEnds().count() == 0) { // not a loop anymore
             ((StructuredGraph) end.graph()).reduceDegenerateLoopBegin((LoopBeginNode) merge);
         } else if (merge.phiPredecessorCount() == 1) { // not a merge anymore
             ((StructuredGraph) end.graph()).reduceTrivialMerge(merge);
         }
     }
 
+    // TODO(tw): Factor this code with other branch deletion code.
     public static void propagateKill(Node node) {
         if (node != null && node.isAlive()) {
             List<Node> usagesSnapshot = node.usages().filter(isA(FloatingNode.class).or(CallTargetNode.class)).snapshot();
@@ -77,7 +78,7 @@ public class GraphUtil {
             // null out remaining usages
             node.replaceAtUsages(null);
             node.replaceAtPredecessors(null);
-            killUnusedFloatingInputs(node);
+            node.safeDelete();
 
             for (Node usage : usagesSnapshot) {
                 if (!usage.isDeleted()) {
@@ -87,17 +88,6 @@ public class GraphUtil {
                         propagateKill(usage);
                     }
                 }
-            }
-        }
-    }
-
-    public static void killUnusedFloatingInputs(Node node) {
-        List<FloatingNode> floatingInputs = node.inputs().filter(FloatingNode.class).snapshot();
-        node.safeDelete();
-
-        for (FloatingNode in : floatingInputs) {
-            if (in.usages().isEmpty()) {
-                killUnusedFloatingInputs(in);
             }
         }
     }

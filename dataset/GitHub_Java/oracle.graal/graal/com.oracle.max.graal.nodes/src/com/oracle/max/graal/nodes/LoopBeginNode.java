@@ -83,7 +83,6 @@ public class LoopBeginNode extends MergeNode implements Node.IterableNodeType, L
                     le.setEndIndex(leIdx - 1);
                 }
             }
-            nextEndIndex--;
         } else {
             super.deleteEnd(end);
         }
@@ -99,7 +98,7 @@ public class LoopBeginNode extends MergeNode implements Node.IterableNodeType, L
         if (pred instanceof LoopEndNode) {
             LoopEndNode loopEnd = (LoopEndNode) pred;
             if (loopEnd.loopBegin() == this) {
-                assert loopEnd.endIndex() < loopEnds().count() : "Invalid endIndex : " + loopEnd;
+                assert loopEnd.endIndex() < loopEnds().count();
                 return loopEnd.endIndex() + forwardEndCount();
             }
         } else {
@@ -139,10 +138,5 @@ public class LoopBeginNode extends MergeNode implements Node.IterableNodeType, L
 
     public int nextEndIndex() {
         return nextEndIndex++;
-    }
-
-    @Override
-    public void simplify(SimplifierTool tool) {
-        // nothing yet
     }
 }

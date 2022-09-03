@@ -44,8 +44,6 @@ public final class FrameState extends Node implements FrameStateAccess, Node.Ite
 
     private boolean rethrowException;
 
-    private boolean duringCall;
-
     /**
      * This BCI should be used for frame states that are built for code with no meaningful BCI.
      */
@@ -94,7 +92,7 @@ public final class FrameState extends Node implements FrameStateAccess, Node.Ite
      * @param stackSize size of the stack
      * @param rethrowException if true the VM should re-throw the exception on top of the stack when deopt'ing using this framestate
      */
-    public FrameState(RiResolvedMethod method, int bci, int localsSize, int stackSize, boolean rethrowException, boolean duringCall) {
+    public FrameState(RiResolvedMethod method, int bci, int localsSize, int stackSize, boolean rethrowException) {
         assert stackSize >= 0;
         this.method = method;
         this.bci = bci;
@@ -103,11 +101,10 @@ public final class FrameState extends Node implements FrameStateAccess, Node.Ite
         this.values = new NodeInputList<>(this, localsSize + stackSize);
         this.virtualObjectMappings = new NodeInputList<>(this);
         this.rethrowException = rethrowException;
-        this.duringCall = duringCall;
         assert !rethrowException || stackSize == 1 : "must have exception on top of the stack";
     }
 
-    public FrameState(RiResolvedMethod method, int bci, ValueNode[] locals, ValueNode[] stack, int stackSize, boolean rethrowException, boolean duringCall) {
+    public FrameState(RiResolvedMethod method, int bci, ValueNode[] locals, ValueNode[] stack, int stackSize, boolean rethrowException) {
         this.method = method;
         this.bci = bci;
         this.localsSize = locals.length;
@@ -122,7 +119,6 @@ public final class FrameState extends Node implements FrameStateAccess, Node.Ite
         this.values = new NodeInputList<>(this, newValues);
         this.virtualObjectMappings = new NodeInputList<>(this);
         this.rethrowException = rethrowException;
-        this.duringCall = duringCall;
         assert !rethrowException || stackSize == 1 : "must have exception on top of the stack";
     }
 
@@ -149,14 +145,6 @@ public final class FrameState extends Node implements FrameStateAccess, Node.Ite
 
     public boolean rethrowException() {
         return rethrowException;
-    }
-
-    public boolean duringCall() {
-        return duringCall;
-    }
-
-    public void setDuringCall(boolean b) {
-        this.duringCall = b;
     }
 
     public RiResolvedMethod method() {
@@ -188,7 +176,7 @@ public final class FrameState extends Node implements FrameStateAccess, Node.Ite
     }
 
     public FrameState duplicate(int newBci, boolean duplicateOuter) {
-        FrameState other = graph().add(new FrameState(method, newBci, localsSize, stackSize, rethrowException, duringCall));
+        FrameState other = graph().add(new FrameState(method, newBci, localsSize, stackSize, rethrowException));
         other.values.setAll(values);
         other.virtualObjectMappings.setAll(virtualObjectMappings);
         FrameState newOuterFrameState = outerFrameState();
@@ -212,7 +200,7 @@ public final class FrameState extends Node implements FrameStateAccess, Node.Ite
     public FrameState duplicateModified(int newBci, boolean newRethrowException, CiKind popKind, ValueNode... pushedValues) {
         int popSlots = popKind == CiKind.Void ? 0 : isTwoSlot(popKind) ? 2 : 1;
         int pushSlots = pushedValues.length;
-        FrameState other = graph().add(new FrameState(method, newBci, localsSize, stackSize - popSlots + pushSlots, newRethrowException, false));
+        FrameState other = graph().add(new FrameState(method, newBci, localsSize, stackSize - popSlots + pushSlots, newRethrowException));
         for (int i = 0; i < localsSize; i++) {
             other.setValueAt(i, localAt(i));
         }
@@ -611,7 +599,6 @@ public final class FrameState extends Node implements FrameStateAccess, Node.Ite
         }
         properties.put("stack", str.toString());
         properties.put("rethrowException", rethrowException);
-        properties.put("duringCall", duringCall);
         return properties;
     }
 

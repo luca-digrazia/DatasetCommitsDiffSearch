@@ -48,7 +48,7 @@ public abstract class PostOrderNodeIterator<T extends MergeableState<T>> {
         FixedNode current = start;
 
         do {
-            if (current instanceof InvokeWithExceptionNode) {
+            if (current instanceof Invoke) {
                 invoke((Invoke) current);
                 queueSuccessors(current, null);
                 current = nextQueuedNode();

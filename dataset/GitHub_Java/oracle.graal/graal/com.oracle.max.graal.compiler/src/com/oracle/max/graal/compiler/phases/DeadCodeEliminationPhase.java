@@ -22,112 +22,116 @@
  */
 package com.oracle.max.graal.compiler.phases;
 
-import com.oracle.max.graal.compiler.*;
-import com.oracle.max.graal.compiler.gen.*;
-import com.oracle.max.graal.compiler.ir.*;
+import com.oracle.max.graal.debug.*;
 import com.oracle.max.graal.graph.*;
+import com.oracle.max.graal.nodes.*;
 
 
 public class DeadCodeEliminationPhase extends Phase {
 
-    private NodeBitMap alive;
-    private NodeWorklist worklist;
-    private Graph graph;
-
-    public int deletedNodeCount;
+    private NodeFlood flood;
 
     @Override
-    protected void run(Graph graph) {
-        this.graph = graph;
-        this.alive = graph.createNodeBitMap();
-        this.worklist = graph.createNodeWorklist();
+    protected void run(StructuredGraph graph) {
+        this.flood = graph.createNodeFlood();
 
-        worklist.add(graph.start());
-
+        flood.add(graph.start());
         iterateSuccessors();
-        disconnectCFGNodes();
+        disconnectCFGNodes(graph);
+        iterateInputs(graph);
+        deleteNodes(graph);
 
-        iterateInputs();
-        disconnectNonCFGNodes();
-
-        deleteCFGNodes();
-        deleteNonCFGNodes();
-
-        new PhiSimplifier(graph);
-
-        if (C1XOptions.TraceDeadCodeElimination) {
-            System.out.printf("dead code elimination: deleted %d nodes\n", deletedNodeCount);
+        // remove chained Merges
+        for (MergeNode merge : graph.getNodes(MergeNode.class)) {
+            if (merge.forwardEndCount() == 1 && !(merge instanceof LoopBeginNode)) {
+                replacePhis(merge);
+                EndNode endNode = merge.forwardEndAt(0);
+                FixedNode next = merge.next();
+                merge.safeDelete();
+                endNode.replaceAndDelete(next);
+            }
         }
-    }
-
-    private static boolean isCFG(Node n) {
-        return n != null && ((n instanceof Instruction) || n == n.graph().start());
     }
 
     private void iterateSuccessors() {
-        for (Node current : worklist) {
-            for (Node successor : current.successors()) {
-                worklist.add(successor);
+        for (Node current : flood) {
+            if (current instanceof EndNode) {
+                EndNode end = (EndNode) current;
+                flood.add(end.merge());
+            } else {
+                for (Node successor : current.successors()) {
+                    flood.add(successor);
+                }
             }
         }
     }
 
-    private void disconnectCFGNodes() {
-        for (Node node : graph.getNodes()) {
-            if (node != Node.Null && !worklist.isMarked(node) && isCFG(node)) {
-                // iterate backwards so that the predecessor indexes in removePhiPredecessor are correct
-                for (int i = node.successors().size() - 1; i >= 0; i--) {
-                    Node successor = node.successors().get(i);
-                    if (successor != Node.Null && worklist.isMarked(successor)) {
-                        if (successor instanceof Merge) {
-                            ((Merge) successor).removePhiPredecessor(node);
-                        }
+    private void disconnectCFGNodes(StructuredGraph graph) {
+        for (EndNode node : graph.getNodes(EndNode.class)) {
+            if (!flood.isMarked(node)) {
+                MergeNode merge = node.merge();
+                if (merge != null && flood.isMarked(merge)) {
+                    // We are a dead end node leading to a live merge.
+                    merge.removeEnd(node);
+                }
+            }
+        }
+        for (LoopBeginNode loop : graph.getNodes(LoopBeginNode.class)) {
+            if (flood.isMarked(loop)) {
+                boolean reachable = false;
+                for (LoopEndNode end : loop.loopEnds()) {
+                    if (flood.isMarked(end)) {
+                        reachable = true;
+                        break;
                     }
                 }
-                node.successors().clearAll();
-                node.inputs().clearAll();
-            }
-        }
-    }
-
-    private void deleteCFGNodes() {
-        for (Node node : graph.getNodes()) {
-            if (node != Node.Null && !worklist.isMarked(node) && isCFG(node)) {
-                node.delete();
-                deletedNodeCount++;
-            }
-        }
-    }
-
-    private void iterateInputs() {
-        for (Node node : graph.getNodes()) {
-            if (node != Node.Null && worklist.isMarked(node)) {
-                for (Node input : node.inputs()) {
-                    worklist.add(input);
+                if (!reachable) {
+                    Debug.log("Removing loop with unreachable end: %s", loop);
+                    for (LoopEndNode end : loop.loopEnds().snapshot()) {
+                        loop.removeEnd(end);
+                    }
+                    graph.reduceDegenerateLoopBegin(loop);
                 }
             }
         }
-        for (Node current : worklist) {
+    }
+
+    private static void replacePhis(MergeNode merge) {
+        for (PhiNode phi : merge.phis().snapshot()) {
+            ((StructuredGraph) merge.graph()).replaceFloating(phi, phi.valueAt(0));
+        }
+    }
+
+    private void deleteNodes(StructuredGraph graph) {
+        for (Node node : graph.getNodes()) {
+            if (!flood.isMarked(node)) {
+                node.clearInputs();
+                node.clearSuccessors();
+            }
+        }
+        for (Node node : graph.getNodes()) {
+            if (!flood.isMarked(node)) {
+                node.safeDelete();
+            }
+        }
+    }
+
+    private void iterateInputs(StructuredGraph graph) {
+        for (Node node : graph.getNodes()) {
+            if (node instanceof LocalNode) {
+                flood.add(node);
+            }
+            if (flood.isMarked(node)) {
+                for (Node input : node.inputs()) {
+                    flood.add(input);
+                }
+            }
+        }
+        for (Node current : flood) {
             for (Node input : current.inputs()) {
-                worklist.add(input);
+                flood.add(input);
             }
         }
     }
 
-    private void disconnectNonCFGNodes() {
-        for (Node node : graph.getNodes()) {
-            if (node != Node.Null && !worklist.isMarked(node) && !isCFG(node)) {
-                node.inputs().clearAll();
-            }
-        }
-    }
-
-    private void deleteNonCFGNodes() {
-        for (Node node : graph.getNodes()) {
-            if (node != Node.Null && !worklist.isMarked(node) && !isCFG(node)) {
-                node.delete();
-                deletedNodeCount++;
-            }
-        }
-    }
 }

@@ -129,7 +129,6 @@ public final class InvokeNode extends AbstractStateSplit implements Node.Iterabl
                 this.replaceAtPredecessors(node);
                 this.replaceAtUsages(null);
                 GraphUtil.killCFG(this);
-                return;
             } else {
                 ((StructuredGraph) graph()).replaceFixed(this, node);
             }

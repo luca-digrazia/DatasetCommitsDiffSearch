@@ -24,12 +24,12 @@ package com.oracle.max.graal.compiler.graph;
 
 import java.util.*;
 
-import com.oracle.max.graal.compiler.ir.*;
+import com.oracle.max.graal.nodes.*;
 
 public interface MergeableState <T> {
     T clone();
-    boolean merge(Merge merge, Collection<T> withStates);
-    void loopBegin(LoopBegin loopBegin);
-    void loopEnd(LoopEnd loopEnd, T loopEndState);
+    boolean merge(MergeNode merge, Collection<T> withStates);
+    void loopBegin(LoopBeginNode loopBegin);
+    void loopEnds(LoopBeginNode loopBegin, Collection<T> loopEndStates);
     void afterSplit(FixedNode node);
 }

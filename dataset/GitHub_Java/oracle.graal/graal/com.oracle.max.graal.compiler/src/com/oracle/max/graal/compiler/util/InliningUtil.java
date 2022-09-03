@@ -28,9 +28,7 @@ import java.util.concurrent.*;
 
 import com.oracle.max.cri.ci.*;
 import com.oracle.max.cri.ri.*;
-import com.oracle.max.cri.ri.RiType.Representation;
 import com.oracle.max.graal.compiler.*;
-import com.oracle.max.graal.compiler.phases.*;
 import com.oracle.max.graal.cri.*;
 import com.oracle.max.graal.debug.*;
 import com.oracle.max.graal.graph.*;
@@ -128,7 +126,6 @@ public class InliningUtil {
         @Override
         public void inline(StructuredGraph compilerGraph, GraalRuntime runtime, final InliningCallback callback) {
             StructuredGraph graph = getGraph(concrete, callback);
-            assert !IntrinsificationPhase.canIntrinsify(invoke, concrete, runtime);
             InliningUtil.inline(invoke, graph, true);
         }
 
@@ -171,25 +168,17 @@ public class InliningUtil {
         public void inline(StructuredGraph graph, GraalRuntime runtime, InliningCallback callback) {
             // receiver null check must be before the type check
             InliningUtil.receiverNullCheck(invoke);
-            ValueNode receiver = invoke.callTarget().receiver();
-            ReadHubNode objectClass = graph.add(new ReadHubNode(receiver));
+            ReadHubNode objectClass = graph.add(new ReadHubNode(invoke.callTarget().receiver()));
             IsTypeNode isTypeNode = graph.unique(new IsTypeNode(objectClass, type));
             FixedGuardNode guard = graph.add(new FixedGuardNode(isTypeNode));
-            AnchorNode anchor = graph.add(new AnchorNode());
             assert invoke.predecessor() != null;
-
-            ConstantNode typeConst = graph.unique(ConstantNode.forCiConstant(type.getEncoding(Representation.ObjectHub), runtime, graph));
-            CheckCastNode checkCast = graph.unique(new CheckCastNode(anchor, typeConst, type, receiver));
-            invoke.callTarget().replaceFirstInput(receiver, checkCast);
 
             graph.addBeforeFixed(invoke.node(), objectClass);
             graph.addBeforeFixed(invoke.node(), guard);
-            graph.addBeforeFixed(invoke.node(), anchor);
 
             Debug.log("inlining 1 method using 1 type check");
 
             StructuredGraph calleeGraph = getGraph(concrete, callback);
-            assert !IntrinsificationPhase.canIntrinsify(invoke, concrete, runtime);
             InliningUtil.inline(invoke, calleeGraph, false);
         }
 
@@ -245,9 +234,9 @@ public class InliningUtil {
             // receiver null check must be the first node
             InliningUtil.receiverNullCheck(invoke);
             if (numberOfMethods > 1 || shouldFallbackToInvoke()) {
-                inlineMultipleMethods(graph, runtime, callback, numberOfMethods, hasReturnValue);
+                inlineMultipleMethods(graph, callback, numberOfMethods, hasReturnValue);
             } else {
-                inlineSingleMethod(graph, runtime, callback);
+                inlineSingleMethod(graph, callback);
             }
 
             Debug.log("inlining %d methods with %d type checks and falling back to %s if violated", numberOfMethods, types.length, shouldFallbackToInvoke() ? "invocation" : "deoptimization");
@@ -257,13 +246,13 @@ public class InliningUtil {
             return notRecordedTypeProbability > 0;
         }
 
-        private void inlineMultipleMethods(StructuredGraph graph, GraalRuntime runtime, InliningCallback callback, int numberOfMethods, boolean hasReturnValue) {
+        private void inlineMultipleMethods(StructuredGraph graph, InliningCallback callback, int numberOfMethods, boolean hasReturnValue) {
             FixedNode continuation = invoke.next();
 
             // setup merge and phi nodes for results and exceptions
             MergeNode returnMerge = graph.add(new MergeNode());
             returnMerge.setProbability(invoke.probability());
-            returnMerge.setStateAfter(invoke.stateAfter().duplicate(invoke.stateAfter().bci));
+            returnMerge.setStateAfter(invoke.stateAfter());
 
             PhiNode returnValuePhi = null;
             if (hasReturnValue) {
@@ -279,7 +268,7 @@ public class InliningUtil {
 
                 exceptionMerge = graph.add(new MergeNode());
                 exceptionMerge.setProbability(exceptionEdge.probability());
-                exceptionMerge.setStateAfter(exceptionEdge.stateAfter().duplicate(invoke.stateAfter().bci));
+                exceptionMerge.setStateAfter(exceptionEdge.stateAfter());
 
                 FixedNode exceptionSux = exceptionObject.next();
                 graph.addBeforeFixed(exceptionSux, exceptionMerge);
@@ -326,20 +315,12 @@ public class InliningUtil {
             for (int i = 0; i < calleeEntryNodes.length; i++) {
                 BeginNode node = calleeEntryNodes[i];
                 Invoke invokeForInlining = (Invoke) node.next();
-
-                ValueNode receiver = invokeForInlining.callTarget().receiver();
-                ConstantNode typeConst = graph.unique(ConstantNode.forCiConstant(types[i].getEncoding(Representation.ObjectHub), runtime, graph));
-                CheckCastNode checkCast = graph.unique(new CheckCastNode(node, typeConst, types[i], receiver));
-                invokeForInlining.callTarget().replaceFirstInput(receiver, checkCast);
-
-                RiResolvedMethod concrete = concretes.get(i);
-                StructuredGraph calleeGraph = getGraph(concrete, callback);
-                assert !IntrinsificationPhase.canIntrinsify(invokeForInlining, concrete, runtime);
+                StructuredGraph calleeGraph = getGraph(concretes.get(i), callback);
                 InliningUtil.inline(invokeForInlining, calleeGraph, false);
             }
         }
 
-        private void inlineSingleMethod(StructuredGraph graph, GraalRuntime runtime, InliningCallback callback) {
+        private void inlineSingleMethod(StructuredGraph graph, InliningCallback callback) {
             assert concretes.size() == 1 && types.length > 1 && !shouldFallbackToInvoke() && notRecordedTypeProbability == 0;
 
             MergeNode calleeEntryNode = graph.add(new MergeNode());
@@ -354,9 +335,7 @@ public class InliningUtil {
             pred.setNext(dispatchOnType);
             calleeEntryNode.setNext(invoke.node());
 
-            RiResolvedMethod concrete = concretes.get(0);
-            StructuredGraph calleeGraph = getGraph(concrete, callback);
-            assert !IntrinsificationPhase.canIntrinsify(invoke, concrete, runtime);
+            StructuredGraph calleeGraph = getGraph(concretes.get(0), callback);
             InliningUtil.inline(invoke, calleeGraph, false);
         }
 
@@ -419,8 +398,6 @@ public class InliningUtil {
 
         private static Invoke duplicateInvokeForInlining(StructuredGraph graph, Invoke invoke, MergeNode exceptionMerge, PhiNode exceptionObjectPhi, boolean useForInlining) {
             Invoke result = (Invoke) invoke.node().copyWithInputs();
-            Node callTarget = result.callTarget().copyWithInputs();
-            result.node().replaceFirstInput(result.callTarget(), callTarget);
             result.setUseForInlining(useForInlining);
 
             CiKind kind = invoke.node().kind();
