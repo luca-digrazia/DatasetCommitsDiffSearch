@@ -39,7 +39,6 @@ import com.oracle.truffle.nfi.types.NativeSimpleTypeMirror;
 import com.oracle.truffle.nfi.types.NativeTypeMirror;
 import com.oracle.truffle.nfi.types.NativeTypeMirror.Kind;
 import java.util.HashMap;
-import java.util.Map;
 import java.util.function.Supplier;
 
 class NFIContext {

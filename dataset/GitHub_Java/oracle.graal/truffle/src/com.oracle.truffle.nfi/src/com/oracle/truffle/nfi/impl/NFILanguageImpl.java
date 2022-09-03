@@ -84,10 +84,6 @@ public class NFILanguageImpl extends TruffleLanguage<NFIContext> {
 
         @Override
         public Object execute(VirtualFrame frame) {
-            if (!ctxRef.get().env.isNativeAccessAllowed()) {
-                CompilerDirectives.transferToInterpreter();
-                throw new UnsatisfiedLinkError("Access to native code is not allowed.");
-            }
             if (cached == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 cached = ctxRef.get().loadLibrary(name, flags);
@@ -98,19 +94,12 @@ public class NFILanguageImpl extends TruffleLanguage<NFIContext> {
 
     private static class GetDefaultLibraryNode extends RootNode {
 
-        private final ContextReference<NFIContext> ctxRef;
-
-        GetDefaultLibraryNode(NFILanguageImpl language) {
-            super(language);
-            this.ctxRef = language.getContextReference();
+        GetDefaultLibraryNode() {
+            super(null);
         }
 
         @Override
         public Object execute(VirtualFrame frame) {
-            if (!ctxRef.get().env.isNativeAccessAllowed()) {
-                CompilerDirectives.transferToInterpreter();
-                throw new UnsatisfiedLinkError("Access to native code is not allowed.");
-            }
             return LibFFILibrary.createDefault();
         }
     }
@@ -123,7 +112,7 @@ public class NFILanguageImpl extends TruffleLanguage<NFIContext> {
         NFIContext ctx = getContextReference().get();
 
         if (descriptor.isDefaultLibrary()) {
-            root = new GetDefaultLibraryNode(this);
+            root = new GetDefaultLibraryNode();
         } else {
             int flags = 0;
             boolean lazyOrNow = false;
@@ -159,6 +148,11 @@ public class NFILanguageImpl extends TruffleLanguage<NFIContext> {
 
     static ContextReference<NFIContext> getCurrentContextReference() {
         return getCurrentLanguage(NFILanguageImpl.class).getContextReference();
+    }
+
+    @Override
+    protected Object getLanguageGlobal(NFIContext context) {
+        return null;
     }
 
     @Override
