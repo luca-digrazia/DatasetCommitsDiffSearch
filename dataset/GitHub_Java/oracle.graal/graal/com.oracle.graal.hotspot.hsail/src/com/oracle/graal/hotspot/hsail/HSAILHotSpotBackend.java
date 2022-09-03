@@ -43,11 +43,9 @@ import com.oracle.graal.api.code.CallingConvention.Type;
 import com.oracle.graal.api.code.CompilationResult.Call;
 import com.oracle.graal.api.code.CompilationResult.CodeAnnotation;
 import com.oracle.graal.api.code.CompilationResult.DataPatch;
-import com.oracle.graal.api.code.CompilationResult.DataSectionReference;
 import com.oracle.graal.api.code.CompilationResult.ExceptionHandler;
 import com.oracle.graal.api.code.CompilationResult.Infopoint;
 import com.oracle.graal.api.code.CompilationResult.Mark;
-import com.oracle.graal.api.code.DataSection.Data;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
 import com.oracle.graal.asm.hsail.*;
@@ -88,7 +86,7 @@ public class HSAILHotSpotBackend extends HotSpotBackend {
 
         // @formatter:off
         @Option(help = "Number of TLABs used for HSAIL kernels which allocate")
-        public static  final OptionValue<Integer> HsailKernelTlabs = new OptionValue<>(4);
+        static public final OptionValue<Integer> HsailKernelTlabs = new OptionValue<>(4);
         // @formatter:on
     }
 
@@ -299,7 +297,7 @@ public class HSAILHotSpotBackend extends HotSpotBackend {
         HSAILHotSpotNmethod code = new HSAILHotSpotNmethod(javaMethod, hsailCode.getName(), false, true);
         code.setOopMapArray(hsailCode.getOopMapArray());
         code.setUsesAllocationFlag(hsailCode.getUsesAllocationFlag());
-        HotSpotCompiledNmethod compiled = new HotSpotCompiledNmethod(javaMethod, compilationResult);
+        HotSpotCompiledNmethod compiled = new HotSpotCompiledNmethod(getTarget(), javaMethod, compilationResult);
         CodeInstallResult result = getRuntime().getCompilerToVM().installCode(compiled, code, null);
         if (result != CodeInstallResult.OK) {
             return null;
@@ -316,7 +314,7 @@ public class HSAILHotSpotBackend extends HotSpotBackend {
         result.setEntryBCI(hsailCode.getEntryBCI());
         assert hsailCode.getMarks().isEmpty();
         assert hsailCode.getExceptionHandlers().isEmpty();
-        assert hsailCode.getDataPatches().isEmpty();
+        assert hsailCode.getDataReferences().isEmpty();
 
         // from host code
         result.setTotalFrameSize(hostCode.getTotalFrameSize());
@@ -331,13 +329,14 @@ public class HSAILHotSpotBackend extends HotSpotBackend {
         for (ExceptionHandler handler : hostCode.getExceptionHandlers()) {
             result.recordExceptionHandler(handler.pcOffset, handler.handlerPos);
         }
-        for (DataPatch patch : hostCode.getDataPatches()) {
-            if (patch.reference instanceof DataSectionReference) {
-                Data hostData = hostCode.getDataSection().findData((DataSectionReference) patch.reference);
-                Data resultData = new Data(hostData.getAlignment(), hostData.getSize(), hostData.getBuilder());
-                patch.reference = result.getDataSection().insertData(resultData);
+        for (DataPatch patch : hostCode.getDataReferences()) {
+            if (patch.data != null) {
+                if (patch.inline) {
+                    result.recordInlineData(patch.pcOffset, patch.data);
+                } else {
+                    result.recordDataReference(patch.pcOffset, patch.data);
+                }
             }
-            result.recordDataPatch(patch.pcOffset, patch.reference);
         }
         for (Infopoint infopoint : hostCode.getInfopoints()) {
             if (infopoint instanceof Call) {
@@ -386,7 +385,7 @@ public class HSAILHotSpotBackend extends HotSpotBackend {
 
     @Override
     public FrameMapBuilder newFrameMapBuilder(RegisterConfig registerConfig) {
-        return new DelayedFrameMapBuilder(this::newFrameMap, getCodeCache(), registerConfig);
+        return new FrameMapBuilderImpl(this::newFrameMap, getCodeCache(), registerConfig);
     }
 
     /**
@@ -628,40 +627,40 @@ public class HSAILHotSpotBackend extends HotSpotBackend {
 
         if (useHSAILDeoptimization) {
             // Aliases for d16
-            RegisterValue d16DeoptInfo = HSAIL.d16.asValue(wordLIRKind);
+            RegisterValue d16_deoptInfo = HSAIL.d16.asValue(wordLIRKind);
 
             // Aliases for d17
-            RegisterValue d17TlabIndex = HSAIL.d17.asValue(wordLIRKind);
-            RegisterValue d17SafepointFlagAddrIndex = d17TlabIndex;
+            RegisterValue d17_tlabIndex = HSAIL.d17.asValue(wordLIRKind);
+            RegisterValue d17_safepointFlagAddrIndex = d17_tlabIndex;
 
             // Aliases for s34
-            RegisterValue s34DeoptOccurred = HSAIL.s34.asValue(LIRKind.value(Kind.Int));
-            RegisterValue s34TlabIndex = s34DeoptOccurred;
+            RegisterValue s34_deoptOccurred = HSAIL.s34.asValue(LIRKind.value(Kind.Int));
+            RegisterValue s34_tlabIndex = s34_deoptOccurred;
 
-            asm.emitLoadKernelArg(d16DeoptInfo, asm.getDeoptInfoName(), "u64");
+            asm.emitLoadKernelArg(d16_deoptInfo, asm.getDeoptInfoName(), "u64");
             asm.emitComment("// Check if a deopt or safepoint has occurred and abort if true before doing any work");
 
             if (useHSAILSafepoints) {
                 // Load address of _notice_safepoints field
-                asm.emitLoad(wordKind, d17SafepointFlagAddrIndex, new HSAILAddressValue(wordLIRKind, d16DeoptInfo, config.hsailNoticeSafepointsOffset).toAddress());
+                asm.emitLoad(wordKind, d17_safepointFlagAddrIndex, new HSAILAddressValue(wordLIRKind, d16_deoptInfo, config.hsailNoticeSafepointsOffset).toAddress());
                 // Load int value from that field
-                asm.emitLoadAcquire(s34DeoptOccurred, new HSAILAddressValue(wordLIRKind, d17SafepointFlagAddrIndex, 0).toAddress());
-                asm.emitCompare(Kind.Int, s34DeoptOccurred, JavaConstant.forInt(0), "ne", false, false);
+                asm.emitLoadAcquire(s34_deoptOccurred, new HSAILAddressValue(wordLIRKind, d17_safepointFlagAddrIndex, 0).toAddress());
+                asm.emitCompare(Kind.Int, s34_deoptOccurred, Constant.forInt(0), "ne", false, false);
                 asm.cbr(deoptInProgressLabel);
             }
-            asm.emitLoadAcquire(s34DeoptOccurred, new HSAILAddressValue(wordLIRKind, d16DeoptInfo, config.hsailDeoptOccurredOffset).toAddress());
-            asm.emitCompare(Kind.Int, s34DeoptOccurred, JavaConstant.forInt(0), "ne", false, false);
+            asm.emitLoadAcquire(s34_deoptOccurred, new HSAILAddressValue(wordLIRKind, d16_deoptInfo, config.hsailDeoptOccurredOffset).toAddress());
+            asm.emitCompare(Kind.Int, s34_deoptOccurred, Constant.forInt(0), "ne", false, false);
             asm.cbr(deoptInProgressLabel);
             // load thread register if this kernel performs allocation
             if (usesAllocation) {
                 RegisterValue threadReg = getProviders().getRegisters().getThreadRegister().asValue(wordLIRKind);
                 assert HsailKernelTlabs.getValue() > 0;
-                asm.emitLoad(wordKind, threadReg, new HSAILAddressValue(wordLIRKind, d16DeoptInfo, config.hsailCurTlabInfoOffset).toAddress());
+                asm.emitLoad(wordKind, threadReg, new HSAILAddressValue(wordLIRKind, d16_deoptInfo, config.hsailCurTlabInfoOffset).toAddress());
                 if (HsailKernelTlabs.getValue() != 1) {
                     asm.emitComment("// map workitem to a tlab");
-                    asm.emitString(String.format("rem_u32  $%s, %s, %d;", s34TlabIndex.getRegister(), workItemReg, HsailKernelTlabs.getValue()));
-                    asm.emitConvert(d17TlabIndex, s34TlabIndex, wordKind, Kind.Int);
-                    asm.emit("mad", threadReg, d17TlabIndex, JavaConstant.forInt(8), threadReg);
+                    asm.emitString(String.format("rem_u32  $%s, %s, %d;", s34_tlabIndex.getRegister(), workItemReg, HsailKernelTlabs.getValue()));
+                    asm.emitConvert(d17_tlabIndex, s34_tlabIndex, wordKind, Kind.Int);
+                    asm.emit("mad", threadReg, d17_tlabIndex, Constant.forInt(8), threadReg);
                 } else {
                     // workitem is already mapped to solitary tlab
                 }
@@ -762,7 +761,7 @@ public class HSAILHotSpotBackend extends HotSpotBackend {
             Set<Register> infoUsedRegs = new TreeSet<>();
             Set<StackSlot> infoUsedStackSlots = new HashSet<>();
             List<Infopoint> infoList = crb.compilationResult.getInfopoints();
-            Queue<JavaValue[]> workList = new LinkedList<>();
+            Queue<Value[]> workList = new LinkedList<>();
             for (Infopoint info : infoList) {
                 BytecodeFrame frame = info.debugInfo.frame();
                 while (frame != null) {
@@ -771,28 +770,28 @@ public class HSAILHotSpotBackend extends HotSpotBackend {
                 }
             }
             while (!workList.isEmpty()) {
-                JavaValue[] values = workList.poll();
-                for (JavaValue val : values) {
-                    if (!Value.ILLEGAL.equals(val)) {
-                        if (val instanceof RegisterValue) {
-                            Register reg = ((RegisterValue) val).getRegister();
+                Value[] values = workList.poll();
+                for (Value val : values) {
+                    if (isLegal(val)) {
+                        if (isRegister(val)) {
+                            Register reg = asRegister(val);
                             infoUsedRegs.add(reg);
                             if (hsailRegConfig.isAllocatableSReg(reg)) {
                                 numSRegs = Math.max(numSRegs, reg.encoding + 1);
                             } else if (hsailRegConfig.isAllocatableDReg(reg)) {
                                 numDRegs = Math.max(numDRegs, reg.encoding + 1);
                             }
-                        } else if (val instanceof StackSlot) {
-                            StackSlot slot = (StackSlot) val;
+                        } else if (isStackSlot(val)) {
+                            StackSlot slot = asStackSlot(val);
                             Kind slotKind = slot.getKind();
                             int slotSizeBytes = (slotKind.isObject() ? 8 : slotKind.getByteCount());
                             int slotOffsetMax = HSAIL.getStackOffsetStart(slot, slotSizeBytes * 8) + slotSizeBytes;
                             numStackSlotBytes = Math.max(numStackSlotBytes, slotOffsetMax);
                             infoUsedStackSlots.add(slot);
-                        } else if (val instanceof VirtualObject) {
+                        } else if (isVirtualObject(val)) {
                             workList.add(((VirtualObject) val).getValues());
                         } else {
-                            assert val instanceof JavaConstant : "Unsupported value: " + val;
+                            assert isConstant(val) : "Unsupported value: " + val;
                         }
                     }
                 }
@@ -836,7 +835,7 @@ public class HSAILHotSpotBackend extends HotSpotBackend {
             asm.emitConvert(waveMathScratch2, workidreg, wordKind, Kind.Int);
             asm.emit("add", waveMathScratch1, waveMathScratch1, waveMathScratch2);
             HSAILAddress neverRanStoreAddr = new HSAILAddressValue(wordLIRKind, waveMathScratch1, 0).toAddress();
-            asm.emitStore(Kind.Byte, JavaConstant.forInt(1), neverRanStoreAddr);
+            asm.emitStore(Kind.Byte, Constant.forInt(1), neverRanStoreAddr);
             asm.emitString("ret;");
 
             // The deoptimizing lanes will jump here
@@ -847,23 +846,23 @@ public class HSAILHotSpotBackend extends HotSpotBackend {
             asm.emitLoadKernelArg(scratch64, asm.getDeoptInfoName(), "u64");
 
             // Set deopt occurred flag
-            asm.emitMov(Kind.Int, scratch32, JavaConstant.forInt(1));
+            asm.emitMov(Kind.Int, scratch32, Constant.forInt(1));
             asm.emitStoreRelease(scratch32, deoptInfoAddr);
 
             asm.emitComment("// Determine next deopt save slot");
-            asm.emitAtomicAdd(scratch32, deoptNextIndexAddr, JavaConstant.forInt(1));
+            asm.emitAtomicAdd(scratch32, deoptNextIndexAddr, Constant.forInt(1));
             /*
              * scratch32 now holds next index to use set error condition if no room in save area
              */
             asm.emitComment("// assert room to save deopt");
-            asm.emitCompare(Kind.Int, scratch32, JavaConstant.forInt(maxDeoptIndex), "lt", false, false);
+            asm.emitCompare(Kind.Int, scratch32, Constant.forInt(maxDeoptIndex), "lt", false, false);
             asm.cbr("@L_StoreDeopt");
             /*
              * if assert fails, store a guaranteed negative workitemid in top level deopt occurred
              * flag
              */
             asm.emitWorkItemAbsId(scratch32);
-            asm.emit("mad", scratch32, scratch32, JavaConstant.forInt(-1), JavaConstant.forInt(-1));
+            asm.emit("mad", scratch32, scratch32, Constant.forInt(-1), Constant.forInt(-1));
             asm.emitStore(scratch32, deoptInfoAddr);
             asm.emitString("ret;");
 
@@ -874,17 +873,17 @@ public class HSAILHotSpotBackend extends HotSpotBackend {
             asm.emitComment("// Convert id's for ptr math");
             asm.emitConvert(cuSaveAreaPtr, scratch32, wordKind, Kind.Int);
             asm.emitComment("// multiply by sizeof KernelDeoptArea");
-            asm.emit("mul", cuSaveAreaPtr, cuSaveAreaPtr, JavaConstant.forInt(sizeofKernelDeopt));
+            asm.emit("mul", cuSaveAreaPtr, cuSaveAreaPtr, Constant.forInt(sizeofKernelDeopt));
             asm.emitComment("// Add computed offset to deoptInfoPtr base");
             asm.emit("add", cuSaveAreaPtr, cuSaveAreaPtr, scratch64);
             // Add offset to _deopt_save_states[0]
-            asm.emit("add", scratch64, cuSaveAreaPtr, JavaConstant.forInt(offsetToDeoptSaveStates));
+            asm.emit("add", scratch64, cuSaveAreaPtr, Constant.forInt(offsetToDeoptSaveStates));
 
             HSAILAddress workItemAddr = new HSAILAddressValue(wordLIRKind, scratch64, offsetToDeoptimizationWorkItem).toAddress();
             HSAILAddress actionReasonStoreAddr = new HSAILAddressValue(wordLIRKind, scratch64, offsetToDeoptimizationReason).toAddress();
 
             asm.emitComment("// Get _deopt_info._first_frame");
-            asm.emit("add", waveMathScratch1, scratch64, JavaConstant.forInt(offsetToDeoptimizationFrame));
+            asm.emit("add", waveMathScratch1, scratch64, Constant.forInt(offsetToDeoptimizationFrame));
             // Now scratch64 is the _deopt_info._first_frame
             HSAILAddress pcStoreAddr = new HSAILAddressValue(wordLIRKind, waveMathScratch1, offsetToFramePc).toAddress();
             HSAILAddress regCountsAddr = new HSAILAddressValue(wordLIRKind, waveMathScratch1, offsetToNumSaves).toAddress();
@@ -897,7 +896,7 @@ public class HSAILHotSpotBackend extends HotSpotBackend {
             asm.emitStore(Kind.Int, codeBufferOffsetReg, pcStoreAddr);
 
             asm.emitComment("// store regCounts (" + numSRegs + " $s registers, " + numDRegs + " $d registers, " + numStackSlots + " stack slots)");
-            asm.emitStore(Kind.Int, JavaConstant.forInt(numSRegs + (numDRegs << 8) + (numStackSlots << 16)), regCountsAddr);
+            asm.emitStore(Kind.Int, Constant.forInt(numSRegs + (numDRegs << 8) + (numStackSlots << 16)), regCountsAddr);
 
             /*
              * Loop thru the usedValues storing each of the registers that are used. We always store
@@ -1005,20 +1004,22 @@ public class HSAILHotSpotBackend extends HotSpotBackend {
                 BytecodeFrame frame = info.debugInfo.frame();
                 while (frame != null) {
                     for (int i = 0; i < frame.numLocals + frame.numStack; i++) {
-                        JavaValue val = frame.values[i];
-                        if (val instanceof RegisterValue) {
-                            Register reg = ((RegisterValue) val).getRegister();
-                            if (val.getKind().isObject()) {
-                                assert (hsailRegConfig.isAllocatableDReg(reg));
-                                int bitIndex = reg.encoding();
-                                setOopMapBit(infoIndex, bitIndex);
-                            }
-                        } else if (val instanceof StackSlot) {
-                            StackSlot slot = (StackSlot) val;
-                            if (val.getKind().isObject()) {
-                                assert (HSAIL.getStackOffsetStart(slot, 64) % 8 == 0);
-                                int bitIndex = numDRegs + HSAIL.getStackOffsetStart(slot, 64) / 8;
-                                setOopMapBit(infoIndex, bitIndex);
+                        Value val = frame.values[i];
+                        if (isLegal(val)) {
+                            if (isRegister(val)) {
+                                Register reg = asRegister(val);
+                                if (val.getKind().isObject()) {
+                                    assert (hsailRegConfig.isAllocatableDReg(reg));
+                                    int bitIndex = reg.encoding();
+                                    setOopMapBit(infoIndex, bitIndex);
+                                }
+                            } else if (isStackSlot(val)) {
+                                StackSlot slot = asStackSlot(val);
+                                if (val.getKind().isObject()) {
+                                    assert (HSAIL.getStackOffsetStart(slot, 64) % 8 == 0);
+                                    int bitIndex = numDRegs + HSAIL.getStackOffsetStart(slot, 64) / 8;
+                                    setOopMapBit(infoIndex, bitIndex);
+                                }
                             }
                         }
                     }
@@ -1134,7 +1135,7 @@ public class HSAILHotSpotBackend extends HotSpotBackend {
             outterFrameState = createFrameState(lowLevelFrame.caller(), hsailFrame, providers, config, numSRegs, numDRegs, virtualObjects);
         }
         StructuredGraph hostGraph = hsailFrame.graph();
-        Function<? super JavaValue, ? extends ValueNode> lirValueToHirNode = v -> getNodeForValueFromFrame(v, hsailFrame, hostGraph, providers, config, numSRegs, numDRegs, virtualObjects);
+        Function<? super Value, ? extends ValueNode> lirValueToHirNode = v -> getNodeForValueFromFrame(v, hsailFrame, hostGraph, providers, config, numSRegs, numDRegs, virtualObjects);
         ValueNode[] locals = new ValueNode[lowLevelFrame.numLocals];
         for (int i = 0; i < lowLevelFrame.numLocals; i++) {
             locals[i] = lirValueToHirNode.apply(lowLevelFrame.getLocalValue(i));
@@ -1182,11 +1183,11 @@ public class HSAILHotSpotBackend extends HotSpotBackend {
         throw GraalInternalError.unimplemented();
     }
 
-    private static ValueNode getNodeForValueFromFrame(JavaValue localValue, ParameterNode hsailFrame, StructuredGraph hostGraph, HotSpotProviders providers, HotSpotVMConfig config, int numSRegs,
+    private static ValueNode getNodeForValueFromFrame(Value localValue, ParameterNode hsailFrame, StructuredGraph hostGraph, HotSpotProviders providers, HotSpotVMConfig config, int numSRegs,
                     int numDRegs, Map<VirtualObject, VirtualObjectNode> virtualObjects) {
         ValueNode valueNode;
-        if (localValue instanceof JavaConstant) {
-            valueNode = ConstantNode.forConstant((JavaConstant) localValue, providers.getMetaAccess(), hostGraph);
+        if (localValue instanceof Constant) {
+            valueNode = ConstantNode.forConstant((Constant) localValue, providers.getMetaAccess(), hostGraph);
         } else if (localValue instanceof VirtualObject) {
             valueNode = getNodeForVirtualObjectFromFrame((VirtualObject) localValue, virtualObjects, hostGraph);
         } else if (localValue instanceof StackSlot) {

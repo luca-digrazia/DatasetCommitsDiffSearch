@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -44,7 +44,6 @@ import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.common.inlining.*;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.phases.util.*;
-import com.oracle.graal.truffle.debug.*;
 import com.oracle.graal.truffle.phases.*;
 import com.oracle.graal.virtual.phases.ea.*;
 import com.oracle.truffle.api.*;
@@ -105,7 +104,11 @@ public class TruffleCacheImpl implements TruffleCache {
         return graph;
     }
 
-    private static List<Object> computeCacheKey(ResolvedJavaMethod method, NodeInputList<ValueNode> arguments) {
+    public StructuredGraph lookup(ResolvedJavaMethod method, NodeInputList<ValueNode> arguments, CanonicalizerPhase canonicalizer) {
+        if (method.getAnnotation(CompilerDirectives.TruffleBoundary.class) != null) {
+            return null;
+        }
+
         List<Object> key = new ArrayList<>(arguments.size() + 1);
         key.add(method);
         for (ValueNode v : arguments) {
@@ -113,28 +116,12 @@ public class TruffleCacheImpl implements TruffleCache {
                 key.add(v.stamp());
             }
         }
-        return key;
-    }
-
-    public StructuredGraph lookup(ResolvedJavaMethod method, NodeInputList<ValueNode> arguments, CanonicalizerPhase canonicalizer) {
-        List<Object> key = computeCacheKey(method, arguments);
         StructuredGraph resultGraph = cache.get(key);
         if (resultGraph == markerGraph) {
-            // compilation failed previously, don't try again
-            return null;
-        }
-        StructuredGraph graph = cacheLookup(method, arguments, canonicalizer);
-        assert graph != markerGraph : "markerGraph should not leak out";
-        return graph;
-    }
-
-    private StructuredGraph cacheLookup(ResolvedJavaMethod method, NodeInputList<ValueNode> arguments, CanonicalizerPhase canonicalizer) {
-        if (method.getAnnotation(CompilerDirectives.TruffleBoundary.class) != null) {
+            // Avoid recursive inlining or a previous attempt bailed out (and we won't try again).
             return null;
         }
 
-        List<Object> key = computeCacheKey(method, arguments);
-        StructuredGraph resultGraph = cache.get(key);
         if (resultGraph != null) {
             lastUsed.put(key, counter++);
             return resultGraph;
@@ -210,7 +197,7 @@ public class TruffleCacheImpl implements TruffleCache {
                     Map<String, Object> map = new LinkedHashMap<>();
                     map.put("nodeCount", graph.getNodeCount());
                     map.put("method", method.toString());
-                    TracePerformanceWarningsListener.logPerformanceWarning(String.format("Method on fast path contains more than %d graal nodes.", warnNodeCount), map);
+                    OptimizedCallTargetLog.logPerformanceWarning(String.format("Method on fast path contains more than %d graal nodes.", warnNodeCount), map);
                 }
             }
 
@@ -293,7 +280,7 @@ public class TruffleCacheImpl implements TruffleCache {
     private void expandInvoke(MethodCallTargetNode methodCallTargetNode, CanonicalizerPhase canonicalizer) {
         StructuredGraph inlineGraph = providers.getReplacements().getMethodSubstitution(methodCallTargetNode.targetMethod());
         if (inlineGraph == null) {
-            inlineGraph = cacheLookup(methodCallTargetNode.targetMethod(), methodCallTargetNode.arguments(), canonicalizer);
+            inlineGraph = TruffleCacheImpl.this.lookup(methodCallTargetNode.targetMethod(), methodCallTargetNode.arguments(), canonicalizer);
         }
         if (inlineGraph == null) {
             return;
