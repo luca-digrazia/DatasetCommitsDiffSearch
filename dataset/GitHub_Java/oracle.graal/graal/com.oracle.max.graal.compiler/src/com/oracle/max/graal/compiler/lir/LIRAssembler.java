@@ -108,7 +108,7 @@ public abstract class LIRAssembler {
 
     void emitBlock(LIRBlock block) {
 
-        if (block.align()) {
+        if (block.isLinearScanLoopHeader()) {
             emitAlignment();
         }
 
