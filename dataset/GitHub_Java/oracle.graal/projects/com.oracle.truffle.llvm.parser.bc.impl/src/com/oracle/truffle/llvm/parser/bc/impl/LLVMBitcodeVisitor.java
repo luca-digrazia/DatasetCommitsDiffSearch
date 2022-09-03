@@ -178,8 +178,6 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
 
     private final NodeFactoryFacade factoryFacade;
 
-    private final LLVMBitcodeVisitorParserRuntime parserRuntime;
-
     private final Source source;
 
     private final StackAllocation stack;
@@ -194,8 +192,7 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
         this.targetDataLayout = layout;
         this.typeHelper = new LLVMBitcodeTypeHelper(targetDataLayout);
         this.factoryFacade = factoryFacade;
-        this.parserRuntime = new LLVMBitcodeVisitorParserRuntime();
-        this.factoryFacade.setUpFacade(this.parserRuntime);
+        this.factoryFacade.setUpFacade(new LLVMBitcodeVisitorParserRuntime());
     }
 
     private LLVMExpressionNode createFunction(FunctionDefinition method, LLVMLifetimeAnalysis lifetimes) {
@@ -209,11 +206,7 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
                         factoryFacade,
                         method.getParameters().size());
 
-        parserRuntime.setFunctionVisitor(visitor);
-
         method.accept(visitor);
-
-        parserRuntime.setFunctionVisitor(null);
 
         final int[] basicBlockIndices = new int[method.getBlockCount()];
         for (int i = 0; i < method.getBlockCount(); i++) {
@@ -529,12 +522,6 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
 
     private class LLVMBitcodeVisitorParserRuntime implements LLVMParserRuntime {
 
-        private LLVMBitcodeFunctionVisitor functionVisitor = null;
-
-        void setFunctionVisitor(LLVMBitcodeFunctionVisitor functionVisitor) {
-            this.functionVisitor = functionVisitor;
-        }
-
         @Override
         public ResolvedType resolve(EObject e) {
             throw new UnsupportedOperationException("Not implemented!");
@@ -547,10 +534,7 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
 
         @Override
         public FrameSlot getReturnSlot() {
-            if (functionVisitor != null) {
-                return functionVisitor.getReturnSlot();
-            }
-            throw new IllegalStateException("There is currently no active function visitor set");
+            throw new UnsupportedOperationException("Not implemented!");
         }
 
         @Override
@@ -565,10 +549,7 @@ public class LLVMBitcodeVisitor implements ModelVisitor {
 
         @Override
         public FrameSlot getStackPointerSlot() {
-            if (functionVisitor != null) {
-                return functionVisitor.getStackSlot();
-            }
-            throw new IllegalStateException("There is currently no active function visitor set");
+            throw new UnsupportedOperationException("Not implemented!");
         }
 
         @Override

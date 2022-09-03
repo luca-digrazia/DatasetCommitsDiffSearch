@@ -37,6 +37,8 @@ import com.oracle.truffle.llvm.parser.LLVMBaseType;
 import com.oracle.truffle.llvm.parser.LLVMType;
 import com.oracle.truffle.llvm.parser.base.util.LLVMParserRuntime;
 
+import com.intel.llvm.ireditor.lLVM_IR.FunctionDef;
+import com.intel.llvm.ireditor.lLVM_IR.FunctionHeader;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.dsl.NodeFactory;
 import com.oracle.truffle.api.frame.FrameDescriptor;
@@ -49,9 +51,7 @@ import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMStackFrameNuller;
-import com.oracle.truffle.llvm.parser.base.model.functions.FunctionDeclaration;
 import com.oracle.truffle.llvm.parser.base.model.globals.GlobalVariable;
-import com.oracle.truffle.llvm.parser.base.model.types.FunctionType;
 import com.oracle.truffle.llvm.parser.base.model.types.Type;
 import com.oracle.truffle.llvm.parser.instructions.LLVMArithmeticInstructionType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMConversionType;
@@ -130,7 +130,7 @@ public class NodeFactoryFacadeAdapter implements NodeFactoryFacade {
     }
 
     @Override
-    public LLVMNode createLLVMIntrinsic(String functionName, Object[] argNodes, FunctionType functionDef) {
+    public LLVMNode createLLVMIntrinsic(String functionName, Object[] argNodes, FunctionDef functionDef) {
         return null;
     }
 
@@ -297,7 +297,7 @@ public class NodeFactoryFacadeAdapter implements NodeFactoryFacade {
 
     @Override
     public RootNode createFunctionStartNode(LLVMExpressionNode functionBodyNode, LLVMNode[] beforeFunction, LLVMNode[] afterFunction, SourceSection sourceSection, FrameDescriptor frameDescriptor,
-                    FunctionDeclaration functionHeader) {
+                    FunctionHeader functionHeader) {
         return null;
     }
 
