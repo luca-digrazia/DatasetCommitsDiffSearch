@@ -42,7 +42,6 @@ import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI32Node;
 import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI64Node;
 import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI8Node;
 import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMIVarBitNode;
-import com.oracle.truffle.llvm.nodes.impl.base.vector.LLVMFloatVectorNode;
 import com.oracle.truffle.llvm.nodes.impl.base.vector.LLVMI32VectorNode;
 import com.oracle.truffle.llvm.nodes.impl.base.vector.LLVMI8VectorNode;
 import com.oracle.truffle.llvm.nodes.impl.cast.LLVMTo80BitFloatingNodeFactory.LLVMDoubleToLLVM80BitFloatNodeGen;
@@ -68,7 +67,6 @@ import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToDoubleNodeFactory.LLVMI8ToD
 import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToFloatNodeFactory.LLVM80BitFloatToFloatNodeGen;
 import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToFloatNodeFactory.LLVMDoubleToFloatNodeGen;
 import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToFloatNodeFactory.LLVMI16ToFloatNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToFloatNodeFactory.LLVMI16ToFloatZeroExtNodeGen;
 import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToFloatNodeFactory.LLVMI32ToFloatBitNodeGen;
 import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToFloatNodeFactory.LLVMI32ToFloatNodeGen;
 import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToFloatNodeFactory.LLVMI32ToFloatUnsignedNodeGen;
@@ -111,7 +109,6 @@ import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMAddressT
 import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMDoubleToI64BitCastNodeGen;
 import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMDoubleToI64NodeGen;
 import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMFloatToI64NodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMFloatVectorToI64NodeGen;
 import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMFunctionToI64NodeGen;
 import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMI16ToI64NodeGen;
 import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMI16ToI64ZeroExtNodeGen;
@@ -216,19 +213,8 @@ public final class LLVMCastsFactory {
                 return factory.castFromPointer((LLVMAddressNode) fromNode);
             case FUNCTION_ADDRESS:
                 return factory.castFromFunctionPointer((LLVMFunctionNode) fromNode);
-            case FLOAT_VECTOR:
-                return factory.castFromFloatVector((LLVMFloatVectorNode) fromNode);
             default:
                 throw new AssertionError(fromType);
-        }
-    }
-
-    private LLVMExpressionNode castFromFloatVector(LLVMFloatVectorNode fromNode) {
-        switch (targetType) {
-            case I64:
-                return LLVMFloatVectorToI64NodeGen.create(fromNode);
-            default:
-                throw new AssertionError(targetType + " " + conv);
         }
     }
 
@@ -403,7 +389,7 @@ public final class LLVMCastsFactory {
                 case I64:
                     return LLVMI16ToI64ZeroExtNodeGen.create(fromNode);
                 case FLOAT:
-                    return LLVMI16ToFloatZeroExtNodeGen.create(fromNode);
+                    return LLVMI16ToFloatNodeGen.create(fromNode);
                 case DOUBLE:
                     return LLVMI16ToDoubleZeroExtNodeGen.create(fromNode);
                 default:
