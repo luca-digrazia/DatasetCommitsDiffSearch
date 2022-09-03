@@ -1,3 +1,19 @@
+/*
+ * Copyright (C)  Tony Green, Litepal Framework Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.litepal.util;
 
 import java.util.Collection;
@@ -40,9 +56,9 @@ public class BaseUtility {
 			if (Const.LitePal.CASES_KEEP.equals(cases)) {
 				return string;
 			} else if (Const.LitePal.CASES_UPPER.equals(cases)) {
-				return string.toUpperCase(Locale.getDefault());
+				return string.toUpperCase(Locale.US);
 			}
-			return string.toLowerCase(Locale.getDefault());
+			return string.toLowerCase(Locale.US);
 		}
 		return null;
 	}
@@ -87,7 +103,7 @@ public class BaseUtility {
 	 */
 	public static String capitalize(String string) {
 		if (!TextUtils.isEmpty(string)) {
-			return string.substring(0, 1).toUpperCase(Locale.getDefault()) + string.substring(1);
+			return string.substring(0, 1).toUpperCase(Locale.US) + string.substring(1);
 		}
 		return string == null ? null : "";
 	}
@@ -114,7 +130,7 @@ public class BaseUtility {
 		}
 		return 0;
 	}
-	
+
 	/**
 	 * Check the number of question mark existed in conditions[0] equals the
 	 * number of rest conditions elements or not. If not equals, throws
@@ -168,7 +184,7 @@ public class BaseUtility {
 		if ("char".equals(fieldType) || "java.lang.Character".equals(fieldType)) {
 			return true;
 		}
-		if ("java.lang.String".equals(fieldType)) {
+		if ("java.lang.String".equals(fieldType) || "java.util.Date".equals(fieldType)) {
 			return true;
 		}
 		return false;

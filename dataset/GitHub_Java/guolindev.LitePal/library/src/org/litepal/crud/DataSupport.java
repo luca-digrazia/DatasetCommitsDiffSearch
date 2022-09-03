@@ -1,3 +1,19 @@
+/*
+ * Copyright (C)  Tony Green, Litepal Framework Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.litepal.crud;
 
 import java.util.ArrayList;
@@ -8,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.litepal.exceptions.DataSupportException;
 import org.litepal.tablemanager.Connector;
 import org.litepal.util.BaseUtility;
 
@@ -16,6 +33,31 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 
 /**
+ * DataSupport connects classes to SQLite database tables to establish an almost
+ * zero-configuration persistence layer for applications. In the context of an
+ * application, these classes are commonly referred to as models. Models can
+ * also be connected to other models.<br>
+ * DataSupport relies heavily on naming in that it uses class and association
+ * names to establish mappings between respective database tables and foreign
+ * key columns.<br>
+ * Automated mapping between classes and tables, attributes and columns.
+ * 
+ * <pre>
+ * public class Person extends DataSupport {
+ * 	private int id;
+ * 	private String name;
+ * 	private int age;
+ * }
+ * 
+ * The Person class is automatically mapped to the table named "person",
+ * which might look like this:
+ * 
+ * CREATE TABLE person (
+ * 	id integer primary key autoincrement,
+ * 	age integer, 
+ * 	name text
+ * );
+ * </pre>
  * 
  * @author Tony Green
  * @since 1.1
@@ -84,7 +126,7 @@ public class DataSupport {
 	 * 
 	 * @return A ClusterQuery instance.
 	 */
-	public static ClusterQuery select(String... columns) {
+	public static synchronized ClusterQuery select(String... columns) {
 		ClusterQuery cQuery = new ClusterQuery();
 		cQuery.mColumns = columns;
 		return cQuery;
@@ -105,7 +147,7 @@ public class DataSupport {
 	 *            WHERE clause. Passing null will return all rows.
 	 * @return A ClusterQuery instance.
 	 */
-	public static ClusterQuery where(String... conditions) {
+	public static synchronized ClusterQuery where(String... conditions) {
 		ClusterQuery cQuery = new ClusterQuery();
 		cQuery.mConditions = conditions;
 		return cQuery;
@@ -127,7 +169,7 @@ public class DataSupport {
 	 *            unordered.
 	 * @return A ClusterQuery instance.
 	 */
-	public static ClusterQuery order(String column) {
+	public static synchronized ClusterQuery order(String column) {
 		ClusterQuery cQuery = new ClusterQuery();
 		cQuery.mOrderBy = column;
 		return cQuery;
@@ -147,7 +189,7 @@ public class DataSupport {
 	 *            LIMIT clause.
 	 * @return A ClusterQuery instance.
 	 */
-	public static ClusterQuery limit(int value) {
+	public static synchronized ClusterQuery limit(int value) {
 		ClusterQuery cQuery = new ClusterQuery();
 		cQuery.mLimit = String.valueOf(value);
 		return cQuery;
@@ -167,10 +209,261 @@ public class DataSupport {
 	 *            The offset amount of rows returned by the query.
 	 * @return A ClusterQuery instance.
 	 */
-	public static ClusterQuery offset(int value) {
+	public static synchronized ClusterQuery offset(int value) {
 		ClusterQuery cQuery = new ClusterQuery();
 		cQuery.mOffset = String.valueOf(value);
 		return cQuery;
+	}
+
+	/**
+	 * Count the records.
+	 * 
+	 * <pre>
+	 * DataSupport.count(Person.class);
+	 * </pre>
+	 * 
+	 * This will count all rows in person table.<br>
+	 * You can also specify a where clause when counting.
+	 * 
+	 * <pre>
+	 * DataSupport.where(&quot;age &gt; ?&quot;, &quot;15&quot;).count(Person.class);
+	 * </pre>
+	 * 
+	 * @param modelClass
+	 *            Which table to query from by class.
+	 * @return Count of the specified table.
+	 */
+	public static synchronized int count(Class<?> modelClass) {
+		return count(BaseUtility.changeCase(modelClass.getSimpleName()));
+	}
+
+	/**
+	 * Count the records.
+	 * 
+	 * <pre>
+	 * DataSupport.count(&quot;person&quot;);
+	 * </pre>
+	 * 
+	 * This will count all rows in person table.<br>
+	 * You can also specify a where clause when counting.
+	 * 
+	 * <pre>
+	 * DataSupport.where(&quot;age &gt; ?&quot;, &quot;15&quot;).count(&quot;person&quot;);
+	 * </pre>
+	 * 
+	 * @param tableName
+	 *            Which table to query from.
+	 * @return Count of the specified table.
+	 */
+	public static synchronized int count(String tableName) {
+		ClusterQuery cQuery = new ClusterQuery();
+		return cQuery.count(tableName);
+	}
+
+	/**
+	 * Calculates the average value on a given column.
+	 * 
+	 * <pre>
+	 * DataSupport.average(Person.class, &quot;age&quot;);
+	 * </pre>
+	 * 
+	 * You can also specify a where clause when calculating.
+	 * 
+	 * <pre>
+	 * DataSupport.where(&quot;age &gt; ?&quot;, &quot;15&quot;).average(Person.class, &quot;age&quot;);
+	 * </pre>
+	 * 
+	 * @param modelClass
+	 *            Which table to query from by class.
+	 * @param column
+	 *            The based on column to calculate.
+	 * @return The average value on a given column.
+	 */
+	public static synchronized double average(Class<?> modelClass, String column) {
+		return average(BaseUtility.changeCase(modelClass.getSimpleName()), column);
+	}
+
+	/**
+	 * Calculates the average value on a given column.
+	 * 
+	 * <pre>
+	 * DataSupport.average(&quot;person&quot;, &quot;age&quot;);
+	 * </pre>
+	 * 
+	 * You can also specify a where clause when calculating.
+	 * 
+	 * <pre>
+	 * DataSupport.where(&quot;age &gt; ?&quot;, &quot;15&quot;).average(&quot;person&quot;, &quot;age&quot;);
+	 * </pre>
+	 * 
+	 * @param tableName
+	 *            Which table to query from.
+	 * @param column
+	 *            The based on column to calculate.
+	 * @return The average value on a given column.
+	 */
+	public static synchronized double average(String tableName, String column) {
+		ClusterQuery cQuery = new ClusterQuery();
+		return cQuery.average(tableName, column);
+	}
+
+	/**
+	 * Calculates the maximum value on a given column. The value is returned
+	 * with the same data type of the column.
+	 * 
+	 * <pre>
+	 * DataSupport.max(Person.class, &quot;age&quot;, int.class);
+	 * </pre>
+	 * 
+	 * You can also specify a where clause when calculating.
+	 * 
+	 * <pre>
+	 * DataSupport.where(&quot;age &gt; ?&quot;, &quot;15&quot;).max(Person.class, &quot;age&quot;, Integer.TYPE);
+	 * </pre>
+	 * 
+	 * @param modelClass
+	 *            Which table to query from by class.
+	 * @param columnName
+	 *            The based on column to calculate.
+	 * @param columnType
+	 *            The type of the based on column.
+	 * @return The maximum value on a given column.
+	 */
+	public static synchronized <T> T max(Class<?> modelClass, String columnName, Class<T> columnType) {
+		return max(BaseUtility.changeCase(modelClass.getSimpleName()), columnName, columnType);
+	}
+
+	/**
+	 * Calculates the maximum value on a given column. The value is returned
+	 * with the same data type of the column.
+	 * 
+	 * <pre>
+	 * DataSupport.max(&quot;person&quot;, &quot;age&quot;, int.class);
+	 * </pre>
+	 * 
+	 * You can also specify a where clause when calculating.
+	 * 
+	 * <pre>
+	 * DataSupport.where(&quot;age &gt; ?&quot;, &quot;15&quot;).max(&quot;person&quot;, &quot;age&quot;, Integer.TYPE);
+	 * </pre>
+	 * 
+	 * @param tableName
+	 *            Which table to query from.
+	 * @param columnName
+	 *            The based on column to calculate.
+	 * @param columnType
+	 *            The type of the based on column.
+	 * @return The maximum value on a given column.
+	 */
+	public static synchronized <T> T max(String tableName, String columnName, Class<T> columnType) {
+		ClusterQuery cQuery = new ClusterQuery();
+		return cQuery.max(tableName, columnName, columnType);
+	}
+
+	/**
+	 * Calculates the minimum value on a given column. The value is returned
+	 * with the same data type of the column.
+	 * 
+	 * <pre>
+	 * DataSupport.min(Person.class, &quot;age&quot;, int.class);
+	 * </pre>
+	 * 
+	 * You can also specify a where clause when calculating.
+	 * 
+	 * <pre>
+	 * DataSupport.where(&quot;age &gt; ?&quot;, &quot;15&quot;).min(Person.class, &quot;age&quot;, Integer.TYPE);
+	 * </pre>
+	 * 
+	 * @param modelClass
+	 *            Which table to query from by class.
+	 * @param columnName
+	 *            The based on column to calculate.
+	 * @param columnType
+	 *            The type of the based on column.
+	 * @return The minimum value on a given column.
+	 */
+	public static synchronized <T> T min(Class<?> modelClass, String columnName, Class<T> columnType) {
+		return min(BaseUtility.changeCase(modelClass.getSimpleName()), columnName, columnType);
+	}
+
+	/**
+	 * Calculates the minimum value on a given column. The value is returned
+	 * with the same data type of the column.
+	 * 
+	 * <pre>
+	 * DataSupport.min(&quot;person&quot;, &quot;age&quot;, int.class);
+	 * </pre>
+	 * 
+	 * You can also specify a where clause when calculating.
+	 * 
+	 * <pre>
+	 * DataSupport.where(&quot;age &gt; ?&quot;, &quot;15&quot;).min(&quot;person&quot;, &quot;age&quot;, Integer.TYPE);
+	 * </pre>
+	 * 
+	 * @param tableName
+	 *            Which table to query from.
+	 * @param columnName
+	 *            The based on column to calculate.
+	 * @param columnType
+	 *            The type of the based on column.
+	 * @return The minimum value on a given column.
+	 */
+	public static synchronized <T> T min(String tableName, String columnName, Class<T> columnType) {
+		ClusterQuery cQuery = new ClusterQuery();
+		return cQuery.min(tableName, columnName, columnType);
+	}
+
+	/**
+	 * Calculates the sum of values on a given column. The value is returned
+	 * with the same data type of the column.
+	 * 
+	 * <pre>
+	 * DataSupport.sum(Person.class, &quot;age&quot;, int.class);
+	 * </pre>
+	 * 
+	 * You can also specify a where clause when calculating.
+	 * 
+	 * <pre>
+	 * DataSupport.where(&quot;age &gt; ?&quot;, &quot;15&quot;).sum(Person.class, &quot;age&quot;, Integer.TYPE);
+	 * </pre>
+	 * 
+	 * @param modelClass
+	 *            Which table to query from by class.
+	 * @param columnName
+	 *            The based on column to calculate.
+	 * @param columnType
+	 *            The type of the based on column.
+	 * @return The sum value on a given column.
+	 */
+	public static synchronized <T> T sum(Class<?> modelClass, String columnName, Class<T> columnType) {
+		return sum(BaseUtility.changeCase(modelClass.getSimpleName()), columnName, columnType);
+	}
+
+	/**
+	 * Calculates the sum of values on a given column. The value is returned
+	 * with the same data type of the column.
+	 * 
+	 * <pre>
+	 * DataSupport.sum(&quot;person&quot;, &quot;age&quot;, int.class);
+	 * </pre>
+	 * 
+	 * You can also specify a where clause when calculating.
+	 * 
+	 * <pre>
+	 * DataSupport.where(&quot;age &gt; ?&quot;, &quot;15&quot;).sum(&quot;person&quot;, &quot;age&quot;, Integer.TYPE);
+	 * </pre>
+	 * 
+	 * @param tableName
+	 *            Which table to query from.
+	 * @param columnName
+	 *            The based on column to calculate.
+	 * @param columnType
+	 *            The type of the based on column.
+	 * @return The sum value on a given column.
+	 */
+	public static synchronized <T> T sum(String tableName, String columnName, Class<T> columnType) {
+		ClusterQuery cQuery = new ClusterQuery();
+		return cQuery.sum(tableName, columnName, columnType);
 	}
 
 	/**
@@ -181,19 +474,34 @@ public class DataSupport {
 	 * </pre>
 	 * 
 	 * The modelClass determines which table to query and the object type to
-	 * return. If no record can be found, then return null.
+	 * return. If no record can be found, then return null. <br>
+	 * 
+	 * Note that the associated models won't be loaded by default considering
+	 * the efficiency, but you can do that by using
+	 * {@link DataSupport#find(Class, long, boolean)}.
 	 * 
 	 * @param modelClass
 	 *            Which table to query and the object type to return.
 	 * @param id
 	 *            Which record to query.
-	 * @return An object with founded data from database, or null.
+	 * @return An object with found data from database, or null.
 	 */
 	public static synchronized <T> T find(Class<T> modelClass, long id) {
-		QueryHandler queryHandler = new QueryHandler(Connector.getDatabase());
-		return queryHandler.onFind(modelClass, id, false);
+		return find(modelClass, id, false);
 	}
 
+	/**
+	 * It is mostly same as {@link DataSupport#find(Class, long)} but an isEager
+	 * parameter. If set true the associated models will be loaded as well.
+	 * 
+	 * @param modelClass
+	 *            Which table to query and the object type to return.
+	 * @param id
+	 *            Which record to query.
+	 * @param isEager
+	 *            True to load the associated models, false not.
+	 * @return An object with found data from database, or null.
+	 */
 	public static synchronized <T> T find(Class<T> modelClass, long id, boolean isEager) {
 		QueryHandler queryHandler = new QueryHandler(Connector.getDatabase());
 		return queryHandler.onFind(modelClass, id, isEager);
@@ -206,15 +514,28 @@ public class DataSupport {
 	 * Person p = DataSupport.findFirst(Person.class);
 	 * </pre>
 	 * 
+	 * Note that the associated models won't be loaded by default considering
+	 * the efficiency, but you can do that by using
+	 * {@link DataSupport#findFirst(Class, boolean)}.
+	 * 
 	 * @param modelClass
 	 *            Which table to query and the object type to return.
 	 * @return An object with data of first row, or null.
 	 */
 	public static synchronized <T> T findFirst(Class<T> modelClass) {
-		QueryHandler queryHandler = new QueryHandler(Connector.getDatabase());
-		return queryHandler.onFindFirst(modelClass, false);
+		return findFirst(modelClass, false);
 	}
 
+	/**
+	 * It is mostly same as {@link DataSupport#findFirst(Class)} but an isEager
+	 * parameter. If set true the associated models will be loaded as well.
+	 * 
+	 * @param modelClass
+	 *            Which table to query and the object type to return.
+	 * @param isEager
+	 *            True to load the associated models, false not.
+	 * @return An object with data of first row, or null.
+	 */
 	public static synchronized <T> T findFirst(Class<T> modelClass, boolean isEager) {
 		QueryHandler queryHandler = new QueryHandler(Connector.getDatabase());
 		return queryHandler.onFindFirst(modelClass, isEager);
@@ -227,13 +548,31 @@ public class DataSupport {
 	 * Person p = DataSupport.findLast(Person.class);
 	 * </pre>
 	 * 
+	 * Note that the associated models won't be loaded by default considering
+	 * the efficiency, but you can do that by using
+	 * {@link DataSupport#findLast(Class, boolean)}.
+	 * 
 	 * @param modelClass
 	 *            Which table to query and the object type to return.
 	 * @return An object with data of last row, or null.
 	 */
 	public static synchronized <T> T findLast(Class<T> modelClass) {
+		return findLast(modelClass, false);
+	}
+
+	/**
+	 * It is mostly same as {@link DataSupport#findLast(Class)} but an isEager
+	 * parameter. If set true the associated models will be loaded as well.
+	 * 
+	 * @param modelClass
+	 *            Which table to query and the object type to return.
+	 * @param isEager
+	 *            True to load the associated models, false not.
+	 * @return An object with data of last row, or null.
+	 */
+	public static synchronized <T> T findLast(Class<T> modelClass, boolean isEager) {
 		QueryHandler queryHandler = new QueryHandler(Connector.getDatabase());
-		return queryHandler.onFindLast(modelClass);
+		return queryHandler.onFindLast(modelClass, isEager);
 	}
 
 	/**
@@ -253,6 +592,10 @@ public class DataSupport {
 	 * List&lt;Book&gt; allBooks = DataSupport.findAll(Book.class);
 	 * </pre>
 	 * 
+	 * Note that the associated models won't be loaded by default considering
+	 * the efficiency, but you can do that by using
+	 * {@link DataSupport#findAll(Class, boolean, long...)}.
+	 * 
 	 * The modelClass determines which table to query and the object type to
 	 * return.
 	 * 
@@ -260,11 +603,29 @@ public class DataSupport {
 	 *            Which table to query and the object type to return as a list.
 	 * @param ids
 	 *            Which records to query. Or do not pass it to find all records.
-	 * @return An object list with founded data from database, or an empty list.
+	 * @return An object list with found data from database, or an empty list.
 	 */
 	public static synchronized <T> List<T> findAll(Class<T> modelClass, long... ids) {
+		return findAll(modelClass, false, ids);
+	}
+
+	/**
+	 * It is mostly same as {@link DataSupport#findAll(Class, long...)} but an
+	 * isEager parameter. If set true the associated models will be loaded as
+	 * well.
+	 * 
+	 * @param modelClass
+	 *            Which table to query and the object type to return as a list.
+	 * @param isEager
+	 *            True to load the associated models, false not.
+	 * @param ids
+	 *            Which records to query. Or do not pass it to find all records.
+	 * @return An object list with found data from database, or an empty list.
+	 */
+	public static synchronized <T> List<T> findAll(Class<T> modelClass, boolean isEager,
+			long... ids) {
 		QueryHandler queryHandler = new QueryHandler(Connector.getDatabase());
-		return queryHandler.onFindAll(modelClass, ids);
+		return queryHandler.onFindAll(modelClass, isEager, ids);
 	}
 
 	/**
@@ -306,6 +667,12 @@ public class DataSupport {
 	 * The data in other tables which is referenced with the record will be
 	 * removed too.
 	 * 
+	 * <pre>
+	 * DataSupport.delete(Person.class, 1);
+	 * </pre>
+	 * 
+	 * This means that the record 1 in person table will be removed.
+	 * 
 	 * @param modelClass
 	 *            Which table to delete from by class.
 	 * @param id
@@ -329,9 +696,14 @@ public class DataSupport {
 	/**
 	 * Deletes all records with details given if they match a set of conditions
 	 * supplied. This method constructs a single SQL DELETE statement and sends
-	 * it to the database.<br>
-	 * Note that this method won't delete the referenced data in other tables.
-	 * You should remove those values by your own.
+	 * it to the database.
+	 * 
+	 * <pre>
+	 * DataSupport.deleteAll(Person.class, &quot;name = ? and age = ?&quot;, &quot;Tom&quot;, &quot;14&quot;);
+	 * </pre>
+	 * 
+	 * This means that all the records which name is Tom and age is 14 will be
+	 * removed.<br>
 	 * 
 	 * @param modelClass
 	 *            Which table to delete from by class.
@@ -353,7 +725,15 @@ public class DataSupport {
 	/**
 	 * Deletes all records with details given if they match a set of conditions
 	 * supplied. This method constructs a single SQL DELETE statement and sends
-	 * it to the database.<br>
+	 * it to the database.
+	 * 
+	 * <pre>
+	 * DataSupport.deleteAll(&quot;person&quot;, &quot;name = ? and age = ?&quot;, &quot;Tom&quot;, &quot;14&quot;);
+	 * </pre>
+	 * 
+	 * This means that all the records which name is Tom and age is 14 will be
+	 * removed.<br>
+	 * 
 	 * Note that this method won't delete the referenced data in other tables.
 	 * You should remove those values by your own.
 	 * 
@@ -378,6 +758,14 @@ public class DataSupport {
 	 * Updates the corresponding record by id with ContentValues. Returns the
 	 * number of affected rows.
 	 * 
+	 * <pre>
+	 * ContentValues cv = new ContentValues();
+	 * cv.put(&quot;name&quot;, &quot;Jim&quot;);
+	 * DataSupport.update(Person.class, cv, 1);
+	 * </pre>
+	 * 
+	 * This means that the name of record 1 will be updated into Jim.<br>
+	 * 
 	 * @param modelClass
 	 *            Which table to update by class.
 	 * @param values
@@ -397,6 +785,15 @@ public class DataSupport {
 	 * supplied. This method constructs a single SQL UPDATE statement and sends
 	 * it to the database.
 	 * 
+	 * <pre>
+	 * ContentValues cv = new ContentValues();
+	 * cv.put(&quot;name&quot;, &quot;Jim&quot;);
+	 * DataSupport.update(Person.class, cv, &quot;name = ?&quot;, &quot;Tom&quot;);
+	 * </pre>
+	 * 
+	 * This means that all the records which name is Tom will be updated into
+	 * Jim.
+	 * 
 	 * @param modelClass
 	 *            Which table to update by class.
 	 * @param values
@@ -414,14 +811,22 @@ public class DataSupport {
 	 */
 	public static synchronized int updateAll(Class<?> modelClass, ContentValues values,
 			String... conditions) {
-		UpdateHandler updateHandler = new UpdateHandler(Connector.getDatabase());
-		return updateHandler.onUpdateAll(modelClass, values, conditions);
+		return updateAll(BaseUtility.changeCase(modelClass.getSimpleName()), values, conditions);
 	}
 
 	/**
 	 * Updates all records with details given if they match a set of conditions
 	 * supplied. This method constructs a single SQL UPDATE statement and sends
 	 * it to the database.
+	 * 
+	 * <pre>
+	 * ContentValues cv = new ContentValues();
+	 * cv.put(&quot;name&quot;, &quot;Jim&quot;);
+	 * DataSupport.update(&quot;person&quot;, cv, &quot;name = ?&quot;, &quot;Tom&quot;);
+	 * </pre>
+	 * 
+	 * This means that all the records which name is Tom will be updated into
+	 * Jim.
 	 * 
 	 * @param tableName
 	 *            Which table to update.
@@ -477,6 +882,8 @@ public class DataSupport {
 			SaveHandler saveHandler = new SaveHandler(db);
 			saveHandler.onSaveAll(collection);
 			db.setTransactionSuccessful();
+		} catch (Exception e) {
+			throw new DataSupportException(e.getMessage());
 		} finally {
 			db.endTransaction();
 		}
@@ -487,15 +894,23 @@ public class DataSupport {
 	 * The data in other tables which is referenced with the record will be
 	 * removed too.
 	 * 
+	 * <pre>
+	 * Person person;
+	 * ....
+	 * if (person.isSaved()) {
+	 * 		person.delete();
+	 * }
+	 * </pre>
+	 * 
 	 * @return The number of rows affected. Including cascade delete rows.
 	 */
 	public synchronized int delete() {
-		int rowsAffected = 0;
 		SQLiteDatabase db = Connector.getDatabase();
 		db.beginTransaction();
 		try {
 			DeleteHandler deleteHandler = new DeleteHandler(db);
-			rowsAffected = deleteHandler.onDelete(this);
+			int rowsAffected = deleteHandler.onDelete(this);
+			baseObjId = 0;
 			db.setTransactionSuccessful();
 			return rowsAffected;
 		} finally {
@@ -505,7 +920,16 @@ public class DataSupport {
 
 	/**
 	 * Updates the corresponding record by id. Use setXxx to decide which
-	 * columns to update. <br>
+	 * columns to update.
+	 * 
+	 * <pre>
+	 * Person person = new Person();
+	 * person.setName(&quot;Jim&quot;);
+	 * person.update(1);
+	 * </pre>
+	 * 
+	 * This means that the name of record 1 will be updated into Jim.<br>
+	 * 
 	 * <b>Note: </b> 1. If you set a default value to a field, the corresponding
 	 * column won't be updated. Use {@link #setToDefault(String)} to update
 	 * columns into default value. 2. This method couldn't update foreign key in
@@ -516,16 +940,30 @@ public class DataSupport {
 	 * @return The number of rows affected.
 	 */
 	public synchronized int update(long id) {
-		UpdateHandler updateHandler = new UpdateHandler(Connector.getDatabase());
-		int rowsAffected = updateHandler.onUpdate(this, id);
-		getFieldsToSetToDefault().clear();
-		return rowsAffected;
+		try {
+			UpdateHandler updateHandler = new UpdateHandler(Connector.getDatabase());
+			int rowsAffected = updateHandler.onUpdate(this, id);
+			getFieldsToSetToDefault().clear();
+			return rowsAffected;
+		} catch (Exception e) {
+			throw new DataSupportException(e.getMessage());
+		}
 	}
 
 	/**
 	 * Updates all records with details given if they match a set of conditions
 	 * supplied. This method constructs a single SQL UPDATE statement and sends
-	 * it to the database.<br>
+	 * it to the database.
+	 * 
+	 * <pre>
+	 * Person person = new Person();
+	 * person.setName(&quot;Jim&quot;);
+	 * person.updateAll(&quot;name = ?&quot;, &quot;Tom&quot;);
+	 * </pre>
+	 * 
+	 * This means that all the records which name is Tom will be updated into
+	 * Jim.<br>
+	 * 
 	 * <b>Note: <b> 1. If you set a default value to a field, the corresponding
 	 * column won't be updated. Use {@link #setToDefault(String)} to update
 	 * columns into default value. 2. This method couldn't update foreign key in
@@ -542,10 +980,14 @@ public class DataSupport {
 	 * @return The number of rows affected.
 	 */
 	public synchronized int updateAll(String... conditions) {
-		UpdateHandler updateHandler = new UpdateHandler(Connector.getDatabase());
-		int rowsAffected = updateHandler.onUpdateAll(this, conditions);
-		getFieldsToSetToDefault().clear();
-		return rowsAffected;
+		try {
+			UpdateHandler updateHandler = new UpdateHandler(Connector.getDatabase());
+			int rowsAffected = updateHandler.onUpdateAll(this, conditions);
+			getFieldsToSetToDefault().clear();
+			return rowsAffected;
+		} catch (Exception e) {
+			throw new DataSupportException(e.getMessage());
+		}
 	}
 
 	/**
@@ -573,6 +1015,40 @@ public class DataSupport {
 	 *         happens, return false.
 	 */
 	public synchronized boolean save() {
+		try {
+			saveThrows();
+			return true;
+		} catch (Exception e) {
+			e.printStackTrace();
+			return false;
+		}
+	}
+
+	/**
+	 * Saves the model. <br />
+	 * 
+	 * <pre>
+	 * Person person = new Person();
+	 * person.setName(&quot;Tom&quot;);
+	 * person.setAge(22);
+	 * person.saveThrows();
+	 * </pre>
+	 * 
+	 * If the model is a new record gets created in the database, otherwise the
+	 * existing record gets updated.<br />
+	 * If saving process failed by any accident, the whole action will be
+	 * cancelled and your database will be <b>rolled back</b> and throws
+	 * {@link DataSupportException}<br />
+	 * If the model has a field named id or _id and field type is int or long,
+	 * the id value generated by database will assign to it after the model is
+	 * saved.<br />
+	 * Note that if the associated models of this model is already saved. The
+	 * associations between them will be built automatically in database after
+	 * it saved.
+	 * 
+	 * @throws DataSupportException
+	 */
+	public synchronized void saveThrows() {
 		SQLiteDatabase db = Connector.getDatabase();
 		db.beginTransaction();
 		try {
@@ -580,10 +1056,8 @@ public class DataSupport {
 			saveHandler.onSave(this);
 			clearAssociatedData();
 			db.setTransactionSuccessful();
-			return true;
 		} catch (Exception e) {
-			e.printStackTrace();
-			return false;
+			throw new DataSupportException(e.getMessage());
 		} finally {
 			db.endTransaction();
 		}
@@ -626,7 +1100,7 @@ public class DataSupport {
 	protected long getBaseObjId() {
 		return baseObjId;
 	}
-
+	
 	/**
 	 * Get the full class name of self.
 	 * 
@@ -643,6 +1117,13 @@ public class DataSupport {
 	 */
 	protected String getTableName() {
 		return BaseUtility.changeCase(getClass().getSimpleName());
+	}
+	
+	/**
+	 * Reset the value of baseObjId. This means the model will become unsaved state.
+	 */
+	void resetBaseObjId() {
+		baseObjId = 0;
 	}
 
 	/**
