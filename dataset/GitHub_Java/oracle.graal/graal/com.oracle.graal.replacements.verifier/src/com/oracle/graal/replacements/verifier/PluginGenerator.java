@@ -141,7 +141,6 @@ public class PluginGenerator {
 
             private int idx = 0;
 
-            @Override
             public String apply(GeneratedPlugin plugin) {
                 return plugin.getPluginName() + "_" + (idx++);
             }
@@ -159,7 +158,6 @@ public class PluginGenerator {
                 out.printf("// CheckStyle: stop header check\n");
                 out.printf("// CheckStyle: stop line length check\n");
                 out.printf("// GENERATED CONTENT - DO NOT EDIT\n");
-                out.printf("// GENERATORS: %s, %s\n", VerifierAnnotationProcessor.class.getName(), PluginGenerator.class.getName());
                 out.printf("package %s;\n", pkg.getQualifiedName());
                 out.printf("\n");
                 createImports(out, plugins);
@@ -181,7 +179,7 @@ public class PluginGenerator {
 
     protected static void createImports(PrintWriter out, List<GeneratedPlugin> plugins) {
         out.printf("import jdk.vm.ci.meta.ResolvedJavaMethod;\n");
-        out.printf("import com.oracle.graal.serviceprovider.ServiceProvider;\n");
+        out.printf("import jdk.vm.ci.service.ServiceProvider;\n");
         out.printf("\n");
         out.printf("import com.oracle.graal.nodes.ValueNode;\n");
         out.printf("import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderContext;\n");
@@ -203,7 +201,6 @@ public class PluginGenerator {
     }
 
     private static void createPluginFactoryMethod(PrintWriter out, List<GeneratedPlugin> plugins) {
-        out.printf("    @Override\n");
         out.printf("    public void registerPlugins(InvocationPlugins plugins, InjectionProvider injection) {\n");
         for (GeneratedPlugin plugin : plugins) {
             plugin.register(out);
