@@ -190,9 +190,9 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
 
     private RescueSlotDummyOp rescueSlotOp;
 
-    private AllocatableValue getOrInitRescueSlot() {
+    private VirtualStackSlot getOrInitRescueSlot() {
         RescueSlotDummyOp op = getOrInitRescueSlotOp();
-        return op.getSlot();
+        return (VirtualStackSlot) op.getSlot();
     }
 
     private RescueSlotDummyOp getOrInitRescueSlotOp() {
