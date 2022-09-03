@@ -165,7 +165,7 @@ public final class GraphBuilderPhase extends Phase {
         frameState.clearNonLiveLocals(blockMap.startBlock.localsLiveIn);
 
         // finish the start block
-        ((StateSplit) lastInstr).setStateAfter(frameState.create(0));
+        lastInstr.setStateAfter(frameState.create(0));
         if (blockMap.startBlock.isLoopHeader) {
             appendGoto(createTarget(blockMap.startBlock, frameState));
         } else {
@@ -241,7 +241,7 @@ public final class GraphBuilderPhase extends Phase {
         return handler.catchTypeCPI() == 0;
     }
 
-    private DispatchBeginNode handleException(ValueNode exceptionObject, int bci) {
+    private BeginNode handleException(ValueNode exceptionObject, int bci) {
         assert bci == FrameState.BEFORE_BCI || bci == bci() : "invalid bci";
         Debug.log("Creating exception dispatch edges at %d, exception object=%s, exception seen=%s", bci, exceptionObject, profilingInfo.getExceptionSeen(bci));
 
@@ -255,7 +255,7 @@ public final class GraphBuilderPhase extends Phase {
         FrameStateBuilder dispatchState = frameState.copy();
         dispatchState.clearStack();
 
-        DispatchBeginNode dispatchBegin = currentGraph.add(new DispatchBeginNode());
+        BeginNode dispatchBegin = currentGraph.add(new DispatchBeginNode());
         dispatchBegin.setStateAfter(dispatchState.create(bci));
 
         if (exceptionObject == null) {
@@ -302,7 +302,8 @@ public final class GraphBuilderPhase extends Phase {
 
         ValueNode index = frameState.ipop();
         ValueNode array = frameState.apop();
-        ValueNode v = append(currentGraph.add(new LoadIndexedNode(array, index, kind, graphId)));
+        ValueNode length = append(currentGraph.add(new ArrayLengthNode(array)));
+        ValueNode v = append(currentGraph.add(new LoadIndexedNode(array, index, length, kind, graphId)));
         frameState.push(kind.stackKind(), v);
     }
 
@@ -312,7 +313,8 @@ public final class GraphBuilderPhase extends Phase {
         ValueNode value = frameState.pop(kind.stackKind());
         ValueNode index = frameState.ipop();
         ValueNode array = frameState.apop();
-        StoreIndexedNode result = currentGraph.add(new StoreIndexedNode(array, index, kind, value, graphId));
+        ValueNode length = append(currentGraph.add(new ArrayLengthNode(array)));
+        StoreIndexedNode result = currentGraph.add(new StoreIndexedNode(array, index, length, kind, value, graphId));
         append(result);
     }
 
@@ -946,7 +948,7 @@ public final class GraphBuilderPhase extends Phase {
             frameState.pushReturn(resultType, result);
 
         } else {
-            DispatchBeginNode exceptionEdge = handleException(null, bci());
+            BeginNode exceptionEdge = handleException(null, bci());
             InvokeWithExceptionNode invoke = currentGraph.add(new InvokeWithExceptionNode(callTarget, exceptionEdge, bci(), graphId));
             ValueNode result = append(invoke);
             frameState.pushReturn(resultType, result);
@@ -1467,13 +1469,9 @@ public final class GraphBuilderPhase extends Phase {
                 frameState.clearNonLiveLocals(currentBlock.localsLiveOut);
             }
             if (lastInstr instanceof StateSplit) {
-                if (lastInstr.getClass() == BeginNode.class) {
-                    // BeginNodes do not need a frame state
-                } else {
-                    StateSplit stateSplit = (StateSplit) lastInstr;
-                    if (stateSplit.stateAfter() == null) {
-                        stateSplit.setStateAfter(frameState.create(bci));
-                    }
+                StateSplit stateSplit = (StateSplit) lastInstr;
+                if (stateSplit.stateAfter() == null) {
+                    stateSplit.setStateAfter(frameState.create(bci));
                 }
             }
             if (bci < endBCI) {

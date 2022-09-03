@@ -25,13 +25,12 @@ package com.oracle.graal.hotspot;
 import java.io.*;
 import java.util.*;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.printer.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
 import com.oracle.max.criutils.*;
 
 public class HotSpotDebugConfig implements DebugConfig {
@@ -106,9 +105,9 @@ public class HotSpotDebugConfig implements DebugConfig {
             return true;
         } else {
             for (Object o : Debug.context()) {
-                if (o instanceof JavaMethod) {
+                if (o instanceof RiMethod) {
                     for (MethodFilter filter : methodFilter) {
-                        if (filter.matches((JavaMethod) o)) {
+                        if (filter.matches((RiMethod) o)) {
                             return true;
                         }
                     }
@@ -145,28 +144,19 @@ public class HotSpotDebugConfig implements DebugConfig {
 
     @Override
     public RuntimeException interceptException(Throwable e) {
-        if (e instanceof BailoutException) {
+        if (e instanceof CiBailout) {
             return null;
         }
         Debug.setConfig(Debug.fixedConfig(true, true, false, false, dumpHandlers, output));
         Debug.log(String.format("Exception occurred in scope: %s", Debug.currentScope()));
         for (Object o : Debug.context()) {
+            Debug.log("Context obj %s", o);
             if (o instanceof Graph) {
-                Debug.log("Context obj %s", o);
                 if (GraalOptions.DumpOnError) {
                     Debug.dump(o, "Exception graph");
                 } else {
                     Debug.log("Use -G:+DumpOnError to enable dumping of graphs on this error");
                 }
-            } else if (o instanceof Node) {
-                String location = GraphUtil.approxSourceLocation((Node) o);
-                if (location != null) {
-                    Debug.log("Context obj %s (approx. location: %s)", o, location);
-                } else {
-                    Debug.log("Context obj %s", o);
-                }
-            } else {
-                Debug.log("Context obj %s", o);
             }
         }
         return null;

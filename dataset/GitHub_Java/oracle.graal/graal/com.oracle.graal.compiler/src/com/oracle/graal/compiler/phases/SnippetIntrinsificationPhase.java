@@ -120,23 +120,12 @@ public class SnippetIntrinsificationPhase extends Phase {
             if (folding || CiUtil.getParameterAnnotation(ConstantNodeParameter.class, parameterIndex, target) != null) {
                 assert argument instanceof ConstantNode : "parameter " + parameterIndex + " must be a compile time constant for calling " + invoke.callTarget().targetMethod() + ": " + argument;
                 ConstantNode constantNode = (ConstantNode) argument;
-                CiConstant constant = constantNode.asConstant();
-                Object o = constant.boxedValue();
+                Object o = constantNode.asConstant().boxedValue();
                 if (o instanceof Class< ? >) {
                     reflectionCallArguments[i] = runtime.getType((Class< ? >) o);
                     parameterTypes[i] = RiResolvedType.class;
                 } else {
-                    if (parameterTypes[i] == boolean.class) {
-                        reflectionCallArguments[i] = Boolean.valueOf(constant.asInt() != 0);
-                    } else if (parameterTypes[i] == byte.class) {
-                        reflectionCallArguments[i] = Byte.valueOf((byte) constant.asInt());
-                    } else if (parameterTypes[i] == short.class) {
-                        reflectionCallArguments[i] = Short.valueOf((short) constant.asInt());
-                    } else if (parameterTypes[i] == char.class) {
-                        reflectionCallArguments[i] = Character.valueOf((char) constant.asInt());
-                    } else {
-                        reflectionCallArguments[i] = o;
-                    }
+                    reflectionCallArguments[i] = o;
                 }
             } else {
                 reflectionCallArguments[i] = argument;
@@ -197,6 +186,7 @@ public class SnippetIntrinsificationPhase extends Phase {
     }
 
     private static Node createNodeInstance(Class< ? > nodeClass, Class< ? >[] parameterTypes, Object[] nodeConstructorArguments) {
+
         Constructor< ? > constructor;
         try {
             constructor = nodeClass.getDeclaredConstructor(parameterTypes);
@@ -207,7 +197,7 @@ public class SnippetIntrinsificationPhase extends Phase {
         try {
             return (ValueNode) constructor.newInstance(nodeConstructorArguments);
         } catch (Exception e) {
-            throw new RuntimeException(constructor + Arrays.toString(nodeConstructorArguments), e);
+            throw new RuntimeException(e);
         }
     }
 

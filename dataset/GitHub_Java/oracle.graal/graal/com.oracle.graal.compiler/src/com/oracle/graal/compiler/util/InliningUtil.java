@@ -962,7 +962,7 @@ public class InliningUtil {
         assert localCount == args.length : "snippet argument count mismatch";
         snippetCopy.addDuplicates(snippetGraph.getNodes(), replacements);
         if (!replacements.isEmpty()) {
-            new CanonicalizerPhase(null, runtime, null, -1, immutabilityPredicate).apply(snippetCopy);
+            new CanonicalizerPhase(null, runtime, null, false, immutabilityPredicate).apply(snippetCopy);
         }
 
         // Explode all loops in the snippet if requested
@@ -974,10 +974,10 @@ public class InliningUtil {
                 Debug.dump(snippetCopy, "Before exploding loop %s", loopBegin);
                 int peel = 0;
                 while (!loopBegin.isDeleted()) {
-                    int mark = snippetCopy.getMark();
+                    snippetCopy.mark();
                     LoopTransformUtil.peel(loop, wholeLoop);
                     Debug.dump(snippetCopy, "After peel %d", peel);
-                    new CanonicalizerPhase(null, runtime, null, mark, immutabilityPredicate).apply(snippetCopy);
+                    new CanonicalizerPhase(null, runtime, null, true, immutabilityPredicate).apply(snippetCopy);
                     peel++;
                 }
                 Debug.dump(snippetCopy, "After exploding loop %s", loopBegin);
@@ -1012,7 +1012,7 @@ public class InliningUtil {
 
         // Inline the gathered snippet nodes
         StructuredGraph graph = (StructuredGraph) replacee.graph();
-        int mark = graph.getMark();
+        graph.mark();
         Map<Node, Node> duplicates = graph.addDuplicates(nodes, replacements);
         Debug.dump(graph, "After inlining snippet %s", snippetCopy.method());
 
@@ -1032,7 +1032,7 @@ public class InliningUtil {
             }
         }
 
-        for (Node node : graph.getNewNodes(mark)) {
+        for (Node node : graph.getNewNodes()) {
             if (node instanceof StateSplit) {
                 StateSplit stateSplit = (StateSplit) node;
                 FrameState frameState = stateSplit.stateAfter();

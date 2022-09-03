@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.nodes.java;
 
-import com.oracle.graal.cri.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
@@ -35,7 +34,7 @@ import com.oracle.max.cri.ri.*;
 /**
  * Implements a type check that results in a {@link ClassCastException} if it fails.
  */
-public final class CheckCastNode extends FixedWithNextNode implements Canonicalizable, LIRLowerable, Lowerable, Node.IterableNodeType, TypeFeedbackProvider, TypeCanonicalizable {
+public final class CheckCastNode extends FixedWithNextNode implements Canonicalizable, LIRLowerable, Node.IterableNodeType, TypeFeedbackProvider, TypeCanonicalizable {
 
     @Input private ValueNode object;
     @Input private ValueNode targetClassInstruction;
@@ -61,11 +60,6 @@ public final class CheckCastNode extends FixedWithNextNode implements Canonicali
     }
 
     @Override
-    public void lower(CiLoweringTool tool) {
-        tool.getRuntime().lower(this, tool);
-    }
-
-    @Override
     public void generate(LIRGeneratorTool gen) {
         gen.visitCheckCast(this);
     }
@@ -74,15 +68,10 @@ public final class CheckCastNode extends FixedWithNextNode implements Canonicali
     public ValueNode canonical(CanonicalizerTool tool) {
         assert object() != null : this;
 
-        if (targetClass != null) {
-            RiResolvedType objectType = object().exactType();
-            if (objectType == null) {
-                objectType = object().declaredType();
-            }
-            if (objectType != null && objectType.isSubtypeOf(targetClass)) {
-                // we don't have to check for null types here because they will also pass the checkcast.
-                return object();
-            }
+        RiResolvedType objectDeclaredType = object().declaredType();
+        if (objectDeclaredType != null && targetClass != null && objectDeclaredType.isSubtypeOf(targetClass)) {
+            // we don't have to check for null types here because they will also pass the checkcast.
+            return object();
         }
 
         CiConstant constant = object().asConstant();

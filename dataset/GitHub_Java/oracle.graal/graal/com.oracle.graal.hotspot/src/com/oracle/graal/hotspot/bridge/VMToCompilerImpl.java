@@ -53,7 +53,6 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
 
     private final Compiler compiler;
     private IntrinsifyArrayCopyPhase intrinsifyArrayCopy;
-    private LowerCheckCastPhase lowerCheckCastPhase;
 
     public final HotSpotTypePrimitive typeBoolean;
     public final HotSpotTypePrimitive typeChar;
@@ -116,12 +115,8 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
                 @Override
                 public void run() {
                     VMToCompilerImpl.this.intrinsifyArrayCopy = new IntrinsifyArrayCopyPhase(runtime);
-                    VMToCompilerImpl.this.lowerCheckCastPhase = new LowerCheckCastPhase(runtime);
                     GraalIntrinsics.installIntrinsics(runtime, runtime.getCompiler().getTarget());
-                    Snippets.install(runtime, runtime.getCompiler().getTarget(), new SystemSnippets());
-                    Snippets.install(runtime, runtime.getCompiler().getTarget(), new UnsafeSnippets());
-                    Snippets.install(runtime, runtime.getCompiler().getTarget(), new ArrayCopySnippets());
-                    Snippets.install(runtime, runtime.getCompiler().getTarget(), new CheckCastSnippets());
+                    runtime.installSnippets();
                 }
             });
 
@@ -260,17 +255,14 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
             List<DebugValueMap> topLevelMaps = DebugValueMap.getTopLevelMaps();
             List<DebugValue> debugValues = KeyRegistry.getDebugValues();
             if (debugValues.size() > 0) {
-                ArrayList<DebugValue> sortedValues = new ArrayList<>(debugValues);
-                Collections.sort(sortedValues, DebugValue.ORDER_BY_NAME);
-
                 if (GraalOptions.SummarizeDebugValues) {
-                    printSummary(topLevelMaps, sortedValues);
+                    printSummary(topLevelMaps, debugValues);
                 } else if (GraalOptions.PerThreadDebugValues) {
                     for (DebugValueMap map : topLevelMaps) {
                         TTY.println("Showing the results for thread: " + map.getName());
                         map.group();
                         map.normalize();
-                        printMap(map, sortedValues, 0);
+                        printMap(map, debugValues, 0);
                     }
                 } else {
                     DebugValueMap globalMap = new DebugValueMap("Global");
@@ -287,7 +279,7 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
                         globalMap.group();
                     }
                     globalMap.normalize();
-                    printMap(globalMap, sortedValues, 0);
+                    printMap(globalMap, debugValues, 0);
                 }
             }
         }
@@ -334,7 +326,6 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
 
         printIndent(level);
         TTY.println("%s", map.getName());
-
         for (DebugValue value : debugValues) {
             long l = map.getCurrentValue(value.getIndex());
             if (l != 0) {
@@ -499,7 +490,6 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
         if (GraalOptions.Intrinsify) {
             phasePlan.addPhase(PhasePosition.HIGH_LEVEL, intrinsifyArrayCopy);
         }
-        phasePlan.addPhase(PhasePosition.HIGH_LEVEL, lowerCheckCastPhase);
         return phasePlan;
     }
 
