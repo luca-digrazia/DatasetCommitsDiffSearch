@@ -30,8 +30,6 @@ import java.util.List;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.SortedMap;
-import java.util.function.Consumer;
-import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import org.graalvm.collections.EconomicMap;
@@ -78,8 +76,8 @@ public class SubstrateOptionsParser {
             return new OptionParseResult(selectedOptionTypes, null);
         }
 
-        boolean printFlags() {
-            return !printFlags.isEmpty();
+        EnumSet<OptionType> printFlags() {
+            return printFlags;
         }
 
         public boolean isValid() {
@@ -88,20 +86,6 @@ public class SubstrateOptionsParser {
 
         public String getError() {
             return error;
-        }
-
-        private boolean matchesFlags(OptionDescriptor d, boolean svmOption) {
-            boolean showAll = printFlags.equals(EnumSet.allOf(OptionType.class));
-            return showAll || svmOption && printFlags.contains(d.getOptionType());
-        }
-
-        boolean matchesFlagsRuntime(OptionDescriptor d) {
-            return matchesFlags(d, d.getOptionKey() instanceof RuntimeOptionKey);
-        }
-
-        boolean matchesFlagsHosted(OptionDescriptor d) {
-            OptionKey<?> key = d.getOptionKey();
-            return matchesFlags(d, key instanceof RuntimeOptionKey || key instanceof HostedOptionKey);
         }
     }
 
@@ -267,8 +251,8 @@ public class SubstrateOptionsParser {
         }
 
         OptionParseResult optionParseResult = SubstrateOptionsParser.parseOption(options, arg.substring(optionPrefix.length()), valuesMap, optionPrefix, booleanOptionFormat);
-        if (optionParseResult.printFlags()) {
-            SubstrateOptionsParser.printFlags(optionParseResult::matchesFlagsHosted, options, optionPrefix, out);
+        if (!optionParseResult.printFlags().isEmpty()) {
+            SubstrateOptionsParser.printFlags(optionParseResult.printFlags(), options, optionPrefix, out);
             throw new InterruptImageBuilding();
         }
         if (!optionParseResult.isValid()) {
@@ -281,7 +265,8 @@ public class SubstrateOptionsParser {
         return new String(new char[length]).replace('\0', ' ');
     }
 
-    private static String wrap(String s, int width) {
+    private static String wrap(String s) {
+        final int width = 120;
         StringBuilder sb = new StringBuilder(s);
         int cursor = 0;
         while (cursor + width < sb.length()) {
@@ -299,29 +284,30 @@ public class SubstrateOptionsParser {
         return sb.toString();
     }
 
-    private static void printOption(PrintStream out, String option, String description) {
-        printOption(out::println, option, description, 2, 45, 120);
-    }
-
-    public static void printOption(Consumer<String> println, String option, String description, int indentation, int optionWidth, int wrapWidth) {
+    private static void printOption(PrintStream out, String option, String description, int indentation) {
         String indent = spaces(indentation);
-        String desc = wrap(description != null ? description : "", wrapWidth);
+        String desc = wrap(description != null ? description : "");
         String nl = System.lineSeparator();
         String[] descLines = desc.split(nl);
+        int optionWidth = 45;
         if (option.length() >= optionWidth && description != null) {
-            println.accept(indent + option + nl + indent + spaces(optionWidth) + descLines[0]);
+            out.println(indent + option + nl + indent + spaces(optionWidth) + descLines[0]);
         } else {
-            println.accept(indent + option + spaces(optionWidth - option.length()) + descLines[0]);
+            out.println(indent + option + spaces(optionWidth - option.length()) + descLines[0]);
         }
         for (int i = 1; i < descLines.length; i++) {
-            println.accept(indent + spaces(optionWidth) + descLines[i]);
+            out.println(indent + spaces(optionWidth) + descLines[i]);
         }
     }
 
-    static void printFlags(Predicate<OptionDescriptor> filter, SortedMap<String, OptionDescriptor> sortedOptions, String prefix, PrintStream out) {
+    static void printFlags(EnumSet<OptionType> optionTypes, SortedMap<String, OptionDescriptor> sortedOptions, String prefix, PrintStream out) {
         for (Entry<String, OptionDescriptor> entry : sortedOptions.entrySet()) {
             OptionDescriptor descriptor = entry.getValue();
-            if (!filter.test(descriptor)) {
+            if (!optionTypes.contains(descriptor.getOptionType())) {
+                continue;
+            }
+            OptionKey<?> optionKey = descriptor.getOptionKey();
+            if (!(optionKey instanceof HostedOptionKey || optionKey instanceof RuntimeOptionKey)) {
                 continue;
             }
             String helpMsg = descriptor.getHelp();
@@ -339,18 +325,18 @@ public class SubstrateOptionsParser {
                 } else {
                     helpMsg += "Default: + (enabled).";
                 }
-                printOption(out, prefix + "\u00b1" + entry.getKey(), helpMsg);
+                printOption(out, prefix + "\u00b1" + entry.getKey(), helpMsg, 2);
             } else {
                 Object def = descriptor.getOptionKey().getDefaultValue();
                 if (def instanceof String) {
                     def = '"' + String.valueOf(def) + '"';
                 }
-                printOption(out, prefix + entry.getKey() + "=" + def, helpMsg);
+                printOption(out, prefix + entry.getKey() + "=" + def, helpMsg, 2);
             }
         }
     }
 
-    public static long parseLong(String v) {
+    static long parseLong(String v) {
         String valueString = v.toLowerCase();
         long scale = 1;
         if (valueString.endsWith("k")) {
@@ -379,7 +365,7 @@ public class SubstrateOptionsParser {
      *         it returns "-H:Name=file")
      */
     public static String commandArgument(OptionKey<?> option, String value) {
-        if (option.getDescriptor().getOptionValueType() == Boolean.class) {
+        if (option.getDescriptor().getType() == Boolean.class) {
             assert value.equals("+") || value.equals("-") || value.equals("[+|-]") : "Boolean option can be only + or - or [+|-].";
             return HOSTED_OPTION_PREFIX + value + option;
         } else {
