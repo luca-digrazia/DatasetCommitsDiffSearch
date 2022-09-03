@@ -58,7 +58,7 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
     /**
      * If an OSR compilation is scheduled the corresponding call target is stored here.
      */
-    private volatile OptimizedCallTarget compiledOSRLoop;
+    private OptimizedCallTarget compiledOSRLoop;
 
     /**
      * The current loop count. Not for condition probabilities use as it might stop profiling.
