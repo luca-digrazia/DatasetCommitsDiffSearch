@@ -44,7 +44,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BooleanSupplier;
-import java.util.function.Predicate;
 
 import org.graalvm.compiler.core.common.SuppressFBWarnings;
 import org.graalvm.compiler.options.Option;
@@ -455,7 +454,6 @@ class ClassDescriptor extends PlatformsDescriptor {
     }
 }
 
-@SuppressWarnings("unchecked")
 @SuppressFBWarnings(value = "UwF", justification = "Fields written by GSON using reflection")
 class ElementDescriptor extends PlatformsDescriptor {
 
@@ -475,8 +473,8 @@ class ElementDescriptor extends PlatformsDescriptor {
         }
 
         @Override
-        public Class<? extends Predicate<Class<?>>>[] onlyWith() {
-            return (Class<? extends Predicate<Class<?>>>[]) new Class<?>[]{TargetElement.AlwaysIncluded.class};
+        public boolean optional() {
+            return get("optional", false);
         }
     }
 }

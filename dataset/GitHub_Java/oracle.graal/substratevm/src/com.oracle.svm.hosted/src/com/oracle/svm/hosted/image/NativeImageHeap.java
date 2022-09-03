@@ -179,11 +179,6 @@ public final class NativeImageHeap {
         return readOnlyRelocatable.offsetInSection();
     }
 
-    long getFirstRelocatablePointerOffsetInSection() {
-        assert firstRelocatablePointerOffsetInSection != -1;
-        return firstRelocatablePointerOffsetInSection;
-    }
-
     long getReadOnlyRelocatablePartitionSize() {
         return readOnlyRelocatable.getSize();
     }
@@ -447,26 +442,16 @@ public final class NativeImageHeap {
             final boolean fieldsAreImmutable = canonicalObj instanceof String;
             for (HostedField field : clazz.getInstanceFields(true)) {
                 if (field.isAccessed() && !field.equals(hybridArrayField) && !field.equals(hybridBitsetField)) {
-                    boolean fieldRelocatable = false;
-                    if (field.getJavaKind() == JavaKind.Object) {
+                    written = written || (field.isWritten() && !field.isFinal());
+                    if (field.getType().getStorageKind() == JavaKind.Object) {
                         assert field.hasLocation();
-                        JavaConstant value = field.readValue(con);
-                        if (value.getJavaKind() == JavaKind.Object) {
-                            Object obj = SubstrateObjectConstant.asObject(value);
-                            if (spawnIsolates()) {
-                                fieldRelocatable = obj instanceof RelocatedPointer;
-                            }
-                            recursiveAddObject(obj, canonicalizable, fieldsAreImmutable, info);
-                            references = true;
+                        Object fieldValue = readObjectField(field, con);
+                        if (spawnIsolates()) {
+                            relocatable = relocatable || fieldValue instanceof RelocatedPointer;
                         }
+                        recursiveAddObject(fieldValue, canonicalizable, fieldsAreImmutable, info);
+                        references = true;
                     }
-                    /*
-                     * The analysis considers relocatable pointers to be written because their
-                     * eventual value is assigned at runtime by the dynamic linker and it cannot be
-                     * inlined. Relocatable pointers are read-only for our purposes, however.
-                     */
-                    relocatable = relocatable || fieldRelocatable;
-                    written = written || (field.isWritten() && !field.isFinal() && !fieldRelocatable);
                 }
 
             }
@@ -530,7 +515,7 @@ public final class NativeImageHeap {
             }
             return references ? readOnlyReference : readOnlyPrimitive;
         } else {
-            VMError.guarantee(!relocatable, "Objects with relocatable pointers must be immutable");
+            assert !relocatable;
             return references ? writableReference : writablePrimitive;
         }
     }
@@ -637,7 +622,7 @@ public final class NativeImageHeap {
                 int shift = compressEncoding.getShift();
                 writePointer(buffer, index, targetInfo.getOffsetInSection() >>> shift);
             } else {
-                addDirectRelocationWithoutAddend(buffer, index, target);
+                buffer.addDirectRelocationWithoutAddend(index, objectSize(), target);
             }
         }
     }
@@ -673,23 +658,7 @@ public final class NativeImageHeap {
         } else {
             // The address of the DynamicHub target will have to be added by the link editor.
             // DynamicHubs are the size of Object references.
-            addDirectRelocationWithAddend(buffer, index, target, objectHeaderBits);
-        }
-    }
-
-    private void addDirectRelocationWithoutAddend(RelocatableBuffer buffer, int index, Object target) {
-        assert !spawnIsolates() || index >= readOnlyRelocatable.offsetInSection() && index < readOnlyRelocatable.offsetInSection(readOnlyRelocatable.getSize());
-        buffer.addDirectRelocationWithoutAddend(index, objectSize(), target);
-        if (firstRelocatablePointerOffsetInSection == -1) {
-            firstRelocatablePointerOffsetInSection = index;
-        }
-    }
-
-    private void addDirectRelocationWithAddend(RelocatableBuffer buffer, int index, DynamicHub target, long objectHeaderBits) {
-        assert !spawnIsolates() || index >= readOnlyRelocatable.offsetInSection() && index < readOnlyRelocatable.offsetInSection(readOnlyRelocatable.getSize());
-        buffer.addDirectRelocationWithAddend(index, objectSize(), objectHeaderBits, target);
-        if (firstRelocatablePointerOffsetInSection == -1) {
-            firstRelocatablePointerOffsetInSection = index;
+            buffer.addDirectRelocationWithAddend(index, objectSize(), objectHeaderBits, target);
         }
     }
 
@@ -704,7 +673,7 @@ public final class NativeImageHeap {
         HostedMethod method = ((MethodPointer) pointer).getMethod();
         if (method.isCodeAddressOffsetValid()) {
             // Only compiled methods inserted in vtables require relocation.
-            addDirectRelocationWithoutAddend(buffer, index, pointer);
+            buffer.addDirectRelocationWithoutAddend(index, objectSize(), pointer);
         }
     }
 
@@ -895,7 +864,6 @@ public final class NativeImageHeap {
                 for (int i = 0; i < length; i++) {
                     final int elementIndex = info.getIntIndexInSection(layout.getArrayElementOffset(kind, i));
                     final Object element = aUniverse.replaceObject(oarray[i]);
-                    assert (oarray[i] instanceof RelocatedPointer) == (element instanceof RelocatedPointer);
                     writeConstant(buffer, elementIndex, kind, element, info);
                 }
             } else {
@@ -943,8 +911,6 @@ public final class NativeImageHeap {
         // Some hosted classes I know are not canonicalizable.
         knownNonCanonicalizableClasses.add(Enum.class);
         knownNonCanonicalizableClasses.add(Proxy.class);
-        // The classes implementing Map have lazily initialized caches, so must not be immutable.
-        knownNonCanonicalizableClasses.add(Map.class);
         // Some hosted classes I know to be canonicalizable.
         knownCanonicalizableClasses.add(DynamicHub.class);
     }
@@ -990,7 +956,6 @@ public final class NativeImageHeap {
     private final HeapPartition readOnlyPrimitive;
     private final HeapPartition readOnlyReference;
     private final HeapPartition readOnlyRelocatable;
-    private long firstRelocatablePointerOffsetInSection = -1;
     private final HeapPartition writablePrimitive;
     private final HeapPartition writableReference;
 
