@@ -29,7 +29,6 @@ import java.util.Map.Entry;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graph.Graph.Mark;
@@ -37,9 +36,9 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.java.*;
-import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.*;
@@ -68,7 +67,7 @@ public final class TruffleCacheImpl implements TruffleCache {
 
     private final ResolvedJavaType stringBuilderClass;
     private final ResolvedJavaType runtimeExceptionClass;
-    private final ResolvedJavaType errorClass;
+    private final ResolvedJavaType assertionErrorClass;
     private final ResolvedJavaType controlFlowExceptionClass;
 
     private final ResolvedJavaMethod callBoundaryMethod;
@@ -82,7 +81,7 @@ public final class TruffleCacheImpl implements TruffleCache {
 
         this.stringBuilderClass = providers.getMetaAccess().lookupJavaType(StringBuilder.class);
         this.runtimeExceptionClass = providers.getMetaAccess().lookupJavaType(RuntimeException.class);
-        this.errorClass = providers.getMetaAccess().lookupJavaType(Error.class);
+        this.assertionErrorClass = providers.getMetaAccess().lookupJavaType(AssertionError.class);
         this.controlFlowExceptionClass = providers.getMetaAccess().lookupJavaType(ControlFlowException.class);
 
         try {
@@ -98,6 +97,7 @@ public final class TruffleCacheImpl implements TruffleCache {
         return graph;
     }
 
+    @SuppressWarnings("unused")
     public StructuredGraph lookup(final ResolvedJavaMethod method, final NodeInputList<ValueNode> arguments, final Assumptions assumptions, final CanonicalizerPhase finalCanonicalizer,
                     boolean ignoreSlowPath) {
 
@@ -124,7 +124,24 @@ public final class TruffleCacheImpl implements TruffleCache {
         }
 
         if (lastUsed.values().size() >= TruffleCompilerOptions.TruffleMaxCompilationCacheSize.getValue()) {
-            lookupExceedsMaxSize();
+            List<Long> lastUsedList = new ArrayList<>();
+            for (long l : lastUsed.values()) {
+                lastUsedList.add(l);
+            }
+            Collections.sort(lastUsedList);
+            long mid = lastUsedList.get(lastUsedList.size() / 2);
+
+            List<List<Object>> toRemoveList = new ArrayList<>();
+            for (Entry<List<Object>, Long> entry : lastUsed.entrySet()) {
+                if (entry.getValue() < mid) {
+                    toRemoveList.add(entry.getKey());
+                }
+            }
+
+            for (List<Object> entry : toRemoveList) {
+                cache.remove(entry);
+                lastUsed.remove(entry);
+            }
         }
 
         lastUsed.put(key, counter++);
@@ -166,11 +183,42 @@ public final class TruffleCacheImpl implements TruffleCache {
                 boolean inliningProgress = false;
                 for (MethodCallTargetNode methodCallTarget : graph.getNodes(MethodCallTargetNode.class)) {
                     if (!graph.getMark().equals(mark)) {
-                        mark = lookupProcessMacroSubstitutions(graph, mark);
+                        // Make sure macro substitutions such as
+                        // CompilerDirectives.transferToInterpreter get processed first.
+                        for (Node newNode : graph.getNewNodes(mark)) {
+                            if (newNode instanceof MethodCallTargetNode) {
+                                MethodCallTargetNode methodCallTargetNode = (MethodCallTargetNode) newNode;
+                                Class<? extends FixedWithNextNode> macroSubstitution = providers.getReplacements().getMacroSubstitution(methodCallTargetNode.targetMethod());
+                                if (macroSubstitution != null) {
+                                    InliningUtil.inlineMacroNode(methodCallTargetNode.invoke(), methodCallTargetNode.targetMethod(), macroSubstitution);
+                                } else {
+                                    tryCutOffRuntimeExceptions(methodCallTargetNode);
+                                }
+                            }
+                        }
+                        mark = graph.getMark();
                     }
                     if (methodCallTarget.isAlive() && methodCallTarget.invoke() != null && shouldInline(methodCallTarget)) {
                         inliningProgress = true;
-                        lookupDoInline(graph, phaseContext, canonicalizerPhase, methodCallTarget);
+                        List<Node> canonicalizerUsages = new ArrayList<Node>();
+                        for (Node n : methodCallTarget.invoke().asNode().usages()) {
+                            if (n instanceof Canonicalizable) {
+                                canonicalizerUsages.add(n);
+                            }
+                        }
+                        List<ValueNode> argumentSnapshot = methodCallTarget.arguments().snapshot();
+                        Mark beforeInvokeMark = graph.getMark();
+                        expandInvoke(methodCallTarget);
+                        for (Node arg : argumentSnapshot) {
+                            if (arg != null && arg.recordsUsages()) {
+                                for (Node argUsage : arg.usages()) {
+                                    if (graph.isNew(beforeInvokeMark, argUsage) && argUsage instanceof Canonicalizable) {
+                                        canonicalizerUsages.add(argUsage);
+                                    }
+                                }
+                            }
+                        }
+                        canonicalizerPhase.applyIncremental(graph, phaseContext, canonicalizerUsages);
                     }
                 }
 
@@ -192,66 +240,7 @@ public final class TruffleCacheImpl implements TruffleCache {
         } catch (Throwable e) {
             throw Debug.handle(e);
         }
-    }
 
-    private void lookupExceedsMaxSize() {
-        List<Long> lastUsedList = new ArrayList<>();
-        for (long l : lastUsed.values()) {
-            lastUsedList.add(l);
-        }
-        Collections.sort(lastUsedList);
-        long mid = lastUsedList.get(lastUsedList.size() / 2);
-
-        List<List<Object>> toRemoveList = new ArrayList<>();
-        for (Entry<List<Object>, Long> entry : lastUsed.entrySet()) {
-            if (entry.getValue() < mid) {
-                toRemoveList.add(entry.getKey());
-            }
-        }
-
-        for (List<Object> entry : toRemoveList) {
-            cache.remove(entry);
-            lastUsed.remove(entry);
-        }
-    }
-
-    private Mark lookupProcessMacroSubstitutions(final StructuredGraph graph, Mark mark) throws GraalInternalError {
-        // Make sure macro substitutions such as
-        // CompilerDirectives.transferToInterpreter get processed first.
-        for (Node newNode : graph.getNewNodes(mark)) {
-            if (newNode instanceof MethodCallTargetNode) {
-                MethodCallTargetNode methodCallTargetNode = (MethodCallTargetNode) newNode;
-                Class<? extends FixedWithNextNode> macroSubstitution = providers.getReplacements().getMacroSubstitution(methodCallTargetNode.targetMethod());
-                if (macroSubstitution != null) {
-                    InliningUtil.inlineMacroNode(methodCallTargetNode.invoke(), methodCallTargetNode.targetMethod(), macroSubstitution);
-                } else {
-                    tryCutOffRuntimeExceptionsAndErrors(methodCallTargetNode);
-                }
-            }
-        }
-        return graph.getMark();
-    }
-
-    private void lookupDoInline(final StructuredGraph graph, final PhaseContext phaseContext, CanonicalizerPhase canonicalizerPhase, MethodCallTargetNode methodCallTarget) {
-        List<Node> canonicalizerUsages = new ArrayList<>();
-        for (Node n : methodCallTarget.invoke().asNode().usages()) {
-            if (n instanceof Canonicalizable) {
-                canonicalizerUsages.add(n);
-            }
-        }
-        List<ValueNode> argumentSnapshot = methodCallTarget.arguments().snapshot();
-        Mark beforeInvokeMark = graph.getMark();
-        expandInvoke(methodCallTarget);
-        for (Node arg : argumentSnapshot) {
-            if (arg != null && arg.recordsUsages()) {
-                for (Node argUsage : arg.usages()) {
-                    if (graph.isNew(beforeInvokeMark, argUsage) && argUsage instanceof Canonicalizable) {
-                        canonicalizerUsages.add(argUsage);
-                    }
-                }
-            }
-        }
-        canonicalizerPhase.applyIncremental(graph, phaseContext, canonicalizerUsages);
     }
 
     private void expandInvoke(MethodCallTargetNode methodCallTargetNode) {
@@ -268,15 +257,15 @@ public final class TruffleCacheImpl implements TruffleCache {
         InliningUtil.inline(invoke, inlineGraph, true, null);
     }
 
-    private boolean tryCutOffRuntimeExceptionsAndErrors(MethodCallTargetNode methodCallTargetNode) {
+    private boolean tryCutOffRuntimeExceptions(MethodCallTargetNode methodCallTargetNode) {
         if (methodCallTargetNode.targetMethod().isConstructor()) {
             ResolvedJavaType declaringClass = methodCallTargetNode.targetMethod().getDeclaringClass();
             ResolvedJavaType exceptionType = Objects.requireNonNull(StampTool.typeOrNull(methodCallTargetNode.receiver().stamp()));
 
-            boolean removeAllocation = runtimeExceptionClass.isAssignableFrom(declaringClass) || errorClass.isAssignableFrom(declaringClass);
-            boolean isControlFlowException = controlFlowExceptionClass.isAssignableFrom(exceptionType);
-            if (removeAllocation && !isControlFlowException) {
-                DeoptimizeNode deoptNode = methodCallTargetNode.graph().add(DeoptimizeNode.create(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.UnreachedCode));
+            boolean removeAllocation = runtimeExceptionClass.isAssignableFrom(declaringClass) || assertionErrorClass.isAssignableFrom(declaringClass);
+            boolean isCFGException = controlFlowExceptionClass.isAssignableFrom(exceptionType);
+            if (removeAllocation && !isCFGException) {
+                DeoptimizeNode deoptNode = methodCallTargetNode.graph().add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.UnreachedCode));
                 FixedNode invokeNode = methodCallTargetNode.invoke().asNode();
                 invokeNode.replaceAtPredecessor(deoptNode);
                 GraphUtil.killCFG(invokeNode);
