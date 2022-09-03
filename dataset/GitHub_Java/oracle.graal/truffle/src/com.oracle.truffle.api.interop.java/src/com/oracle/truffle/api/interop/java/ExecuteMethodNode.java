@@ -46,7 +46,6 @@ import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.profiles.ConditionProfile;
-import com.oracle.truffle.api.profiles.ValueProfile;
 
 abstract class ExecuteMethodNode extends Node {
     static final int LIMIT = 3;
@@ -87,8 +86,7 @@ abstract class ExecuteMethodNode extends Node {
     @Specialization(guards = {"!method.isVarArgs()", "method == cachedMethod"}, limit = "LIMIT")
     Object doFixed(SingleMethodDesc method, Object obj, Object[] args, Object languageContext,
                     @Cached("method") SingleMethodDesc cachedMethod,
-                    @Cached("createToJava(method.getParameterCount())") ToJavaNode[] toJavaNodes,
-                    @Cached("createClassProfile()") ValueProfile receiverProfile) {
+                    @Cached("createToJava(method.getParameterCount())") ToJavaNode[] toJavaNodes) {
         int arity = cachedMethod.getParameterCount();
         if (args.length != arity) {
             throw ArityException.raise(arity, args.length);
@@ -100,15 +98,14 @@ abstract class ExecuteMethodNode extends Node {
             convertedArguments[i] = toJavaNodes[i].execute(args[i], types[i], genericTypes[i], languageContext);
         }
 
-        return doInvoke(cachedMethod, receiverProfile.profile(obj), convertedArguments, languageContext);
+        return doInvoke(cachedMethod, obj, convertedArguments, languageContext);
     }
 
     @SuppressWarnings("unused")
     @Specialization(guards = {"method.isVarArgs()", "method == cachedMethod"}, limit = "LIMIT")
     Object doVarArgs(SingleMethodDesc method, Object obj, Object[] args, Object languageContext,
                     @Cached("method") SingleMethodDesc cachedMethod,
-                    @Cached("create()") ToJavaNode toJavaNode,
-                    @Cached("createClassProfile()") ValueProfile receiverProfile) {
+                    @Cached("create()") ToJavaNode toJavaNode) {
         int parameterCount = cachedMethod.getParameterCount();
         int minArity = parameterCount - 1;
         if (args.length < minArity) {
@@ -130,7 +127,7 @@ abstract class ExecuteMethodNode extends Node {
         } else {
             convertedArguments[minArity] = toJavaNode.execute(args[minArity], types[minArity], genericTypes[minArity], languageContext);
         }
-        return doInvoke(cachedMethod, receiverProfile.profile(obj), convertedArguments, languageContext);
+        return doInvoke(cachedMethod, obj, convertedArguments, languageContext);
     }
 
     @Specialization(replaces = {"doFixed", "doVarArgs"})
@@ -155,8 +152,7 @@ abstract class ExecuteMethodNode extends Node {
                     @Cached("create()") ToJavaNode toJavaNode,
                     @Cached(value = "createArgTypesArray(args)", dimensions = 1) Type[] cachedArgTypes,
                     @Cached("selectOverload(method, args, languageContext, toJavaNode, cachedArgTypes)") SingleMethodDesc overload,
-                    @Cached("asVarArgs(args, overload)") boolean asVarArgs,
-                    @Cached("createClassProfile()") ValueProfile receiverProfile) {
+                    @Cached("asVarArgs(args, overload)") boolean asVarArgs) {
         assert overload == selectOverload(method, args, languageContext, toJavaNode);
         Class<?>[] types = overload.getParameterTypes();
         Type[] genericTypes = overload.getGenericParameterTypes();
@@ -175,7 +171,7 @@ abstract class ExecuteMethodNode extends Node {
                 convertedArguments[i] = toJavaNode.execute(args[i], types[i], genericTypes[i], languageContext);
             }
         }
-        return doInvoke(overload, receiverProfile.profile(obj), convertedArguments, languageContext);
+        return doInvoke(overload, obj, convertedArguments, languageContext);
     }
 
     @Specialization(replaces = "doOverloadedCached")
