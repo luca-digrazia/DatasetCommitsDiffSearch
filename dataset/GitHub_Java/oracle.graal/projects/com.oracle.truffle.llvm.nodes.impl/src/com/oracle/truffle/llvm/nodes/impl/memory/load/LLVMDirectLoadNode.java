@@ -30,31 +30,21 @@
 package com.oracle.truffle.llvm.nodes.impl.memory.load;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.ImportStatic;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeField;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.interop.ForeignAccess;
-import com.oracle.truffle.api.interop.Message;
-import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.UnknownIdentifierException;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMAddressNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMFunctionNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMFunctionRegistry;
 import com.oracle.truffle.llvm.nodes.impl.base.floating.LLVM80BitFloatNode;
 import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMIVarBitNode;
-import com.oracle.truffle.llvm.nodes.impl.intrinsics.interop.LLVMTruffleManagedMalloc.ManagedMallocObject;
 import com.oracle.truffle.llvm.nodes.impl.others.LLVMGlobalVariableDescriptorGuards;
 import com.oracle.truffle.llvm.types.LLVMAddress;
 import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.types.LLVMGlobalVariableDescriptor;
 import com.oracle.truffle.llvm.types.LLVMIVarBit;
-import com.oracle.truffle.llvm.types.LLVMTruffleObject;
 import com.oracle.truffle.llvm.types.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.types.memory.LLVMHeap;
 import com.oracle.truffle.llvm.types.memory.LLVMMemory;
@@ -90,56 +80,16 @@ public abstract class LLVMDirectLoadNode {
 
         @Specialization
         public LLVMFunctionDescriptor executeAddress(LLVMAddress addr) {
-            return (LLVMFunctionDescriptor) getFunctionRegistry().createFromIndex(LLVMHeap.getFunctionIndex(addr));
+            return getFunctionRegistry().createFromIndex(LLVMHeap.getFunctionIndex(addr));
         }
     }
 
-    @NodeChild(type = LLVMExpressionNode.class)
+    @NodeChild(type = LLVMAddressNode.class)
     public abstract static class LLVMAddressDirectLoadNode extends LLVMAddressNode {
 
         @Specialization
         public LLVMAddress executeAddress(LLVMAddress addr) {
             return LLVMMemory.getAddress(addr);
-        }
-
-        @Specialization
-        public Object executeManagedMalloc(ManagedMallocObject addr) {
-            return addr.get(0);
-        }
-
-        @Specialization(guards = "objectIsManagedMalloc(addr)")
-        public Object executeIndirectedManagedMalloc(LLVMTruffleObject addr) {
-            return ((ManagedMallocObject) addr.getObject()).get((int) (addr.getOffset() / LLVMAddressNode.BYTE_SIZE));
-        }
-
-        @Specialization(guards = "!objectIsManagedMalloc(addr)")
-        public Object executeIndirectedForeign(VirtualFrame frame, LLVMTruffleObject addr, @Cached("createForeignReadNode()") Node foreignRead) {
-            try {
-                return ForeignAccess.sendRead(foreignRead, frame, addr.getObject(), addr.getOffset());
-            } catch (UnknownIdentifierException | UnsupportedMessageException e) {
-                throw new UnsupportedOperationException(e);
-            }
-        }
-
-        @Specialization(guards = "!isManagedMalloc(addr)")
-        public Object executeForeign(VirtualFrame frame, TruffleObject addr, @Cached("createForeignReadNode()") Node foreignRead) {
-            try {
-                return ForeignAccess.sendRead(foreignRead, frame, addr, 0);
-            } catch (UnknownIdentifierException | UnsupportedMessageException e) {
-                throw new UnsupportedOperationException(e);
-            }
-        }
-
-        protected boolean objectIsManagedMalloc(LLVMTruffleObject addr) {
-            return addr.getObject() instanceof ManagedMallocObject;
-        }
-
-        protected boolean isManagedMalloc(TruffleObject addr) {
-            return addr instanceof ManagedMallocObject;
-        }
-
-        protected Node createForeignReadNode() {
-            return Message.READ.createNode();
         }
     }
 

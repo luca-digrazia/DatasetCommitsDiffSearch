@@ -41,6 +41,7 @@ import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.llvm.nativeint.NativeLookup;
 import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.parser.NodeFactoryFacade;
+import com.oracle.truffle.llvm.runtime.LLVMOptimizationConfiguration;
 import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.types.memory.LLVMStack;
 
@@ -64,9 +65,9 @@ public class LLVMContext extends ExecutionContext {
 
     private boolean parseOnly;
 
-    public LLVMContext(NodeFactoryFacade facade) {
+    public LLVMContext(NodeFactoryFacade facade, LLVMOptimizationConfiguration optimizationConfig) {
         nativeLookup = new NativeLookup(facade);
-        this.functionRegistry = new LLVMFunctionRegistry(facade);
+        this.functionRegistry = new LLVMFunctionRegistry(optimizationConfig, facade);
     }
 
     public RootCallTarget getFunction(LLVMFunctionDescriptor function) {

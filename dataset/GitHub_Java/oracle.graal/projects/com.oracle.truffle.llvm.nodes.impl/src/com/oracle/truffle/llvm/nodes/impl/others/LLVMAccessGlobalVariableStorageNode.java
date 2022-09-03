@@ -27,46 +27,46 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.oracle.truffle.llvm.nodes.impl.intrinsics.interop;
+package com.oracle.truffle.llvm.nodes.impl.others;
 
-import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.NodeChild;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.dsl.ImportStatic;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
-import com.oracle.truffle.llvm.nodes.impl.base.LLVMLanguage;
-import com.oracle.truffle.llvm.nodes.impl.intrinsics.interop.LLVMTruffleImportCachedFactory.ImportCacheNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.intrinsics.llvm.LLVMIntrinsic.LLVMAddressIntrinsic;
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.llvm.nodes.impl.base.LLVMAddressNode;
 import com.oracle.truffle.llvm.types.LLVMAddress;
+import com.oracle.truffle.llvm.types.LLVMGlobalVariableDescriptor;
 
-@NodeChild(type = LLVMExpressionNode.class)
-public abstract class LLVMTruffleImportCached extends LLVMAddressIntrinsic {
+@ImportStatic(LLVMGlobalVariableDescriptorGuards.class)
+public abstract class LLVMAccessGlobalVariableStorageNode extends LLVMAddressNode {
 
-    @Child private ImportCache cache = ImportCacheNodeGen.create();
+    protected final LLVMGlobalVariableDescriptor descriptor;
 
-    @Specialization
-    public Object executeIntrinsic(LLVMAddress value) {
-        String id = LLVMTruffleIntrinsicUtil.readString(value);
-        return cache.execute(id);
+    public LLVMAccessGlobalVariableStorageNode(LLVMGlobalVariableDescriptor descriptor) {
+        this.descriptor = descriptor;
     }
 
-    abstract static class ImportCache extends Node {
+    @Specialization(guards = "needsTransition(frame, descriptor)")
+    public LLVMAddress executeTransition(VirtualFrame frame) {
+        CompilerDirectives.transferToInterpreterAndInvalidate();
+        descriptor.transition(false, false);
+        return executeNative(frame);
+    }
 
-        public abstract Object execute(String name);
+    @SuppressWarnings("unused")
+    @Specialization(guards = "isNative(frame, descriptor)")
+    public LLVMAddress executeNative(VirtualFrame frame) {
+        return descriptor.getNativeStorage();
+    }
 
-        @SuppressWarnings("unused")
-        @Specialization(limit = "10", guards = {"stringEquals(name, cachedName)"})
-        public Object importValue(String name, @Cached("name") String cachedName, @Cached("resolve(cachedName)") Object value) {
-            return value;
-        }
+    @SuppressWarnings("unused")
+    @Specialization(guards = "isManaged(frame, descriptor)")
+    public Object executeManaged(VirtualFrame frame) {
+        return descriptor.getManagedStorage();
+    }
 
-        protected static Object resolve(String name) {
-            return LLVMLanguage.INSTANCE.getEnvironment().importSymbol(name);
-        }
-
-        protected static boolean stringEquals(String s1, String s2) {
-            return s1.equals(s2);
-        }
+    public LLVMGlobalVariableDescriptor getGlobalVariableStorage() {
+        return descriptor;
     }
 
 }

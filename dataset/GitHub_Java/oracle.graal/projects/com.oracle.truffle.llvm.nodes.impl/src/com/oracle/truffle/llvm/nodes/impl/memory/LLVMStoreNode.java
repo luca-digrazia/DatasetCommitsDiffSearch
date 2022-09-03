@@ -29,12 +29,21 @@
  */
 package com.oracle.truffle.llvm.nodes.impl.memory;
 
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.dsl.ImportStatic;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.NodeField;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.interop.ForeignAccess;
+import com.oracle.truffle.api.interop.Message;
+import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.interop.UnknownIdentifierException;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMAddressNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMFunctionNode;
@@ -47,15 +56,36 @@ import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI32Node;
 import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI64Node;
 import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI8Node;
 import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMIVarBitNode;
+import com.oracle.truffle.llvm.nodes.impl.others.LLVMGlobalVariableDescriptorGuards;
 import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.LLVMFunction;
+import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
+import com.oracle.truffle.llvm.types.LLVMGlobalVariableDescriptor;
 import com.oracle.truffle.llvm.types.LLVMIVarBit;
+import com.oracle.truffle.llvm.types.LLVMTruffleObject;
 import com.oracle.truffle.llvm.types.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.types.memory.LLVMHeap;
 import com.oracle.truffle.llvm.types.memory.LLVMMemory;
 
 @NodeChildren(value = {@NodeChild(type = LLVMAddressNode.class, value = "pointerNode")})
 public abstract class LLVMStoreNode extends LLVMNode {
+
+    @Child protected Node foreignWrite = Message.WRITE.createNode();
+
+    protected void doForeignAccess(VirtualFrame frame, LLVMTruffleObject addr, int stride, Object value) {
+        try {
+            ForeignAccess.sendWrite(foreignWrite, frame, addr.getObject(), (int) (addr.getOffset() / stride), value);
+        } catch (UnknownIdentifierException | UnsupportedMessageException | UnsupportedTypeException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    protected void doForeignAccess(VirtualFrame frame, TruffleObject addr, Object value) {
+        try {
+            ForeignAccess.sendWrite(foreignWrite, frame, addr, 0, value);
+        } catch (UnknownIdentifierException | UnsupportedMessageException | UnsupportedTypeException e) {
+            throw new IllegalStateException(e);
+        }
+    }
 
     @NodeChild(type = LLVMI1Node.class, value = "valueNode")
     public abstract static class LLVMI1StoreNode extends LLVMStoreNode {
@@ -75,6 +105,15 @@ public abstract class LLVMStoreNode extends LLVMNode {
             LLVMMemory.putI8(address, value);
         }
 
+        @Specialization
+        public void execute(VirtualFrame frame, LLVMTruffleObject address, byte value) {
+            doForeignAccess(frame, address, 1, value);
+        }
+
+        @Specialization
+        public void execute(VirtualFrame frame, TruffleObject address, byte value) {
+            execute(frame, new LLVMTruffleObject(address), value);
+        }
     }
 
     @NodeChild(type = LLVMI16Node.class, value = "valueNode")
@@ -93,6 +132,16 @@ public abstract class LLVMStoreNode extends LLVMNode {
         @Specialization
         public void execute(LLVMAddress address, int value) {
             LLVMMemory.putI32(address, value);
+        }
+
+        @Specialization
+        public void execute(VirtualFrame frame, LLVMTruffleObject address, int value) {
+            doForeignAccess(frame, address, LLVMI32Node.BYTE_SIZE, value);
+        }
+
+        @Specialization
+        public void execute(VirtualFrame frame, TruffleObject address, int value) {
+            execute(frame, new LLVMTruffleObject(address), value);
         }
 
     }
@@ -135,6 +184,16 @@ public abstract class LLVMStoreNode extends LLVMNode {
             LLVMMemory.putDouble(address, value);
         }
 
+        @Specialization
+        public void execute(VirtualFrame frame, LLVMTruffleObject address, double value) {
+            doForeignAccess(frame, address, LLVMDoubleNode.BYTE_SIZE, value);
+        }
+
+        @Specialization
+        public void execute(VirtualFrame frame, TruffleObject address, double value) {
+            doForeignAccess(frame, address, value);
+        }
+
     }
 
     @NodeChild(type = LLVM80BitFloatNode.class, value = "valueNode")
@@ -148,11 +207,70 @@ public abstract class LLVMStoreNode extends LLVMNode {
     }
 
     @NodeChild(type = LLVMAddressNode.class, value = "valueNode")
-    public abstract static class LLVMAdressStoreNode extends LLVMStoreNode {
+    public abstract static class LLVMAddressStoreNode extends LLVMStoreNode {
 
         @Specialization
         public void execute(LLVMAddress address, LLVMAddress value) {
             LLVMMemory.putAddress(address, value);
+        }
+
+        @SuppressWarnings("unused")
+        @Specialization(guards = "!isLLVMAddress(value)")
+        public void execute(LLVMAddress address, Object value) {
+            CompilerDirectives.bailout("unsupported operation");
+            throw new UnsupportedOperationException("Sulong can't store a Truffle object in a native memory address " + address);
+        }
+
+    }
+
+    @NodeChild(type = LLVMAddressNode.class, value = "valueNode")
+    @ImportStatic(LLVMGlobalVariableDescriptorGuards.class)
+    public abstract static class LLVMGlobalVariableStoreNode extends LLVMNode {
+
+        protected final LLVMGlobalVariableDescriptor descriptor;
+
+        public LLVMGlobalVariableStoreNode(LLVMGlobalVariableDescriptor descriptor) {
+            this.descriptor = descriptor;
+        }
+
+        @Specialization(guards = "needsTransition(frame, descriptor)")
+        public void executeTransitionNative(VirtualFrame frame, LLVMAddress value) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            descriptor.transition(true, false);
+            executeNative(frame, value);
+        }
+
+        @Specialization(guards = {"needsTransition(frame, descriptor)", "!isLLVMAddress(value)"})
+        public void executeTransitionManaged(VirtualFrame frame, Object value) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            descriptor.transition(true, true);
+            executeManaged(frame, value);
+        }
+
+        @SuppressWarnings("unused")
+        @Specialization(guards = "isNative(frame, descriptor)")
+        public void executeNative(VirtualFrame frame, LLVMAddress value) {
+            LLVMMemory.putAddress(descriptor.getNativeStorage(), value);
+        }
+
+        @SuppressWarnings("unused")
+        @Specialization(guards = {"isNative(frame, descriptor)", "!isLLVMAddress(value)"})
+        public void executeManagedUnsupported(VirtualFrame frame, Object value) {
+            CompilerDirectives.bailout("unsupported operation");
+            throw new UnsupportedOperationException("Sulong can't store a Truffle object in a global variable " + descriptor.getName() + " that previously stored a native address");
+        }
+
+        @SuppressWarnings("unused")
+        @Specialization(guards = {"isManaged(frame, descriptor)", "!isLLVMAddress(value)"})
+        public void executeManaged(VirtualFrame frame, Object value) {
+            descriptor.setManagedStorage(value);
+        }
+
+        @SuppressWarnings("unused")
+        @Specialization(guards = "isManaged(frame, descriptor)")
+        public void executeManagedUnsupported(VirtualFrame frame, LLVMAddress value) {
+            CompilerDirectives.bailout("unsupported operation");
+            throw new UnsupportedOperationException("Sulong can't store a native address in a global variable " + descriptor.getName() + " that previously stored a Truffle object");
         }
 
     }
@@ -161,8 +279,8 @@ public abstract class LLVMStoreNode extends LLVMNode {
     public abstract static class LLVMFunctionStoreNode extends LLVMStoreNode {
 
         @Specialization
-        public void execute(LLVMAddress address, LLVMFunction function) {
-            LLVMHeap.putFunction(address, function);
+        public void execute(LLVMAddress address, LLVMFunctionDescriptor function) {
+            LLVMHeap.putFunctionIndex(address, function.getFunctionIndex());
         }
 
     }
@@ -421,8 +539,8 @@ public abstract class LLVMStoreNode extends LLVMNode {
         protected LLVMAddress writeDouble(VirtualFrame frame, LLVMAddress addr) {
             LLVMAddress currentAddress = addr;
             for (int i = 0; i < values.length; i++) {
-                LLVMFunction currentValue = values[i].executeFunction(frame);
-                LLVMHeap.putFunction(currentAddress, currentValue);
+                LLVMFunctionDescriptor currentValue = (LLVMFunctionDescriptor) values[i].executeFunction(frame);
+                LLVMHeap.putFunctionIndex(currentAddress, currentValue.getFunctionIndex());
                 currentAddress = currentAddress.increment(stride);
             }
             return addr;
