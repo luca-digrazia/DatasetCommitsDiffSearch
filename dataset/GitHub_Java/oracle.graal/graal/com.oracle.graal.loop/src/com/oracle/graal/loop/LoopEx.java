@@ -36,19 +36,19 @@ import com.oracle.graal.nodes.extended.*;
 
 public class LoopEx {
 
-    private final Loop<Block> lirLoop;
+    private final Loop lirLoop;
     private LoopFragmentInside inside;
     private LoopFragmentWhole whole;
     private CountedLoopInfo counted; // TODO (gd) detect
     private LoopsData data;
     private InductionVariables ivs;
 
-    LoopEx(Loop<Block> lirLoop, LoopsData data) {
+    LoopEx(Loop lirLoop, LoopsData data) {
         this.lirLoop = lirLoop;
         this.data = data;
     }
 
-    public Loop<Block> lirLoop() {
+    public Loop lirLoop() {
         return lirLoop;
     }
 
@@ -88,7 +88,7 @@ public class LoopEx {
     }
 
     public LoopBeginNode loopBegin() {
-        return (LoopBeginNode) lirLoop().header.getBeginNode();
+        return lirLoop().loopBegin();
     }
 
     public FixedNode predecessor() {
@@ -123,7 +123,7 @@ public class LoopEx {
         return (isCounted() ? "CountedLoop [" + counted() + "] " : "Loop ") + "(depth=" + lirLoop().depth + ") " + loopBegin();
     }
 
-    private class InvariantPredicate implements NodePredicate {
+    private class InvariantPredicate extends NodePredicate {
 
         @Override
         public boolean apply(Node n) {
@@ -141,7 +141,7 @@ public class LoopEx {
             BinaryNode result = BinaryNode.reassociate(binary, invariant);
             if (result != binary) {
                 if (Debug.isLogEnabled()) {
-                    Debug.log("%s : Reassociated %s into %s", MetaUtil.format("%H::%n", graph.method()), binary, result);
+                    Debug.log("%s : Reassociated %s into %s", MetaUtil.format("%H::%n", Debug.contextLookup(ResolvedJavaMethod.class)), binary, result);
                 }
                 graph.replaceFloating(binary, result);
             }
