@@ -36,7 +36,6 @@ import java.util.Map;
 import java.util.Objects;
 
 import com.oracle.graal.api.replacements.MethodSubstitution;
-import com.oracle.graal.bytecode.Bytecode;
 import com.oracle.graal.bytecode.Bytecodes;
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.debug.Debug;
@@ -57,6 +56,7 @@ import com.oracle.graal.nodes.virtual.VirtualObjectNode;
 import jdk.vm.ci.code.BytecodeFrame;
 import jdk.vm.ci.code.CodeUtil;
 import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.MetaUtil;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 /**
@@ -65,7 +65,7 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
  *
  * This can be used as debug or deoptimization information.
  */
-@NodeInfo(nameTemplate = "@{p#code/s}:{p#bci}", cycles = CYCLES_0, size = SIZE_1)
+@NodeInfo(nameTemplate = "@{p#method/s}:{p#bci}", cycles = CYCLES_0, size = SIZE_1)
 public final class FrameState extends VirtualState implements IterableNodeType {
     public static final NodeClass<FrameState> TYPE = NodeClass.create(FrameState.class);
 
@@ -114,28 +114,25 @@ public final class FrameState extends VirtualState implements IterableNodeType {
      */
     public final int bci;
 
-    /**
-     * The bytecode to which this frame state applies.
-     */
-    protected final Bytecode code;
+    protected final ResolvedJavaMethod method;
 
-    public FrameState(FrameState outerFrameState, Bytecode code, int bci, int localsSize, int stackSize, int lockSize, boolean rethrowException, boolean duringCall,
+    public FrameState(FrameState outerFrameState, ResolvedJavaMethod method, int bci, int localsSize, int stackSize, int lockSize, boolean rethrowException, boolean duringCall,
                     List<MonitorIdNode> monitorIds, List<EscapeObjectState> virtualObjectMappings) {
         super(TYPE);
-        if (code != null) {
+        if (method != null) {
             /*
              * Make sure the bci is within range of the bytecodes. If the code size is 0 then allow
              * any value, otherwise the bci must be less than the code size. Any negative value is
              * also allowed to represent special bytecode states.
              */
-            int codeSize = code.getCodeSize();
+            int codeSize = method.getCodeSize();
             if (codeSize != 0 && bci >= codeSize) {
-                throw new GraalError("bci %d is out of range for %s %d bytes", bci, code.getMethod().format("%H.%n(%p)"), codeSize);
+                throw new GraalError("bci %d is out of range for %s %d bytes", bci, method.format("%H.%n(%p)"), codeSize);
             }
         }
         assert stackSize >= 0;
         this.outerFrameState = outerFrameState;
-        this.code = code;
+        this.method = method;
         this.bci = bci;
         this.localsSize = localsSize;
         this.stackSize = stackSize;
@@ -156,9 +153,9 @@ public final class FrameState extends VirtualState implements IterableNodeType {
         FRAMESTATES_COUNTER.increment();
     }
 
-    public FrameState(FrameState outerFrameState, Bytecode code, int bci, List<ValueNode> values, int localsSize, int stackSize, boolean rethrowException, boolean duringCall,
+    public FrameState(FrameState outerFrameState, ResolvedJavaMethod method, int bci, List<ValueNode> values, int localsSize, int stackSize, boolean rethrowException, boolean duringCall,
                     List<MonitorIdNode> monitorIds, List<EscapeObjectState> virtualObjectMappings) {
-        this(outerFrameState, code, bci, localsSize, stackSize, values.size() - localsSize - stackSize, rethrowException, duringCall, monitorIds, virtualObjectMappings);
+        this(outerFrameState, method, bci, localsSize, stackSize, values.size() - localsSize - stackSize, rethrowException, duringCall, monitorIds, virtualObjectMappings);
         for (int i = 0; i < values.size(); ++i) {
             this.values.initialize(i, values.get(i));
         }
@@ -192,9 +189,9 @@ public final class FrameState extends VirtualState implements IterableNodeType {
         this.values.initialize(0, returnValue);
     }
 
-    public FrameState(FrameState outerFrameState, Bytecode code, int bci, ValueNode[] locals, ValueNode[] stack, int stackSize, ValueNode[] locks, List<MonitorIdNode> monitorIds,
+    public FrameState(FrameState outerFrameState, ResolvedJavaMethod method, int bci, ValueNode[] locals, ValueNode[] stack, int stackSize, ValueNode[] locks, List<MonitorIdNode> monitorIds,
                     boolean rethrowException, boolean duringCall) {
-        this(outerFrameState, code, bci, locals.length, stackSize, locks.length, rethrowException, duringCall, monitorIds, Collections.<EscapeObjectState> emptyList());
+        this(outerFrameState, method, bci, locals.length, stackSize, locks.length, rethrowException, duringCall, monitorIds, Collections.<EscapeObjectState> emptyList());
         createValues(locals, stack, locks);
     }
 
@@ -243,7 +240,7 @@ public final class FrameState extends VirtualState implements IterableNodeType {
         if (fs == null) {
             return null;
         }
-        return new NodeSourcePosition(null, toSourcePosition(fs.outerFrameState()), fs.code.getMethod(), fs.bci);
+        return new NodeSourcePosition(null, toSourcePosition(fs.outerFrameState()), fs.method(), fs.bci);
     }
 
     /**
@@ -257,24 +254,8 @@ public final class FrameState extends VirtualState implements IterableNodeType {
         return duringCall;
     }
 
-    public Bytecode getCode() {
-        return code;
-    }
-
-    public ResolvedJavaMethod getMethod() {
-        return code == null ? null : code.getMethod();
-    }
-
-    /**
-     * Determines if this frame state can be converted to a {@link BytecodeFrame}.
-     *
-     * Since a {@link BytecodeFrame} encodes {@link #getMethod()} and {@link #bci}, it does not
-     * preserve {@link #getCode()}. {@link #bci} is only guaranteed to be valid in terms of
-     * {@code getCode().getCode()} which may be different from {@code getMethod().getCode()} if the
-     * latter has been subject to instrumentation.
-     */
-    public boolean canProduceBytecodeFrame() {
-        return code != null && code.getCode() == code.getMethod().getCode();
+    public ResolvedJavaMethod method() {
+        return method;
     }
 
     public void addVirtualObjectMapping(EscapeObjectState virtualObject) {
@@ -303,7 +284,7 @@ public final class FrameState extends VirtualState implements IterableNodeType {
      * Gets a copy of this frame state.
      */
     public FrameState duplicate(int newBci) {
-        return graph().add(new FrameState(outerFrameState(), code, newBci, values, localsSize, stackSize, rethrowException, duringCall, monitorIds, virtualObjectMappings));
+        return graph().add(new FrameState(outerFrameState(), method, newBci, values, localsSize, stackSize, rethrowException, duringCall, monitorIds, virtualObjectMappings));
     }
 
     /**
@@ -330,7 +311,7 @@ public final class FrameState extends VirtualState implements IterableNodeType {
                 newVirtualMappings.add(state.duplicateWithVirtualState());
             }
         }
-        return graph().add(new FrameState(newOuterFrameState, code, bci, values, localsSize, stackSize, rethrowException, duringCall, monitorIds, newVirtualMappings));
+        return graph().add(new FrameState(newOuterFrameState, method, bci, values, localsSize, stackSize, rethrowException, duringCall, monitorIds, newVirtualMappings));
     }
 
     /**
@@ -403,7 +384,7 @@ public final class FrameState extends VirtualState implements IterableNodeType {
         copy.addAll(values.subList(localsSize + stackSize, values.size()));
 
         assert checkStackDepth(bci, stackSize, duringCall, rethrowException, newBci, newStackSize, newDuringCall, newRethrowException);
-        return graph.add(new FrameState(outerFrameState(), code, newBci, copy, localsSize, newStackSize, newRethrowException, newDuringCall, monitorIds, virtualObjectMappings));
+        return graph.add(new FrameState(outerFrameState(), method, newBci, copy, localsSize, newStackSize, newRethrowException, newDuringCall, monitorIds, virtualObjectMappings));
     }
 
     /**
@@ -420,7 +401,7 @@ public final class FrameState extends VirtualState implements IterableNodeType {
          * dataflow of the bytecodes but for now just check for obvious expression stack depth
          * mistakes.
          */
-        byte[] codes = code.getCode();
+        byte[] codes = method.getCode();
         if (codes == null) {
             /* Graph was constructed manually. */
             return true;
@@ -526,7 +507,7 @@ public final class FrameState extends VirtualState implements IterableNodeType {
         String nl = CodeUtil.NEW_LINE;
         FrameState fs = frameState;
         while (fs != null) {
-            Bytecode.appendLocation(sb, fs.getCode(), fs.bci);
+            MetaUtil.appendLocation(sb, fs.method, fs.bci);
             if (BytecodeFrame.isPlaceholderBci(fs.bci)) {
                 sb.append("//").append(getPlaceholderBciName(fs.bci));
             }
@@ -567,9 +548,9 @@ public final class FrameState extends VirtualState implements IterableNodeType {
     @Override
     public Map<Object, Object> getDebugProperties(Map<Object, Object> map) {
         Map<Object, Object> properties = super.getDebugProperties(map);
-        if (code != null) {
+        if (method != null) {
             // properties.put("method", MetaUtil.format("%H.%n(%p):%r", method));
-            StackTraceElement ste = code.asStackTraceElement(bci);
+            StackTraceElement ste = method.asStackTraceElement(bci);
             if (ste.getFileName() != null && ste.getLineNumber() >= 0) {
                 properties.put("sourceFile", ste.getFileName());
                 properties.put("sourceLine", ste.getLineNumber());
@@ -593,8 +574,8 @@ public final class FrameState extends VirtualState implements IterableNodeType {
          * The outermost FrameState should have a method that matches StructuredGraph.method except
          * when it's a substitution or it's null.
          */
-        assertTrue(outerFrameState != null || graph() == null || graph().method() == null || code == null || Objects.equals(code.getMethod(), graph().method()) ||
-                        graph().method().getAnnotation(MethodSubstitution.class) != null, "wrong outerFrameState %s != %s", code == null ? "null" : code.getMethod(), graph().method());
+        assertTrue(outerFrameState != null || graph() == null || graph().method() == null || method == null || Objects.equals(method, graph().method()) ||
+                        graph().method().getAnnotation(MethodSubstitution.class) != null, "wrong outerFrameState %s != %s", method, graph().method());
         if (monitorIds() != null && monitorIds().size() > 0) {
             int depth = outerLockDepth();
             for (MonitorIdNode monitor : monitorIds()) {
