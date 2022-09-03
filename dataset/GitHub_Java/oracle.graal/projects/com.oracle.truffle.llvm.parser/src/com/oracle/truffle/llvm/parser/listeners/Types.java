@@ -29,43 +29,42 @@
  */
 package com.oracle.truffle.llvm.parser.listeners;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Iterator;
-
-import com.oracle.truffle.llvm.parser.ir.records.TypesRecord;
-import com.oracle.truffle.llvm.parser.model.generators.ModuleGenerator;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.llvm.parser.model.ModelModule;
 import com.oracle.truffle.llvm.parser.records.Records;
+import com.oracle.truffle.llvm.parser.records.TypesRecord;
+import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
+import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType;
 import com.oracle.truffle.llvm.runtime.types.ArrayType;
-import com.oracle.truffle.llvm.runtime.types.FloatingPointType;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
-import com.oracle.truffle.llvm.runtime.types.IntegerType;
 import com.oracle.truffle.llvm.runtime.types.MetaType;
+import com.oracle.truffle.llvm.runtime.types.OpaqueType;
 import com.oracle.truffle.llvm.runtime.types.PointerType;
+import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
 import com.oracle.truffle.llvm.runtime.types.StructureType;
 import com.oracle.truffle.llvm.runtime.types.Type;
 import com.oracle.truffle.llvm.runtime.types.VectorType;
+import com.oracle.truffle.llvm.runtime.types.VoidType;
+import com.oracle.truffle.llvm.runtime.types.symbols.LLVMIdentifier;
+import com.oracle.truffle.llvm.runtime.types.visitors.TypeVisitor;
+
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.function.Consumer;
 
 public final class Types implements ParserListener, Iterable<Type> {
 
-    private static Type[] toTypes(Types types, long[] args, long from, long to) {
-        Type[] t = new Type[(int) (to - from)];
-
-        for (int i = 0; i < t.length; i++) {
-            t[i] = types.get(args[(int) from + i]);
-        }
-
-        return t;
-    }
-
-    private final ModuleGenerator generator;
+    private final ModelModule module;
 
     private Type[] table = new Type[0];
 
+    private String structName = null;
+
     private int size = 0;
 
-    public Types(ModuleGenerator generator) {
-        this.generator = generator;
+    Types(ModelModule module) {
+        this.module = module;
     }
 
     @Override
@@ -84,15 +83,15 @@ public final class Types implements ParserListener, Iterable<Type> {
                 return;
 
             case VOID:
-                type = MetaType.VOID;
+                type = VoidType.INSTANCE;
                 break;
 
             case FLOAT:
-                type = FloatingPointType.FLOAT;
+                type = PrimitiveType.FLOAT;
                 break;
 
             case DOUBLE:
-                type = FloatingPointType.DOUBLE;
+                type = PrimitiveType.DOUBLE;
                 break;
 
             case LABEL:
@@ -100,54 +99,59 @@ public final class Types implements ParserListener, Iterable<Type> {
                 break;
 
             case OPAQUE:
-                type = MetaType.OPAQUE;
+                if (structName != null) {
+                    type = new OpaqueType(LLVMIdentifier.toLocalIdentifier(structName));
+                    structName = null;
+                    module.addGlobalType(type);
+                } else {
+                    type = new OpaqueType();
+                }
                 break;
 
             case INTEGER:
-                type = new IntegerType((int) args[0]);
+                type = Type.getIntegerType((int) args[0]);
                 break;
 
             case POINTER: {
-                int idx = (int) args[0];
-
-                if (idx > size) {
-                    table[size] = new PointerType(null);
-                    table[idx] = new UnresolvedPointeeType(size);
-                    size++;
-                    return;
-                } else {
-                    type = new PointerType(get(idx));
-                }
+                final PointerType pointerType = new PointerType(null);
+                setType((int) args[0], pointerType::setPointeeType);
+                type = pointerType;
                 break;
             }
             case FUNCTION_OLD: {
-                int i = 2;
-                Type returnType = get(args[i++]);
-                type = new FunctionType(returnType, toTypes(this, args, i, args.length), args[0] != 0);
+                final FunctionType functionType = new FunctionType(null, toTypes(args, 3, args.length), args[0] != 0);
+                setType((int) args[2], functionType::setReturnType);
+                type = functionType;
                 break;
             }
             case HALF:
-                type = FloatingPointType.HALF;
+                type = PrimitiveType.HALF;
                 break;
 
-            case ARRAY:
-                type = new ArrayType(get(args[1]), (int) args[0]);
+            case ARRAY: {
+                final ArrayType arrayType = new ArrayType(null, (int) args[0]);
+                setType((int) args[1], arrayType::setElementType);
+                type = arrayType;
                 break;
+            }
 
-            case VECTOR:
-                type = new VectorType(get(args[1]), (int) args[0]);
+            case VECTOR: {
+                final VectorType vectorType = new VectorType(null, (int) args[0]);
+                setType((int) args[1], vectorType::setElementType);
+                type = vectorType;
                 break;
+            }
 
             case X86_FP80:
-                type = FloatingPointType.X86_FP80;
+                type = PrimitiveType.X86_FP80;
                 break;
 
             case FP128:
-                type = FloatingPointType.FP128;
+                type = PrimitiveType.F128;
                 break;
 
             case PPC_FP128:
-                type = FloatingPointType.PPC_FP128;
+                type = PrimitiveType.PPC_FP128;
                 break;
 
             case METADATA:
@@ -155,37 +159,33 @@ public final class Types implements ParserListener, Iterable<Type> {
                 break;
 
             case X86_MMX:
-                type = MetaType.X86_MMX;
-                break;
-
-            case STRUCT_ANON:
-                type = new StructureType(args[0] != 0, toTypes(this, args, 1, args.length));
+                type = MetaType.X86MMX;
                 break;
 
             case STRUCT_NAME: {
-                String name = Records.toString(args);
-                if (table[size] instanceof UnresolvedPointeeType) {
-                    table[size] = new UnresolvedNamedPointeeType(name, ((UnresolvedPointeeType) table[size]).getIndex());
-                } else {
-                    table[size] = new UnresolvedNamedType(name);
-                }
+                structName = Records.toString(args);
                 return;
             }
+
+            case STRUCT_ANON:
             case STRUCT_NAMED: {
-                StructureType structure = new StructureType(args[0] != 0, toTypes(this, args, 1, args.length));
-                if (table[size] != null) {
-                    if (table[size] instanceof UnresolvedNamedPointeeType) {
-                        structure.setName(((UnresolvedNamedPointeeType) table[size]).getName());
-                    } else {
-                        structure.setName(((UnresolvedNamedType) table[size]).getName());
-                    }
+                final boolean isPacked = args[0] != 0;
+                final Type[] members = toTypes(args, 1, args.length);
+                if (structName != null) {
+                    type = new StructureType(LLVMIdentifier.toTypeIdentifier(structName), isPacked, members);
+                    structName = null;
+                    module.addGlobalType(type);
+                } else {
+                    type = new StructureType(isPacked, members);
                 }
-                type = structure;
                 break;
             }
-            case FUNCTION:
-                type = new FunctionType(get(args[1]), toTypes(this, args, 2, args.length), args[0] != 0);
+            case FUNCTION: {
+                final FunctionType functionType = new FunctionType(null, toTypes(args, 2, args.length), args[0] != 0);
+                setType((int) args[1], functionType::setReturnType);
+                type = functionType;
                 break;
+            }
 
             case TOKEN:
                 type = MetaType.TOKEN;
@@ -196,61 +196,134 @@ public final class Types implements ParserListener, Iterable<Type> {
                 break;
         }
 
-        if (table[size] instanceof UnresolvedPointeeType) {
-            PointerType pointer = (PointerType) table[((UnresolvedPointeeType) table[size]).getIndex()];
-            pointer.setPointeeType(type);
-            generator.createType(pointer);
+        if (table[size] != null) {
+            ((UnresolvedType) table[size]).dependent.accept(type);
         }
         table[size++] = type;
-        generator.createType(type);
+
+    }
+
+    private void setType(int typeIndex, Consumer<Type> typeFieldSetter) {
+        if (typeIndex < size) {
+            typeFieldSetter.accept(table[typeIndex]);
+
+        } else if (table[typeIndex] == null) {
+            table[typeIndex] = new UnresolvedType(typeFieldSetter);
+
+        } else {
+            ((UnresolvedType) table[typeIndex]).addDependent(typeFieldSetter);
+        }
+    }
+
+    private Type[] toTypes(long[] args, int from, int to) {
+        final Type[] types = new Type[to - from];
+
+        for (int i = 0; i < types.length; i++) {
+            final int typeIndex = (int) args[from + i];
+            if (typeIndex < size) {
+                types[i] = table[typeIndex];
+
+            } else {
+                final Consumer<Type> setter = new MemberDependent(i, types);
+                if (table[typeIndex] == null) {
+                    table[typeIndex] = new UnresolvedType(setter);
+
+                } else {
+                    ((UnresolvedType) table[typeIndex]).addDependent(setter);
+                }
+            }
+        }
+
+        return types;
+    }
+
+    private static final class MemberDependent implements Consumer<Type> {
+
+        private final int index;
+        private final Type[] target;
+
+        private MemberDependent(int index, Type[] target) {
+            this.index = index;
+            this.target = target;
+        }
+
+        @Override
+        public void accept(Type type) {
+            target[index] = type;
+        }
     }
 
     public Type get(long index) {
         return table[(int) index];
     }
 
-    private static class UnresolvedPointeeType implements Type {
+    private static final class UnresolvedType extends Type {
 
-        private final int idx;
+        private Consumer<Type> dependent;
 
-        UnresolvedPointeeType(int idx) {
-            this.idx = idx;
+        UnresolvedType(Consumer<Type> dependent) {
+            this.dependent = dependent;
         }
 
-        public int getIndex() {
-            return idx;
-        }
-    }
-
-    private static final class UnresolvedNamedPointeeType extends UnresolvedPointeeType {
-
-        private final String name;
-
-        UnresolvedNamedPointeeType(String name, int idx) {
-            super(idx);
-            this.name = name;
+        private void addDependent(Consumer<Type> newDependent) {
+            dependent = dependent.andThen(newDependent);
         }
 
-        public String getName() {
-            return name;
-        }
-    }
-
-    private static final class UnresolvedNamedType implements Type {
-
-        private final String name;
-
-        UnresolvedNamedType(String name) {
-            this.name = name;
+        @Override
+        public void accept(TypeVisitor visitor) {
+            CompilerDirectives.transferToInterpreter();
+            throw new IllegalStateException("Unresolved Forward-Referenced Type!");
         }
 
-        public String getName() {
-            return name;
+        @Override
+        public int getBitSize() {
+            CompilerDirectives.transferToInterpreter();
+            throw new IllegalStateException("Unresolved Forward-Referenced Type!");
+        }
+
+        @Override
+        public int getAlignment(DataLayout targetDataLayout) {
+            CompilerDirectives.transferToInterpreter();
+            throw new IllegalStateException("Unresolved Forward-Referenced Type!");
+        }
+
+        @Override
+        public int getSize(DataLayout targetDataLayout) {
+            CompilerDirectives.transferToInterpreter();
+            throw new IllegalStateException("Unresolved Forward-Referenced Type!");
+        }
+
+        @Override
+        public Type shallowCopy() {
+            return this;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            return obj == this;
+        }
+
+        @Override
+        public int hashCode() {
+            return 0;
+        }
+
+        @Override
+        public LLVMInteropType getInteropType() {
+            CompilerDirectives.transferToInterpreter();
+            throw new IllegalStateException("Unresolved Forward-Referenced Type!");
+        }
+
+        @Override
+        public void setInteropType(LLVMInteropType sourceType) {
+            CompilerDirectives.transferToInterpreter();
+            throw new IllegalStateException("Unresolved Forward-Referenced Type!");
         }
     }
 
     @Override
     public String toString() {
-        return "Types " + Arrays.toString(table);
+        CompilerDirectives.transferToInterpreter();
+        return "Typetable (size: " + table.length + ", currentIndex: " + size + ")";
     }
 }

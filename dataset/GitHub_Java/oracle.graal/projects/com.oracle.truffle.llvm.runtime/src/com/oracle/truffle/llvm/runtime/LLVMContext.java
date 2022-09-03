@@ -68,7 +68,6 @@ import com.oracle.truffle.llvm.runtime.memory.LLVMThreadingStack;
 import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 import com.oracle.truffle.llvm.runtime.types.AggregateType;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
 import com.oracle.truffle.llvm.runtime.types.MetaType;
@@ -93,7 +92,6 @@ public final class LLVMContext {
     private final LLVMSourceContext sourceContext;
     private final LLVMGlobalsStack globalStack;
 
-    private final LLVMLanguage language;
     private final Env env;
     private final LLVMScope globalScope;
     private final DynamicLinkChain dynamicLinkChain;
@@ -107,7 +105,7 @@ public final class LLVMContext {
 
     // we are not able to clean up ThreadLocals properly, so we are using maps instead
     private final Map<Thread, Object> tls = new HashMap<>();
-    private final Map<Thread, LLVMPointer> clearChildTid = new HashMap<>();
+    private final Map<Thread, LLVMNativePointer> clearChildTid = new HashMap<>();
 
     // signals
     private final LLVMNativePointer sigDfl;
@@ -201,8 +199,7 @@ public final class LLVMContext {
         }
     }
 
-    public LLVMContext(LLVMLanguage language, Env env, List<ContextExtension> contextExtensions, InteropNodeFactory interopNodeFactory, String languageHome) {
-        this.language = language;
+    public LLVMContext(Env env, List<ContextExtension> contextExtensions, InteropNodeFactory interopNodeFactory) {
         this.env = env;
         this.contextExtensions = contextExtensions;
         this.initialized = false;
@@ -233,9 +230,6 @@ public final class LLVMContext {
         this.interopNodeFactory = interopNodeFactory;
 
         addLibraryPaths(SulongEngineOption.getPolyglotOptionSearchPaths(env));
-        if (languageHome != null) {
-            addLibraryPath(languageHome);
-        }
     }
 
     private LLVMScope createGlobalScope() {
@@ -423,10 +417,6 @@ public final class LLVMContext {
         return libPath;
     }
 
-    public LLVMLanguage getLanguage() {
-        return language;
-    }
-
     public Env getEnv() {
         return env;
     }
@@ -450,8 +440,8 @@ public final class LLVMContext {
     }
 
     @TruffleBoundary
-    public LLVMPointer getClearChildTid() {
-        LLVMPointer value = clearChildTid.get(Thread.currentThread());
+    public LLVMNativePointer getClearChildTid() {
+        LLVMNativePointer value = clearChildTid.get(Thread.currentThread());
         if (value != null) {
             return value;
         }
@@ -459,7 +449,7 @@ public final class LLVMContext {
     }
 
     @TruffleBoundary
-    public void setClearChildTid(LLVMPointer value) {
+    public void setClearChildTid(LLVMNativePointer value) {
         clearChildTid.put(Thread.currentThread(), value);
     }
 

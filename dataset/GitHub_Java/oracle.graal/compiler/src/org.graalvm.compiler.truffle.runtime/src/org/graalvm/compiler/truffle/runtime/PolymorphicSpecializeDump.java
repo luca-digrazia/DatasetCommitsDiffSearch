@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -27,6 +25,7 @@ package org.graalvm.compiler.truffle.runtime;
 import com.oracle.truffle.api.dsl.Introspection;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
+import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.graphio.GraphOutput;
 import org.graalvm.graphio.GraphStructure;
 
@@ -36,14 +35,16 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import org.graalvm.compiler.truffle.common.TruffleDebugContext;
+
+import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.getOptions;
 
 class PolymorphicSpecializeDump {
 
     public static void dumpPolymorphicSpecialize(List<Node> toDump, List<OptimizedDirectCallNode> knownCallNodes) {
         assert toDump.size() > 0;
         assert knownCallNodes.size() > 0;
-        try (TruffleDebugContext debugContext = openDebugContext()) {
+        final DebugContext debugContext = DebugContext.create(getOptions(), Collections.emptyList());
+        try {
             Collections.reverse(toDump);
             PolymorphicSpecializeDump.PolymorphicSpecializeGraph graph = new PolymorphicSpecializeDump.PolymorphicSpecializeGraph(knownCallNodes, toDump);
             final GraphOutput<PolymorphicSpecializeGraph, ?> output = debugContext.buildOutput(
@@ -55,14 +56,6 @@ class PolymorphicSpecializeDump {
         } catch (IOException e) {
             e.printStackTrace();
         }
-    }
-
-    private static TruffleDebugContext openDebugContext() {
-        TruffleDebugContext debugContext = GraalTruffleRuntime.getRuntime().getTruffleCompiler().openDebugContext(TruffleRuntimeOptions.asMap(TruffleRuntimeOptions.getOptions()), null, null);
-        if (debugContext == null) {
-            debugContext = IgvSupport.create();
-        }
-        return debugContext;
     }
 
     static class PolymorphicSpecializeGraph {
