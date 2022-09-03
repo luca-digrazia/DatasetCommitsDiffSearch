@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -54,17 +54,15 @@ public class WordTypeRewriterPhase extends Phase {
 
     protected final MetaAccessProvider metaAccess;
     protected final SnippetReflectionProvider snippetReflection;
-    protected final ConstantReflectionProvider constantReflection;
     protected final ResolvedJavaType wordBaseType;
     protected final ResolvedJavaType wordImplType;
     protected final ResolvedJavaType objectAccessType;
     protected final ResolvedJavaType barrieredAccessType;
     protected final Kind wordKind;
 
-    public WordTypeRewriterPhase(MetaAccessProvider metaAccess, SnippetReflectionProvider snippetReflection, ConstantReflectionProvider constantReflection, Kind wordKind) {
+    public WordTypeRewriterPhase(MetaAccessProvider metaAccess, SnippetReflectionProvider snippetReflection, Kind wordKind) {
         this.metaAccess = metaAccess;
         this.snippetReflection = snippetReflection;
-        this.constantReflection = constantReflection;
         this.wordKind = wordKind;
         this.wordBaseType = metaAccess.lookupJavaType(WordBase.class);
         this.wordImplType = metaAccess.lookupJavaType(Word.class);
@@ -95,8 +93,8 @@ public class WordTypeRewriterPhase extends Phase {
         if (isWord(node)) {
             if (node.isConstant()) {
                 ConstantNode oldConstant = (ConstantNode) node;
-                assert oldConstant.asJavaConstant().getKind() == Kind.Object;
-                WordBase value = (WordBase) snippetReflection.asObject(oldConstant.asJavaConstant());
+                assert oldConstant.getValue().getKind() == Kind.Object;
+                WordBase value = (WordBase) snippetReflection.asObject(oldConstant.getValue());
                 ConstantNode newConstant = ConstantNode.forIntegerKind(wordKind, value.rawValue(), node.graph());
                 graph.replaceFloating(oldConstant, newConstant);
 
@@ -136,7 +134,7 @@ public class WordTypeRewriterPhase extends Phase {
      * Fold constant field reads, e.g. enum constants.
      */
     protected void rewriteLoadField(StructuredGraph graph, LoadFieldNode node) {
-        ConstantNode constant = node.asConstant(metaAccess, constantReflection, node.object());
+        ConstantNode constant = node.asConstant(metaAccess, node.object());
         if (constant != null) {
             node.replaceAtUsages(graph.unique(constant));
             graph.removeFixed(node);
@@ -185,16 +183,11 @@ public class WordTypeRewriterPhase extends Phase {
             return;
         }
 
+        Invoke invoke = callTargetNode.invoke();
         if (!callTargetNode.isStatic()) {
             assert callTargetNode.receiver().getKind() == wordKind : "changeToWord() missed the receiver " + callTargetNode.receiver();
-            assert wordImplType.isLinked();
-            targetMethod = wordImplType.resolveConcreteMethod(targetMethod, callTargetNode.invoke().getContextType());
+            targetMethod = wordImplType.resolveMethod(targetMethod, invoke.getContextType());
         }
-        rewriteWordOperation(graph, callTargetNode, targetMethod);
-    }
-
-    protected void rewriteWordOperation(StructuredGraph graph, MethodCallTargetNode callTargetNode, ResolvedJavaMethod targetMethod) throws GraalInternalError {
-        Invoke invoke = callTargetNode.invoke();
         Operation operation = targetMethod.getAnnotation(Word.Operation.class);
         assert operation != null : targetMethod;
 
@@ -241,7 +234,7 @@ public class WordTypeRewriterPhase extends Phase {
                 assert arguments.size() == 3;
                 Kind readKind = asKind(callTargetNode.returnType());
                 LocationNode location = makeLocation(graph, arguments.get(1), readKind, ANY_LOCATION);
-                BarrierType barrierType = (BarrierType) snippetReflection.asObject(arguments.get(2).asJavaConstant());
+                BarrierType barrierType = (BarrierType) snippetReflection.asObject(arguments.get(2).asConstant());
                 replace(invoke, readOp(graph, arguments.get(0), invoke, location, barrierType, true));
                 break;
             }
@@ -379,9 +372,9 @@ public class WordTypeRewriterPhase extends Phase {
         return materialize;
     }
 
-    protected LocationNode makeLocation(StructuredGraph graph, ValueNode offset, Kind readKind, ValueNode locationIdentity) {
+    private LocationNode makeLocation(StructuredGraph graph, ValueNode offset, Kind readKind, ValueNode locationIdentity) {
         if (locationIdentity.isConstant()) {
-            return makeLocation(graph, offset, readKind, (LocationIdentity) snippetReflection.asObject(locationIdentity.asJavaConstant()));
+            return makeLocation(graph, offset, readKind, (LocationIdentity) snippetReflection.asObject(locationIdentity.asConstant()));
         }
         return SnippetLocationNode.create(snippetReflection, locationIdentity, ConstantNode.forConstant(snippetReflection.forObject(readKind), metaAccess, graph), ConstantNode.forLong(0, graph),
                         fromSigned(graph, offset), ConstantNode.forInt(1, graph), graph);

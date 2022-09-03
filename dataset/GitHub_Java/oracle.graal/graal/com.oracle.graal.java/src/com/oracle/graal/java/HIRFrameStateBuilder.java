@@ -95,7 +95,7 @@ public class HIRFrameStateBuilder extends AbstractFrameStateBuilder<ValueNode, H
     }
 
     @Override
-    protected ValueNode[] getEmptyArray() {
+    protected ValueNode[] getEmtpyArray() {
         return EMPTY_ARRAY;
     }
 

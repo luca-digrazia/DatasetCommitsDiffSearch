@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -84,16 +84,16 @@ public class BenchmarkCounters {
     static class Options {
 
         //@formatter:off
-        @Option(help = "Turn on the benchmark counters, and displays the results on VM shutdown", type = OptionType.Debug)
+        @Option(help = "Turn on the benchmark counters, and displays the results on VM shutdown")
         private static final OptionValue<Boolean> GenericDynamicCounters = new OptionValue<>(false);
-        @Option(help = "Turn on the benchmark counters, and displays the results every n milliseconds", type = OptionType.Debug)
+        @Option(help = "Turn on the benchmark counters, and displays the results every n milliseconds")
         private static final OptionValue<Integer> TimedDynamicCounters = new OptionValue<>(-1);
 
         @Option(help = "Turn on the benchmark counters, and listen for specific patterns on System.out/System.err:%n" +
                        "Format: (err|out),start pattern,end pattern (~ matches multiple digits)%n" +
                        "Examples:%n" +
                        "  dacapo = 'err, starting =====, PASSED in'%n" +
-                       "  specjvm2008 = 'out,Iteration ~ (~s) begins:,Iteration ~ (~s) ends:'", type = OptionType.Debug)
+                       "  specjvm2008 = 'out,Iteration ~ (~s) begins:,Iteration ~ (~s) ends:'")
         private static final OptionValue<String> BenchmarkDynamicCounters = new OptionValue<>(null);
         //@formatter:on
     }
@@ -139,7 +139,7 @@ public class BenchmarkCounters {
         }
         assert groups.get(index).equals(group) : "mismatching groups: " + groups.get(index) + " vs. " + group;
         if (counter.getIncrement().isConstant()) {
-            staticCounters.get(index).addAndGet(counter.getIncrement().asJavaConstant().asLong());
+            staticCounters.get(index).addAndGet(counter.getIncrement().asConstant().asLong());
         }
         return index;
     }
@@ -383,11 +383,11 @@ public class BenchmarkCounters {
         if (index >= config.graalCountersSize) {
             throw new GraalInternalError("too many counters, reduce number of counters or increase -XX:GraalCounterSize=... (current value: " + config.graalCountersSize + ")");
         }
-        ConstantLocationNode arrayLocation = ConstantLocationNode.create(LocationIdentity.ANY_LOCATION, config.graalCountersThreadOffset, graph);
+        ConstantLocationNode arrayLocation = ConstantLocationNode.create(LocationIdentity.ANY_LOCATION, wordKind, config.graalCountersThreadOffset, graph);
         ReadNode readArray = graph.add(ReadNode.create(thread, arrayLocation, StampFactory.forKind(wordKind), BarrierType.NONE));
-        ConstantLocationNode location = ConstantLocationNode.create(LocationIdentity.ANY_LOCATION, Unsafe.ARRAY_LONG_INDEX_SCALE * index, graph);
+        ConstantLocationNode location = ConstantLocationNode.create(LocationIdentity.ANY_LOCATION, Kind.Long, Unsafe.ARRAY_LONG_INDEX_SCALE * index, graph);
         ReadNode read = graph.add(ReadNode.create(readArray, location, StampFactory.forKind(Kind.Long), BarrierType.NONE));
-        AddNode add = graph.unique(AddNode.create(read, counter.getIncrement()));
+        IntegerAddNode add = graph.unique(IntegerAddNode.create(read, counter.getIncrement()));
         WriteNode write = graph.add(WriteNode.create(readArray, add, location, BarrierType.NONE));
 
         graph.addBeforeFixed(counter, thread);

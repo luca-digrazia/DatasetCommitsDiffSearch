@@ -42,13 +42,13 @@ public class ArrayEqualsNode extends FixedWithNextNode implements LIRLowerable, 
     private final Kind kind;
 
     /** One array to be tested for equality. */
-    @Input ValueNode array1;
+    @Input private ValueNode array1;
 
     /** The other array to be tested for equality. */
-    @Input ValueNode array2;
+    @Input private ValueNode array2;
 
     /** Length of both arrays. */
-    @Input ValueNode length;
+    @Input private ValueNode length;
 
     public static ArrayEqualsNode create(ValueNode array1, ValueNode array2, ValueNode length) {
         return new ArrayEqualsNodeGen(array1, array2, length);

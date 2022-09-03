@@ -42,8 +42,8 @@ public class NewMultiArrayStubCall extends ForeignCallNode {
 
     private static final Stamp defaultStamp = StampFactory.objectNonNull();
 
-    @Input ValueNode hub;
-    @Input ValueNode dims;
+    @Input private ValueNode hub;
+    @Input private ValueNode dims;
     private final int rank;
 
     public static NewMultiArrayStubCall create(@InjectedNodeParameter ForeignCallsProvider foreignCalls, ValueNode hub, int rank, ValueNode dims) {

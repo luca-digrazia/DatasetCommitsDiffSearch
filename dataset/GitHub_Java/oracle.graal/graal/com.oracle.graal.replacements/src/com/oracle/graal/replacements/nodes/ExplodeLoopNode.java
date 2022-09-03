@@ -48,20 +48,20 @@ public class ExplodeLoopNode extends FixedWithNextNode {
     }
 
     public LoopBeginNode findLoopBegin() {
-        Node currentNext = next();
+        Node next = next();
         ArrayList<Node> succs = new ArrayList<>();
-        while (!(currentNext instanceof LoopBeginNode)) {
-            assert currentNext != null : "cannot find loop after " + this;
-            for (Node n : currentNext.cfgSuccessors()) {
+        while (!(next instanceof LoopBeginNode)) {
+            assert next != null : "cannot find loop after " + this;
+            for (Node n : next.cfgSuccessors()) {
                 succs.add(n);
             }
             if (succs.size() == 1) {
-                currentNext = succs.get(0);
+                next = succs.get(0);
             } else {
                 return null;
             }
         }
-        return (LoopBeginNode) currentNext;
+        return (LoopBeginNode) next;
     }
 
     /**

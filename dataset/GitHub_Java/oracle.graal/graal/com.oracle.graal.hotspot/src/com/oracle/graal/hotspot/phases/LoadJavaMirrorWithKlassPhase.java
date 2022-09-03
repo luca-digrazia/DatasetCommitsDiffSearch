@@ -23,7 +23,6 @@
 package com.oracle.graal.hotspot.phases;
 
 import static com.oracle.graal.api.meta.LocationIdentity.*;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
 import static com.oracle.graal.nodes.ConstantNode.*;
 
 import com.oracle.graal.api.meta.*;
@@ -59,14 +58,14 @@ public class LoadJavaMirrorWithKlassPhase extends BasePhase<PhaseContext> {
         this.oopEncoding = oopEncoding;
     }
 
-    private ValueNode getClassConstantReplacement(StructuredGraph graph, PhaseContext context, JavaConstant constant) {
+    private ValueNode getClassConstantReplacement(StructuredGraph graph, PhaseContext context, Constant constant) {
         if (constant instanceof HotSpotObjectConstant && HotSpotObjectConstant.asObject(constant) instanceof Class<?>) {
             MetaAccessProvider metaAccess = context.getMetaAccess();
             ResolvedJavaType type = metaAccess.lookupJavaType((Class<?>) HotSpotObjectConstant.asObject(constant));
-            JavaConstant klass;
+            Constant klass;
             LocationNode location;
             if (type instanceof HotSpotResolvedObjectType) {
-                location = ConstantLocationNode.create(CLASS_MIRROR_LOCATION, Kind.Object, classMirrorOffset, graph);
+                location = ConstantLocationNode.create(FINAL_LOCATION, Kind.Object, classMirrorOffset, graph);
                 klass = ((HotSpotResolvedObjectType) type).klass();
             } else {
                 /*
@@ -106,7 +105,7 @@ public class LoadJavaMirrorWithKlassPhase extends BasePhase<PhaseContext> {
     @Override
     protected void run(StructuredGraph graph, PhaseContext context) {
         for (ConstantNode node : getConstantNodes(graph)) {
-            JavaConstant constant = node.asJavaConstant();
+            Constant constant = node.asConstant();
             ValueNode freadNode = getClassConstantReplacement(graph, context, constant);
             if (freadNode != null) {
                 node.replace(graph, freadNode);

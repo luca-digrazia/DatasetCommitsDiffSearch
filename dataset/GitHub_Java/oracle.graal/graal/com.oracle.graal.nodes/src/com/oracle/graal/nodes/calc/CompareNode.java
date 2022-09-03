@@ -25,7 +25,6 @@ package com.oracle.graal.nodes.calc;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.calc.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
@@ -137,7 +136,7 @@ public abstract class CompareNode extends BinaryOpLogicNode {
     }
 
     private ConstantNode canonicalConvertConstant(CanonicalizerTool tool, ConvertNode convert, Constant constant) {
-        if (convert.preservesOrder(condition(), constant)) {
+        if (convert.preservesOrder(condition())) {
             Constant reverseConverted = convert.reverse(constant);
             if (convert.convert(reverseConverted).equals(constant)) {
                 return ConstantNode.forConstant(convert.getValue().stamp(), reverseConverted, tool.getMetaAccess());
@@ -157,10 +156,8 @@ public abstract class CompareNode extends BinaryOpLogicNode {
 
         CompareNode comparison;
         if (condition == Condition.EQ) {
-            if (x.stamp() instanceof AbstractObjectStamp) {
+            if (x.getKind() == Kind.Object) {
                 comparison = ObjectEqualsNode.create(x, y);
-            } else if (x.stamp() instanceof AbstractPointerStamp) {
-                comparison = PointerEqualsNode.create(x, y);
             } else {
                 assert x.getKind().isNumericInteger();
                 comparison = IntegerEqualsNode.create(x, y);

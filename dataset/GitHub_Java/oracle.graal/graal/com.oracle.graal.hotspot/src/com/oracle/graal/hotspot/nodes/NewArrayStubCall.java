@@ -42,8 +42,8 @@ public class NewArrayStubCall extends DeoptimizingStubCall implements LIRLowerab
 
     private static final Stamp defaultStamp = StampFactory.objectNonNull();
 
-    @Input ValueNode hub;
-    @Input ValueNode length;
+    @Input private ValueNode hub;
+    @Input private ValueNode length;
 
     public static NewArrayStubCall create(ValueNode hub, ValueNode length) {
         return new NewArrayStubCallGen(hub, length);

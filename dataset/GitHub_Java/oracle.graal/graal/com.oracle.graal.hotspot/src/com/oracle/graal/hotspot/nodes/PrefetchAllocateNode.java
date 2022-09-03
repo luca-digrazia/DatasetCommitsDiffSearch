@@ -33,8 +33,8 @@ import com.oracle.graal.word.*;
 @NodeInfo
 public class PrefetchAllocateNode extends FixedWithNextNode implements LIRLowerable {
 
-    @Input ValueNode distance;
-    @Input ValueNode address;
+    @Input private ValueNode distance;
+    @Input private ValueNode address;
 
     public static PrefetchAllocateNode create(ValueNode address, ValueNode distance) {
         return new PrefetchAllocateNodeGen(address, distance);

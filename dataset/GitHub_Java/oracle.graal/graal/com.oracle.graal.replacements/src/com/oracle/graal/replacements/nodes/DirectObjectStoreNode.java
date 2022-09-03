@@ -37,9 +37,9 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public class DirectObjectStoreNode extends FixedWithNextNode implements Lowerable {
 
-    @Input ValueNode object;
-    @Input ValueNode value;
-    @Input ValueNode offset;
+    @Input private ValueNode object;
+    @Input private ValueNode value;
+    @Input private ValueNode offset;
     private final int displacement;
     private final LocationIdentity locationIdentity;
 

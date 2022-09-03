@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -160,7 +160,7 @@ public abstract class InstanceOfSnippetsTemplates extends AbstractTemplates {
                 // Can simply use the phi result if the same materialized values are expected.
                 return result;
             } else {
-                return graph.unique(new ConditionalNode(asCondition(trueValue), t, f));
+                return graph.unique(ConditionalNode.create(asCondition(trueValue), t, f));
             }
         }
     }

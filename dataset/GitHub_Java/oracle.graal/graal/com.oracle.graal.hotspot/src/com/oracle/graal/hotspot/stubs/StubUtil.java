@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,25 +22,22 @@
  */
 package com.oracle.graal.hotspot.stubs;
 
+import static com.oracle.graal.api.meta.DeoptimizationReason.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 import static com.oracle.graal.hotspot.nodes.CStringNode.*;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
 import static com.oracle.graal.word.Word.*;
-import static jdk.internal.jvmci.meta.DeoptimizationReason.*;
 
 import java.lang.reflect.*;
 import java.util.*;
 
-import jdk.internal.jvmci.meta.*;
-
-import com.oracle.graal.api.replacements.*;
-import com.oracle.graal.compiler.common.spi.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.hotspot.nodes.*;
-import com.oracle.graal.hotspot.word.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.replacements.*;
+import com.oracle.graal.replacements.Snippet.Fold;
 import com.oracle.graal.word.*;
 
 //JaCoCo Exclude
@@ -232,8 +229,8 @@ public class StubUtil {
                     fatal("oop not in heap: %p", oop.rawValue());
                 }
 
-                KlassPointer klass = loadHubIntrinsic(object, anchorNode);
-                if (klass.isNull()) {
+                Word klass = loadHubIntrinsic(object, getWordKind(), anchorNode);
+                if (klass.equal(Word.zero())) {
                     fatal("klass for oop %p is null", oop.rawValue());
                 }
             }

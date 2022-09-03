@@ -25,7 +25,7 @@ package com.oracle.graal.phases.common;
 import java.util.*;
 
 import com.oracle.graal.debug.*;
-import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.NodeClass.NodeClassIterator;
 import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
@@ -110,7 +110,7 @@ public class OptimizeGuardAnchorsPhase extends Phase {
 
             if (otherGuards.size() == successorCount - 1) {
                 BeginNode anchor = computeOptimalAnchor(cfg.get(), BeginNode.prevBegin(controlSplit));
-                GuardNode newGuard = controlSplit.graph().unique(new GuardNode(guard.condition(), anchor, guard.reason(), guard.action(), guard.isNegated(), guard.getSpeculation()));
+                GuardNode newGuard = controlSplit.graph().unique(GuardNode.create(guard.condition(), anchor, guard.reason(), guard.action(), guard.negated(), guard.getSpeculation()));
                 for (GuardNode otherGuard : otherGuards) {
                     otherGuard.replaceAndDelete(newGuard);
                 }
@@ -122,12 +122,12 @@ public class OptimizeGuardAnchorsPhase extends Phase {
     }
 
     private static boolean compatibleGuards(GuardNode guard, GuardNode conditonGuard) {
-        return conditonGuard.isNegated() == guard.isNegated() && conditonGuard.action() == guard.action() && conditonGuard.reason() == guard.reason() &&
+        return conditonGuard.negated() == guard.negated() && conditonGuard.action() == guard.action() && conditonGuard.reason() == guard.reason() &&
                         conditonGuard.getSpeculation().equals(guard.getSpeculation());
     }
 
     private static BeginNode findMinimumUsagesSuccessor(ControlSplitNode controlSplit) {
-        NodePosIterator successors = controlSplit.successors().iterator();
+        NodeClassIterator successors = controlSplit.successors().iterator();
         BeginNode min = (BeginNode) successors.next();
         int minUsages = min.usages().count();
         while (successors.hasNext()) {

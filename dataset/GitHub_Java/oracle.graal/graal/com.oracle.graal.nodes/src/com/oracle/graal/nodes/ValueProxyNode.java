@@ -30,7 +30,7 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public class ValueProxyNode extends ProxyNode implements Canonicalizable, Virtualizable, ValueAndStampProxy {
 
-    @Input ValueNode value;
+    @Input private ValueNode value;
 
     public static ValueProxyNode create(ValueNode value, BeginNode proxyPoint) {
         return new ValueProxyNodeGen(value, proxyPoint);

@@ -26,7 +26,6 @@ import java.util.*;
 import java.util.concurrent.atomic.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.calc.*;
@@ -111,21 +110,6 @@ public class StructuredGraph extends Graph {
         this.entryBCI = entryBCI;
     }
 
-    public Stamp getReturnStamp() {
-        Stamp returnStamp = null;
-        for (ReturnNode returnNode : getNodes(ReturnNode.class)) {
-            ValueNode result = returnNode.result();
-            if (result != null) {
-                if (returnStamp == null) {
-                    returnStamp = result.stamp();
-                } else {
-                    returnStamp = returnStamp.meet(result.stamp());
-                }
-            }
-        }
-        return returnStamp;
-    }
-
     @Override
     public String toString() {
         StringBuilder buf = new StringBuilder(getClass().getSimpleName() + ":" + graphId);
@@ -184,8 +168,6 @@ public class StructuredGraph extends Graph {
     public StructuredGraph copy(String newName, ResolvedJavaMethod newMethod) {
         StructuredGraph copy = new StructuredGraph(newName, newMethod, graphId, entryBCI);
         copy.setGuardsStage(getGuardsStage());
-        copy.isAfterFloatingReadPhase = isAfterFloatingReadPhase;
-        copy.hasValueProxies = hasValueProxies;
         HashMap<Node, Node> replacements = new HashMap<>();
         replacements.put(start, copy.start);
         copy.addDuplicates(getNodes(), this, this.getNodeCount(), replacements);
@@ -260,7 +242,7 @@ public class StructuredGraph extends Graph {
     }
 
     public void replaceFloating(FloatingNode node, Node replacement) {
-        assert node != null && node.isAlive() && (replacement == null || replacement.isAlive()) : "cannot replace " + node + " with " + replacement;
+        assert node != null && replacement != null && node.isAlive() && replacement.isAlive() : "cannot replace " + node + " with " + replacement;
         node.replaceAtUsages(replacement);
         node.safeDelete();
     }

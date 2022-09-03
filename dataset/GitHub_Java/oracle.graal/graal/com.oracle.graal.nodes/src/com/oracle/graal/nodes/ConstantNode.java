@@ -55,7 +55,7 @@ public class ConstantNode extends FloatingNode implements LIRLowerable {
      * @param value the constant
      */
     public static ConstantNode create(Constant value, Stamp stamp) {
-        return USE_GENERATED_NODES ? new ConstantNodeGen(value, stamp) : new ConstantNode(value, stamp);
+        return new ConstantNodeGen(value, stamp);
     }
 
     protected ConstantNode(Constant value, Stamp stamp) {

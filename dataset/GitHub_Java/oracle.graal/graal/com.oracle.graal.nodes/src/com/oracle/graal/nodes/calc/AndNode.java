@@ -36,11 +36,11 @@ import com.oracle.graal.nodes.util.*;
 public class AndNode extends BitLogicNode implements NarrowableArithmeticNode {
 
     public static AndNode create(ValueNode x, ValueNode y) {
-        return USE_GENERATED_NODES ? new AndNodeGen(x, y) : new AndNode(x, y);
+        return new AndNodeGen(x, y);
     }
 
     public static Class<? extends AndNode> getGenClass() {
-        return USE_GENERATED_NODES ? AndNodeGen.class : AndNode.class;
+        return AndNodeGen.class;
     }
 
     AndNode(ValueNode x, ValueNode y) {

@@ -35,11 +35,11 @@ import com.oracle.graal.nodes.spi.*;
 public class IntegerMulNode extends IntegerArithmeticNode implements NarrowableArithmeticNode {
 
     public static IntegerMulNode create(ValueNode x, ValueNode y) {
-        return USE_GENERATED_NODES ? new IntegerMulNodeGen(x, y) : new IntegerMulNode(x, y);
+        return new IntegerMulNodeGen(x, y);
     }
 
     public static Class<? extends IntegerMulNode> getGenClass() {
-        return USE_GENERATED_NODES ? IntegerMulNodeGen.class : IntegerMulNode.class;
+        return IntegerMulNodeGen.class;
     }
 
     protected IntegerMulNode(ValueNode x, ValueNode y) {

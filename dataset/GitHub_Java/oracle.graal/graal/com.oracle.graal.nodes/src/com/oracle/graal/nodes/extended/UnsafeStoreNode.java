@@ -38,8 +38,8 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public class UnsafeStoreNode extends UnsafeAccessNode implements StateSplit, Lowerable, Virtualizable, MemoryCheckpoint.Single {
 
-    @Input ValueNode value;
-    @OptionalInput(InputType.State) FrameState stateAfter;
+    @Input private ValueNode value;
+    @OptionalInput(InputType.State) private FrameState stateAfter;
 
     public static UnsafeStoreNode create(ValueNode object, ValueNode offset, ValueNode value, Kind accessKind, LocationIdentity locationIdentity) {
         return new UnsafeStoreNodeGen(object, offset, value, accessKind, locationIdentity);
@@ -89,8 +89,8 @@ public class UnsafeStoreNode extends UnsafeAccessNode implements StateSplit, Low
         if (state != null && state.getState() == EscapeState.Virtual) {
             ValueNode indexValue = tool.getReplacedValue(offset());
             if (indexValue.isConstant()) {
-                long off = indexValue.asConstant().asLong();
-                int entryIndex = state.getVirtualObject().entryIndexForOffset(off);
+                long offset = indexValue.asConstant().asLong();
+                int entryIndex = state.getVirtualObject().entryIndexForOffset(offset);
                 if (entryIndex != -1) {
                     Kind entryKind = state.getVirtualObject().entryKind(entryIndex);
                     ValueNode entry = state.getEntry(entryIndex);
@@ -99,7 +99,7 @@ public class UnsafeStoreNode extends UnsafeAccessNode implements StateSplit, Low
                         tool.delete();
                     } else {
                         if ((accessKind() == Kind.Long || accessKind() == Kind.Double) && entryKind == Kind.Int) {
-                            int nextIndex = state.getVirtualObject().entryIndexForOffset(off + 4);
+                            int nextIndex = state.getVirtualObject().entryIndexForOffset(offset + 4);
                             if (nextIndex != -1) {
                                 Kind nextKind = state.getVirtualObject().entryKind(nextIndex);
                                 if (nextKind == Kind.Int) {

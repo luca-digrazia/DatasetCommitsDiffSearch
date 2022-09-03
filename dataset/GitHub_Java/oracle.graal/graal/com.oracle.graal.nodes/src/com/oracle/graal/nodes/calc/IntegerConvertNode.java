@@ -60,7 +60,7 @@ public abstract class IntegerConvertNode extends ConvertNode implements Arithmet
         }
     }
 
-    protected ValueNode canonicalConvert(@SuppressWarnings("hiding") ValueNode value) {
+    protected ValueNode canonicalConvert(ValueNode value) {
         if (value.stamp() instanceof IntegerStamp) {
             int inputBits = ((IntegerStamp) value.stamp()).getBits();
             if (inputBits == resultBits) {

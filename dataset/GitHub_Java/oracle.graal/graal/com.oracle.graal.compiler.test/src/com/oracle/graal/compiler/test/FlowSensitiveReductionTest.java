@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -148,7 +148,7 @@ public class FlowSensitiveReductionTest extends GraalCompilerTest {
         new FlowSensitiveReductionPhase(getMetaAccess()).apply(graph, context);
         new CanonicalizerPhase(true).apply(graph, context);
         for (ConstantNode constant : getConstantNodes(graph)) {
-            assertTrue("unexpected constant: " + constant, constant.isNullConstant() || constant.asJavaConstant().asInt() > 0);
+            assertTrue("unexpected constant: " + constant, constant.asConstant().isNull() || constant.asConstant().asInt() > 0);
         }
     }
 
@@ -175,16 +175,16 @@ public class FlowSensitiveReductionTest extends GraalCompilerTest {
         new CanonicalizerPhase(true).apply(graph, new PhaseContext(getProviders(), null));
         IfNode ifNode = (IfNode) graph.start().next();
         InstanceOfNode instanceOf = (InstanceOfNode) ifNode.condition();
-        IsNullNode x = graph.unique(new IsNullNode(graph.getParameter(0)));
+        IsNullNode x = graph.unique(IsNullNode.create(graph.getParameter(0)));
         InstanceOfNode y = instanceOf;
-        ShortCircuitOrNode disjunction = graph.unique(new ShortCircuitOrNode(x, false, y, false, NOT_FREQUENT_PROBABILITY));
-        LogicNegationNode negation = graph.unique(new LogicNegationNode(disjunction));
+        ShortCircuitOrNode disjunction = graph.unique(ShortCircuitOrNode.create(x, false, y, false, NOT_FREQUENT_PROBABILITY));
+        LogicNegationNode negation = graph.unique(LogicNegationNode.create(disjunction));
         ifNode.setCondition(negation);
         new CanonicalizerPhase(true).apply(graph, new PhaseContext(getProviders(), null));
         new FlowSensitiveReductionPhase(getMetaAccess()).apply(graph, new PhaseContext(getProviders(), null));
         new CanonicalizerPhase(true).apply(graph, new PhaseContext(getProviders(), null));
         for (ConstantNode constant : getConstantNodes(graph)) {
-            assertTrue("unexpected constant: " + constant, constant.isNullConstant() || constant.asJavaConstant().asInt() > 0);
+            assertTrue("unexpected constant: " + constant, constant.asConstant().isNull() || constant.asConstant().asInt() > 0);
         }
     }
 

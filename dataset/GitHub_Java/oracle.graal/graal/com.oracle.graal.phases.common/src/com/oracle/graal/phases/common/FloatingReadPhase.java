@@ -67,7 +67,7 @@ public class FloatingReadPhase extends Phase {
         @Override
         public MemoryNode getLastLocationAccess(LocationIdentity locationIdentity) {
             MemoryNode lastLocationAccess;
-            if (locationIdentity.isImmutable()) {
+            if (locationIdentity == FINAL_LOCATION) {
                 return null;
             } else {
                 lastLocationAccess = lastMemorySnapshot.get(locationIdentity);
@@ -157,7 +157,7 @@ public class FloatingReadPhase extends Phase {
         for (MemoryMap other : states) {
             keys.addAll(other.getLocations());
         }
-        assert checkNoImmutableLocations(keys);
+        assert !keys.contains(FINAL_LOCATION);
 
         Map<LocationIdentity, MemoryPhiNode> existingPhis = null;
         if (updateExistingPhis) {
@@ -209,13 +209,6 @@ public class FloatingReadPhase extends Phase {
 
     }
 
-    private static boolean checkNoImmutableLocations(Set<LocationIdentity> keys) {
-        keys.forEach(t -> {
-            assert !t.isImmutable();
-        });
-        return true;
-    }
-
     public static class CollectMemoryCheckpointsClosure extends NodeIteratorClosure<Set<LocationIdentity>> {
 
         private final Map<LoopBeginNode, Set<LocationIdentity>> modifiedInLoops;
@@ -261,7 +254,7 @@ public class FloatingReadPhase extends Phase {
                 exit.addAll(modifiedLocations);
                 exit.addAll(initialState);
             }
-            assert checkNoImmutableLocations(modifiedLocations);
+            assert !modifiedLocations.contains(FINAL_LOCATION);
             modifiedInLoops.put(loop, modifiedLocations);
             return loopInfo.exitStates;
         }

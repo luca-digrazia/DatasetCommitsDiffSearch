@@ -22,9 +22,10 @@
  */
 package com.oracle.graal.virtual.phases.ea;
 
+import static com.oracle.graal.graph.util.CollectionsAccess.*;
+
 import java.util.*;
 
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.java.*;
@@ -33,7 +34,7 @@ import com.oracle.graal.nodes.virtual.*;
 
 public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<T>> extends EffectsBlockState<T> {
 
-    protected final Map<VirtualObjectNode, ObjectState> objectStates = Node.newIdentityMap();
+    protected final Map<VirtualObjectNode, ObjectState> objectStates = newIdentityMap();
 
     /**
      * Final subclass of PartialEscapeBlockState, for performance and to make everything behave

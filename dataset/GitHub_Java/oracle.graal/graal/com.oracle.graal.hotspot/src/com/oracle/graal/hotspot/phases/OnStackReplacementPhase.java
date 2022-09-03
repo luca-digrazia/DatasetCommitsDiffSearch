@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.hotspot.phases;
 
-import static com.oracle.graal.phases.common.DeadCodeEliminationPhase.Optionality.*;
-
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.debug.*;
@@ -111,6 +109,6 @@ public class OnStackReplacementPhase extends Phase {
         GraphUtil.killCFG(start);
 
         Debug.dump(graph, "OnStackReplacement result");
-        new DeadCodeEliminationPhase(OPTIONAL).apply(graph);
+        new DeadCodeEliminationPhase().apply(graph);
     }
 }

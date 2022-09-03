@@ -32,7 +32,7 @@ public class SimpleInfopointNode extends InfopointNode implements LIRLowerable, 
     private BytecodePosition position;
 
     public static SimpleInfopointNode create(InfopointReason reason, BytecodePosition position) {
-        return USE_GENERATED_NODES ? new SimpleInfopointNodeGen(reason, position) : new SimpleInfopointNode(reason, position);
+        return new SimpleInfopointNodeGen(reason, position);
     }
 
     protected SimpleInfopointNode(InfopointReason reason, BytecodePosition position) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -37,12 +37,12 @@ import com.oracle.graal.phases.tiers.PhaseContext;
  * This class implements control-flow sensitive reductions for
  * {@link com.oracle.graal.nodes.GuardingPiNode}.
  * </p>
- * 
+ *
  * <p>
  * The laundry-list of all flow-sensitive reductions is summarized in
  * {@link com.oracle.graal.phases.common.cfs.FlowSensitiveReduction}
  * </p>
- * 
+ *
  * @see #visitGuardingPiNode(com.oracle.graal.nodes.GuardingPiNode)
  */
 public abstract class GuardingPiReduction extends BaseReduction {
@@ -141,7 +141,7 @@ public abstract class GuardingPiReduction extends BaseReduction {
          * FixedGuardNode allows tracking the condition via a GuardingNode, thus potentially
          * triggering simplifications down the road.
          */
-        FixedGuardNode fixedGuard = graph.add(new FixedGuardNode(envelope.condition(), envelope.getReason(), envelope.getAction(), envelope.isNegated()));
+        FixedGuardNode fixedGuard = graph.add(FixedGuardNode.create(envelope.condition(), envelope.getReason(), envelope.getAction(), envelope.isNegated()));
         graph.addBeforeFixed(envelope, fixedGuard);
 
         /*
@@ -152,7 +152,7 @@ public abstract class GuardingPiReduction extends BaseReduction {
 
         if (!FlowUtil.lacksUsages(envelope)) {
             // not calling wrapInPiNode() because we don't want to rememberSubstitution()
-            PiNode replacement = graph.unique(new PiNode(envelope.object(), envelope.stamp(), fixedGuard));
+            PiNode replacement = graph.unique(PiNode.create(envelope.object(), envelope.stamp(), fixedGuard));
             reasoner.added.add(replacement);
             // before removing the GuardingPiNode replace its usages
             envelope.replaceAtUsages(replacement);
@@ -214,7 +214,7 @@ public abstract class GuardingPiReduction extends BaseReduction {
                 /*
                  * GuardingPiNode succeeds if payload null
                  */
-                ValueNode replacement = StampTool.isPointerAlwaysNull(payload) ? payload : reasoner.nonTrivialNull(payload);
+                ValueNode replacement = StampTool.isObjectAlwaysNull(payload) ? payload : reasoner.nonTrivialNull(payload);
                 if (replacement != null) {
                     // replacement == null means !isKnownNull(payload)
                     removeGuardingPiNode(envelope, replacement);
@@ -274,14 +274,14 @@ public abstract class GuardingPiReduction extends BaseReduction {
             return true;
         }
 
-        if (StampTool.isPointerNonNull(payload)) {
+        if (StampTool.isObjectNonNull(payload)) {
             // payload needs no downcasting, it satisfies as-is the GuardingPiNode's condition.
             if (precisionLoss(envelope, payload)) {
                 /*
                  * TODO The GuardingPiNode has an outgoing stamp whose narrowing goes beyond what
                  * the condition checks. That's suspicious.
                  */
-                PiNode replacement = graph.unique(new PiNode(payload, envelope.stamp()));
+                PiNode replacement = graph.unique(PiNode.create(payload, envelope.stamp()));
                 reasoner.added.add(replacement);
                 removeGuardingPiNode(envelope, replacement);
                 return true;
@@ -295,7 +295,7 @@ public abstract class GuardingPiReduction extends BaseReduction {
         Witness w = state.typeInfo(payload);
         GuardingNode nonNullAnchor = (w != null && w.isNonNull()) ? w.guard() : null;
         if (nonNullAnchor != null) {
-            PiNode replacement = graph.unique(new PiNode(payload, envelope.stamp(), nonNullAnchor.asNode()));
+            PiNode replacement = graph.unique(PiNode.create(payload, envelope.stamp(), nonNullAnchor.asNode()));
             reasoner.added.add(replacement);
             removeGuardingPiNode(envelope, replacement);
             return true;
@@ -334,7 +334,7 @@ public abstract class GuardingPiReduction extends BaseReduction {
             return false;
         }
 
-        if (StampTool.isPointerAlwaysNull(d)) {
+        if (StampTool.isObjectAlwaysNull(d)) {
             removeGuardingPiNode(envelope, d);
             return true;
         }

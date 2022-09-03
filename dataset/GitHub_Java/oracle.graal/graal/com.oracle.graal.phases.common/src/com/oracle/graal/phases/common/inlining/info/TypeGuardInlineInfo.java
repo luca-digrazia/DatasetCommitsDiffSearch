@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,17 +24,17 @@ package com.oracle.graal.phases.common.inlining.info;
 
 import java.util.*;
 
-import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.code.Assumptions;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.calc.*;
+import com.oracle.graal.compiler.common.calc.Condition;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.phases.common.inlining.*;
-import com.oracle.graal.phases.common.inlining.info.elem.*;
-import com.oracle.graal.phases.util.*;
+import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
+import com.oracle.graal.nodes.calc.CompareNode;
+import com.oracle.graal.nodes.extended.LoadHubNode;
+import com.oracle.graal.phases.common.inlining.InliningUtil;
+import com.oracle.graal.phases.common.inlining.info.elem.Inlineable;
+import com.oracle.graal.phases.util.Providers;
 
 /**
  * Represents an inlining opportunity for which profiling information suggests a monomorphic
@@ -91,20 +91,20 @@ public class TypeGuardInlineInfo extends AbstractInlineInfo {
 
     @Override
     public Collection<Node> inline(Providers providers, Assumptions assumptions) {
-        createGuard(graph(), providers);
+        createGuard(graph(), providers.getMetaAccess());
         return inline(invoke, concrete, inlineableElement, assumptions, false);
     }
 
     @Override
-    public void tryToDevirtualizeInvoke(Providers providers, Assumptions assumptions) {
-        createGuard(graph(), providers);
+    public void tryToDevirtualizeInvoke(MetaAccessProvider metaAccess, Assumptions assumptions) {
+        createGuard(graph(), metaAccess);
         InliningUtil.replaceInvokeCallTarget(invoke, graph(), InvokeKind.Special, concrete);
     }
 
-    private void createGuard(StructuredGraph graph, Providers providers) {
+    private void createGuard(StructuredGraph graph, MetaAccessProvider metaAccess) {
         ValueNode nonNullReceiver = InliningUtil.nonNullReceiver(invoke);
-        LoadHubNode receiverHub = graph.unique(LoadHubNode.create(providers.getStampProvider(), nonNullReceiver));
-        ConstantNode typeHub = ConstantNode.forConstant(receiverHub.stamp(), type.getObjectHub(), providers.getMetaAccess(), graph);
+        ConstantNode typeHub = ConstantNode.forConstant(type.getEncoding(ResolvedJavaType.Representation.ObjectHub), metaAccess, graph);
+        LoadHubNode receiverHub = graph.unique(LoadHubNode.create(nonNullReceiver, typeHub.getKind()));
 
         CompareNode typeCheck = CompareNode.createCompareNode(graph, Condition.EQ, receiverHub, typeHub);
         FixedGuardNode guard = graph.add(FixedGuardNode.create(typeCheck, DeoptimizationReason.TypeCheckedInliningViolated, DeoptimizationAction.InvalidateReprofile));

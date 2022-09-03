@@ -119,7 +119,7 @@ public final class HotSpotTruffleRuntime implements GraalTruffleRuntime {
 
     public DirectCallNode createDirectCallNode(CallTarget target) {
         if (target instanceof OptimizedCallTarget) {
-            return OptimizedDirectCallNode.create((OptimizedCallTarget) target);
+            return new OptimizedDirectCallNode((OptimizedCallTarget) target);
         } else {
             throw new IllegalStateException(String.format("Unexpected call target class %s!", target.getClass()));
         }
@@ -231,7 +231,7 @@ public final class HotSpotTruffleRuntime implements GraalTruffleRuntime {
         MetaAccessProvider metaAccess = providers.getMetaAccess();
         SuitesProvider suitesProvider = Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend().getSuites();
         Suites suites = suitesProvider.createSuites();
-        removeInliningPhase(suites);
+        suites.getHighTier().findPhase(InliningPhase.class).remove();
         StructuredGraph graph = new StructuredGraph(javaMethod);
         new GraphBuilderPhase.Instance(metaAccess, GraphBuilderConfiguration.getEagerDefault(), OptimisticOptimizations.ALL).apply(graph);
         PhaseSuite<HighTierContext> graphBuilderSuite = suitesProvider.getDefaultGraphBuilderSuite();
@@ -245,13 +245,6 @@ public final class HotSpotTruffleRuntime implements GraalTruffleRuntime {
     private static Providers getGraalProviders() {
         RuntimeProvider runtimeProvider = Graal.getRequiredCapability(RuntimeProvider.class);
         return runtimeProvider.getHostBackend().getProviders();
-    }
-
-    private static void removeInliningPhase(Suites suites) {
-        ListIterator<BasePhase<? super HighTierContext>> inliningPhase = suites.getHighTier().findPhase(InliningPhase.class);
-        if (inliningPhase != null) {
-            inliningPhase.remove();
-        }
     }
 
     @SlowPath

@@ -57,14 +57,7 @@ public final class OptimizedDirectCallNode extends DirectCallNode implements Mat
         if (CompilerDirectives.inInterpreter()) {
             onInterpreterCall(arguments);
         }
-        boolean isInlined;
-        if (TruffleCompilerOptions.TruffleContextSensitiveInlining.getValue()) {
-            /* Inlining done during partial evalulation. */
-            isInlined = false;
-        } else {
-            isInlined = this.inlined;
-        }
-        Object result = callProxy(this, getCurrentCallTarget(), frame, arguments, isInlined, true);
+        Object result = callProxy(this, getCurrentCallTarget(), frame, arguments, inlined, true);
 
         if (CompilerDirectives.inInterpreter()) {
             afterInterpreterCall(result);

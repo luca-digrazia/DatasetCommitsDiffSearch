@@ -37,7 +37,7 @@ public class TypedNodeIteratorTest2 {
         private final String name;
 
         public static NodeA create(String name) {
-            return USE_GENERATED_NODES ? new TypedNodeIteratorTest2_NodeAGen(name) : new NodeA(name);
+            return new TypedNodeIteratorTest2_NodeAGen(name);
         }
 
         NodeA(String name) {
@@ -53,7 +53,7 @@ public class TypedNodeIteratorTest2 {
     static class NodeB extends NodeA implements IterableNodeType {
 
         public static NodeB create(String name) {
-            return USE_GENERATED_NODES ? new TypedNodeIteratorTest2_NodeBGen(name) : new NodeB(name);
+            return new TypedNodeIteratorTest2_NodeBGen(name);
         }
 
         NodeB(String name) {
@@ -64,7 +64,7 @@ public class TypedNodeIteratorTest2 {
     @NodeInfo
     static class NodeC extends NodeB {
         public static NodeC create(String name) {
-            return USE_GENERATED_NODES ? new TypedNodeIteratorTest2_NodeCGen(name) : new NodeC(name);
+            return new TypedNodeIteratorTest2_NodeCGen(name);
         }
 
         NodeC(String name) {
@@ -75,7 +75,7 @@ public class TypedNodeIteratorTest2 {
     @NodeInfo
     static class NodeD extends NodeC {
         public static NodeD create(String name) {
-            return USE_GENERATED_NODES ? new TypedNodeIteratorTest2_NodeDGen(name) : new NodeD(name);
+            return new TypedNodeIteratorTest2_NodeDGen(name);
         }
 
         NodeD(String name) {

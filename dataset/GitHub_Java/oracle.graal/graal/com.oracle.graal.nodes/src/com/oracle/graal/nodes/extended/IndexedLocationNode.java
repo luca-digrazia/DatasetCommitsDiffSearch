@@ -44,7 +44,7 @@ public class IndexedLocationNode extends LocationNode implements Canonicalizable
     private final Kind valueKind;
     private final LocationIdentity locationIdentity;
     private final long displacement;
-    @Input ValueNode index;
+    @Input private ValueNode index;
     private final int indexScaling;
 
     /**

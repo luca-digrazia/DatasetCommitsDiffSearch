@@ -36,7 +36,7 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public class GetObjectAddressNode extends FixedWithNextNode implements LIRLowerable {
 
-    @Input ValueNode object;
+    @Input private ValueNode object;
 
     public static GetObjectAddressNode create(ValueNode obj) {
         return new GetObjectAddressNodeGen(obj);

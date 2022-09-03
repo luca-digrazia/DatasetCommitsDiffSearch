@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,18 +23,19 @@
 package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
 
 /**
  * The {@code LogicNode} class definition.
  */
-public abstract class BitLogicNode extends BinaryNode implements ArithmeticLIRLowerable, MemoryArithmeticLIRLowerable, NarrowableArithmeticNode {
+@NodeInfo
+public abstract class BitLogicNode extends BinaryNode implements ArithmeticLIRLowerable, NarrowableArithmeticNode {
 
     /**
      * Constructs a new logic operation node.
-     * 
+     *
      * @param x the first input into this node
      * @param y the second input into this node
      */
@@ -44,17 +45,26 @@ public abstract class BitLogicNode extends BinaryNode implements ArithmeticLIRLo
     }
 
     public static BitLogicNode and(StructuredGraph graph, ValueNode v1, ValueNode v2) {
-        assert v1.stamp().isCompatible(v2.stamp());
-        return graph.unique(new AndNode(StampTool.and(v1.stamp(), v2.stamp()), v1, v2));
+        return graph.unique(AndNode.create(v1, v2));
+    }
+
+    public static BitLogicNode and(ValueNode v1, ValueNode v2) {
+        return AndNode.create(v1, v2);
     }
 
     public static BitLogicNode or(StructuredGraph graph, ValueNode v1, ValueNode v2) {
-        assert v1.stamp().isCompatible(v2.stamp());
-        return graph.unique(new OrNode(StampTool.or(v1.stamp(), v2.stamp()), v1, v2));
+        return graph.unique(OrNode.create(v1, v2));
+    }
+
+    public static BitLogicNode or(ValueNode v1, ValueNode v2) {
+        return OrNode.create(v1, v2);
     }
 
     public static BitLogicNode xor(StructuredGraph graph, ValueNode v1, ValueNode v2) {
-        assert v1.stamp().isCompatible(v2.stamp());
-        return graph.unique(new XorNode(StampTool.xor(v1.stamp(), v2.stamp()), v1, v2));
+        return graph.unique(XorNode.create(v1, v2));
+    }
+
+    public static BitLogicNode xor(ValueNode v1, ValueNode v2) {
+        return XorNode.create(v1, v2);
     }
 }

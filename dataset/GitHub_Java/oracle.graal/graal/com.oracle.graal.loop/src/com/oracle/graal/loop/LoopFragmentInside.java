@@ -22,14 +22,16 @@
  */
 package com.oracle.graal.loop;
 
+import static com.oracle.graal.graph.util.CollectionsAccess.*;
+
 import java.util.*;
 
 import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.graph.Graph.DuplicationReplacement;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.Graph.*;
 import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.VirtualState.*;
+import com.oracle.graal.nodes.VirtualState.NodeClosure;
 import com.oracle.graal.nodes.util.*;
 
 public class LoopFragmentInside extends LoopFragment {
@@ -143,7 +145,7 @@ public class LoopFragmentInside extends LoopFragment {
         final StructuredGraph graph = graph();
         return new DuplicationReplacement() {
 
-            private Map<Node, Node> seenNode = Node.newMap();
+            private HashMap<Node, Node> seenNode = new HashMap<>();
 
             @Override
             public Node replacement(Node original) {
@@ -304,7 +306,7 @@ public class LoopFragmentInside extends LoopFragment {
                 reverseEnds.put(duplicate, le);
             }
         }
-        mergedInitializers = Node.newIdentityMap();
+        mergedInitializers = newNodeIdentityMap();
         BeginNode newExit;
         StructuredGraph graph = graph();
         if (endsToMerge.size() == 1) {

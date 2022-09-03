@@ -36,7 +36,7 @@ import com.oracle.graal.nodes.util.*;
 @NodeInfo
 public class ArrayLengthNode extends FixedWithNextNode implements Canonicalizable.Unary<ValueNode>, Lowerable, Virtualizable {
 
-    @Input ValueNode array;
+    @Input private ValueNode array;
 
     public ValueNode array() {
         return array;

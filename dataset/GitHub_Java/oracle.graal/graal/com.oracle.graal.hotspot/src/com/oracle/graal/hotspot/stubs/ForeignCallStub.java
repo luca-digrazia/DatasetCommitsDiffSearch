@@ -26,7 +26,6 @@ import static com.oracle.graal.api.code.CallingConvention.Type.*;
 import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.RegisterEffect.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.hotspot.*;
@@ -34,9 +33,7 @@ import com.oracle.graal.hotspot.HotSpotForeignCallLinkage.Transition;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.hotspot.replacements.*;
-import com.oracle.graal.hotspot.word.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.phases.util.*;
 import com.oracle.graal.replacements.*;
 import com.oracle.graal.replacements.nodes.*;
 import com.oracle.graal.word.*;
@@ -51,8 +48,6 @@ import com.oracle.graal.word.*;
  * the foreign call.
  */
 public class ForeignCallStub extends Stub {
-
-    private final HotSpotGraalRuntimeProvider runtime;
 
     /**
      * The target of the call.
@@ -77,15 +72,14 @@ public class ForeignCallStub extends Stub {
      *            be re-executed.
      * @param killedLocations the memory locations killed by the stub call
      */
-    public ForeignCallStub(HotSpotGraalRuntimeProvider runtime, HotSpotProviders providers, long address, ForeignCallDescriptor descriptor, boolean prependThread, Transition transition,
-                    boolean reexecutable, LocationIdentity... killedLocations) {
-        super(providers, HotSpotForeignCallLinkageImpl.create(providers.getMetaAccess(), providers.getCodeCache(), providers.getForeignCalls(), descriptor, 0L, PRESERVES_REGISTERS, JavaCall,
-                        JavaCallee, transition, reexecutable, killedLocations));
-        this.runtime = runtime;
+    public ForeignCallStub(HotSpotProviders providers, long address, ForeignCallDescriptor descriptor, boolean prependThread, Transition transition, boolean reexecutable,
+                    LocationIdentity... killedLocations) {
+        super(providers, HotSpotForeignCallLinkage.create(providers.getMetaAccess(), providers.getCodeCache(), providers.getForeignCalls(), descriptor, 0L, PRESERVES_REGISTERS, JavaCall, JavaCallee,
+                        transition, reexecutable, killedLocations));
         this.prependThread = prependThread;
         Class<?>[] targetParameterTypes = createTargetParameters(descriptor);
         ForeignCallDescriptor targetSig = new ForeignCallDescriptor(descriptor.getName() + ":C", descriptor.getResultType(), targetParameterTypes);
-        target = HotSpotForeignCallLinkageImpl.create(providers.getMetaAccess(), providers.getCodeCache(), providers.getForeignCalls(), targetSig, address, DESTROYS_REGISTERS, NativeCall, NativeCall,
+        target = HotSpotForeignCallLinkage.create(providers.getMetaAccess(), providers.getCodeCache(), providers.getForeignCalls(), targetSig, address, DESTROYS_REGISTERS, NativeCall, NativeCall,
                         transition, reexecutable, killedLocations);
     }
 
@@ -124,7 +118,7 @@ public class ForeignCallStub extends Stub {
                 for (int i = 0; i < arguments.length; i++) {
                     parameters[i] = metaAccess.lookupJavaType(arguments[i]);
                 }
-                return new HotSpotSignature(runtime, metaAccess.lookupJavaType(d.getResultType()), parameters);
+                return new HotSpotSignature(metaAccess.lookupJavaType(d.getResultType()), parameters);
             }
 
             public String getName() {
@@ -192,7 +186,7 @@ public class ForeignCallStub extends Stub {
 
         StructuredGraph graph = new StructuredGraph(toString(), null);
 
-        GraphKit kit = new HotSpotGraphKit(graph, providers);
+        GraphKit kit = new GraphKit(graph, providers);
         ParameterNode[] params = createParameters(kit, args);
 
         ReadRegisterNode thread = kit.append(ReadRegisterNode.create(providers.getRegisters().getThreadRegister(), true, false));
@@ -216,18 +210,6 @@ public class ForeignCallStub extends Stub {
         }
 
         return graph;
-    }
-
-    private static class HotSpotGraphKit extends GraphKit {
-
-        public HotSpotGraphKit(StructuredGraph graph, Providers providers) {
-            super(graph, providers);
-        }
-
-        @Override
-        public void rewriteWordTypes(SnippetReflectionProvider snippetReflection) {
-            new HotSpotWordTypeRewriterPhase(providers.getMetaAccess(), snippetReflection, providers.getConstantReflection(), providers.getCodeCache().getTarget().wordKind).apply(graph);
-        }
     }
 
     private ParameterNode[] createParameters(GraphKit kit, Class<?>[] args) {

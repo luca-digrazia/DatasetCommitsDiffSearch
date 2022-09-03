@@ -32,7 +32,7 @@ import com.oracle.graal.nodes.*;
 @NodeInfo
 public class DynamicNewInstanceNode extends AbstractNewObjectNode implements Canonicalizable {
 
-    @Input ValueNode clazz;
+    @Input private ValueNode clazz;
 
     public static DynamicNewInstanceNode create(ValueNode clazz, boolean fillContents) {
         return new DynamicNewInstanceNodeGen(clazz, fillContents);

@@ -37,7 +37,7 @@ import com.oracle.graal.nodes.type.*;
 @NodeInfo
 public class LoadMethodNode extends FixedWithNextNode implements Lowerable, Canonicalizable {
 
-    @Input ValueNode hub;
+    @Input private ValueNode hub;
     private final ResolvedJavaMethod method;
     private final ResolvedJavaType receiverType;
 

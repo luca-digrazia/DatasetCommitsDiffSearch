@@ -55,9 +55,9 @@ public class FixedGuardNode extends AbstractFixedGuardNode implements Lowerable,
         if (condition() instanceof LogicConstantNode) {
             LogicConstantNode c = (LogicConstantNode) condition();
             if (c.getValue() == isNegated()) {
-                FixedNode currentNext = this.next();
-                if (currentNext != null) {
-                    tool.deleteBranch(currentNext);
+                FixedNode next = this.next();
+                if (next != null) {
+                    tool.deleteBranch(next);
                 }
 
                 DeoptimizeNode deopt = graph().add(DeoptimizeNode.create(getAction(), getReason()));

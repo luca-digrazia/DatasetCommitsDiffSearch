@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.phases.common.cfs;
 
+import static com.oracle.graal.graph.util.CollectionsAccess.*;
+
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
@@ -79,7 +81,7 @@ public final class EquationalReasoner {
      * {@link com.oracle.graal.graph.NodeBitMap NodeBitMap} but in this set instead (those nodes are
      * added after the {@link com.oracle.graal.graph.NodeBitMap} was obtained).
      */
-    final Set<ValueNode> added = Node.newSet();
+    final Set<ValueNode> added = newNodeIdentitySet();
 
     /**
      * The reduction of a FloatingNode performed by {@link EquationalReasoner EquationalReasoner}
@@ -89,7 +91,7 @@ public final class EquationalReasoner {
      * The substitutions tracked in this field become invalid as described in
      * {@link #updateState(com.oracle.graal.phases.common.cfs.State) updateState(State)}
      */
-    private final Map<ValueNode, ValueNode> substs = Node.newIdentityMap();
+    private final Map<ValueNode, ValueNode> substs = newNodeIdentityMap();
 
     public EquationalReasoner(StructuredGraph graph, CanonicalizerTool tool, LogicConstantNode trueConstant, LogicConstantNode falseConstant, ConstantNode nullConstant) {
         this.graph = graph;
@@ -379,7 +381,7 @@ public final class EquationalReasoner {
     /**
      * The contract for this baseCase-style method is covered in
      * {@link EquationalReasoner#deverbosify(com.oracle.graal.graph.Node)
-     * EquationalReasoner#deverbosify()}.
+     * EquationalReasoner#deverbosify()}
      *
      * @return a {@link com.oracle.graal.nodes.calc.FloatingNode} different from the argument, in
      *         case a reduction was made. The node being returned might be already in the graph. In

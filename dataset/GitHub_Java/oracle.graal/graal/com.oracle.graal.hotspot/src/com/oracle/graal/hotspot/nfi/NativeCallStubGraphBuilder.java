@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,11 +30,11 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.hotspot.meta.*;
-import com.oracle.graal.hotspot.word.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.virtual.*;
+import com.oracle.graal.word.phases.*;
 
 /**
  * Utility creating a graph for a stub used to call a native function.
@@ -61,7 +61,7 @@ public class NativeCallStubGraphBuilder {
             g.start().setStateAfter(frameState);
             List<ValueNode> parameters = new ArrayList<>();
             FixedWithNextNode fixedWithNext = getParameters(g, arg0, argumentTypes.length, argumentTypes, parameters, providers);
-            JavaConstant functionPointerNode = JavaConstant.forLong(functionPointer);
+            Constant functionPointerNode = Constant.forLong(functionPointer);
 
             ValueNode[] arguments = new ValueNode[parameters.size()];
 
@@ -91,7 +91,7 @@ public class NativeCallStubGraphBuilder {
 
             ReturnNode returnNode = g.add(ReturnNode.create(boxedResult));
             callNode.setNext(returnNode);
-            (new HotSpotWordTypeRewriterPhase(providers.getMetaAccess(), providers.getSnippetReflection(), providers.getConstantReflection(), Kind.Long)).apply(g);
+            (new WordTypeRewriterPhase(providers.getMetaAccess(), providers.getSnippetReflection(), Kind.Long)).apply(g);
             return g;
         } catch (NoSuchMethodException e) {
             throw GraalInternalError.shouldNotReachHere("Call Stub method not found");
@@ -117,9 +117,9 @@ public class NativeCallStubGraphBuilder {
                 // array value
                 Kind arrayElementKind = getElementKind(type);
                 LocationIdentity locationIdentity = NamedLocationIdentity.getArrayLocation(arrayElementKind);
-                int displacement = runtime().getArrayBaseOffset(arrayElementKind);
+                int displacement = getArrayBaseOffset(arrayElementKind);
                 ConstantNode index = ConstantNode.forInt(0, g);
-                int indexScaling = runtime().getArrayIndexScale(arrayElementKind);
+                int indexScaling = getArrayIndexScale(arrayElementKind);
                 IndexedLocationNode locationNode = IndexedLocationNode.create(locationIdentity, arrayElementKind, displacement, index, g, indexScaling);
                 Stamp wordStamp = StampFactory.forKind(providers.getCodeCache().getTarget().wordKind);
                 ComputeAddressNode arrayAddress = g.unique(ComputeAddressNode.create(boxedElement, locationNode, wordStamp));
