@@ -46,7 +46,9 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Fram
     protected OptimizedCallTarget(RootNode rootNode, FrameDescriptor descriptor, TruffleCompiler compiler, int invokeCounter, int compilationThreshold) {
         super(rootNode, descriptor);
         this.compiler = compiler;
-        this.compilationPolicy = new CompilationPolicy(compilationThreshold, invokeCounter);
+        this.invokeCounter = invokeCounter;
+        this.loopAndInvokeCounter = compilationThreshold;
+        this.originalInvokeCounter = compilationThreshold;
         this.rootNode.setCallTarget(this);
 
         if (TruffleCallTargetProfiling.getValue()) {
@@ -56,8 +58,10 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Fram
 
     private HotSpotNmethod compiledMethod;
     private final TruffleCompiler compiler;
-    private final CompilationPolicy compilationPolicy;
 
+    private int invokeCounter;
+    private int originalInvokeCounter;
+    private int loopAndInvokeCounter;
     private boolean disableCompilation;
 
     private int callCount;
@@ -93,8 +97,12 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Fram
     private Object compiledCodeInvalidated(PackedFrame caller, Arguments args) {
         CompilerAsserts.neverPartOfCompilation();
         compiledMethod = null;
+        int invalidationReprofileCount = TruffleInvalidationReprofileCount.getValue();
+        invokeCounter = invalidationReprofileCount;
         invalidationCount++;
-        compilationPolicy.compilationInvalidated();
+        if (TruffleFunctionInlining.getValue()) {
+            originalInvokeCounter += invalidationReprofileCount;
+        }
         if (TraceTruffleCompilation.getValue()) {
             OUT.printf("[truffle] invalidated %-48s |Alive %5.0fms |Inv# %d                                     |Replace# %d\n", rootNode, (System.nanoTime() - timeCompilationFinished) / 1e6,
                             invalidationCount, replaceCount);
@@ -104,8 +112,9 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Fram
 
     private Object interpreterCall(PackedFrame caller, Arguments args) {
         CompilerAsserts.neverPartOfCompilation();
-        compilationPolicy.countInterpreterCall();
-        if (disableCompilation || !compilationPolicy.compileOrInline()) {
+        invokeCounter--;
+        loopAndInvokeCounter--;
+        if (disableCompilation || loopAndInvokeCounter > 0 || invokeCounter > 0) {
             return executeHelper(caller, args);
         } else {
             compileOrInline();
@@ -115,7 +124,10 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Fram
 
     private void compileOrInline() {
         if (TruffleFunctionInlining.getValue() && inline()) {
-            compilationPolicy.inlined(MIN_INVOKES_AFTER_INLINING);
+            invokeCounter = MIN_INVOKES_AFTER_INLINING;
+            int inliningReprofileCount = TruffleInliningReprofileCount.getValue();
+            loopAndInvokeCounter = inliningReprofileCount;
+            originalInvokeCounter = inliningReprofileCount;
         } else {
             compile();
         }
@@ -177,13 +189,18 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Fram
 
     @Override
     public void reportLoopCount(int count) {
-        compilationPolicy.reportLoopCount(count);
+        loopAndInvokeCounter = Math.max(0, loopAndInvokeCounter - count);
     }
 
     @Override
     public void nodeReplaced() {
         replaceCount++;
-        compilationPolicy.nodeReplaced();
+
+        // delay compilation until tree is deemed stable enough
+        int replaceBackoff = TruffleReplaceReprofileCount.getValue();
+        if (loopAndInvokeCounter < replaceBackoff) {
+            loopAndInvokeCounter = replaceBackoff;
+        }
     }
 
     private static class InliningHelper {
@@ -263,7 +280,7 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Fram
 
             public InliningPolicy(OptimizedCallTarget caller) {
                 this.callerNodeCount = NodeUtil.countNodes(caller.getRootNode());
-                this.callerInvocationCount = caller.compilationPolicy.getOriginalInvokeCounter();
+                this.callerInvocationCount = caller.originalInvokeCounter;
             }
 
             public boolean continueInlining() {
