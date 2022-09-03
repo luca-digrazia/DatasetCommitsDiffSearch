@@ -434,7 +434,7 @@ public class StandardGraphBuilderPlugins {
         r.register1("getClass", Receiver.class, new InvocationPlugin() {
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
                 ValueNode object = receiver.get();
-                ValueNode folded = GetClassNode.tryFold(b.getMetaAccess(), b.getConstantReflection(), GraphUtil.originalValue(object));
+                ValueNode folded = GetClassNode.tryFold(b.getMetaAccess(), GraphUtil.originalValue(object));
                 if (folded != null) {
                     b.addPush(JavaKind.Object, folded);
                 } else {
@@ -450,7 +450,7 @@ public class StandardGraphBuilderPlugins {
         Registration r = new Registration(plugins, Class.class);
         r.register2("isInstance", Receiver.class, Object.class, new InvocationPlugin() {
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver type, ValueNode object) {
-                LogicNode condition = b.add(InstanceOfDynamicNode.create(b.getAssumptions(), b.getConstantReflection(), type.get(), object));
+                LogicNode condition = b.add(InstanceOfDynamicNode.create(b.getConstantReflection(), type.get(), object));
                 b.push(JavaKind.Boolean, b.recursiveAppend(new ConditionalNode(condition).canonical(null)));
                 return true;
             }

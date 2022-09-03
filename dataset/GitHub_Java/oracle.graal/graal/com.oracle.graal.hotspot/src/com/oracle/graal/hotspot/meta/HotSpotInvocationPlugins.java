@@ -47,7 +47,7 @@ import com.oracle.graal.replacements.nodes.MacroNode;
 final class HotSpotInvocationPlugins extends InvocationPlugins {
     final HotSpotVMConfig config;
 
-    HotSpotInvocationPlugins(HotSpotVMConfig config, MetaAccessProvider metaAccess) {
+    public HotSpotInvocationPlugins(HotSpotVMConfig config, MetaAccessProvider metaAccess) {
         super(metaAccess);
         this.config = config;
     }

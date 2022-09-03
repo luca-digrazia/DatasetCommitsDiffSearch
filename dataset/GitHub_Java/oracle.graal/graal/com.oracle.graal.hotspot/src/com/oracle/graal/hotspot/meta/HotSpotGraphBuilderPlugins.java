@@ -38,7 +38,8 @@ import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.services.Services;
+import jdk.vm.ci.options.StableOptionValue;
+import jdk.vm.ci.service.Services;
 import sun.reflect.Reflection;
 
 import com.oracle.graal.api.replacements.SnippetReflectionProvider;
@@ -73,9 +74,9 @@ import com.oracle.graal.nodes.memory.address.AddressNode;
 import com.oracle.graal.nodes.memory.address.OffsetAddressNode;
 import com.oracle.graal.nodes.spi.StampProvider;
 import com.oracle.graal.nodes.util.GraphUtil;
-import com.oracle.graal.options.StableOptionValue;
 import com.oracle.graal.replacements.InlineDuringParsingPlugin;
 import com.oracle.graal.replacements.MethodHandlePlugin;
+import com.oracle.graal.replacements.NodeIntrinsificationPlugin;
 import com.oracle.graal.replacements.NodeIntrinsificationProvider;
 import com.oracle.graal.replacements.ReplacementsImpl;
 import com.oracle.graal.replacements.StandardGraphBuilderPlugins;
@@ -101,8 +102,9 @@ public class HotSpotGraphBuilderPlugins {
 
         Plugins plugins = new Plugins(invocationPlugins);
         NodeIntrinsificationProvider nodeIntrinsificationProvider = new NodeIntrinsificationProvider(metaAccess, snippetReflection, foreignCalls, wordTypes);
+        NodeIntrinsificationPlugin nodeIntrinsificationPlugin = new NodeIntrinsificationPlugin();
         HotSpotWordOperationPlugin wordOperationPlugin = new HotSpotWordOperationPlugin(snippetReflection, wordTypes);
-        HotSpotNodePlugin nodePlugin = new HotSpotNodePlugin(wordOperationPlugin);
+        HotSpotNodePlugin nodePlugin = new HotSpotNodePlugin(wordOperationPlugin, nodeIntrinsificationPlugin);
 
         plugins.appendParameterPlugin(nodePlugin);
         plugins.appendNodePlugin(nodePlugin);
