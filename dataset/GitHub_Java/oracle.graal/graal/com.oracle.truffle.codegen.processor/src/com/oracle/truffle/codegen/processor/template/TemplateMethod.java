@@ -29,7 +29,7 @@ import javax.lang.model.type.*;
 
 import com.oracle.truffle.codegen.processor.*;
 
-public class TemplateMethod extends MessageContainer {
+public class TemplateMethod {
 
     private String id;
     private final Template template;
@@ -58,22 +58,6 @@ public class TemplateMethod extends MessageContainer {
 
     public TemplateMethod(TemplateMethod method) {
         this(method.id, method.template, method.specification, method.method, method.markerAnnotation, method.returnType, method.parameters);
-        getMessages().addAll(method.getMessages());
-    }
-
-    @Override
-    public Element getMessageElement() {
-        return method;
-    }
-
-    @Override
-    public AnnotationMirror getMessageAnnotation() {
-        return markerAnnotation;
-    }
-
-    @Override
-    protected List<MessageContainer> findChildContainers() {
-        return Collections.emptyList();
     }
 
     public void setId(String id) {

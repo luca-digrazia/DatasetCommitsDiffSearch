@@ -28,7 +28,6 @@ import java.util.*;
 import javax.lang.model.element.*;
 import javax.lang.model.type.*;
 import javax.lang.model.util.*;
-import javax.tools.Diagnostic.*;
 
 import com.oracle.truffle.api.codegen.*;
 import com.oracle.truffle.api.nodes.Node.Child;
@@ -57,33 +56,10 @@ public class NodeParser extends TemplateParser<NodeData> {
         try {
             parsedNodes = new HashMap<>();
             node = resolveNode((TypeElement) element);
-            if (Log.DEBUG) {
-                NodeData parsed = parsedNodes.get(Utils.getQualifiedName((TypeElement) element));
-                if (node != null) {
-                    String dump = parsed.dump();
-                    log.message(Kind.ERROR, null, null, null, dump);
-                    System.out.println(dump);
-                }
-            }
         } finally {
             parsedNodes = null;
         }
-
         return node;
-    }
-
-    @Override
-    protected NodeData filterErrorElements(NodeData model) {
-        for (Iterator<NodeData> iterator = model.getDeclaredChildren().iterator(); iterator.hasNext();) {
-            NodeData node = filterErrorElements(iterator.next());
-            if (node == null) {
-                iterator.remove();
-            }
-        }
-        if (model.hasErrors()) {
-            return null;
-        }
-        return model;
     }
 
     @Override
@@ -106,11 +82,9 @@ public class NodeParser extends TemplateParser<NodeData> {
                 children.add(childNode);
             }
         }
-
         NodeData rootNode = parseNode(rootType);
-        boolean hasErrors = rootNode != null ? rootNode.hasErrors() : false;
-        if ((rootNode == null || hasErrors) && children.size() > 0) {
-            rootNode = new NodeData(rootType, rootType.getSimpleName().toString());
+        if (rootNode == null && children.size() > 0) {
+            rootNode = new NodeData(rootType, null, rootType.getSimpleName().toString());
         }
 
         parsedNodes.put(typeName, rootNode);
@@ -118,6 +92,17 @@ public class NodeParser extends TemplateParser<NodeData> {
         if (rootNode != null) {
             children.addAll(rootNode.getDeclaredChildren());
             rootNode.setDeclaredChildren(children);
+        }
+
+        if (Log.DEBUG) {
+            NodeData parsed = parsedNodes.get(typeName);
+            if (parsed != null) {
+                String dump = parsed.dump();
+                String valid = rootNode != null ? "" : " failed";
+                String msg = String.format("Node parsing %s : %s", valid, dump);
+                log.error(msg);
+                System.out.println(msg);
+            }
         }
 
         return rootNode;
@@ -136,8 +121,7 @@ public class NodeParser extends TemplateParser<NodeData> {
         }
 
         if (type.getModifiers().contains(Modifier.PRIVATE)) {
-            // TODO error message here!?
-            return null; // not visible, not a node
+            return null; // not visible
         }
 
         TypeElement nodeType;
@@ -151,32 +135,43 @@ public class NodeParser extends TemplateParser<NodeData> {
         }
 
         NodeData nodeData = parseNodeData(type, nodeType);
-        if (nodeData.hasErrors()) {
-            return nodeData; // error sync point
+        if (nodeData == null) {
+            return null;
         }
 
         List<Element> elements = new ArrayList<>(context.getEnvironment().getElementUtils().getAllMembers(type));
-        nodeData.setExtensionElements(getExtensionParser().parseAll(nodeData, elements));
+        nodeData.setExtensionElements(getExtensionParser().parseAll(type, elements));
         if (nodeData.getExtensionElements() != null) {
             elements.addAll(nodeData.getExtensionElements());
         }
-        parseMethods(nodeData, elements);
 
-        if (nodeData.hasErrors()) {
-            return nodeData;
+        if (!parseMethods(nodeData, elements)) {
+            return null;
         }
 
         List<NodeData> nodes;
         if (needsSplit) {
             nodes = splitNodeData(nodeData);
+            if (nodes == null) {
+                return null;
+            }
         } else {
             nodes = new ArrayList<>();
             nodes.add(nodeData);
         }
 
+        boolean valid = true;
         for (NodeData splittedNode : nodes) {
-            finalizeSpecializations(splittedNode);
-            verifyNode(splittedNode);
+            if (!finalizeSpecializations(splittedNode)) {
+                valid = false;
+            }
+            if (!verifyNode(splittedNode)) {
+                valid = false;
+            }
+        }
+
+        if (!valid) {
+            return null;
         }
 
         if (needsSplit) {
@@ -242,25 +237,31 @@ public class NodeParser extends TemplateParser<NodeData> {
         return grouped;
     }
 
-    private void parseMethods(final NodeData node, List<Element> elements) {
+    private boolean parseMethods(final NodeData node, List<Element> elements) {
         node.setGuards(new GuardParser(context, node, node.getTypeSystem()).parse(elements));
         node.setShortCircuits(new ShortCircuitParser(context, node).parse(elements));
         node.setSpecializationListeners(new SpecializationListenerParser(context, node).parse(elements));
         List<SpecializationData> generics = new GenericParser(context, node).parse(elements);
         List<SpecializationData> specializations = new SpecializationMethodParser(context, node).parse(elements);
 
+        if (generics == null || specializations == null || node.getGuards() == null || node.getShortCircuits() == null || node.getSpecializationListeners() == null) {
+            return false;
+        }
+
         List<SpecializationData> allSpecializations = new ArrayList<>();
         allSpecializations.addAll(generics);
         allSpecializations.addAll(specializations);
 
         node.setSpecializations(allSpecializations);
+
+        return true;
     }
 
-    private void finalizeSpecializations(final NodeData node) {
+    private boolean finalizeSpecializations(final NodeData node) {
         List<SpecializationData> specializations = new ArrayList<>(node.getSpecializations());
 
         if (specializations.isEmpty()) {
-            return;
+            return true;
         }
 
         List<SpecializationData> generics = new ArrayList<>();
@@ -272,18 +273,22 @@ public class NodeParser extends TemplateParser<NodeData> {
 
         if (generics.size() == 1 && specializations.size() == 1) {
             for (SpecializationData generic : generics) {
-                generic.addError("@%s defined but no @%s.", Generic.class.getSimpleName(), Specialization.class.getSimpleName());
+                log.error(generic.getMethod(), "@%s defined but no @%s.", Generic.class.getSimpleName(), Specialization.class.getSimpleName());
             }
         }
 
         SpecializationData genericSpecialization = null;
         if (generics.size() > 1) {
             for (SpecializationData generic : generics) {
-                generic.addError("Only @%s is allowed per operation.", Generic.class.getSimpleName());
+                log.error(generic.getMethod(), "Only @%s is allowed per operation.", Generic.class.getSimpleName());
             }
-            return;
+            return false;
         } else if (generics.size() == 1) {
             genericSpecialization = generics.get(0);
+            if (!node.needsRewrites(context)) {
+                log.error(genericSpecialization.getMethod(), "Generic specialization is not reachable.", Generic.class.getSimpleName());
+                return false;
+            }
         } else if (node.needsRewrites(context)) {
             SpecializationData specialization = specializations.get(0);
             GenericParser parser = new GenericParser(context, node);
@@ -338,6 +343,8 @@ public class NodeParser extends TemplateParser<NodeData> {
         for (SpecializationData specialization : specializations) {
             specialization.setId(findUniqueSpecializationId(specialization));
         }
+
+        return true;
     }
 
     private static String findUniqueSpecializationId(SpecializationData specialization) {
@@ -428,18 +435,28 @@ public class NodeParser extends TemplateParser<NodeData> {
         }
     }
 
-    private void verifyNode(NodeData nodeData) {
+    private boolean verifyNode(NodeData nodeData) {
         // verify specialization parameter length
-        verifySpecializationParameters(nodeData);
+        if (!verifySpecializationParameters(nodeData)) {
+            return false;
+        }
 
         // verify order is not ambiguous
-        verifySpecializationOrder(nodeData);
+        if (!verifySpecializationOrder(nodeData)) {
+            return false;
+        }
 
-        verifyMissingAbstractMethods(nodeData);
+        if (!verifyMissingAbstractMethods(nodeData)) {
+            return false;
+        }
 
-        assignShortCircuitsToSpecializations(nodeData);
+        if (!assignShortCircuitsToSpecializations(nodeData)) {
+            return false;
+        }
 
-        verifyConstructors(nodeData);
+        if (!verifyConstructors(nodeData)) {
+            return false;
+        }
 
 // if (!verifyNamingConvention(specializations, "do")) {
 // return null;
@@ -449,42 +466,54 @@ public class NodeParser extends TemplateParser<NodeData> {
 // return null;
 // }
 
-        verifyNamingConvention(nodeData.getShortCircuits(), "needs");
+        if (!verifyNamingConvention(nodeData.getShortCircuits(), "needs")) {
+            return false;
+        }
 
-        verifySpecializationThrows(nodeData);
+        if (!verifySpecializationThrows(nodeData)) {
+            return false;
+        }
+
+        return true;
     }
 
     private NodeData parseNodeData(TypeElement templateType, TypeElement nodeType) {
         List<Element> elements = new ArrayList<>(context.getEnvironment().getElementUtils().getAllMembers(nodeType));
         List<TypeElement> typeHierarchy = findSuperClasses(new ArrayList<TypeElement>(), nodeType);
         Collections.reverse(typeHierarchy);
-        NodeData nodeData = new NodeData(templateType, templateType.getSimpleName().toString());
 
         AnnotationMirror typeSystemMirror = findFirstAnnotation(typeHierarchy, TypeSystemReference.class);
         if (typeSystemMirror == null) {
-            nodeData.addError("No @%s annotation found in type hierarchy of %s.", TypeSystemReference.class.getSimpleName(), nodeType.getQualifiedName().toString());
-            return nodeData;
+            log.error(templateType, "No @%s annotation found in type hierarchy of %s.", TypeSystemReference.class.getSimpleName(), nodeType.getQualifiedName().toString());
+            return null;
         }
 
         TypeMirror typeSytemType = Utils.getAnnotationValue(TypeMirror.class, typeSystemMirror, "value");
         final TypeSystemData typeSystem = (TypeSystemData) context.getTemplate(typeSytemType, true);
         if (typeSystem == null) {
-            nodeData.addError("The used type system '%s' is invalid.", Utils.getQualifiedName(typeSytemType));
-            return nodeData;
+            log.error(templateType, "The used type system '%s' is invalid.", Utils.getQualifiedName(typeSytemType));
+            return null;
         }
 
+        NodeData nodeData = new NodeData(templateType, typeSystem, templateType.getSimpleName().toString());
         nodeData.setNodeType(nodeType.asType());
-        nodeData.setTypeSystem(typeSystem);
 
         List<ExecutableTypeData> executableTypes = filterExecutableTypes(new ExecutableTypeMethodParser(context, nodeData).parse(elements));
+
         nodeData.setExecutableTypes(executableTypes);
+
         parsedNodes.put(Utils.getQualifiedName(templateType), nodeData);
-        nodeData.setFields(parseFields(nodeData, elements, typeHierarchy));
+
+        List<NodeFieldData> fields = parseFields(nodeData, elements, typeHierarchy);
+        if (fields == null) {
+            return null;
+        }
+        nodeData.setFields(fields);
 
         return nodeData;
     }
 
-    private static void verifySpecializationParameters(NodeData nodeData) {
+    private boolean verifySpecializationParameters(NodeData nodeData) {
         boolean valid = true;
         int args = -1;
         for (SpecializationData specializationData : nodeData.getSpecializations()) {
@@ -502,16 +531,17 @@ public class NodeParser extends TemplateParser<NodeData> {
         }
         if (!valid) {
             for (SpecializationData specialization : nodeData.getSpecializations()) {
-                specialization.addError("All specializations must have the same number of arguments.");
+                context.getLog().error(specialization.getMethod(), specialization.getMarkerAnnotation(), "All specializations must have the same number of arguments.");
             }
         }
+        return valid;
     }
 
-    private void verifyMissingAbstractMethods(NodeData nodeData) {
-        if (!nodeData.needsFactory()) {
+    private boolean verifyMissingAbstractMethods(NodeData nodeData) {
+        if (nodeData.needsFactory()) {
             // missing abstract methods only needs to be implemented
             // if we need go generate factory for it.
-            return;
+            return true;
         }
 
         List<Element> elements = new ArrayList<>(context.getEnvironment().getElementUtils().getAllMembers(nodeData.getTemplateType()));
@@ -524,20 +554,24 @@ public class NodeParser extends TemplateParser<NodeData> {
             unusedElements.removeAll(nodeData.getExtensionElements());
         }
 
+        boolean valid = true;
         for (ExecutableElement unusedMethod : ElementFilter.methodsIn(unusedElements)) {
             if (unusedMethod.getModifiers().contains(Modifier.ABSTRACT)) {
-                nodeData.addError("The type %s must implement the inherited abstract method %s.", Utils.getSimpleName(nodeData.getTemplateType()), Utils.getReadableSignature(unusedMethod));
+                context.getLog().error(nodeData.getTemplateType(), "The type %s must implement the inherited abstract method %s.", Utils.getSimpleName(nodeData.getTemplateType()),
+                                Utils.getReadableSignature(unusedMethod));
+                valid = false;
             }
         }
+
+        return valid;
     }
 
-    private void verifyConstructors(NodeData nodeData) {
+    private boolean verifyConstructors(NodeData nodeData) {
+        TypeElement type = Utils.fromTypeMirror(nodeData.getNodeType());
         if (!nodeData.needsRewrites(context)) {
             // no specialization constructor is needed if the node never rewrites.
-            return;
+            return true;
         }
-
-        TypeElement type = Utils.fromTypeMirror(nodeData.getNodeType());
 
         List<ExecutableElement> constructors = ElementFilter.constructorsIn(type.getEnclosedElements());
         for (ExecutableElement e : constructors) {
@@ -545,17 +579,20 @@ public class NodeParser extends TemplateParser<NodeData> {
                 TypeMirror firstArg = e.getParameters().get(0).asType();
                 if (Utils.typeEquals(firstArg, nodeData.getNodeType())) {
                     if (e.getModifiers().contains(Modifier.PRIVATE)) {
-                        nodeData.addError("The specialization constructor must not be private.");
+                        context.getLog().error(e, "The specialization constructor must not be private.");
+                        return false;
                     } else if (constructors.size() <= 1) {
-                        nodeData.addError("The specialization constructor must not be the only constructor. The definition of an alternative constructor is required.");
+                        context.getLog().error(e, "The specialization constructor must not be the only constructor. The definition of an alternative constructor is required.");
+                        return false;
                     }
-                    return;
+                    return true;
                 }
             }
         }
 
         // not found
-        nodeData.addError("Specialization constructor '%s(%s previousNode) { this(...); }' is required.", Utils.getSimpleName(type), Utils.getSimpleName(type));
+        context.getLog().error(type, "Specialization constructor '%s(%s previousNode) { this(...); }' is required.", Utils.getSimpleName(type), Utils.getSimpleName(type));
+        return false;
     }
 
     private static List<ExecutableTypeData> filterExecutableTypes(List<ExecutableTypeData> executableTypes) {
@@ -620,6 +657,8 @@ public class NodeParser extends TemplateParser<NodeData> {
             }
         }
 
+        boolean valid = true;
+
         List<NodeFieldData> fields = new ArrayList<>();
         for (VariableElement var : ElementFilter.fieldsIn(elements)) {
             if (var.getModifiers().contains(Modifier.STATIC)) {
@@ -633,10 +672,20 @@ public class NodeParser extends TemplateParser<NodeData> {
             }
 
             NodeFieldData field = parseField(nodeData, var, shortCircuits);
-            if (field.getExecutionKind() != ExecutionKind.IGNORE) {
-                fields.add(field);
+            if (field != null) {
+                if (field.getExecutionKind() != ExecutionKind.IGNORE) {
+                    fields.add(field);
+                }
+            } else {
+                valid = false;
             }
         }
+
+        // TODO parse getters
+        if (!valid) {
+            return null;
+        }
+
         sortByExecutionOrder(fields, executionDefinition == null ? Collections.<String> emptyList() : executionDefinition, typeHierarchy);
         return fields;
     }
@@ -672,15 +721,19 @@ public class NodeParser extends TemplateParser<NodeData> {
             kind = null;
         }
 
-        NodeFieldData fieldData = new NodeFieldData(var, findAccessElement(var), mirror, kind, execution);
+        NodeData fieldNodeData = null;
         if (nodeType != null) {
-            NodeData fieldNodeData = resolveNode(Utils.fromTypeMirror(nodeType));
-            fieldData.setNode(fieldNodeData);
+            fieldNodeData = resolveNode(Utils.fromTypeMirror(nodeType));
+            Element errorElement = Utils.typeEquals(parentNodeData.getTemplateType().asType(), var.getEnclosingElement().asType()) ? var : parentNodeData.getTemplateType();
 
             if (fieldNodeData == null) {
-                fieldData.addError("Node type '%s' is invalid.", Utils.getQualifiedName(nodeType));
+                // TODO redirect errors from resolve.
+                context.getLog().error(errorElement, "Node type '%s' is invalid.", Utils.getQualifiedName(nodeType));
+                return null;
             } else if (fieldNodeData.findGenericExecutableTypes(context).isEmpty()) {
-                fieldData.addError("No executable generic types found for node '%s'.", Utils.getQualifiedName(nodeType));
+                // TODO better error handling for (no or multiple?)
+                context.getLog().error(errorElement, "No executable generic types found for node '%s'.", Utils.getQualifiedName(nodeType));
+                return null;
             }
 
             // TODO correct handling of access elements
@@ -688,7 +741,7 @@ public class NodeParser extends TemplateParser<NodeData> {
                 execution = ExecutionKind.IGNORE;
             }
         }
-        return fieldData;
+        return new NodeFieldData(fieldNodeData, var, findAccessElement(var), mirror, kind, execution);
     }
 
     private Element findAccessElement(VariableElement variableElement) {
@@ -742,16 +795,17 @@ public class NodeParser extends TemplateParser<NodeData> {
         });
     }
 
-    private void assignShortCircuitsToSpecializations(NodeData node) {
+    private boolean assignShortCircuitsToSpecializations(NodeData node) {
         Map<String, List<ShortCircuitData>> groupedShortCircuits = groupShortCircuits(node.getShortCircuits());
 
         boolean valid = true;
+
         for (NodeFieldData field : node.filterFields(null, ExecutionKind.SHORT_CIRCUIT)) {
             String valueName = field.getName();
             List<ShortCircuitData> availableCircuits = groupedShortCircuits.get(valueName);
 
             if (availableCircuits == null || availableCircuits.isEmpty()) {
-                node.addError("@%s method for short cut value '%s' required.", ShortCircuit.class.getSimpleName(), valueName);
+                log.error(node.getTemplateType(), "@%s method for short cut value '%s' required.", ShortCircuit.class.getSimpleName(), valueName);
                 valid = false;
                 continue;
             }
@@ -766,7 +820,7 @@ public class NodeParser extends TemplateParser<NodeData> {
 
             if (!sameMethodName) {
                 for (ShortCircuitData circuit : availableCircuits) {
-                    circuit.addError("All short circuits for short cut value '%s' must have the same method name.", valueName);
+                    log.error(circuit.getMethod(), circuit.getMarkerAnnotation(), "All short circuits for short cut value '%s' must have the same method name.", valueName);
                 }
                 valid = false;
                 continue;
@@ -781,7 +835,7 @@ public class NodeParser extends TemplateParser<NodeData> {
             }
 
             if (genericCircuit == null) {
-                node.addError("No generic @%s method available for short cut value '%s'.", ShortCircuit.class.getSimpleName(), valueName);
+                log.error(node.getTemplateType(), "No generic @%s method available for short cut value '%s'.", ShortCircuit.class.getSimpleName(), valueName);
                 valid = false;
                 continue;
             }
@@ -794,42 +848,62 @@ public class NodeParser extends TemplateParser<NodeData> {
         }
 
         if (!valid) {
-            return;
+            return valid;
         }
 
         NodeFieldData[] fields = node.filterFields(null, ExecutionKind.SHORT_CIRCUIT);
         for (SpecializationData specialization : node.getSpecializations()) {
-            List<ShortCircuitData> assignedShortCuts = new ArrayList<>(fields.length);
+            ShortCircuitData[] assignedShortCuts = new ShortCircuitData[fields.length];
 
             for (int i = 0; i < fields.length; i++) {
                 List<ShortCircuitData> availableShortCuts = groupedShortCircuits.get(fields[i].getName());
 
                 ShortCircuitData genericShortCircuit = null;
-                ShortCircuitData compatibleShortCircuit = null;
                 for (ShortCircuitData circuit : availableShortCuts) {
                     if (circuit.isGeneric()) {
                         genericShortCircuit = circuit;
                     } else if (circuit.isCompatibleTo(specialization)) {
-                        compatibleShortCircuit = circuit;
+                        assignedShortCuts[i] = circuit;
                     }
                 }
 
-                if (compatibleShortCircuit == null) {
-                    compatibleShortCircuit = genericShortCircuit;
+                if (assignedShortCuts[i] == null) {
+                    assignedShortCuts[i] = genericShortCircuit;
                 }
-                assignedShortCuts.add(compatibleShortCircuit);
             }
             specialization.setShortCircuits(assignedShortCuts);
         }
+        return true;
     }
 
-    private static void verifyNamingConvention(List<? extends TemplateMethod> methods, String prefix) {
+    private boolean verifyNamingConvention(List<? extends TemplateMethod> methods, String prefix) {
+        boolean valid = true;
         for (int i = 0; i < methods.size(); i++) {
             TemplateMethod m1 = methods.get(i);
             if (m1.getMethodName().length() < 3 || !m1.getMethodName().startsWith(prefix)) {
-                m1.addError("Naming convention: method name must start with '%s'.", prefix);
+                log.error(m1.getMethod(), m1.getMarkerAnnotation(), "Naming convention: method name must start with '%s'.", prefix);
+                valid = false;
             }
         }
+        return valid;
+    }
+
+    @SuppressWarnings("unused")
+    private boolean verifyNamesUnique(List<? extends TemplateMethod> methods) {
+        boolean valid = true;
+        for (int i = 0; i < methods.size(); i++) {
+            TemplateMethod m1 = methods.get(i);
+            for (int j = i + 1; j < methods.size(); j++) {
+                TemplateMethod m2 = methods.get(j);
+
+                if (m1.getMethodName().equalsIgnoreCase(m2.getMethodName())) {
+                    log.error(m1.getMethod(), m1.getMarkerAnnotation(), "Method name '%s' used multiple times", m1.getMethodName());
+                    log.error(m2.getMethod(), m2.getMarkerAnnotation(), "Method name '%s' used multiple times", m1.getMethodName());
+                    return false;
+                }
+            }
+        }
+        return valid;
     }
 
     private boolean isGenericShortCutMethod(NodeData node, TemplateMethod method) {
@@ -884,7 +958,7 @@ public class NodeParser extends TemplateParser<NodeData> {
         return collection;
     }
 
-    private static void verifySpecializationOrder(NodeData node) {
+    private boolean verifySpecializationOrder(NodeData node) {
         TypeSystemData typeSystem = node.getTypeSystem();
         List<SpecializationData> specializations = node.getSpecializations();
 
@@ -897,39 +971,44 @@ public class NodeParser extends TemplateParser<NodeData> {
                 if (m1.getOrder() != Specialization.DEFAULT_ORDER && m2.getOrder() != Specialization.DEFAULT_ORDER) {
                     int specOrder = m1.getOrder() - m2.getOrder();
                     if (specOrder == 0) {
-                        m1.addError("Order value %d used multiple times", m1.getOrder());
-                        m2.addError("Order value %d used multiple times", m1.getOrder());
-                        return;
+                        log.error(m1.getMethod(), m1.getMarkerAnnotation(), "Order value %d used multiple times", m1.getOrder());
+                        log.error(m2.getMethod(), m2.getMarkerAnnotation(), "Order value %d used multiple times", m1.getOrder());
+                        return false;
                     } else if ((specOrder < 0 && inferredOrder > 0) || (specOrder > 0 && inferredOrder < 0)) {
-                        m1.addError("Explicit order values %d and %d are inconsistent with type lattice ordering.", m1.getOrder(), m2.getOrder());
-                        m2.addError("Explicit order values %d and %d are inconsistent with type lattice ordering.", m1.getOrder(), m2.getOrder());
-                        return;
+                        log.error(m1.getMethod(), m1.getMarkerAnnotation(), "Explicit order values %d and %d are inconsistent with type lattice ordering.", m1.getOrder(), m2.getOrder());
+                        log.error(m2.getMethod(), m2.getMarkerAnnotation(), "Explicit order values %d and %d are inconsistent with type lattice ordering.", m1.getOrder(), m2.getOrder());
+                        return false;
                     }
                 } else if (inferredOrder == 0) {
                     SpecializationData m = (m1.getOrder() == Specialization.DEFAULT_ORDER ? m1 : m2);
-                    m.addError("Cannot calculate a consistent order for this specialization. Define the order attribute to resolve this.");
-                    return;
+                    log.error(m.getMethod(), m.getMarkerAnnotation(), "Cannot calculate a consistent order for this specialization. Define the order attribute to resolve this.");
+                    return false;
                 }
             }
         }
+        return true;
     }
 
-    private static void verifySpecializationThrows(NodeData node) {
+    private boolean verifySpecializationThrows(NodeData node) {
         Map<String, SpecializationData> specializationMap = new HashMap<>();
         for (SpecializationData spec : node.getSpecializations()) {
             specializationMap.put(spec.getMethodName(), spec);
         }
+        boolean valid = true;
         for (SpecializationData sourceSpecialization : node.getSpecializations()) {
             if (sourceSpecialization.getExceptions() != null) {
                 for (SpecializationThrowsData throwsData : sourceSpecialization.getExceptions()) {
                     for (SpecializationThrowsData otherThrowsData : sourceSpecialization.getExceptions()) {
                         if (otherThrowsData != throwsData && Utils.typeEquals(otherThrowsData.getJavaClass(), throwsData.getJavaClass())) {
-                            throwsData.addError("Duplicate exception type.");
+                            AnnotationValue javaClassValue = Utils.getAnnotationValue(throwsData.getAnnotationMirror(), "rewriteOn");
+                            log.error(throwsData.getSpecialization().getMethod(), throwsData.getAnnotationMirror(), javaClassValue, "Duplicate exception type.");
+                            valid = false;
                         }
                     }
                 }
             }
         }
+        return valid;
     }
 
     private static int compareSpecialization(TypeSystemData typeSystem, SpecializationData m1, SpecializationData m2) {

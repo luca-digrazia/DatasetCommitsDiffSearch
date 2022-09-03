@@ -799,8 +799,4 @@ public class Utils {
         return true;
     }
 
-    public static boolean isObject(TypeMirror actualType) {
-        return getQualifiedName(actualType).equals("java.lang.Object");
-    }
-
 }
