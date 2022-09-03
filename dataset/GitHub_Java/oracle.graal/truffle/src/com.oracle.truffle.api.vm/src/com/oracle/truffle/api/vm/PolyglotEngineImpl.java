@@ -28,8 +28,6 @@ import static com.oracle.truffle.api.vm.PolyglotImpl.checkEngine;
 import static com.oracle.truffle.api.vm.VMAccessor.INSTRUMENT;
 import static com.oracle.truffle.api.vm.VMAccessor.LANGUAGE;
 import static com.oracle.truffle.api.vm.VMAccessor.NODES;
-import static com.oracle.truffle.api.vm.VMAccessor.SPI;
-import static com.oracle.truffle.api.vm.VMAccessor.engine;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -134,7 +132,7 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
             }
         }
 
-        this.engineOptions = OptionDescriptors.create(describeEngineOptions());
+        this.engineOptions = new OptionDescriptorsImpl(describeEngineOptions());
         this.compilerOptions = VMAccessor.SPI.getCompilerOptions();
         this.allEngineOptions = OptionDescriptors.createUnion(engineOptions, compilerOptions);
         this.engineOptionValues = new OptionValuesImpl(this, this.engineOptions);
@@ -252,7 +250,7 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
 
     private Map<String, Instrument> initializeInstruments(Map<String, InstrumentInfo> infos) {
         Map<String, Instrument> instruments = new LinkedHashMap<>();
-        List<InstrumentCache> cachedInstruments = InstrumentCache.load(SPI.allLoaders());
+        List<InstrumentCache> cachedInstruments = InstrumentCache.load();
         for (InstrumentCache instrumentCache : cachedInstruments) {
             PolyglotInstrumentImpl instrumentImpl = new PolyglotInstrumentImpl(this, instrumentCache);
             instrumentImpl.info = LANGUAGE.createInstrument(instrumentImpl, instrumentCache.getId(), instrumentCache.getName(), instrumentCache.getVersion());
@@ -360,20 +358,8 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
     @Override
     public PolyglotContext createPolyglotContext(OutputStream providedOut, OutputStream providedErr, InputStream providedIn, Map<String, String[]> arguments, Map<String, String> options) {
         checkEngine(this);
-        DispatchOutputStream useOut;
-        if (providedOut == null) {
-            useOut = out;
-        } else {
-            useOut = INSTRUMENT.createDispatchOutput(providedOut);
-            engine().attachOutputConsumer(useOut, out);
-        }
-        DispatchOutputStream useErr;
-        if (providedErr == null) {
-            useErr = err;
-        } else {
-            useErr = INSTRUMENT.createDispatchOutput(providedErr);
-            engine().attachOutputConsumer(useErr, err);
-        }
+        OutputStream useOut = providedOut == null ? out : providedOut;
+        OutputStream useErr = providedErr == null ? err : providedErr;
         InputStream useIn = providedIn == null ? in : providedIn;
         PolyglotContextImpl contextImpl = new PolyglotContextImpl(this, useOut, useErr, useIn, options, arguments, null);
         return impl.getAPIAccess().newPolyglotContext(api, contextImpl);
