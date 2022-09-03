@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -31,95 +31,76 @@ package com.oracle.truffle.llvm.runtime.interop.convert;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
-import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
-import com.oracle.truffle.llvm.runtime.LLVMSharedGlobalVariable;
-import com.oracle.truffle.llvm.runtime.LLVMTruffleAddress;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
+import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
-abstract class ToI8 extends ForeignToLLVM {
+public abstract class ToI8 extends ForeignToLLVM {
 
-    @Child private ToI8 toI8;
+    @Child private ForeignToLLVM toI8;
 
     @Specialization
-    public byte fromInt(int value) {
+    protected byte fromInt(int value) {
         return (byte) value;
     }
 
     @Specialization
-    public byte fromChar(char value) {
+    protected byte fromChar(char value) {
         return (byte) value;
     }
 
     @Specialization
-    public byte fromLong(long value) {
+    protected byte fromLong(long value) {
         return (byte) value;
     }
 
     @Specialization
-    public byte fromShort(short value) {
+    protected byte fromShort(short value) {
         return (byte) value;
     }
 
     @Specialization
-    public byte fromByte(byte value) {
+    protected byte fromByte(byte value) {
         return value;
     }
 
     @Specialization
-    public byte fromFloat(float value) {
+    protected byte fromFloat(float value) {
         return (byte) value;
     }
 
     @Specialization
-    public byte fromDouble(double value) {
+    protected byte fromDouble(double value) {
         return (byte) value;
     }
 
     @Specialization
-    public byte fromBoolean(boolean value) {
+    protected byte fromBoolean(boolean value) {
         return (byte) (value ? 1 : 0);
     }
 
     @Specialization
-    public byte fromForeignPrimitive(LLVMBoxedPrimitive boxed) {
+    protected byte fromForeignPrimitive(LLVMBoxedPrimitive boxed) {
         return recursiveConvert(boxed.getValue());
     }
 
     @Specialization(guards = "notLLVM(obj)")
-    public byte fromTruffleObject(TruffleObject obj) {
+    protected byte fromTruffleObject(TruffleObject obj) {
         return recursiveConvert(fromForeign(obj));
     }
 
     @Specialization
-    public byte fromString(String value) {
+    protected byte fromString(String value) {
         return (byte) getSingleStringCharacter(value);
-    }
-
-    @Specialization
-    public byte fromLLVMTruffleAddress(LLVMTruffleAddress obj) {
-        return (byte) obj.getAddress().getVal();
-    }
-
-    @Specialization
-    public byte fromLLVMFunctionDescriptor(LLVMFunctionDescriptor fd) {
-        return (byte) fd.getFunctionPointer();
-    }
-
-    @Specialization
-    public byte fromSharedDescriptor(LLVMSharedGlobalVariable shared, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess access) {
-        return (byte) access.getNativeLocation(shared.getDescriptor()).getVal();
     }
 
     private byte recursiveConvert(Object o) {
         if (toI8 == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            toI8 = ToI8NodeGen.create();
+            toI8 = insert(getNodeFactory().createForeignToLLVM(ForeignToLLVMType.I8));
         }
         return (byte) toI8.executeWithTarget(o);
     }
@@ -129,7 +110,7 @@ abstract class ToI8 extends ForeignToLLVM {
     }
 
     @TruffleBoundary
-    static byte slowPathPrimitiveConvert(ForeignToLLVM thiz, Object value) {
+    static byte slowPathPrimitiveConvert(LLVMMemory memory, ForeignToLLVM thiz, Object value) {
         if (value instanceof Number) {
             return ((Number) value).byteValue();
         } else if (value instanceof Boolean) {
@@ -138,16 +119,10 @@ abstract class ToI8 extends ForeignToLLVM {
             return (byte) (char) value;
         } else if (value instanceof String) {
             return (byte) thiz.getSingleStringCharacter((String) value);
-        } else if (value instanceof LLVMFunctionDescriptor) {
-            return (byte) ((LLVMFunctionDescriptor) value).getFunctionPointer();
         } else if (value instanceof LLVMBoxedPrimitive) {
-            return slowPathPrimitiveConvert(thiz, ((LLVMBoxedPrimitive) value).getValue());
-        } else if (value instanceof LLVMTruffleAddress) {
-            return (byte) ((LLVMTruffleAddress) value).getAddress().getVal();
-        } else if (value instanceof LLVMSharedGlobalVariable) {
-            return (byte) createGlobalAccess().getNativeLocation(((LLVMSharedGlobalVariable) value).getDescriptor()).getVal();
+            return slowPathPrimitiveConvert(memory, thiz, ((LLVMBoxedPrimitive) value).getValue());
         } else if (value instanceof TruffleObject && notLLVM((TruffleObject) value)) {
-            return slowPathPrimitiveConvert(thiz, thiz.fromForeign((TruffleObject) value));
+            return slowPathPrimitiveConvert(memory, thiz, thiz.fromForeign((TruffleObject) value));
         } else {
             throw UnsupportedTypeException.raise(new Object[]{value});
         }

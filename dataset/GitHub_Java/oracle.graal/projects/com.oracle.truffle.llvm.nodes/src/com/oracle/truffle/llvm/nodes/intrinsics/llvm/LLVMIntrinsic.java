@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,56 +29,25 @@
  */
 package com.oracle.truffle.llvm.nodes.intrinsics.llvm;
 
-import com.oracle.truffle.api.dsl.GenerateNodeFactory;
-import com.oracle.truffle.llvm.nodes.api.LLVMNode;
-import com.oracle.truffle.llvm.nodes.base.LLVMAddressNode;
-import com.oracle.truffle.llvm.nodes.base.floating.LLVMDoubleNode;
-import com.oracle.truffle.llvm.nodes.base.floating.LLVMFloatNode;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI1Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI32Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI64Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI8Node;
+import com.oracle.truffle.api.interop.Message;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMReadStringNode;
+import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMReadStringNodeGen;
+import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
+import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
-public interface LLVMIntrinsic {
+public abstract class LLVMIntrinsic extends LLVMExpressionNode {
 
-    @GenerateNodeFactory
-    abstract class LLVMVoidIntrinsic extends LLVMNode implements LLVMIntrinsic {
-
+    public LLVMReadStringNode createReadString() {
+        return LLVMReadStringNodeGen.create();
     }
 
-    @GenerateNodeFactory
-    abstract class LLVMAddressIntrinsic extends LLVMAddressNode implements LLVMIntrinsic {
-
+    protected ForeignToLLVM createToByteNode() {
+        return getNodeFactory().createForeignToLLVM(ForeignToLLVMType.I8);
     }
 
-    @GenerateNodeFactory
-    abstract class LLVMFloatIntrinsic extends LLVMFloatNode implements LLVMIntrinsic {
-
+    protected Node createForeignReadNode() {
+        return Message.READ.createNode();
     }
-
-    @GenerateNodeFactory
-    abstract class LLVMDoubleIntrinsic extends LLVMDoubleNode implements LLVMIntrinsic {
-
-    }
-
-    @GenerateNodeFactory
-    abstract class LLVMBooleanIntrinsic extends LLVMI1Node implements LLVMIntrinsic {
-
-    }
-
-    @GenerateNodeFactory
-    abstract class LLVMI8Intrinsic extends LLVMI8Node implements LLVMIntrinsic {
-
-    }
-
-    @GenerateNodeFactory
-    abstract class LLVMI32Intrinsic extends LLVMI32Node implements LLVMIntrinsic {
-
-    }
-
-    @GenerateNodeFactory
-    abstract class LLVMI64Intrinsic extends LLVMI64Node implements LLVMIntrinsic {
-
-    }
-
 }

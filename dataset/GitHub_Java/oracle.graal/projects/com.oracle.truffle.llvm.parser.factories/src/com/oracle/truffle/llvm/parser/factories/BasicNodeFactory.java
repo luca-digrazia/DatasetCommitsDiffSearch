@@ -129,10 +129,8 @@ import com.oracle.truffle.llvm.nodes.intrinsics.llvm.x86.LLVMX86_64VAStartNodeGe
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.x86.LLVMX86_ConversionNodeFactory.LLVMX86_ConversionDoubleToIntNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.x86.LLVMX86_ConversionNodeFactory.LLVMX86_ConversionFloatToIntNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.x86.LLVMX86_ConversionNodeFactory.LLVMX86_Pmovmskb128NodeGen;
-import com.oracle.truffle.llvm.nodes.intrinsics.llvm.x86.LLVMX86_VectorMathNodeFactory.LLVMX86_VectorCmpNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.x86.LLVMX86_VectorMathNodeFactory.LLVMX86_VectorMaxNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.x86.LLVMX86_VectorMathNodeFactory.LLVMX86_VectorMinNodeGen;
-import com.oracle.truffle.llvm.nodes.intrinsics.llvm.x86.LLVMX86_VectorMathNodeFactory.LLVMX86_VectorPackNodeGen;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.x86.LLVMX86_VectorMathNodeFactory.LLVMX86_VectorSquareRootNodeGen;
 import com.oracle.truffle.llvm.nodes.literals.LLVMSimpleLiteralNode.LLVM80BitFloatLiteralNode;
 import com.oracle.truffle.llvm.nodes.literals.LLVMSimpleLiteralNode.LLVMDoubleLiteralNode;
@@ -351,6 +349,19 @@ import com.oracle.truffle.llvm.runtime.debug.value.LLVMFrameValueAccess;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType;
+import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType.Value;
+import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
+import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
+import com.oracle.truffle.llvm.runtime.interop.convert.ToAnyLLVMNodeGen;
+import com.oracle.truffle.llvm.runtime.interop.convert.ToDoubleNodeGen;
+import com.oracle.truffle.llvm.runtime.interop.convert.ToFloatNodeGen;
+import com.oracle.truffle.llvm.runtime.interop.convert.ToI16NodeGen;
+import com.oracle.truffle.llvm.runtime.interop.convert.ToI1NodeGen;
+import com.oracle.truffle.llvm.runtime.interop.convert.ToI32NodeGen;
+import com.oracle.truffle.llvm.runtime.interop.convert.ToI64NodeGen;
+import com.oracle.truffle.llvm.runtime.interop.convert.ToI8NodeGen;
+import com.oracle.truffle.llvm.runtime.interop.convert.ToPointer;
+import com.oracle.truffle.llvm.runtime.interop.convert.ToVoidLLVMNodeGen;
 import com.oracle.truffle.llvm.runtime.memory.LLVMAllocateStringNode;
 import com.oracle.truffle.llvm.runtime.memory.LLVMAllocateStructNode;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemMoveNode;
@@ -1784,11 +1795,6 @@ public class BasicNodeFactory implements NodeFactory {
                 return LLVMX86_VectorMaxNodeGen.create(args[1], args[2], sourceSection);
             case "@llvm.x86.sse2.min.pd":
                 return LLVMX86_VectorMinNodeGen.create(args[1], args[2], sourceSection);
-            case "@llvm.x86.sse2.cmp.sd":
-                return LLVMX86_VectorCmpNodeGen.create(args[1], args[2], args[3], sourceSection);
-            case "@llvm.x86.sse2.packssdw.128":
-            case "@llvm.x86.sse2.packsswb.128":
-                return LLVMX86_VectorPackNodeGen.create(args[1], args[2], sourceSection);
             case "@llvm.x86.sse2.pmovmskb.128":
                 return LLVMX86_Pmovmskb128NodeGen.create(args[1], sourceSection);
 
@@ -2176,5 +2182,57 @@ public class BasicNodeFactory implements NodeFactory {
     @Override
     public LLVMExpressionNode createBitcastToI64(LLVMExpressionNode fromNode) {
         return LLVMBitcastToI64NodeGen.create(fromNode);
+    }
+
+    @Override
+    public ForeignToLLVM createForeignToLLVM(ForeignToLLVMType type) {
+        switch (type) {
+            case VOID:
+                return ToVoidLLVMNodeGen.create();
+            case ANY:
+                return ToAnyLLVMNodeGen.create();
+            case I1:
+                return ToI1NodeGen.create();
+            case I8:
+                return ToI8NodeGen.create();
+            case I16:
+                return ToI16NodeGen.create();
+            case I32:
+                return ToI32NodeGen.create();
+            case I64:
+                return ToI64NodeGen.create();
+            case FLOAT:
+                return ToFloatNodeGen.create();
+            case DOUBLE:
+                return ToDoubleNodeGen.create();
+            case POINTER:
+                return ToPointer.create();
+            default:
+                throw new IllegalStateException(type.toString());
+        }
+    }
+
+    @Override
+    public ForeignToLLVM createForeignToLLVM(Value type) {
+        switch (type.getKind()) {
+            case I1:
+                return ToI1NodeGen.create();
+            case I8:
+                return ToI8NodeGen.create();
+            case I16:
+                return ToI16NodeGen.create();
+            case I32:
+                return ToI32NodeGen.create();
+            case I64:
+                return ToI64NodeGen.create();
+            case FLOAT:
+                return ToFloatNodeGen.create();
+            case DOUBLE:
+                return ToDoubleNodeGen.create();
+            case POINTER:
+                return ToPointer.create(type.getBaseType());
+            default:
+                throw new IllegalStateException("unexpected interop kind " + type.getKind());
+        }
     }
 }

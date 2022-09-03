@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,105 +29,85 @@
  */
 package com.oracle.truffle.llvm.runtime.interop.convert;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
-import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
-import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
-import com.oracle.truffle.llvm.runtime.LLVMSharedGlobalVariable;
-import com.oracle.truffle.llvm.runtime.LLVMTruffleAddress;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
+import com.oracle.truffle.llvm.runtime.interop.LLVMInternalTruffleObject;
+import com.oracle.truffle.llvm.runtime.interop.LLVMTypedForeignObject;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
-abstract class ToAnyLLVM extends ForeignToLLVM {
+public abstract class ToAnyLLVM extends ForeignToLLVM {
 
     @Specialization
-    public int fromInt(int value) {
+    protected int fromInt(int value) {
         return value;
     }
 
     @Specialization
-    public char fromChar(char value) {
+    protected char fromChar(char value) {
         return value;
     }
 
     @Specialization
-    public long fromLong(long value) {
+    protected long fromLong(long value) {
         return value;
     }
 
     @Specialization
-    public byte fromByte(byte value) {
+    protected byte fromByte(byte value) {
         return value;
     }
 
     @Specialization
-    public short fromShort(short value) {
+    protected short fromShort(short value) {
         return value;
     }
 
     @Specialization
-    public float fromFloat(float value) {
+    protected float fromFloat(float value) {
         return value;
     }
 
     @Specialization
-    public double fromDouble(double value) {
+    protected double fromDouble(double value) {
         return value;
     }
 
     @Specialization
-    public boolean fromBoolean(boolean value) {
+    protected boolean fromBoolean(boolean value) {
         return value;
     }
 
     @Specialization
-    public String fromString(String obj) {
+    protected String fromString(String obj) {
         return obj;
     }
 
     @Specialization
-    public LLVMBoxedPrimitive fromBoxedPrimitive(LLVMBoxedPrimitive boxed) {
+    protected LLVMBoxedPrimitive fromBoxedPrimitive(LLVMBoxedPrimitive boxed) {
         return boxed;
     }
 
     @Specialization
-    public LLVMAddress fromLLVMTruffleAddress(LLVMTruffleAddress obj) {
-        return obj.getAddress();
+    protected LLVMPointer fromPointer(LLVMPointer pointer) {
+        return pointer;
     }
 
     @Specialization
-    public LLVMFunctionDescriptor fromLLVMFunctionDescriptor(LLVMFunctionDescriptor fd) {
-        return fd;
+    protected LLVMManagedPointer fromInternal(LLVMInternalTruffleObject object) {
+        return LLVMManagedPointer.create(object);
     }
 
-    @Specialization
-    public LLVMGlobalVariable fromSharedDescriptor(LLVMSharedGlobalVariable shared) {
-        return shared.getDescriptor();
-    }
-
-    @Specialization(guards = {"checkIsPointer(obj)", "notLLVM(obj)"})
-    public LLVMAddress fromNativePointer(TruffleObject obj) {
-        try {
-            long raw = ForeignAccess.sendAsPointer(asPointer, obj);
-            return LLVMAddress.fromLong(raw);
-        } catch (UnsupportedMessageException ex) {
-            CompilerDirectives.transferToInterpreter();
-            throw new IllegalStateException("Foreign value is not a pointer!", ex);
-        }
-    }
-
-    @Specialization(guards = {"!checkIsPointer(obj)", "notLLVM(obj)"})
-    public TruffleObject fromTruffleObject(TruffleObject obj) {
-        return obj;
+    @Specialization(guards = {"notLLVM(obj)"})
+    protected LLVMManagedPointer fromTruffleObject(TruffleObject obj) {
+        return LLVMManagedPointer.create(LLVMTypedForeignObject.createUnknown(obj));
     }
 
     @TruffleBoundary
-    static Object slowPathPrimitiveConvert(ForeignToLLVM thiz, Object value) {
+    static Object slowPathPrimitiveConvert(Object value) {
         if (value instanceof Number) {
             return value;
         } else if (value instanceof Boolean) {
@@ -138,22 +118,13 @@ abstract class ToAnyLLVM extends ForeignToLLVM {
             return value;
         } else if (value instanceof LLVMBoxedPrimitive) {
             return value;
-        } else if (value instanceof LLVMFunctionDescriptor) {
+        } else if (LLVMPointer.isInstance(value)) {
             return value;
-        } else if (value instanceof LLVMTruffleAddress) {
-            return ((LLVMTruffleAddress) value).getAddress();
-        } else if (value instanceof LLVMSharedGlobalVariable) {
-            return ((LLVMSharedGlobalVariable) value).getDescriptor();
-        } else if (value instanceof TruffleObject && thiz.checkIsPointer((TruffleObject) value) && notLLVM((TruffleObject) value)) {
-            try {
-                long raw = ForeignAccess.sendAsPointer(thiz.asPointer, (TruffleObject) value);
-                return LLVMAddress.fromLong(raw);
-            } catch (UnsupportedMessageException ex) {
-                CompilerDirectives.transferToInterpreter();
-                throw new IllegalStateException("Foreign value is not a pointer!", ex);
-            }
-        } else if (value instanceof TruffleObject && !thiz.checkIsPointer((TruffleObject) value) && notLLVM((TruffleObject) value)) {
-            return value;
+        } else if (value instanceof LLVMInternalTruffleObject) {
+            return LLVMManagedPointer.create((LLVMInternalTruffleObject) value);
+        } else if (value instanceof TruffleObject && notLLVM((TruffleObject) value)) {
+            LLVMTypedForeignObject typed = LLVMTypedForeignObject.createUnknown((TruffleObject) value);
+            return LLVMManagedPointer.create(typed);
         } else {
             throw UnsupportedTypeException.raise(new Object[]{value});
         }

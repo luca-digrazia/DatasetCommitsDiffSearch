@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,70 +29,124 @@
  */
 package com.oracle.truffle.llvm.nodes.cast;
 
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.llvm.nodes.base.floating.LLVMDoubleNode;
-import com.oracle.truffle.llvm.nodes.base.floating.LLVMFloatNode;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI16Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI1Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI32Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI64Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI8Node;
+import com.oracle.truffle.api.interop.ForeignAccess;
+import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
+import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
+import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
+import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
+import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI1Vector;
 
-public abstract class LLVMToI1Node {
+@NodeChild(value = "fromNode", type = LLVMExpressionNode.class)
+public abstract class LLVMToI1Node extends LLVMExpressionNode {
 
-    @NodeChild(value = "fromNode", type = LLVMI8Node.class)
-    public abstract static class LLVMI8ToI1Node extends LLVMI1Node {
-
-        @Specialization
-        public boolean executeI1(byte from) {
-            return (from & 1) != 0;
+    @Specialization
+    protected boolean doManaged(LLVMManagedPointer from,
+                    @Cached("createForeignToLLVM()") ForeignToLLVM toLLVM,
+                    @Cached("createIsNull()") Node isNull,
+                    @Cached("createIsBoxed()") Node isBoxed,
+                    @Cached("createUnbox()") Node unbox) {
+        TruffleObject base = from.getObject();
+        if (ForeignAccess.sendIsNull(isNull, base)) {
+            return (from.getOffset() & 1) != 0;
+        } else if (ForeignAccess.sendIsBoxed(isBoxed, base)) {
+            try {
+                boolean ptr = (boolean) toLLVM.executeWithTarget(ForeignAccess.sendUnbox(unbox, base));
+                return ptr ^ ((from.getOffset() & 1) != 0);
+            } catch (UnsupportedMessageException e) {
+                CompilerDirectives.transferToInterpreter();
+                throw new IllegalStateException(e);
+            }
         }
+        CompilerDirectives.transferToInterpreter();
+        throw new IllegalStateException("Not convertable");
     }
 
-    @NodeChild(value = "fromNode", type = LLVMI16Node.class)
-    public abstract static class LLVMI16ToI1Node extends LLVMI1Node {
-
-        @Specialization
-        public boolean executeI1(short from) {
-            return (from & 1) != 0;
-        }
+    @Specialization
+    protected boolean doLLVMBoxedPrimitive(LLVMBoxedPrimitive from,
+                    @Cached("createForeignToLLVM()") ForeignToLLVM toLLVM) {
+        return (boolean) toLLVM.executeWithTarget(from.getValue());
     }
 
-    @NodeChild(value = "fromNode", type = LLVMI32Node.class)
-    public abstract static class LLVMI32ToI1Node extends LLVMI1Node {
-
-        @Specialization
-        public boolean executeI1(int from) {
-            return (from & 1) != 0;
-        }
+    @Specialization
+    protected boolean doNativePointer(LLVMNativePointer from) {
+        return (from.asNative() & 1L) != 0;
     }
 
-    @NodeChild(value = "fromNode", type = LLVMI64Node.class)
-    public abstract static class LLVMI64ToI1Node extends LLVMI1Node {
-
-        @Specialization
-        public boolean executeI1(long from) {
-            return (from & 1) != 0;
-        }
+    @TruffleBoundary
+    protected ForeignToLLVM createForeignToLLVM() {
+        return getNodeFactory().createForeignToLLVM(ForeignToLLVMType.I1);
     }
 
-    @NodeChild(value = "fromNode", type = LLVMFloatNode.class)
-    public abstract static class LLVMFloatToI1Node extends LLVMI1Node {
+    public abstract static class LLVMSignedCastToI1Node extends LLVMToI1Node {
+        @Specialization
+        protected boolean doI1(boolean from) {
+            return from;
+        }
 
         @Specialization
-        public boolean executeI1(float from) {
+        protected boolean doI1(byte from) {
+            return (from & 1) != 0;
+        }
+
+        @Specialization
+        protected boolean doI1(short from) {
+            return (from & 1) != 0;
+        }
+
+        @Specialization
+        protected boolean doI1(int from) {
+            return (from & 1) != 0;
+        }
+
+        @Specialization
+        protected boolean doI1(long from) {
+            return (from & 1) != 0;
+        }
+
+        @Specialization
+        protected boolean doI1(LLVMIVarBit from) {
+            return doI1(from.getByteValue());
+        }
+
+        @Specialization
+        protected boolean doI1(float from) {
             return from != 0;
         }
-    }
-
-    @NodeChild(value = "fromNode", type = LLVMDoubleNode.class)
-    public abstract static class LLVMDoubleToI1Node extends LLVMI1Node {
 
         @Specialization
-        public boolean executeI1(double from) {
+        protected boolean doI1(double from) {
             return from != 0;
+        }
+
+        @Specialization
+        protected boolean doLLVM80BitFloat(LLVM80BitFloat from) {
+            return from.getLongValue() != 0;
         }
     }
 
+    public abstract static class LLVMBitcastToI1Node extends LLVMToI1Node {
+
+        @Specialization
+        protected boolean doI1(boolean from) {
+            return from;
+        }
+
+        @Specialization
+        protected boolean doI1Vector(LLVMI1Vector from) {
+            assert from.getLength() == 1 : "invalid vector size";
+            return from.getValue(0);
+        }
+    }
 }

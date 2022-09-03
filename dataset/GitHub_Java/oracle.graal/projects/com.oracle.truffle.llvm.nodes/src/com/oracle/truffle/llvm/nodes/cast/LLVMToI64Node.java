@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,162 +29,276 @@
  */
 package com.oracle.truffle.llvm.nodes.cast;
 
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.interop.ForeignAccess;
-import com.oracle.truffle.api.interop.Message;
-import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.nodes.base.floating.LLVMDoubleNode;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI16Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI32Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI64Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI8Node;
-import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
-import com.oracle.truffle.llvm.types.LLVMIVarBit;
-import com.oracle.truffle.llvm.types.LLVMTruffleObject;
-import com.oracle.truffle.llvm.types.floating.LLVM80BitFloat;
-import com.oracle.truffle.llvm.types.vector.LLVMFloatVector;
+import com.oracle.truffle.api.nodes.ExplodeLoop;
+import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
+import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
+import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
+import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
+import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
+import com.oracle.truffle.llvm.runtime.vector.LLVMDoubleVector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMFloatVector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI16Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI1Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI32Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI64Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI8Vector;
 
-public abstract class LLVMToI64Node extends LLVMI64Node {
+@NodeChild(value = "fromNode", type = LLVMExpressionNode.class)
+public abstract class LLVMToI64Node extends LLVMExpressionNode {
+    private static final float MAX_LONG_AS_FLOAT = Long.MAX_VALUE;
+    private static final double MAX_LONG_AS_DOUBLE = Long.MAX_VALUE;
 
-    @NodeChild(value = "fromNode", type = LLVMExpressionNode.class)
-    public abstract static class LLVMAnyToI64Node extends LLVMToI64Node {
+    @Child private LLVMToNativeNode toNative;
+
+    @Specialization
+    protected Object doManaged(LLVMManagedPointer from) {
+        return getToNative().executeWithTarget(from).asNative();
+    }
+
+    @Specialization
+    protected long doLLVMBoxedPrimitive(LLVMBoxedPrimitive from,
+                    @Cached("createForeignToLLVM()") ForeignToLLVM convert) {
+        return (long) convert.executeWithTarget(from.getValue());
+    }
+
+    @Specialization
+    protected long doNativePointer(LLVMNativePointer from) {
+        return from.asNative();
+    }
+
+    @TruffleBoundary
+    protected ForeignToLLVM createForeignToLLVM() {
+        return getNodeFactory().createForeignToLLVM(ForeignToLLVMType.I64);
+    }
+
+    @TruffleBoundary
+    private LLVMToNativeNode getToNative() {
+        if (toNative == null) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            toNative = insert(LLVMToNativeNode.createToNativeWithTarget());
+        }
+        return toNative;
+    }
+
+    // these methods are only on the base class as a workaround for a DSL issue
+    protected static boolean fitsIntoSignedLong(float from) {
+        return from < MAX_LONG_AS_FLOAT;
+    }
+
+    protected static boolean fitsIntoSignedLong(double from) {
+        return from < MAX_LONG_AS_DOUBLE;
+    }
+
+    public abstract static class LLVMSignedCastToI64Node extends LLVMToI64Node {
 
         @Specialization
-        public long executeI64(boolean from) {
+        protected long doI64(boolean from) {
             return from ? -1 : 0;
         }
 
         @Specialization
-        public long executeI64(byte from) {
+        protected long doI64(byte from) {
             return from;
         }
 
         @Specialization
-        public long executeI64(short from) {
+        protected long doI64(short from) {
             return from;
         }
 
         @Specialization
-        public long executeI64(int from) {
+        protected long doI64(int from) {
             return from;
         }
 
         @Specialization
-        public long executeI64(long from) {
+        protected long doI64(long from) {
             return from;
         }
 
         @Specialization
-        public long executeI64(LLVMIVarBit from) {
+        protected long doI64(LLVMIVarBit from) {
             return from.getLongValue();
         }
 
         @Specialization
-        public long executeI64(float from) {
+        protected long doI64(float from) {
             return (long) from;
         }
 
         @Specialization
-        public long executeI64(double from) {
+        protected long doI64(double from) {
             return (long) from;
         }
 
         @Specialization
-        public long executeI64(LLVM80BitFloat from) {
+        protected long doI64(LLVM80BitFloat from) {
             return from.getLongValue();
         }
-
-        @Specialization
-        public long executeI64(LLVMAddress from) {
-            return from.getVal();
-        }
-
-        @Specialization(guards = "!isLLVMFunctionDescriptor(from)")
-        public long executeUnbox(VirtualFrame frame, TruffleObject from,
-                        @Cached("createUnboxNode()") Node unboxNode) {
-            try {
-                return (long) ForeignAccess.sendUnbox(unboxNode, frame, from);
-            } catch (UnsupportedMessageException e) {
-                throw new UnsupportedOperationException(e);
-            }
-        }
-
-        @Specialization
-        public long executeUnbox(VirtualFrame frame, LLVMTruffleObject from,
-                        @Cached("createUnboxNode()") Node unboxNode) {
-            try {
-                long head = (long) ForeignAccess.sendUnbox(unboxNode, frame, from.getObject());
-                return head + from.getOffset();
-            } catch (UnsupportedMessageException e) {
-                throw new UnsupportedOperationException(e);
-            }
-        }
-
-        protected Node createUnboxNode() {
-            return Message.UNBOX.createNode();
-        }
-
-        protected boolean isLLVMFunctionDescriptor(TruffleObject object) {
-            return object instanceof LLVMFunctionDescriptor;
-        }
-
-        @Specialization
-        public long executeI64(LLVMFloatVector from) {
-            float f1 = from.getValue(0);
-            float f2 = from.getValue(1);
-            long composedValue = (long) Float.floatToRawIntBits(f1) << Float.SIZE | Float.floatToRawIntBits(f2);
-            return composedValue;
-        }
-
-        @Specialization
-        public long executeI64(LLVMFunctionDescriptor from) {
-            return from.getFunctionIndex();
-        }
     }
 
-    @NodeChild(value = "fromNode", type = LLVMDoubleNode.class)
-    public abstract static class LLVMDoubleToI64BitCastNode extends LLVMToI64Node {
-
+    public abstract static class LLVMUnsignedCastToI64Node extends LLVMToI64Node {
         @Specialization
-        public long executeI64(double from) {
-            return Double.doubleToRawLongBits(from);
-        }
-    }
-
-    @NodeChild(value = "fromNode", type = LLVMExpressionNode.class)
-    public abstract static class LLVMToI64ZeroExtNode extends LLVMToI64Node {
-
-        @Specialization
-        public long executeI64(boolean from) {
+        protected long doI1(boolean from) {
             return from ? 1 : 0;
         }
 
         @Specialization
-        public long executeI64(byte from) {
-            return from & LLVMI8Node.MASK;
+        protected long doI8(byte from) {
+            return from & LLVMExpressionNode.I8_MASK;
         }
 
         @Specialization
-        public long executeI64(short from) {
-            return from & LLVMI16Node.MASK;
+        protected long doI16(short from) {
+            return from & LLVMExpressionNode.I16_MASK;
         }
 
         @Specialization
-        public long executeI64(int from) {
-            return from & LLVMI32Node.MASK;
+        protected long doI32(int from) {
+            return from & LLVMExpressionNode.I32_MASK;
         }
 
         @Specialization
-        public long executeI64(LLVMIVarBit from) {
+        protected long doI64(long from) {
+            return from;
+        }
+
+        @Specialization
+        protected long doIVarBit(LLVMIVarBit from) {
             return from.getZeroExtendedLongValue();
+        }
+
+        @Specialization(guards = "fitsIntoSignedLong(from)")
+        protected long doFloat(float from) {
+            return (long) from;
+        }
+
+        @Specialization(guards = "!fitsIntoSignedLong(from)")
+        protected long doFloatConversion(float from) {
+            return (long) (from + Long.MIN_VALUE) - Long.MIN_VALUE;
+        }
+
+        @Specialization(guards = "fitsIntoSignedLong(from)")
+        protected long doDouble(double from) {
+            return (long) from;
+        }
+
+        @Specialization(guards = "!fitsIntoSignedLong(from)")
+        protected long doDoubleConversion(double from) {
+            return (long) (from + Long.MIN_VALUE) - Long.MIN_VALUE;
+        }
+
+        @Specialization
+        protected long do80LLVMBitFloat(LLVM80BitFloat from) {
+            return from.getLongValue();
         }
     }
 
+    public abstract static class LLVMBitcastToI64Node extends LLVMToI64Node {
+        @Specialization
+        protected long doI64(double from) {
+            return Double.doubleToRawLongBits(from);
+        }
+
+        @Specialization
+        protected long doI64(long from) {
+            return from;
+        }
+
+        @Specialization
+        protected long doI1Vector(LLVMI1Vector from) {
+            return castI1Vector(from, Long.SIZE);
+        }
+
+        @Specialization
+        protected long doI8Vector(LLVMI8Vector from) {
+            return castI8Vector(from, Long.SIZE / Byte.SIZE);
+        }
+
+        @Specialization
+        protected long doI16Vector(LLVMI16Vector from) {
+            return castI16Vector(from, Long.SIZE / Short.SIZE);
+        }
+
+        @Specialization
+        protected long doI32Vector(LLVMI32Vector from) {
+            return castI32Vector(from, Long.SIZE / Integer.SIZE);
+        }
+
+        @Specialization
+        protected long doFloatVector(LLVMFloatVector from) {
+            return castFloatVector(from, Long.SIZE / Float.SIZE);
+        }
+
+        @Specialization
+        protected long doI64Vector(LLVMI64Vector from) {
+            assert from.getLength() == 1 : "invalid vector size";
+            return from.getValue(0);
+        }
+
+        @Specialization
+        protected long doDoubleVector(LLVMDoubleVector from) {
+            assert from.getLength() == 1 : "invalid vector size";
+            return Double.doubleToLongBits(from.getValue(0));
+        }
+
+        @ExplodeLoop
+        protected static long castI1Vector(LLVMI1Vector from, int elem) {
+            assert from.getLength() == elem : "invalid vector size";
+            long res = 0;
+            for (int i = 0; i < elem; i++) {
+                res |= (from.getValue(i) ? 1L : 0L) << i;
+            }
+            return res;
+        }
+
+        @ExplodeLoop
+        protected static long castI8Vector(LLVMI8Vector from, int elem) {
+            assert from.getLength() == elem : "invalid vector size";
+            long res = 0;
+            for (int i = 0; i < elem; i++) {
+                res |= ((long) (from.getValue(i) & LLVMExpressionNode.I8_MASK)) << (i * Byte.SIZE);
+            }
+            return res;
+        }
+
+        @ExplodeLoop
+        protected static long castI16Vector(LLVMI16Vector from, int elem) {
+            assert from.getLength() == elem : "invalid vector size";
+            long res = 0;
+            for (int i = 0; i < elem; i++) {
+                res |= ((long) (from.getValue(i) & LLVMExpressionNode.I16_MASK)) << (i * Short.SIZE);
+            }
+            return res;
+        }
+
+        @ExplodeLoop
+        protected static long castI32Vector(LLVMI32Vector from, int elem) {
+            assert from.getLength() == elem : "invalid vector size";
+            long res = 0;
+            for (int i = 0; i < elem; i++) {
+                res |= (from.getValue(i) & LLVMExpressionNode.I32_MASK) << (i * Integer.SIZE);
+            }
+            return res;
+        }
+
+        @ExplodeLoop
+        protected static long castFloatVector(LLVMFloatVector from, int elem) {
+            assert from.getLength() == elem : "invalid vector size";
+            long res = 0;
+            for (int i = 0; i < elem; i++) {
+                res |= (Float.floatToIntBits(from.getValue(i)) & LLVMExpressionNode.I32_MASK) << (i * Integer.SIZE);
+            }
+            return res;
+        }
+    }
 }

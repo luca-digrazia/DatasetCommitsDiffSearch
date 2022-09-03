@@ -41,42 +41,45 @@ import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.runtime.except.LLVMPolyglotException;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropAccessNode.AccessLocation;
+import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
-import com.oracle.truffle.llvm.runtime.interop.convert.ToLLVM;
-import com.oracle.truffle.llvm.runtime.interop.convert.ToLLVMNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 
 public abstract class LLVMInteropReadNode extends LLVMNode {
 
-    public static LLVMInteropReadNode create() {
-        return LLVMInteropReadNodeGen.create();
+    public static LLVMInteropReadNode create(ForeignToLLVMType type) {
+        return LLVMInteropReadNodeGen.create(type);
     }
 
     @Child Node read;
-    @Child ToLLVM toLLVM;
+    @Child ForeignToLLVM foreignToLLVM;
 
-    protected LLVMInteropReadNode() {
+    private final int elementAccessSize;
+    private final ForeignToLLVMType llvmType;
+
+    protected LLVMInteropReadNode(ForeignToLLVMType llvmType) {
         this.read = Message.READ.createNode();
-        this.toLLVM = ToLLVMNodeGen.create();
+        this.elementAccessSize = llvmType.getSizeInBytes();
+        this.llvmType = llvmType;
     }
 
-    public abstract Object execute(LLVMInteropType.Structured type, TruffleObject foreign, long offset, ForeignToLLVMType accessType);
+    public abstract Object execute(LLVMInteropType.Structured type, TruffleObject foreign, long offset);
 
     @Specialization(guards = "type != null")
-    Object doKnownType(LLVMInteropType.Structured type, TruffleObject foreign, long offset, ForeignToLLVMType accessType,
+    Object doKnownType(LLVMInteropType.Structured type, TruffleObject foreign, long offset,
                     @Cached("create()") LLVMInteropAccessNode access) {
         AccessLocation location = access.execute(type, foreign, offset);
-        return read(location, accessType);
+        return read(location);
     }
 
     @Fallback
-    Object doUnknownType(@SuppressWarnings("unused") LLVMInteropType.Structured type, TruffleObject foreign, long offset, ForeignToLLVMType accessType) {
+    Object doUnknownType(@SuppressWarnings("unused") LLVMInteropType.Structured type, TruffleObject foreign, long offset) {
         // type unknown: fall back to "array of unknown value type"
-        AccessLocation location = new AccessLocation(foreign, Long.divideUnsigned(offset, accessType.getSizeInBytes()), null);
-        return read(location, accessType);
+        AccessLocation location = new AccessLocation(foreign, Long.divideUnsigned(offset, elementAccessSize), null);
+        return read(location);
     }
 
-    private Object read(AccessLocation location, ForeignToLLVMType accessType) {
+    private Object read(AccessLocation location) {
         Object ret;
         try {
             ret = ForeignAccess.sendRead(read, location.base, location.identifier);
@@ -87,6 +90,14 @@ public abstract class LLVMInteropReadNode extends LLVMNode {
             CompilerDirectives.transferToInterpreter();
             throw new LLVMPolyglotException(this, "Can not read member '%s'.", location.identifier);
         }
-        return toLLVM.executeWithType(ret, location.type, accessType);
+        return getForeignToLLVM().executeWithType(ret, location.type);
+    }
+
+    private ForeignToLLVM getForeignToLLVM() {
+        if (foreignToLLVM == null) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            foreignToLLVM = insert(getNodeFactory().createForeignToLLVM(llvmType));
+        }
+        return foreignToLLVM;
     }
 }

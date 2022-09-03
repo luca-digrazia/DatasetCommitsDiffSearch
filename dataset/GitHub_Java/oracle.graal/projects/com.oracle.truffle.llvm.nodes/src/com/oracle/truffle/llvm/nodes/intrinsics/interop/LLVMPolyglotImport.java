@@ -29,40 +29,76 @@
  */
 package com.oracle.truffle.llvm.nodes.intrinsics.interop;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.InteropException;
+import com.oracle.truffle.api.interop.KeyInfo;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.interop.UnknownIdentifierException;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
 @NodeChild(value = "name", type = LLVMExpressionNode.class)
 public abstract class LLVMPolyglotImport extends LLVMIntrinsic {
 
     @Child LLVMReadStringNode readString = LLVMReadStringNodeGen.create();
-    @Child ForeignToLLVM toLLVM = ForeignToLLVM.create(ForeignToLLVMType.POINTER);
     @Child Node read = Message.READ.createNode();
+    @Child ForeignToLLVM toLLVM;
 
-    @Specialization
-    protected Object doImport(VirtualFrame frame, Object name,
-                    @Cached("getContextReference()") ContextReference<LLVMContext> ctxRef) {
-        String symbolName = readString.executeWithTarget(frame, name);
+    @Specialization(rewriteOn = UnknownIdentifierException.class)
+    protected Object doImportExisting(Object name,
+                    @Cached("getContextReference()") ContextReference<LLVMContext> ctxRef) throws UnknownIdentifierException {
+        String symbolName = readString.executeWithTarget(name);
 
         LLVMContext ctx = ctxRef.get();
         try {
             Object ret = ForeignAccess.sendRead(read, (TruffleObject) ctx.getEnv().getPolyglotBindings(), symbolName);
-            return toLLVM.executeWithTarget(frame, ret);
-        } catch (InteropException ex) {
+            return getToLLVM().executeWithTarget(ret);
+        } catch (UnsupportedMessageException ex) {
             throw ex.raise();
         }
+    }
+
+    @Specialization
+    protected Object doImport(Object name,
+                    @Cached("createKeyInfo()") Node keyInfo,
+                    @Cached("getContextReference()") ContextReference<LLVMContext> ctxRef) {
+        String symbolName = readString.executeWithTarget(name);
+
+        TruffleObject bindings = (TruffleObject) ctxRef.get().getEnv().getPolyglotBindings();
+        int info = ForeignAccess.sendKeyInfo(keyInfo, bindings, symbolName);
+        if (KeyInfo.isReadable(info)) {
+            try {
+                Object ret = ForeignAccess.sendRead(read, bindings, symbolName);
+                return getToLLVM().executeWithTarget(ret);
+            } catch (InteropException ex) {
+                throw ex.raise();
+            }
+        } else {
+            return LLVMNativePointer.createNull();
+        }
+    }
+
+    private ForeignToLLVM getToLLVM() {
+        if (toLLVM == null) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            toLLVM = insert(getNodeFactory().createForeignToLLVM(ForeignToLLVMType.POINTER));
+        }
+        return toLLVM;
+    }
+
+    protected Node createKeyInfo() {
+        return Message.KEY_INFO.createNode();
     }
 }

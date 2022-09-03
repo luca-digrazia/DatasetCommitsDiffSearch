@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,122 +29,184 @@
  */
 package com.oracle.truffle.llvm.nodes.cast;
 
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.llvm.nodes.base.floating.LLVM80BitFloatNode;
-import com.oracle.truffle.llvm.nodes.base.floating.LLVMDoubleNode;
-import com.oracle.truffle.llvm.nodes.base.floating.LLVMFloatNode;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI16Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI32Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI64Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI8Node;
-import com.oracle.truffle.llvm.types.floating.LLVM80BitFloat;
+import com.oracle.truffle.api.interop.ForeignAccess;
+import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.llvm.nodes.cast.LLVMToI64Node.LLVMBitcastToI64Node;
+import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
+import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
+import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
+import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
+import com.oracle.truffle.llvm.runtime.vector.LLVMFloatVector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI16Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI1Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI32Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI8Vector;
 
-public abstract class LLVMToFloatNode extends LLVMFloatNode {
+@NodeChild(value = "fromNode", type = LLVMExpressionNode.class)
+public abstract class LLVMToFloatNode extends LLVMExpressionNode {
 
-    @NodeChild(value = "fromNode", type = LLVMI8Node.class)
-    public abstract static class LLVMI8ToFloatNode extends LLVMToFloatNode {
+    @Specialization
+    protected float doLLVMBoxedPrimitive(LLVMBoxedPrimitive from,
+                    @Cached("createForeignToLLVM()") ForeignToLLVM toLLVM) {
+        return (float) toLLVM.executeWithTarget(from.getValue());
+    }
+
+    @Specialization
+    protected float doManaged(LLVMManagedPointer from,
+                    @Cached("createForeignToLLVM()") ForeignToLLVM toLLVM,
+                    @Cached("createIsNull()") Node isNull,
+                    @Cached("createIsBoxed()") Node isBoxed,
+                    @Cached("createUnbox()") Node unbox) {
+        TruffleObject base = from.getObject();
+        if (ForeignAccess.sendIsNull(isNull, base)) {
+            return from.getOffset();
+        } else if (ForeignAccess.sendIsBoxed(isBoxed, base)) {
+            try {
+                float ptr = (float) toLLVM.executeWithTarget(ForeignAccess.sendUnbox(unbox, base));
+                return ptr + from.getOffset();
+            } catch (UnsupportedMessageException e) {
+                CompilerDirectives.transferToInterpreter();
+                throw new IllegalStateException(e);
+            }
+        }
+        CompilerDirectives.transferToInterpreter();
+        throw new IllegalStateException("Not convertable");
+    }
+
+    @TruffleBoundary
+    protected ForeignToLLVM createForeignToLLVM() {
+        return getNodeFactory().createForeignToLLVM(ForeignToLLVMType.FLOAT);
+    }
+
+    public abstract static class LLVMSignedCastToFloatNode extends LLVMToFloatNode {
+        @Specialization
+        protected float doFloat(boolean from) {
+            return from ? 1.0f : 0.0f;
+        }
 
         @Specialization
-        public float executeDouble(byte from) {
+        protected float doFloat(byte from) {
             return from;
         }
-    }
-
-    @NodeChild(value = "fromNode", type = LLVMI8Node.class)
-    public abstract static class LLVMI8ToFloatZeroExtNode extends LLVMToFloatNode {
 
         @Specialization
-        public float executeDouble(byte from) {
-            return from & LLVMI8Node.MASK;
-        }
-    }
-
-    @NodeChild(value = "fromNode", type = LLVMI16Node.class)
-    public abstract static class LLVMI16ToFloatNode extends LLVMToFloatNode {
-
-        @Specialization
-        public float executeFloat(short from) {
+        protected float doFloat(short from) {
             return from;
         }
-    }
-
-    @NodeChild(value = "fromNode", type = LLVMI16Node.class)
-    public abstract static class LLVMI16ToFloatZeroExtNode extends LLVMToFloatNode {
 
         @Specialization
-        public float executeDouble(short from) {
-            return from & LLVMI16Node.MASK;
-        }
-    }
-
-    @NodeChild(value = "fromNode", type = LLVMI32Node.class)
-    public abstract static class LLVMI32ToFloatNode extends LLVMToFloatNode {
-
-        @Specialization
-        public float executeFloat(int from) {
+        protected float doFloat(int from) {
             return from;
         }
-    }
-
-    @NodeChild(value = "fromNode", type = LLVMI32Node.class)
-    public abstract static class LLVMI32ToFloatUnsignedNode extends LLVMToFloatNode {
 
         @Specialization
-        public float executeFloat(int from) {
-            return from & LLVMI32Node.MASK;
-        }
-    }
-
-    @NodeChild(value = "fromNode", type = LLVMI32Node.class)
-    public abstract static class LLVMI32ToFloatBitNode extends LLVMToFloatNode {
-
-        @Specialization
-        public float executeFloat(int from) {
-            return Float.intBitsToFloat(from);
-        }
-    }
-
-    @NodeChild(value = "fromNode", type = LLVMI64Node.class)
-    public abstract static class LLVMI64ToFloatNode extends LLVMToFloatNode {
-
-        @Specialization
-        public float executeFloat(long from) {
+        protected float doFloat(long from) {
             return from;
         }
+
+        @Specialization
+        protected float doFloat(float from) {
+            return from;
+        }
+
+        @Specialization
+        protected float doFloat(double from) {
+            return (float) from;
+        }
+
+        @Specialization
+        protected float doFloat(LLVM80BitFloat from) {
+            return from.getFloatValue();
+        }
     }
 
-    @NodeChild(value = "fromNode", type = LLVMI64Node.class)
-    public abstract static class LLVMI64ToFloatUnsignedNode extends LLVMToFloatNode {
-
+    public abstract static class LLVMUnsignedCastToFloatNode extends LLVMToFloatNode {
         private static final float LEADING_BIT = 0x1.0p63f;
 
         @Specialization
-        public float executeFloat(long from) {
+        protected float doFloat(boolean from) {
+            return from ? 1 : 0;
+        }
+
+        @Specialization
+        protected float doFloat(byte from) {
+            return from & LLVMExpressionNode.I8_MASK;
+        }
+
+        @Specialization
+        protected float doFloat(short from) {
+            return from & LLVMExpressionNode.I16_MASK;
+        }
+
+        @Specialization
+        protected float doFloat(int from) {
+            return from & LLVMExpressionNode.I32_MASK;
+        }
+
+        @Specialization
+        protected float doFloat(long from) {
             float val = from & Long.MAX_VALUE;
             if (from < 0) {
                 val += LEADING_BIT;
             }
             return val;
         }
-    }
-
-    @NodeChild(value = "fromNode", type = LLVMDoubleNode.class)
-    public abstract static class LLVMDoubleToFloatNode extends LLVMToFloatNode {
 
         @Specialization
-        public float executeFloat(double from) {
-            return (float) from;
+        protected float doFloat(float from) {
+            return from;
         }
     }
 
-    @NodeChild(value = "fromNode", type = LLVM80BitFloatNode.class)
-    public abstract static class LLVM80BitFloatToFloatNode extends LLVMToFloatNode {
+    public abstract static class LLVMBitcastToFloatNode extends LLVMToFloatNode {
 
         @Specialization
-        public float executeFloat(LLVM80BitFloat from) {
-            return from.getFloatValue();
+        protected float doFloat(int from) {
+            return Float.intBitsToFloat(from);
+        }
+
+        @Specialization
+        protected float doFloat(float from) {
+            return from;
+        }
+
+        @Specialization
+        protected float doI1Vector(LLVMI1Vector from) {
+            int res = (int) LLVMBitcastToI64Node.castI1Vector(from, Integer.SIZE);
+            return Float.intBitsToFloat(res);
+        }
+
+        @Specialization
+        protected float doI8Vector(LLVMI8Vector from) {
+            int res = (int) LLVMBitcastToI64Node.castI8Vector(from, Integer.SIZE / Byte.SIZE);
+            return Float.intBitsToFloat(res);
+        }
+
+        @Specialization
+        protected float doI16Vector(LLVMI16Vector from) {
+            int res = (int) LLVMBitcastToI64Node.castI16Vector(from, Integer.SIZE / Short.SIZE);
+            return Float.intBitsToFloat(res);
+        }
+
+        @Specialization
+        protected float doI32Vector(LLVMI32Vector from) {
+            assert from.getLength() == 1 : "invalid vector size";
+            return Float.intBitsToFloat(from.getValue(0));
+        }
+
+        @Specialization
+        protected float doFloatVector(LLVMFloatVector from) {
+            assert from.getLength() == 1 : "invalid vector size";
+            return from.getValue(0);
         }
     }
-
 }

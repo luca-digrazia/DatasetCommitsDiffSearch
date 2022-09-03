@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -31,95 +31,76 @@ package com.oracle.truffle.llvm.runtime.interop.convert;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
-import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
-import com.oracle.truffle.llvm.runtime.LLVMSharedGlobalVariable;
-import com.oracle.truffle.llvm.runtime.LLVMTruffleAddress;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
+import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
-abstract class ToI1 extends ForeignToLLVM {
+public abstract class ToI1 extends ForeignToLLVM {
 
-    @Child private ToI1 toI1;
+    @Child private ForeignToLLVM toI1;
 
     @Specialization
-    public boolean fromInt(int value) {
+    protected boolean fromInt(int value) {
         return value != 0;
     }
 
     @Specialization
-    public boolean fromChar(char value) {
+    protected boolean fromChar(char value) {
         return value != 0;
     }
 
     @Specialization
-    public boolean fromShort(short value) {
+    protected boolean fromShort(short value) {
         return value != 0;
     }
 
     @Specialization
-    public boolean fromLong(long value) {
+    protected boolean fromLong(long value) {
         return value != 0;
     }
 
     @Specialization
-    public boolean fromByte(byte value) {
+    protected boolean fromByte(byte value) {
         return value != 0;
     }
 
     @Specialization
-    public boolean fromFloat(float value) {
+    protected boolean fromFloat(float value) {
         return value != 0;
     }
 
     @Specialization
-    public boolean fromDouble(double value) {
+    protected boolean fromDouble(double value) {
         return value != 0;
     }
 
     @Specialization
-    public boolean fromBoolean(boolean value) {
+    protected boolean fromBoolean(boolean value) {
         return value;
     }
 
     @Specialization
-    public boolean fromForeignPrimitive(LLVMBoxedPrimitive boxed) {
+    protected boolean fromForeignPrimitive(LLVMBoxedPrimitive boxed) {
         return recursiveConvert(boxed.getValue());
     }
 
     @Specialization
-    public boolean fromString(String value) {
+    protected boolean fromString(String value) {
         return getSingleStringCharacter(value) != 0;
     }
 
-    @Specialization
-    public boolean fromLLVMTruffleAddress(LLVMTruffleAddress obj) {
-        return obj.getAddress().getVal() != 0;
-    }
-
-    @Specialization
-    public boolean fromLLVMFunctionDescriptor(LLVMFunctionDescriptor fd) {
-        return fd.getFunctionPointer() != 0;
-    }
-
-    @Specialization
-    public boolean fromSharedDescriptor(LLVMSharedGlobalVariable shared, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess access) {
-        return access.getNativeLocation(shared.getDescriptor()).getVal() != 0;
-    }
-
     @Specialization(guards = "notLLVM(obj)")
-    public boolean fromTruffleObject(TruffleObject obj) {
+    protected boolean fromTruffleObject(TruffleObject obj) {
         return recursiveConvert(fromForeign(obj));
     }
 
     private boolean recursiveConvert(Object o) {
         if (toI1 == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            toI1 = ToI1NodeGen.create();
+            toI1 = insert(getNodeFactory().createForeignToLLVM(ForeignToLLVMType.I1));
         }
         return (boolean) toI1.executeWithTarget(o);
     }
@@ -129,32 +110,7 @@ abstract class ToI1 extends ForeignToLLVM {
     }
 
     @TruffleBoundary
-    Object slowPathPrimitiveConvert(Object value) {
-        if (value instanceof Number) {
-            return ((Number) value).longValue() != 0;
-        } else if (value instanceof Boolean) {
-            return (boolean) value;
-        } else if (value instanceof Character) {
-            return (char) value != 0;
-        } else if (value instanceof String) {
-            return getSingleStringCharacter((String) value);
-        } else if (value instanceof LLVMFunctionDescriptor) {
-            return fromLLVMFunctionDescriptor((LLVMFunctionDescriptor) value);
-        } else if (value instanceof LLVMBoxedPrimitive) {
-            return fromForeignPrimitive((LLVMBoxedPrimitive) value);
-        } else if (value instanceof LLVMTruffleAddress) {
-            return fromLLVMTruffleAddress((LLVMTruffleAddress) value);
-        } else if (value instanceof LLVMSharedGlobalVariable) {
-            return fromSharedDescriptor((LLVMSharedGlobalVariable) value, createGlobalAccess());
-        } else if (value instanceof TruffleObject && notLLVM((TruffleObject) value)) {
-            return fromTruffleObject((TruffleObject) value);
-        } else {
-            throw UnsupportedTypeException.raise(new Object[]{value});
-        }
-    }
-
-    @TruffleBoundary
-    static boolean slowPathPrimitiveConvert(ForeignToLLVM thiz, Object value) {
+    static boolean slowPathPrimitiveConvert(LLVMMemory memory, ForeignToLLVM thiz, Object value) {
         if (value instanceof Number) {
             return ((Number) value).longValue() != 0;
         } else if (value instanceof Boolean) {
@@ -163,19 +119,12 @@ abstract class ToI1 extends ForeignToLLVM {
             return (char) value != 0;
         } else if (value instanceof String) {
             return thiz.getSingleStringCharacter((String) value) != 0;
-        } else if (value instanceof LLVMFunctionDescriptor) {
-            return ((LLVMFunctionDescriptor) value).getFunctionPointer() != 0;
         } else if (value instanceof LLVMBoxedPrimitive) {
-            return slowPathPrimitiveConvert(thiz, ((LLVMBoxedPrimitive) value).getValue());
-        } else if (value instanceof LLVMTruffleAddress) {
-            return ((LLVMTruffleAddress) value).getAddress().getVal() != 0;
-        } else if (value instanceof LLVMSharedGlobalVariable) {
-            return createGlobalAccess().getNativeLocation(((LLVMSharedGlobalVariable) value).getDescriptor()).getVal() != 0;
+            return slowPathPrimitiveConvert(memory, thiz, ((LLVMBoxedPrimitive) value).getValue());
         } else if (value instanceof TruffleObject && notLLVM((TruffleObject) value)) {
-            return slowPathPrimitiveConvert(thiz, thiz.fromForeign((TruffleObject) value));
+            return slowPathPrimitiveConvert(memory, thiz, thiz.fromForeign((TruffleObject) value));
         } else {
             throw UnsupportedTypeException.raise(new Object[]{value});
         }
     }
-
 }
