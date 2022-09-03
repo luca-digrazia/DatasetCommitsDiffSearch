@@ -29,6 +29,7 @@ import java.lang.annotation.*;
 import java.util.*;
 
 import com.oracle.truffle.api.*;
+import com.oracle.truffle.api.nodes.NodeInfo.Kind;
 
 /**
  * Abstract base class for all Truffle nodes.
@@ -81,12 +82,12 @@ public abstract class Node implements Cloneable {
         this.sourceSection = section;
     }
 
-    public NodeCost getCost() {
+    public Kind getKind() {
         NodeInfo info = getClass().getAnnotation(NodeInfo.class);
         if (info != null) {
-            return info.cost();
+            return info.kind();
         }
-        return NodeCost.MONOMORPHIC;
+        return Kind.SPECIALIZED;
     }
 
     /**
@@ -276,54 +277,61 @@ public abstract class Node implements Cloneable {
     }
 
     private void traceRewrite(Node newNode, String reason) {
+        Class<? extends Node> from = getClass();
+        Class<? extends Node> to = newNode.getClass();
 
-        if (TruffleOptions.TraceRewritesFilterFromCost != null) {
-            if (filterByKind(this, TruffleOptions.TraceRewritesFilterFromCost)) {
+        if (TruffleOptions.TraceRewritesFilterFromKind != null) {
+            if (filterByKind(from, TruffleOptions.TraceRewritesFilterFromKind)) {
                 return;
             }
         }
 
-        if (TruffleOptions.TraceRewritesFilterToCost != null) {
-            if (filterByKind(newNode, TruffleOptions.TraceRewritesFilterToCost)) {
+        if (TruffleOptions.TraceRewritesFilterToKind != null) {
+            if (filterByKind(to, TruffleOptions.TraceRewritesFilterToKind)) {
                 return;
             }
         }
 
         String filter = TruffleOptions.TraceRewritesFilterClass;
-        Class<? extends Node> from = getClass();
-        Class<? extends Node> to = newNode.getClass();
         if (filter != null && (filterByContainsClassName(from, filter) || filterByContainsClassName(to, filter))) {
             return;
         }
 
         PrintStream out = System.out;
-        out.printf("[truffle]   rewrite %-50s |From %-40s |To %-40s |Reason %s.%n", this.toString(), formatNodeInfo(this), formatNodeInfo(newNode), reason);
+        out.printf("[truffle]   rewrite %-50s |From %-40s |To %-40s |Reason %s.%n", this.toString(), formatNodeInfo(from), formatNodeInfo(to), reason);
     }
 
-    private static String formatNodeInfo(Node node) {
-        String cost = "?";
-        switch (node.getCost()) {
-            case NONE:
-                cost = "G";
-                break;
-            case MONOMORPHIC:
-                cost = "M";
-                break;
-            case POLYMORPHIC:
-                cost = "P";
-                break;
-            case MEGAMORPHIC:
-                cost = "G";
-                break;
-            default:
-                cost = "?";
-                break;
+    private static String formatNodeInfo(Class<? extends Node> clazz) {
+        NodeInfo nodeInfo = clazz.getAnnotation(NodeInfo.class);
+        String kind = "?";
+        if (nodeInfo != null) {
+            switch (nodeInfo.kind()) {
+                case GENERIC:
+                    kind = "G";
+                    break;
+                case SPECIALIZED:
+                    kind = "S";
+                    break;
+                case UNINITIALIZED:
+                    kind = "U";
+                    break;
+                case POLYMORPHIC:
+                    kind = "P";
+                    break;
+                default:
+                    kind = "?";
+                    break;
+            }
         }
-        return cost + " " + node.getClass().getSimpleName();
+        return kind + " " + clazz.getSimpleName();
     }
 
-    private static boolean filterByKind(Node node, NodeCost cost) {
-        return node.getCost() == cost;
+    private static boolean filterByKind(Class<?> clazz, Kind kind) {
+        NodeInfo info = clazz.getAnnotation(NodeInfo.class);
+        if (info != null) {
+            return info.kind() != kind;
+        }
+        return true;
     }
 
     private static boolean filterByContainsClassName(Class<? extends Node> from, String filter) {

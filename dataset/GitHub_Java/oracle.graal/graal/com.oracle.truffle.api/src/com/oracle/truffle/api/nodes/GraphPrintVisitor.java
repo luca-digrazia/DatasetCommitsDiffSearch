@@ -214,7 +214,7 @@ public class GraphPrintVisitor {
             setNodeProperty(node, "name", node.getClass().getSimpleName().replaceFirst("Node$", ""));
             NodeInfo nodeInfo = node.getClass().getAnnotation(NodeInfo.class);
             if (nodeInfo != null) {
-                setNodeProperty(node, "cost", nodeInfo.cost());
+                setNodeProperty(node, "kind", nodeInfo.kind());
                 if (!nodeInfo.shortName().isEmpty()) {
                     setNodeProperty(node, "shortName", nodeInfo.shortName());
                 }
