@@ -118,13 +118,15 @@ public class CanonicalizerPhase extends Phase {
         });
 
         for (Node n : workList) {
-            processNode(n, graph);
+            if (n instanceof ValueNode) {
+                processNode((ValueNode) n, graph);
+            }
         }
 
         graph.stopTrackingInputChange();
     }
 
-    private void processNode(Node node, StructuredGraph graph) {
+    private void processNode(ValueNode node, StructuredGraph graph) {
         if (node.isAlive()) {
             METRIC_PROCESSED_NODES.increment();
 
@@ -175,7 +177,7 @@ public class CanonicalizerPhase extends Phase {
         return false;
     }
 
-    public boolean tryCanonicalize(final Node node, final StructuredGraph graph) {
+    public boolean tryCanonicalize(final ValueNode node, final StructuredGraph graph) {
         boolean result = baseTryCanonicalize(node, graph);
         if (!result && customCanonicalizer != null) {
             ValueNode canonical = customCanonicalizer.canonicalize(node);

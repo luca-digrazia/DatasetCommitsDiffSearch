@@ -209,8 +209,6 @@ public class GraalCompiler {
         assert startBlock != null;
         assert startBlock.numberOfPreds() == 0;
 
-        new ComputeProbabilityPhase().apply(graph);
-
         return Debug.scope("ComputeLinearScanOrder", new Callable<LIR>() {
 
             @Override
@@ -241,21 +239,10 @@ public class GraalCompiler {
 
             public void run() {
                 for (Block b : lir.linearScanOrder()) {
-                    emitBlock(b);
+                    lirGenerator.doBlock(b);
                 }
 
                 Debug.dump(lir, "After LIR generation");
-            }
-
-            private void emitBlock(Block b) {
-                if (lir.lir(b) == null) {
-                    for (Block pred : b.getPredecessors()) {
-                        if (!b.isLoopHeader() || !pred.isLoopEnd()) {
-                            emitBlock(pred);
-                        }
-                    }
-                    lirGenerator.doBlock(b);
-                }
             }
         });
 
