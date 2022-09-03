@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -32,9 +32,6 @@ package com.oracle.truffle.llvm.parser.scanner;
 import java.nio.ByteBuffer;
 
 public final class BitStream {
-
-    private static final int BYTE_BITS_SHIFT = 3;
-    private static final int BYTE_BITS_MASK = 0x7;
 
     private static final long BYTE_MASK = 0xffL;
     private final ByteBuffer bitstream;
@@ -70,31 +67,17 @@ public final class BitStream {
         return total;
     }
 
-    public long read(long offset, int bits) {
-        int byteIndex = (int) (offset >> BYTE_BITS_SHIFT);
-        int bitOffsetInByte = (int) (offset & BYTE_BITS_MASK);
-        int availableBits = Byte.SIZE - bitOffsetInByte;
-
-        long value = (bitstream.get(byteIndex++) & BYTE_MASK) >> bitOffsetInByte;
-        if (bits <= availableBits) {
-            return value & (BYTE_MASK >> (8 - bits));
-        }
-        int remainingBits = bits - availableBits;
-        int shift = availableBits;
-        while (true) {
-            byte byteValue = bitstream.get(byteIndex++);
-
-            if (remainingBits > Byte.SIZE) {
-                value = value | ((byteValue & BYTE_MASK) << shift);
-                remainingBits -= Byte.SIZE;
-                shift += Byte.SIZE;
-            } else {
-                return value | ((byteValue & (BYTE_MASK >> (Byte.SIZE - remainingBits))) << shift);
-            }
+    public long read(long offset, long bits) {
+        final long l = read(offset);
+        if (bits < Long.SIZE) {
+            // shifting 1L << 64 would cause an overflow
+            return l & ((1L << bits) - 1L);
+        } else {
+            return l;
         }
     }
 
-    public long readVBR(long offset, int width) {
+    public long readVBR(long offset, long width) {
         long value = 0;
         long shift = 0;
         long datum;
@@ -111,6 +94,24 @@ public final class BitStream {
 
     public long size() {
         return bitstream.limit() * Byte.SIZE;
+    }
+
+    private long read(long offset) {
+        long div = offset / Byte.SIZE;
+        long value = 0;
+        for (int i = 0; i < Byte.SIZE; i++) {
+            value += readAlignedByte(div + i) << (i * Byte.SIZE);
+        }
+        long mod = offset & (Byte.SIZE - 1L);
+        if (mod != 0) {
+            value >>>= mod;
+            value += readAlignedByte(div + Byte.SIZE) << (Long.SIZE - mod);
+        }
+        return value;
+    }
+
+    private long readAlignedByte(long i) {
+        return i < bitstream.capacity() ? bitstream.get((int) i) & BYTE_MASK : 0;
     }
 
     public ByteBuffer getBitstream() {

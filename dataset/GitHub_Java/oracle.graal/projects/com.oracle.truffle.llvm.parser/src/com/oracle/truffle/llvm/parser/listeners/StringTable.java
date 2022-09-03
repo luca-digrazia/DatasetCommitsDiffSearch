@@ -29,7 +29,7 @@
  */
 package com.oracle.truffle.llvm.parser.listeners;
 
-import com.oracle.truffle.llvm.parser.model.ValueSymbol;
+import com.oracle.truffle.llvm.runtime.types.symbols.ValueSymbol;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -68,9 +68,6 @@ final class StringTable implements ParserListener {
     }
 
     void requestName(int offset, int length, ValueSymbol target) {
-        if (length <= 0 || offset < 0) {
-            return;
-        }
         // the STRTAB block's content may be forward referenced
         if (table != null) {
             target.setName(get(offset, length));

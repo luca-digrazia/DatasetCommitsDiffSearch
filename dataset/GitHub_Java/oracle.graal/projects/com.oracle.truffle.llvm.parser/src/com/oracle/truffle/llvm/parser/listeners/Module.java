@@ -29,64 +29,87 @@
  */
 package com.oracle.truffle.llvm.parser.listeners;
 
-import java.util.ArrayList;
-import java.util.List;
-
+import com.oracle.truffle.llvm.parser.model.ModelModule;
 import com.oracle.truffle.llvm.parser.model.attributes.AttributesCodeEntry;
+import com.oracle.truffle.llvm.parser.model.enums.Linkage;
 import com.oracle.truffle.llvm.parser.model.enums.Visibility;
-import com.oracle.truffle.llvm.parser.model.generators.FunctionGenerator;
-import com.oracle.truffle.llvm.parser.model.generators.ModuleGenerator;
+import com.oracle.truffle.llvm.parser.model.functions.FunctionDeclaration;
+import com.oracle.truffle.llvm.parser.model.functions.FunctionDefinition;
+import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalAlias;
+import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalConstant;
+import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalValueSymbol;
+import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalVariable;
 import com.oracle.truffle.llvm.parser.model.target.TargetDataLayout;
-import com.oracle.truffle.llvm.parser.model.target.TargetInformation;
 import com.oracle.truffle.llvm.parser.model.target.TargetTriple;
 import com.oracle.truffle.llvm.parser.records.ModuleRecord;
 import com.oracle.truffle.llvm.parser.records.Records;
 import com.oracle.truffle.llvm.parser.scanner.Block;
-import com.oracle.truffle.llvm.runtime.LLVMLogger;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
 import com.oracle.truffle.llvm.runtime.types.PointerType;
 import com.oracle.truffle.llvm.runtime.types.Type;
+import com.oracle.truffle.llvm.runtime.types.symbols.ValueSymbol;
 
 public final class Module implements ParserListener {
 
-    private final ModuleGenerator generator;
+    private final ModelModule module;
 
     private final ParameterAttributes paramAttributes = new ParameterAttributes();
 
+    private final StringTable stringTable = new StringTable();
+
     private int mode = 1;
 
-    protected final Types types;
+    private final Types types;
 
-    private final List<TargetInformation> info = new ArrayList<>();
+    public Module(ModelModule module) {
+        this.module = module;
+        types = new Types(module);
+    }
 
-    protected final List<FunctionType> functions = new ArrayList<>();
+    private static final int STRTAB_RECORD_OFFSET = 2;
+    private static final int STRTAB_RECORD_OFFSET_INDEX = 0;
+    private static final int STRTAB_RECORD_LENGTH_INDEX = 1;
 
-    protected final List<Type> symbols = new ArrayList<>();
+    private boolean useStrTab() {
+        return mode == 2;
+    }
 
-    public Module(ModuleGenerator generator) {
-        this.generator = generator;
-        types = new Types(generator);
+    private void readNameFromStrTab(long[] args, ValueSymbol target) {
+        final int offset = (int) args[STRTAB_RECORD_OFFSET_INDEX];
+        final int length = (int) args[STRTAB_RECORD_LENGTH_INDEX];
+        stringTable.requestName(offset, length, target);
     }
 
     private static final int FUNCTION_TYPE = 0;
     private static final int FUNCTION_ISPROTOTYPE = 2;
+    private static final int FUNCTION_LINKAGE = 3;
     private static final int FUNCTION_PARAMATTR = 4;
 
     private void createFunction(long[] args) {
-        Type type = types.get(args[FUNCTION_TYPE]);
+        final int recordOffset = useStrTab() ? STRTAB_RECORD_OFFSET : 0;
+        Type type = types.get(args[FUNCTION_TYPE + recordOffset]);
         if (type instanceof PointerType) {
             type = ((PointerType) type).getPointeeType();
         }
 
         final FunctionType functionType = (FunctionType) type;
-        final boolean isPrototype = args[FUNCTION_ISPROTOTYPE] != 0;
+        final boolean isPrototype = args[FUNCTION_ISPROTOTYPE + recordOffset] != 0;
+        final Linkage linkage = Linkage.decode(args[FUNCTION_LINKAGE + recordOffset]);
 
-        final AttributesCodeEntry paramAttr = paramAttributes.getCodeEntry(args[FUNCTION_PARAMATTR]);
+        final AttributesCodeEntry paramAttr = paramAttributes.getCodeEntry(args[FUNCTION_PARAMATTR + recordOffset]);
 
-        generator.createFunction(functionType, isPrototype, paramAttr);
-        symbols.add(functionType);
-        if (!isPrototype) {
-            functions.add(functionType);
+        if (isPrototype) {
+            final FunctionDeclaration function = new FunctionDeclaration(functionType, linkage, paramAttr);
+            module.addFunctionDeclaration(function);
+            if (useStrTab()) {
+                readNameFromStrTab(args, function);
+            }
+        } else {
+            final FunctionDefinition function = new FunctionDefinition(functionType, linkage, paramAttr);
+            module.addFunctionDefinition(function);
+            if (useStrTab()) {
+                readNameFromStrTab(args, function);
+            }
         }
     }
 
@@ -100,8 +123,9 @@ public final class Module implements ParserListener {
     private static final int GLOBALVAR_VISIBILITY = 6;
 
     private void createGlobalVariable(long[] args) {
-        final long typeField = args[GLOBALVAR_TYPE];
-        final long flagField = args[GLOBALVAR_FLAGS];
+        final int recordOffset = useStrTab() ? STRTAB_RECORD_OFFSET : 0;
+        final long typeField = args[GLOBALVAR_TYPE + recordOffset];
+        final long flagField = args[GLOBALVAR_FLAGS + recordOffset];
 
         Type type = types.get(typeField);
         if ((flagField & GLOBALVAR_EXPLICICTTYPE_MASK) != 0) {
@@ -109,17 +133,25 @@ public final class Module implements ParserListener {
         }
 
         final boolean isConstant = (flagField & GLOBALVAR_ISCONSTANT_MASK) != 0;
-        final int initialiser = (int) args[GLOBALVAR_INTITIALIZER];
-        final long linkage = args[GLOBALVAR_LINKAGE];
-        final int align = (int) args[GLOBALVAR_ALIGN];
+        final int initialiser = (int) args[GLOBALVAR_INTITIALIZER + recordOffset];
+        final long linkage = args[GLOBALVAR_LINKAGE + recordOffset];
+        final int align = (int) args[GLOBALVAR_ALIGN + recordOffset];
 
         long visibility = Visibility.DEFAULT.getEncodedValue();
-        if (GLOBALVAR_VISIBILITY < args.length) {
-            visibility = args[GLOBALVAR_VISIBILITY];
+        if (GLOBALVAR_VISIBILITY + recordOffset < args.length) {
+            visibility = args[GLOBALVAR_VISIBILITY + recordOffset];
         }
 
-        generator.createGlobal(type, isConstant, initialiser, align, linkage, visibility);
-        symbols.add(type);
+        final GlobalValueSymbol global;
+        if (isConstant) {
+            global = GlobalConstant.create(type, initialiser, align, linkage, visibility);
+        } else {
+            global = GlobalVariable.create(type, initialiser, align, linkage, visibility);
+        }
+        if (useStrTab()) {
+            readNameFromStrTab(args, global);
+        }
+        module.addGlobalSymbol(global);
     }
 
     private static final int GLOBALALIAS_TYPE = 0;
@@ -127,26 +159,34 @@ public final class Module implements ParserListener {
     private static final int GLOBALALIAS_NEW_LINKAGE = 3;
 
     private void createGlobalAliasNew(long[] args) {
-        final Type type = new PointerType(types.get(args[GLOBALALIAS_TYPE]));
+        final int recordOffset = useStrTab() ? STRTAB_RECORD_OFFSET : 0;
+        final Type type = new PointerType(types.get(args[GLOBALALIAS_TYPE + recordOffset]));
 
         // idx = 1 is address space information
-        final int value = (int) args[GLOBALALIAS_NEW_VALUE];
-        final long linkage = args[GLOBALALIAS_NEW_LINKAGE];
+        final int value = (int) args[GLOBALALIAS_NEW_VALUE + recordOffset];
+        final long linkage = args[GLOBALALIAS_NEW_LINKAGE + recordOffset];
 
-        generator.createAlias(type, value, linkage, Visibility.DEFAULT.ordinal());
-        symbols.add(type);
+        final GlobalAlias global = GlobalAlias.create(type, value, linkage, Visibility.DEFAULT.ordinal());
+        if (useStrTab()) {
+            readNameFromStrTab(args, global);
+        }
+        module.addGlobalSymbol(global);
     }
 
     private static final int GLOBALALIAS_OLD_VALUE = 1;
     private static final int GLOBALALIAS_OLD_LINKAGE = 2;
 
     private void createGlobalAliasOld(long[] args) {
-        final Type type = types.get(args[GLOBALALIAS_TYPE]);
-        int value = (int) args[GLOBALALIAS_OLD_VALUE];
-        long linkage = args[GLOBALALIAS_OLD_LINKAGE];
+        final int recordOffset = useStrTab() ? STRTAB_RECORD_OFFSET : 0;
+        final Type type = types.get(args[GLOBALALIAS_TYPE + recordOffset]);
+        int value = (int) args[GLOBALALIAS_OLD_VALUE + recordOffset];
+        long linkage = args[GLOBALALIAS_OLD_LINKAGE + recordOffset];
 
-        generator.createAlias(type, value, linkage, Visibility.DEFAULT.ordinal());
-        symbols.add(type);
+        final GlobalAlias global = GlobalAlias.create(type, value, linkage, Visibility.DEFAULT.ordinal());
+        if (useStrTab()) {
+            readNameFromStrTab(args, global);
+        }
+        module.addGlobalSymbol(global);
     }
 
     @Override
@@ -162,42 +202,38 @@ public final class Module implements ParserListener {
                 return paramAttributes;
 
             case CONSTANTS:
-                return new Constants(types, symbols, generator);
+                return new Constants(types, module);
 
             case FUNCTION: {
-                FunctionType function = functions.remove(0);
-
-                FunctionGenerator gen = generator.generateFunction();
-
-                List<Type> sym = new ArrayList<>(symbols);
-
-                for (Type arg : function.getArgumentTypes()) {
-                    gen.createParameter(arg);
-                    sym.add(arg);
+                final FunctionDefinition functionDefinition = module.generateFunction();
+                final FunctionType functionType = functionDefinition.getType();
+                for (Type arg : functionType.getArgumentTypes()) {
+                    functionDefinition.createParameter(arg);
                 }
-
-                return new Function(types, sym, gen, mode);
+                return new Function(types, functionDefinition, mode, paramAttributes);
             }
 
             case TYPE:
                 return types;
 
             case VALUE_SYMTAB:
-                return new ValueSymbolTable(generator);
+                return new ValueSymbolTable(module);
 
             case METADATA:
             case METADATA_KIND:
-                return new Metadata(types, symbols, generator);
+                return new Metadata(types, module);
+
+            case STRTAB:
+                return stringTable;
 
             default:
-                LLVMLogger.info("Entering Unknown Block inside Module: " + block);
                 return ParserListener.DEFAULT;
         }
     }
 
     @Override
     public void exit() {
-        generator.exitModule();
+        module.exitModule();
     }
 
     @Override
@@ -209,13 +245,12 @@ public final class Module implements ParserListener {
                 break;
 
             case TARGET_TRIPLE:
-                info.add(new TargetTriple(Records.toString(args)));
+                module.addTargetInformation(new TargetTriple(Records.toString(args)));
                 break;
 
             case TARGET_DATALAYOUT:
                 final TargetDataLayout layout = TargetDataLayout.fromString(Records.toString(args));
-                info.add(layout);
-                generator.createTargetDataLayout(layout);
+                module.setTargetDataLayout(layout);
                 break;
 
             case GLOBAL_VARIABLE:
@@ -234,7 +269,6 @@ public final class Module implements ParserListener {
                 break;
 
             default:
-                LLVMLogger.info("Unknown Top-Level Record: " + Records.describe(id, args));
                 break;
         }
     }
