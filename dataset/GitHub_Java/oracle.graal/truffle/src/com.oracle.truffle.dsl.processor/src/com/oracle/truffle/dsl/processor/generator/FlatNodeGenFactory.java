@@ -60,7 +60,6 @@ import javax.lang.model.type.ArrayType;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
-import javax.lang.model.util.ElementFilter;
 
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
@@ -1724,7 +1723,7 @@ class FlatNodeGenFactory {
             if (frameLocal == null) {
                 values.add(CodeTreeBuilder.singleString("null"));
             } else {
-                values.add(createParameterReference(frameLocal, method.getMethod(), 0));
+                values.add(createTypeSafeReference(frameLocal, method.getFrameParameter()));
             }
         }
 
@@ -1740,8 +1739,7 @@ class FlatNodeGenFactory {
                 TypeMirror targetType = method.getEvaluatedParameters().get(evaluatedIndex);
                 LocalVariable value = frameState.getValue(parameterExecution);
                 if (value != null) {
-                    int parameterIndex = method.getParameterIndex(evaluatedIndex);
-                    values.add(createParameterReference(value, method.getMethod(), parameterIndex));
+                    values.add(createTypeSafeReference(value, targetType));
                 } else {
                     values.add(CodeTreeBuilder.createBuilder().defaultValue(targetType).build());
                 }
@@ -1771,7 +1769,7 @@ class FlatNodeGenFactory {
                 }
 
                 if (var != null) {
-                    bindings[i] = createParameterReference(var, method.getMethod(), i);
+                    bindings[i] = createTypeSafeReference(var, parameter.getType());
                 }
             }
 
@@ -1782,47 +1780,14 @@ class FlatNodeGenFactory {
         return callMethod(receiver, method.getMethod(), bindings);
     }
 
-    private CodeTree createParameterReference(LocalVariable sourceVariable, ExecutableElement targetMethod, int targetIndex) {
-        CodeTree valueReference = sourceVariable.createReference();
-        TypeMirror sourceType = sourceVariable.getTypeMirror();
-        VariableElement targetParameter = targetMethod.getParameters().get(targetIndex);
-        TypeMirror targetType = targetParameter.asType();
-
+    private CodeTree createTypeSafeReference(LocalVariable var, TypeMirror targetType) {
+        CodeTree valueReference = var.createReference();
+        TypeMirror sourceType = var.getTypeMirror();
         if (targetType == null || sourceType == null) {
             return valueReference;
         }
-        boolean hasCast = false;
         if (needsCastTo(sourceType, targetType)) {
-            CodeTree castValue = TypeSystemCodeGenerator.cast(typeSystem, targetType, valueReference);
-            hasCast = valueReference != castValue;
-            valueReference = castValue;
-        }
-
-        // check for overloads that might conflict in the call and therefore needs a cast
-        if (!ElementUtils.typeEquals(sourceType, targetType) && !hasCast) {
-            Element element = targetMethod.getEnclosingElement();
-            boolean needsOverloadCast = false;
-            if (element != null) {
-                for (ExecutableElement executable : ElementFilter.methodsIn(element.getEnclosedElements())) {
-                    if (ElementUtils.executableEquals(executable, targetMethod)) {
-                        continue;
-                    }
-                    if (!executable.getSimpleName().toString().equals(targetMethod.getSimpleName().toString())) {
-                        continue;
-                    }
-                    if (executable.getParameters().size() != targetMethod.getParameters().size()) {
-                        continue;
-                    }
-                    TypeMirror overloadedTarget = executable.getParameters().get(targetIndex).asType();
-                    if (!needsCastTo(sourceType, overloadedTarget)) {
-                        needsOverloadCast = true;
-                        break;
-                    }
-                }
-            }
-            if (needsOverloadCast) {
-                valueReference = TypeSystemCodeGenerator.cast(typeSystem, targetType, valueReference);
-            }
+            valueReference = TypeSystemCodeGenerator.cast(typeSystem, targetType, valueReference);
         }
         return valueReference;
     }
