@@ -32,22 +32,15 @@ import com.oracle.truffle.api.nodes.*;
  */
 public final class OptimizedLoopNode extends LoopNode {
 
-    @Child private RepeatingNode repeatingNode;
-
-    public OptimizedLoopNode(RepeatingNode repeatingNode) {
-        this.repeatingNode = repeatingNode;
-    }
-
-    @Override
-    public RepeatingNode getRepeatingNode() {
-        return repeatingNode;
+    public OptimizedLoopNode(RepeatingNode body) {
+        super(body);
     }
 
     @Override
     public void executeLoop(VirtualFrame frame) {
         int loopCount = 0;
         try {
-            while (repeatingNode.executeRepeating(frame)) {
+            while (executeRepeatingNode(frame)) {
                 if (CompilerDirectives.inInterpreter()) {
                     loopCount++;
                 }
