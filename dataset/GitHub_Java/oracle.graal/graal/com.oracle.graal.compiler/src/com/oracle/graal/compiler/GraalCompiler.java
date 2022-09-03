@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -32,12 +32,13 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.code.CompilationResult.ConstantReference;
 import com.oracle.graal.api.code.CompilationResult.DataPatch;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.LIRGenerationPhase.LIRGenerationContext;
+import com.oracle.graal.api.meta.ProfilingInfo.TriState;
 import com.oracle.graal.compiler.common.alloc.*;
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
+import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.framemap.*;
@@ -244,7 +245,7 @@ public class GraalCompiler {
      */
     public static SchedulePhase emitFrontEnd(Providers providers, TargetDescription target, StructuredGraph graph, Map<ResolvedJavaMethod, StructuredGraph> cache,
                     PhaseSuite<HighTierContext> graphBuilderSuite, OptimisticOptimizations optimisticOpts, ProfilingInfo profilingInfo, SpeculationLog speculationLog, Suites suites) {
-        try (Scope s = Debug.scope("FrontEnd"); DebugCloseable a = FrontEnd.start()) {
+        try (Scope s = Debug.scope("FrontEnd"); TimerCloseable a = FrontEnd.start()) {
             if (speculationLog != null) {
                 speculationLog.collectFailedSpeculations();
             }
@@ -280,7 +281,7 @@ public class GraalCompiler {
 
     public static <T extends CompilationResult> void emitBackEnd(StructuredGraph graph, Object stub, CallingConvention cc, ResolvedJavaMethod installedCodeOwner, Backend backend,
                     TargetDescription target, T compilationResult, CompilationResultBuilderFactory factory, SchedulePhase schedule, RegisterConfig registerConfig, LIRSuites lirSuites) {
-        try (Scope s = Debug.scope("BackEnd"); DebugCloseable a = BackEnd.start()) {
+        try (Scope s = Debug.scope("BackEnd"); TimerCloseable a = BackEnd.start()) {
             // Repeatedly run the LIR code generation pass to improve statistical profiling results.
             for (int i = 0; i < EmitLIRRepeatCount.getValue(); i++) {
                 SchedulePhase dummySchedule = new SchedulePhase();
@@ -301,9 +302,23 @@ public class GraalCompiler {
         }
     }
 
+    private static void emitBlock(NodeLIRBuilderTool nodeLirGen, LIRGenerationResult lirGenRes, Block b, StructuredGraph graph, BlockMap<List<ValueNode>> blockMap) {
+        if (lirGenRes.getLIR().getLIRforBlock(b) == null) {
+            for (Block pred : b.getPredecessors()) {
+                if (!b.isLoopHeader() || !pred.isLoopEnd()) {
+                    emitBlock(nodeLirGen, lirGenRes, pred, graph, blockMap);
+                }
+            }
+            nodeLirGen.doBlock(b, graph, blockMap);
+        }
+    }
+
+    private static final DebugTimer lirGenTimeTracker = Debug.timer("LIRGenTime");
+    private static final DebugMemUseTracker lirGenMemUseTracker = Debug.memUseTracker("LIRGenMemUse");
+
     public static LIRGenerationResult emitLIR(Backend backend, TargetDescription target, SchedulePhase schedule, StructuredGraph graph, Object stub, CallingConvention cc,
                     RegisterConfig registerConfig, LIRSuites lirSuites) {
-        try (Scope ds = Debug.scope("EmitLIR"); DebugCloseable a = EmitLIR.start()) {
+        try (Scope ds = Debug.scope("EmitLIR"); TimerCloseable a = EmitLIR.start()) {
             List<Block> blocks = schedule.getCFG().getBlocks();
             Block startBlock = schedule.getCFG().getStartBlock();
             assert startBlock != null;
@@ -326,11 +341,18 @@ public class GraalCompiler {
             LIRGeneratorTool lirGen = backend.newLIRGenerator(cc, lirGenRes);
             NodeLIRBuilderTool nodeLirGen = backend.newNodeLIRBuilder(graph, lirGen);
 
-            // LIR generation
-            LIRGenerationContext context = new LIRGenerationContext(lirGen, nodeLirGen, graph, schedule);
-            new LIRGenerationPhase().apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, context);
+            try (Scope s = Debug.scope("LIRGen", lir, lirGen); AutoCloseable c = lirGenMemUseTracker.start(); AutoCloseable t = lirGenTimeTracker.start()) {
+                for (Block b : linearScanOrder) {
+                    emitBlock(nodeLirGen, lirGenRes, b, graph, schedule.getBlockToNodesMap());
+                }
+                lirGen.beforeRegisterAllocation();
 
-            try (Scope s = Debug.scope("LIRStages", nodeLirGen, lir)) {
+                Debug.dump(lir, "After LIR generation");
+            } catch (Throwable e) {
+                throw Debug.handle(e);
+            }
+
+            try (Scope s = Debug.scope("LIRStages", nodeLirGen)) {
                 return emitLowLevel(target, codeEmittingOrder, linearScanOrder, lirGenRes, lirGen, lirSuites);
             } catch (Throwable e) {
                 throw Debug.handle(e);
@@ -356,7 +378,7 @@ public class GraalCompiler {
 
     public static void emitCode(Backend backend, Assumptions assumptions, ResolvedJavaMethod rootMethod, Set<ResolvedJavaMethod> inlinedMethods, LIRGenerationResult lirGenRes,
                     CompilationResult compilationResult, ResolvedJavaMethod installedCodeOwner, CompilationResultBuilderFactory factory) {
-        try (DebugCloseable a = EmitCode.start()) {
+        try (TimerCloseable a = EmitCode.start()) {
             FrameMap frameMap = lirGenRes.getFrameMap();
             CompilationResultBuilder crb = backend.newCompilationResultBuilder(lirGenRes, frameMap, compilationResult, factory);
             backend.emitCode(crb, lirGenRes.getLIR(), installedCodeOwner);
