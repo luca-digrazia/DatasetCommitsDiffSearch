@@ -2028,7 +2028,6 @@ public final class LinearScan {
     private DebugMetric betterSpillPosWithLowerProbability = Debug.metric("BetterSpillPositionWithLowerProbability");
 
     private void optimizeSpillPosition() {
-        LIRInsertionBuffer[] insertionBuffers = new LIRInsertionBuffer[ir.linearScanOrder().size()];
         for (Interval interval : intervals) {
             if (interval != null && interval.isSplitParent() && interval.spillState() == SpillState.SpillInDominator) {
                 AbstractBlock<?> defBlock = blockForId(interval.spillDefinitionPos());
@@ -2085,26 +2084,8 @@ public final class LinearScan {
                                 // better spill block has the same probability -> do nothing
                                 interval.setSpillState(SpillState.StoreAtDefinition);
                             } else {
-                                LIRInsertionBuffer insertionBuffer = insertionBuffers[spillBlock.getId()];
-                                if (insertionBuffer == null) {
-                                    insertionBuffer = new LIRInsertionBuffer();
-                                    insertionBuffers[spillBlock.getId()] = insertionBuffer;
-                                    insertionBuffer.init(ir.getLIRforBlock(spillBlock));
-                                }
-                                int spillOpId = getFirstLirInstructionId(spillBlock);
-                                // insert spill move
-                                AllocatableValue fromLocation = interval.getSplitChildAtOpId(spillOpId, OperandMode.DEF, this).location();
-                                AllocatableValue toLocation = canonicalSpillOpr(interval);
-                                LIRInstruction move = ir.getSpillMoveFactory().createMove(toLocation, fromLocation);
-                                move.setId(-2);
-                                /*
-                                 * We can use the insertion buffer directly because we always insert
-                                 * at position 1.
-                                 */
-                                insertionBuffer.append(1, move);
-
                                 betterSpillPosWithLowerProbability.increment();
-                                interval.setSpillDefinitionPos(spillOpId);
+                                interval.setSpillDefinitionPos(getFirstLirInstructionId(spillBlock));
                             }
                         } else {
                             // definition is the best choice
@@ -2112,12 +2093,6 @@ public final class LinearScan {
                         }
                     }
                 }
-            }
-        }
-        for (LIRInsertionBuffer insertionBuffer : insertionBuffers) {
-            if (insertionBuffer != null) {
-                assert insertionBuffer.initialized() : "Insertion buffer is nonnull but not initialized!";
-                insertionBuffer.finish();
             }
         }
     }
