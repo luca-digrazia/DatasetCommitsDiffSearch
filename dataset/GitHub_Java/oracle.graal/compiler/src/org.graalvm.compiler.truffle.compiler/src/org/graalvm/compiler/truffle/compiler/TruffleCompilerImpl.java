@@ -60,7 +60,6 @@ import org.graalvm.compiler.core.common.CancellationBailoutException;
 import org.graalvm.compiler.core.common.CompilationIdentifier;
 import org.graalvm.compiler.core.common.RetryableBailoutException;
 import org.graalvm.compiler.core.common.util.CompilationAlarm;
-import org.graalvm.compiler.core.phases.EconomyCompilerConfiguration;
 import org.graalvm.compiler.core.target.Backend;
 import org.graalvm.compiler.debug.DebugCloseable;
 import org.graalvm.compiler.debug.DebugContext;
@@ -117,8 +116,6 @@ public abstract class TruffleCompilerImpl implements TruffleCompiler {
     protected final Suites suites;
     protected final GraphBuilderConfiguration config;
     protected final LIRSuites lirSuites;
-    protected final Suites lowTierSuites;
-    protected final LIRSuites lowTierLIRSuites;
     protected final PartialEvaluator partialEvaluator;
     protected final Backend backend;
     protected final SnippetReflectionProvider snippetReflection;
@@ -148,8 +145,6 @@ public abstract class TruffleCompilerImpl implements TruffleCompiler {
                         BytecodeExceptionMode.ExplicitOnly);
 
         this.partialEvaluator = createPartialEvaluator();
-        this.lowTierSuites = null;
-        this.lowTierLIRSuites = null;
     }
 
     private ResolvedJavaType[] getSkippedExceptionTypes(TruffleCompilerRuntime runtime) {
@@ -426,7 +421,6 @@ public abstract class TruffleCompilerImpl implements TruffleCompiler {
             CompilationResult compilationResult = createCompilationResult(name, graph.compilationId());
             result = GraalCompiler.compileGraph(graph, graph.method(), providers, backend, graphBuilderSuite, Optimizations, graph.getProfilingInfo(), suites, lirSuites, compilationResult,
                             CompilationResultBuilderFactory.Default, false);
-//            debug.forceDump(graph, "end");
         } catch (Throwable e) {
             throw debug.handle(e);
         }
