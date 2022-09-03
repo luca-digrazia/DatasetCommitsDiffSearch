@@ -110,10 +110,9 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     private static final AtomicReferenceFieldUpdater<OptimizedCallTarget, Assumption> NODE_REWRITING_ASSUMPTION_UPDATER = AtomicReferenceFieldUpdater.newUpdater(OptimizedCallTarget.class,
                     Assumption.class, "nodeRewritingAssumption");
     private volatile OptimizedDirectCallNode callSiteForSplit;
-    @CompilationFinal private volatile String nameCache;
 
     public OptimizedCallTarget(OptimizedCallTarget sourceCallTarget, RootNode rootNode) {
-        super(null);
+        super(rootNode.toString());
         assert sourceCallTarget == null || sourceCallTarget.sourceCallTarget == null : "Cannot create a clone of a cloned CallTarget";
         this.sourceCallTarget = sourceCallTarget;
         this.speculationLog = sourceCallTarget != null ? sourceCallTarget.getSpeculationLog() : null;
@@ -437,17 +436,6 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
 
     public final OptimizedCallTarget getSourceCallTarget() {
         return sourceCallTarget;
-    }
-
-    @Override
-    public String getName() {
-        String result = nameCache;
-        if (result == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            result = rootNode.toString();
-            nameCache = result;
-        }
-        return result;
     }
 
     @Override
