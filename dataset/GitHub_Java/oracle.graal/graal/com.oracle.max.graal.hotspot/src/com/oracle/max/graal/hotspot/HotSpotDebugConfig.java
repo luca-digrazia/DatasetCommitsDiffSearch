@@ -22,22 +22,18 @@
  */
 package com.oracle.max.graal.hotspot;
 
-import java.util.*;
-
 import com.oracle.max.cri.ri.*;
 import com.oracle.max.graal.debug.*;
 import com.oracle.max.graal.graph.*;
-import com.oracle.max.graal.printer.*;
 
 
 public class HotSpotDebugConfig implements DebugConfig {
 
-    private final String logFilter;
-    private final String meterFilter;
-    private final String timerFilter;
-    private final String dumpFilter;
-    private final String methodFilter;
-    private final List<DebugDumpHandler> dumpHandlers = new ArrayList<>();
+    public final String logFilter;
+    public final String meterFilter;
+    public final String timerFilter;
+    public final String dumpFilter;
+    public final String methodFilter;
 
     public HotSpotDebugConfig(String logFilter, String meterFilter, String timerFilter, String dumpFilter, String methodFilter) {
         this.logFilter = logFilter;
@@ -45,7 +41,6 @@ public class HotSpotDebugConfig implements DebugConfig {
         this.timerFilter = timerFilter;
         this.dumpFilter = dumpFilter;
         this.methodFilter = methodFilter;
-        dumpHandlers.add(new IdealGraphPrinterDumpHandler());
     }
 
     public boolean isLogEnabled() {
@@ -118,10 +113,5 @@ public class HotSpotDebugConfig implements DebugConfig {
             }
         }
         return e;
-    }
-
-    @Override
-    public Collection<? extends DebugDumpHandler> dumpHandlers() {
-        return dumpHandlers;
     }
 }
