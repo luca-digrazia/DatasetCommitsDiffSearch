@@ -76,7 +76,7 @@ public interface CodeCacheProvider extends MetaAccessProvider {
      * 
      * @return the encoded value as an integer
      */
-    Constant encodeDeoptActionAndReason(DeoptimizationAction action, DeoptimizationReason reason);
+    int encodeDeoptActionAndReason(DeoptimizationAction action, DeoptimizationReason reason);
 
     /**
      * Determines if a {@link DataPatch} should be created for a given

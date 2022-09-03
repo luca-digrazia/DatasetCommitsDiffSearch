@@ -34,9 +34,7 @@ import com.oracle.graal.asm.*;
 import com.oracle.graal.asm.amd64.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.StandardOp.ImplicitNullCheck;
 import com.oracle.graal.lir.StandardOp.MoveOp;
-import com.oracle.graal.lir.StandardOp.NullCheck;
 import com.oracle.graal.lir.asm.*;
 
 public class AMD64Move {
@@ -95,7 +93,7 @@ public class AMD64Move {
         }
     }
 
-    public abstract static class MemOp extends AMD64LIRInstruction implements ImplicitNullCheck {
+    public abstract static class MemOp extends AMD64LIRInstruction {
 
         protected final Kind kind;
         @Use({COMPOSITE}) protected AMD64AddressValue address;
@@ -115,14 +113,6 @@ public class AMD64Move {
                 tasm.recordImplicitException(masm.codeBuffer.position(), state);
             }
             emitMemAccess(masm);
-        }
-
-        public boolean makeNullCheckFor(Value value, LIRFrameState nullCheckState, int implicitNullCheckLimit) {
-            if (state == null && value.equals(address.base) && address.index == Value.ILLEGAL && address.displacement >= 0 && address.displacement < implicitNullCheckLimit) {
-                state = nullCheckState;
-                return true;
-            }
-            return false;
         }
     }
 
@@ -149,7 +139,7 @@ public class AMD64Move {
                     masm.movswl(asRegister(result), address.toAddress());
                     break;
                 case Int:
-                    masm.movl(asRegister(result), address.toAddress());
+                    masm.movslq(asRegister(result), address.toAddress());
                     break;
                 case Long:
                     masm.movq(asRegister(result), address.toAddress());
@@ -305,7 +295,7 @@ public class AMD64Move {
         }
     }
 
-    public static class NullCheckOp extends AMD64LIRInstruction implements NullCheck {
+    public static class NullCheckOp extends AMD64LIRInstruction {
 
         @Use({REG}) protected AllocatableValue input;
         @State protected LIRFrameState state;
@@ -319,14 +309,6 @@ public class AMD64Move {
         public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
             tasm.recordImplicitException(masm.codeBuffer.position(), state);
             masm.nullCheck(asRegister(input));
-        }
-
-        public Value getCheckedValue() {
-            return input;
-        }
-
-        public LIRFrameState getState() {
-            return state;
         }
     }
 
@@ -459,7 +441,7 @@ public class AMD64Move {
          */
         switch (input.getKind().getStackKind()) {
             case Int:
-                if (tasm.codeCache.needsDataPatch(input)) {
+                if (tasm.runtime.needsDataPatch(input)) {
                     tasm.recordDataReferenceInCode(input, 0, true);
                 }
                 // Do not optimize with an XOR as this instruction may be between
@@ -469,7 +451,7 @@ public class AMD64Move {
 
                 break;
             case Long:
-                if (tasm.codeCache.needsDataPatch(input)) {
+                if (tasm.runtime.needsDataPatch(input)) {
                     tasm.recordDataReferenceInCode(input, 0, true);
                 }
                 // Do not optimize with an XOR as this instruction may be between
@@ -480,7 +462,7 @@ public class AMD64Move {
             case Float:
                 // This is *not* the same as 'constant == 0.0f' in the case where constant is -0.0f
                 if (Float.floatToRawIntBits(input.asFloat()) == Float.floatToRawIntBits(0.0f)) {
-                    assert !tasm.codeCache.needsDataPatch(input);
+                    assert !tasm.runtime.needsDataPatch(input);
                     masm.xorps(asFloatReg(result), asFloatReg(result));
                 } else {
                     masm.movflt(asFloatReg(result), (AMD64Address) tasm.asFloatConstRef(input));
@@ -489,7 +471,7 @@ public class AMD64Move {
             case Double:
                 // This is *not* the same as 'constant == 0.0d' in the case where constant is -0.0d
                 if (Double.doubleToRawLongBits(input.asDouble()) == Double.doubleToRawLongBits(0.0d)) {
-                    assert !tasm.codeCache.needsDataPatch(input);
+                    assert !tasm.runtime.needsDataPatch(input);
                     masm.xorpd(asDoubleReg(result), asDoubleReg(result));
                 } else {
                     masm.movdbl(asDoubleReg(result), (AMD64Address) tasm.asDoubleConstRef(input));
@@ -514,7 +496,7 @@ public class AMD64Move {
     }
 
     private static void const2stack(TargetMethodAssembler tasm, AMD64MacroAssembler masm, Value result, Constant input) {
-        assert !tasm.codeCache.needsDataPatch(input);
+        assert !tasm.runtime.needsDataPatch(input);
         AMD64Address dest = (AMD64Address) tasm.asAddress(result);
         switch (input.getKind().getStackKind()) {
             case Int:
