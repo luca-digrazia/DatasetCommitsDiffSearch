@@ -22,90 +22,53 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.truffle.api.interop.java.test;
+package com.oracle.truffle.api.interop.java;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
-import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.java.JavaInterop;
 import com.oracle.truffle.api.nodes.RootNode;
 
-import static org.junit.Assert.assertEquals;
-import org.junit.Before;
-import org.junit.Test;
-
-public class BoxedStringTest implements TruffleObject, ForeignAccess.Factory10 {
-    public interface ExactMatchInterop {
-        String stringValue();
-
-        char charValue();
-    }
-
-    private String value;
-    private ExactMatchInterop interop;
-
-    @Before
-    public void initObjects() {
-        interop = JavaInterop.asJavaObject(ExactMatchInterop.class, this);
-    }
-
-    @Test
-    public void convertToString() {
-        value = "Hello";
-        assertEquals("Hello", interop.stringValue());
-    }
-
-    @Test
-    public void convertToChar() {
-        value = "W";
-        assertEquals('W', interop.charValue());
-    }
-
-    @Override
-    public ForeignAccess getForeignAccess() {
-        return ForeignAccess.create(BoxedStringTest.class, this);
-    }
-
+final class JavaObjectForeignAccess implements ForeignAccess.Factory10 {
     @Override
     public CallTarget accessIsNull() {
-        return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(false));
+        return Truffle.getRuntime().createCallTarget(new NullCheckNode());
     }
 
     @Override
     public CallTarget accessIsExecutable() {
-        return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(false));
+        return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(Boolean.FALSE));
     }
 
     @Override
     public CallTarget accessIsBoxed() {
-        return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(true));
+        return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(Boolean.FALSE));
     }
 
     @Override
     public CallTarget accessHasSize() {
-        return null;
+        return Truffle.getRuntime().createCallTarget(new ArrayHasSizeNode());
     }
 
     @Override
     public CallTarget accessGetSize() {
-        return null;
+        return Truffle.getRuntime().createCallTarget(new ArrayGetSizeNode());
     }
 
     @Override
     public CallTarget accessUnbox() {
-        return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(value));
+        return null;
     }
 
     @Override
     public CallTarget accessRead() {
-        return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(this));
+        return Truffle.getRuntime().createCallTarget(new ReadFieldNode());
     }
 
     @Override
     public CallTarget accessWrite() {
-        return null;
+        return Truffle.getRuntime().createCallTarget(new WriteFieldNode());
     }
 
     @Override
@@ -115,17 +78,16 @@ public class BoxedStringTest implements TruffleObject, ForeignAccess.Factory10 {
 
     @Override
     public CallTarget accessInvoke(int argumentsLength) {
-        return null;
+        return Truffle.getRuntime().createCallTarget(new InvokeMemberNode());
     }
 
     @Override
     public CallTarget accessNew(int argumentsLength) {
-        return null;
+        return Truffle.getRuntime().createCallTarget(new JavaNewNode());
     }
 
     @Override
     public CallTarget accessMessage(Message unknown) {
         return null;
     }
-
 }
