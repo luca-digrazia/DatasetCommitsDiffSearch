@@ -33,10 +33,6 @@ import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-import com.oracle.truffle.api.instrumentation.StandardTags.ExpressionTag;
-import com.oracle.truffle.api.instrumentation.StandardTags.RootTag;
-import com.oracle.truffle.api.instrumentation.StandardTags.StatementTag;
-import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.SourceSection;
 
 /**
@@ -49,7 +45,7 @@ import com.oracle.truffle.api.source.SourceSection;
  */
 public final class ProfilerNode<T> {
 
-    ProfilerNode(ProfilerNode<T> parent, StackTraceEntry sourceLocation, T payload) {
+    ProfilerNode(ProfilerNode<T> parent, SourceLocation sourceLocation, T payload) {
         this.parent = parent;
         this.sourceLocation = sourceLocation;
         this.payload = payload;
@@ -63,8 +59,8 @@ public final class ProfilerNode<T> {
 
     private final T payload;
     private final ProfilerNode<T> parent;
-    private final StackTraceEntry sourceLocation;
-    Map<StackTraceEntry, ProfilerNode<T>> children;
+    private final SourceLocation sourceLocation;
+    Map<SourceLocation, ProfilerNode<T>> children;
 
     /**
      * @return the children of this {@link ProfilerNode}
@@ -87,7 +83,7 @@ public final class ProfilerNode<T> {
 
     /**
      * @return true if the parent chain contains a {@link ProfilerNode} with the same
-     *         {@link StackTraceEntry}, otherwise false
+     *         {@link SourceLocation}, otherwise false
      * @since 0.30
      */
     public boolean isRecursive() {
@@ -113,8 +109,8 @@ public final class ProfilerNode<T> {
     }
 
     /**
-     * @return The name of the {@linkplain RootNode root node} in which this {@link ProfilerNode}
-     *         appears.
+     * @return The name of the {@linkplain com.oracle.truffle.api.nodes.RootNode root node} in which
+     *         the {@link SourceLocation} associated with this {@link ProfilerNode} appears
      * @since 0.30
      */
     public String getRootName() {
@@ -122,12 +118,8 @@ public final class ProfilerNode<T> {
     }
 
     /**
-     * Returns a set tags a stack location marked with. Common tags are {@link RootTag root},
-     * {@link StatementTag statement} and {@link ExpressionTag expression}. Whether statement or
-     * expression stack trace entries appear depends on the configured
-     * {@link CPUSampler#setFilter(com.oracle.truffle.api.instrumentation.SourceSectionFilter)
-     * filter}.
-     *
+     * @return A set of {@link com.oracle.truffle.api.instrumentation.StandardTags tags} for the
+     *         {@link SourceLocation} associated with this {@link ProfilerNode}
      * @since 0.30
      */
     public Set<Class<?>> getTags() {
@@ -142,27 +134,27 @@ public final class ProfilerNode<T> {
         return payload;
     }
 
-    ProfilerNode<T> findChild(StackTraceEntry childLocation) {
+    ProfilerNode<T> findChild(SourceLocation childLocation) {
         if (children != null) {
             return children.get(childLocation);
         }
         return null;
     }
 
-    void addChild(StackTraceEntry childLocation, ProfilerNode<T> child) {
+    void addChild(SourceLocation childLocation, ProfilerNode<T> child) {
         if (children == null) {
             children = new HashMap<>();
         }
         children.put(childLocation, child);
     }
 
-    StackTraceEntry getSourceLocation() {
+    SourceLocation getSourceLocation() {
         return sourceLocation;
     }
 
     void deepCopyChildrenFrom(ProfilerNode<T> node, Function<T, T> copyPayload) {
         for (ProfilerNode<T> child : node.getChildren()) {
-            final StackTraceEntry childSourceLocation = child.getSourceLocation();
+            final SourceLocation childSourceLocation = child.getSourceLocation();
             T childPayload = child.getPayload();
             T destinationPayload = copyPayload.apply(childPayload);
             ProfilerNode<T> destinationChild = new ProfilerNode<>(this, childSourceLocation, destinationPayload);
@@ -176,7 +168,7 @@ public final class ProfilerNode<T> {
 
     void deepMergeChildrenFrom(ProfilerNode<T> node, BiConsumer<T, T> mergePayload, Supplier<T> payloadFactory) {
         for (ProfilerNode<T> child : node.getChildren()) {
-            final StackTraceEntry childSourceLocation = child.getSourceLocation();
+            final SourceLocation childSourceLocation = child.getSourceLocation();
             final T childPayload = child.getPayload();
             ProfilerNode<T> destinationChild = findBySourceLocation(childSourceLocation);
             if (destinationChild == null) {
@@ -194,25 +186,7 @@ public final class ProfilerNode<T> {
         }
     }
 
-    void deepMergeNodeToChildren(ProfilerNode<T> node, BiConsumer<T, T> mergePayload, Supplier<T> payloadFactory) {
-        final StackTraceEntry childSourceLocation = node.getSourceLocation();
-        final T childPayload = node.getPayload();
-        ProfilerNode<T> destinationChild = findBySourceLocation(childSourceLocation);
-        if (destinationChild == null) {
-            T destinationPayload = payloadFactory.get();
-            mergePayload.accept(childPayload, destinationPayload);
-            destinationChild = new ProfilerNode<>(this, childSourceLocation, destinationPayload);
-            if (children == null) {
-                children = new HashMap<>();
-            }
-            children.put(childSourceLocation, destinationChild);
-        } else {
-            mergePayload.accept(childPayload, destinationChild.getPayload());
-        }
-        destinationChild.deepMergeChildrenFrom(node, mergePayload, payloadFactory);
-    }
-
-    private ProfilerNode<T> findBySourceLocation(StackTraceEntry targetSourceLocation) {
+    private ProfilerNode<T> findBySourceLocation(SourceLocation targetSourceLocation) {
         if (children != null) {
             for (ProfilerNode<T> child : children.values()) {
                 if (child.getSourceLocation().equals(targetSourceLocation)) {
