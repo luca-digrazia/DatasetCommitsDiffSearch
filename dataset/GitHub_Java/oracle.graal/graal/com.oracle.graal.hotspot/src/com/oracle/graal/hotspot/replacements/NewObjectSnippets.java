@@ -246,12 +246,12 @@ public class NewObjectSnippets implements Snippets {
                 new_seqInit.inc();
                 explodeLoop();
                 for (int offset = instanceHeaderSize(); offset < size; offset += wordSize()) {
-                    memory.initializeWord(offset, Word.zero(), INIT_LOCATION);
+                    memory.writeWord(offset, Word.zero(), INIT_LOCATION);
                 }
             } else {
                 new_loopInit.inc();
                 for (int offset = instanceHeaderSize(); offset < size; offset += wordSize()) {
-                    memory.initializeWord(offset, Word.zero(), INIT_LOCATION);
+                    memory.writeWord(offset, Word.zero(), INIT_LOCATION);
                 }
             }
         }
@@ -270,7 +270,7 @@ public class NewObjectSnippets implements Snippets {
         initializeObjectHeader(memory, prototypeMarkWord, hub);
         if (fillContents) {
             for (int offset = headerSize; offset < allocationSize; offset += wordSize()) {
-                memory.initializeWord(offset, Word.zero(), INIT_LOCATION);
+                memory.writeWord(offset, Word.zero(), INIT_LOCATION);
             }
         }
         return memory.toObject();
@@ -320,7 +320,7 @@ public class NewObjectSnippets implements Snippets {
             Kind elementKind = elementType.getKind();
             ConstantNode hub = ConstantNode.forConstant(arrayType.klass(), providers.getMetaAccess(), graph);
             final int headerSize = HotSpotGraalRuntime.getArrayBaseOffset(elementKind);
-            HotSpotLoweringProvider lowerer = (HotSpotLoweringProvider) providers.getLowerer();
+            HotSpotHostLoweringProvider lowerer = (HotSpotHostLoweringProvider) providers.getLowerer();
             int log2ElementSize = CodeUtil.log2(lowerer.getScalingFactor(elementKind));
 
             Arguments args = new Arguments(allocateArray, graph.getGuardsStage());
