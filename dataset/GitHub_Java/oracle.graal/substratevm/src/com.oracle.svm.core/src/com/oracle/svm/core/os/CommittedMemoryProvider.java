@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -73,10 +71,7 @@ public interface CommittedMemoryProvider {
      * Returns the granularity of committed memory management, which is typically the same as that
      * of {@linkplain VirtualMemoryProvider#getGranularity() virtual memory management}.
      */
-    @Uninterruptible(reason = "Still being initialized.", mayBeInlined = true)
-    default UnsignedWord getGranularity() {
-        return VirtualMemoryProvider.get().getGranularity();
-    }
+    UnsignedWord getGranularity();
 
     /**
      * Allocate a block of committed memory.
@@ -116,12 +111,5 @@ public interface CommittedMemoryProvider {
      * @param completeCollection Whether the garbage collector has performed a full collection.
      */
     default void afterGarbageCollection(boolean completeCollection) {
-    }
-
-    /**
-     * Maps image heap from the executable file.
-     */
-    default boolean mapsImageHeap() {
-        return false;
     }
 }
