@@ -344,11 +344,7 @@ public class NodeUtil {
         for (long fieldOffset : nodeClass.childrenOffsets) {
             Node[] children = (Node[]) unsafe.getObject(node, fieldOffset);
             if (children != null) {
-                for (Node child : children) {
-                    if (child != null) {
-                        nodes.add(child);
-                    }
-                }
+                nodes.addAll(Arrays.asList(children));
             }
         }
 
@@ -549,25 +545,23 @@ public class NodeUtil {
     }
 
     public static int countNodes(Node root, Class<?> clazz) {
-        NodeCountVisitor nodeCount = new NodeCountVisitor(root, clazz);
+        NodeCountVisitor nodeCount = new NodeCountVisitor(clazz);
         root.accept(nodeCount);
         return nodeCount.nodeCount;
     }
 
     private static final class NodeCountVisitor implements NodeVisitor {
 
-        int nodeCount;
-        private final Node root;
         private final Class<?> clazz;
+        int nodeCount;
 
-        private NodeCountVisitor(Node root, Class<?> clazz) {
-            this.root = root;
+        private NodeCountVisitor(Class<?> clazz) {
             this.clazz = clazz;
         }
 
         @Override
         public boolean visit(Node node) {
-            if (node instanceof RootNode && node != root) {
+            if (node instanceof RootNode && nodeCount > 0) {
                 return false;
             }
             if (clazz == null || clazz.isInstance(node)) {
@@ -595,7 +589,7 @@ public class NodeUtil {
             p.print("  ");
         }
         if (parent == null) {
-            p.println(nodeName(node));
+            p.println(node.getClass().getSimpleName());
         } else {
             String fieldName = "unknownField";
             NodeField[] fields = NodeClass.get(parent.getClass()).fields;
@@ -617,7 +611,7 @@ public class NodeUtil {
             }
             p.print(fieldName);
             p.print(" = ");
-            p.println(nodeName(node));
+            p.println(node.getClass().getSimpleName());
         }
 
         for (Node child : node.getChildren()) {
@@ -655,7 +649,7 @@ public class NodeUtil {
             return;
         }
 
-        p.print(nodeName(node));
+        p.print(node.getClass().getSimpleName());
 
         ArrayList<NodeField> childFields = new ArrayList<>();
         String sep = "";
@@ -710,7 +704,4 @@ public class NodeUtil {
         }
     }
 
-    private static String nodeName(Node node) {
-        return node.getClass().getSimpleName();
-    }
 }
