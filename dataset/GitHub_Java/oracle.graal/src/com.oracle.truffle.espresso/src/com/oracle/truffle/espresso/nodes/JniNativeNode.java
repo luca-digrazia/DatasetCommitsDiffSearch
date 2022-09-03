@@ -39,11 +39,11 @@ public class JniNativeNode extends NativeRootNode {
         JniEnv jniEnv = EspressoLanguage.getCurrentContext().getJNI();
         assert jniEnv.getNativePointer() != 0;
 
-        Object[] processedArgs = super.preprocessArgs(args);
+        args = super.preprocessArgs(args);
 
         Object[] argsWithEnv = getOriginalMethod().isStatic()
-                        ? prepend2(jniEnv.getNativePointer(), getOriginalMethod().getDeclaringClass().rawKlass().mirror(), processedArgs)
-                        : prepend1(jniEnv.getNativePointer(), processedArgs);
+                        ? prepend2(jniEnv.getNativePointer(), getOriginalMethod().getDeclaringClass().rawKlass().mirror(), args)
+                        : prepend1(jniEnv.getNativePointer(), args);
 
         return argsWithEnv;
     }

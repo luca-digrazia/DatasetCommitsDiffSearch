@@ -53,11 +53,21 @@ public class Target_java_lang_reflect_Array {
     }
 
     @Intrinsic
+    public static int getLength(Object array) {
+        try {
+            return Array.getLength(MetaUtil.unwrap(array));
+        } catch (IllegalArgumentException | NullPointerException e) {
+            EspressoContext context = EspressoLanguage.getCurrentContext();
+            throw context.getMeta().throwEx(e.getClass(), e.getMessage());
+        }
+    }
+
+    @Intrinsic
     public static boolean getBoolean(Object array, int index) {
         try {
             return Array.getBoolean(MetaUtil.unwrap(array), index);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(e.getClass(), e.getMessage());
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(e.getClass());
         }
     }
 
@@ -66,7 +76,7 @@ public class Target_java_lang_reflect_Array {
         try {
             return Array.getByte(MetaUtil.unwrap(array), index);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(e.getClass(), e.getMessage());
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(e.getClass());
         }
     }
 
@@ -75,7 +85,7 @@ public class Target_java_lang_reflect_Array {
         try {
             return Array.getChar(MetaUtil.unwrap(array), index);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(e.getClass(), e.getMessage());
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(e.getClass());
         }
     }
 
@@ -84,7 +94,7 @@ public class Target_java_lang_reflect_Array {
         try {
             return Array.getShort(MetaUtil.unwrap(array), index);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(e.getClass(), e.getMessage());
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(e.getClass());
         }
     }
 
@@ -93,7 +103,7 @@ public class Target_java_lang_reflect_Array {
         try {
             return Array.getInt(MetaUtil.unwrap(array), index);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(e.getClass(), e.getMessage());
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(e.getClass());
         }
     }
 
@@ -102,7 +112,7 @@ public class Target_java_lang_reflect_Array {
         try {
             return Array.getFloat(MetaUtil.unwrap(array), index);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(e.getClass(), e.getMessage());
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(e.getClass());
         }
     }
 
@@ -111,7 +121,7 @@ public class Target_java_lang_reflect_Array {
         try {
             return Array.getDouble(MetaUtil.unwrap(array), index);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(e.getClass(), e.getMessage());
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(e.getClass());
         }
     }
 
@@ -120,7 +130,7 @@ public class Target_java_lang_reflect_Array {
         try {
             return Array.getLong(MetaUtil.unwrap(array), index);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(e.getClass(), e.getMessage());
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(e.getClass());
         }
     }
 
@@ -129,7 +139,7 @@ public class Target_java_lang_reflect_Array {
         try {
             Array.setBoolean(MetaUtil.unwrap(array), index, value);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(e.getClass(), e.getMessage());
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(e.getClass());
         }
     }
 
@@ -138,7 +148,7 @@ public class Target_java_lang_reflect_Array {
         try {
             Array.setByte(MetaUtil.unwrap(array), index, value);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(e.getClass(), e.getMessage());
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(e.getClass());
         }
     }
 
@@ -147,7 +157,7 @@ public class Target_java_lang_reflect_Array {
         try {
             Array.setChar(((StaticObjectArray) MetaUtil.unwrap(array)).getWrapped(), index, value);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(e.getClass(), e.getMessage());
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(e.getClass());
         }
     }
 
@@ -156,7 +166,7 @@ public class Target_java_lang_reflect_Array {
         try {
             Array.setShort(MetaUtil.unwrap(array), index, value);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(e.getClass(), e.getMessage());
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(e.getClass());
         }
     }
 
@@ -165,7 +175,7 @@ public class Target_java_lang_reflect_Array {
         try {
             Array.setInt(MetaUtil.unwrap(array), index, value);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(e.getClass(), e.getMessage());
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(e.getClass());
         }
     }
 
@@ -174,7 +184,7 @@ public class Target_java_lang_reflect_Array {
         try {
             Array.setFloat(MetaUtil.unwrap(array), index, value);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(e.getClass(), e.getMessage());
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(e.getClass());
         }
     }
 
@@ -183,7 +193,7 @@ public class Target_java_lang_reflect_Array {
         try {
             Array.setDouble(MetaUtil.unwrap(array), index, value);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(e.getClass(), e.getMessage());
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(e.getClass());
         }
     }
 
@@ -192,7 +202,16 @@ public class Target_java_lang_reflect_Array {
         try {
             Array.setLong(MetaUtil.unwrap(array), index, value);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(e.getClass(), e.getMessage());
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(e.getClass());
+        }
+    }
+
+    @Intrinsic
+    public static Object get(Object array, int index) {
+        try {
+            return Array.get(MetaUtil.unwrap(array), index);
+        } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(e.getClass());
         }
     }
 

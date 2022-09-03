@@ -32,6 +32,7 @@ package com.oracle.truffle.espresso.jni;
  * consumer for varargs...
  *
  * <pre>
+ * {@code
  * public static void jprintf(PrintStream out, String fmt, long varargsPtr) {
  *     // VarArgs is a helper object that uses/calls the native pop* implementation.
  *     VarArgs varargs = VarArgs.init(varargsPtr);
@@ -42,33 +43,15 @@ package com.oracle.truffle.espresso.jni;
  *             if (i < fmt.length) {
  *                 char id = fmt.charAt(i);
  *                 switch (id) {
- *                     case 'z':
- *                         out.print(varargs.popBoolean());
- *                         break;
- *                     case 'b':
- *                         out.print(varargs.popByte());
- *                         break;
- *                     case 'c':
- *                         out.print(varargs.popChar());
- *                         break;
- *                     case 's':
- *                         out.print(varargs.popShort());
- *                         break;
- *                     case 'i':
- *                         out.print(varargs.popInt());
- *                         break;
- *                     case 'f':
- *                         out.print(varargs.popFloat());
- *                         break;
- *                     case 'd':
- *                         out.print(varargs.popDouble());
- *                         break;
- *                     case 'j':
- *                         out.print(varargs.popLong());
- *                         break;
- *                     case 'l':
- *                         out.print(varargs.popObject());
- *                         break;
+ *                     case 'z': out.print(varargs.popBoolean()); break;
+ *                     case 'b': out.print(varargs.popByte());    break;
+ *                     case 'c': out.print(varargs.popChar());    break;
+ *                     case 's': out.print(varargs.popShort());   break;
+ *                     case 'i': out.print(varargs.popInt());     break;
+ *                     case 'f': out.print(varargs.popFloat());   break;
+ *                     case 'd': out.print(varargs.popDouble());  break;
+ *                     case 'j': out.print(varargs.popLong());    break;
+ *                     case 'l': out.print(varargs.popObject());  break;
  *                     default:
  *                         out.print(id);
  *                 }
@@ -77,6 +60,7 @@ package com.oracle.truffle.espresso.jni;
  *             out.print(c);
  *         }
  *     }
+ * }
  * }
  * </pre>
  * <p>

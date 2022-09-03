@@ -24,9 +24,19 @@ package com.oracle.truffle.espresso;
 
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.JavaKind;
+import com.oracle.truffle.espresso.runtime.StaticObject;
+import com.oracle.truffle.espresso.vm.InterpreterToVM;
 import com.oracle.truffle.nfi.types.NativeSimpleType;
 
 public class Utils {
+
+    public static InterpreterToVM getVm() {
+        return EspressoLanguage.getCurrentContext().getInterpreterToVM();
+    }
+
+    public static Object maybeNull(Object obj) {
+        return (obj == null) ? StaticObject.NULL : obj;
+    }
 
     public static NativeSimpleType kindToType(JavaKind kind, boolean javaToNative) {
         switch (kind) {
@@ -53,7 +63,7 @@ public class Utils {
                 // NULL instead.
 
                 return javaToNative
-                                ? NativeSimpleType.NULLABLE
+                                ? NativeSimpleType.OBJECT_OR_NULL
                                 : NativeSimpleType.OBJECT;
 
             default:

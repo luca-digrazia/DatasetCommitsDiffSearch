@@ -63,9 +63,6 @@ public abstract class NativeRootNode extends RootNode implements LinkedNode {
         // TODO(peterssen): Static method does not get the clazz in the arguments,
         int argIndex = getOriginalMethod().isStatic() ? 0 : 1;
         for (int i = 0; i < params.length; ++i) {
-            if (args[argIndex] == null) {
-                args[argIndex] = StaticObject.NULL;
-            }
             if (args[argIndex] instanceof Boolean) {
                 if (params[i].kind() == JavaKind.Boolean) {
                     args[argIndex] = (boolean) args[argIndex] ? (byte) 1 : (byte) 0;
@@ -84,11 +81,14 @@ public abstract class NativeRootNode extends RootNode implements LinkedNode {
             // constant.
             // Having a constant length would help PEA to skip the copying.
             Object[] argsWithEnv = preprocessArgs(frame.getArguments());
-            // System.err.println("Calling native " + originalMethod.getName() + Arrays.toString(argsWithEnv));
+            System.err.println("Calling native " + originalMethod.getName() + Arrays.toString(argsWithEnv));
             Object result = ForeignAccess.sendExecute(execute, boundNative, argsWithEnv);
-            // System.err.println("Return from native " + originalMethod.getName() + Arrays.toString(argsWithEnv) + " -> " + result);
             return processResult(result);
         } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
+            throw EspressoError.shouldNotReachHere(e);
+        } catch (VirtualMachineError | EspressoException allowed) {
+            throw allowed;
+        } catch (Exception e) {
             throw EspressoError.shouldNotReachHere(e);
         }
     }
@@ -105,17 +105,23 @@ public abstract class NativeRootNode extends RootNode implements LinkedNode {
         }
 
         switch (getOriginalMethod().getReturnType().kind()) {
-            case Boolean: return ((byte) result != 0);
-            case Byte: return (byte) result;
-            case Char: return (char) result;
-            case Short: return (short) result;
+            case Boolean:
+            case Byte:
+                result = (int) (byte) result;
+                break;
+            case Char:
+                result = (int) (char) result;
+                break;
+            case Short:
+                result = (int) (short) result;
+                break;
             case Object:
                 if (result instanceof TruffleObject) {
                     if (ForeignAccess.sendIsNull(Message.IS_NULL.createNode(), (TruffleObject) result)) {
-                        return StaticObject.NULL;
+                        result = StaticObject.NULL;
                     }
                 }
-                return result;
+                break;
         }
         // System.err.println("Return native " + originalMethod.getName() + " -> " + result);
         return result;

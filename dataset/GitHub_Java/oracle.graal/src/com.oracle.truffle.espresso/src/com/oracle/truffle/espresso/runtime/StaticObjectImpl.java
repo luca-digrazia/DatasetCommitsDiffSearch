@@ -54,10 +54,6 @@ public class StaticObjectImpl implements StaticObject {
         return new StaticObjectImpl(getKlass(), new HashMap<>(fields), isStatic);
     }
 
-    private static String getStorageName(FieldInfo fi) {
-        return fi.getDeclaringClass().getName() + "#" + fi.getName();
-    }
-
     public StaticObjectImpl(Klass klass) {
         this.klass = klass;
         this.fields = new HashMap<>();
@@ -97,7 +93,7 @@ public class StaticObjectImpl implements StaticObject {
                 case Void:
                     throw new RuntimeException("Invalid type " + fi.getKind() + " for field: " + fi.getName());
             }
-            this.fields.put(getStorageName(fi), value);
+            this.fields.put(fi.getName(), value);
         }
     }
 
@@ -143,7 +139,7 @@ public class StaticObjectImpl implements StaticObject {
                     case Void:
                         throw new RuntimeException("Invalid type " + fi.getKind() + " for field: " + fi.getName());
                 }
-                this.fields.put(getStorageName(fi), value);
+                this.fields.put(fi.getName(), value);
             }
         }
         this.isStatic = isStatic;
@@ -152,9 +148,7 @@ public class StaticObjectImpl implements StaticObject {
     @CompilerDirectives.TruffleBoundary
     public Object getField(FieldInfo field) {
         // TODO(peterssen): Klass check
-        Object result = fields.get(getStorageName(field));
-        assert result != null;
-        return result;
+        return fields.get(field.getName());
     }
 
     @CompilerDirectives.TruffleBoundary
@@ -167,11 +161,15 @@ public class StaticObjectImpl implements StaticObject {
         return getKlass().getName();
     }
 
+    public void setFieldByName(String name, Object value) {
+        fields.put(name, value);
+    }
+
     @CompilerDirectives.TruffleBoundary
     public void setField(FieldInfo field, Object value) {
         // TODO(peterssen): Klass check
-        assert fields.containsKey(getStorageName(field));
-        fields.put(getStorageName(field), value);
+        assert fields.containsKey(field.getName());
+        fields.put(field.getName(), value);
     }
 
     @CompilerDirectives.TruffleBoundary

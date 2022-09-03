@@ -36,7 +36,6 @@ import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.Utils;
 import com.oracle.truffle.espresso.classfile.ConstantPool;
-import com.oracle.truffle.espresso.classfile.ExceptionsAttribute;
 import com.oracle.truffle.espresso.jni.Mangle;
 import com.oracle.truffle.espresso.jni.NativeLibrary;
 import com.oracle.truffle.espresso.meta.EspressoError;
@@ -72,18 +71,16 @@ public final class MethodInfo implements ModifiersProvider {
     private final LineNumberTable lineNumberTable;
     private final LocalVariableTable localVariableTable;
     private final int modifiers;
-    private final ExceptionsAttribute exceptionsAttribute;
 
     @CompilerDirectives.CompilationFinal private boolean intrinsified = false;
 
     @CompilerDirectives.CompilationFinal private CallTarget callTarget;
     @CompilerDirectives.CompilationFinal private Klass returnType;
     @CompilerDirectives.CompilationFinal(dimensions = 1) private Klass[] parameterTypes;
-    @CompilerDirectives.CompilationFinal(dimensions = 1) private Klass[] checkedExceptions;
 
     MethodInfo(Klass declaringClass, String name, SignatureDescriptor signature,
-               byte[] code, int maxStackSize, int maxLocals, int modifiers,
-               ExceptionHandler[] exceptionHandlers, LineNumberTable lineNumberTable, LocalVariableTable localVariableTable, ExceptionsAttribute exceptionsAttribute) {
+                    byte[] code, int maxStackSize, int maxLocals, int modifiers,
+                    ExceptionHandler[] exceptionHandlers, LineNumberTable lineNumberTable, LocalVariableTable localVariableTable) {
         this.declaringClass = declaringClass;
         this.name = name;
         this.signature = signature;
@@ -94,7 +91,6 @@ public final class MethodInfo implements ModifiersProvider {
         this.exceptionHandlers = exceptionHandlers;
         this.lineNumberTable = lineNumberTable;
         this.localVariableTable = localVariableTable;
-        this.exceptionsAttribute = exceptionsAttribute;
     }
 
     public EspressoContext getContext() {
@@ -296,22 +292,6 @@ public final class MethodInfo implements ModifiersProvider {
         return parameterTypes;
     }
 
-    public Klass[] getCheckedExceptions() {
-        if (checkedExceptions == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            if (exceptionsAttribute == null) {
-                checkedExceptions = Klass.EMPTY_ARRAY;
-                return checkedExceptions;
-            }
-            final int[] entries = exceptionsAttribute.getCheckedExceptionsCPI();
-            checkedExceptions = new Klass[entries.length];
-            for (int i = 0; i < entries.length; ++i) {
-                checkedExceptions[i] = getConstantPool().classAt(entries[i]).resolve(getConstantPool(), entries[i]);
-            }
-        }
-        return checkedExceptions;
-    }
-
     public Klass getReturnType() {
         if (returnType == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
@@ -347,7 +327,6 @@ public final class MethodInfo implements ModifiersProvider {
         private ExceptionHandler[] exceptionHandlers;
         private LineNumberTable lineNumberTable;
         private LocalVariableTable localVariableTable;
-        private ExceptionsAttribute exceptions;
 
         public Builder setDeclaringClass(Klass declaringClass) {
             this.declaringClass = declaringClass;
@@ -401,18 +380,13 @@ public final class MethodInfo implements ModifiersProvider {
 
         @Override
         public MethodInfo build() {
-            return MethodInfo.create(declaringClass, name, signature, code, maxStackSize, maxLocals, modifiers, exceptionHandlers, lineNumberTable, localVariableTable, exceptions);
-        }
-
-        public Builder setCheckedExceptions(ExceptionsAttribute exceptions) {
-            this.exceptions = exceptions;
-            return this;
+            return MethodInfo.create(declaringClass, name, signature, code, maxStackSize, maxLocals, modifiers, exceptionHandlers, lineNumberTable, localVariableTable);
         }
     }
 
     private static MethodInfo create(Klass declaringClass, String name, SignatureDescriptor signature, byte[] code, int maxStackSize, int maxLocals,
-                    int modifiers, ExceptionHandler[] exceptionHandlers, LineNumberTable lineNumberTable, LocalVariableTable localVariableTable, ExceptionsAttribute exceptions) {
-        return new MethodInfo(declaringClass, name, signature, code, maxStackSize, maxLocals, modifiers, exceptionHandlers, lineNumberTable, localVariableTable, exceptions);
+                    int modifiers, ExceptionHandler[] exceptionHandlers, LineNumberTable lineNumberTable, LocalVariableTable localVariableTable) {
+        return new MethodInfo(declaringClass, name, signature, code, maxStackSize, maxLocals, modifiers, exceptionHandlers, lineNumberTable, localVariableTable);
     }
 
     public boolean isFinal() {

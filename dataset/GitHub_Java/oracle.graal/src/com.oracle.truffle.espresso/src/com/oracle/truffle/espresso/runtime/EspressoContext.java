@@ -28,8 +28,6 @@ import java.lang.reflect.Method;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
-import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.source.Source;
@@ -66,11 +64,17 @@ public class EspressoContext {
     private Meta meta;
     private StaticObject mainThread;
 
-    @CompilerDirectives.CompilationFinal
+    private final ConcurrentHashMap<Long, TruffleObject> nativeLibraries = new ConcurrentHashMap<>();
+    private final AtomicLong nativeHandleCount = new AtomicLong();
     private JniEnv jniEnv;
-
-    @CompilerDirectives.CompilationFinal
     private VM vm;
+
+    public long addNativeLibrary(TruffleObject library) {
+        long handle = nativeHandleCount.incrementAndGet();
+        assert !nativeLibraries.containsValue(library);
+        nativeLibraries.put(handle, library);
+        return handle;
+    }
 
     public EspressoContext(TruffleLanguage.Env env, EspressoLanguage language) {
         this.env = env;
@@ -160,7 +164,8 @@ public class EspressoContext {
         // FIXME(peterssen): Contextualize the JniENv, even if shared libraries are isolated,
         // currently
         // we assume a singleton context.
-        // initialize native context
+        ; // initialize native context
+
         // TODO(peterssen): Combine these 2.
         this.interpreterToVM = new InterpreterToVM(language);
         // Spawn JNI first, then the VM.
@@ -253,9 +258,12 @@ public class EspressoContext {
         return appClassLoader;
     }
 
+    public ConcurrentHashMap<Long, TruffleObject> getNativeLibraries() {
+        return nativeLibraries;
+    }
+
     public JniEnv getJNI() {
         if (jniEnv == null) {
-            CompilerAsserts.neverPartOfCompilation();
             jniEnv = JniEnv.create();
         }
         return jniEnv;

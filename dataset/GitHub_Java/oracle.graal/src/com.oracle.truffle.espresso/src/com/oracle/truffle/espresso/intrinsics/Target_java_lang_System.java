@@ -23,32 +23,23 @@
 
 package com.oracle.truffle.espresso.intrinsics;
 
-import java.io.InputStream;
-import java.io.PrintStream;
+import static com.oracle.truffle.espresso.meta.Meta.meta;
+
+import java.util.Map;
 import java.util.Properties;
 
-import com.oracle.truffle.espresso.bytecode.InterpreterToVM;
-import com.oracle.truffle.espresso.impl.Klass;
-import com.oracle.truffle.espresso.impl.MethodInfo;
+import com.oracle.truffle.espresso.EspressoLanguage;
+import com.oracle.truffle.espresso.EspressoOptions;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.StaticObject;
-import com.oracle.truffle.espresso.runtime.StaticObjectArray;
-import com.oracle.truffle.espresso.runtime.StaticObjectImpl;
-import com.oracle.truffle.espresso.runtime.Utils;
 
 @EspressoIntrinsics
 public class Target_java_lang_System {
-
-    @Intrinsic
-    public static void exit(int status) {
-        // TODO(peterssen): Use TruffleException.
-        System.exit(status);
-    }
-
     @Intrinsic
     public static @Type(Properties.class) StaticObject initProperties(@Type(Properties.class) StaticObject props) {
-        EspressoContext context = Utils.getContext();
+        EspressoContext context = EspressoLanguage.getCurrentContext();
+
         final String[] importedProps = new String[]{
                         "java.version",
                         "java.vendor",
@@ -69,87 +60,36 @@ public class Target_java_lang_System {
                         "sun.boot.class.path",
 
                         // Needed during initSystemClass to initialize props.
-                        "file.encoding"
+                        "file.encoding",
+                        "java.library.path",
+                        "sun.boot.library.path",
+                        // FIXME(peterssen): Only needed by some tests/examples. Remove once
+                        // dictionary-like options are merged.
+                        "playground.library",
+                        "native.test.lib"
         };
 
-        MethodInfo setProperty = props.getKlass().findDeclaredMethod("setProperty",
-                        Object.class, String.class, String.class);
+        Meta.Method.WithInstance setProperty = meta(props).method("setProperty", Object.class, String.class, String.class);
 
         for (String prop : importedProps) {
-
-            StaticObject guestPropKey = context.getMeta().toGuest(prop);
-            StaticObject guestPropValue;
-
+            String propValue;
             // Inject guest classpath.
             if (prop.equals("java.class.path")) {
-                guestPropValue = context.getMeta().toGuest(context.getClasspath().toString());
+                propValue = context.getClasspath().toString();
             } else {
-                guestPropValue = context.getMeta().toGuest(System.getProperty(prop));
+                propValue = System.getProperty(prop);
             }
-
-            setProperty.getCallTarget().call(props, guestPropKey, guestPropValue);
+            if (propValue != null) {
+                setProperty.invoke(prop, propValue);
+            }
         }
 
+        // setProperty.invoke("sun.misc.URLClassPath.debug", "true");
+        for (Map.Entry<String, String> entry : EspressoLanguage.getCurrentContext().getEnv().getOptions().get(EspressoOptions.Properties).entrySet()) {
+            setProperty.invoke(entry.getKey(), entry.getValue());
+        }
+
+        // FIXME(peterssen): Load libjvm surrogate, but this should not be in initProperties.
         return props;
-    }
-
-    @Intrinsic
-    public static void setIn0(@Type(InputStream.class) StaticObjectImpl in) {
-        Utils.getContext().getMeta().knownKlass(System.class)
-                .staticField("in")
-                .set(in);
-    }
-
-    @Intrinsic
-    public static void setOut0(@Type(PrintStream.class) StaticObject out) {
-        Utils.getContext().getMeta().knownKlass(System.class)
-                .staticField("out")
-                .set(out);
-    }
-
-    @Intrinsic
-    public static void setErr0(@Type(PrintStream.class) StaticObject err) {
-        Utils.getContext().getMeta().knownKlass(System.class)
-                .staticField("err")
-                .set(err);
-    }
-
-    @Intrinsic
-    public static void arraycopy(Object src, int srcPos,
-                    Object dest, int destPos,
-                    int length) {
-        try {
-            if (src instanceof StaticObjectArray && dest instanceof StaticObjectArray) {
-                System.arraycopy(((StaticObjectArray) src).getWrapped(), srcPos, ((StaticObjectArray) dest).getWrapped(), destPos, length);
-            } else {
-                assert src.getClass().isArray();
-                assert dest.getClass().isArray();
-                System.arraycopy(src, srcPos, dest, destPos, length);
-            }
-        } catch (Throwable e) {
-            // TODO(peterssen): Throw guest exception.
-            throw e;
-        }
-    }
-
-    @Intrinsic
-    public static long currentTimeMillis() {
-        // TODO(peterssen): Speed up time.
-        return System.currentTimeMillis();
-    }
-
-    @Intrinsic
-    public static long nanoTime() {
-        return System.nanoTime();
-    }
-
-    @Intrinsic
-    public static void registerNatives() {
-        /* nop */
-    }
-
-    @Intrinsic
-    public static void loadLibrary(@Type(String.class) StaticObject libname) {
-        /* nop */
     }
 }
