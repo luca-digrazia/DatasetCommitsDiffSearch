@@ -24,7 +24,6 @@ package com.oracle.graal.nodes;
 
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.extended.*;
 
 /**
@@ -33,24 +32,10 @@ import com.oracle.graal.nodes.extended.*;
 @NodeInfo(nameTemplate = "GuardPhi({i#values})", allowedUsageTypes = {InputType.Guard})
 public class GuardPhiNode extends PhiNode implements GuardingNode {
 
-    @OptionalInput(InputType.Guard) final NodeInputList<ValueNode> values;
+    @OptionalInput(InputType.Guard) final NodeInputList<ValueNode> values = new NodeInputList<>(this);
 
-    public static GuardPhiNode create(MergeNode merge) {
-        return new GuardPhiNodeGen(merge);
-    }
-
-    protected GuardPhiNode(MergeNode merge) {
+    public GuardPhiNode(MergeNode merge) {
         super(StampFactory.forVoid(), merge);
-        this.values = new NodeInputList<>(this);
-    }
-
-    public static GuardPhiNode create(MergeNode merge, ValueNode[] values) {
-        return new GuardPhiNodeGen(merge, values);
-    }
-
-    protected GuardPhiNode(MergeNode merge, ValueNode[] values) {
-        super(StampFactory.forVoid(), merge);
-        this.values = new NodeInputList<>(this, values);
     }
 
     @Override

@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.nodes;
 
-import java.util.*;
-
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
@@ -137,42 +135,39 @@ public abstract class PhiNode extends FloatingNode implements Simplifiable {
         values().remove(index);
     }
 
-    public static final ValueNode NO_VALUE = new ValueNode(null) {
-        // empty dummy class
-    };
-
     public ValueNode singleValue() {
-        Iterator<ValueNode> iterator = values().iterator();
-        ValueNode singleValue = iterator.next();
-        while (iterator.hasNext()) {
-            ValueNode value = iterator.next();
-            if (value != this) {
-                if (value != singleValue) {
-                    return NO_VALUE;
+        ValueNode differentValue = null;
+        for (ValueNode n : values()) {
+            assert n != null : "Must have input value!";
+            if (n != this) {
+                if (differentValue == null) {
+                    differentValue = n;
+                } else if (differentValue != n) {
+                    return null;
                 }
             }
         }
-        return singleValue;
+        return differentValue;
     }
 
     public ValueNode singleBackValue() {
         assert merge() instanceof LoopBeginNode;
-        Iterator<ValueNode> iterator = values().iterator();
-        iterator.next();
-        ValueNode singleValue = iterator.next();
-        while (iterator.hasNext()) {
-            if (iterator.next() != singleValue) {
-                return NO_VALUE;
+        ValueNode differentValue = null;
+        for (ValueNode n : values().subList(merge().forwardEndCount(), values().size())) {
+            if (differentValue == null) {
+                differentValue = n;
+            } else if (differentValue != n) {
+                return null;
             }
         }
-        return singleValue;
+        return differentValue;
     }
 
     @Override
     public void simplify(SimplifierTool tool) {
         ValueNode singleValue = singleValue();
 
-        if (singleValue != NO_VALUE) {
+        if (singleValue != null) {
             for (Node node : usages().snapshot()) {
                 if (node instanceof ProxyNode && ((ProxyNode) node).proxyPoint() instanceof LoopExitNode && ((LoopExitNode) ((ProxyNode) node).proxyPoint()).loopBegin() == merge) {
                     tool.addToWorkList(node.usages());

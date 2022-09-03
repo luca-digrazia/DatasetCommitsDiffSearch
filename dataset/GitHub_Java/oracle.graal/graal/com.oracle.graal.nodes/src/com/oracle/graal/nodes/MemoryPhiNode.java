@@ -25,7 +25,6 @@ package com.oracle.graal.nodes;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.extended.*;
 
 /**
@@ -34,27 +33,12 @@ import com.oracle.graal.nodes.extended.*;
 @NodeInfo(nameTemplate = "MemoryPhi({i#values}) {p#locationIdentity/s}", allowedUsageTypes = {InputType.Memory})
 public class MemoryPhiNode extends PhiNode implements MemoryNode {
 
-    @Input(InputType.Memory) final NodeInputList<ValueNode> values;
+    @Input(InputType.Memory) final NodeInputList<ValueNode> values = new NodeInputList<>(this);
     private final LocationIdentity locationIdentity;
 
-    public static MemoryPhiNode create(MergeNode merge, LocationIdentity locationIdentity) {
-        return new MemoryPhiNodeGen(merge, locationIdentity);
-    }
-
-    protected MemoryPhiNode(MergeNode merge, LocationIdentity locationIdentity) {
+    public MemoryPhiNode(MergeNode merge, LocationIdentity locationIdentity) {
         super(StampFactory.forVoid(), merge);
         this.locationIdentity = locationIdentity;
-        this.values = new NodeInputList<>(this);
-    }
-
-    public static MemoryPhiNode create(MergeNode merge, LocationIdentity locationIdentity, ValueNode[] values) {
-        return new MemoryPhiNodeGen(merge, locationIdentity, values);
-    }
-
-    protected MemoryPhiNode(MergeNode merge, LocationIdentity locationIdentity, ValueNode[] values) {
-        super(StampFactory.forVoid(), merge);
-        this.locationIdentity = locationIdentity;
-        this.values = new NodeInputList<>(this, values);
     }
 
     public LocationIdentity getLocationIdentity() {
