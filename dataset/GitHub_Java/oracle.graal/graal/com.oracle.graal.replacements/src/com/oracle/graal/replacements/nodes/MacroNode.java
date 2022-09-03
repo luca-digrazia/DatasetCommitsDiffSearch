@@ -79,7 +79,7 @@ public class MacroNode extends AbstractStateSplit implements Lowerable, MemoryCh
     }
 
     @Override
-    public void lower(LoweringTool tool) {
+    public void lower(LoweringTool tool, LoweringType loweringType) {
         boolean nullCheck = false;
         StructuredGraph replacementGraph = getSnippetGraph(tool);
         if (replacementGraph == null) {
@@ -110,7 +110,7 @@ public class MacroNode extends AbstractStateSplit implements Lowerable, MemoryCh
     }
 
     protected void replaceSnippetInvokes(StructuredGraph snippetGraph) {
-        for (InvokeNode invoke : snippetGraph.getNodes().filter(InvokeNode.class)) {
+        for (InvokeNode invoke : snippetGraph.getNodes(InvokeNode.class)) {
             if (((MethodCallTargetNode) invoke.callTarget()).targetMethod() != getTargetMethod()) {
                 throw new GraalInternalError("unexpected invoke %s in snippet", getClass().getSimpleName());
             }
