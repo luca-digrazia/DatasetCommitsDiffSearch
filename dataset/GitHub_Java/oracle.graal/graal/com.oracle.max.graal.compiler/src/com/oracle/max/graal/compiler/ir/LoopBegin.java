@@ -28,21 +28,10 @@ import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.graph.*;
 
-public class LoopBegin extends Merge {
-
-    private double loopFrequency;
-
+public class LoopBegin extends Merge{
     public LoopBegin(Graph graph) {
         super(graph);
-        loopFrequency = 1;
-    }
-
-    public double loopFrequency() {
-        return loopFrequency;
-    }
-
-    public void setLoopFrequency(double loopFrequency) {
-        this.loopFrequency = loopFrequency;
+        this.addEnd(new EndNode(graph));
     }
 
     public LoopEnd loopEnd() {
@@ -74,10 +63,7 @@ public class LoopBegin extends Merge {
 
     @Override
     public Node copy(Graph into) {
-        LoopBegin x = new LoopBegin(into);
-        x.setLoopFrequency(loopFrequency);
-        super.copyInto(x);
-        return x;
+        return new LoopBegin(into);
     }
 
     @Override
@@ -93,16 +79,6 @@ public class LoopBegin extends Merge {
             return 1;
         }
         throw Util.shouldNotReachHere("unknown pred : " + pred + "(sp=" + forwardEdge() + ", le=" + this.loopEnd() + ")");
-    }
-
-    @Override
-    public Node phiPredecessorAt(int index) {
-        if (index == 0) {
-            return forwardEdge();
-        } else if (index == 1) {
-            return loopEnd();
-        }
-        throw Util.shouldNotReachHere();
     }
 
     public Collection<LoopCounter> counters() {
@@ -131,12 +107,6 @@ public class LoopBegin extends Merge {
     }
 
     @Override
-    public Node singlePredecessor() {
-        assert endCount() == 1;
-        return endAt(0).singlePredecessor();
-    }
-
-    @Override
     public Iterable< ? extends Node> dataUsages() {
         final Iterator< ? extends Node> dataUsages = super.dataUsages().iterator();
         return new Iterable<Node>() {
@@ -145,12 +115,5 @@ public class LoopBegin extends Merge {
                 return new StateSplit.FilteringIterator(dataUsages, LoopBegin.class);
             }
         };
-    }
-
-    @Override
-    public Map<Object, Object> getDebugProperties() {
-        Map<Object, Object> properties = super.getDebugProperties();
-        properties.put("loopFrequency", String.format("%7.1f", loopFrequency));
-        return properties;
     }
 }

@@ -52,10 +52,8 @@ public class DeadCodeEliminationPhase extends Phase {
         for (Merge merge : graph.getNodes(Merge.class)) {
             if (merge.endCount() == 1 && !(merge instanceof LoopBegin)) {
                 replacePhis(merge);
-                EndNode endNode = merge.endAt(0);
-                FixedNode next = merge.next();
+                merge.endAt(0).replaceAndDelete(merge.next());
                 merge.delete();
-                endNode.replaceAndDelete(next);
             }
         }
 

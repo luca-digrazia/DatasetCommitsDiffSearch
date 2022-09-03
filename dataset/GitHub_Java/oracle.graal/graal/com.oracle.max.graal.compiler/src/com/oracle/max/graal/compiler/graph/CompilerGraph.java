@@ -22,22 +22,21 @@
  */
 package com.oracle.max.graal.compiler.graph;
 
+import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.ir.*;
 import com.oracle.max.graal.graph.*;
-import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
 
 
 public class CompilerGraph extends Graph {
 
-    private RiRuntime runtime;
     private Return returnSingleton;
     private Unwind unwindSingleton;
-    private CiAssumptions assumptions = new CiAssumptions();
+    private GraalCompilation compilation;
 
 
-    public CompilerGraph(RiRuntime runtime) {
-        this.runtime = runtime;
+    public CompilerGraph(GraalCompilation compilation) {
+        this.compilation = compilation;
     }
 
     public void setReturn(Return returnNode) {
@@ -59,10 +58,10 @@ public class CompilerGraph extends Graph {
     }
 
     public RiRuntime runtime() {
-        return runtime;
+        return compilation.runtime;
     }
 
-    public CiAssumptions assumptions() {
-        return assumptions;
+    public GraalCompilation getCompilation() {
+        return compilation;
     }
 }
