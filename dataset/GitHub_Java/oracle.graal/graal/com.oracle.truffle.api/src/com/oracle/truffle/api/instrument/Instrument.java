@@ -69,7 +69,9 @@ import com.oracle.truffle.api.nodes.*;
  * <p>
  * <strong>Disclaimer:</strong> experimental; under development.
  *
+ * @see Instrumentation
  * @see Probe
+ * @see Instrument
  * @see ASTNodeProber
  */
 public class Instrument extends InstrumentationNode {

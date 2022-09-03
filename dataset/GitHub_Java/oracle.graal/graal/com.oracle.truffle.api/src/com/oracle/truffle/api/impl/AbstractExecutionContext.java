@@ -24,173 +24,39 @@
  */
 package com.oracle.truffle.api.impl;
 
-import java.util.*;
-
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.instrument.*;
 import com.oracle.truffle.api.instrument.impl.*;
-import com.oracle.truffle.api.instrument.impl.InstrumentationNode.ProbeCallback;
-import com.oracle.truffle.api.instrument.impl.InstrumentationNode.ProbeImpl;
 import com.oracle.truffle.api.source.*;
 
 public abstract class AbstractExecutionContext implements ExecutionContext {
 
-    // TODO (mlvdv) use weak references.
-    /**
-     * Map: SourceSection ==> probe associated with that source section in an AST.
-     */
-    private final Map<SourceSection, ProbeImpl> srcToProbe = new HashMap<>();
-
-    // TODO (mlvdv) use weak references.
-    /**
-     * Map: Source line ==> probes associated with source sections starting on the line.
-     */
-    private final Map<SourceLineLocation, Collection<Probe>> lineToProbes = new HashMap<>();
-
     private final SourceManager sourceManager = new SourceManager();
-    private final List<SourceListener> sourceListeners = new ArrayList<>();
-    private final List<ProbeListener> probeListeners = new ArrayList<>();
-
-    private final SourceCallback sourceCallback = new SourceCallback() {
-
-        public void startLoading(Source source) {
-            for (SourceListener listener : sourceListeners) {
-                listener.loadStarting(source);
-            }
-        }
-
-        public void endLoading(Source source) {
-            for (SourceListener listener : sourceListeners) {
-                listener.loadEnding(source);
-            }
-        }
-    };
-
-    private final ProbeCallback probeCallback = new ProbeCallback() {
-        /**
-         * Receives (from the {@link Probe} implementation) and distributes notification that a
-         * {@link Probe} has acquired a new {@linkplain PhylumTag tag}.
-         */
-        public void newTagAdded(ProbeImpl probe, PhylumTag tag) {
-            for (ProbeListener listener : probeListeners) {
-                listener.probeTaggedAs(probe, tag);
-            }
-            if (trap != null && tag == trap.getTag()) {
-                probe.setTrap(trap);
-            }
-        }
-    };
-
+    private final Instrumentation instrumentation;
     private Visualizer visualizer = new DefaultVisualizer();
-
-    /**
-     * When non-null, "enter" events with matching tags will trigger a callback.
-     */
-    private PhylumTrap trap = null;
+    protected ASTProber astProber = null;
 
     protected AbstractExecutionContext() {
-    }
-
-    public void initialize() {
-        setSourceCallback(sourceCallback);
+        this.instrumentation = InstrumentationFactory.create(this);
     }
 
     public final SourceManager getSourceManager() {
         return sourceManager;
     }
 
-    public void addSourceListener(SourceListener listener) {
-        assert listener != null;
-        sourceListeners.add(listener);
-    }
-
-    public void addProbeListener(ProbeListener listener) {
-        assert listener != null;
-        probeListeners.add(listener);
-    }
-
-    public Probe getProbe(SourceSection sourceSection) {
-        assert sourceSection != null;
-
-        ProbeImpl probe = srcToProbe.get(sourceSection);
-
-        if (probe != null) {
-            return probe;
-        }
-        probe = InstrumentationNode.createProbe(sourceSection, probeCallback);
-
-        // Register new probe by unique SourceSection
-        srcToProbe.put(sourceSection, probe);
-
-        // Register new probe by source line, there may be more than one
-        // Create line location for map key
-        final SourceLineLocation lineLocation = new SourceLineLocation(sourceSection.getSource(), sourceSection.getStartLine());
-
-        Collection<Probe> probes = lineToProbes.get(lineLocation);
-        if (probes == null) {
-            probes = new ArrayList<>(2);
-            lineToProbes.put(lineLocation, probes);
-        }
-        probes.add(probe);
-
-        for (ProbeListener listener : probeListeners) {
-            listener.newProbeInserted(sourceSection, probe);
-        }
-
-        return probe;
-    }
-
-    /**
-     * Returns all existing probes with specific tag, or all probes if {@code tag = null}; empty
-     * collection if no probes found.
-     */
-    public Collection<Probe> findProbesTaggedAs(PhylumTag tag) {
-        final List<Probe> probes = new ArrayList<>();
-        for (Probe probe : srcToProbe.values()) {
-            if (tag == null || probe.isTaggedAs(tag)) {
-                probes.add(probe);
-            }
-        }
-        return probes;
-    }
-
-    public Collection<Probe> findProbesByLine(SourceLineLocation lineLocation) {
-        final Collection<Probe> probes = lineToProbes.get(lineLocation);
-        if (probes == null) {
-            return Collections.emptyList();
-        }
-        return new ArrayList<>(probes);
-    }
-
-    // TODO (mlvdv) consider allowing multiple traps (without inhibiting Truffle inlining)
-    public void setTrap(PhylumTrap trap) {
-        assert trap != null;
-        if (this.trap != null) {
-            throw new IllegalStateException("trap already set");
-        }
-        this.trap = trap;
-
-        for (ProbeImpl probe : srcToProbe.values()) {
-            if (probe.isTaggedAs(trap.getTag())) {
-                probe.setTrap(trap);
-            }
-        }
-    }
-
-    public void clearTrap() {
-        if (this.trap == null) {
-            throw new IllegalStateException("no trap set");
-        }
-        for (ProbeImpl probe : srcToProbe.values()) {
-            if (probe.isTaggedAs(trap.getTag())) {
-                probe.setTrap(null);
-            }
-        }
-        trap = null;
+    public final Instrumentation getInstrumentation() {
+        return instrumentation;
     }
 
     public Visualizer getVisualizer() {
         return visualizer;
+    }
+
+    public void addNodeProber(ASTNodeProber nodeProber) {
+        if (astProber == null) {
+            throw new IllegalStateException("No ASTProber installed in context");
+        }
+        astProber.addNodeProber(nodeProber);
     }
 
     /**
@@ -207,11 +73,19 @@ public abstract class AbstractExecutionContext implements ExecutionContext {
      * implementation context to avoid build circularities. It must also be set before any
      * instrumentation probe implementations are assigned.
      */
-    public abstract void setASTProber(ASTProber astProber);
+    public void setASTProber(ASTProber astProber) {
+        this.astProber = astProber;
+    }
 
     /**
-     * Establishes source event reporting
+     * Gets a guest language-specific {@link ASTNodeProber} that will apply all that have been
+     * added; {@code null} if no instrumentation in AST.
      */
-    protected abstract void setSourceCallback(SourceCallback sourceCallback);
+    public ASTNodeProber getCombinedNodeProber() {
+        return astProber == null ? null : astProber.getCombinedNodeProber();
+    }
 
+    public abstract void setInstrumentEventListener(InstrumentEventListener listener);
+
+    public abstract InstrumentEventListener getInstrumentEventListener();
 }

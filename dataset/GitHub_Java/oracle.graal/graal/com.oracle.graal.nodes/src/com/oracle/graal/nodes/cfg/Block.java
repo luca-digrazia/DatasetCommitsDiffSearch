@@ -37,6 +37,7 @@ public final class Block extends AbstractBlockBase<Block> {
     protected double probability;
     protected Loop<Block> loop;
 
+    protected List<Block> dominated;
     protected Block postdominator;
 
     protected Block(BeginNode node) {
@@ -95,6 +96,13 @@ public final class Block extends AbstractBlockBase<Block> {
             }
         }
         return b;
+    }
+
+    public List<Block> getDominated() {
+        if (dominated == null) {
+            return Collections.emptyList();
+        }
+        return dominated;
     }
 
     public Block getPostdominator() {
@@ -159,12 +167,25 @@ public final class Block extends AbstractBlockBase<Block> {
         return "B" + id;
     }
 
+    public boolean dominates(Block block) {
+        return block.isDominatedBy(this);
+    }
+
+    public boolean isDominatedBy(Block block) {
+        if (block == this) {
+            return true;
+        }
+        if (getDominator() == null) {
+            return false;
+        }
+        return getDominator().isDominatedBy(block);
+    }
+
     public double probability() {
         return probability;
     }
 
     public void setProbability(double probability) {
-        assert probability >= 0 && Double.isFinite(probability);
         this.probability = probability;
     }
 }

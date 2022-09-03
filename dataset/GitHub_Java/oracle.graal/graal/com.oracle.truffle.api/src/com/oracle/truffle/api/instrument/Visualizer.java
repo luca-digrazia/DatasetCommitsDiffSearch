@@ -29,15 +29,16 @@ import com.oracle.truffle.api.frame.*;
 import com.oracle.truffle.api.nodes.*;
 
 /**
- * Visualization services for the benefit of instrumentation-based tools, possibly specialized for
- * each guest language and possibly specialized for relevant information from the underlying Truffle
- * implementation.
+ * Visualization services for the benefit of {@link Instrumentation}-based tools, possibly
+ * specialized for each guest language and possibly specialized for relevant information from the
+ * underlying Truffle implementation.
  * <p>
  * <strong>Disclaimer:</strong> experimental interface under development.
+ *
+ * @See Instrumentation
  */
 public interface Visualizer {
 
-    // TODO (mlvdv) "Visualizer" is misleading: rename.
     /**
      * Gets a printer for Truffle ASTs, possibly specialized to be helpful for a specific guest
      * language implementation.
@@ -62,7 +63,7 @@ public interface Visualizer {
     /**
      * Converts a value in the guest language to a display string.
      */
-    String displayValue(ExecutionContext context, Object value);
+    String displayValue(Object value);
 
     /**
      * Converts a slot identifier in the guest language to a display string.
