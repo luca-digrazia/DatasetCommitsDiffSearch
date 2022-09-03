@@ -151,7 +151,7 @@ public abstract class BasePhase<C> implements PhaseSizeContract {
     @SuppressWarnings("try")
     protected final void apply(final StructuredGraph graph, final C context, final boolean dumpGraph) {
         try (DebugCloseable a = timer.start(); Scope s = Debug.scope(getClass(), this); DebugCloseable c = memUseTracker.start()) {
-            int sizeBefore = 0;
+            double sizeBefore = 0.0D;
             Mark before = null;
             if (PhaseOptions.VerifyGraalPhasesSize.getValue() && checkContract()) {
                 if (context instanceof PhaseContext) {
@@ -168,7 +168,10 @@ public abstract class BasePhase<C> implements PhaseSizeContract {
             if (PhaseOptions.VerifyGraalPhasesSize.getValue() && checkContract()) {
                 if (context instanceof PhaseContext) {
                     if (!before.isCurrent()) {
-                        int sizeAfter = NodeCostUtil.computeGraphSize(graph, ((PhaseContext) context).getNodeCostProvider());
+                        double sizeAfter = NodeCostUtil.computeGraphSize(graph, ((PhaseContext) context).getNodeCostProvider());
+                        if (Debug.isLogEnabled(Debug.VERBOSE_LOG_LEVEL)) {
+                            Debug.log("Graph size before %f and after %f phase %s", sizeBefore, sizeAfter, getName());
+                        }
                         NodeCostUtil.phaseAdheresSizeContract(graph, sizeBefore, sizeAfter, this);
                     }
                 }
