@@ -150,11 +150,11 @@ import com.oracle.truffle.llvm.parser.instructions.LLVMLogicalInstructionType;
 import com.oracle.truffle.llvm.parser.util.LLVMTypeHelper;
 import com.oracle.truffle.llvm.runtime.LLVMLogger;
 import com.oracle.truffle.llvm.runtime.LLVMOptimizationConfiguration;
+import com.oracle.truffle.llvm.runtime.LLVMOptions;
 import com.oracle.truffle.llvm.runtime.LLVMParserException;
 import com.oracle.truffle.llvm.runtime.LLVMParserException.ParserErrorCause;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException.UnsupportedReason;
-import com.oracle.truffle.llvm.runtime.options.LLVMBaseOptionFacade;
 import com.oracle.truffle.llvm.types.LLVMAddress;
 import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.types.memory.LLVMStack;
@@ -163,7 +163,7 @@ import com.oracle.truffle.llvm.types.memory.LLVMStack;
  * This class traverses the LLVM IR AST as provided by the <code>com.intel.llvm.ireditor</code>
  * project and returns an executable AST.
  */
-public final class LLVMVisitor implements LLVMParserRuntime {
+public class LLVMVisitor implements LLVMParserRuntime {
 
     private static final int HEX_BASE = 16;
 
@@ -490,7 +490,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
         LLVMNode[] beforeFunction = formalParameters.toArray(new LLVMNode[formalParameters.size()]);
         LLVMNode[] afterFunction = functionEpilogue.toArray(new LLVMNode[functionEpilogue.size()]);
         RootNode rootNode = factoryFacade.createFunctionStartNode(block, beforeFunction, afterFunction, frameDescriptor, functionName);
-        if (LLVMBaseOptionFacade.printFunctionASTs()) {
+        if (LLVMOptions.printFunctionASTs()) {
             NodeUtil.printTree(System.out, rootNode);
         }
         LLVMFunctionDescriptor function = createLLVMFunctionFromHeader(def.getHeader());
@@ -513,7 +513,7 @@ public final class LLVMVisitor implements LLVMParserRuntime {
         LLVMStackFrameNuller[][] indexToSlotNuller = new LLVMStackFrameNuller[currentIndex][];
         i = 0;
         Map<BasicBlock, FrameSlot[]> deadSlotsAfterBlock;
-        if (LLVMBaseOptionFacade.lifeTimeAnalysisEnabled()) {
+        if (LLVMOptions.lifeTimeAnalysisEnabled()) {
             deadSlotsAfterBlock = LLVMLifeTimeAnalysisVisitor.visit(def, frameDescriptor);
         } else {
             deadSlotsAfterBlock = new HashMap<>();

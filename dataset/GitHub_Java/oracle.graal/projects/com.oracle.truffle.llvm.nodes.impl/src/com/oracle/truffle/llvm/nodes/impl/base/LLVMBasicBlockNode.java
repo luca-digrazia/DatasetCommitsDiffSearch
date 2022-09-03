@@ -34,13 +34,8 @@ import java.util.Arrays;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.ControlFlowException;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
-import com.oracle.truffle.api.nodes.NodeUtil;
-import com.oracle.truffle.api.profiles.BranchProfile;
-import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
-import com.oracle.truffle.llvm.nodes.impl.func.LLVMFunctionStartNode;
 
 /**
  * This node represents a basic block in LLVM. The node contains both sequential statements which do
@@ -61,10 +56,6 @@ public class LLVMBasicBlockNode extends LLVMNode {
     @CompilationFinal private long totalExecutionCount = 0;
     private final int blockId;
 
-    private final BranchProfile controlFlowExceptionProfile = BranchProfile.create();
-
-    @CompilationFinal private SourceSection sourceSection;
-
     @Override
     public void executeVoid(VirtualFrame frame) {
         executeGetSuccessorIndex(frame);
@@ -80,21 +71,7 @@ public class LLVMBasicBlockNode extends LLVMNode {
     @ExplodeLoop
     public int executeGetSuccessorIndex(VirtualFrame frame) {
         for (LLVMNode statement : statements) {
-            try {
-                statement.executeVoid(frame);
-            } catch (ControlFlowException e) {
-                controlFlowExceptionProfile.enter();
-                throw e;
-            } catch (RuntimeException e) {
-                CompilerDirectives.transferToInterpreter();
-                SourceSection exceptionSourceSection = statement.getEncapsulatingSourceSection();
-                if (exceptionSourceSection == null) {
-                    throw e;
-                } else {
-                    String message = String.format("LLVM error in %s in %s", exceptionSourceSection.getIdentifier(), exceptionSourceSection.getSource().getName());
-                    throw new RuntimeException(message, e);
-                }
-            }
+            statement.executeVoid(frame);
         }
         return termInstruction.executeGetSuccessorIndex(frame);
     }
@@ -150,24 +127,7 @@ public class LLVMBasicBlockNode extends LLVMNode {
     }
 
     @Override
-    public SourceSection getSourceSection() {
-        if (sourceSection == null) {
-            // No harm in racing to create the source section
-            LLVMFunctionStartNode functionStartNode = NodeUtil.findParent(getParent(), LLVMFunctionStartNode.class);
-            assert functionStartNode != null;
-            String identifier = String.format("basic block %d in function %s", blockId, functionStartNode.getFunctionName());
-            sourceSection = functionStartNode.getSourceSection().getSource().createSection(identifier, 1);
-        }
-        return sourceSection;
-    }
-
-    @Override
     public String toString() {
         return String.format(FORMAT_STRING, blockId, statements.length, Arrays.toString(termInstruction.getSuccessors()));
     }
-
-    public int getBlockId() {
-        return blockId;
-    }
-
 }
