@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,23 +22,44 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp.Div;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.lir.gen.ArithmeticLIRGeneratorTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+
+import jdk.vm.ci.code.CodeUtil;
+import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.PrimitiveConstant;
 
 @NodeInfo(shortName = "/")
-public class DivNode extends BinaryArithmeticNode {
+public class DivNode extends BinaryArithmeticNode<Div> {
 
-    public static DivNode create(ValueNode x, ValueNode y) {
-        return USE_GENERATED_NODES ? new DivNodeGen(x, y) : new DivNode(x, y);
+    public static final NodeClass<DivNode> TYPE = NodeClass.create(DivNode.class);
+
+    public DivNode(ValueNode x, ValueNode y) {
+        super(TYPE, ArithmeticOpTable::getDiv, x, y);
     }
 
-    protected DivNode(ValueNode x, ValueNode y) {
-        super(ArithmeticOpTable.forStamp(x.stamp()).getDiv(), x, y);
+    protected DivNode(NodeClass<? extends DivNode> c, ValueNode x, ValueNode y) {
+        super(c, ArithmeticOpTable::getDiv, x, y);
+    }
+
+    public static ValueNode create(ValueNode x, ValueNode y) {
+        BinaryOp<Div> op = ArithmeticOpTable.forStamp(x.stamp()).getDiv();
+        Stamp stamp = op.foldStamp(x.stamp(), y.stamp());
+        ConstantNode tryConstantFold = tryConstantFold(op, x, y, stamp);
+        if (tryConstantFold != null) {
+            return tryConstantFold;
+        } else {
+            return new DivNode(x, y);
+        }
     }
 
     @Override
@@ -50,15 +71,34 @@ public class DivNode extends BinaryArithmeticNode {
 
         if (forY.isConstant()) {
             Constant c = forY.asConstant();
-            if (getOp().isNeutral(c)) {
+            if (getOp(forX, forY).isNeutral(c)) {
                 return forX;
+            }
+            if (c instanceof PrimitiveConstant && ((PrimitiveConstant) c).getJavaKind().isNumericInteger()) {
+                long i = ((PrimitiveConstant) c).asLong();
+                boolean signFlip = false;
+                if (i < 0) {
+                    i = -i;
+                    signFlip = true;
+                }
+                ValueNode divResult = null;
+                if (CodeUtil.isPowerOf2(i)) {
+                    divResult = new RightShiftNode(forX, ConstantNode.forInt(CodeUtil.log2(i)));
+                }
+                if (divResult != null) {
+                    if (signFlip) {
+                        return new NegateNode(divResult);
+                    } else {
+                        return divResult;
+                    }
+                }
             }
         }
         return this;
     }
 
     @Override
-    public void generate(NodeMappableLIRBuilder builder, ArithmeticLIRGenerator gen) {
-        builder.setResult(this, gen.emitDiv(builder.operand(getX()), builder.operand(getY()), null));
+    public void generate(NodeLIRBuilderTool nodeValueMap, ArithmeticLIRGeneratorTool gen) {
+        nodeValueMap.setResult(this, gen.emitDiv(nodeValueMap.operand(getX()), nodeValueMap.operand(getY()), null));
     }
 }
