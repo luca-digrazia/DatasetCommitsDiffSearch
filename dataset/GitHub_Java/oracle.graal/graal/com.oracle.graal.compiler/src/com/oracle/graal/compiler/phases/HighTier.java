@@ -48,7 +48,7 @@ public class HighTier extends PhaseSuite<HighTierContext> {
     }
 
     public HighTier() {
-        CanonicalizerPhase canonicalizer = new CanonicalizerPhase(!ImmutableCode.getValue());
+        CanonicalizerPhase canonicalizer = new CanonicalizerPhase(!AOTCompilation.getValue());
 
         if (VerifyUsageWithEquals.getValue()) {
             appendPhase(new VerifyUsageWithEquals(Value.class));
