@@ -260,9 +260,9 @@ public final class GraalOptions {
     /**
      * Use HIR lowering instead of LIR lowering for checkcast instructions.
      * Only checkcasts in methods whose fully qualified name contains this option will be HIR lowered.
-     * TODO (dnsimon) remove once HIR checkcast lowering works reliably
+     * TDOD (dnsimon) remove once HIR checkcast lowering works reliably
      */
-    public static String HIRLowerCheckcast = "";
+    public static String HIRLowerCheckcast;
 
     /**
      * The profiling info cache directory.
