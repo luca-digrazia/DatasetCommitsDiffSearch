@@ -127,11 +127,10 @@ class CFGPrinter extends CompilationPrinter {
      * @param label A label describing the compilation phase that produced the control flow graph.
      * @param blocks The list of blocks to be printed.
      */
-    public void printCFG(String label, List<? extends AbstractBlock<?>> blocks, boolean printNodes) {
+    public void printCFG(String label, List<Block> blocks, boolean printNodes) {
         if (lir == null) {
             latestScheduling = new NodeMap<>(cfg.getNodeToBlock());
-            for (AbstractBlock<?> abstractBlock : blocks) {
-                Block block = (Block) abstractBlock;
+            for (Block block : blocks) {
                 Node cur = block.getBeginNode();
                 while (true) {
                     assert inFixedSchedule(cur) && latestScheduling.get(cur) == block;
@@ -149,8 +148,7 @@ class CFGPrinter extends CompilationPrinter {
 
         begin("cfg");
         out.print("name \"").print(label).println('"');
-        for (AbstractBlock<?> abstractBlock : blocks) {
-            Block block = (Block) abstractBlock;
+        for (Block block : blocks) {
             printBlock(block, printNodes);
         }
         end("cfg");
@@ -301,7 +299,7 @@ class CFGPrinter extends CompilationPrinter {
         out.print("tid ").print(nodeToString(node)).println(COLUMN_END);
 
         if (lirGenerator != null) {
-            Value operand = lirGenerator.getNodeOperands().get(node);
+            Value operand = lirGenerator.nodeOperands.get(node);
             if (operand != null) {
                 out.print("result ").print(operand.toString()).println(COLUMN_END);
             }
@@ -405,8 +403,8 @@ class CFGPrinter extends CompilationPrinter {
 
     private String stateValueToString(ValueNode value) {
         String result = nodeToString(value);
-        if (lirGenerator != null && lirGenerator.getNodeOperands() != null && value != null) {
-            Value operand = lirGenerator.getNodeOperands().get(value);
+        if (lirGenerator != null && lirGenerator.nodeOperands != null && value != null) {
+            Value operand = lirGenerator.nodeOperands.get(value);
             if (operand != null) {
                 result += ": " + operand;
             }
