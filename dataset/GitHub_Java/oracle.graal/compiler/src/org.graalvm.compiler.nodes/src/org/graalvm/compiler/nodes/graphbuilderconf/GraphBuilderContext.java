@@ -296,7 +296,6 @@ public interface GraphBuilderContext extends GraphBuilderTool {
 
     }
 
-    @SuppressWarnings("unused")
     default int countOccurrencesOnStack(ResolvedJavaMethod method) {
         return -1;
     }
