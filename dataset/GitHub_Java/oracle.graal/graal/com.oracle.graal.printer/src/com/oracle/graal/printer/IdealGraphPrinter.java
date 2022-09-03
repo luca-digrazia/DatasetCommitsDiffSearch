@@ -27,12 +27,12 @@ import java.util.*;
 import java.util.Map.Entry;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.bytecode.*;
 import com.oracle.graal.compiler.schedule.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node.Verbosity;
 import com.oracle.graal.graph.NodeClass.NodeClassIterator;
 import com.oracle.graal.graph.NodeClass.Position;
+import com.oracle.graal.java.*;
 import com.oracle.graal.lir.cfg.*;
 import com.oracle.graal.nodes.*;
 
@@ -57,23 +57,8 @@ class IdealGraphPrinter extends BasicIdealGraphPrinter {
         printProperty("name", name);
         endProperties();
         beginMethod(name, shortName, bci);
-        if (method != null) {
-            beginBytecodes();
-            BytecodeStream bytecodes = new BytecodeStream(method.code());
-            while (bytecodes.currentBC() != Bytecodes.END) {
-                int startBCI = bytecodes.currentBCI();
-                String mnemonic = Bytecodes.nameOf(bytecodes.currentBC());
-                int[] extra = null;
-                if (bytecodes.nextBCI() > startBCI + 1) {
-                    extra = new int[bytecodes.nextBCI() - (startBCI + 1)];
-                    for (int i = 0; i < extra.length; i++) {
-                        extra[i] = bytecodes.readUByte(startBCI + 1 + i);
-                    }
-                }
-                printBytecode(startBCI, mnemonic, extra);
-                bytecodes.next();
-            }
-            endBytecodes();
+        if (method != null && method.code() != null) {
+            printBytecodes(new BytecodeDisassembler(false).disassemble(method));
         }
         endMethod();
     }
@@ -94,12 +79,12 @@ class IdealGraphPrinter extends BasicIdealGraphPrinter {
                 schedule = new SchedulePhase();
                 schedule.apply((StructuredGraph) graph);
             } catch (Throwable t) {
+                schedule = null;
             }
         }
-        ControlFlowGraph cfg =  schedule == null ? null : schedule.getCFG();
 
         beginNodes();
-        List<Edge> edges = printNodes(graph, cfg == null ? null : cfg.getNodeToBlock(), noBlockNodes);
+        List<Edge> edges = printNodes(graph, schedule == null ? null : schedule.getCFG().getNodeToBlock(), noBlockNodes);
         endNodes();
 
         beginEdges();
@@ -108,10 +93,10 @@ class IdealGraphPrinter extends BasicIdealGraphPrinter {
         }
         endEdges();
 
-        if (cfg != null && cfg.getBlocks() != null) {
+        if (schedule != null) {
             beginControlFlow();
-            for (Block block : cfg.getBlocks()) {
-                printBlock(graph, block, cfg.getNodeToBlock());
+            for (Block block : schedule.getCFG().getBlocks()) {
+                printBlock(graph, block, schedule.getCFG().getNodeToBlock());
             }
             printNoBlock(noBlockNodes);
             endControlFlow();

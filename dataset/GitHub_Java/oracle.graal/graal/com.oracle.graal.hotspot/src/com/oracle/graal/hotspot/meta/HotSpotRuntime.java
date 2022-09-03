@@ -58,13 +58,13 @@ public class HotSpotRuntime implements GraalCodeCacheProvider {
     public final HotSpotVMConfig config;
     final HotSpotRegisterConfig regConfig;
     private final HotSpotRegisterConfig globalStubRegConfig;
-    private final HotSpotGraalRuntime graalRuntime;
+    private final HotSpotGraalRuntime compiler;
     private CheckCastSnippets.Templates checkcastSnippets;
     private NewObjectSnippets.Templates newObjectSnippets;
 
-    public HotSpotRuntime(HotSpotVMConfig config, HotSpotGraalRuntime graalRuntime) {
+    public HotSpotRuntime(HotSpotVMConfig config, HotSpotGraalRuntime compiler) {
         this.config = config;
-        this.graalRuntime = graalRuntime;
+        this.compiler = compiler;
         regConfig = new HotSpotRegisterConfig(config, false);
         globalStubRegConfig = new HotSpotRegisterConfig(config, true);
 
@@ -78,18 +78,18 @@ public class HotSpotRuntime implements GraalCodeCacheProvider {
         installer.install(CheckCastSnippets.class);
         installer.install(NewObjectSnippets.class);
         checkcastSnippets = new CheckCastSnippets.Templates(this);
-        newObjectSnippets = new NewObjectSnippets.Templates(this, graalRuntime.getTarget(), config.useTLAB);
+        newObjectSnippets = new NewObjectSnippets.Templates(this, compiler.getTarget(), config.useTLAB);
     }
 
 
-    public HotSpotGraalRuntime getGraalRuntime() {
-        return graalRuntime;
+    public HotSpotGraalRuntime getCompiler() {
+        return compiler;
     }
 
     @Override
     public String disassemble(CodeInfo info, CompilationResult tm) {
         byte[] code = info.code();
-        TargetDescription target = graalRuntime.getTarget();
+        TargetDescription target = compiler.getTarget();
         HexCodeFile hcf = new HexCodeFile(code, info.start(), target.arch.name, target.wordSize * 8);
         if (tm != null) {
             HexCodeFile.addAnnotations(hcf, tm.annotations());
@@ -181,12 +181,12 @@ public class HotSpotRuntime implements GraalCodeCacheProvider {
 
     @Override
     public ResolvedJavaType getResolvedJavaType(Kind kind) {
-        return (ResolvedJavaType) graalRuntime.getCompilerToVM().getType(kind.toJavaClass());
+        return (ResolvedJavaType) compiler.getCompilerToVM().getType(kind.toJavaClass());
     }
 
     @Override
     public ResolvedJavaType getTypeOf(Constant constant) {
-        return (ResolvedJavaType) graalRuntime.getCompilerToVM().getJavaType(constant);
+        return (ResolvedJavaType) compiler.getCompilerToVM().getJavaType(constant);
     }
 
     @Override
@@ -197,7 +197,7 @@ public class HotSpotRuntime implements GraalCodeCacheProvider {
 
     @Override
     public boolean areConstantObjectsEqual(Constant x, Constant y) {
-        return graalRuntime.getCompilerToVM().compareConstantObjects(x, y);
+        return compiler.getCompilerToVM().compareConstantObjects(x, y);
     }
 
     @Override
@@ -221,7 +221,7 @@ public class HotSpotRuntime implements GraalCodeCacheProvider {
 
     @Override
     public int getArrayLength(Constant array) {
-        return graalRuntime.getCompilerToVM().getArrayLength(array);
+        return compiler.getCompilerToVM().getArrayLength(array);
     }
 
     @Override
@@ -474,7 +474,7 @@ public class HotSpotRuntime implements GraalCodeCacheProvider {
     }
 
     public ResolvedJavaType getResolvedJavaType(Class<?> clazz) {
-        return (ResolvedJavaType) graalRuntime.getCompilerToVM().getType(clazz);
+        return (ResolvedJavaType) compiler.getCompilerToVM().getType(clazz);
     }
 
     public Object asCallTarget(Object target) {
@@ -482,36 +482,42 @@ public class HotSpotRuntime implements GraalCodeCacheProvider {
     }
 
     public long getMaxCallTargetOffset(RuntimeCall rtcall) {
-        return graalRuntime.getCompilerToVM().getMaxCallTargetOffset(rtcall);
+        return compiler.getCompilerToVM().getMaxCallTargetOffset(rtcall);
     }
 
     public ResolvedJavaMethod getResolvedJavaMethod(Method reflectionMethod) {
-        return (ResolvedJavaMethod) graalRuntime.getCompilerToVM().getJavaMethod(reflectionMethod);
+        return (ResolvedJavaMethod) compiler.getCompilerToVM().getJavaMethod(reflectionMethod);
     }
 
-    private static HotSpotCodeInfo makeInfo(ResolvedJavaMethod method, CompilationResult compResult, CodeInfo[] info) {
+    private static HotSpotCodeInfo makeInfo(ResolvedJavaMethod method, CompilationResult code, CodeInfo[] info) {
         HotSpotCodeInfo hsInfo = null;
         if (info != null && info.length > 0) {
-            hsInfo = new HotSpotCodeInfo(compResult, (HotSpotResolvedJavaMethod) method);
+            hsInfo = new HotSpotCodeInfo(code, (HotSpotResolvedJavaMethod) method);
             info[0] = hsInfo;
         }
         return hsInfo;
     }
 
-    public void installMethod(ResolvedJavaMethod method, CompilationResult compResult, CodeInfo[] info) {
-        HotSpotCodeInfo hsInfo = makeInfo(method, compResult, info);
-        graalRuntime.getCompilerToVM().installMethod(new HotSpotCompilationResult((HotSpotResolvedJavaMethod) method, compResult), true, hsInfo);
+    public void installMethod(ResolvedJavaMethod method, CompilationResult code, CodeInfo[] info) {
+        HotSpotCodeInfo hsInfo = makeInfo(method, code, info);
+        compiler.getCompilerToVM().installMethod(new HotSpotTargetMethod((HotSpotResolvedJavaMethod) method, code), true, hsInfo);
     }
 
     @Override
-    public InstalledCode addMethod(ResolvedJavaMethod method, CompilationResult compResult, CodeInfo[] info) {
-        HotSpotCodeInfo hsInfo = makeInfo(method, compResult, info);
-        return graalRuntime.getCompilerToVM().installMethod(new HotSpotCompilationResult((HotSpotResolvedJavaMethod) method, compResult), false, hsInfo);
+    public InstalledCode addMethod(ResolvedJavaMethod method, CompilationResult code, CodeInfo[] info) {
+        HotSpotCodeInfo hsInfo = makeInfo(method, code, info);
+        return compiler.getCompilerToVM().installMethod(new HotSpotTargetMethod((HotSpotResolvedJavaMethod) method, code), false, hsInfo);
     }
 
     @Override
     public RegisterConfig getGlobalStubRegisterConfig() {
         return globalStubRegConfig;
+    }
+
+    @Override
+    public CompilationResult compile(ResolvedJavaMethod method, StructuredGraph graph) {
+        OptimisticOptimizations optimisticOpts = OptimisticOptimizations.ALL;
+        return compiler.getCompiler().compileMethod(method, graph, -1, compiler.getCache(), compiler.getVMToCompiler().createPhasePlan(optimisticOpts), optimisticOpts);
     }
 
     @Override

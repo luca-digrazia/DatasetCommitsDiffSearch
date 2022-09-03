@@ -85,13 +85,7 @@ class BasicIdealGraphPrinter {
      */
     protected BasicIdealGraphPrinter(OutputStream stream) {
         try {
-            OutputStream buffered;
-            if (stream instanceof BufferedOutputStream) {
-                buffered = stream;
-            } else {
-                buffered = new BufferedOutputStream(stream, 256 * 1024);
-            }
-            this.stream = new PrintStream(buffered, false, "US-ASCII");
+            this.stream = new PrintStream(stream, false, "US-ASCII");
         } catch (UnsupportedEncodingException e) {
             throw new RuntimeException(e);
         }
@@ -257,7 +251,7 @@ class BasicIdealGraphPrinter {
     /**
      * Ends the current group.
      */
-    public void endGroup() {
+    protected void endGroup() {
         stream.println("</group>");
     }
 

@@ -77,10 +77,10 @@ public class CompilerToVMImpl implements CompilerToVM {
     public native JavaField ConstantPool_lookupField(HotSpotResolvedJavaType pool, int cpi, byte byteCode);
 
     @Override
-    public native HotSpotCompiledMethod installMethod(HotSpotCompilationResult comp, boolean makeDefault, HotSpotCodeInfo info);
+    public native HotSpotCompiledMethod installMethod(HotSpotTargetMethod targetMethod, boolean makeDefault, HotSpotCodeInfo info);
 
     @Override
-    public native void initializeConfiguration(HotSpotVMConfig config);
+    public native HotSpotVMConfig getConfiguration();
 
     @Override
     public native JavaMethod JavaType_resolveMethodImpl(HotSpotResolvedJavaType klass, String name, String signature);

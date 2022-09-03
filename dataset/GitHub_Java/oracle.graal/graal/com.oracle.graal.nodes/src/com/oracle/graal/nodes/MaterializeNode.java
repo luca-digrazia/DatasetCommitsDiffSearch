@@ -27,7 +27,7 @@ import com.oracle.graal.nodes.calc.*;
 
 public final class MaterializeNode extends ConditionalNode {
 
-    public static CompareNode createCompareNode(Condition condition, ValueNode x, ValueNode y) {
+    private static CompareNode createCompareNode(Condition condition, ValueNode x, ValueNode y) {
         assert x.kind() == y.kind();
         assert condition.isCanonical() : "condition is not canonical: " + condition;
 
@@ -37,15 +37,15 @@ public final class MaterializeNode extends ConditionalNode {
             if (x.kind().isObject()) {
                 comparison = new ObjectEqualsNode(x, y);
             } else {
-                assert x.kind().getStackKind().isStackInt() || x.kind().isLong();
+                assert x.kind().stackKind().isInt() || x.kind().isLong();
                 comparison = new IntegerEqualsNode(x, y);
             }
         } else if (condition == Condition.LT) {
-            assert x.kind().getStackKind().isStackInt() || x.kind().isLong();
+            assert x.kind().stackKind().isInt() || x.kind().isLong();
             comparison = new IntegerLessThanNode(x, y);
         } else {
             assert condition == Condition.BT;
-            assert x.kind().getStackKind().isStackInt() || x.kind().isLong();
+            assert x.kind().stackKind().isInt() || x.kind().isLong();
             comparison = new IntegerBelowThanNode(x, y);
         }
 
@@ -72,8 +72,14 @@ public final class MaterializeNode extends ConditionalNode {
     }
 
     @NodeIntrinsic
-    public static native boolean materialize(@ConstantNodeParameter Condition condition, int x, int y);
+    @SuppressWarnings("unused")
+    public static boolean materialize(@ConstantNodeParameter Condition condition, int x, int y) {
+        throw new UnsupportedOperationException("This method may only be compiled with the Graal compiler");
+    }
 
     @NodeIntrinsic
-    public static native boolean materialize(@ConstantNodeParameter Condition condition, long x, long y);
+    @SuppressWarnings("unused")
+    public static boolean materialize(@ConstantNodeParameter Condition condition, long x, long y) {
+        throw new UnsupportedOperationException("This method may only be compiled with the Graal compiler");
+    }
 }

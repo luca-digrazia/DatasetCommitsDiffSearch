@@ -38,17 +38,17 @@ public class ArrayCopySnippets implements SnippetsInterface{
     private static final Kind VECTOR_KIND = Kind.Long;
     private static final long VECTOR_SIZE = arrayIndexScale(Kind.Long);
 
-    @Snippet
+    //@Snippet
     public static void vectorizedCopy(Object src, int srcPos, Object dest, int destPos, int length, @ConstantParameter("baseKind") Kind baseKind) {
         int header = arrayBaseOffset(baseKind);
-        int elementSize = arrayIndexScale(baseKind);
-        long byteLength = (long) length * elementSize;
+        long byteLength = length * arrayIndexScale(baseKind);
         long nonVectorBytes = byteLength % VECTOR_SIZE;
-        long srcOffset = (long) srcPos * elementSize;
-        long destOffset = (long) destPos * elementSize;
+        long srcOffset = srcPos * arrayIndexScale(baseKind);
+        long destOffset = destPos * arrayIndexScale(baseKind);
         if (src == dest && srcPos < destPos) { // bad aliased case
-            for (long i = byteLength - elementSize; i >= byteLength - nonVectorBytes; i -= elementSize) {
-                UnsafeStoreNode.store(dest, header, i + destOffset, UnsafeLoadNode.load(src, header, i + srcOffset, baseKind), baseKind);
+            for (long i = byteLength - 1; i > byteLength - 1 - nonVectorBytes; i--) {
+                Byte a = UnsafeLoadNode.load(src, header, i + srcOffset, Kind.Byte);
+                UnsafeStoreNode.store(dest, header, i + destOffset, a.byteValue(), Kind.Byte);
             }
             long vectorLength = byteLength - nonVectorBytes;
             for (long i = vectorLength - VECTOR_SIZE; i >= 0; i -= VECTOR_SIZE) {
@@ -56,8 +56,9 @@ public class ArrayCopySnippets implements SnippetsInterface{
                 UnsafeStoreNode.store(dest, header, i + destOffset, a.longValue(), VECTOR_KIND);
             }
         } else {
-            for (long i = 0; i < nonVectorBytes; i += elementSize) {
-                UnsafeStoreNode.store(dest, header, i + destOffset, UnsafeLoadNode.load(src, header, i + srcOffset, baseKind), baseKind);
+            for (long i = 0; i < nonVectorBytes; i++) {
+                Byte a = UnsafeLoadNode.load(src, header, i + srcOffset, Kind.Byte);
+                UnsafeStoreNode.store(dest, header, i + destOffset, a.byteValue(), Kind.Byte);
             }
             for (long i = nonVectorBytes; i < byteLength; i += VECTOR_SIZE) {
                 Long a = UnsafeLoadNode.load(src, header, i + srcOffset, VECTOR_KIND);
@@ -74,7 +75,32 @@ public class ArrayCopySnippets implements SnippetsInterface{
         if (srcPos < 0 || destPos < 0 || length < 0 || srcPos + length > src.length || destPos + length > dest.length) {
             throw new IndexOutOfBoundsException();
         }
-        vectorizedCopy(src, srcPos, dest, destPos, length, Kind.Byte);
+        Kind baseKind = Kind.Byte;
+        int header = arrayBaseOffset(baseKind);
+        long byteLength = length * arrayIndexScale(baseKind);
+        long nonVectorBytes = byteLength % VECTOR_SIZE;
+        long srcOffset = srcPos * arrayIndexScale(baseKind);
+        long destOffset = destPos * arrayIndexScale(baseKind);
+        if (src == dest && srcPos < destPos) { // bad aliased case
+            for (long i = byteLength - arrayIndexScale(Kind.Byte); i >= byteLength - nonVectorBytes; i -= arrayIndexScale(Kind.Byte)) {
+                Byte a = UnsafeLoadNode.load(src, header, i + srcOffset, Kind.Byte);
+                UnsafeStoreNode.store(dest, header, i + destOffset, a.byteValue(), Kind.Byte);
+            }
+            long vectorLength = byteLength - nonVectorBytes;
+            for (long i = vectorLength - VECTOR_SIZE; i >= 0; i -= VECTOR_SIZE) {
+                Long a = UnsafeLoadNode.load(src, header, i + srcOffset, VECTOR_KIND);
+                UnsafeStoreNode.store(dest, header, i + destOffset, a.longValue(), VECTOR_KIND);
+            }
+        } else {
+            for (long i = 0; i < nonVectorBytes; i += arrayIndexScale(Kind.Byte)) {
+                Byte a = UnsafeLoadNode.load(src, header, i + srcOffset, Kind.Byte);
+                UnsafeStoreNode.store(dest, header, i + destOffset, a.byteValue(), Kind.Byte);
+            }
+            for (long i = nonVectorBytes; i < byteLength; i += VECTOR_SIZE) {
+                Long a = UnsafeLoadNode.load(src, header, i + srcOffset, VECTOR_KIND);
+                UnsafeStoreNode.store(dest, header, i + destOffset, a.longValue(), VECTOR_KIND);
+            }
+        }
     }
 
     @Snippet
@@ -85,7 +111,32 @@ public class ArrayCopySnippets implements SnippetsInterface{
         if (srcPos < 0 || destPos < 0 || length < 0 || srcPos + length > src.length || destPos + length > dest.length) {
             throw new IndexOutOfBoundsException();
         }
-        vectorizedCopy(src, srcPos, dest, destPos, length, Kind.Char);
+        Kind baseKind = Kind.Char;
+        int header = arrayBaseOffset(baseKind);
+        long byteLength = length * arrayIndexScale(baseKind);
+        long nonVectorBytes = byteLength % VECTOR_SIZE;
+        long srcOffset = srcPos * arrayIndexScale(baseKind);
+        long destOffset = destPos * arrayIndexScale(baseKind);
+        if (src == dest && srcPos < destPos) { // bad aliased case
+            for (long i = byteLength - arrayIndexScale(Kind.Char); i >= byteLength - nonVectorBytes; i -= arrayIndexScale(Kind.Char)) {
+                Character a = UnsafeLoadNode.load(src, header, i + srcOffset, Kind.Char);
+                UnsafeStoreNode.store(dest, header, i + destOffset, a.charValue(), Kind.Char);
+            }
+            long vectorLength = byteLength - nonVectorBytes;
+            for (long i = vectorLength - VECTOR_SIZE; i >= 0; i -= VECTOR_SIZE) {
+                Long a = UnsafeLoadNode.load(src, header, i + srcOffset, VECTOR_KIND);
+                UnsafeStoreNode.store(dest, header, i + destOffset, a.longValue(), VECTOR_KIND);
+            }
+        } else {
+            for (long i = 0; i < nonVectorBytes; i += arrayIndexScale(Kind.Char)) {
+                Character a = UnsafeLoadNode.load(src, header, i + srcOffset, Kind.Char);
+                UnsafeStoreNode.store(dest, header, i + destOffset, a.charValue(), Kind.Char);
+            }
+            for (long i = nonVectorBytes; i < byteLength; i += VECTOR_SIZE) {
+                Long a = UnsafeLoadNode.load(src, header, i + srcOffset, VECTOR_KIND);
+                UnsafeStoreNode.store(dest, header, i + destOffset, a.longValue(), VECTOR_KIND);
+            }
+        }
     }
 
     @Snippet
@@ -96,7 +147,32 @@ public class ArrayCopySnippets implements SnippetsInterface{
         if (srcPos < 0 || destPos < 0 || length < 0 || srcPos + length > src.length || destPos + length > dest.length) {
             throw new IndexOutOfBoundsException();
         }
-        vectorizedCopy(src, srcPos, dest, destPos, length, Kind.Short);
+        Kind baseKind = Kind.Short;
+        int header = arrayBaseOffset(baseKind);
+        long byteLength = length * arrayIndexScale(baseKind);
+        long nonVectorBytes = byteLength % VECTOR_SIZE;
+        long srcOffset = srcPos * arrayIndexScale(baseKind);
+        long destOffset = destPos * arrayIndexScale(baseKind);
+        if (src == dest && srcPos < destPos) { // bad aliased case
+            for (long i = byteLength - arrayIndexScale(Kind.Short); i >= byteLength - nonVectorBytes; i -= arrayIndexScale(Kind.Short)) {
+                Short a = UnsafeLoadNode.load(src, header, i + srcOffset, Kind.Short);
+                UnsafeStoreNode.store(dest, header, i + destOffset, a.shortValue(), Kind.Short);
+            }
+            long vectorLength = byteLength - nonVectorBytes;
+            for (long i = vectorLength - VECTOR_SIZE; i >= 0; i -= VECTOR_SIZE) {
+                Long a = UnsafeLoadNode.load(src, header, i + srcOffset, VECTOR_KIND);
+                UnsafeStoreNode.store(dest, header, i + destOffset, a.longValue(), VECTOR_KIND);
+            }
+        } else {
+            for (long i = 0; i < nonVectorBytes; i += arrayIndexScale(Kind.Short)) {
+                Short a = UnsafeLoadNode.load(src, header, i + srcOffset, Kind.Short);
+                UnsafeStoreNode.store(dest, header, i + destOffset, a.shortValue(), Kind.Short);
+            }
+            for (long i = nonVectorBytes; i < byteLength; i += VECTOR_SIZE) {
+                Long a = UnsafeLoadNode.load(src, header, i + srcOffset, VECTOR_KIND);
+                UnsafeStoreNode.store(dest, header, i + destOffset, a.longValue(), VECTOR_KIND);
+            }
+        }
     }
 
     @Snippet
@@ -107,7 +183,32 @@ public class ArrayCopySnippets implements SnippetsInterface{
         if (srcPos < 0 || destPos < 0 || length < 0 || srcPos + length > src.length || destPos + length > dest.length) {
             throw new IndexOutOfBoundsException();
         }
-        vectorizedCopy(src, srcPos, dest, destPos, length, Kind.Int);
+        Kind baseKind = Kind.Int;
+        int header = arrayBaseOffset(baseKind);
+        long byteLength = length * arrayIndexScale(baseKind);
+        long nonVectorBytes = byteLength % VECTOR_SIZE;
+        long srcOffset = srcPos * arrayIndexScale(baseKind);
+        long destOffset = destPos * arrayIndexScale(baseKind);
+        if (src == dest && srcPos < destPos) { // bad aliased case
+            for (long i = byteLength - arrayIndexScale(Kind.Int); i >= byteLength - nonVectorBytes; i -= arrayIndexScale(Kind.Int)) {
+                Integer a = UnsafeLoadNode.load(src, header, i + srcOffset, Kind.Int);
+                UnsafeStoreNode.store(dest, header, i + destOffset, a.intValue(), Kind.Int);
+            }
+            long vectorLength = byteLength - nonVectorBytes;
+            for (long i = vectorLength - VECTOR_SIZE; i >= 0; i -= VECTOR_SIZE) {
+                Long a = UnsafeLoadNode.load(src, header, i + srcOffset, VECTOR_KIND);
+                UnsafeStoreNode.store(dest, header, i + destOffset, a.longValue(), VECTOR_KIND);
+            }
+        } else {
+            for (long i = 0; i < nonVectorBytes; i += arrayIndexScale(Kind.Int)) {
+                Integer a = UnsafeLoadNode.load(src, header, i + srcOffset, Kind.Int);
+                UnsafeStoreNode.store(dest, header, i + destOffset, a.intValue(), Kind.Int);
+            }
+            for (long i = nonVectorBytes; i < byteLength; i += VECTOR_SIZE) {
+                Long a = UnsafeLoadNode.load(src, header, i + srcOffset, VECTOR_KIND);
+                UnsafeStoreNode.store(dest, header, i + destOffset, a.longValue(), VECTOR_KIND);
+            }
+        }
     }
 
     @Snippet
@@ -118,7 +219,32 @@ public class ArrayCopySnippets implements SnippetsInterface{
         if (srcPos < 0 || destPos < 0 || length < 0 || srcPos + length > src.length || destPos + length > dest.length) {
             throw new IndexOutOfBoundsException();
         }
-        vectorizedCopy(src, srcPos, dest, destPos, length, Kind.Float);
+        Kind baseKind = Kind.Float;
+        int header = arrayBaseOffset(baseKind);
+        long byteLength = length * arrayIndexScale(baseKind);
+        long nonVectorBytes = byteLength % VECTOR_SIZE;
+        long srcOffset = srcPos * arrayIndexScale(baseKind);
+        long destOffset = destPos * arrayIndexScale(baseKind);
+        if (src == dest && srcPos < destPos) { // bad aliased case
+            for (long i = byteLength - arrayIndexScale(Kind.Float); i >= byteLength - nonVectorBytes; i -= arrayIndexScale(Kind.Float)) {
+                Float a = UnsafeLoadNode.load(src, header, i + srcOffset, Kind.Float);
+                UnsafeStoreNode.store(dest, header, i + destOffset, a.floatValue(), Kind.Float);
+            }
+            long vectorLength = byteLength - nonVectorBytes;
+            for (long i = vectorLength - VECTOR_SIZE; i >= 0; i -= VECTOR_SIZE) {
+                Long a = UnsafeLoadNode.load(src, header, i + srcOffset, VECTOR_KIND);
+                UnsafeStoreNode.store(dest, header, i + destOffset, a.longValue(), VECTOR_KIND);
+            }
+        } else {
+            for (long i = 0; i < nonVectorBytes; i += arrayIndexScale(Kind.Float)) {
+                Float a = UnsafeLoadNode.load(src, header, i + srcOffset, Kind.Float);
+                UnsafeStoreNode.store(dest, header, i + destOffset, a.floatValue(), Kind.Float);
+            }
+            for (long i = nonVectorBytes; i < byteLength; i += VECTOR_SIZE) {
+                Long a = UnsafeLoadNode.load(src, header, i + srcOffset, VECTOR_KIND);
+                UnsafeStoreNode.store(dest, header, i + destOffset, a.longValue(), VECTOR_KIND);
+            }
+        }
     }
 
     @Snippet
@@ -131,9 +257,9 @@ public class ArrayCopySnippets implements SnippetsInterface{
         }
         Kind baseKind = Kind.Long;
         int header = arrayBaseOffset(baseKind);
-        long byteLength = (long) length * arrayIndexScale(baseKind);
-        long srcOffset = (long) srcPos * arrayIndexScale(baseKind);
-        long destOffset = (long) destPos * arrayIndexScale(baseKind);
+        long byteLength = length * arrayIndexScale(baseKind);
+        long srcOffset = srcPos * arrayIndexScale(baseKind);
+        long destOffset = destPos * arrayIndexScale(baseKind);
         if (src == dest && srcPos < destPos) { // bad aliased case
             for (long i = byteLength - VECTOR_SIZE; i >= 0; i -= VECTOR_SIZE) {
                 Long a = UnsafeLoadNode.load(src, header, i + srcOffset, VECTOR_KIND);
@@ -157,9 +283,9 @@ public class ArrayCopySnippets implements SnippetsInterface{
         }
         Kind baseKind = Kind.Double;
         int header = arrayBaseOffset(baseKind);
-        long byteLength = (long) length * arrayIndexScale(baseKind);
-        long srcOffset = (long) srcPos * arrayIndexScale(baseKind);
-        long destOffset = (long) destPos * arrayIndexScale(baseKind);
+        long byteLength = length * arrayIndexScale(baseKind);
+        long srcOffset = srcPos * arrayIndexScale(baseKind);
+        long destOffset = destPos * arrayIndexScale(baseKind);
         if (src == dest && srcPos < destPos) { // bad aliased case
             for (long i = byteLength - VECTOR_SIZE; i >= 0; i -= VECTOR_SIZE) {
                 Long a = UnsafeLoadNode.load(src, header, i + srcOffset, VECTOR_KIND);
@@ -185,14 +311,12 @@ public class ArrayCopySnippets implements SnippetsInterface{
         final int scale = arrayIndexScale(Kind.Object);
         int header = arrayBaseOffset(Kind.Object);
         if (src == dest && srcPos < destPos) { // bad aliased case
-            long start = (long) (length - 1) * scale;
-            for (long i = start; i >= 0; i -= scale) {
+            for (long i = (length - 1) * scale; i >= 0; i -= scale) {
                 Object a = UnsafeLoadNode.load(src, header, i + (long) srcPos * scale, Kind.Object);
                 DirectObjectStoreNode.storeObject(dest, header, i + (long) destPos * scale, a);
             }
         } else {
-            long end = (long) length * scale;
-            for (long i = 0; i < end; i += scale) {
+            for (long i = 0; i < length * scale; i += scale) {
                 Object a = UnsafeLoadNode.load(src, header, i + (long) srcPos * scale, Kind.Object);
                 DirectObjectStoreNode.storeObject(dest, header, i + (long) destPos * scale, a);
             }

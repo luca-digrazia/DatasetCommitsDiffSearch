@@ -26,6 +26,7 @@ import java.io.*;
 import java.util.*;
 import java.util.concurrent.atomic.*;
 
+import com.oracle.graal.alloc.util.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.*;
@@ -35,8 +36,9 @@ import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.java.*;
 import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.cfg.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.cfg.*;
+import com.oracle.max.criutils.*;
 
 /**
  * Observes compilation events and uses {@link CFGPrinter} to produce a control flow graph for the <a
@@ -136,7 +138,7 @@ public class CFGPrinterObserver implements DebugDumpHandler {
         if (object instanceof BciBlockMapping) {
             BciBlockMapping blockMap = (BciBlockMapping) object;
             cfgPrinter.printCFG(message, blockMap);
-            if (blockMap.method.getCode() != null) {
+            if (blockMap.method.code() != null) {
                 cfgPrinter.printBytecodes(new BytecodeDisassembler(false).disassemble(blockMap.method));
             }
 
@@ -151,21 +153,16 @@ public class CFGPrinterObserver implements DebugDumpHandler {
 
         } else if (object instanceof CompilationResult) {
             final CompilationResult tm = (CompilationResult) object;
-            final byte[] code = Arrays.copyOf(tm.getTargetCode(), tm.getTargetCodeSize());
+            final byte[] code = Arrays.copyOf(tm.targetCode(), tm.targetCodeSize());
             CodeInfo info = new CodeInfo() {
-                public ResolvedJavaMethod getMethod() {
-                    return curMethod;
+                public ResolvedJavaMethod method() {
+                    return null;
                 }
-                public long getStart() {
+                public long start() {
                     return 0L;
                 }
-                public byte[] getCode() {
+                public byte[] code() {
                     return code;
-                }
-                @Override
-                public String toString() {
-                    int size = code == null ? 0 : code.length;
-                    return getMethod() + " installed code; length = " + size;
                 }
             };
             cfgPrinter.printMachineCode(runtime.disassemble(info, tm), message);
@@ -175,6 +172,8 @@ public class CFGPrinterObserver implements DebugDumpHandler {
         } else if (object instanceof Interval[]) {
             cfgPrinter.printIntervals(message, (Interval[]) object);
 
+        } else if (object instanceof IntervalPrinter.Interval[]) {
+            cfgPrinter.printIntervals(message, (IntervalPrinter.Interval[]) object);
         }
 
         cfgPrinter.target = null;
@@ -192,12 +191,5 @@ public class CFGPrinterObserver implements DebugDumpHandler {
             }
         }
         return false;
-    }
-
-    @Override
-    public void close() throws IOException {
-        if (cfgPrinter != null) {
-            cfgPrinter.close();
-        }
     }
 }
