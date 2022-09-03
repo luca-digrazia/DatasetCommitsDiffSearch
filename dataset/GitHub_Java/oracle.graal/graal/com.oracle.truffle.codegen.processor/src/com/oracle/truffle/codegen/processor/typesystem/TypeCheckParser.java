@@ -23,14 +23,12 @@
 package com.oracle.truffle.codegen.processor.typesystem;
 
 import java.lang.annotation.*;
-import java.util.*;
 
 import javax.lang.model.element.*;
 
 import com.oracle.truffle.api.codegen.*;
 import com.oracle.truffle.codegen.processor.*;
 import com.oracle.truffle.codegen.processor.template.*;
-import com.oracle.truffle.codegen.processor.template.ParameterSpec.Cardinality;
 
 class TypeCheckParser extends TypeSystemMethodParser<TypeCheckData> {
 
@@ -40,28 +38,26 @@ class TypeCheckParser extends TypeSystemMethodParser<TypeCheckData> {
 
     @Override
     public MethodSpec createSpecification(ExecutableElement method, AnnotationMirror mirror) {
-        TypeData targetType = findTypeByMethodName(method, mirror, "is");
+        TypeData targetType = findTypeByMethodName(method.getSimpleName().toString(), "is");
         if (targetType == null) {
             return null;
         }
-        List<ParameterSpec> specs = new ArrayList<>();
-        specs.add(new ParameterSpec("value", getTypeSystem(), false, Cardinality.ONE));
-        ParameterSpec returnTypeSpec = new ParameterSpec("returnType", getContext().getType(boolean.class), false);
-        MethodSpec spec = new MethodSpec(returnTypeSpec, specs);
+        MethodSpec spec = new MethodSpec(new ParameterSpec("returnType", getContext().getType(boolean.class)));
+        spec.addRequired(new ParameterSpec("value", getTypeSystem().getPrimitiveTypeMirrors()));
         return spec;
     }
 
     @Override
     public TypeCheckData create(TemplateMethod method) {
-        TypeData checkedType = findTypeByMethodName(method.getMethod(), method.getMarkerAnnotation(), "is");
+        TypeData checkedType = findTypeByMethodName(method, "is");
         assert checkedType != null;
-        ActualParameter parameter = method.findParameter("value");
+        ActualParameter parameter = method.findParameter("valueValue");
         assert parameter != null;
-        return new TypeCheckData(method, checkedType, parameter.getActualTypeData(getTypeSystem()));
+        return new TypeCheckData(method, checkedType, parameter.getTypeSystemType());
     }
 
     @Override
-    public Class< ? extends Annotation> getAnnotationType() {
+    public Class<? extends Annotation> getAnnotationType() {
         return TypeCheck.class;
     }
 }

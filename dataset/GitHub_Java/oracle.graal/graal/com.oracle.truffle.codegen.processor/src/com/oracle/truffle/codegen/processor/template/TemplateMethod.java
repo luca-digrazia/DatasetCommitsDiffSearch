@@ -151,9 +151,9 @@ public class TemplateMethod extends MessageContainer implements Comparable<Templ
         return Collections.unmodifiableList(allParameters);
     }
 
-    public boolean canBeAccessedByInstanceOf(ProcessorContext context, TypeMirror type) {
+    public boolean canBeAccessedByInstanceOf(TypeMirror type) {
         TypeMirror methodType = Utils.findNearestEnclosingType(getMethod()).asType();
-        return Utils.isAssignable(context, type, methodType) || Utils.isAssignable(context, methodType, type);
+        return Utils.isAssignable(type, methodType) || Utils.isAssignable(methodType, type);
     }
 
     public ExecutableElement getMethod() {
@@ -202,17 +202,6 @@ public class TemplateMethod extends MessageContainer implements Comparable<Templ
             if (typeData != null) {
                 types.add(typeData);
             }
-        }
-        return types;
-    }
-
-    public List<ActualParameter> getSignatureParameters() {
-        List<ActualParameter> types = new ArrayList<>();
-        for (ActualParameter parameter : getParameters()) {
-            if (!parameter.getSpecification().isSignature()) {
-                continue;
-            }
-            types.add(parameter);
         }
         return types;
     }

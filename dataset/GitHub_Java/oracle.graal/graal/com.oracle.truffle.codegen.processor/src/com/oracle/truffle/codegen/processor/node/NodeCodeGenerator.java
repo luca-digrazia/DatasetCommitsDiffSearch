@@ -1443,21 +1443,22 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
 
                 ActualParameter sourceParameter = sourceExecutable.findParameter(targetParameter.getLocalName());
 
-                String targetVariableName = null;
-                CodeTree executionExpression = null;
+                String targetVariableName;
+                CodeTree executionExpression;
                 if (cast || sourceParameter != null) {
                     TypeData sourceType = sourceParameter.getTypeSystemType();
                     if (!sourceType.needsCastTo(targetType)) {
-                        if (field.isShortCircuit() && sourceParameter != null) {
-                            builder.tree(createShortCircuitValue(builder, sourceExecutable, specialization, field, targetParameter.getPreviousParameter(), unexpectedParameter));
-                        }
                         continue;
                     }
                     executionExpression = createExpectType(sourceNode, targetExecutable, CodeTreeBuilder.singleString(valueName(targetParameter)));
                     targetVariableName = castValueName(targetParameter);
-                } else if (sourceParameter == null) {
-                    targetVariableName = valueName(targetParameter);
-                    executionExpression = createExecuteChildExpression(builder, field, targetParameter);
+                } else {
+                    if (sourceExecutable.findParameter(targetParameter.getLocalName()) == null) {
+                        executionExpression = createExecuteChildExpression(builder, field, targetParameter);
+                        targetVariableName = valueName(targetParameter);
+                    } else {
+                        continue;
+                    }
                 }
 
                 CodeTreeVariable executionVar = new CodeTreeVariable();
@@ -1560,20 +1561,6 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
 
             ActualParameter shortCircuitParam = specialization.getPreviousParam(parameter);
 
-            builder.tree(createShortCircuitValue(builder, currentExecutable, specialization, forField, shortCircuitParam, exceptionParam));
-
-            builder.declaration(parameter.getType(), targetVariableName, CodeTreeBuilder.createBuilder().defaultValue(parameter.getType()));
-            builder.startIf().string(shortCircuitParam.getLocalName()).end();
-            builder.startBlock();
-            builder.tree(body);
-            builder.end();
-
-            return builder.getRoot();
-        }
-
-        private CodeTree createShortCircuitValue(CodeTreeBuilder parent, ExecutableTypeData currentExecutable, SpecializationData specialization, NodeFieldData forField,
-                        ActualParameter shortCircuitParam, ActualParameter exceptionParam) {
-            CodeTreeBuilder builder = new CodeTreeBuilder(parent);
             int shortCircuitIndex = 0;
             for (NodeFieldData field : specialization.getNode().getFields()) {
                 if (field.getExecutionKind() == ExecutionKind.SHORT_CIRCUIT) {
@@ -1586,8 +1573,16 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
 
             builder.startStatement().type(shortCircuitParam.getType()).string(" ").string(valueName(shortCircuitParam)).string(" = ");
             ShortCircuitData shortCircuitData = specialization.getShortCircuits().get(shortCircuitIndex);
+
             builder.tree(createTemplateMethodCall(builder, currentExecutable, shortCircuitData, exceptionParam != null ? exceptionParam.getLocalName() : null));
+
             builder.end(); // statement
+
+            builder.declaration(parameter.getType(), targetVariableName, CodeTreeBuilder.createBuilder().defaultValue(parameter.getType()));
+            builder.startIf().string(shortCircuitParam.getLocalName()).end();
+            builder.startBlock();
+            builder.tree(body);
+            builder.end();
 
             return builder.getRoot();
         }

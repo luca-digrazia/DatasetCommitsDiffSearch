@@ -25,7 +25,6 @@ package com.oracle.truffle.codegen.processor.node;
 import com.oracle.truffle.codegen.processor.*;
 import com.oracle.truffle.codegen.processor.template.*;
 
-
 public class ShortCircuitData extends TemplateMethod {
 
     private ShortCircuitData genericShortCircuitMethod;
@@ -62,9 +61,8 @@ public class ShortCircuitData extends TemplateMethod {
         }
 
         for (ActualParameter param : getParameters()) {
-            ParameterSpec paramSpec = param.getSpecification();
-            ActualParameter specializationParam = specialization.findParameter(paramSpec.getName());
-            if (!Utils.typeEquals(param.getActualType(), specializationParam.getActualType())) {
+            ActualParameter specializationParam = specialization.findParameter(param.getLocalName());
+            if (!Utils.typeEquals(param.getType(), specializationParam.getType())) {
                 return false;
             }
         }

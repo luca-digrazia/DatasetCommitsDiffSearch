@@ -28,7 +28,8 @@ import javax.lang.model.element.*;
 import javax.lang.model.type.*;
 
 import com.oracle.truffle.codegen.processor.*;
-import com.oracle.truffle.codegen.processor.node.NodeChildData.ExecutionKind;
+import com.oracle.truffle.codegen.processor.node.NodeFieldData.ExecutionKind;
+import com.oracle.truffle.codegen.processor.node.NodeFieldData.FieldKind;
 import com.oracle.truffle.codegen.processor.template.*;
 import com.oracle.truffle.codegen.processor.typesystem.*;
 
@@ -36,11 +37,9 @@ public class NodeData extends Template {
 
     private final String nodeId;
     private NodeData declaringNode;
-    private List<NodeData> declaredNodes = new ArrayList<>();
-    private boolean splitByMethodName;
+    private List<NodeData> declaredChildren = new ArrayList<>();
 
     private TypeSystemData typeSystem;
-    private List<NodeChildData> children;
     private List<NodeFieldData> fields;
     private TypeMirror nodeType;
     private ParameterSpec instanceParameterSpec;
@@ -59,7 +58,7 @@ public class NodeData extends Template {
         super(splitSource.getTemplateType(), templateMethodName, null);
         this.nodeId = nodeId;
         this.declaringNode = splitSource.declaringNode;
-        this.declaredNodes = splitSource.declaredNodes;
+        this.declaredChildren = splitSource.declaredChildren;
         this.typeSystem = splitSource.typeSystem;
         this.nodeType = splitSource.nodeType;
         this.specializations = splitSource.specializations;
@@ -67,58 +66,41 @@ public class NodeData extends Template {
         this.executableTypes = splitSource.executableTypes;
         this.shortCircuits = splitSource.shortCircuits;
         this.fields = splitSource.fields;
-        this.children = splitSource.children;
-    }
-
-    public boolean isSplitByMethodName() {
-        return splitByMethodName;
     }
 
     void setTypeSystem(TypeSystemData typeSystem) {
         this.typeSystem = typeSystem;
     }
 
-    void setFields(List<NodeFieldData> fields) {
-        this.fields = fields;
-    }
-
-    public List<NodeFieldData> getFields() {
-        return fields;
-    }
-
-    void setSplitByMethodName(boolean splitByMethodName) {
-        this.splitByMethodName = splitByMethodName;
-    }
-
     @Override
     protected List<MessageContainer> findChildContainers() {
-        List<MessageContainer> containerChildren = new ArrayList<>();
-        if (declaredNodes != null) {
-            containerChildren.addAll(declaredNodes);
+        List<MessageContainer> children = new ArrayList<>();
+        if (declaredChildren != null) {
+            children.addAll(declaredChildren);
         }
         if (typeSystem != null) {
-            containerChildren.add(typeSystem);
+            children.add(typeSystem);
         }
         if (specializations != null) {
             for (MessageContainer specialization : specializations) {
                 if (specialization.getMessageElement() != null) {
-                    containerChildren.add(specialization);
+                    children.add(specialization);
                 }
             }
         }
         if (specializationListeners != null) {
-            containerChildren.addAll(specializationListeners);
+            children.addAll(specializationListeners);
         }
         if (executableTypes != null) {
-            containerChildren.addAll(getExecutableTypes());
+            children.addAll(getExecutableTypes());
         }
         if (shortCircuits != null) {
-            containerChildren.addAll(shortCircuits);
+            children.addAll(shortCircuits);
         }
-        if (containerChildren != null) {
-            containerChildren.addAll(containerChildren);
+        if (fields != null) {
+            children.addAll(fields);
         }
-        return containerChildren;
+        return children;
     }
 
     public ParameterSpec getInstanceParameterSpec() {
@@ -162,19 +144,19 @@ public class NodeData extends Template {
         return true;
     }
 
-    public List<NodeData> getNodeDeclaringChildren() {
-        List<NodeData> nodeChildren = new ArrayList<>();
-        for (NodeData child : getDeclaredNodes()) {
+    public List<NodeData> getNodeChildren() {
+        List<NodeData> children = new ArrayList<>();
+        for (NodeData child : getDeclaredChildren()) {
             if (child.needsFactory()) {
-                nodeChildren.add(child);
+                children.add(child);
             }
-            nodeChildren.addAll(child.getNodeDeclaringChildren());
+            children.addAll(child.getNodeChildren());
         }
-        return nodeChildren;
+        return children;
     }
 
-    void setDeclaredNodes(List<NodeData> declaredChildren) {
-        this.declaredNodes = declaredChildren;
+    void setDeclaredChildren(List<NodeData> declaredChildren) {
+        this.declaredChildren = declaredChildren;
 
         for (NodeData child : declaredChildren) {
             child.declaringNode = this;
@@ -185,8 +167,8 @@ public class NodeData extends Template {
         return declaringNode;
     }
 
-    public List<NodeData> getDeclaredNodes() {
-        return declaredNodes;
+    public List<NodeData> getDeclaredChildren() {
+        return declaredChildren;
     }
 
     public void setNodeType(TypeMirror nodeType) {
@@ -278,14 +260,16 @@ public class NodeData extends Template {
         return result;
     }
 
-    public NodeChildData[] filterFields(ExecutionKind usage) {
-        List<NodeChildData> filteredFields = new ArrayList<>();
-        for (NodeChildData field : getChildren()) {
+    public NodeFieldData[] filterFields(FieldKind fieldKind, ExecutionKind usage) {
+        List<NodeFieldData> filteredFields = new ArrayList<>();
+        for (NodeFieldData field : getFields()) {
             if (usage == null || field.getExecutionKind() == usage) {
-                filteredFields.add(field);
+                if (fieldKind == null || field.getKind() == fieldKind) {
+                    filteredFields.add(field);
+                }
             }
         }
-        return filteredFields.toArray(new NodeChildData[filteredFields.size()]);
+        return filteredFields.toArray(new NodeFieldData[filteredFields.size()]);
     }
 
     public boolean needsRewrites(ProcessorContext context) {
@@ -329,13 +313,13 @@ public class NodeData extends Template {
 
         dumpProperty(builder, indent, "templateClass", Utils.getQualifiedName(getTemplateType()));
         dumpProperty(builder, indent, "typeSystem", getTypeSystem());
-        dumpProperty(builder, indent, "fields", getChildren());
+        dumpProperty(builder, indent, "fields", getFields());
         dumpProperty(builder, indent, "executableTypes", getExecutableTypes());
         dumpProperty(builder, indent, "specializations", getSpecializations());
         dumpProperty(builder, indent, "messages", collectMessages());
-        if (getDeclaredNodes().size() > 0) {
+        if (getDeclaredChildren().size() > 0) {
             builder.append(String.format("\n%s  children = [", indent));
-            for (NodeData node : getDeclaredNodes()) {
+            for (NodeData node : getDeclaredChildren()) {
                 builder.append("\n");
                 builder.append(node.dump(level + 1));
             }
@@ -381,8 +365,8 @@ public class NodeData extends Template {
         return b.toString();
     }
 
-    public NodeChildData findChild(String name) {
-        for (NodeChildData field : getChildren()) {
+    public NodeFieldData findField(String name) {
+        for (NodeFieldData field : getFields()) {
             if (field.getName().equals(name)) {
                 return field;
             }
@@ -390,12 +374,12 @@ public class NodeData extends Template {
         return null;
     }
 
-    public List<NodeChildData> getChildren() {
-        return children;
+    public List<NodeFieldData> getFields() {
+        return fields;
     }
 
-    void setChildren(List<NodeChildData> fields) {
-        this.children = fields;
+    void setFields(List<NodeFieldData> fields) {
+        this.fields = fields;
     }
 
     public List<SpecializationData> getSpecializations() {

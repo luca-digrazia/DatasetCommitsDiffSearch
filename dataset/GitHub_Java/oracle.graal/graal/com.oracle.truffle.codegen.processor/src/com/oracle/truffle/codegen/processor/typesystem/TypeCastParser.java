@@ -23,15 +23,12 @@
 package com.oracle.truffle.codegen.processor.typesystem;
 
 import java.lang.annotation.*;
-import java.util.*;
 
 import javax.lang.model.element.*;
 
 import com.oracle.truffle.api.codegen.*;
 import com.oracle.truffle.codegen.processor.*;
 import com.oracle.truffle.codegen.processor.template.*;
-import com.oracle.truffle.codegen.processor.template.ParameterSpec.Cardinality;
-
 
 class TypeCastParser extends TypeSystemMethodParser<TypeCastData> {
 
@@ -41,26 +38,24 @@ class TypeCastParser extends TypeSystemMethodParser<TypeCastData> {
 
     @Override
     public MethodSpec createSpecification(ExecutableElement method, AnnotationMirror mirror) {
-        TypeData targetType = findTypeByMethodName(method, mirror, "as");
+        TypeData targetType = findTypeByMethodName(method.getSimpleName().toString(), "as");
         if (targetType == null) {
             return null;
         }
-        List<ParameterSpec> specs = new ArrayList<>();
-        specs.add(new ParameterSpec("value", getTypeSystem(), false, Cardinality.ONE));
-        ParameterSpec returnTypeSpec = new ParameterSpec("returnType", targetType.getPrimitiveType(), false);
-        MethodSpec spec = new MethodSpec(returnTypeSpec, specs);
+        MethodSpec spec = new MethodSpec(new ParameterSpec("returnType", targetType.getPrimitiveType()));
+        spec.addRequired(new ParameterSpec("value", getTypeSystem().getPrimitiveTypeMirrors()));
         return spec;
     }
 
     @Override
     public TypeCastData create(TemplateMethod method) {
-        TypeData targetType = findTypeByMethodName(method.getMethod(), method.getMarkerAnnotation(), "as");
-        ActualParameter parameter = method.findParameter("value");
-        return new TypeCastData(method, parameter.getActualTypeData(getTypeSystem()), targetType);
+        TypeData targetType = findTypeByMethodName(method, "as");
+        ActualParameter parameter = method.findParameter("valueValue");
+        return new TypeCastData(method, parameter.getTypeSystemType(), targetType);
     }
 
     @Override
-    public Class< ? extends Annotation> getAnnotationType() {
+    public Class<? extends Annotation> getAnnotationType() {
         return TypeCast.class;
     }
 }

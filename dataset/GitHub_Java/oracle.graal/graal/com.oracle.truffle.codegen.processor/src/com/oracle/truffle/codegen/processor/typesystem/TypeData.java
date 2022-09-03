@@ -30,20 +30,36 @@ import javax.lang.model.type.*;
 import com.oracle.truffle.codegen.processor.*;
 import com.oracle.truffle.codegen.processor.template.*;
 
-public class TypeData extends Template {
+public class TypeData extends MessageContainer {
 
-    protected TypeSystemData typeSystem;
+    private final TypeSystemData typeSystem;
+    private final AnnotationValue annotationValue;
     private final TypeMirror primitiveType;
     private final TypeMirror boxedType;
 
     private final List<TypeCastData> typeCasts = new ArrayList<>();
     private final List<TypeCheckData> typeChecks = new ArrayList<>();
 
-    public TypeData(TypeElement templateType, AnnotationMirror annotation,
-                    TypeMirror primitiveType, TypeMirror boxedType) {
-        super(templateType, annotation);
+    public TypeData(TypeSystemData typeSystem, AnnotationValue value, TypeMirror primitiveType, TypeMirror boxedType) {
+        this.typeSystem = typeSystem;
+        this.annotationValue = value;
         this.primitiveType = primitiveType;
         this.boxedType = boxedType;
+    }
+
+    @Override
+    public Element getMessageElement() {
+        return typeSystem.getMessageElement();
+    }
+
+    @Override
+    public AnnotationMirror getMessageAnnotation() {
+        return typeSystem.getMessageAnnotation();
+    }
+
+    @Override
+    public AnnotationValue getMessageAnnotationValue() {
+        return annotationValue;
     }
 
     void addTypeCast(TypeCastData typeCast) {
@@ -90,5 +106,23 @@ public class TypeData extends Template {
         return getClass().getSimpleName() + "[" + Utils.getSimpleName(primitiveType) + "]";
     }
 
-}
+    public boolean equalsType(TypeData actualTypeData) {
+        return Utils.typeEquals(boxedType, actualTypeData.boxedType);
+    }
 
+    public boolean needsCastTo(TypeData targetType) {
+        if (this.equals(targetType)) {
+            return false;
+        } else if (targetType.isGeneric()) {
+            return false;
+        } else if (targetType.isVoid()) {
+            return false;
+        }
+        return true;
+    }
+
+    public boolean isPrimitive() {
+        return Utils.isPrimitive(getPrimitiveType());
+    }
+
+}
