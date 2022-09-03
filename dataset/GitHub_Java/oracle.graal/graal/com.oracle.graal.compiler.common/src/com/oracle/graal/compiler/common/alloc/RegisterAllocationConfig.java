@@ -22,17 +22,13 @@
  */
 package com.oracle.graal.compiler.common.alloc;
 
-import static com.oracle.graal.compiler.common.GraalOptions.RegisterPressure;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.RegisterConfig;
-import jdk.vm.ci.meta.PlatformKind;
-
-import com.oracle.graal.compiler.common.GraalOptions;
-import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig.AllocatableRegisters;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
 
 /**
  * Configuration for register allocation. This is different to {@link RegisterConfig} as it only
@@ -119,20 +115,7 @@ public class RegisterAllocationConfig {
     }
 
     protected AllocatableRegisters createAllocatableRegisters(Register[] registers) {
-        int min = Integer.MAX_VALUE;
-        int max = Integer.MIN_VALUE;
-        for (Register reg : registers) {
-            int number = reg.number;
-            if (number < min) {
-                min = number;
-            }
-            if (number > max) {
-                max = number;
-            }
-        }
-        assert min < max;
-        return new AllocatableRegisters(registers, min, max);
-
+        return new AllocatableRegisters(registers, registers[0].number, registers[registers.length - 1].number);
     }
 
     /**
