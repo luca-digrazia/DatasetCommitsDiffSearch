@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,13 +24,58 @@
  */
 package com.oracle.truffle.api.frame;
 
+import com.oracle.truffle.api.*;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+
 /**
  * A slot in a frame that can store a value of a given type.
  */
-public interface FrameSlot {
-    String getName();
-    int getIndex();
-    Class< ? > getType();
-    void setType(Class< ? > type);
-    void registerOneShotTypeListener(FrameSlotTypeListener listener);
+public final class FrameSlot implements Cloneable {
+
+    private final FrameDescriptor descriptor;
+    private final Object identifier;
+    private final Object info;
+    private final int index;
+    @CompilationFinal private FrameSlotKind kind;
+
+    public FrameSlot(FrameDescriptor descriptor, Object identifier, Object info, int index, FrameSlotKind kind) {
+        this.descriptor = descriptor;
+        this.identifier = identifier;
+        this.info = info;
+        this.index = index;
+        this.kind = kind;
+    }
+
+    public Object getIdentifier() {
+        return identifier;
+    }
+
+    public Object getInfo() {
+        return info;
+    }
+
+    public int getIndex() {
+        return index;
+    }
+
+    public FrameSlotKind getKind() {
+        return kind;
+    }
+
+    public void setKind(final FrameSlotKind kind) {
+        if (this.kind != kind) {
+            CompilerDirectives.transferToInterpreter();
+            this.kind = kind;
+            this.descriptor.updateVersion();
+        }
+    }
+
+    @Override
+    public String toString() {
+        return "[" + index + "," + identifier + "," + kind + "]";
+    }
+
+    public FrameDescriptor getFrameDescriptor() {
+        return this.descriptor;
+    }
 }
