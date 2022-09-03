@@ -24,7 +24,6 @@
  */
 package com.oracle.truffle.api.nodes;
 
-import com.oracle.truffle.api.CallTarget;
 import java.util.concurrent.locks.ReentrantLock;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
@@ -178,12 +177,7 @@ public abstract class RootNode extends Node {
         return frameDescriptor;
     }
 
-    /**
-     * @since 0.8 or earlier
-     * @deprecated No replacement. Changing {@link CallTarget} of an existing {@link RootNode} isn't
-     *             supported operation
-     */
-    @Deprecated
+    /** @since 0.8 or earlier */
     public final void setCallTarget(RootCallTarget callTarget) {
         this.callTarget = callTarget;
     }
