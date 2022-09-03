@@ -125,13 +125,13 @@ public class SnippetInstaller {
                 }
                 String originalName = originalName(substituteMethod, methodSubstitution.value());
                 Class[] originalParameters = originalParameters(substituteMethod, methodSubstitution.signature(), methodSubstitution.isStatic());
-                Member originalMethod = originalMethod(classSubstitution, originalName, originalParameters);
+                Method originalMethod = originalMethod(classSubstitution, originalName, originalParameters);
                 installMethodSubstitution(originalMethod, substituteMethod);
             }
             if (macroSubstitution != null) {
                 String originalName = originalName(substituteMethod, macroSubstitution.value());
                 Class[] originalParameters = originalParameters(substituteMethod, macroSubstitution.signature(), macroSubstitution.isStatic());
-                Member originalMethod = originalMethod(classSubstitution, originalName, originalParameters);
+                Method originalMethod = originalMethod(classSubstitution, originalName, originalParameters);
                 installMacroSubstitution(originalMethod, macroSubstitution.macro());
             }
         }
@@ -145,25 +145,16 @@ public class SnippetInstaller {
     /**
      * Installs a method substitution.
      * 
-     * @param originalMethod a method or constructor being substituted
+     * @param originalMethod a method being substituted
      * @param substituteMethod the substitute method
      */
-    protected void installMethodSubstitution(Member originalMethod, Method substituteMethod) {
+    protected void installMethodSubstitution(Method originalMethod, Method substituteMethod) {
         substitute = runtime.lookupJavaMethod(substituteMethod);
-        if (originalMethod instanceof Method) {
-            original = runtime.lookupJavaMethod((Method) originalMethod);
-        } else {
-            original = runtime.lookupJavaConstructor((Constructor) originalMethod);
-        }
+        original = runtime.lookupJavaMethod(originalMethod);
         try {
-            Debug.log("inlinable substitution: " + MetaUtil.format("%H.%n(%p)", original) + " --> " + MetaUtil.format("%H.%n(%p)", substitute));
+            Debug.log("substitution: " + MetaUtil.format("%H.%n(%p)", original) + " --> " + MetaUtil.format("%H.%n(%p)", substitute));
             StructuredGraph graph = makeGraph(substitute, inliningPolicy(substitute));
             Object oldValue = original.getCompilerStorage().put(Graph.class, graph);
-            assert oldValue == null;
-
-            Debug.log("compilable substitution: " + MetaUtil.format("%H.%n(%p)", original) + " --> " + MetaUtil.format("%H.%n(%p)", substitute));
-            graph = makeGraph(substitute, inliningPolicy(substitute));
-            oldValue = original.getCompilerStorage().put(MethodSubstitution.class, graph);
             assert oldValue == null;
         } finally {
             substitute = null;
@@ -175,16 +166,11 @@ public class SnippetInstaller {
     /**
      * Installs a macro substitution.
      * 
-     * @param originalMethod a method or constructor being substituted
+     * @param originalMethod a method being substituted
      * @param macro the substitute macro node class
      */
-    protected void installMacroSubstitution(Member originalMethod, Class<? extends FixedWithNextNode> macro) {
-        ResolvedJavaMethod originalJavaMethod;
-        if (originalMethod instanceof Method) {
-            originalJavaMethod = runtime.lookupJavaMethod((Method) originalMethod);
-        } else {
-            originalJavaMethod = runtime.lookupJavaConstructor((Constructor) originalMethod);
-        }
+    protected void installMacroSubstitution(Method originalMethod, Class<? extends FixedWithNextNode> macro) {
+        ResolvedJavaMethod originalJavaMethod = runtime.lookupJavaMethod(originalMethod);
         Object oldValue = originalJavaMethod.getCompilerStorage().put(Node.class, macro);
         assert oldValue == null;
     }
@@ -374,17 +360,13 @@ public class SnippetInstaller {
         return parameters;
     }
 
-    private static Member originalMethod(ClassSubstitution classSubstitution, String name, Class[] parameters) {
+    private static Method originalMethod(ClassSubstitution classSubstitution, String name, Class[] parameters) {
         Class<?> originalClass = classSubstitution.value();
         if (originalClass == ClassSubstitution.class) {
             originalClass = resolveType(classSubstitution.className());
         }
         try {
-            if (name.equals("<init>")) {
-                return originalClass.getDeclaredConstructor(parameters);
-            } else {
-                return originalClass.getDeclaredMethod(name, parameters);
-            }
+            return originalClass.getDeclaredMethod(name, parameters);
         } catch (NoSuchMethodException | SecurityException e) {
             throw new GraalInternalError(e);
         }
