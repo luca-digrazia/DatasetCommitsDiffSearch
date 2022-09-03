@@ -26,8 +26,10 @@ package com.oracle.graal.hotspot.bridge;
 import java.lang.reflect.*;
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.*;
 
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
+import com.oracle.max.criutils.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.phases.*;
 import com.oracle.graal.compiler.phases.PhasePlan.PhasePosition;
@@ -38,11 +40,7 @@ import com.oracle.graal.hotspot.Compiler;
 import com.oracle.graal.hotspot.ri.*;
 import com.oracle.graal.hotspot.server.*;
 import com.oracle.graal.hotspot.snippets.*;
-import com.oracle.graal.java.*;
 import com.oracle.graal.snippets.*;
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
-import com.oracle.max.criutils.*;
 
 /**
  * Exits from the HotSpot VM into Java code.
@@ -63,8 +61,6 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
     public final HotSpotTypePrimitive typeVoid;
 
     private ThreadPoolExecutor compileQueue;
-    private ThreadPoolExecutor slowCompileQueue;
-    private AtomicInteger compileTaskIds = new AtomicInteger();
 
     public VMToCompilerImpl(Compiler compiler) {
         this.compiler = compiler;
@@ -83,18 +79,12 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
     public void startCompiler() throws Throwable {
         // Make sure TTY is initialized here such that the correct System.out is used for TTY.
         TTY.initialize();
-
-        if (GraalOptions.Log == null && GraalOptions.Meter == null && GraalOptions.Time == null && GraalOptions.Dump == null) {
-            if (GraalOptions.MethodFilter != null) {
-                TTY.println("WARNING: Ignoring MethodFilter option since Log, Meter, Time and Dump options are all null");
-            }
-        }
-
         if (GraalOptions.Debug) {
             Debug.enable();
             HotSpotDebugConfig hotspotDebugConfig = new HotSpotDebugConfig(GraalOptions.Log, GraalOptions.Meter, GraalOptions.Time, GraalOptions.Dump, GraalOptions.MethodFilter);
             Debug.setConfig(hotspotDebugConfig);
         }
+
         // Install intrinsics.
         final HotSpotRuntime runtime = (HotSpotRuntime) compiler.getCompiler().runtime;
         if (GraalOptions.Intrinsify) {
@@ -103,33 +93,17 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
                 @Override
                 public void run() {
                     VMToCompilerImpl.this.intrinsifyArrayCopy = new IntrinsifyArrayCopyPhase(runtime);
-                    GraalIntrinsics.installIntrinsics(runtime, runtime.getCompiler().getTarget());
-                    Snippets.install(runtime, runtime.getCompiler().getTarget(), new SystemSnippets());
-                    Snippets.install(runtime, runtime.getCompiler().getTarget(), new UnsafeSnippets());
-                    Snippets.install(runtime, runtime.getCompiler().getTarget(), new ArrayCopySnippets());
+                    GraalIntrinsics.installIntrinsics(runtime, runtime.getCompiler().getTarget(), PhasePlan.DEFAULT);
+                    Snippets.install(runtime, runtime.getCompiler().getTarget(), new SystemSnippets(), PhasePlan.DEFAULT);
+                    Snippets.install(runtime, runtime.getCompiler().getTarget(), new UnsafeSnippets(), PhasePlan.DEFAULT);
+                    Snippets.install(runtime, runtime.getCompiler().getTarget(), new ArrayCopySnippets(), PhasePlan.DEFAULT);
                 }
             });
 
         }
 
         // Create compilation queue.
-        final BlockingQueue<Runnable> queue;
-        if (GraalOptions.PriorityCompileQueue) {
-            queue = new PriorityBlockingQueue<>();
-        } else {
-            queue = new LinkedBlockingQueue<>();
-        }
-        compileQueue = new ThreadPoolExecutor(GraalOptions.Threads, GraalOptions.Threads, 0L, TimeUnit.MILLISECONDS, queue, CompilerThread.FACTORY);
-
-        if (GraalOptions.SlowCompileThreads) {
-            final BlockingQueue<Runnable> slowQueue;
-            if (GraalOptions.PriorityCompileQueue) {
-                slowQueue = new PriorityBlockingQueue<>();
-            } else {
-                slowQueue = new LinkedBlockingQueue<>();
-            }
-            slowCompileQueue = new ThreadPoolExecutor(GraalOptions.Threads, GraalOptions.Threads, 0L, TimeUnit.MILLISECONDS, slowQueue, CompilerThread.LOW_PRIORITY_FACTORY);
-        }
+        compileQueue = new ThreadPoolExecutor(GraalOptions.Threads, GraalOptions.Threads, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<Runnable>(), CompilerThread.FACTORY);
 
         // Create queue status printing thread.
         if (GraalOptions.PrintQueue) {
@@ -138,11 +112,7 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
                 @Override
                 public void run() {
                     while (true) {
-                        if (slowCompileQueue == null) {
-                            TTY.println(compileQueue.toString());
-                        } else {
-                            TTY.println("fast: " + compileQueue.toString() + " slow: " + slowCompileQueue);
-                        }
+                        TTY.println(compileQueue.toString());
                         try {
                             Thread.sleep(1000);
                         } catch (InterruptedException e) {
@@ -179,8 +149,7 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
 
         // Compile until the queue is empty.
         int z = 0;
-        while (compileQueue.getCompletedTaskCount() < Math.max(3, compileQueue.getTaskCount()) || (
-                        slowCompileQueue != null && slowCompileQueue.getCompletedTaskCount() < Math.max(3, slowCompileQueue.getTaskCount()))) {
+        while (compileQueue.getCompletedTaskCount() < Math.max(3, compileQueue.getTaskCount())) {
             Thread.sleep(100);
             while (z < compileQueue.getCompletedTaskCount() / 100) {
                 ++z;
@@ -188,24 +157,19 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
                 TTY.flush();
             }
         }
-        CiCompilationStatistics.clear("bootstrap");
 
         TTY.println(" in %d ms", System.currentTimeMillis() - startTime);
         System.gc();
-        CiCompilationStatistics.clear("bootstrap2");
     }
 
     private void enqueue(Method m) throws Throwable {
         RiMethod riMethod = compiler.getRuntime().getRiMethod(m);
         assert !Modifier.isAbstract(((HotSpotMethodResolved) riMethod).accessFlags()) && !Modifier.isNative(((HotSpotMethodResolved) riMethod).accessFlags()) : riMethod;
-        compileMethod((HotSpotMethodResolved) riMethod, 0, false, 10);
+        compileMethod((HotSpotMethodResolved) riMethod, 0, false);
     }
 
     public void shutdownCompiler() throws Throwable {
         compileQueue.shutdown();
-        if (slowCompileQueue != null) {
-            slowCompileQueue.shutdown();
-        }
 
         if (Debug.isEnabled()) {
             List<DebugValueMap> topLevelMaps = DebugValueMap.getTopLevelMaps();
@@ -239,7 +203,6 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
                 }
             }
         }
-        CiCompilationStatistics.clear("final");
     }
 
     private void flattenChildren(DebugValueMap map, DebugValueMap globalMap) {
@@ -301,7 +264,7 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
     }
 
     @Override
-    public boolean compileMethod(final HotSpotMethodResolved method, final int entryBCI, boolean blocking, int priority) throws Throwable {
+    public boolean compileMethod(final HotSpotMethodResolved method, final int entryBCI, boolean blocking) throws Throwable {
         if (Thread.currentThread() instanceof CompilerThread) {
             if (method.holder().name().contains("java/util/concurrent")) {
                 // This is required to avoid deadlocking a compiler thread. The issue is that a
@@ -312,30 +275,12 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
             }
         }
 
-        CompilationTask current = method.currentTask();
-        if (current != null) {
-            if (GraalOptions.PriorityCompileQueue) {
-                // normally compilation tasks will only be re-queued when they get a priority boost, so cancel the old task and add a new one
-                current.cancel();
-            } else {
-                // without a prioritizing compile queue it makes no sense to re-queue the compilation task
-                return true;
-            }
-        }
-
-        final OptimisticOptimizations optimisticOpts = new OptimisticOptimizations(method);
-        int id = compileTaskIds.incrementAndGet();
-        CompilationTask task = CompilationTask.create(compiler, createHotSpotSpecificPhasePlan(optimisticOpts), optimisticOpts, method, id, priority);
+        Runnable task = CompilationTask.create(compiler, getDefaultPhasePlan(), method);
         if (blocking) {
             task.run();
         } else {
             try {
-                method.setCurrentTask(task);
-                if (GraalOptions.SlowCompileThreads && priority > GraalOptions.SlowQueueCutoff) {
-                    slowCompileQueue.execute(task);
-                } else {
-                    compileQueue.execute(task);
-                }
+                compileQueue.execute(task);
             } catch (RejectedExecutionException e) {
                 // The compile queue was already shut down.
                 return false;
@@ -433,11 +378,8 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
         return CiConstant.forObject(object);
     }
 
-
-    private PhasePlan createHotSpotSpecificPhasePlan(OptimisticOptimizations optimisticOpts) {
+    private PhasePlan getDefaultPhasePlan() {
         PhasePlan phasePlan = new PhasePlan();
-        GraphBuilderPhase graphBuilderPhase = new GraphBuilderPhase(compiler.getRuntime(), GraphBuilderConfiguration.getDefault(), optimisticOpts);
-        phasePlan.addPhase(PhasePosition.AFTER_PARSING, graphBuilderPhase);
         if (GraalOptions.Intrinsify) {
             phasePlan.addPhase(PhasePosition.HIGH_LEVEL, intrinsifyArrayCopy);
         }
