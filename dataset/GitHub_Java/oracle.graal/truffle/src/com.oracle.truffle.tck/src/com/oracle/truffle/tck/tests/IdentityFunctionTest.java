@@ -24,9 +24,16 @@
  */
 package com.oracle.truffle.tck.tests;
 
-import java.io.IOException;
+import static org.graalvm.polyglot.tck.TypeDescriptor.ARRAY;
+import static org.graalvm.polyglot.tck.TypeDescriptor.BOOLEAN;
+import static org.graalvm.polyglot.tck.TypeDescriptor.HOST_OBJECT;
+import static org.graalvm.polyglot.tck.TypeDescriptor.NATIVE_POINTER;
+import static org.graalvm.polyglot.tck.TypeDescriptor.NULL;
+import static org.graalvm.polyglot.tck.TypeDescriptor.NUMBER;
+import static org.graalvm.polyglot.tck.TypeDescriptor.OBJECT;
+import static org.graalvm.polyglot.tck.TypeDescriptor.STRING;
 
-import static org.graalvm.polyglot.tck.TypeDescriptor.*;
+import java.io.IOException;
 import java.util.AbstractMap;
 import java.util.Arrays;
 import java.util.Collection;
@@ -124,17 +131,19 @@ public class IdentityFunctionTest {
     @Test
     public void testIdentityFunction() {
         Assume.assumeThat(testRun, TEST_RESULT_MATCHER);
-        Value result = null;
+        boolean success = false;
         try {
             try {
 
-                result = testRun.getSnippet().getExecutableValue().execute(testRun.getActualParameters().toArray());
+                final Value result = testRun.getSnippet().getExecutableValue().execute(testRun.getActualParameters().toArray());
                 TestUtil.validateResult(testRun, result, null);
+                success = true;
             } catch (PolyglotException pe) {
                 TestUtil.validateResult(testRun, null, pe);
+                success = true;
             }
         } finally {
-            TEST_RESULT_MATCHER.accept(new AbstractMap.SimpleImmutableEntry<>(testRun, result != null));
+            TEST_RESULT_MATCHER.accept(new AbstractMap.SimpleImmutableEntry<>(testRun, success));
         }
     }
 }

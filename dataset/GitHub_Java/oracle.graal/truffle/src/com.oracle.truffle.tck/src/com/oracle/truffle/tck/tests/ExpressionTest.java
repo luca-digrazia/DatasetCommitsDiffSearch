@@ -25,8 +25,10 @@
 package com.oracle.truffle.tck.tests;
 
 import java.io.IOException;
+import java.util.AbstractMap;
 import java.util.Collection;
 import java.util.Objects;
+import java.util.function.Function;
 import org.graalvm.polyglot.Value;
 import org.junit.Assume;
 import org.junit.Test;
@@ -34,6 +36,7 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.PolyglotException;
+import org.graalvm.polyglot.tck.Snippet;
 import org.junit.AfterClass;
 import org.junit.Before;
 
@@ -50,8 +53,18 @@ public class ExpressionTest {
         final Collection<? extends TestRun> testRuns = TestUtil.createTestRuns(
                         TestUtil.getRequiredLanguages(context),
                         TestUtil.getRequiredValueLanguages(context),
-                        (lang) -> context.getExpressions(null, null, lang),
-                        (lang) -> context.getValueConstructors(null, lang));
+                        new Function<String, Collection<? extends Snippet>>() {
+                            @Override
+                            public Collection<? extends Snippet> apply(String lang) {
+                                return context.getExpressions(null, null, lang);
+                            }
+                        },
+                        new Function<String, Collection<? extends Snippet>>() {
+                            @Override
+                            public Collection<? extends Snippet> apply(String lang) {
+                                return context.getValueConstructors(null, lang);
+                            }
+                        });
         return testRuns;
     }
 
@@ -74,16 +87,18 @@ public class ExpressionTest {
     @Test
     public void testExpression() {
         Assume.assumeThat(testRun, TEST_RESULT_MATCHER);
-        Value result = null;
+        boolean success = false;
         try {
             try {
-                result = testRun.getSnippet().getExecutableValue().execute(testRun.getActualParameters().toArray());
+                final Value result = testRun.getSnippet().getExecutableValue().execute(testRun.getActualParameters().toArray());
                 TestUtil.validateResult(testRun, result, null);
+                success = true;
             } catch (PolyglotException pe) {
                 TestUtil.validateResult(testRun, null, pe);
+                success = true;
             }
         } finally {
-            TEST_RESULT_MATCHER.accept(Pair.of(testRun, result != null));
+            TEST_RESULT_MATCHER.accept(new AbstractMap.SimpleImmutableEntry<>(testRun, success));
         }
     }
 }

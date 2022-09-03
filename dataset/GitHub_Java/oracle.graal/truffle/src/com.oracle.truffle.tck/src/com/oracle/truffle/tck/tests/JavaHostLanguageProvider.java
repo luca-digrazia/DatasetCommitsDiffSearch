@@ -59,23 +59,23 @@ public final class JavaHostLanguageProvider implements LanguageProvider {
     @Override
     public Collection<? extends Snippet> createValueConstructors(final Context context) {
         final List<Snippet> result = new ArrayList<>();
-        final Map<Class<?>, Primitive> primitives = new HashMap<>();
-        primitives.put(Boolean.class, Primitive.create("boolean", false, TypeDescriptor.BOOLEAN));
-        primitives.put(Byte.class, Primitive.create("byte", Byte.MIN_VALUE, TypeDescriptor.NUMBER));
-        primitives.put(Short.class, Primitive.create("short", Short.MIN_VALUE, TypeDescriptor.NUMBER));
-        primitives.put(Character.class, Primitive.create("char", ' ', TypeDescriptor.STRING));
-        primitives.put(Integer.class, Primitive.create("int", Integer.MAX_VALUE, TypeDescriptor.NUMBER));   // Integer.MIN_VALUE
-                                                                                                            // is
-                                                                                                            // NA
-                                                                                                            // for
-                                                                                                            // fast-r
-        primitives.put(Long.class, Primitive.create("long", Long.MIN_VALUE, TypeDescriptor.NUMBER));
-        primitives.put(Float.class, Primitive.create("float", Float.MAX_VALUE, TypeDescriptor.NUMBER));
-        primitives.put(Double.class, Primitive.create("double", Double.MAX_VALUE, TypeDescriptor.NUMBER));
-        primitives.put(String.class, Primitive.create("java.lang.String", "TEST", TypeDescriptor.STRING));
+        final Primitive[] primitives = new Primitive[]{
+                        Primitive.create("boolean", false, TypeDescriptor.BOOLEAN),
+                        Primitive.create("byte", Byte.MIN_VALUE, TypeDescriptor.NUMBER),
+                        Primitive.create("short", Short.MIN_VALUE, TypeDescriptor.NUMBER),
+                        Primitive.create("char", ' ', TypeDescriptor.STRING),
+                        Primitive.create("int", Integer.MAX_VALUE, TypeDescriptor.NUMBER),  // Integer.MIN_VALUE
+                                                                                            // is NA
+                                                                                            // for
+                                                                                            // fast-r
+                        Primitive.create("long", Long.MIN_VALUE, TypeDescriptor.NUMBER),
+                        Primitive.create("float", Float.MAX_VALUE, TypeDescriptor.NUMBER),
+                        Primitive.create("double", Double.MAX_VALUE, TypeDescriptor.NUMBER),
+                        Primitive.create("java.lang.String", "TEST", TypeDescriptor.STRING)
+        };
 
         // Java primitives
-        for (Primitive primitive : primitives.values()) {
+        for (Primitive primitive : primitives) {
             result.add(createPrimitive(context, primitive));
         }
         // Arrays
@@ -84,12 +84,12 @@ public final class JavaHostLanguageProvider implements LanguageProvider {
         result.add(Snippet.newBuilder("Array<java.lang.Object>", export(context, new ValueSupplier<>(new Object[]{1, "TEST"})),
                         TypeDescriptor.union(TypeDescriptor.OBJECT, TypeDescriptor.ARRAY)).build());
         // Primitive Proxies
-        for (Primitive primitive : primitives.values()) {
+        for (Primitive primitive : primitives) {
             result.add(createProxyPrimitive(context, primitive));
         }
         // Array Proxies
         result.add(createProxyArray(context, null));
-        for (Primitive primitive : primitives.values()) {
+        for (Primitive primitive : primitives) {
             result.add(createProxyArray(context, primitive));
         }
         // Object Proxies
@@ -108,10 +108,7 @@ public final class JavaHostLanguageProvider implements LanguageProvider {
                         "ProxyExecutable<>",
                         export(context, new ValueSupplier<>(new ProxyExecutableImpl(ProxyExecutableImpl.EMPTY, 0))),
                         TypeDescriptor.union(TypeDescriptor.OBJECT, TypeDescriptor.executable(TypeDescriptor.ANY))).build());
-        for (Primitive primitive : new Primitive[]{
-                        primitives.get(Boolean.class),
-                        primitives.get(Integer.class),
-                        primitives.get(String.class)}) {
+        for (Primitive primitive : primitives) {
             result.add(createProxyExecutable(context, primitive));
         }
         return Collections.unmodifiableCollection(result);
@@ -288,22 +285,15 @@ public final class JavaHostLanguageProvider implements LanguageProvider {
                 return new Consumer<Value>() {
                     @Override
                     public void accept(Value value) {
-                        if (!value.isNumber()) {
-                            throw new AssertionError(String.format("Expected NUMBER, got: %s", value));
-                        }
-                        if (value.fitsInByte()) {
+                        if (primitive.value.getClass() == Byte.class) {
                             value.asByte();
-                        }
-                        if (value.fitsInInt()) {
+                        } else if (primitive.value.getClass() == Short.class || primitive.value.getClass() == Integer.class) {
                             value.asInt();
-                        }
-                        if (value.fitsInLong()) {
+                        } else if (primitive.value.getClass() == Long.class) {
                             value.asLong();
-                        }
-                        if (value.fitsInFloat()) {
+                        } else if (primitive.value.getClass() == Float.class) {
                             value.asFloat();
-                        }
-                        if (value.fitsInDouble()) {
+                        } else if (primitive.value.getClass() == Double.class) {
                             value.asDouble();
                         }
                     }
