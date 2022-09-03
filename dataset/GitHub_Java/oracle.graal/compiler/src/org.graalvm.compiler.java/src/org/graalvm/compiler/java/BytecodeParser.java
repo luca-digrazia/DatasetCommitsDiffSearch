@@ -270,7 +270,6 @@ import java.util.function.Supplier;
 
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.Equivalence;
-import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.compiler.api.replacements.Snippet;
 import org.graalvm.compiler.bytecode.Bytecode;
 import org.graalvm.compiler.bytecode.BytecodeDisassembler;
@@ -2530,7 +2529,6 @@ public class BytecodeParser implements GraphBuilderContext {
 
     protected void genReturn(ValueNode returnVal, JavaKind returnKind) {
         if (parsingIntrinsic() && returnVal != null) {
-
             if (returnVal instanceof StateSplit) {
                 StateSplit stateSplit = (StateSplit) returnVal;
                 FrameState stateAfter = stateSplit.stateAfter();
@@ -2539,20 +2537,7 @@ public class BytecodeParser implements GraphBuilderContext {
                     if (stateAfter.bci == BytecodeFrame.AFTER_BCI) {
                         assert stateAfter.usages().count() == 1;
                         assert stateAfter.usages().first() == stateSplit;
-                        FrameState state;
-                        if (returnVal.getStackKind() == JavaKind.Illegal) {
-                            // This should only occur when Fold and NodeIntrinsic plugins are
-                            // deferred. Their return value might not be a Java type and in that
-                            // case this can't be the final AFTER_BCI so just create a FrameState
-                            // without a return value on the top of stack.
-                            assert stateSplit instanceof Invoke;
-                            ResolvedJavaMethod targetMethod = ((Invoke) stateSplit).getTargetMethod();
-                            assert targetMethod != null && (targetMethod.getAnnotation(Fold.class) != null || targetMethod.getAnnotation(Node.NodeIntrinsic.class) != null);
-                            state = new FrameState(BytecodeFrame.AFTER_BCI);
-                        } else {
-                            state = new FrameState(BytecodeFrame.AFTER_BCI, returnVal);
-                        }
-                        stateAfter.replaceAtUsages(graph.add(state));
+                        stateAfter.replaceAtUsages(graph.add(new FrameState(BytecodeFrame.AFTER_BCI, returnVal)));
                         GraphUtil.killWithUnusedFloatingInputs(stateAfter);
                     } else {
                         /*
@@ -3426,7 +3411,13 @@ public class BytecodeParser implements GraphBuilderContext {
                     this.controlFlowSplit = true;
                     FixedNode noDeoptSuccessor = createTarget(noDeoptBlock, frameState, false, true);
                     DeoptimizeNode deopt = graph.add(new DeoptimizeNode(InvalidateReprofile, UnreachedCode));
-                    FixedNode deoptSuccessor = checkLoopExit(deopt, deoptBlock, frameState).fixed;
+                    /*
+                     * We do not want to `checkLoopExit` here: otherwise the deopt will go to the
+                     * deoptBlock's BCI, skipping the branch in the interpreter, and the profile
+                     * will never see that the branch is taken. This can lead to deopt loops or OSR
+                     * failure.
+                     */
+                    FixedNode deoptSuccessor = BeginNode.begin(deopt);
                     ValueNode ifNode = genIfNode(condition, negated ? deoptSuccessor : noDeoptSuccessor, negated ? noDeoptSuccessor : deoptSuccessor, negated ? 1 - probability : probability);
                     postProcessIfNode(ifNode);
                     append(ifNode);
@@ -4539,13 +4530,9 @@ public class BytecodeParser implements GraphBuilderContext {
          * Javac does not allow use of "$assertionsDisabled" for a field name but Eclipse does, in
          * which case a suffix is added to the generated field.
          */
-        if (resolvedField.isSynthetic() && resolvedField.getName().startsWith("$assertionsDisabled")) {
-            if (parsingIntrinsic()) {
-                throw new GraalError("Cannot use an assertion within the context of an intrinsic.");
-            } else if (graphBuilderConfig.omitAssertions()) {
-                frameState.push(field.getJavaKind(), ConstantNode.forBoolean(true, graph));
-                return;
-            }
+        if ((parsingIntrinsic() || graphBuilderConfig.omitAssertions()) && resolvedField.isSynthetic() && resolvedField.getName().startsWith("$assertionsDisabled")) {
+            frameState.push(field.getJavaKind(), ConstantNode.forBoolean(true, graph));
+            return;
         }
 
         ResolvedJavaType holder = resolvedField.getDeclaringClass();

@@ -38,12 +38,8 @@ public abstract class Loop<T extends AbstractBlockBase<T>> {
     private final T header;
     private final ArrayList<T> blocks;
     private final ArrayList<T> exits;
-    /**
-     * Natural exits, ignoring LoopExitNodes.
-     *
-     * @see #getNaturalExits()
-     */
-    private final ArrayList<T> naturalExits;
+    // "actual" exist, ignoring LoopExitNodes
+    private final ArrayList<T> cfgExits;
 
     protected Loop(Loop<T> parent, int index, T header) {
         this.parent = parent;
@@ -57,7 +53,7 @@ public abstract class Loop<T extends AbstractBlockBase<T>> {
         this.blocks = new ArrayList<>();
         this.children = new ArrayList<>();
         this.exits = new ArrayList<>();
-        this.naturalExits = new ArrayList<>();
+        this.cfgExits = new ArrayList<>();
     }
 
     public abstract long numBackedges();
@@ -95,49 +91,11 @@ public abstract class Loop<T extends AbstractBlockBase<T>> {
      * Returns the loop exits.
      *
      * This might be a conservative set: before framestate assignment it matches the LoopExitNodes
-     * even if earlier blocks could be considered as exits. After framestate assignments, this is
-     * the same as {@link #getNaturalExits()}.
+     * even if earlier blocks could be considered as exits.
      *
-     * <p>
-     * LoopExitNodes are inserted in the control-flow during parsing and are natural exits: they are
-     * the earliest block at which we are guaranteed to have exited the loop. However, after some
-     * transformations of the graph, the natural exit might go up but the LoopExitNodes are not
-     * updated.
-     * </p>
-     *
-     * <p>
-     * For example in:
-     *
-     * <pre>
-     * for (int i = 0; i < N; i++) {
-     *     if (c) {
-     *         // Block 1
-     *         if (dummy) {
-     *             // ...
-     *         } else {
-     *             // ...
-     *         }
-     *         if (b) {
-     *             continue;
-     *         } else {
-     *             // Block 2
-     *             // LoopExitNode
-     *             break;
-     *         }
-     *     }
-     * }
-     * </pre>
-     *
-     * After parsing, the natural exits match the LoopExitNode: Block 2 is a natural exit and has a
-     * LoopExitNode. If the {@code b} condition gets canonicalized to {@code false}, the natural
-     * exit moves to Block 1 while the LoopExitNode remains in Block 2. In such a scenario,
-     * {@code getLoopExits()} will contain block 2 while {@link #getNaturalExits()} will contain
-     * block 1.
-     *
-     *
-     * @see #getNaturalExits()
+     * @see #getCfgExits()
      */
-    public List<T> getLoopExits() {
+    public List<T> getExits() {
         return exits;
     }
 
@@ -147,10 +105,10 @@ public abstract class Loop<T extends AbstractBlockBase<T>> {
      *
      * This can not be used in the context of preserving or using loop-closed form.
      *
-     * @see #getLoopExits()
+     * @see #getExits()
      */
-    public ArrayList<T> getNaturalExits() {
-        return naturalExits;
+    public ArrayList<T> getCfgExits() {
+        return cfgExits;
     }
 
     /**
