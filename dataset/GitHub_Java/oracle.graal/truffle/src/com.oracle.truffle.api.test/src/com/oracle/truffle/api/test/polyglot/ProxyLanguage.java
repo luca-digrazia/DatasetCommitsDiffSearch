@@ -183,7 +183,6 @@ public class ProxyLanguage extends TruffleLanguage<LanguageContext> {
         }
     }
 
-    @SuppressWarnings("deprecation")
     @Override
     protected Object lookupSymbol(LanguageContext context, String symbolName) {
         if (wrapper) {

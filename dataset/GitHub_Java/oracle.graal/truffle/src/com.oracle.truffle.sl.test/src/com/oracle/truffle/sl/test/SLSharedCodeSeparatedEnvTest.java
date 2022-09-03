@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -49,7 +49,6 @@ import java.io.IOException;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.Instrument;
-import org.graalvm.polyglot.PolyglotAccess;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -77,10 +76,10 @@ public class SLSharedCodeSeparatedEnvTest {
 
         int instances = SLLanguage.counter;
         // @formatter:off
-        e1 = Context.newBuilder("sl").engine(engine).out(os1).allowPolyglotAccess(PolyglotAccess.ALL).build();
-        e1.getPolyglotBindings().putMember("extra", 1);
-        e2 = Context.newBuilder("sl").engine(engine).out(os2).allowPolyglotAccess(PolyglotAccess.ALL).build();
-        e2.getPolyglotBindings().putMember("extra", 2);
+        e1 = Context.newBuilder("sl").engine(engine).out(os1).build();
+        e1.exportSymbol("extra", 1);
+        e2 = Context.newBuilder("sl").engine(engine).out(os2).build();
+        e2.exportSymbol("extra", 2);
         e1.initialize("sl");
         e2.initialize("sl");
         assertEquals("One SLLanguage instance created", instances + 1, SLLanguage.counter);
