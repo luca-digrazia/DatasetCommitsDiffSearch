@@ -22,18 +22,13 @@
  */
 package com.oracle.graal.truffle.test;
 
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.*;
 
-import com.oracle.graal.truffle.OptimizedCallTarget;
-import com.oracle.graal.truffle.test.nodes.AbstractTestNode;
-import com.oracle.graal.truffle.test.nodes.AssumptionCutsBranchTestNode;
-import com.oracle.graal.truffle.test.nodes.ConstantWithAssumptionTestNode;
-import com.oracle.graal.truffle.test.nodes.RootTestNode;
-import com.oracle.truffle.api.Assumption;
-import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.frame.FrameDescriptor;
-import com.oracle.truffle.api.nodes.InvalidAssumptionException;
+import com.oracle.graal.truffle.*;
+import com.oracle.graal.truffle.test.nodes.*;
+import com.oracle.truffle.api.*;
+import com.oracle.truffle.api.frame.*;
+import com.oracle.truffle.api.nodes.*;
 
 public class AssumptionPartialEvaluationTest extends PartialEvaluationTest {
     public static Object constant42() {
@@ -62,22 +57,5 @@ public class AssumptionPartialEvaluationTest extends PartialEvaluationTest {
         }
         Assert.assertFalse(callTarget.isValid());
         assertDeepEquals(43, callTarget.call());
-    }
-
-    /**
-     * This tests whether a valid Assumption does successfully cut of the branch that is not
-     * executed.
-     */
-    @Test
-    public void assumptionBranchCutoff() {
-        Assumption assumption = Truffle.getRuntime().createAssumption();
-        AssumptionCutsBranchTestNode result = new AssumptionCutsBranchTestNode(assumption);
-        RootTestNode rootNode = new RootTestNode(new FrameDescriptor(), "cutoffBranch", result);
-        OptimizedCallTarget compilable = compileHelper("cutoffBranch", rootNode, new Object[0]);
-
-        for (int i = 0; i < 100000; i++) {
-            Assert.assertEquals(0, compilable.call(new Object[0]));
-        }
-        Assert.assertNull(result.getChildNode());
     }
 }
