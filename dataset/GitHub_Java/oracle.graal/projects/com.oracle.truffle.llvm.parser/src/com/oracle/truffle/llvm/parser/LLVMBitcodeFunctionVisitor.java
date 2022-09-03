@@ -35,42 +35,65 @@ import java.util.List;
 import java.util.Map;
 
 import com.oracle.truffle.api.frame.FrameDescriptor;
-import com.oracle.truffle.llvm.parser.LLVMLivenessAnalysis.LLVMLivenessAnalysisResult;
+import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.llvm.parser.LLVMPhiManager.Phi;
 import com.oracle.truffle.llvm.parser.model.blocks.InstructionBlock;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionDefinition;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.Instruction;
 import com.oracle.truffle.llvm.parser.model.visitors.FunctionVisitor;
-import com.oracle.truffle.llvm.parser.nodes.LLVMSymbolReadResolver;
+import com.oracle.truffle.llvm.parser.nodes.LLVMSymbolResolver;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 
 final class LLVMBitcodeFunctionVisitor implements FunctionVisitor {
 
-    private final LLVMParserRuntime runtime;
-    private final FrameDescriptor frame;
-    private final List<LLVMExpressionNode> blocks;
-    private final Map<String, Integer> labels;
-    private final Map<InstructionBlock, List<Phi>> phis;
-    private final LLVMSymbolReadResolver symbols;
-    private final NodeFactory nodeFactory;
-    private final int argCount;
-    private final FunctionDefinition function;
-    private final LLVMLivenessAnalysisResult liveness;
+    private final LLVMParserRuntime module;
 
-    LLVMBitcodeFunctionVisitor(LLVMParserRuntime runtime, FrameDescriptor frame, Map<String, Integer> labels,
-                    Map<InstructionBlock, List<Phi>> phis, NodeFactory nodeFactory, int argCount, LLVMSymbolReadResolver symbols, FunctionDefinition functionDefinition,
-                    LLVMLivenessAnalysisResult liveness) {
-        this.runtime = runtime;
+    private final FrameDescriptor frame;
+
+    private final List<LLVMExpressionNode> blocks = new ArrayList<>();
+
+    private final Map<String, Integer> labels;
+
+    private final Map<InstructionBlock, List<Phi>> phis;
+
+    private final List<LLVMNode> instructions = new ArrayList<>();
+
+    private final LLVMSymbolResolver symbolResolver;
+
+    private final SulongNodeFactory nodeFactory;
+
+    private final int argCount;
+
+    private final FunctionDefinition function;
+
+    LLVMBitcodeFunctionVisitor(LLVMParserRuntime module, FrameDescriptor frame, Map<String, Integer> labels,
+                    Map<InstructionBlock, List<Phi>> phis, SulongNodeFactory nodeFactory, int argCount, LLVMSymbolResolver symbolResolver, FunctionDefinition functionDefinition) {
+        this.module = module;
         this.frame = frame;
         this.labels = labels;
         this.phis = phis;
-        this.symbols = symbols;
+        this.symbolResolver = symbolResolver;
         this.nodeFactory = nodeFactory;
         this.argCount = argCount;
         this.function = functionDefinition;
-        this.liveness = liveness;
+    }
 
-        this.blocks = new ArrayList<>();
+    void addInstruction(LLVMNode node) {
+        instructions.add(node);
+    }
+
+    void addTerminatingInstruction(LLVMControlFlowNode node, int blockId, String blockName) {
+        blocks.add(nodeFactory.createBasicBlockNode(module, getBlock(), node, blockId, blockName));
+        instructions.add(node);
+    }
+
+    int getArgCount() {
+        return argCount;
+    }
+
+    public LLVMExpressionNode[] getBlock() {
+        return instructions.toArray(new LLVMExpressionNode[instructions.size()]);
     }
 
     public List<LLVMExpressionNode> getBlocks() {
@@ -81,16 +104,34 @@ final class LLVMBitcodeFunctionVisitor implements FunctionVisitor {
         return function;
     }
 
+    public LLVMParserRuntime getRuntime() {
+        return module;
+    }
+
+    public FrameDescriptor getFrame() {
+        return frame;
+    }
+
+    FrameSlot getSlot(String name) {
+        return frame.findFrameSlot(name);
+    }
+
+    LLVMSymbolResolver getSymbolResolver() {
+        return symbolResolver;
+    }
+
+    public Map<String, Integer> labels() {
+        return labels;
+    }
+
+    Map<InstructionBlock, List<Phi>> getPhiManager() {
+        return phis;
+    }
+
     @Override
     public void visit(InstructionBlock block) {
-        List<Phi> blockPhis = phis.get(block);
-        ArrayList<LLVMLivenessAnalysis.NullerInformation> blockNullerInfos = liveness.getNullableWithinBlock()[block.getBlockIndex()];
-        LLVMBitcodeInstructionVisitor visitor = new LLVMBitcodeInstructionVisitor(frame, labels, blockPhis, nodeFactory, argCount, symbols, runtime, blockNullerInfos);
-        for (int i = 0; i < block.getInstructionCount(); i++) {
-            Instruction instruction = block.getInstruction(i);
-            visitor.setInstructionIndex(i);
-            instruction.accept(visitor);
-        }
-        blocks.add(nodeFactory.createBasicBlockNode(runtime, visitor.getInstructions(), visitor.getControlFlowNode(), block.getBlockIndex(), block.getName()));
+        this.instructions.clear();
+        block.accept(new LLVMBitcodeInstructionVisitor(this, block, nodeFactory));
     }
+
 }

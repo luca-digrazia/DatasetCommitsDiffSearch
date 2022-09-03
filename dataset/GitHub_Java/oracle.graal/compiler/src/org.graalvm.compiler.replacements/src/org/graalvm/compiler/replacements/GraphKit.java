@@ -29,10 +29,10 @@ import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.graalvm.api.word.LocationIdentity;
 import org.graalvm.compiler.core.common.spi.ConstantFieldProvider;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.core.common.type.StampPair;
-import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.graph.Graph;
 import org.graalvm.compiler.graph.Node.ValueNumberable;
 import org.graalvm.compiler.java.FrameStateBuilder;
@@ -67,7 +67,6 @@ import org.graalvm.compiler.phases.common.DeadCodeEliminationPhase.Optionality;
 import org.graalvm.compiler.phases.common.inlining.InliningUtil;
 import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.compiler.word.WordTypes;
-import org.graalvm.word.LocationIdentity;
 
 import jdk.vm.ci.code.BytecodeFrame;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
@@ -207,7 +206,7 @@ public class GraphKit implements GraphBuilderTool {
                 method = providers.getMetaAccess().lookupJavaMethod(m);
             }
         }
-        GraalError.guarantee(method != null, "Could not find %s.%s (%s)", declaringClass, name, isStatic ? "static" : "non-static");
+        assert method != null : "did not find method in " + declaringClass + " named " + name;
         return method;
     }
 
@@ -308,7 +307,7 @@ public class GraphKit implements GraphBuilderTool {
         Plugins plugins = new Plugins(graphBuilderPlugins);
         GraphBuilderConfiguration config = GraphBuilderConfiguration.getSnippetDefault(plugins);
 
-        StructuredGraph calleeGraph = new StructuredGraph.Builder(invoke.getOptions(), invoke.getDebug()).method(method).build();
+        StructuredGraph calleeGraph = new StructuredGraph.Builder(invoke.getOptions()).method(method).build();
         IntrinsicContext initialReplacementContext = new IntrinsicContext(method, method, providers.getReplacements().getDefaultReplacementBytecodeProvider(), INLINE_AFTER_PARSING);
         GraphBuilderPhase.Instance instance = new GraphBuilderPhase.Instance(metaAccess, providers.getStampProvider(), providers.getConstantReflection(), providers.getConstantFieldProvider(), config,
                         OptimisticOptimizations.NONE,

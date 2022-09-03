@@ -250,9 +250,7 @@ public final class LLVMDispatchBasicBlockNode extends LLVMExpressionNode {
         LLVMStackFrameNuller[] afterStackNuller = nuller[bci];
         if (afterStackNuller != null) {
             for (int j = 0; j < afterStackNuller.length; j++) {
-                if (afterStackNuller[j] != null) {
-                    afterStackNuller[j].nullifySlot(frame);
-                }
+                afterStackNuller[j].nullifySlot(frame);
             }
         }
     }
