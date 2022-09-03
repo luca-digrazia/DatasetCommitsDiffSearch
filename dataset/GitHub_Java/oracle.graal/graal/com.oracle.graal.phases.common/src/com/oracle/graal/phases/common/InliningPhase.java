@@ -33,7 +33,6 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
@@ -124,10 +123,10 @@ public class InliningPhase extends Phase {
 
     @Override
     protected void run(final StructuredGraph graph) {
-        final InliningData data = new InliningData(graph, compilationAssumptions);
+        InliningData data = new InliningData(graph, compilationAssumptions);
 
         while (data.hasUnprocessedGraphs()) {
-            final MethodInvocation currentInvocation = data.currentInvocation();
+            MethodInvocation currentInvocation = data.currentInvocation();
             GraphInfo graphInfo = data.currentGraph();
             if (!currentInvocation.isRoot() && !inliningPolicy.isWorthInlining(currentInvocation.callee(), data.inliningDepth(), currentInvocation.probability(), currentInvocation.relevance(), false)) {
                 int remainingGraphs = currentInvocation.totalGraphs() - currentInvocation.processedGraphs();
@@ -143,15 +142,8 @@ public class InliningPhase extends Phase {
                     currentInvocation.incrementProcessedGraphs();
                     if (currentInvocation.processedGraphs() == currentInvocation.totalGraphs()) {
                         data.popInvocation();
-                        final MethodInvocation parentInvoke = data.currentInvocation();
-                        Debug.scope("Inlining", data.inliningContext(), new Runnable() {
-
-                            @Override
-                            public void run() {
-                                tryToInline(data.currentGraph(), currentInvocation, parentInvoke, data.inliningDepth() + 1);
-                            }
-                        });
-
+                        MethodInvocation parentInvoke = data.currentInvocation();
+                        tryToInline(data.currentGraph(), currentInvocation, parentInvoke, data.inliningDepth() + 1);
                     }
                 }
             }
@@ -589,9 +581,6 @@ public class InliningPhase extends Phase {
 
         private static final GraphInfo DummyGraphInfo = new GraphInfo(null, new LinkedList<Invoke>(), 1.0, 1.0);
 
-        /**
-         * Call hierarchy from outer most call (i.e., compilation unit) to inner most callee.
-         */
         private final ArrayDeque<GraphInfo> graphQueue;
         private final ArrayDeque<MethodInvocation> invocationQueue;
 
@@ -643,18 +632,6 @@ public class InliningPhase extends Phase {
             }
         }
 
-        /**
-         * Gets the call hierarchy of this inling from outer most call to inner most callee.
-         */
-        public Object[] inliningContext() {
-            Object[] result = new Object[graphQueue.size()];
-            int i = 0;
-            for (GraphInfo g : graphQueue) {
-                result[i++] = g.graph.method();
-            }
-            return result;
-        }
-
         public MethodInvocation currentInvocation() {
             return invocationQueue.peek();
         }
@@ -693,12 +670,10 @@ public class InliningPhase extends Phase {
             StringBuilder result = new StringBuilder("Invocations: ");
 
             for (MethodInvocation invocation : invocationQueue) {
-                if (invocation.callee() != null) {
-                    result.append(invocation.callee().numberOfMethods());
-                    result.append("x ");
-                    result.append(invocation.callee().invoke());
-                    result.append("; ");
-                }
+                result.append(invocation.callee().numberOfMethods());
+                result.append("x ");
+                result.append(invocation.callee().invoke());
+                result.append("; ");
             }
 
             result.append("\nGraphs: ");
@@ -779,26 +754,8 @@ public class InliningPhase extends Phase {
         public boolean isRoot() {
             return callee == null;
         }
-
-        @Override
-        public String toString() {
-            if (isRoot()) {
-                return "<root>";
-            }
-            CallTargetNode callTarget = callee.invoke().callTarget();
-            if (callTarget instanceof MethodCallTargetNode) {
-                ResolvedJavaMethod calleeMethod = ((MethodCallTargetNode) callTarget).targetMethod();
-                return MetaUtil.format("Invoke#%H.%n(%p)", calleeMethod);
-            } else {
-                return "Invoke#" + callTarget.targetName();
-            }
-        }
     }
 
-    /**
-     * Information about a graph that will potentially be inlined. This includes tracking the
-     * invocations in graph that will subject to inlining themselves.
-     */
     private static class GraphInfo {
 
         private final StructuredGraph graph;
@@ -820,10 +777,6 @@ public class InliningPhase extends Phase {
             }
         }
 
-        /**
-         * Gets the method associated with the {@linkplain #graph() graph} represented by this
-         * object.
-         */
         public ResolvedJavaMethod method() {
             return graph.method();
         }
@@ -832,9 +785,6 @@ public class InliningPhase extends Phase {
             return !remainingInvokes.isEmpty();
         }
 
-        /**
-         * The graph about which this object contains inlining information.
-         */
         public StructuredGraph graph() {
             return graph;
         }
@@ -858,11 +808,6 @@ public class InliningPhase extends Phase {
 
         public double invokeRelevance(Invoke invoke) {
             return Math.min(CapInheritedRelevance.getValue(), relevance) * nodeRelevance.get(invoke.asNode());
-        }
-
-        @Override
-        public String toString() {
-            return MetaUtil.format("%H.%n(%p)", method()) + remainingInvokes;
         }
     }
 
