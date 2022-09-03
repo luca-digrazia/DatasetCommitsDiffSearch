@@ -198,11 +198,7 @@ public final class NativeLookup {
             }
         }
         TruffleObject symbol = getNativeFunction(defaultLibrary, name);
-        if (symbol == null) {
-            throw new LinkageError(String.format("External function %s cannot be found.", name));
-        } else {
-            return symbol;
-        }
+        return symbol;
     }
 
     public TruffleObject getNativeDataObject(String name) {
@@ -215,11 +211,7 @@ public final class NativeLookup {
             }
         }
         TruffleObject symbol = getNativeDataObject(defaultLibrary, realName);
-        if (symbol == null) {
-            throw new LinkageError(String.format("External variable %s cannot be found.", name));
-        } else {
-            return symbol;
-        }
+        return symbol;
     }
 
     private static TruffleObject getNativeDataObject(TruffleObject libraryHandle, String name) {
