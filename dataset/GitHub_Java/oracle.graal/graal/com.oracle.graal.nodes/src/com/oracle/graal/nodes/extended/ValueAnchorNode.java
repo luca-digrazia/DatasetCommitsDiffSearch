@@ -24,20 +24,21 @@ package com.oracle.graal.nodes.extended;
 
 import static com.oracle.graal.graph.iterators.NodePredicates.*;
 
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
+import com.oracle.max.cri.ci.*;
 
 /**
  * The ValueAnchor instruction keeps non-CFG (floating) nodes above a certain point in the graph.
  */
+
 public final class ValueAnchorNode extends FixedWithNextNode implements Canonicalizable, LIRLowerable, Node.IterableNodeType {
 
     public ValueAnchorNode(ValueNode... values) {
-        super(StampFactory.forVoid(), values);
+        super(StampFactory.illegal(), values);
     }
 
     @Override
@@ -45,16 +46,10 @@ public final class ValueAnchorNode extends FixedWithNextNode implements Canonica
         // Nothing to emit, since this node is used for structural purposes only.
     }
 
-    public void addAnchoredNode(ValueNode value) {
+    public void addAnchoredNode(Node value) {
         if (!this.dependencies().contains(value)) {
             this.dependencies().add(value);
         }
-    }
-
-    @Override
-    public boolean verify() {
-        assertTrue(usages().isEmpty(), "upwards dependencies should target BeginNodes only");
-        return super.verify();
     }
 
     @Override
@@ -62,7 +57,7 @@ public final class ValueAnchorNode extends FixedWithNextNode implements Canonica
         if (this.predecessor() instanceof ValueAnchorNode) {
             // transfer values and remove
             ValueAnchorNode previousAnchor = (ValueAnchorNode) this.predecessor();
-            for (ValueNode node : dependencies().nonNull().distinct()) {
+            for (Node node : dependencies().nonNull().distinct()) {
                 previousAnchor.addAnchoredNode(node);
             }
             return null;
@@ -74,7 +69,7 @@ public final class ValueAnchorNode extends FixedWithNextNode implements Canonica
             if (node instanceof IntegerDivNode || node instanceof IntegerRemNode) {
                 ArithmeticNode arithmeticNode = (ArithmeticNode) node;
                 if (arithmeticNode.y().isConstant()) {
-                    Constant constant = arithmeticNode.y().asConstant();
+                    CiConstant  constant = arithmeticNode.y().asConstant();
                     assert constant.kind == arithmeticNode.kind() : constant.kind + " != " + arithmeticNode.kind();
                     if (constant.asLong() != 0) {
                         continue;
