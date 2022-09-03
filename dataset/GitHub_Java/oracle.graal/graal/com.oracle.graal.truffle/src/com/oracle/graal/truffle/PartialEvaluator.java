@@ -416,7 +416,7 @@ public class PartialEvaluator {
         }
 
         FrameState directCallState = invoke.stateAfter();
-        while (directCallState != null && !directCallState.method().equals(callSiteProxyMethod)) {
+        while (directCallState != null && directCallState.method() != callSiteProxyMethod) {
             directCallState = directCallState.outerFrameState();
         }
 
