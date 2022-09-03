@@ -48,7 +48,6 @@ import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
 import com.oracle.graal.api.replacements.SnippetReflectionProvider;
-import com.oracle.graal.compiler.common.type.CheckedJavaType;
 import com.oracle.graal.compiler.common.type.IntegerStamp;
 import com.oracle.graal.compiler.common.type.ObjectStamp;
 import com.oracle.graal.compiler.common.type.Stamp;
@@ -195,8 +194,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
 
     private void lowerTypeCheckNode(TypeCheckNode n, LoweringTool tool, StructuredGraph graph) {
         ValueNode hub = createReadHub(graph, n.getValue(), tool);
-        ValueNode clazz = graph.unique(ConstantNode.forConstant(tool.getStampProvider().createHubStamp((ObjectStamp) n.getValue().stamp()), tool.getConstantReflection().asObjectHub(n.type()),
-                        tool.getMetaAccess()));
+        ValueNode clazz = graph.unique(ConstantNode.forConstant(tool.getStampProvider().createHubStamp((ObjectStamp) n.getValue().stamp()), n.type().getObjectHub(), tool.getMetaAccess()));
         LogicNode objectEquals = graph.unique(PointerEqualsNode.create(hub, clazz));
         n.replaceAndDelete(objectEquals);
     }
@@ -332,7 +330,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
             if (arrayType != null && StampTool.isExactType(array)) {
                 ResolvedJavaType elementType = arrayType.getComponentType();
                 if (!elementType.isJavaLangObject()) {
-                    ValueNode storeCheck = CheckCastNode.create(CheckedJavaType.create(storeIndexed.graph().getAssumptions(), elementType), value, null, true);
+                    ValueNode storeCheck = CheckCastNode.create(elementType, value, null, true, graph.getAssumptions());
                     if (storeCheck.graph() == null) {
                         checkCastNode = (CheckCastNode) storeCheck;
                         checkCastNode = graph.add(checkCastNode);
@@ -396,7 +394,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         if (nullCheck != null) {
             object = graph.unique(new PiNode(object, ((ObjectStamp) object.stamp()).improveWith(StampFactory.objectNonNull()), (ValueNode) nullCheck));
         }
-        ValueNode hub = graph.addOrUnique(LoadHubNode.create(object, tool.getStampProvider(), tool.getMetaAccess(), tool.getConstantReflection()));
+        ValueNode hub = graph.addOrUnique(LoadHubNode.create(object, tool.getStampProvider(), tool.getMetaAccess()));
         RawMonitorEnterNode rawMonitorEnter = graph.add(new RawMonitorEnterNode(object, hub, monitorEnter.getMonitorId()));
         rawMonitorEnter.setStateBefore(monitorEnter.stateBefore());
         rawMonitorEnter.setStateAfter(monitorEnter.stateAfter());
