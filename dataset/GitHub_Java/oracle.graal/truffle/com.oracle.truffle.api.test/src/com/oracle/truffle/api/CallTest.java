@@ -87,7 +87,7 @@ public class CallTest {
 
         private final int value;
 
-        ConstantRootNode(int value) {
+        public ConstantRootNode(int value) {
             super(TestingLanguage.class, null, null);
             this.value = value;
         }

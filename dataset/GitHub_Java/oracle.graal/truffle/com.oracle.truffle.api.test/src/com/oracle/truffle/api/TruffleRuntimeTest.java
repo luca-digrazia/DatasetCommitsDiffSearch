@@ -33,6 +33,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -41,6 +42,7 @@ import com.oracle.truffle.api.nodes.NodeUtil;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
+import com.oracle.truffle.api.utilities.InstrumentationTestMode;
 
 /**
  * <h3>Accessing the Truffle Runtime</h3>
@@ -63,7 +65,13 @@ public class TruffleRuntimeTest {
 
     @Before
     public void before() {
+        InstrumentationTestMode.set(true);
         this.runtime = Truffle.getRuntime();
+    }
+
+    @After
+    public void after() {
+        InstrumentationTestMode.set(false);
     }
 
     private static RootNode createTestRootNode(SourceSection sourceSection) {
