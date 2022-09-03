@@ -33,9 +33,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import com.oracle.truffle.llvm.parser.base.util.LLVMTypeHelper;
 import org.eclipse.emf.ecore.EObject;
 
+import com.intel.llvm.ireditor.lLVM_IR.BitwiseBinaryInstruction;
 import com.intel.llvm.ireditor.lLVM_IR.FunctionDef;
 import com.intel.llvm.ireditor.lLVM_IR.FunctionHeader;
 import com.intel.llvm.ireditor.lLVM_IR.GlobalVariable;
@@ -93,12 +93,13 @@ import com.oracle.truffle.llvm.nodes.impl.others.LLVMUnsupportedInlineAssemblerN
 import com.oracle.truffle.llvm.nodes.impl.others.LLVMUnsupportedInlineAssemblerNode.LLVMI64UnsupportedInlineAssemblerNode;
 import com.oracle.truffle.llvm.nodes.impl.others.LLVMUnsupportedInlineAssemblerNode.LLVMI8UnsupportedInlineAssemblerNode;
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
-import com.oracle.truffle.llvm.parser.base.util.LLVMParserRuntime;
+import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
 import com.oracle.truffle.llvm.parser.LLVMType;
-import com.oracle.truffle.llvm.parser.base.facade.NodeFactoryFacade;
+import com.oracle.truffle.llvm.parser.NodeFactoryFacade;
 import com.oracle.truffle.llvm.parser.base.model.LLVMToBitcodeAdapter;
 import com.oracle.truffle.llvm.parser.base.model.types.ArrayType;
 import com.oracle.truffle.llvm.parser.base.model.types.Type;
+import com.oracle.truffle.llvm.parser.base.util.LLVMTypeHelperImpl;
 import com.oracle.truffle.llvm.parser.instructions.LLVMArithmeticInstructionType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMConversionType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMFloatComparisonType;
@@ -158,6 +159,11 @@ public class NodeFactoryFacadeImpl implements NodeFactoryFacade {
 
     @Override
     public LLVMExpressionNode createLogicalOperation(LLVMExpressionNode left, LLVMExpressionNode right, LLVMLogicalInstructionType type, LLVMBaseType llvmType, LLVMExpressionNode target) {
+        return LLVMLogicalFactory.createLogicalOperation(left, right, type, llvmType, (LLVMAddressNode) target);
+    }
+
+    @Override
+    public LLVMExpressionNode createLogicalOperation(LLVMExpressionNode left, LLVMExpressionNode right, BitwiseBinaryInstruction type, LLVMBaseType llvmType, LLVMExpressionNode target) {
         return LLVMLogicalFactory.createLogicalOperation(left, right, type, llvmType, (LLVMAddressNode) target);
     }
 
@@ -361,14 +367,14 @@ public class NodeFactoryFacadeImpl implements NodeFactoryFacade {
         int i = 0;
         for (FrameSlot slot : frameDescriptor.getSlots()) {
             String identifier = (String) slot.getIdentifier();
-            Type slotType = runtime.getVariableNameTypesMapping().get(identifier);
+            Type slotType = LLVMToBitcodeAdapter.resolveType(runtime.getVariableNameTypesMapping().get(identifier));
             if (slot.equals(runtime.getReturnSlot())) {
-                nullers[i] = runtime.getNodeFactoryFacade().createFrameNuller(identifier, LLVMTypeHelper.getLLVMType(runtime.resolve(functionHeader.getRettype())), slot);
+                nullers[i] = runtime.getNodeFactoryFacade().createFrameNuller(identifier, LLVMTypeHelperImpl.getLLVMType(runtime.resolve(functionHeader.getRettype())), slot);
             } else if (slot.equals(runtime.getStackPointerSlot())) {
                 nullers[i] = runtime.getNodeFactoryFacade().createFrameNuller(identifier, new LLVMType(LLVMBaseType.ADDRESS), slot);
             } else {
                 assert slotType != null : identifier;
-                nullers[i] = runtime.getNodeFactoryFacade().createFrameNuller(identifier, LLVMTypeHelper.getLLVMType(slotType), slot);
+                nullers[i] = runtime.getNodeFactoryFacade().createFrameNuller(identifier, LLVMTypeHelperImpl.getLLVMType(slotType), slot);
             }
             i++;
         }
@@ -456,7 +462,7 @@ public class NodeFactoryFacadeImpl implements NodeFactoryFacade {
 
         if (!isExtern && !descriptor.isDeclared()) {
             Type resolvedType = LLVMToBitcodeAdapter.resolveType(runtime.resolve(globalVariable.getType()));
-            int byteSize = runtime.getTypeHelper().getByteSize(resolvedType);
+            int byteSize = ((LLVMTypeHelperImpl) runtime.getTypeHelper()).getByteSize(resolvedType);
             LLVMAddress nativeStorage = LLVMHeap.allocateMemory(byteSize);
             LLVMAddressNode addressLiteralNode = (LLVMAddressNode) createLiteral(nativeStorage, LLVMBaseType.ADDRESS);
             runtime.addDestructor(LLVMFreeFactory.create(addressLiteralNode));
