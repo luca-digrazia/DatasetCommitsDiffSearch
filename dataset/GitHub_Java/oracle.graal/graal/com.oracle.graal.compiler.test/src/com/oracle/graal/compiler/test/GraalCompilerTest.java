@@ -24,13 +24,7 @@ package com.oracle.graal.compiler.test;
 
 import static com.oracle.graal.compiler.GraalCompilerOptions.PrintCompilation;
 import static com.oracle.graal.nodes.ConstantNode.getConstantNodes;
-import static com.oracle.graal.nodes.graphbuilderconf.InlineInvokePlugin.InlineInfo.DO_NOT_INLINE_NO_EXCEPTION;
-import static com.oracle.graal.nodes.graphbuilderconf.InlineInvokePlugin.InlineInfo.DO_NOT_INLINE_WITH_EXCEPTION;
 
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -67,7 +61,6 @@ import com.oracle.graal.debug.TTY;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.graph.NodeMap;
-import com.oracle.graal.java.BytecodeParser;
 import com.oracle.graal.java.ComputeLoopFrequenciesClosure;
 import com.oracle.graal.java.GraphBuilderPhase;
 import com.oracle.graal.lir.asm.CompilationResultBuilderFactory;
@@ -80,8 +73,6 @@ import com.oracle.graal.nodes.ConstantNode;
 import com.oracle.graal.nodes.FixedWithNextNode;
 import com.oracle.graal.nodes.FrameState;
 import com.oracle.graal.nodes.FullInfopointNode;
-import com.oracle.graal.nodes.InvokeNode;
-import com.oracle.graal.nodes.InvokeWithExceptionNode;
 import com.oracle.graal.nodes.ProxyNode;
 import com.oracle.graal.nodes.ReturnNode;
 import com.oracle.graal.nodes.StructuredGraph;
@@ -92,7 +83,6 @@ import com.oracle.graal.nodes.cfg.Block;
 import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration;
 import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderContext;
-import com.oracle.graal.nodes.graphbuilderconf.InlineInvokePlugin;
 import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugin;
 import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins;
 import com.oracle.graal.nodes.spi.LoweringProvider;
@@ -153,27 +143,6 @@ public abstract class GraalCompilerTest extends GraalTest {
     private final Backend backend;
     private final DerivedOptionValue<Suites> suites;
     private final DerivedOptionValue<LIRSuites> lirSuites;
-
-    /**
-     * Denotes a test method that must be inlined by the {@link BytecodeParser}.
-     */
-    @Target({ElementType.METHOD, ElementType.CONSTRUCTOR})
-    @Retention(RetentionPolicy.RUNTIME)
-    public @interface BytecodeParserForceInline {
-    }
-
-    /**
-     * Denotes a test method that must never be inlined by the {@link BytecodeParser}.
-     */
-    @Retention(RetentionPolicy.RUNTIME)
-    @Target({ElementType.METHOD, ElementType.CONSTRUCTOR})
-    public @interface BytecodeParserNeverInline {
-        /**
-         * Specifies if the call should be implemented with {@link InvokeWithExceptionNode} instead
-         * of {@link InvokeNode}.
-         */
-        boolean invokeWithException() default false;
-    }
 
     /**
      * Can be overridden by unit tests to verify properties of the graph.
@@ -540,7 +509,7 @@ public abstract class GraalCompilerTest extends GraalTest {
         return lirSuites.getValue();
     }
 
-    protected final Providers getProviders() {
+    protected Providers getProviders() {
         return providers;
     }
 
@@ -1070,34 +1039,7 @@ public abstract class GraalCompilerTest extends GraalTest {
                 return true;
             }
         }, GraalCompilerTest.class, "shouldBeOptimizedAway");
-
-        conf.getPlugins().prependInlineInvokePlugin(new InlineInvokePlugin() {
-
-            @Override
-            public InlineInfo shouldInlineInvoke(GraphBuilderContext b, ResolvedJavaMethod method, ValueNode[] args) {
-                BytecodeParserNeverInline neverInline = method.getAnnotation(BytecodeParserNeverInline.class);
-                if (neverInline != null) {
-                    return neverInline.invokeWithException() ? DO_NOT_INLINE_WITH_EXCEPTION : DO_NOT_INLINE_NO_EXCEPTION;
-                }
-                if (method.getAnnotation(BytecodeParserForceInline.class) != null) {
-                    return InlineInfo.createStandardInlineInfo(method);
-                }
-                return bytecodeParserShouldInlineInvoke(b, method, args);
-            }
-        });
         return conf;
-    }
-
-    /**
-     * Supplements {@link BytecodeParserForceInline} and {@link BytecodeParserNeverInline} in terms
-     * of allowing a test to influence the inlining decision made during bytecode parsing.
-     *
-     * @see InlineInvokePlugin#shouldInlineInvoke(GraphBuilderContext, ResolvedJavaMethod,
-     *      ValueNode[])
-     */
-    @SuppressWarnings("unused")
-    protected InlineInvokePlugin.InlineInfo bytecodeParserShouldInlineInvoke(GraphBuilderContext b, ResolvedJavaMethod method, ValueNode[] args) {
-        return null;
     }
 
     @NodeInfo
