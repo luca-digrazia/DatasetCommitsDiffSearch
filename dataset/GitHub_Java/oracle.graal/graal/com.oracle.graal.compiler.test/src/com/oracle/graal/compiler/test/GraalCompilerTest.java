@@ -177,15 +177,7 @@ public abstract class GraalCompilerTest extends GraalTest {
     protected Suites createSuites() {
         Suites ret = backend.getSuites().getDefaultSuites().copy();
         ListIterator<BasePhase<? super HighTierContext>> iter = ret.getHighTier().findPhase(ConvertDeoptimizeToGuardPhase.class, true);
-        if (iter != null) {
-            PhaseSuite.findNextPhase(iter, CanonicalizerPhase.class);
-        } else {
-            /*
-             * in the economy configuration, we don't have the ConvertDeoptimizeToGuard phase, so we
-             * just select the first CanonicalizerPhase in HighTier
-             */
-            iter = ret.getHighTier().findPhase(CanonicalizerPhase.class);
-        }
+        PhaseSuite.findNextPhase(iter, CanonicalizerPhase.class);
         iter.add(new Phase("ComputeLoopFrequenciesPhase") {
 
             @Override
