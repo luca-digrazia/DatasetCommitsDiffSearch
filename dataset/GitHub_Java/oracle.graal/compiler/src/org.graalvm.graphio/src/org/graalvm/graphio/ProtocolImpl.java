@@ -25,7 +25,6 @@ package org.graalvm.graphio;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.nio.channels.WritableByteChannel;
 import java.util.Collection;
 import java.util.Map;
@@ -299,16 +298,11 @@ final class ProtocolImpl<Graph, Node, NodeClass, Port, Block, ResolvedJavaMethod
     }
 
     @Override
-    protected String findLocationFile(Location loc) throws IOException {
+    protected String findLocationFile(Location loc) {
         if (loc == null) {
             return null;
         }
-        URI u;
-        try {
-            u = locations.locationURI(loc);
-        } catch (URISyntaxException ex) {
-            throw new IOException(ex);
-        }
+        URI u = locations.locationURI(loc);
         if (u == null) {
             return null;
         }
@@ -327,7 +321,7 @@ final class ProtocolImpl<Graph, Node, NodeClass, Port, Block, ResolvedJavaMethod
     }
 
     @Override
-    protected URI findLocationURI(Location loc) throws URISyntaxException {
+    protected URI findLocationURI(Location loc) {
         return locations.locationURI(loc);
     }
 
