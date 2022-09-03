@@ -64,7 +64,7 @@ public class LoopsData {
         return loopToEx.values();
     }
 
-    public List<LoopEx> outerFirst() {
+    public List<LoopEx> outterFirst() {
         ArrayList<LoopEx> loops = new ArrayList<>(loops());
         Collections.sort(loops, new Comparator<LoopEx>() {
 

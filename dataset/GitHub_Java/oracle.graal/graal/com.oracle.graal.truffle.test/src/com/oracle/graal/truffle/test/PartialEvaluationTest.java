@@ -120,7 +120,6 @@ public class PartialEvaluationTest extends GraalCompilerTest {
                             }
                         }
                     }
-                    loopsData.deleteUnusedNodes();
                 } while (unrolled);
             }
 

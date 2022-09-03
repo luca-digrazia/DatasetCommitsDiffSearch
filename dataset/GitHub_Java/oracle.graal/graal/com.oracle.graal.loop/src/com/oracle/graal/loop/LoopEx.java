@@ -253,13 +253,4 @@ public class LoopEx {
         }
         return ivs;
     }
-
-    /**
-     * Deletes any nodes created within the scope of this object that have no usages.
-     */
-    public void deleteUnusedNodes() {
-        if (ivs != null) {
-            ivs.deleteUnusedNodes();
-        }
-    }
 }
