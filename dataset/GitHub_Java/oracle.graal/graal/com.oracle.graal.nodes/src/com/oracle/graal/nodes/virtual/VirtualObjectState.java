@@ -72,14 +72,4 @@ public final class VirtualObjectState extends VirtualState implements Node.Itera
             closure.apply(this, value);
         }
     }
-
-    @Override
-    public boolean isPartOfThisState(VirtualState state) {
-        return this == state;
-    }
-
-    @Override
-    public void applyToVirtual(VirtualClosure closure) {
-        closure.apply(this);
-    }
 }
