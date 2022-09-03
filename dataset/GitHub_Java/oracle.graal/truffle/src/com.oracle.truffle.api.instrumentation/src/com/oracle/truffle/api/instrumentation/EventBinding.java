@@ -125,13 +125,13 @@ public final class EventBinding<T> {
             if (rootNode == null) {
                 return false;
             }
-            return isInstrumentedRoot(providedTags, rootNode, rootNode.getSourceSection(), 0);
+            return isInstrumentedRoot(providedTags, rootNode, rootNode.getSourceSection());
         }
         return false;
     }
 
-    boolean isInstrumentedRoot(Set<Class<?>> providedTags, RootNode rootNode, SourceSection rootSourceSection, int rootNodeBits) {
-        return getInstrumenter().isInstrumentableRoot(rootNode) && getFilter().isInstrumentedRoot(providedTags, rootSourceSection, rootNode, rootNodeBits);
+    boolean isInstrumentedRoot(Set<Class<?>> providedTags, RootNode rootNode, SourceSection rootSourceSection) {
+        return getInstrumenter().isInstrumentableRoot(rootNode) && getFilter().isInstrumentedRoot(providedTags, rootSourceSection, rootNode);
     }
 
     boolean isInstrumentedLeaf(Set<Class<?>> providedTags, Node instrumentedNode, SourceSection section) {
