@@ -33,7 +33,6 @@ import java.util.Map;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.Language;
-import org.graalvm.polyglot.PolyglotException;
 
 public abstract class AbstractLanguageLauncher extends Launcher {
 
@@ -54,8 +53,6 @@ public abstract class AbstractLanguageLauncher extends Launcher {
                 launch(new ArrayList<>(Arrays.asList(args)), null, true);
             } catch (AbortException e) {
                 throw e;
-            } catch (PolyglotException e) {
-                handlePolyglotException(e);
             } catch (Throwable t) {
                 throw abort(t);
             }
