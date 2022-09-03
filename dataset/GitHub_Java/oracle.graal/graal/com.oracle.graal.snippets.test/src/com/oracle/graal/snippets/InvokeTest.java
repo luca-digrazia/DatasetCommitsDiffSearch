@@ -93,8 +93,7 @@ public class InvokeTest extends GraalCompilerTest {
     }
 
     public static String invokevirtual2(A a, String s) {
-        a.virtualMethod(s);
-        return a.virtualMethod(s);
+        return a.virtualMethod(s) + a.virtualMethod(s);
     }
 
     public static String invokeinterface(I i, String s) {
