@@ -253,14 +253,38 @@ public final class CEntryPointSnippets extends SubstrateTemplates implements Sni
     @SubstrateForeignCallTarget
     @Uninterruptible(reason = "Thread state going away.")
     @RestrictHeapAccess(access = RestrictHeapAccess.Access.NO_ALLOCATION, reason = "Must not (thread-local) allocate while detaching a thread.")
-    private static int detachThreadMT(IsolateThread currentThread) {
+    private static int detachThreadMT(IsolateThread thread) {
+        int result = CEntryPointErrors.NO_ERROR;
+        /*
+         * Make me immune to safepoints (the safepoint mechanism ignores me). We are calling
+         * functions that are not marked as @Uninterruptible during the detach process. We hold the
+         * THREAD_MUTEX, so we know that we are not going to be interrupted by a safepoint. But a
+         * safepoint can already be requested, or our safepoint counter can reach 0 - so it is still
+         * possible that we enter the safepoint slow path.
+         */
+        VMThreads.StatusSupport.setStatusIgnoreSafepoints();
+
+        // try-finally because try-with-resources can call interruptible code
+        VMThreads.THREAD_MUTEX.lockNoTransition();
         try {
-            VMThreads.detachThread(currentThread);
+            detachJavaLangThreadMT(thread);
+
+            // clear references to thread to avoid unintended use
             writeCurrentVMThread(VMThreads.nullThread());
+
+            VMThreads.detachThread(thread);
         } catch (Throwable t) {
-            return CEntryPointErrors.UNCAUGHT_EXCEPTION;
+            result = CEntryPointErrors.UNCAUGHT_EXCEPTION;
+        } finally {
+            VMThreads.THREAD_MUTEX.unlock();
+            VMThreads.singleton().freeIsolateThread(thread);
         }
-        return CEntryPointErrors.NO_ERROR;
+        return result;
+    }
+
+    @Uninterruptible(reason = "For calling interruptible code from uninterruptible code.", callerMustBe = true, mayBeInlined = true, calleeMustBe = false)
+    private static void detachJavaLangThreadMT(IsolateThread thread) {
+        JavaThreads.detachThread(thread);
     }
 
     @Snippet

@@ -47,8 +47,6 @@ import org.graalvm.word.WordBase;
 @Platforms(Platform.WINDOWS.class)
 public class WinBase {
 
-    public static final int MAX_PATH = 260;
-
     /**
      * Windows opaque Handle type
      */
@@ -355,10 +353,4 @@ public class WinBase {
 
     @CFunction(transition = Transition.NO_TRANSITION)
     public static native UnsignedWord VirtualQuery(PointerBase lpAddress, MEMORY_BASIC_INFORMATION lpBuffer, UnsignedWord dwLength);
-
-    @CFunction(transition = Transition.NO_TRANSITION)
-    public static native int GetVersion();
-
-    @CFunction(transition = Transition.NO_TRANSITION)
-    public static native int GetCurrentDirectoryA(long nBufferLength, CCharPointer lpBuffer);
 }

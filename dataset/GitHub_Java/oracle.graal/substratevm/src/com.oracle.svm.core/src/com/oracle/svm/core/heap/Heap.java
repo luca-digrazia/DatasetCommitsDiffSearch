@@ -95,10 +95,4 @@ public abstract class Heap {
 
     /** Tear down the heap, return all allocated virtual memory chunks to VirtualMemoryProvider. */
     public abstract void tearDown();
-
-    /** Prepare the heap for a safepoint. */
-    public abstract void prepareForSafepoint();
-
-    /** Reset the heap to the normal execution state. */
-    public abstract void endSafepoint();
 }

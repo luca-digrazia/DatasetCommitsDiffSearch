@@ -38,7 +38,6 @@ import org.graalvm.compiler.replacements.nodes.UnaryMathIntrinsicNode.UnaryOpera
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.LogHandler;
 import org.graalvm.nativeimage.c.function.CodePointer;
-import org.graalvm.util.DirectAnnotationAccess;
 import org.graalvm.word.LocationIdentity;
 import org.graalvm.word.Pointer;
 import org.graalvm.word.UnsignedWord;
@@ -67,6 +66,7 @@ public class SnippetRuntime {
     public static final SubstrateForeignCallDescriptor UNRESOLVED = findForeignCall(SnippetRuntime.class, "unresolved", true, LocationIdentity.any());
 
     public static final SubstrateForeignCallDescriptor UNWIND_EXCEPTION = findForeignCall(SnippetRuntime.class, "unwindException", true, LocationIdentity.any());
+    public static final SubstrateForeignCallDescriptor REPORT_UNHANDLED_EXCEPTION_RAW = findForeignCall(SnippetRuntime.class, "reportUnhandledExceptionRaw", true, LocationIdentity.any());
 
     /* Implementation of runtime calls defined in a VM-independent way by Graal. */
     public static final SubstrateForeignCallDescriptor REGISTER_FINALIZER = findForeignCall(SnippetRuntime.class, "registerFinalizer", true);
@@ -89,8 +89,12 @@ public class SnippetRuntime {
     public static final SubstrateForeignCallDescriptor ARITHMETIC_TAN = findForeignCall(UnaryOperation.TAN.foreignCallDescriptor.getName(), Math.class, "tan", true);
     public static final SubstrateForeignCallDescriptor ARITHMETIC_LOG = findForeignCall(UnaryOperation.LOG.foreignCallDescriptor.getName(), Math.class, "log", true);
     public static final SubstrateForeignCallDescriptor ARITHMETIC_LOG10 = findForeignCall(UnaryOperation.LOG10.foreignCallDescriptor.getName(), Math.class, "log10", true);
-    public static final SubstrateForeignCallDescriptor ARITHMETIC_EXP = findForeignCall(UnaryOperation.EXP.foreignCallDescriptor.getName(), Math.class, "exp", true);
-    public static final SubstrateForeignCallDescriptor ARITHMETIC_POW = findForeignCall(BinaryOperation.POW.foreignCallDescriptor.getName(), Math.class, "pow", true);
+    /*
+     * Graal-defined math functions where we do not have optimized code sequences: StrictMath is the
+     * always-available fall-back.
+     */
+    public static final SubstrateForeignCallDescriptor ARITHMETIC_EXP = findForeignCall(UnaryOperation.EXP.foreignCallDescriptor.getName(), StrictMath.class, "exp", true);
+    public static final SubstrateForeignCallDescriptor ARITHMETIC_POW = findForeignCall(BinaryOperation.POW.foreignCallDescriptor.getName(), StrictMath.class, "pow", true);
 
     /*
      * These methods are intrinsified as nodes at first, but can then lowered back to a call. Ensure
@@ -130,7 +134,7 @@ public class SnippetRuntime {
          * We cannot annotate methods from the JDK, but all other foreign call targets we want to be
          * annotated for documentation, and to avoid stripping.
          */
-        VMError.guarantee(declaringClass.getName().startsWith("java.lang") || DirectAnnotationAccess.isAnnotationPresent(foundMethod, SubstrateForeignCallTarget.class),
+        VMError.guarantee(declaringClass.getName().startsWith("java.lang") || foundMethod.getAnnotation(SubstrateForeignCallTarget.class) != null,
                         "Add missing @SubstrateForeignCallTarget to " + declaringClass.getName() + "." + methodName);
 
         return new SubstrateForeignCallDescriptor(descriptorName, foundMethod, isReexecutable, killedLocations);
@@ -192,20 +196,16 @@ public class SnippetRuntime {
         throw VMError.unsupportedFeature("Unresolved element found " + (sourcePosition != null ? sourcePosition : ""));
     }
 
-    /*
-     * The stack walking objects must be stateless (no instance fields), because multiple threads
-     * can use them simultaneously. All state must be in separate VMThreadLocals.
-     */
-    public static class ExceptionStackFrameVisitor implements StackFrameVisitor {
+    static class ExceptionStackFrameVisitor implements StackFrameVisitor {
         @Uninterruptible(reason = "Set currentException atomically with regard to the safepoint mechanism", calleeMustBe = false)
         @RestrictHeapAccess(access = RestrictHeapAccess.Access.NO_ALLOCATION, reason = "Must not allocate when unwinding the stack.")
         @Override
         public boolean visitFrame(Pointer sp, CodePointer ip, DeoptimizedFrame deoptFrame) {
-            CodePointer handlerPointer;
+            CodePointer continueIP;
             if (deoptFrame != null) {
                 /* Deoptimization entry points always have an exception handler. */
                 deoptFrame.takeException();
-                handlerPointer = ip;
+                continueIP = ip;
 
             } else {
                 long handler = CodeInfoTable.lookupExceptionOffset(ip);
@@ -213,8 +213,7 @@ public class SnippetRuntime {
                     /* No handler found in this frame, walk to caller frame. */
                     return true;
                 }
-
-                handlerPointer = getExceptionHandlerPointer(ip, sp, handler);
+                continueIP = (CodePointer) ((UnsignedWord) ip).add(WordFactory.signed(handler));
             }
 
             Throwable exception = currentException.get();
@@ -222,18 +221,20 @@ public class SnippetRuntime {
 
             StackOverflowCheck.singleton().protectYellowZone();
 
-            KnownIntrinsics.farReturn(exception, sp, handlerPointer);
+            KnownIntrinsics.farReturn(exception, sp, continueIP);
             /*
              * The intrinsic performs a jump to the specified instruction pointer, so this code is
              * unreachable.
              */
             return false;
         }
-
-        public CodePointer getExceptionHandlerPointer(CodePointer ip, @SuppressWarnings("unused") Pointer sp, long handlerOffset) {
-            return (CodePointer) ((UnsignedWord) ip).add(WordFactory.signed(handlerOffset));
-        }
     }
+
+    /*
+     * The stack walking objects must be stateless (no instance fields), because multiple threads
+     * can use them simultaneously. All state must be in separate VMThreadLocals.
+     */
+    private static final ExceptionStackFrameVisitor exceptionStackFrameVisitor = new ExceptionStackFrameVisitor();
 
     protected static final FastThreadLocalObject<Throwable> currentException = FastThreadLocalFactory.createObject(Throwable.class);
 
@@ -267,7 +268,7 @@ public class SnippetRuntime {
          * exception. So we can start looking for the exception handler immediately in that frame,
          * without skipping any frames in between.
          */
-        JavaStackWalker.walkCurrentThread(callerSP, callerIP, ImageSingletons.lookup(ExceptionStackFrameVisitor.class));
+        JavaStackWalker.walkCurrentThread(callerSP, callerIP, exceptionStackFrameVisitor);
 
         /*
          * The stack walker does not return if an exception handler is found, but instead performs a
@@ -277,6 +278,8 @@ public class SnippetRuntime {
         reportUnhandledExceptionRaw(exception);
     }
 
+    /** Foreign call: {@link #REPORT_UNHANDLED_EXCEPTION_RAW}. */
+    @SubstrateForeignCallTarget
     private static void reportUnhandledExceptionRaw(Throwable exception) {
         Log.log().string(exception.getClass().getName());
         String detail = JDKUtils.getRawMessage(exception);

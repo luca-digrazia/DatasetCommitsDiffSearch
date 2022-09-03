@@ -22,45 +22,56 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.svm.core.windows;
+package com.oracle.svm.core.posix.linux;
 
 import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.StackValue;
-import org.graalvm.nativeimage.c.struct.SizeOf;
+import org.graalvm.nativeimage.c.type.WordPointer;
 import org.graalvm.word.UnsignedWord;
 
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.annotate.Uninterruptible;
+import com.oracle.svm.core.posix.PosixUtils;
+import com.oracle.svm.core.posix.headers.Pthread;
 import com.oracle.svm.core.stack.StackOverflowCheck;
-import com.oracle.svm.core.windows.headers.WinBase;
 
-@Platforms({Platform.WINDOWS.class})
-class WindowsStackOverflowSupport implements StackOverflowCheck.OSSupport {
+@Platforms({Platform.LINUX.class})
+class LinuxStackOverflowSupport implements StackOverflowCheck.OSSupport {
 
     @Uninterruptible(reason = "Called while thread is being attached to the VM, i.e., when the thread state is not yet set up.")
     @Override
     public UnsignedWord lookupStackEnd() {
-        WinBase.MEMORY_BASIC_INFORMATION minfo = StackValue.get(WinBase.MEMORY_BASIC_INFORMATION.class);
+        Pthread.pthread_attr_t attr = StackValue.get(Pthread.pthread_attr_t.class);
+        PosixUtils.checkStatusIs0(Pthread.pthread_getattr_np(Pthread.pthread_self(), attr), "LinuxStackOverflowSupport: pthread_getattr_np");
+
+        WordPointer stackaddrPtr = StackValue.get(WordPointer.class);
+        WordPointer stacksizePtr = StackValue.get(WordPointer.class);
+        PosixUtils.checkStatusIs0(Pthread.pthread_attr_getstack(attr, stackaddrPtr, stacksizePtr), "LinuxStackOverflowSupport: pthread_attr_getstack");
+        UnsignedWord stackaddr = stackaddrPtr.read();
 
         /*
-         * We find the boundary of the stack by looking at the base of the memory block that
-         * contains a (random known) address of the current stack. The stack-allocated memory where
-         * the function result is placed in is just the easiest way to get such an address.
+         * The block of memory returned by pthread_attr_getstack() includes guard pages where
+         * present. We need to trim these off. Note that these guard pages are not the yellow and
+         * red zones of the stack that we designate.
          */
-        WinBase.VirtualQuery(minfo, minfo, SizeOf.unsigned(WinBase.MEMORY_BASIC_INFORMATION.class));
+        WordPointer guardsizePtr = StackValue.get(WordPointer.class);
+        PosixUtils.checkStatusIs0(Pthread.pthread_attr_getguardsize(attr, guardsizePtr), "LinuxStackOverflowSupport: pthread_attr_getguardsize");
+        UnsignedWord guardsize = guardsizePtr.read();
 
-        return minfo.AllocationBase();
+        PosixUtils.checkStatusIs0(Pthread.pthread_attr_destroy(attr), "LinuxStackOverflowSupport: pthread_attr_destroy");
+
+        return stackaddr.add(guardsize);
     }
 }
 
-@Platforms({Platform.WINDOWS.class})
+@Platforms({Platform.LINUX.class})
 @AutomaticFeature
-class WindowsStackOverflowSupportFeature implements Feature {
+class LinuxStackOverflowSupportFeature implements Feature {
     @Override
     public void afterRegistration(AfterRegistrationAccess access) {
-        ImageSingletons.add(StackOverflowCheck.OSSupport.class, new WindowsStackOverflowSupport());
+        ImageSingletons.add(StackOverflowCheck.OSSupport.class, new LinuxStackOverflowSupport());
     }
 }
