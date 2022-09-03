@@ -265,15 +265,23 @@ public class MethodMetricsImpl implements DebugMethodMetrics {
     }
 
     public synchronized void dumpCSV(PrintStream p) {
-        String methodName = method.format("%H.%n(%p)%R").replace(",", "_");
+        String methodName = "\"" + method.format("%H.%n(%p)%R") + "\"";
+        /*
+         * NOTE: the caching mechanism works by caching compilation data based on the identity of
+         * the resolved java method object. The identity is based on the metaspace address of the
+         * resolved java method object. If the class was loaded by different class loaders or e.g.
+         * loaded - unloaded - loaded the identity will be different. Therefore we also need to
+         * include the identity in the reporting of the data as it is an additional dimension to
+         * <method,compilationId>.
+         */
+        String methodIdentity = String.valueOf(System.identityHashCode(method));
         if (compilationEntries != null) {
             for (int i = 0; i < compilationEntries.size(); i++) {
                 HashMap<String, Long> table = compilationEntries.get(i).counterMap;
                 if (table != null) {
                     Set<Map.Entry<String, Long>> entries = table.entrySet();
                     for (Map.Entry<String, Long> entry : entries.stream().sorted((x, y) -> x.getKey().compareTo(y.getKey())).collect(Collectors.toList())) {
-                        p.printf("%s,%d,%s,%d", methodName, i,
-                                        entry.getKey().replace(" ", "_").replace(",", "_"), entry.getValue());
+                        p.printf("%s,%s,%d,%d,%s,%d", methodName, methodIdentity, i, compilationEntries.get(i).id, "\"" + entry.getKey() + "\"", entry.getValue());
                         p.println();
                     }
                 }
@@ -319,16 +327,45 @@ public class MethodMetricsImpl implements DebugMethodMetrics {
     public static Collection<DebugMethodMetrics> collectedMetrics() {
         /*
          * we want to avoid a concurrent modification when collecting metrics therefore we lock the
-         * cache class
+         * cache class and make a copy of the metrics currently defined (this will be a snapshot)
          */
         synchronized (MethodMetricsCache.class) {
             if (MethodMetricsCache.cache == null) {
                 return Collections.emptyList();
             }
             ArrayList<DebugMethodMetrics> mm = new ArrayList<>();
-            MethodMetricsCache.cache.values().forEach(x -> mm.add(x));
+            MethodMetricsCache.cache.values().forEach(x -> {
+                MethodMetricsImpl impl = (MethodMetricsImpl) x;
+                /*
+                 * it might happen that there e.g. is already one compilation defined for impl and
+                 * during the collection (should only happen during shutdown as it is costly) we
+                 * check if it is worth reporting this method metric there is concurrently a
+                 * compilation of the same method defining another compilation entry thus we lock
+                 * also the current metric to avoid a concurrent modification of the compilation
+                 * entries data structure
+                 */
+                synchronized (impl) {
+                    if (impl.compilationEntries != null) {
+                        // check if there will be one metric in one compilation of all the
+                        // compilations that is (after rounding) !=0
+                        if (impl.compilationEntries.stream().filter(
+                                        compEntry -> compEntry.counterMap.entrySet().stream().anyMatch(metric -> reportMetric(metric.getKey(), metric.getValue()))).count() > 0) {
+                            mm.add(x);
+                        }
+                    }
+                }
+            });
+            // sort the metrics according to the types they are defined for
+            mm.sort((x, y) -> x.getMethod().getDeclaringClass().getName().compareTo(y.getMethod().getDeclaringClass().getName()));
             return mm;
         }
+    }
+
+    private static boolean reportMetric(String name, long value) {
+        if ((name.endsWith("Accm") || name.endsWith("Flat")) && !name.toLowerCase().contains("mem")) {
+            return (value / 1000000) > 0;
+        }
+        return value != 0;
     }
 
     public static void clearMM() {
@@ -349,6 +386,7 @@ public class MethodMetricsImpl implements DebugMethodMetrics {
 
     public static void addToCurrentScopeMethodMetrics(String metricName, long value) {
         DebugScope.ExtraInfo metaInfo = DebugScope.getInstance().getExtraInfo();
+
         if (metaInfo instanceof MethodMetricsRootScopeInfo) {
             ResolvedJavaMethod rootMethod = ((MethodMetricsRootScopeInfo) metaInfo).getRootMethod();
             if (metaInfo instanceof MethodMetricsInlineeScopeInfo) {
