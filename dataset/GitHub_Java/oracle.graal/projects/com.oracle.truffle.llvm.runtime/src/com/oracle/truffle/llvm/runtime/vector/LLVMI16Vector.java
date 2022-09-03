@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -30,198 +30,38 @@
 package com.oracle.truffle.llvm.runtime.vector;
 
 import com.oracle.truffle.api.CompilerDirectives.ValueType;
-import com.oracle.truffle.llvm.runtime.LLVMAddress;
-import com.oracle.truffle.llvm.runtime.memory.LLVMHeap;
-import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
+import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
+import com.oracle.truffle.llvm.runtime.types.Type;
 
 @ValueType
-public final class LLVMI16Vector {
+public final class LLVMI16Vector extends LLVMVector {
 
-    private static final int I16_SIZE = 2;
-    private static final int MASK = 0xffff;
+    private final short[] vector;
 
-    private final LLVMAddress address;
-    private final int nrElements;
-
-    private LLVMI16Vector(LLVMAddress addr, int nrElements) {
-        this.address = addr;
-        this.nrElements = nrElements;
+    public static LLVMI16Vector create(short[] vector) {
+        return new LLVMI16Vector(vector);
     }
 
-    public LLVMI16Vector add(LLVMAddress addr, LLVMI16Vector right) {
-        LLVMAddress currentAddr = addr;
-        for (int i = 0; i < nrElements; i++) {
-            short elementResult = (short) (getValue(i) + right.getValue(i));
-            LLVMMemory.putI16(currentAddr, elementResult);
-            currentAddr = currentAddr.increment(I16_SIZE);
-        }
-        return create(addr, nrElements);
-    }
-
-    public LLVMI16Vector mul(LLVMAddress addr, LLVMI16Vector right) {
-        LLVMAddress currentAddr = addr;
-        for (int i = 0; i < nrElements; i++) {
-            short elementResult = (short) (getValue(i) * right.getValue(i));
-            LLVMMemory.putI16(currentAddr, elementResult);
-            currentAddr = currentAddr.increment(I16_SIZE);
-        }
-        return create(addr, nrElements);
-    }
-
-    public LLVMI16Vector sub(LLVMAddress addr, LLVMI16Vector right) {
-        LLVMAddress currentAddr = addr;
-        for (int i = 0; i < nrElements; i++) {
-            short elementResult = (short) (getValue(i) - right.getValue(i));
-            LLVMMemory.putI16(currentAddr, elementResult);
-            currentAddr = currentAddr.increment(I16_SIZE);
-        }
-        return create(addr, nrElements);
-    }
-
-    public LLVMI16Vector div(LLVMAddress addr, LLVMI16Vector right) {
-        LLVMAddress currentAddr = addr;
-        for (int i = 0; i < nrElements; i++) {
-            short elementResult = (short) (getValue(i) / right.getValue(i));
-            LLVMMemory.putI16(currentAddr, elementResult);
-            currentAddr = currentAddr.increment(I16_SIZE);
-        }
-        return create(addr, nrElements);
-    }
-
-    public LLVMI16Vector rem(LLVMAddress addr, LLVMI16Vector right) {
-        LLVMAddress currentAddr = addr;
-        for (int i = 0; i < nrElements; i++) {
-            short elementResult = (short) (getValue(i) % right.getValue(i));
-            LLVMMemory.putI16(currentAddr, elementResult);
-            currentAddr = currentAddr.increment(I16_SIZE);
-        }
-        return create(addr, nrElements);
-    }
-
-    public LLVMI16Vector and(LLVMAddress addr, LLVMI16Vector right) {
-        LLVMAddress currentAddr = addr;
-        for (int i = 0; i < nrElements; i++) {
-            short elementResult = (short) (getValue(i) & right.getValue(i));
-            LLVMMemory.putI16(currentAddr, elementResult);
-            currentAddr = currentAddr.increment(I16_SIZE);
-        }
-        return create(addr, nrElements);
-    }
-
-    public LLVMI16Vector or(LLVMAddress addr, LLVMI16Vector right) {
-        LLVMAddress currentAddr = addr;
-        for (int i = 0; i < nrElements; i++) {
-            short elementResult = (short) (getValue(i) | right.getValue(i));
-            LLVMMemory.putI16(currentAddr, elementResult);
-            currentAddr = currentAddr.increment(I16_SIZE);
-        }
-        return create(addr, nrElements);
-    }
-
-    public LLVMI16Vector leftShift(LLVMAddress addr, LLVMI16Vector right) {
-        LLVMAddress currentAddr = addr;
-        for (int i = 0; i < nrElements; i++) {
-            short elementResult = (short) (getValue(i) << right.getValue(i));
-            LLVMMemory.putI16(currentAddr, elementResult);
-            currentAddr = currentAddr.increment(I16_SIZE);
-        }
-        return create(addr, nrElements);
-    }
-
-    public LLVMI16Vector logicalRightShift(LLVMAddress addr, LLVMI16Vector right) {
-        LLVMAddress currentAddr = addr;
-        for (int i = 0; i < nrElements; i++) {
-            short elementResult = (short) (getValue(i) >>> right.getValue(i));
-            LLVMMemory.putI16(currentAddr, elementResult);
-            currentAddr = currentAddr.increment(I16_SIZE);
-        }
-        return create(addr, nrElements);
-    }
-
-    public LLVMI16Vector arithmeticRightShift(LLVMAddress addr, LLVMI16Vector right) {
-        LLVMAddress currentAddr = addr;
-        for (int i = 0; i < nrElements; i++) {
-            short elementResult = (short) (getValue(i) >> right.getValue(i));
-            LLVMMemory.putI16(currentAddr, elementResult);
-            currentAddr = currentAddr.increment(I16_SIZE);
-        }
-        return create(addr, nrElements);
-    }
-
-    public LLVMI16Vector xor(LLVMAddress addr, LLVMI16Vector right) {
-        LLVMAddress currentAddr = addr;
-        for (int i = 0; i < nrElements; i++) {
-            short elementResult = (short) (getValue(i) ^ right.getValue(i));
-            LLVMMemory.putI16(currentAddr, elementResult);
-            currentAddr = currentAddr.increment(I16_SIZE);
-        }
-        return create(addr, nrElements);
-    }
-
-    public LLVMI16Vector udiv(LLVMAddress addr, LLVMI16Vector right) {
-        LLVMAddress currentAddr = addr;
-        for (int i = 0; i < nrElements; i++) {
-            short elementResult = (short) ((getValue(i) & MASK) / (right.getValue(i) & MASK));
-            LLVMMemory.putI16(currentAddr, elementResult);
-            currentAddr = currentAddr.increment(I16_SIZE);
-        }
-        return create(addr, nrElements);
-    }
-
-    public LLVMI16Vector urem(LLVMAddress addr, LLVMI16Vector right) {
-        LLVMAddress currentAddr = addr;
-        for (int i = 0; i < nrElements; i++) {
-            short elementResult = (short) ((getValue(i) & MASK) % (right.getValue(i) & MASK));
-            LLVMMemory.putI16(currentAddr, elementResult);
-            currentAddr = currentAddr.increment(I16_SIZE);
-        }
-        return create(addr, nrElements);
-    }
-
-    public static LLVMI16Vector fromI16Array(LLVMAddress target, short[] vals) {
-        LLVMAddress currentTarget = target;
-        for (int i = 0; i < vals.length; i++) {
-            LLVMMemory.putI16(currentTarget, vals[i]);
-            currentTarget = currentTarget.increment(I16_SIZE);
-        }
-        return new LLVMI16Vector(target, vals.length);
-    }
-
-    public static LLVMI16Vector create(LLVMAddress addr, int length) {
-        return new LLVMI16Vector(addr, length);
-    }
-
-    public short[] getValues() {
-        short[] values = new short[nrElements];
-        for (int i = 0; i < values.length; i++) {
-            values[i] = getValue(i);
-        }
-        return values;
+    private LLVMI16Vector(short[] vector) {
+        this.vector = vector;
     }
 
     public short getValue(int index) {
-        int offset = index * I16_SIZE;
-        LLVMAddress increment = address.increment(offset);
-        return LLVMMemory.getI16(increment);
+        return vector[index];
     }
 
-    public LLVMI16Vector insert(LLVMAddress target, short element, int index) {
-        LLVMHeap.memCopy(target, address, nrElements * I16_SIZE);
-        LLVMAddress elementAddress = target.increment(index * I16_SIZE);
-        LLVMMemory.putI16(elementAddress, element);
-        return create(target, nrElements);
-    }
-
-    public LLVMAddress getAddress() {
-        return address;
-    }
-
-    public int getVectorByteSize() {
-        return I16_SIZE * nrElements;
-    }
-
+    @Override
     public int getLength() {
-        return nrElements;
+        return vector.length;
     }
 
+    @Override
+    public Type getElementType() {
+        return PrimitiveType.I16;
+    }
+
+    @Override
+    public Object getElement(int index) {
+        return index >= 0 && index < vector.length ? vector[index] : null;
+    }
 }

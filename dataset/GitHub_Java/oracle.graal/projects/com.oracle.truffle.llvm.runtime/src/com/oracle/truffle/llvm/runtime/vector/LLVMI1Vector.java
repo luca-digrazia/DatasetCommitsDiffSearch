@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -30,95 +30,38 @@
 package com.oracle.truffle.llvm.runtime.vector;
 
 import com.oracle.truffle.api.CompilerDirectives.ValueType;
-import com.oracle.truffle.llvm.runtime.LLVMAddress;
-import com.oracle.truffle.llvm.runtime.memory.LLVMHeap;
-import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
+import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
+import com.oracle.truffle.llvm.runtime.types.Type;
 
 @ValueType
-public final class LLVMI1Vector {
+public final class LLVMI1Vector extends LLVMVector {
 
-    private static final int I1_SIZE = 1;
-    private final LLVMAddress address;
-    private final int nrElements;
+    private final boolean[] vector;
 
-    private LLVMI1Vector(LLVMAddress addr, int nrElements) {
-        this.address = addr;
-        this.nrElements = nrElements;
+    public static LLVMI1Vector create(boolean[] vector) {
+        return new LLVMI1Vector(vector);
     }
 
-    public static LLVMI1Vector fromI1Array(LLVMAddress target, boolean[] vals) {
-        LLVMAddress currentTarget = target;
-        for (int i = 0; i < vals.length; i++) {
-            LLVMMemory.putI1(currentTarget, vals[i]);
-            currentTarget = currentTarget.increment(I1_SIZE);
-        }
-        return new LLVMI1Vector(target, vals.length);
-    }
-
-    public LLVMI1Vector and(LLVMAddress addr, LLVMI1Vector right) {
-        LLVMAddress currentAddr = addr;
-        for (int i = 0; i < nrElements; i++) {
-            boolean elementResult = (getValue(i) & right.getValue(i));
-            LLVMMemory.putI1(currentAddr, elementResult);
-            currentAddr = currentAddr.increment(I1_SIZE);
-        }
-        return create(addr, nrElements);
-    }
-
-    public LLVMI1Vector or(LLVMAddress addr, LLVMI1Vector right) {
-        LLVMAddress currentAddr = addr;
-        for (int i = 0; i < nrElements; i++) {
-            boolean elementResult = (getValue(i) | right.getValue(i));
-            LLVMMemory.putI1(currentAddr, elementResult);
-            currentAddr = currentAddr.increment(I1_SIZE);
-        }
-        return create(addr, nrElements);
-    }
-
-    public LLVMI1Vector xor(LLVMAddress addr, LLVMI1Vector right) {
-        LLVMAddress currentAddr = addr;
-        for (int i = 0; i < nrElements; i++) {
-            boolean elementResult = (getValue(i) ^ right.getValue(i));
-            LLVMMemory.putI1(currentAddr, elementResult);
-            currentAddr = currentAddr.increment(I1_SIZE);
-        }
-        return create(addr, nrElements);
-    }
-
-    public static LLVMI1Vector create(LLVMAddress addr, int length) {
-        return new LLVMI1Vector(addr, length);
-    }
-
-    public boolean[] getValues() {
-        boolean[] values = new boolean[nrElements];
-        for (int i = 0; i < values.length; i++) {
-            values[i] = getValue(i);
-        }
-        return values;
+    private LLVMI1Vector(boolean[] vector) {
+        this.vector = vector;
     }
 
     public boolean getValue(int index) {
-        int offset = index * I1_SIZE;
-        LLVMAddress increment = address.increment(offset);
-        return LLVMMemory.getI1(increment);
+        return vector[index];
     }
 
-    public LLVMI1Vector insert(LLVMAddress target, boolean element, int index) {
-        LLVMHeap.memCopy(target, address, nrElements * I1_SIZE);
-        LLVMAddress elementAddress = target.increment(index * I1_SIZE);
-        LLVMMemory.putI1(elementAddress, element);
-        return create(target, nrElements);
-    }
-
+    @Override
     public int getLength() {
-        return nrElements;
+        return vector.length;
     }
 
-    public LLVMAddress getAddress() {
-        return address;
+    @Override
+    public Type getElementType() {
+        return PrimitiveType.I1;
     }
 
-    public int getVectorByteSize() {
-        return I1_SIZE * nrElements;
+    @Override
+    public Object getElement(int index) {
+        return index >= 0 && index < vector.length ? vector[index] : null;
     }
 }

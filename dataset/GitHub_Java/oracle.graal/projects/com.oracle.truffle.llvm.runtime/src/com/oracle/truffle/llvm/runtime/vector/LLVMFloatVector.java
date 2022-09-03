@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -30,115 +30,38 @@
 package com.oracle.truffle.llvm.runtime.vector;
 
 import com.oracle.truffle.api.CompilerDirectives.ValueType;
-import com.oracle.truffle.llvm.runtime.LLVMAddress;
-import com.oracle.truffle.llvm.runtime.memory.LLVMHeap;
-import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
+import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
+import com.oracle.truffle.llvm.runtime.types.Type;
 
 @ValueType
-public final class LLVMFloatVector {
+public final class LLVMFloatVector extends LLVMVector {
 
-    private static final int FLOAT_SIZE = 4;
-    private final LLVMAddress address;
-    private final int nrElements;
+    private final float[] vector;
 
-    private LLVMFloatVector(LLVMAddress addr, int nrElements) {
-        this.address = addr;
-        this.nrElements = nrElements;
+    public static LLVMFloatVector create(float[] vector) {
+        return new LLVMFloatVector(vector);
     }
 
-    public static LLVMFloatVector fromFloatArray(LLVMAddress target, float[] vals) {
-        LLVMAddress currentTarget = target;
-        for (int i = 0; i < vals.length; i++) {
-            LLVMMemory.putFloat(currentTarget, vals[i]);
-            currentTarget = currentTarget.increment(FLOAT_SIZE);
-        }
-        return new LLVMFloatVector(target, vals.length);
-    }
-
-    private static LLVMFloatVector create(LLVMAddress addr, int length) {
-        return new LLVMFloatVector(addr, length);
-    }
-
-    public static LLVMFloatVector createFloatVector(LLVMAddress addr, int size) {
-        return new LLVMFloatVector(addr, size);
-    }
-
-    public float[] getValues() {
-        float[] values = new float[nrElements];
-        for (int i = 0; i < values.length; i++) {
-            values[i] = getValue(i);
-        }
-        return values;
-    }
-
-    public LLVMFloatVector add(LLVMAddress addr, LLVMFloatVector right) {
-        LLVMAddress currentAddr = addr;
-        for (int i = 0; i < nrElements; i++) {
-            float elementResult = getValue(i) + right.getValue(i);
-            LLVMMemory.putFloat(currentAddr, elementResult);
-            currentAddr = currentAddr.increment(FLOAT_SIZE);
-        }
-        return create(addr, nrElements);
-    }
-
-    public LLVMFloatVector mul(LLVMAddress addr, LLVMFloatVector right) {
-        LLVMAddress currentAddr = addr;
-        for (int i = 0; i < nrElements; i++) {
-            float elementResult = getValue(i) * right.getValue(i);
-            LLVMMemory.putFloat(currentAddr, elementResult);
-            currentAddr = currentAddr.increment(FLOAT_SIZE);
-        }
-        return create(addr, nrElements);
-    }
-
-    public LLVMFloatVector sub(LLVMAddress addr, LLVMFloatVector right) {
-        LLVMAddress currentAddr = addr;
-        for (int i = 0; i < nrElements; i++) {
-            float elementResult = getValue(i) - right.getValue(i);
-            LLVMMemory.putFloat(currentAddr, elementResult);
-            currentAddr = currentAddr.increment(FLOAT_SIZE);
-        }
-        return create(addr, nrElements);
-    }
-
-    public LLVMFloatVector div(LLVMAddress addr, LLVMFloatVector right) {
-        LLVMAddress currentAddr = addr;
-        for (int i = 0; i < nrElements; i++) {
-            float elementResult = getValue(i) / right.getValue(i);
-            LLVMMemory.putFloat(currentAddr, elementResult);
-            currentAddr = currentAddr.increment(FLOAT_SIZE);
-        }
-        return create(addr, nrElements);
-    }
-
-    public LLVMFloatVector rem(LLVMAddress addr, LLVMFloatVector right) {
-        LLVMAddress currentAddr = addr;
-        for (int i = 0; i < nrElements; i++) {
-            float elementResult = getValue(i) % right.getValue(i);
-            LLVMMemory.putFloat(currentAddr, elementResult);
-            currentAddr = currentAddr.increment(FLOAT_SIZE);
-        }
-        return create(addr, nrElements);
+    private LLVMFloatVector(float[] vector) {
+        this.vector = vector;
     }
 
     public float getValue(int index) {
-        int offset = index * FLOAT_SIZE;
-        LLVMAddress increment = address.increment(offset);
-        return LLVMMemory.getFloat(increment);
+        return vector[index];
     }
 
-    public LLVMFloatVector insert(LLVMAddress target, float element, int index) {
-        LLVMHeap.memCopy(target, address, nrElements * FLOAT_SIZE);
-        LLVMAddress elementAddress = target.increment(index * FLOAT_SIZE);
-        LLVMMemory.putFloat(elementAddress, element);
-        return create(target, nrElements);
+    @Override
+    public int getLength() {
+        return vector.length;
     }
 
-    public LLVMAddress getAddress() {
-        return address;
+    @Override
+    public Type getElementType() {
+        return PrimitiveType.FLOAT;
     }
 
-    public int getVectorByteSize() {
-        return FLOAT_SIZE * nrElements;
+    @Override
+    public Object getElement(int index) {
+        return index >= 0 && index < vector.length ? vector[index] : null;
     }
 }
