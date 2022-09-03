@@ -23,6 +23,8 @@
 package com.oracle.max.graal.compiler.ir;
 
 import com.oracle.max.graal.compiler.debug.*;
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.Canonicalizable;
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.NotifyReProcess;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
@@ -30,13 +32,11 @@ import com.sun.cri.ri.*;
 /**
  * The {@code LoadField} instruction represents a read of a static or instance field.
  */
-public final class LoadField extends AccessField {
-
-    private static final int INPUT_COUNT = 0;
-    private static final int SUCCESSOR_COUNT = 0;
+public final class LoadField extends AccessField implements Canonicalizable {
 
     /**
      * Creates a new LoadField instance.
+     *
      * @param object the receiver object
      * @param field the compiler interface field
      * @param isStatic indicates if the field is static
@@ -45,11 +45,12 @@ public final class LoadField extends AccessField {
      * @param isLoaded indicates if the class is loaded
      */
     public LoadField(Value object, RiField field, Graph graph) {
-        super(field.kind().stackKind(), object, field, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+        super(field.kind().stackKind(), object, field, graph);
     }
 
     /**
      * Gets the declared type of the field being accessed.
+     *
      * @return the declared type of the field being accessed.
      */
     @Override
@@ -58,15 +59,15 @@ public final class LoadField extends AccessField {
     }
 
     /**
-     * Gets the exact type of the field being accessed. If the field type is
-     * a primitive array or an instance class and the class is loaded and final,
-     * then the exact type is the same as the declared type. Otherwise it is {@code null}
+     * Gets the exact type of the field being accessed. If the field type is a primitive array or an instance class and
+     * the class is loaded and final, then the exact type is the same as the declared type. Otherwise it is {@code null}
+     *
      * @return the exact type of the field if known; {@code null} otherwise
      */
     @Override
     public RiType exactType() {
-        RiType declaredType = declaredType();
-        return declaredType.isResolved() ? declaredType.exactType() : null;
+        RiType declared = declaredType();
+        return declared != null && declared.isResolved() ? declared.exactType() : null;
     }
 
     @Override
@@ -76,12 +77,7 @@ public final class LoadField extends AccessField {
 
     @Override
     public void print(LogStream out) {
-        out.print(object()).
-        print(".").
-        print(field.name()).
-        print(" [field: ").
-        print(CiUtil.format("%h.%n:%t", field, false)).
-        print("]");
+        out.print(object()).print(".").print(field.name()).print(" [field: ").print(CiUtil.format("%h.%n:%t", field, false)).print("]");
     }
 
     @Override
@@ -89,9 +85,31 @@ public final class LoadField extends AccessField {
         return false;
     }
 
+    /**
+     * Gets a constant value to which this load can be reduced.
+     *
+     * @return {@code null} if this load cannot be reduced to a constant
+     */
+    private CiConstant constantValue() {
+        if (isStatic()) {
+            return field.constantValue(null);
+        } else if (object().isConstant()) {
+            return field.constantValue(object().asConstant());
+        }
+        return null;
+    }
+
     @Override
-    public Node copy(Graph into) {
-        LoadField x = new LoadField(null, field, into);
-        return x;
+    public Node canonical(NotifyReProcess reProcess) {
+        CiConstant constant = null;
+        if (isStatic()) {
+            constant = field().constantValue(null);
+        } else if (object().isConstant()) {
+            constant = field().constantValue(object().asConstant());
+        }
+        if (constant != null) {
+            return new Constant(constant, graph());
+        }
+        return this;
     }
 }

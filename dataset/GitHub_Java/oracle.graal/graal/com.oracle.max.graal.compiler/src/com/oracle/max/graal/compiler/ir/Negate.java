@@ -23,55 +23,41 @@
 package com.oracle.max.graal.compiler.ir;
 
 import com.oracle.max.graal.compiler.debug.*;
-import com.oracle.max.graal.compiler.util.*;
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.NotifyReProcess;
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.*;
 import com.oracle.max.graal.graph.*;
-import com.sun.cri.bytecode.*;
 import com.sun.cri.ci.*;
 
 /**
  * The {@code NegateOp} instruction negates its operand.
  */
-public final class Negate extends FloatingNode {
+public final class Negate extends FloatingNode implements Canonicalizable {
 
-    private static final int INPUT_COUNT = 2;
-    private static final int INPUT_X = 0;
-    private static final int INPUT_Y = 1;
+    @Input
+    private Value x;
 
-    private static final int SUCCESSOR_COUNT = 0;
-
-    @Override
-    protected int inputCount() {
-        return super.inputCount() + INPUT_COUNT;
+    public Value x() {
+        return x;
     }
 
-    @Override
-    protected int successorCount() {
-        return super.successorCount() + SUCCESSOR_COUNT;
-    }
-
-    /**
-     * The instruction producing input to this instruction.
-     */
-     public Value x() {
-        return (Value) inputs().get(super.inputCount() + INPUT_X);
-    }
-
-    public Value setX(Value n) {
-        return (Value) inputs().set(super.inputCount() + INPUT_X, n);
+    public void setX(Value x) {
+        updateUsages(this.x, x);
+        this.x = x;
     }
 
     /**
      * Creates new NegateOp instance.
+     *
      * @param x the instruction producing the value that is input to this instruction
      */
     public Negate(Value x, Graph graph) {
-        super(x.kind, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+        super(x.kind, graph);
         setX(x);
     }
 
     // for copying
     private Negate(CiKind kind, Graph graph) {
-        super(kind, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+        super(kind, graph);
     }
 
     @Override
@@ -80,27 +66,27 @@ public final class Negate extends FloatingNode {
     }
 
     @Override
-    public int valueNumber() {
-        return Util.hash1(Bytecodes.INEG, x());
-    }
-
-    @Override
-    public boolean valueEqual(Node i) {
-        if (i instanceof Negate) {
-            Negate o = (Negate) i;
-            return x() == o.x();
-        }
-        return false;
-    }
-
-    @Override
     public void print(LogStream out) {
         out.print("- ").print(x());
     }
 
     @Override
-    public Node copy(Graph into) {
-        Negate x = new Negate(kind, into);
-        return x;
+    public Node canonical(NotifyReProcess reProcess) {
+        if (x().isConstant()) {
+            switch (x().kind) {
+                case Int:
+                    return Constant.forInt(-x().asConstant().asInt(), graph());
+                case Long:
+                    return Constant.forLong(-x().asConstant().asLong(), graph());
+                case Float:
+                    return Constant.forFloat(-x().asConstant().asFloat(), graph());
+                case Double:
+                    return Constant.forDouble(-x().asConstant().asDouble(), graph());
+            }
+        }
+        if (x() instanceof Negate) {
+            return ((Negate) x()).x();
+        }
+        return this;
     }
 }

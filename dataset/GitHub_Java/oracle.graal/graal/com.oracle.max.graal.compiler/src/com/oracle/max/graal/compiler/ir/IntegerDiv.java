@@ -22,26 +22,38 @@
  */
 package com.oracle.max.graal.compiler.ir;
 
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.NotifyReProcess;
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.bytecode.*;
 import com.sun.cri.ci.*;
 
-
-public final class IntegerDiv extends IntegerArithmetic {
+@NodeInfo(shortName = "/")
+public final class IntegerDiv extends IntegerArithmeticNode implements Canonicalizable {
 
     public IntegerDiv(CiKind kind, Value x, Value y, Graph graph) {
         super(kind, kind == CiKind.Int ? Bytecodes.IDIV : Bytecodes.LDIV, x, y, graph);
     }
 
     @Override
-    public String shortName() {
-        return "/";
+    public Node canonical(NotifyReProcess reProcess) {
+        if (x().isConstant() && y().isConstant()) {
+            long yConst = y().asConstant().asLong();
+            if (yConst == 0) {
+                return this; // this will trap, can not canonicalize
+            }
+            if (kind == CiKind.Int) {
+                return Constant.forInt(x().asConstant().asInt() / (int) yConst, graph());
+            } else {
+                assert kind == CiKind.Long;
+                return Constant.forLong(x().asConstant().asLong() / yConst, graph());
+            }
+        } else if (y().isConstant()) {
+            long c = y().asConstant().asLong();
+            if (c == 1) {
+                return x();
+            }
+        }
+        return this;
     }
-
-    @Override
-    public Node copy(Graph into) {
-        IntegerDiv x = new IntegerDiv(kind, null, null, graph());
-        return x;
-    }
-
 }

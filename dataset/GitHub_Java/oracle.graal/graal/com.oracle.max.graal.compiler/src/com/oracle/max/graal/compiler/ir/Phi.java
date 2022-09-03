@@ -22,102 +22,91 @@
  */
 package com.oracle.max.graal.compiler.ir;
 
+import java.util.*;
+
+import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.debug.*;
+import com.oracle.max.graal.compiler.ir.StateSplit.FilteringIterator;
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.Canonicalizable;
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.NotifyReProcess;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
 
 /**
- * The {@code Phi} instruction represents the merging of dataflow
- * in the instruction graph. It refers to a join block and a variable.
+ * The {@code Phi} instruction represents the merging of dataflow in the instruction graph. It refers to a join block
+ * and a variable.
  */
-public final class Phi extends FixedNode {
+public final class Phi extends FloatingNode implements Canonicalizable {
 
-    private static final int DEFAULT_MAX_VALUES = 2;
+    @Input private Merge merge;
 
-    private static final int INPUT_COUNT = 1;
-    private static final int INPUT_BLOCK = 0;
+    @Input private final NodeInputList<Value> values = new NodeInputList<Value>(this);
 
-    private final int maxValues;
+    public Merge merge() {
+        return merge;
+    }
 
-    private static final int SUCCESSOR_COUNT = 0;
+    public void setMerge(Merge x) {
+        updateUsages(merge, x);
+        merge = x;
+    }
 
-    private int usedInputCount;
-    private boolean isDead;
+    public static enum PhiType {
+        Value, // normal value phis
+        Memory, // memory phis
+        Virtual // phis used for VirtualObjectField merges
+    }
 
-    @Override
-    protected int inputCount() {
-        return super.inputCount() + INPUT_COUNT + maxValues;
+    private final PhiType type;
+
+    public Phi(CiKind kind, Merge merge, PhiType type, Graph graph) {
+        super(kind, graph);
+        this.type = type;
+        setMerge(merge);
+    }
+
+    private Phi(CiKind kind, PhiType type, Graph graph) {
+        super(kind, graph);
+        this.type = type;
+    }
+
+    public PhiType type() {
+        return type;
     }
 
     @Override
-    protected int successorCount() {
-        return super.successorCount() + SUCCESSOR_COUNT;
+    public boolean verify() {
+        assertTrue(merge() != null);
+        assertTrue(merge().phiPredecessorCount() == valueCount(), merge().phiPredecessorCount() + "==" + valueCount());
+        return true;
     }
 
     /**
-     * The join block for this phi.
-     */
-    public Merge block() {
-        return (Merge) inputs().get(super.inputCount() + INPUT_BLOCK);
-    }
-
-    public Value setBlock(Value n) {
-        return (Merge) inputs().set(super.inputCount() + INPUT_BLOCK, n);
-    }
-
-    /**
-     * Create a new Phi for the specified join block and local variable (or operand stack) slot.
-     * @param kind the type of the variable
-     * @param block the join point
-     * @param graph
-     */
-    public Phi(CiKind kind, Merge block, Graph graph) {
-        this(kind, block, DEFAULT_MAX_VALUES, graph);
-    }
-
-    public Phi(CiKind kind, Merge block, int maxValues, Graph graph) {
-        super(kind, INPUT_COUNT + maxValues, SUCCESSOR_COUNT, graph);
-        this.maxValues = maxValues;
-        usedInputCount = 0;
-        setBlock(block);
-    }
-
-    /**
-     * Get the instruction that produces the value associated with the i'th predecessor
-     * of the join block.
+     * Get the instruction that produces the value associated with the i'th predecessor of the join block.
+     *
      * @param i the index of the predecessor
      * @return the instruction that produced the value in the i'th predecessor
      */
     public Value valueAt(int i) {
-        return (Value) inputs().get(INPUT_COUNT + i);
+        return values.get(i);
     }
 
-    public Node setValueAt(int i, Node x) {
-        return inputs().set(INPUT_COUNT + i, x);
+    public void setValueAt(int i, Value x) {
+        values.set(i, x);
     }
 
     /**
      * Get the number of inputs to this phi (i.e. the number of predecessors to the join block).
+     *
      * @return the number of inputs in this phi
      */
     public int valueCount() {
-        return usedInputCount;
+        return values.size();
     }
 
     @Override
     public void accept(ValueVisitor v) {
         v.visitPhi(this);
-    }
-
-    /**
-     * Make this phi illegal if types were not merged correctly.
-     */
-    public void makeDead() {
-        isDead = true;
-    }
-
-    public boolean isDead() {
-        return isDead;
     }
 
     @Override
@@ -141,39 +130,69 @@ public final class Phi extends FixedNode {
             }
             str.append(valueAt(i) == null ? "-" : valueAt(i).id());
         }
-        return "Phi: (" + str + ")";
+        if (type == PhiType.Value) {
+            return "Phi: (" + str + ")";
+        } else {
+            return type + "Phi: (" + str + ")";
+        }
     }
 
-    public Phi addInput(Node y) {
-        assert !this.isDeleted() && !y.isDeleted();
-        Phi phi = this;
-        if (usedInputCount == maxValues) {
-            phi = new Phi(kind, block(), maxValues * 2, graph());
-            for (int i = 0; i < valueCount(); ++i) {
-                phi.addInput(valueAt(i));
-            }
-            phi.addInput(y);
-            this.replace(phi);
-        } else {
-            setValueAt(usedInputCount++, y);
-        }
-        return phi;
+    public void addInput(Value x) {
+        values.add(x);
     }
 
     public void removeInput(int index) {
-        assert index < valueCount() : "index: " + index + ", valueCount: " + valueCount() + "@phi " + id();
-        setValueAt(index, Node.Null);
-        for (int i = index + 1; i < valueCount(); ++i) {
-            setValueAt(i - 1, valueAt(i));
-        }
-        usedInputCount--;
+        values.remove(index);
     }
 
     @Override
-    public Node copy(Graph into) {
-        Phi x = new Phi(kind, null, maxValues, into);
-        x.usedInputCount = usedInputCount;
-        x.isDead = isDead;
-        return x;
+    public Iterable< ? extends Node> dataInputs() {
+        final Iterator< ? extends Node> input = super.dataInputs().iterator();
+        return new Iterable<Node>() {
+
+            @Override
+            public Iterator<Node> iterator() {
+                return new FilteringIterator(input, Merge.class);
+            }
+        };
+    }
+
+    @Override
+    public Node canonical(NotifyReProcess reProcess) {
+        if (valueCount() != 2 || merge().endCount() != 2) {
+            return this;
+        }
+        if (merge().phis().size() > 1) { // XXX (gd) disable canonicalization of multiple conditional while we are not able to fuse them and the potentially leftover If in the backend
+            return this;
+        }
+        Node end0 = merge().endAt(0);
+        Node end1 = merge().endAt(1);
+        Node endPred0 = end0.predecessor();
+        Node endPred1 = end1.predecessor();
+        if (endPred0 != endPred1 || !(endPred0 instanceof If)) {
+            return this;
+        }
+        If ifNode = (If) endPred0;
+        boolean inverted = ifNode.trueSuccessor() == end1;
+        Value trueValue = valueAt(inverted ? 1 : 0);
+        Value falseValue = valueAt(inverted ? 0 : 1);
+        if ((trueValue.kind != CiKind.Int && trueValue.kind != CiKind.Long) || (falseValue.kind != CiKind.Int && falseValue.kind != CiKind.Long)) {
+            return this;
+        }
+        if ((!(trueValue instanceof Constant) && trueValue.usages().size() == 1) || (!(falseValue instanceof Constant) && falseValue.usages().size() == 1)) {
+            return this;
+        }
+        BooleanNode compare = ifNode.compare();
+        while (compare instanceof NegateBooleanNode) {
+            compare = ((NegateBooleanNode) compare).value();
+        }
+        if (!(compare instanceof Compare || compare instanceof IsNonNull || compare instanceof NegateBooleanNode || compare instanceof Constant)) {
+            return this;
+        }
+        if (GraalOptions.TraceCanonicalizer) {
+            TTY.println("> Phi canon'ed to Conditional");
+        }
+        reProcess.reProccess(ifNode);
+        return new Conditional(ifNode.compare(), trueValue, falseValue, graph());
     }
 }

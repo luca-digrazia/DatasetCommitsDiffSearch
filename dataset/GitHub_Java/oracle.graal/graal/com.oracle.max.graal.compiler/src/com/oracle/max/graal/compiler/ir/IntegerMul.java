@@ -22,26 +22,43 @@
  */
 package com.oracle.max.graal.compiler.ir;
 
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.NotifyReProcess;
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.bytecode.*;
 import com.sun.cri.ci.*;
 
-
-public final class IntegerMul extends IntegerArithmetic {
+@NodeInfo(shortName = "*")
+public final class IntegerMul extends IntegerArithmeticNode implements Canonicalizable {
 
     public IntegerMul(CiKind kind, Value x, Value y, Graph graph) {
         super(kind, kind == CiKind.Int ? Bytecodes.IMUL : Bytecodes.LMUL, x, y, graph);
     }
 
     @Override
-    public String shortName() {
-        return "*";
+    public Node canonical(NotifyReProcess reProcess) {
+        if (x().isConstant() && !y().isConstant()) {
+            swapOperands();
+        }
+        if (x().isConstant()) {
+            if (kind == CiKind.Int) {
+                return Constant.forInt(x().asConstant().asInt() * y().asConstant().asInt(), graph());
+            } else {
+                assert kind == CiKind.Long;
+                return Constant.forLong(x().asConstant().asLong() * y().asConstant().asLong(), graph());
+            }
+        } else if (y().isConstant()) {
+            long c = y().asConstant().asLong();
+            if (c == 1) {
+                return x();
+            }
+            if (c == 0) {
+                return Constant.forInt(0, graph());
+            }
+            if (c > 0 && CiUtil.isPowerOf2(c)) {
+                return new LeftShift(kind, x(), Constant.forInt(CiUtil.log2(c), graph()), graph());
+            }
+        }
+        return this;
     }
-
-    @Override
-    public Node copy(Graph into) {
-        IntegerMul x = new IntegerMul(kind, null, null, graph());
-        return x;
-    }
-
 }

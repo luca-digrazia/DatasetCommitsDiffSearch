@@ -22,26 +22,45 @@
  */
 package com.oracle.max.graal.compiler.ir;
 
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.NotifyReProcess;
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.bytecode.*;
 import com.sun.cri.ci.*;
 
-
-public final class FloatAdd extends FloatArithmetic {
+@NodeInfo(shortName = "+")
+public final class FloatAdd extends FloatArithmetic implements Canonicalizable {
 
     public FloatAdd(CiKind kind, Value x, Value y, boolean isStrictFP, Graph graph) {
         super(kind, kind == CiKind.Double ? Bytecodes.DADD : Bytecodes.FADD, x, y, isStrictFP, graph);
     }
 
     @Override
-    public String shortName() {
-        return "+";
+    public Node canonical(NotifyReProcess reProcess) {
+        if (x().isConstant() && !y().isConstant()) {
+            swapOperands();
+        }
+        if (x().isConstant()) {
+            if (kind == CiKind.Float) {
+                return Constant.forFloat(x().asConstant().asFloat() + y().asConstant().asFloat(), graph());
+            } else {
+                assert kind == CiKind.Double;
+                return Constant.forDouble(x().asConstant().asDouble() + y().asConstant().asDouble(), graph());
+            }
+        } else if (y().isConstant()) {
+            if (kind == CiKind.Float) {
+                float c = y().asConstant().asFloat();
+                if (c == 0.0f) {
+                    return x();
+                }
+            } else {
+                assert kind == CiKind.Double;
+                double c = y().asConstant().asDouble();
+                if (c == 0.0) {
+                    return x();
+                }
+            }
+        }
+        return this;
     }
-
-    @Override
-    public Node copy(Graph into) {
-        FloatAdd x = new FloatAdd(kind, null, null, isStrictFP(), graph());
-        return x;
-    }
-
 }

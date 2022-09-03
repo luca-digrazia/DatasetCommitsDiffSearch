@@ -22,69 +22,68 @@
  */
 package com.oracle.max.graal.compiler.ir;
 
+import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.debug.*;
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.Canonicalizable;
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.NotifyReProcess;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
 
 /**
- * The {@code If} instruction represents a branch that can go one of two directions
- * depending on the outcome of a comparison.
+ * The {@code If} instruction represents a branch that can go one of two directions depending on the outcome of a
+ * comparison.
  */
-public final class If extends BlockEnd {
+public final class If extends ControlSplit implements Canonicalizable {
 
-    private static final int INPUT_COUNT = 1;
-    private static final int INPUT_COMPARE = 0;
+    @Input private BooleanNode compare;
 
-    private static final int SUCCESSOR_COUNT = 0;
-
-    @Override
-    protected int inputCount() {
-        return super.inputCount() + INPUT_COUNT;
+    public BooleanNode compare() {
+        return compare;
     }
 
-    @Override
-    protected int successorCount() {
-        return super.successorCount() + SUCCESSOR_COUNT;
+    public void setCompare(BooleanNode x) {
+        updateUsages(compare, x);
+        compare = x;
     }
 
-    /**
-     * The instruction that produces the first input to this comparison.
-     */
-     public Compare compare() {
-        return (Compare) inputs().get(super.inputCount() + INPUT_COMPARE);
-    }
-
-    public Value setCompare(Compare n) {
-        return (Value) inputs().set(super.inputCount() + INPUT_COMPARE, n);
-    }
-
-    public If(Compare compare, Graph graph) {
-        super(CiKind.Illegal, 2, INPUT_COUNT, SUCCESSOR_COUNT, graph);
-        setCompare(compare);
+    public If(BooleanNode condition, double probability, Graph graph) {
+        super(CiKind.Illegal, 2, new double[] {probability, 1 - probability}, graph);
+        setCompare(condition);
     }
 
     /**
      * Gets the block corresponding to the true successor.
+     *
      * @return the true successor
      */
-    public Instruction trueSuccessor() {
+    public FixedNode trueSuccessor() {
         return blockSuccessor(0);
     }
 
     /**
      * Gets the block corresponding to the false successor.
+     *
      * @return the false successor
      */
-    public Instruction falseSuccessor() {
+    public FixedNode falseSuccessor() {
         return blockSuccessor(1);
+    }
+
+    public void setTrueSuccessor(FixedNode node) {
+        setBlockSuccessor(0, node);
+    }
+
+    public void setFalseSuccessor(FixedNode node) {
+        setBlockSuccessor(1, node);
     }
 
     /**
      * Gets the block corresponding to the specified outcome of the branch.
+     *
      * @param istrue {@code true} if the true successor is requested, {@code false} otherwise
      * @return the corresponding successor
      */
-    public Instruction successor(boolean istrue) {
+    public FixedNode successor(boolean istrue) {
         return blockSuccessor(istrue ? 0 : 1);
     }
 
@@ -94,26 +93,56 @@ public final class If extends BlockEnd {
     }
 
     @Override
+    public boolean verify() {
+        assertTrue(compare() != null);
+        assertTrue(trueSuccessor() != null);
+        assertTrue(falseSuccessor() != null);
+        return true;
+    }
+
+    @Override
     public void print(LogStream out) {
-        out.print("if ").
-        print(compare().x()).
-        print(' ').
-        print(compare().condition().operator).
-        print(' ').
-        print(compare().y()).
-        print(" then ").
-        print(blockSuccessors().get(0)).
-        print(" else ").
-        print(blockSuccessors().get(1));
+        out.print("if ").print(compare()).print(" then ").print(trueSuccessor()).print(" else ").print(falseSuccessor());
     }
 
     @Override
-    public String shortName() {
-        return "If " + compare().condition.operator;
-    }
-
-    @Override
-    public Node copy(Graph into) {
-        return new If(compare(), into);
+    public Node canonical(NotifyReProcess reProcess) {
+        if (compare() instanceof Constant) {
+            Constant c = (Constant) compare();
+            if (c.asConstant().asBoolean()) {
+                if (GraalOptions.TraceCanonicalizer) {
+                    TTY.println("Replacing if " + this + " with true branch");
+                }
+                return trueSuccessor();
+            } else {
+                if (GraalOptions.TraceCanonicalizer) {
+                    TTY.println("Replacing if " + this + " with false branch");
+                }
+                return falseSuccessor();
+            }
+        }
+        if (trueSuccessor() instanceof EndNode && falseSuccessor() instanceof EndNode) {
+            EndNode trueEnd = (EndNode) trueSuccessor();
+            EndNode falseEnd = (EndNode) falseSuccessor();
+            Merge merge = trueEnd.merge();
+            if (merge == falseEnd.merge() && merge.phis().size() == 0) {
+                FixedNode next = merge.next();
+                merge.setNext(null); // disconnect to avoid next from having 2 preds
+                if (compare().usages().size() == 1 && /* ifNode.compare().hasSideEffets() */true) { // TODO (gd) ifNode.compare().hasSideEffets() ?
+                    if (GraalOptions.TraceCanonicalizer) {
+                        TTY.println("> Useless if with side effects Canon'ed to guard");
+                    }
+                    ValueAnchor anchor = new ValueAnchor(compare(), graph());
+                    anchor.setNext(next);
+                    return anchor;
+                } else {
+                    if (GraalOptions.TraceCanonicalizer) {
+                        TTY.println("> Useless if Canon'ed away");
+                    }
+                    return next;
+                }
+            }
+        }
+        return this;
     }
 }

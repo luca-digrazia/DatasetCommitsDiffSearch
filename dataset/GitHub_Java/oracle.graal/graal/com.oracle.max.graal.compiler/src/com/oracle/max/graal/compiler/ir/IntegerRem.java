@@ -22,26 +22,43 @@
  */
 package com.oracle.max.graal.compiler.ir;
 
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.NotifyReProcess;
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.bytecode.*;
 import com.sun.cri.ci.*;
 
-
-public final class IntegerRem extends IntegerArithmetic {
+@NodeInfo(shortName = "%")
+public final class IntegerRem extends IntegerArithmeticNode implements Canonicalizable {
 
     public IntegerRem(CiKind kind, Value x, Value y, Graph graph) {
         super(kind, kind == CiKind.Int ? Bytecodes.IREM : Bytecodes.LREM, x, y, graph);
     }
 
     @Override
-    public String shortName() {
-        return "%";
+    public Node canonical(NotifyReProcess reProcess) {
+        if (x().isConstant() && y().isConstant()) {
+            long yConst = y().asConstant().asLong();
+            if (yConst == 0) {
+                return this; // this will trap, can not canonicalize
+            }
+            if (kind == CiKind.Int) {
+                return Constant.forInt(x().asConstant().asInt() % (int) yConst, graph());
+            } else {
+                assert kind == CiKind.Long;
+                return Constant.forLong(x().asConstant().asLong() % yConst, graph());
+            }
+        } else if (y().isConstant()) {
+            long c = y().asConstant().asLong();
+            if (c == 1 || c == -1) {
+                if (kind == CiKind.Int) {
+                    return Constant.forInt(0, graph());
+                } else {
+                    assert kind == CiKind.Long;
+                    return Constant.forLong(0, graph());
+                }
+            }
+        }
+        return this;
     }
-
-    @Override
-    public Node copy(Graph into) {
-        IntegerRem x = new IntegerRem(kind, null, null, graph());
-        return x;
-    }
-
 }

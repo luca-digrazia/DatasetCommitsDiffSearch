@@ -23,49 +23,37 @@
 package com.oracle.max.graal.compiler.ir;
 
 import com.oracle.max.graal.compiler.debug.*;
-import com.oracle.max.graal.compiler.util.*;
+import com.oracle.max.graal.compiler.graph.*;
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.NotifyReProcess;
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.*;
 import com.oracle.max.graal.graph.*;
-import com.sun.cri.bytecode.*;
 import com.sun.cri.ci.*;
+import com.sun.cri.ri.*;
 
 /**
  * The {@code ArrayLength} instruction gets the length of an array.
  */
-public final class ArrayLength extends FloatingNode {
+public final class ArrayLength extends FloatingNode implements Canonicalizable {
 
-    private static final int INPUT_COUNT = 1;
-    private static final int INPUT_ARRAY = 0;
+    @Input private Value array;
 
-    private static final int SUCCESSOR_COUNT = 0;
-
-    @Override
-    protected int inputCount() {
-        return super.inputCount() + INPUT_COUNT;
+    public Value array() {
+        return array;
     }
 
-    @Override
-    protected int successorCount() {
-        return super.successorCount() + SUCCESSOR_COUNT;
-    }
-
-    /**
-     * The instruction that produces the array object.
-     */
-     public Value array() {
-        return (Value) inputs().get(super.inputCount() + INPUT_ARRAY);
-    }
-
-    public Value setArray(Value n) {
-        return (Value) inputs().set(super.inputCount() + INPUT_ARRAY, n);
+    public void setArray(Value x) {
+        updateUsages(array, x);
+        array = x;
     }
 
     /**
      * Constructs a new ArrayLength instruction.
+     *
      * @param array the instruction producing the array
      * @param newFrameState the state after executing this instruction
      */
     public ArrayLength(Value array, Graph graph) {
-        super(CiKind.Int, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+        super(CiKind.Int, graph);
         setArray(array);
     }
 
@@ -75,27 +63,27 @@ public final class ArrayLength extends FloatingNode {
     }
 
     @Override
-    public int valueNumber() {
-        return Util.hash1(Bytecodes.ARRAYLENGTH, array());
-    }
-
-    @Override
-    public boolean valueEqual(Node i) {
-        if (i instanceof ArrayLength) {
-            ArrayLength o = (ArrayLength) i;
-            return array() == o.array();
-        }
-        return false;
-    }
-
-    @Override
     public void print(LogStream out) {
         out.print(array()).print(".length");
     }
 
     @Override
-    public Node copy(Graph into) {
-        ArrayLength x = new ArrayLength(null, into);
-        return x;
+    public Node canonical(NotifyReProcess reProcess) {
+        if (array() instanceof NewArray) {
+            Value length = ((NewArray) array()).dimension(0);
+            assert length != null;
+            return length;
+        }
+        CiConstant constantValue = null;
+        if (array().isConstant()) {
+            constantValue = array().asConstant();
+            if (constantValue != null && constantValue.isNonNull()) {
+                if (graph() instanceof CompilerGraph) {
+                    RiRuntime runtime = ((CompilerGraph) graph()).runtime();
+                    return Constant.forInt(runtime.getArrayLength(constantValue), graph());
+                }
+            }
+        }
+        return this;
     }
 }

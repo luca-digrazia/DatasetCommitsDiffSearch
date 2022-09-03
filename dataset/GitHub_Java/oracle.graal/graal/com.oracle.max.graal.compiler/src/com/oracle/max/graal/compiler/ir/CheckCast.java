@@ -23,7 +23,8 @@
 package com.oracle.max.graal.compiler.ir;
 
 import com.oracle.max.graal.compiler.debug.*;
-import com.oracle.max.graal.compiler.util.*;
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.Canonicalizable;
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.NotifyReProcess;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.bytecode.*;
 import com.sun.cri.ci.*;
@@ -32,37 +33,37 @@ import com.sun.cri.ri.*;
 /**
  * The {@code CheckCast} instruction represents a {@link Bytecodes#CHECKCAST}.
  */
-public final class CheckCast extends TypeCheck {
-
-    private static final int INPUT_COUNT = 0;
-    private static final int SUCCESSOR_COUNT = 0;
+public final class CheckCast extends TypeCheck implements Canonicalizable {
 
     /**
      * Creates a new CheckCast instruction.
+     *
      * @param targetClass the class being cast to
      * @param object the instruction producing the object
      * @param graph
      */
-    public CheckCast(RiType targetClass, Value targetClassInstruction, Value object, Graph graph) {
-        super(targetClass, targetClassInstruction, object, CiKind.Object, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+    public CheckCast(Value targetClassInstruction, Value object, Graph graph) {
+        super(targetClassInstruction, object, CiKind.Object, graph);
     }
 
     /**
      * Gets the declared type of the result of this instruction.
+     *
      * @return the declared type of the result
      */
     @Override
     public RiType declaredType() {
-        return targetClass;
+        return targetClass();
     }
 
     /**
      * Gets the exact type of the result of this instruction.
+     *
      * @return the exact type of the result
      */
     @Override
     public RiType exactType() {
-        return targetClass.isResolved() ? targetClass.exactType() : null;
+        return targetClass().isResolved() ? targetClass().exactType() : null;
     }
 
     @Override
@@ -71,32 +72,25 @@ public final class CheckCast extends TypeCheck {
     }
 
     @Override
-    public int valueNumber() {
-        return targetClass.isResolved() ? Util.hash1(Bytecodes.CHECKCAST, object()) : 0;
-    }
-
-    @Override
-    public boolean valueEqual(Node i) {
-        if (i instanceof CheckCast) {
-            CheckCast o = (CheckCast) i;
-            return targetClass == o.targetClass && object() == o.object();
-        }
-        return false;
-    }
-
-    @Override
     public void print(LogStream out) {
-        out.print("checkcast(").
-        print(object()).
-        print(",").
-        print(targetClassInstruction()).
-        print(") ").
-        print(CiUtil.toJavaName(targetClass()));
+        out.print("checkcast(").print(object()).print(",").print(targetClassInstruction()).print(") ").print(CiUtil.toJavaName(targetClass()));
     }
 
     @Override
-    public Node copy(Graph into) {
-        CheckCast x = new CheckCast(targetClass, null, null, into);
-        return x;
+    public Node canonical(NotifyReProcess reProcess) {
+        if (object().exactType() != null) {
+            return object();
+        }
+        CiConstant constant = object().asConstant();
+        if (constant != null) {
+            assert constant.kind == CiKind.Object;
+            if (constant.isNull()) {
+                return object();
+            } else {
+                // this should never happen - non-null constants are always expected to provide an exactType
+                assert false;
+            }
+        }
+        return this;
     }
 }

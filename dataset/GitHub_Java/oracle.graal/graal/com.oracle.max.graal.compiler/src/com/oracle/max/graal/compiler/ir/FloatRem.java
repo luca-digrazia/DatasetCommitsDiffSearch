@@ -22,37 +22,29 @@
  */
 package com.oracle.max.graal.compiler.ir;
 
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.NotifyReProcess;
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.bytecode.*;
 import com.sun.cri.ci.*;
 
+@NodeInfo(shortName = "%")
+public final class FloatRem extends FloatArithmetic implements Canonicalizable {
 
-/**
- *
- */
-public final class FloatRem extends FloatArithmetic {
-
-    /**
-     * @param opcode
-     * @param kind
-     * @param x
-     * @param y
-     * @param isStrictFP
-     * @param graph
-     */
     public FloatRem(CiKind kind, Value x, Value y, boolean isStrictFP, Graph graph) {
         super(kind, kind == CiKind.Double ? Bytecodes.DREM : Bytecodes.FREM, x, y, isStrictFP, graph);
     }
 
     @Override
-    public String shortName() {
-        return "%";
+    public Node canonical(NotifyReProcess reProcess) {
+        if (x().isConstant() && y().isConstant()) {
+            if (kind == CiKind.Float) {
+                return Constant.forFloat(x().asConstant().asFloat() % y().asConstant().asFloat(), graph());
+            } else {
+                assert kind == CiKind.Double;
+                return Constant.forDouble(x().asConstant().asDouble() % y().asConstant().asDouble(), graph());
+            }
+        }
+        return this;
     }
-
-    @Override
-    public Node copy(Graph into) {
-        FloatRem x = new FloatRem(kind, null, null, isStrictFP(), graph());
-        return x;
-    }
-
 }

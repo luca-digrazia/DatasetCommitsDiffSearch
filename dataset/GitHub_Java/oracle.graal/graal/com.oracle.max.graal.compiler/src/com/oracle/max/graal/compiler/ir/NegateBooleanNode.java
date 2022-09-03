@@ -23,39 +23,26 @@
 package com.oracle.max.graal.compiler.ir;
 
 import com.oracle.max.graal.compiler.debug.*;
-import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.CanonicalizerOp;
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.Canonicalizable;
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.NotifyReProcess;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
 
-public final class NegateBooleanNode extends BooleanNode {
-    private static final int INPUT_COUNT = 1;
-    private static final int INPUT_NODE = 0;
+public final class NegateBooleanNode extends BooleanNode implements Canonicalizable {
 
-    private static final int SUCCESSOR_COUNT = 0;
+    @Input private BooleanNode value;
 
-    @Override
-    protected int inputCount() {
-        return super.inputCount() + INPUT_COUNT;
+    public BooleanNode value() {
+        return value;
     }
 
-    @Override
-    protected int successorCount() {
-        return super.successorCount() + SUCCESSOR_COUNT;
+    public void setValue(BooleanNode x) {
+        updateUsages(value, x);
+        value = x;
     }
 
-    /**
-     * The instruction that produces the array object.
-     */
-     public Value value() {
-        return (Value) inputs().get(super.inputCount() + INPUT_NODE);
-    }
-
-    public Value setValue(Value n) {
-        return (Value) inputs().set(super.inputCount() + INPUT_NODE, n);
-    }
-
-    public NegateBooleanNode(Value value, Graph graph) {
-        super(CiKind.Int, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+    public NegateBooleanNode(BooleanNode value, Graph graph) {
+        super(CiKind.Int, graph);
         setValue(value);
     }
 
@@ -64,40 +51,17 @@ public final class NegateBooleanNode extends BooleanNode {
     }
 
     @Override
-    public boolean valueEqual(Node i) {
-        return i instanceof NegateBooleanNode;
-    }
-
-    @Override
     public void print(LogStream out) {
         out.print(value()).print("!");
     }
 
     @Override
-    public Node copy(Graph into) {
-        return new NegateBooleanNode(null, into);
-    }
-
-    @SuppressWarnings("unchecked")
-    @Override
-    public <T extends Op> T lookup(Class<T> clazz) {
-        if (clazz == CanonicalizerOp.class) {
-            return (T) CANONICALIZER;
+    public Node canonical(NotifyReProcess reProcess) {
+        if (value() instanceof NegateBooleanNode) {
+            return ((NegateBooleanNode) value()).value();
+        } else if (value() instanceof Constant) {
+            return Constant.forBoolean(!value().asConstant().asBoolean(), graph());
         }
-        return super.lookup(clazz);
+        return this;
     }
-
-    private static final CanonicalizerOp CANONICALIZER = new CanonicalizerOp() {
-        @Override
-        public Node canonical(Node node) {
-            NegateBooleanNode negateNode = (NegateBooleanNode) node;
-            Value value = negateNode.value();
-            if (value instanceof NegateBooleanNode) {
-                return ((NegateBooleanNode) value).value();
-            } else if (value instanceof Constant) {
-                return Constant.forBoolean(!value.asConstant().asBoolean(), node.graph());
-            }
-            return negateNode;
-        }
-    };
 }

@@ -22,30 +22,42 @@
  */
 package com.oracle.max.graal.compiler.ir;
 
+import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.debug.*;
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.NotifyReProcess;
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
 
+public final class GuardNode extends FloatingNode implements Canonicalizable {
 
-public final class GuardNode extends Instruction {
-    private static final int INPUT_COUNT = 1;
-    private static final int INPUT_NODE = 0;
+    @Input private FixedNode anchor;
+    @Input private BooleanNode node;
 
-    private static final int SUCCESSOR_COUNT = 0;
+    public FixedNode anchor() {
+        return anchor;
+    }
+
+    public void setAnchor(FixedNode x) {
+        updateUsages(anchor, x);
+        anchor = x;
+    }
 
     /**
-     * The instruction that produces the object tested against null.
+     * The instruction that produces the tested boolean value.
      */
-     public FloatingNode node() {
-        return (FloatingNode) inputs().get(super.inputCount() + INPUT_NODE);
+    public BooleanNode node() {
+        return node;
     }
 
-    public FloatingNode setNode(FloatingNode n) {
-        return (FloatingNode) inputs().set(super.inputCount() + INPUT_NODE, n);
+    public void setNode(BooleanNode x) {
+        updateUsages(node, x);
+        node = x;
     }
 
-    public GuardNode(Graph graph) {
-        super(CiKind.Illegal, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+    public GuardNode(BooleanNode node, Graph graph) {
+        super(CiKind.Illegal, graph);
+        setNode(node);
     }
 
     @Override
@@ -55,11 +67,20 @@ public final class GuardNode extends Instruction {
 
     @Override
     public void print(LogStream out) {
-        out.print("clip node ").print(node());
+        out.print("guard node ").print(node());
     }
 
     @Override
-    public Node copy(Graph into) {
-        return new GuardNode(into);
+    public Node canonical(NotifyReProcess reProcess) {
+        if (node() instanceof Constant) {
+            Constant c = (Constant) node();
+            if (c.asConstant().asBoolean()) {
+                if (GraalOptions.TraceCanonicalizer) {
+                    TTY.println("Removing redundant floating guard " + this);
+                }
+                return Node.Null;
+            }
+        }
+        return this;
     }
 }

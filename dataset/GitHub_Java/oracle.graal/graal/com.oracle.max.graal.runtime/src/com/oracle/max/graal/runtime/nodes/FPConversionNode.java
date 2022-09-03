@@ -24,60 +24,39 @@ package com.oracle.max.graal.runtime.nodes;
 
 import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.gen.*;
+import com.oracle.max.graal.compiler.gen.LIRGenerator.LIRGeneratorOp;
 import com.oracle.max.graal.compiler.ir.*;
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.NotifyReProcess;
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
 
 
-public final class FPConversionNode extends FloatingNode {
-    private static final int INPUT_COUNT = 1;
-    private static final int INPUT_OBJECT = 0;
+public final class FPConversionNode extends FloatingNode implements Canonicalizable {
 
-    private static final int SUCCESSOR_COUNT = 0;
+    @Input private Value value;
 
-    @Override
-    protected int inputCount() {
-        return super.inputCount() + INPUT_COUNT;
+    public Value value() {
+        return value;
     }
 
-    /**
-     * The instruction that produces the object tested against null.
-     */
-     public Value value() {
-        return (Value) inputs().get(super.inputCount() + INPUT_OBJECT);
-    }
-
-    public void setValue(Value n) {
-        inputs().set(super.inputCount() + INPUT_OBJECT, n);
+    public void setValue(Value x) {
+        updateUsages(value, x);
+        value = x;
     }
 
     public FPConversionNode(CiKind kind, Value value, Graph graph) {
-        super(kind, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+        super(kind, graph);
         this.setValue(value);
     }
-
 
     @SuppressWarnings("unchecked")
     @Override
     public <T extends Op> T lookup(Class<T> clazz) {
-        if (clazz == LIRGenerator.LIRGeneratorOp.class) {
-            return (T) new LIRGenerator.LIRGeneratorOp() {
-                @Override
-                public void generate(Node n, LIRGenerator generator) {
-                    FPConversionNode conv = (FPConversionNode) n;
-                    CiValue reg = generator.createResultVariable(conv);
-                    CiValue value = generator.load(conv.value());
-                    CiValue tmp = generator.forceToSpill(value, conv.kind, false);
-                    generator.lir().move(tmp, reg);
-                }
-            };
+        if (clazz == LIRGeneratorOp.class) {
+            return (T) LIRGEN;
         }
         return super.lookup(clazz);
-    }
-
-    @Override
-    public boolean valueEqual(Node i) {
-        return i instanceof FPConversionNode && ((FPConversionNode) i).kind == kind;
     }
 
     @Override
@@ -85,8 +64,32 @@ public final class FPConversionNode extends FloatingNode {
         out.print("fp conversion node ").print(value());
     }
 
+    private static final LIRGeneratorOp LIRGEN = new LIRGeneratorOp() {
+
+        @Override
+        public void generate(Node n, LIRGenerator generator) {
+            FPConversionNode conv = (FPConversionNode) n;
+            CiValue reg = generator.createResultVariable(conv);
+            CiValue value = generator.load(conv.value());
+            CiValue tmp = generator.forceToSpill(value, conv.kind, false);
+            generator.lir().move(tmp, reg);
+        }
+    };
+
     @Override
-    public Node copy(Graph into) {
-        return new FPConversionNode(kind, null, into);
+    public Node canonical(NotifyReProcess reProcess) {
+        if (value instanceof Constant) {
+            CiKind fromKind = value.kind;
+            if (kind == CiKind.Int && fromKind == CiKind.Float) {
+                return Constant.forInt(Float.floatToRawIntBits(((Constant) value).asConstant().asFloat()), graph());
+            } else if (kind == CiKind.Long && fromKind == CiKind.Double) {
+                return Constant.forLong(Double.doubleToRawLongBits(((Constant) value).asConstant().asDouble()), graph());
+            } else if (kind == CiKind.Float && fromKind == CiKind.Int) {
+                return Constant.forFloat(Float.intBitsToFloat(((Constant) value).asConstant().asInt()), graph());
+            } else if (kind == CiKind.Double && fromKind == CiKind.Long) {
+                return Constant.forDouble(Double.longBitsToDouble(((Constant) value).asConstant().asLong()), graph());
+            }
+        }
+        return this;
     }
 }

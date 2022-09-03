@@ -23,71 +23,43 @@
 package com.oracle.max.graal.compiler.ir;
 
 import com.oracle.max.graal.compiler.debug.*;
-import com.oracle.max.graal.compiler.util.*;
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.Canonicalizable;
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.NotifyReProcess;
 import com.oracle.max.graal.graph.*;
-import com.sun.cri.bytecode.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
 
 /**
  * The {@code NullCheck} class represents an explicit null check instruction.
  */
-public final class IsNonNull extends BooleanNode {
+public final class IsNonNull extends BooleanNode implements Canonicalizable {
 
-    private static final int INPUT_COUNT = 1;
-    private static final int INPUT_OBJECT = 0;
+    @Input private Value object;
 
-    private static final int SUCCESSOR_COUNT = 0;
-
-    @Override
-    protected int inputCount() {
-        return super.inputCount() + INPUT_COUNT;
+    public Value object() {
+        return object;
     }
 
-    @Override
-    protected int successorCount() {
-        return super.successorCount() + SUCCESSOR_COUNT;
-    }
-
-    /**
-     * The instruction that produces the object tested against null.
-     */
-     public Value object() {
-        return (Value) inputs().get(super.inputCount() + INPUT_OBJECT);
-    }
-
-    public Value setObject(Value n) {
-        return (Value) inputs().set(super.inputCount() + INPUT_OBJECT, n);
+    public void setObject(Value x) {
+        updateUsages(object, x);
+        object = x;
     }
 
     /**
      * Constructs a new NullCheck instruction.
+     *
      * @param object the instruction producing the object to check against null
      * @param graph
      */
     public IsNonNull(Value object, Graph graph) {
-        super(CiKind.Object, INPUT_COUNT, SUCCESSOR_COUNT, graph);
-        assert object == null || object.kind == CiKind.Object;
+        super(CiKind.Object, graph);
+        assert object == null || object.kind == CiKind.Object : object;
         setObject(object);
     }
 
     @Override
     public void accept(ValueVisitor v) {
         // Nothing to do.
-    }
-
-    @Override
-    public int valueNumber() {
-        return Util.hash1(Bytecodes.IFNONNULL, object());
-    }
-
-    @Override
-    public boolean valueEqual(Node i) {
-        if (i instanceof IsNonNull) {
-            IsNonNull o = (IsNonNull) i;
-            return object() == o.object();
-        }
-        return false;
     }
 
     @Override
@@ -108,7 +80,15 @@ public final class IsNonNull extends BooleanNode {
     }
 
     @Override
-    public Node copy(Graph into) {
-        return new IsNonNull(null, into);
+    public Node canonical(NotifyReProcess reProcess) {
+        if (object() instanceof NewInstance || object() instanceof NewArray) {
+            return Constant.forBoolean(true, graph());
+        }
+        CiConstant constant = object().asConstant();
+        if (constant != null) {
+            assert constant.kind == CiKind.Object;
+            return Constant.forBoolean(constant.isNonNull(), graph());
+        }
+        return this;
     }
 }

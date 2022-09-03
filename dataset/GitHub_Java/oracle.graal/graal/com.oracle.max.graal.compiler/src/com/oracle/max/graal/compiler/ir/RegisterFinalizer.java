@@ -22,43 +22,33 @@
  */
 package com.oracle.max.graal.compiler.ir;
 
+import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.debug.*;
+import com.oracle.max.graal.compiler.graph.*;
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.Canonicalizable;
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.NotifyReProcess;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
+import com.sun.cri.ri.*;
 
 /**
  * This instruction is used to perform the finalizer registration at the end of the java.lang.Object constructor.
  */
-public final class RegisterFinalizer extends StateSplit {
+public final class RegisterFinalizer extends StateSplit implements Canonicalizable {
 
-    private static final int INPUT_COUNT = 1;
-    private static final int INPUT_OBJECT = 0;
+    @Input private Value object;
 
-    private static final int SUCCESSOR_COUNT = 0;
-
-    @Override
-    protected int inputCount() {
-        return super.inputCount() + INPUT_COUNT;
+    public Value object() {
+        return object;
     }
 
-    @Override
-    protected int successorCount() {
-        return super.successorCount() + SUCCESSOR_COUNT;
-    }
-
-    /**
-     * The instruction that produces the object whose finalizer should be registered.
-     */
-     public Value object() {
-        return (Value) inputs().get(super.inputCount() + INPUT_OBJECT);
-    }
-
-    public Value setObject(Value n) {
-        return (Value) inputs().set(super.inputCount() + INPUT_OBJECT, n);
+    public void setObject(Value x) {
+        updateUsages(object, x);
+        object = x;
     }
 
     public RegisterFinalizer(Value object, Graph graph) {
-        super(CiKind.Void, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+        super(CiKind.Void, graph);
         setObject(object);
     }
 
@@ -73,7 +63,37 @@ public final class RegisterFinalizer extends StateSplit {
     }
 
     @Override
-    public Node copy(Graph into) {
-        return new RegisterFinalizer(null, into);
+    public Node canonical(NotifyReProcess reProcess) {
+        RiType declaredType = object.declaredType();
+        RiType exactType = object.exactType();
+        if (exactType == null && declaredType != null) {
+            exactType = declaredType.exactType();
+        }
+
+        boolean needsCheck = true;
+        if (exactType != null) {
+            // we have an exact type
+            needsCheck = exactType.hasFinalizer();
+        } else {
+            // if either the declared type of receiver or the holder can be assumed to have no finalizers
+            if (declaredType != null && !declaredType.hasFinalizableSubclass()) {
+                if (((CompilerGraph) graph()).assumptions().recordNoFinalizableSubclassAssumption(declaredType)) {
+                    needsCheck = false;
+                }
+            }
+        }
+
+        if (needsCheck) {
+            if (GraalOptions.TraceCanonicalizer) {
+                TTY.println("Could not canonicalize finalizer " + object + " (declaredType=" + declaredType + ", exactType=" + exactType + ")");
+            }
+        } else {
+            if (GraalOptions.TraceCanonicalizer) {
+                TTY.println("Canonicalized finalizer for object " + object);
+            }
+            return next();
+        }
+
+        return this;
     }
 }

@@ -22,63 +22,60 @@
  */
 package com.oracle.max.graal.compiler.ir;
 
+import java.util.*;
+
+import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.debug.*;
+import com.oracle.max.graal.compiler.graph.*;
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.NotifyReProcess;
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.*;
 import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
 
-public final class Compare extends FloatingNode {
+/* (tw/gd) For high-level optimization purpose the compare node should be a boolean *value* (it is currently only a helper node)
+ * But in the back-end the comparison should not always be materialized (for example in x86 the comparison result will not be in a register but in a flag)
+ *
+ * Compare should probably be made a value (so that it can be canonicalized for example) and in later stages some Compare usage should be transformed
+ * into variants that do not materialize the value (CompareIf, CompareGuard...)
+ *
+ */
+public final class Compare extends BooleanNode implements Canonicalizable {
 
-    private static final int INPUT_COUNT = 2;
-    private static final int INPUT_X = 0;
-    private static final int INPUT_Y = 1;
+    @Input private Value x;
+    @Input private Value y;
 
-    private static final int SUCCESSOR_COUNT = 0;
+    @Data private Condition condition;
+    @Data private boolean unorderedIsTrue;
 
-    @Override
-    protected int inputCount() {
-        return super.inputCount() + INPUT_COUNT;
+    public Value x() {
+        return x;
     }
 
-    @Override
-    protected int successorCount() {
-        return super.successorCount() + SUCCESSOR_COUNT;
+    public void setX(Value x) {
+        updateUsages(this.x, x);
+        this.x = x;
     }
 
-    /**
-     * The instruction that produces the first input to this comparison.
-     */
-     public Value x() {
-        return (Value) inputs().get(super.inputCount() + INPUT_X);
-    }
-
-    public Value setX(Value n) {
-        return (Value) inputs().set(super.inputCount() + INPUT_X, n);
-    }
-
-    /**
-     * The instruction that produces the second input to this comparison.
-     */
     public Value y() {
-        return (Value) inputs().get(super.inputCount() + INPUT_Y);
+        return y;
     }
 
-    public Value setY(Value n) {
-        return (Value) inputs().set(super.inputCount() + INPUT_Y, n);
+    public void setY(Value x) {
+        updateUsages(y, x);
+        this.y = x;
     }
-
-    Condition condition;
-    boolean unorderedIsTrue;
 
     /**
-     * Constructs a new If instruction.
+     * Constructs a new Compare instruction.
+     *
      * @param x the instruction producing the first input to the instruction
      * @param condition the condition (comparison operation)
      * @param y the instruction that produces the second input to this instruction
      * @param graph
      */
     public Compare(Value x, Condition condition, Value y, Graph graph) {
-        super(CiKind.Illegal, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+        super(CiKind.Illegal, graph);
         assert (x == null && y == null) || Util.archKindsEqual(x, y);
         this.condition = condition;
         setX(x);
@@ -87,6 +84,7 @@ public final class Compare extends FloatingNode {
 
     /**
      * Gets the condition (comparison operation) for this instruction.
+     *
      * @return the condition
      */
     public Condition condition() {
@@ -95,14 +93,20 @@ public final class Compare extends FloatingNode {
 
     /**
      * Checks whether unordered inputs mean true or false.
+     *
      * @return {@code true} if unordered inputs produce true
      */
     public boolean unorderedIsTrue() {
         return unorderedIsTrue;
     }
 
+    public void setUnorderedIsTrue(boolean unorderedIsTrue) {
+        this.unorderedIsTrue = unorderedIsTrue;
+    }
+
     /**
-     * Swaps the operands to this if and reverses the condition (e.g. > goes to <=).
+     * Swaps the operands to this if and mirrors the condition (e.g. > becomes <).
+     *
      * @see Condition#mirror()
      */
     public void swapOperands() {
@@ -112,18 +116,18 @@ public final class Compare extends FloatingNode {
         setY(t);
     }
 
+    public void negate() {
+        condition = condition.negate();
+        unorderedIsTrue = !unorderedIsTrue;
+    }
+
     @Override
     public void accept(ValueVisitor v) {
     }
 
     @Override
     public void print(LogStream out) {
-        out.print("comp ").
-        print(x()).
-        print(' ').
-        print(condition().operator).
-        print(' ').
-        print(y());
+        out.print("comp ").print(x()).print(' ').print(condition().operator).print(' ').print(y());
     }
 
     @Override
@@ -132,9 +136,110 @@ public final class Compare extends FloatingNode {
     }
 
     @Override
-    public Node copy(Graph into) {
-        Compare x = new Compare(null, condition, null, into);
-        x.unorderedIsTrue = unorderedIsTrue;
-        return x;
+    public Map<Object, Object> getDebugProperties() {
+        Map<Object, Object> properties = super.getDebugProperties();
+        properties.put("unorderedIsTrue", unorderedIsTrue());
+        return properties;
+    }
+
+    private Node optimizeMaterialize(CiConstant constant, MaterializeNode materializeNode) {
+        if (constant.kind == CiKind.Int) {
+            boolean isFalseCheck = (constant.asInt() == 0);
+            if (condition == Condition.EQ || condition == Condition.NE) {
+                if (condition == Condition.NE) {
+                    isFalseCheck = !isFalseCheck;
+                }
+                BooleanNode result = materializeNode.condition();
+                if (isFalseCheck) {
+                    result = new NegateBooleanNode(result, graph());
+                }
+                if (GraalOptions.TraceCanonicalizer) {
+                    TTY.println("Removed materialize replacing with " + result);
+                }
+                return result;
+            }
+        }
+        return this;
+    }
+
+    private Node optimizeNormalizeCmp(CiConstant constant, NormalizeCompare normalizeNode) {
+        if (constant.kind == CiKind.Int && constant.asInt() == 0) {
+            Condition condition = condition();
+            if (normalizeNode == y()) {
+                condition = condition.mirror();
+            }
+            Compare result = new Compare(normalizeNode.x(), condition, normalizeNode.y(), graph());
+            boolean isLess = condition == Condition.LE || condition == Condition.LT || condition == Condition.BE || condition == Condition.BT;
+            result.unorderedIsTrue = condition != Condition.EQ && (condition == Condition.NE || !(isLess ^ normalizeNode.isUnorderedLess()));
+            if (GraalOptions.TraceCanonicalizer) {
+                TTY.println("Replaced Compare+NormalizeCompare with " + result);
+            }
+            return result;
+        }
+        return this;
+    }
+
+    @Override
+    public Node canonical(NotifyReProcess reProcess) {
+        if (x().isConstant() && !y().isConstant()) { // move constants to the left (y)
+            swapOperands();
+        } else if (x().isConstant() && y().isConstant()) {
+            CiConstant constX = x().asConstant();
+            CiConstant constY = y().asConstant();
+            Boolean result = condition().foldCondition(constX, constY, ((CompilerGraph) graph()).runtime(), unorderedIsTrue());
+            if (result != null) {
+                if (GraalOptions.TraceCanonicalizer) {
+                    TTY.println("folded condition " + constX + " " + condition() + " " + constY);
+                }
+                return Constant.forBoolean(result, graph());
+            } else {
+                if (GraalOptions.TraceCanonicalizer) {
+                    TTY.println("if not removed %s %s %s (%s %s)", constX, condition(), constY, constX.kind, constY.kind);
+                }
+            }
+        }
+
+        if (y().isConstant()) {
+            if (x() instanceof MaterializeNode) {
+                return optimizeMaterialize(y().asConstant(), (MaterializeNode) x());
+            } else if (x() instanceof NormalizeCompare) {
+                return optimizeNormalizeCmp(y().asConstant(), (NormalizeCompare) x());
+            }
+        }
+
+        if (x() == y() && x().kind != CiKind.Float && x().kind != CiKind.Double) {
+            return Constant.forBoolean(condition().check(1, 1), graph());
+        }
+        if ((condition == Condition.NE || condition == Condition.EQ) && x().kind == CiKind.Object) {
+            Value object = null;
+            if (x().isNullConstant()) {
+                object = y();
+            } else if (y().isNullConstant()) {
+                object = x();
+            }
+            if (object != null) {
+                IsNonNull nonNull = new IsNonNull(object, graph());
+                if (condition == Condition.NE) {
+                    return nonNull;
+                } else {
+                    assert condition == Condition.EQ;
+                    return new NegateBooleanNode(nonNull, graph());
+                }
+            }
+        }
+        boolean allUsagesNegate = true;
+        for (Node usage : usages()) {
+            if (!(usage instanceof NegateBooleanNode)) {
+                allUsagesNegate = false;
+                break;
+            }
+        }
+        if (allUsagesNegate) {
+            negate();
+            for (Node usage : usages().snapshot()) {
+                usage.replaceAtUsages(this);
+            }
+        }
+        return this;
     }
 }

@@ -22,53 +22,41 @@
  */
 package com.oracle.max.graal.compiler.ir;
 
+import java.util.*;
+
 import com.oracle.max.graal.compiler.debug.*;
-import com.oracle.max.graal.compiler.util.*;
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.Canonicalizable;
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.NotifyReProcess;
 import com.oracle.max.graal.graph.*;
-import com.sun.cri.bytecode.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
 
 /**
  * The {@code TypeCheck} class represents an explicit type check instruction.
  */
-public final class IsType extends FloatingNode {
+public final class IsType extends BooleanNode implements Canonicalizable {
 
-    private static final int INPUT_COUNT = 1;
-    private static final int INPUT_OBJECT = 0;
+    @Input private Value object;
 
-    private static final int SUCCESSOR_COUNT = 0;
-
-    @Override
-    protected int inputCount() {
-        return super.inputCount() + INPUT_COUNT;
+    public Value object() {
+        return object;
     }
 
-    @Override
-    protected int successorCount() {
-        return super.successorCount() + SUCCESSOR_COUNT;
-    }
-
-    /**
-     * The instruction that produces the object tested against null.
-     */
-     public Value object() {
-        return (Value) inputs().get(super.inputCount() + INPUT_OBJECT);
-    }
-
-    public Value setObject(Value n) {
-        return (Value) inputs().set(super.inputCount() + INPUT_OBJECT, n);
+    public void setObject(Value x) {
+        updateUsages(object, x);
+        object = x;
     }
 
     private final RiType type;
 
     /**
      * Constructs a new IsType instruction.
+     *
      * @param object the instruction producing the object to check against the given type
      * @param graph
      */
     public IsType(Value object, RiType type, Graph graph) {
-        super(CiKind.Object, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+        super(CiKind.Object, graph);
         assert type.isResolved();
         assert object == null || object.kind == CiKind.Object;
         this.type = type;
@@ -82,20 +70,6 @@ public final class IsType extends FloatingNode {
     @Override
     public void accept(ValueVisitor v) {
         // Nothing to do.
-    }
-
-    @Override
-    public int valueNumber() {
-        return Util.hash1(Bytecodes.CHECKCAST, object());
-    }
-
-    @Override
-    public boolean valueEqual(Node i) {
-        if (i instanceof IsType) {
-            IsType o = (IsType) i;
-            return type == o.type() && object() == o.object();
-        }
-        return false;
     }
 
     @Override
@@ -115,7 +89,18 @@ public final class IsType extends FloatingNode {
     }
 
     @Override
-    public Node copy(Graph into) {
-        return new IsType(null, type, into);
+    public Map<Object, Object> getDebugProperties() {
+        Map<Object, Object> properties = super.getDebugProperties();
+        properties.put("type", type);
+        return properties;
+    }
+
+    @Override
+    public Node canonical(NotifyReProcess reProcess) {
+        if (object().exactType() != null) {
+            return Constant.forBoolean(object().exactType() == type(), graph());
+        }
+        // constants return the correct exactType, so they are handled by the code above
+        return this;
     }
 }

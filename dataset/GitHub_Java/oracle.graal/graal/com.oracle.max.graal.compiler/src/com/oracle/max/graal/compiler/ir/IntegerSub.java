@@ -22,25 +22,53 @@
  */
 package com.oracle.max.graal.compiler.ir;
 
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.NotifyReProcess;
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.bytecode.*;
 import com.sun.cri.ci.*;
 
-
-public final class IntegerSub extends IntegerArithmetic {
+@NodeInfo(shortName = "-")
+public final class IntegerSub extends IntegerArithmeticNode implements Canonicalizable {
 
     public IntegerSub(CiKind kind, Value x, Value y, Graph graph) {
         super(kind, kind == CiKind.Int ? Bytecodes.ISUB : Bytecodes.LSUB, x, y, graph);
     }
 
     @Override
-    public Node copy(Graph into) {
-        IntegerSub x = new IntegerSub(kind, null, null, graph());
-        return x;
-    }
-
-    @Override
-    public String shortName() {
-        return "-";
+    public Node canonical(NotifyReProcess reProcess) {
+        if (x() == y()) {
+            if (kind == CiKind.Int) {
+                return Constant.forInt(0, graph());
+            } else {
+                assert kind == CiKind.Long;
+                return Constant.forLong(0, graph());
+            }
+        }
+        if (x().isConstant() && y().isConstant()) {
+            if (kind == CiKind.Int) {
+                return Constant.forInt(x().asConstant().asInt() - y().asConstant().asInt(), graph());
+            } else {
+                assert kind == CiKind.Long;
+                return Constant.forLong(x().asConstant().asLong() - y().asConstant().asLong(), graph());
+            }
+        } else if (y().isConstant()) {
+            long c = y().asConstant().asLong();
+            if (c == 0) {
+                return x();
+            }
+            if (kind == CiKind.Int) {
+                return new IntegerAdd(kind, x(), Constant.forInt((int) -c, graph()), graph());
+            } else {
+                assert kind == CiKind.Long;
+                return new IntegerAdd(kind, x(), Constant.forLong(-c, graph()), graph());
+            }
+        } else if (x().isConstant()) {
+            long c = x().asConstant().asLong();
+            if (c == 0) {
+                return new Negate(y(), graph());
+            }
+        }
+        return this;
     }
 }

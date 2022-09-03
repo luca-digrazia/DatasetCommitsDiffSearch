@@ -23,47 +23,29 @@
 package com.oracle.max.graal.compiler.ir;
 
 import com.oracle.max.graal.compiler.debug.*;
-import com.oracle.max.graal.compiler.util.*;
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.Canonicalizable;
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.NotifyReProcess;
 import com.oracle.max.graal.graph.*;
-import com.sun.cri.bytecode.*;
 import com.sun.cri.ci.*;
-import com.sun.cri.ri.*;
 
 /**
  * The {@code InstanceOf} instruction represents an instanceof test.
  */
-public final class InstanceOf extends TypeCheck {
-
-    private static final int INPUT_COUNT = 0;
-    private static final int SUCCESSOR_COUNT = 0;
+public final class InstanceOf extends TypeCheck implements Canonicalizable {
 
     /**
      * Constructs a new InstanceOf instruction.
+     *
      * @param targetClass the target class of the instanceof check
      * @param object the instruction producing the object input to this instruction
      * @param graph
      */
-    public InstanceOf(RiType targetClass, Value targetClassInstruction, Value object, Graph graph) {
-        super(targetClass, targetClassInstruction, object, CiKind.Int, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+    public InstanceOf(Constant targetClassInstruction, Value object, boolean nullIsTrue, Graph graph) {
+        super(targetClassInstruction, object, CiKind.Illegal, graph);
     }
 
     @Override
     public void accept(ValueVisitor v) {
-        v.visitInstanceOf(this);
-    }
-
-    @Override
-    public int valueNumber() {
-        return Util.hash1(Bytecodes.INSTANCEOF, object());
-    }
-
-    @Override
-    public boolean valueEqual(Node i) {
-        if (i instanceof InstanceOf) {
-            InstanceOf o = (InstanceOf) i;
-            return targetClass == o.targetClass && object() == o.object();
-        }
-        return false;
     }
 
     @Override
@@ -72,8 +54,20 @@ public final class InstanceOf extends TypeCheck {
     }
 
     @Override
-    public Node copy(Graph into) {
-        InstanceOf x = new InstanceOf(targetClass, null, null, into);
-        return x;
+    public Node canonical(NotifyReProcess reProcess) {
+        if (object().exactType() != null) {
+            return Constant.forBoolean(object().exactType().isSubtypeOf(targetClass()), graph());
+        }
+        CiConstant constant = object().asConstant();
+        if (constant != null) {
+            assert constant.kind == CiKind.Object;
+            if (constant.isNull()) {
+                return Constant.forBoolean(false, graph());
+            } else {
+                // this should never happen - non-null constants are always expected to provide an exactType
+                assert false;
+            }
+        }
+        return this;
     }
 }

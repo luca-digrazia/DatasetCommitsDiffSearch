@@ -22,33 +22,67 @@
  */
 package com.oracle.max.graal.compiler.ir;
 
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.Canonicalizable;
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.NotifyReProcess;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.bytecode.*;
 import com.sun.cri.ci.*;
 
+@NodeInfo(shortName = "<<")
+public final class LeftShift extends Shift implements Canonicalizable {
 
-public final class LeftShift extends Shift {
-
-    /**
-     * @param opcode
-     * @param kind
-     * @param x
-     * @param y
-     * @param graph
-     */
     public LeftShift(CiKind kind, Value x, Value y, Graph graph) {
         super(kind, kind == CiKind.Int ? Bytecodes.ISHL : Bytecodes.LSHL, x, y, graph);
     }
 
     @Override
-    public String shortName() {
-        return "<<";
+    public Node canonical(NotifyReProcess reProcess) {
+        if (y().isConstant()) {
+            int amount = y().asConstant().asInt();
+            int originalAmout = amount;
+            int mask;
+            if (kind == CiKind.Int) {
+                mask = 0x1f;
+            } else {
+                assert kind == CiKind.Long;
+                mask = 0x3f;
+            }
+            amount &= mask;
+            if (x().isConstant()) {
+                if (kind == CiKind.Int) {
+                    return Constant.forInt(x().asConstant().asInt() << amount, graph());
+                } else {
+                    assert kind == CiKind.Long;
+                    return Constant.forLong(x().asConstant().asLong() << amount, graph());
+                }
+            }
+            if (amount == 0) {
+                return x();
+            }
+            if (x() instanceof Shift) {
+                Shift other = (Shift) x();
+                if (other.y().isConstant()) {
+                    int otherAmount = other.y().asConstant().asInt() & mask;
+                    if (other instanceof LeftShift) {
+                        int total = amount + otherAmount;
+                        if (total != (total & mask)) {
+                            return Constant.forInt(0, graph());
+                        }
+                        return new LeftShift(kind, other.x(), Constant.forInt(total, graph()), graph());
+                    } else if ((other instanceof RightShift || other instanceof UnsignedRightShift) && otherAmount == amount) {
+                        if (kind == CiKind.Long) {
+                            return new And(kind, other.x(), Constant.forLong(-1L << amount, graph()), graph());
+                        } else {
+                            assert kind == CiKind.Int;
+                            return new And(kind, other.x(), Constant.forInt(-1 << amount, graph()), graph());
+                        }
+                    }
+                }
+            }
+            if (originalAmout != amount) {
+                return new LeftShift(kind, x(), Constant.forInt(amount, graph()), graph());
+            }
+        }
+        return this;
     }
-
-    @Override
-    public Node copy(Graph into) {
-        LeftShift ls = new LeftShift(kind, null, null, graph());
-        return ls;
-    }
-
 }
