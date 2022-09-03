@@ -32,7 +32,6 @@ import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.annotate.UnknownObjectField;
 import com.oracle.svm.core.jdk.RuntimeSupport;
-import com.oracle.svm.core.jdk.UninterruptibleUtils.AtomicPointer;
 import com.oracle.svm.jni.nativeapi.JNIInvokeInterface;
 import com.oracle.svm.jni.nativeapi.JNIJavaVM;
 import com.oracle.svm.jni.nativeapi.JNINativeInterface;
@@ -83,21 +82,16 @@ public final class JNIFunctionTables {
     @UnknownObjectField(types = JNIStructFunctionsInitializer.class) //
     private JNIStructFunctionsInitializer<JNINativeInterface> functionTableInitializer;
 
-    private final AtomicPointer<JNINativeInterface> globalFunctionTable = new AtomicPointer<>();
+    private JNINativeInterface globalFunctionTable;
 
     public JNINativeInterface getGlobalFunctionTable() {
-        JNINativeInterface functionTable = globalFunctionTable.get();
-        if (functionTable.isNull()) {
-            functionTable = UnmanagedMemory.malloc(SizeOf.get(JNINativeInterface.class));
+        if (globalFunctionTable.isNull()) {
+            JNINativeInterface functionTable = UnmanagedMemory.malloc(SizeOf.get(JNINativeInterface.class));
             functionTableInitializer.initialize(functionTable);
-            if (globalFunctionTable.compareAndSet(WordFactory.nullPointer(), functionTable)) {
-                RuntimeSupport.getRuntimeSupport().addTearDownHook(() -> UnmanagedMemory.free(globalFunctionTable.get()));
-            } else { // lost the race
-                UnmanagedMemory.free(functionTable);
-                functionTable = globalFunctionTable.get();
-            }
+            globalFunctionTable = functionTable;
+            RuntimeSupport.getRuntimeSupport().addTearDownHook(() -> UnmanagedMemory.free(globalFunctionTable));
         }
-        return functionTable;
+        return globalFunctionTable;
     }
 
 }

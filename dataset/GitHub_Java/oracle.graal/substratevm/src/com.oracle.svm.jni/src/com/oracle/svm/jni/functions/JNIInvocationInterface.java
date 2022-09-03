@@ -152,6 +152,9 @@ final class JNIInvocationInterface {
                 }
             });
             vmBuf.write(javavm);
+            if (!JNIThreadLocalEnvironment.isInitialized()) {
+                JNIThreadLocalEnvironment.initialize();
+            }
             penv.write(JNIThreadLocalEnvironment.getAddress());
             return JNIErrors.JNI_OK();
         }
@@ -257,6 +260,9 @@ final class JNIInvocationInterface {
 
         static int attachCurrentThread(JNIJavaVM vm, JNIEnvironmentPointer penv, JNIJavaVMAttachArgs args, boolean asDaemon) {
             if (vm.equal(JNIFunctionTables.singleton().getGlobalJavaVM())) {
+                if (!JNIThreadLocalEnvironment.isInitialized()) {
+                    JNIThreadLocalEnvironment.initialize();
+                }
                 penv.write(JNIThreadLocalEnvironment.getAddress());
                 ThreadGroup group = null;
                 String name = null;
