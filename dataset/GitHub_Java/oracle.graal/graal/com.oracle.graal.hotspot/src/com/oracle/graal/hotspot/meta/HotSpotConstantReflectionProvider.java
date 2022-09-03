@@ -172,13 +172,10 @@ public class HotSpotConstantReflectionProvider implements ConstantReflectionProv
 
         if (receiver == null) {
             assert hotspotField.isStatic();
-            if (hotspotField.isFinal() || hotspotField.isStable()) {
+            if (hotspotField.isFinal()) {
                 ResolvedJavaType holder = hotspotField.getDeclaringClass();
                 if (holder.isInitialized() && !holder.getName().equals(SystemClassName) && isEmbeddable(hotspotField)) {
-                    JavaConstant value = readFieldValue(field, receiver);
-                    if (hotspotField.isFinal() || !value.isDefaultForKind()) {
-                        return value;
-                    }
+                    return readFieldValue(field, receiver);
                 }
             }
         } else {
