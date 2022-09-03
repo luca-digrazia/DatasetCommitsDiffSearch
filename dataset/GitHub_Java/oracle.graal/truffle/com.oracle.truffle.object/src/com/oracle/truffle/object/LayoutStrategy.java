@@ -193,7 +193,6 @@ public abstract class LayoutStrategy {
 
     /** @since 0.17 or earlier */
     protected ShapeImpl removeProperty(ShapeImpl shape, Property property) {
-        assert !shape.isShared();
         RemovePropertyTransition transition = new RemovePropertyTransition(property);
         ShapeImpl cachedShape = shape.queryTransition(transition);
         if (cachedShape != null) {
@@ -284,7 +283,7 @@ public abstract class LayoutStrategy {
             }
             return directReplaceProperty(shape, oldProperty, newProperty);
         } else {
-            throw new UnsupportedOperationException(transition.getClass().getName());
+            throw new UnsupportedOperationException();
         }
     }
 
