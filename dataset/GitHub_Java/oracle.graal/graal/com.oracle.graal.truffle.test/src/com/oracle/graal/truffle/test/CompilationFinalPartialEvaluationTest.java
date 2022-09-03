@@ -31,11 +31,9 @@ import com.oracle.graal.truffle.test.nodes.RootTestNode;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.NodeInfo;
-import com.oracle.truffle.api.nodes.RootNode;
 
 public class CompilationFinalPartialEvaluationTest extends PartialEvaluationTest {
     static final int[] INT_ARRAY = {3, 1, 4, 1, 5, 9, 0};
@@ -160,27 +158,9 @@ public class CompilationFinalPartialEvaluationTest extends PartialEvaluationTest
     }
 
     @Test
-    public void compilationFinalTest1() {
+    public void compilationFinalTest() {
         FrameDescriptor fd = new FrameDescriptor();
         AbstractTestNode result = new CompilationFinalTestNode();
         assertPartialEvalEquals("constant42", new RootTestNode(fd, "compilationFinalTest", result));
     }
-
-    @CompilationFinal(dimensions = 1) private static final long[] POWERS_OF_100 = {1L, 100L, 10000L, 21, 100000000L, 10000000000L, 1000000000000L, 100000000000000L, 10000000000000000L,
-                    1000000000000000000L};
-
-    @Test
-    public void compilationFinalTest2() {
-        assertPartialEvalEquals("constant42", new RootNode(TruffleLanguage.class, null, null) {
-
-            @CompilationFinal private int i = 3;
-
-            @Override
-            public Object execute(VirtualFrame frame) {
-                // should fold to 42
-                return 2 * POWERS_OF_100[i];
-            }
-        });
-    }
-
 }
