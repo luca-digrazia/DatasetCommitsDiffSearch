@@ -28,11 +28,11 @@ import com.oracle.graal.hotspot.meta.HotSpotCodeCacheProvider.MarkId;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.amd64.AMD64Call.DirectCallOp;
 import com.oracle.graal.lir.asm.*;
-import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
+import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
 
 /**
- * A direct call that complies with the conventions for such calls in HotSpot. It doesn't use an
- * inline cache so it's just a patchable call site.
+ * A direct call that complies with the conventions for such calls in HotSpot. In particular, for
+ * calls using an inline cache, a MOVE instruction is emitted just prior to the aligned direct call.
  */
 @Opcode("CALL_DIRECT")
 final class AMD64HotspotDirectStaticCallOp extends DirectCallOp {
@@ -41,7 +41,7 @@ final class AMD64HotspotDirectStaticCallOp extends DirectCallOp {
 
     AMD64HotspotDirectStaticCallOp(ResolvedJavaMethod target, Value result, Value[] parameters, Value[] temps, LIRFrameState state, InvokeKind invokeKind) {
         super(target, result, parameters, temps, state);
-        assert invokeKind.isDirect();
+        assert invokeKind == InvokeKind.Static || invokeKind == InvokeKind.Special;
         this.invokeKind = invokeKind;
     }
 
