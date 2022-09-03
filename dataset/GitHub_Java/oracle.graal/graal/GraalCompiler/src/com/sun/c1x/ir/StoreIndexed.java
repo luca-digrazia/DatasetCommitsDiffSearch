@@ -22,6 +22,8 @@
  */
 package com.sun.c1x.ir;
 
+import static com.sun.c1x.ir.Value.Flag.*;
+
 import com.sun.c1x.debug.*;
 import com.sun.c1x.value.*;
 import com.sun.cri.ci.*;
@@ -51,6 +53,9 @@ public final class StoreIndexed extends AccessIndexed {
         super(CiKind.Void, array, index, length, elementType, stateBefore);
         this.value = value;
         setFlag(Flag.LiveSideEffect);
+        if (elementType != CiKind.Object) {
+            setFlag(Flag.NoWriteBarrier);
+        }
     }
 
     /**
@@ -62,12 +67,32 @@ public final class StoreIndexed extends AccessIndexed {
     }
 
     /**
+     * Checks if this instruction needs a write barrier.
+     * @return {@code true} if this instruction needs a write barrier
+     */
+    public boolean needsWriteBarrier() {
+        return !checkFlag(Flag.NoWriteBarrier);
+    }
+
+    /**
+     * Checks if this instruction needs a store check.
+     * @return {@code true} if this instruction needs a store check
+     */
+    public boolean needsStoreCheck() {
+        return !checkFlag(Flag.NoStoreCheck);
+    }
+
+    public void eliminateStoreCheck() {
+        clearRuntimeCheck(NoStoreCheck);
+    }
+
+    /**
      * Checks whether this instruction can cause a trap.
      * @return {@code true} if this instruction can cause a trap
      */
     @Override
     public boolean canTrap() {
-        return true;
+        return super.canTrap() || needsStoreCheck();
     }
 
     @Override
