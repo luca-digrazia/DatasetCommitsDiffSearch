@@ -26,6 +26,7 @@ import java.util.*;
 
 import com.oracle.graal.graph.*;
 import com.sun.c1x.debug.*;
+import com.sun.c1x.lir.*;
 import com.sun.c1x.util.*;
 import com.sun.c1x.value.*;
 import com.sun.cri.ci.*;
@@ -74,6 +75,17 @@ public final class BlockBegin extends StateSplit {
     public final int blockID;
 
     private int linearScanNumber;
+
+    // LIR block
+    public LIRBlock lirBlock;
+
+    public void setLIRBlock(LIRBlock block) {
+        this.lirBlock = block;
+    }
+
+    public LIRBlock lirBlock() {
+        return lirBlock;
+    }
 
     /**
      * Index of bytecode that generated this node when appended in a basic block.

@@ -66,8 +66,6 @@ public class IR {
         this.compilation = compilation;
     }
 
-    public Map<Value, LIRBlock> valueToBlock;
-
     /**
      * Builds the graph, optimizes it, and computes the linear scan block order.
      */
@@ -85,8 +83,7 @@ public class IR {
 
         Schedule schedule = new Schedule(this.compilation.graph);
 
-        valueToBlock = computeLinearScanOrder();
-        verifyAndPrint("After linear scan order");
+        computeLinearScanOrder();
 
         if (C1XOptions.PrintTimers) {
             C1XTimers.HIR_OPTIMIZE.stop();
@@ -103,14 +100,14 @@ public class IR {
         }
     }
 
-    private Map<Value, LIRBlock> computeLinearScanOrder() {
-        return makeLinearScanOrder();
+    private void computeLinearScanOrder() {
+        if (C1XOptions.GenLIR) {
+            makeLinearScanOrder();
+            verifyAndPrint("After linear scan order");
+        }
     }
 
-    private Map<Value, LIRBlock> makeLinearScanOrder() {
-
-        Map<Value, LIRBlock> valueToBlock = new HashMap<Value, LIRBlock>();
-
+    private void makeLinearScanOrder() {
         if (orderedBlocks == null) {
             CriticalEdgeFinder finder = new CriticalEdgeFinder(this);
             getHIRStartBlock().iteratePreOrder(finder);
@@ -122,7 +119,7 @@ public class IR {
             int z = 0;
             for (BlockBegin bb : blocks) {
                 LIRBlock lirBlock = new LIRBlock(z);
-                valueToBlock.put(bb, lirBlock);
+                bb.setLIRBlock(lirBlock);
                 lirBlock.setLinearScanNumber(bb.linearScanNumber());
                 // TODO(tw): Initialize LIRBlock.linearScanLoopHeader and LIRBlock.linearScanLoopEnd
                 lirBlock.setStateBefore(bb.stateBefore());
@@ -130,15 +127,14 @@ public class IR {
                 ++z;
             }
 
-            z = 0;
             for (BlockBegin bb : blocks) {
-                LIRBlock lirBlock = orderedBlocks.get(z);
+                LIRBlock lirBlock = bb.lirBlock();
                 for (int i = 0; i < bb.numberOfPreds(); ++i) {
-                    lirBlock.blockPredecessors().add(valueToBlock.get(bb.predAt(i).block()));
+                    lirBlock.blockPredecessors().add(bb.predAt(i).block().lirBlock());
                 }
 
                 for (int i = 0; i < bb.numberOfSux(); ++i) {
-                    lirBlock.blockSuccessors().add(valueToBlock.get(bb.suxAt(i)));
+                    lirBlock.blockSuccessors().add(bb.suxAt(i).lirBlock());
                 }
 
                 Instruction first = bb;
@@ -146,14 +142,12 @@ public class IR {
                     lirBlock.getInstructions().add(first);
                     first = first.next();
                 }
-                ++z;
             }
 
-            startBlock = valueToBlock.get(getHIRStartBlock());
+            startBlock = getHIRStartBlock().lirBlock();
             assert startBlock != null;
             compilation.stats.loopCount = computeLinearScanOrder.numLoops();
         }
-        return valueToBlock;
     }
 
     /**

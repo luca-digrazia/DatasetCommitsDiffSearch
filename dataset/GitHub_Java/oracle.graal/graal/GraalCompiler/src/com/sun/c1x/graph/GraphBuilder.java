@@ -270,10 +270,6 @@ public final class GraphBuilder {
 
 
     private void mergeOrClone(Instruction first, FrameStateAccess stateAfter, boolean loopHeader) {
-        mergeOrClone(first, stateAfter, loopHeader, false);
-    }
-
-    private void mergeOrClone(Instruction first, FrameStateAccess stateAfter, boolean loopHeader, boolean blockAppended) {
         if (first instanceof BlockBegin) {
             BlockBegin block = (BlockBegin) first;
             FrameState existingState = block.stateBefore();
@@ -297,7 +293,7 @@ public final class GraphBuilder {
                 assert existingState.localsSize() == stateAfter.localsSize();
                 assert existingState.stackSize() == stateAfter.stackSize();
 
-                existingState.merge(block, stateAfter, blockAppended);
+                existingState.merge(block, stateAfter);
             }
         } else {
             assert false;
@@ -308,16 +304,13 @@ public final class GraphBuilder {
         int stackSize = newState.stackSize();
         for (int i = 0; i < stackSize; i++) {
             // always insert phis for the stack
-            Value x = newState.stackAt(i);
-            if (x != null) {
-                newState.setupPhiForStack(merge, i).addInput(x);
-            }
+            newState.setupPhiForStack(merge, i);
         }
         int localsSize = newState.localsSize();
         for (int i = 0; i < localsSize; i++) {
             Value x = newState.localAt(i);
             if (x != null) {
-                newState.setupPhiForLocal(merge, i).addInput(x);
+                newState.setupPhiForLocal(merge, i);
             }
         }
     }
@@ -445,7 +438,7 @@ public final class GraphBuilder {
         if (oldState != null && dispatchEntry.predecessors().size() == 1) {
             dispatchEntry.setStateBefore(null);
         }
-        mergeOrClone(dispatchEntry, state, false, true);
+        mergeOrClone(dispatchEntry, state, false);
         FrameState mergedState = dispatchEntry.stateBefore();
 
         if (dispatchEntry.next() instanceof ExceptionDispatch) {
@@ -1179,7 +1172,8 @@ public final class GraphBuilder {
         while ((block = removeFromWorkList()) != null) {
 
             // remove blocks that have no predecessors by the time it their bytecodes are parsed
-            if (block.firstInstruction == null) {
+            Instruction firstInstruction = block.firstInstruction;
+            if (firstInstruction.predecessors().size() == 0) {
                 markVisited(block);
                 continue;
             }
@@ -1187,9 +1181,9 @@ public final class GraphBuilder {
             if (!isVisited(block)) {
                 markVisited(block);
                 // now parse the block
-                frameState.initializeFrom(((BlockBegin) block.firstInstruction).stateBefore());
-                lastInstr = block.firstInstruction;
-                assert block.firstInstruction.next() == null;
+                frameState.initializeFrom(((BlockBegin) firstInstruction).stateBefore());
+                lastInstr = firstInstruction;
+                assert firstInstruction.next() == null;
 
                 iterateBytecodesForBlock(block);
             }
