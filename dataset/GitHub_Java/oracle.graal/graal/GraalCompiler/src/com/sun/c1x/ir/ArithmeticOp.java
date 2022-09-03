@@ -33,33 +33,10 @@ import com.sun.cri.ci.*;
  */
 public final class ArithmeticOp extends Op2 {
 
-    private static final int INPUT_COUNT = 1;
-    private static final int INPUT_STATE_BEFORE = 0;
-
+    private static final int INPUT_COUNT = 0;
     private static final int SUCCESSOR_COUNT = 0;
 
-    @Override
-    protected int inputCount() {
-        return super.inputCount() + INPUT_COUNT;
-    }
-
-    @Override
-    protected int successorCount() {
-        return super.successorCount() + SUCCESSOR_COUNT;
-    }
-
-    /**
-     * The state for this instruction.
-     */
-     @Override
-    public FrameState stateBefore() {
-        return (FrameState) inputs().get(super.inputCount() + INPUT_STATE_BEFORE);
-    }
-
-    private FrameState setStateBefore(FrameState n) {
-        return (FrameState) inputs().set(super.inputCount() + INPUT_STATE_BEFORE, n);
-    }
-
+    private final FrameState stateBefore;
     private final boolean isStrictFP;
 
     /**
@@ -74,7 +51,12 @@ public final class ArithmeticOp extends Op2 {
     public ArithmeticOp(int opcode, CiKind kind, Value x, Value y, boolean isStrictFP, FrameState stateBefore, Graph graph) {
         super(kind, opcode, x, y, INPUT_COUNT, SUCCESSOR_COUNT, graph);
         this.isStrictFP = isStrictFP;
-        setStateBefore(stateBefore);
+        this.stateBefore = stateBefore;
+    }
+
+    @Override
+    public FrameState stateBefore() {
+        return stateBefore;
     }
 
     /**
@@ -92,7 +74,7 @@ public final class ArithmeticOp extends Op2 {
      */
     @Override
     public boolean canTrap() {
-        return stateBefore() != null;
+        return stateBefore != null;
     }
 
     @Override
@@ -107,10 +89,5 @@ public final class ArithmeticOp extends Op2 {
     @Override
     public void print(LogStream out) {
         out.print(x()).print(' ').print(Bytecodes.operator(opcode)).print(' ').print(y());
-    }
-
-    @Override
-    public String shortName() {
-        return Bytecodes.operator(opcode);
     }
 }

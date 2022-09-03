@@ -29,6 +29,8 @@ import com.sun.cri.bytecode.*;
 
 /**
  * The {@code NegateOp} instruction negates its operand.
+ *
+ * @author Ben L. Titzer
  */
 public final class NegateOp extends Instruction {
 
@@ -79,7 +81,7 @@ public final class NegateOp extends Instruction {
     }
 
     @Override
-    public boolean valueEqual(Node i) {
+    public boolean valueEqual(Instruction i) {
         if (i instanceof NegateOp) {
             NegateOp o = (NegateOp) i;
             return x() == o.x();

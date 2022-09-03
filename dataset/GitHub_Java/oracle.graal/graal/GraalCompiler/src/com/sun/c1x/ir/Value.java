@@ -72,13 +72,17 @@ public abstract class Value extends Node {
      * @param graph
      */
     public Value(CiKind kind, int inputCount, int successorCount, Graph graph) {
-        super(inputCount, successorCount, graph);
+        super(inputCount, successorCount, graph == null ? new Graph() : graph);
         assert kind == kind.stackKind() : kind + " != " + kind.stackKind();
         this.kind = kind;
     }
 
     ///////////////
     // TODO: remove when Value class changes are completed
+
+    public Value(CiKind kind) {
+        this(kind, 0, 0, null);
+    }
 
     @Override
     public Node copy(Graph into) {

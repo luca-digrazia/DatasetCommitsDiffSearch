@@ -28,6 +28,8 @@ import com.sun.cri.bytecode.*;
 
 /**
  * The {@code ShiftOp} class represents shift operations.
+ *
+ * @author Ben L. Titzer
  */
 public final class ShiftOp extends Op2 {
 
