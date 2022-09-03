@@ -168,6 +168,33 @@ public abstract class GraalCompilerState {
         return backend.getSuites().getDefaultGraphBuilderSuite().copy();
     }
 
+    private LIRSuites updatedLIRSuites;
+
+    private LIRSuites getUpdatedLIRSuites() {
+        if (updatedLIRSuites != null) {
+            return updatedLIRSuites;
+        }
+        return request.lirSuites;
+    }
+
+    /**
+     * Gets the {@link LIRSuites} of the {@link #request}. Do not alter the suites directly. Use
+     * {@link #updateLIRSuite(LIRSuites)} instead.
+     */
+    protected final LIRSuites getRequestLIRSuites() {
+        return request.lirSuites;
+    }
+
+    /**
+     * Updates {@link LIRSuites} used in {@link #preAllocationStage()}, {@link #allocationStage()}
+     * and {@link #postAllocationStage()}.
+     *
+     * @see #getRequestLIRSuites()
+     */
+    protected final void updateLIRSuite(LIRSuites newLIRSuites) {
+        this.updatedLIRSuites = newLIRSuites;
+    }
+
     private Request<CompilationResult> request;
     private LIRGenerationResult lirGenRes;
     private LIRGeneratorTool lirGenTool;
@@ -271,31 +298,31 @@ public abstract class GraalCompilerState {
     /**
      * Executes the {@link PreAllocationStage}.
      *
-     * {@link LIRPhase phases} can be changed by overriding {@link #createLIRSuites()}.
+     * {@link LIRPhase phases} can be changed with {@link #updateLIRSuite(LIRSuites)}.
      */
     protected final void preAllocationStage() {
         PreAllocationOptimizationContext preAllocOptContext = new PreAllocationOptimizationContext(lirGenTool);
-        request.lirSuites.getPreAllocationOptimizationStage().apply(request.backend.getTarget(), lirGenRes, codeEmittingOrder, linearScanOrder, preAllocOptContext);
+        getUpdatedLIRSuites().getPreAllocationOptimizationStage().apply(request.backend.getTarget(), lirGenRes, codeEmittingOrder, linearScanOrder, preAllocOptContext);
     }
 
     /**
      * Executes the {@link AllocationStage}.
      *
-     * {@link LIRPhase phases} can be changed by overriding {@link #createLIRSuites()}.
+     * {@link LIRPhase phases} can be changed with {@link #updateLIRSuite(LIRSuites)}.
      */
     protected final void allocationStage() {
         AllocationContext allocContext = new AllocationContext(lirGenTool.getSpillMoveFactory(), request.backend.newRegisterAllocationConfig(registerConfig));
-        request.lirSuites.getAllocationStage().apply(request.backend.getTarget(), lirGenRes, codeEmittingOrder, linearScanOrder, allocContext);
+        getUpdatedLIRSuites().getAllocationStage().apply(request.backend.getTarget(), lirGenRes, codeEmittingOrder, linearScanOrder, allocContext);
     }
 
     /**
      * Executes the {@link PostAllocationStage}.
      *
-     * {@link LIRPhase phases} can be changed by overriding {@link #createLIRSuites()}.
+     * {@link LIRPhase phases} can be changed with {@link #updateLIRSuite(LIRSuites)}.
      */
     protected final void postAllocationStage() {
         PostAllocationOptimizationContext postAllocOptContext = new PostAllocationOptimizationContext(lirGenTool);
-        request.lirSuites.getPostAllocationOptimizationStage().apply(request.backend.getTarget(), lirGenRes, codeEmittingOrder, linearScanOrder, postAllocOptContext);
+        getUpdatedLIRSuites().getPostAllocationOptimizationStage().apply(request.backend.getTarget(), lirGenRes, codeEmittingOrder, linearScanOrder, postAllocOptContext);
     }
 
     /**
