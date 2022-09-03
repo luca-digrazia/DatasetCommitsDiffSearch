@@ -29,18 +29,18 @@
  */
 package com.oracle.truffle.llvm.nodes.func;
 
-import java.util.Arrays;
+import java.util.StringJoiner;
 
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
-import com.oracle.truffle.llvm.runtime.options.LLVMOptions;
 
 public final class LLVMNativeCallUtils {
 
@@ -54,22 +54,32 @@ public final class LLVMNativeCallUtils {
             return (TruffleObject) ForeignAccess.sendInvoke(bindNode, symbol, "bind", signature);
         } catch (Throwable ex) {
             CompilerDirectives.transferToInterpreter();
-            throw new IllegalStateException(symbol + " " + signature, ex);
+            throw new IllegalStateException("Could not bind " + symbol + " " + signature, ex);
         }
     }
 
-    static Object callNativeFunction(LLVMContext context, Node nativeCall, TruffleObject function, Object[] nativeArgs, LLVMFunctionDescriptor descriptor) {
-        if (LLVMOptions.ENGINE.traceNativeCalls()) {
+    static Object callNativeFunction(boolean enabled, ContextReference<LLVMContext> context, Node nativeCall, TruffleObject function, Object[] nativeArgs, LLVMFunctionDescriptor descriptor) {
+        CompilerAsserts.partialEvaluationConstant(enabled);
+        if (enabled) {
             if (descriptor != null) {
-                traceNativeCall(context, descriptor);
+                traceNativeCall(context.get(), descriptor);
             }
         }
         try {
             return ForeignAccess.sendExecute(nativeCall, function, nativeArgs);
         } catch (Throwable e) {
             CompilerDirectives.transferToInterpreter();
-            throw new IllegalStateException(function + Arrays.toString(nativeArgs), e);
+            throw new IllegalStateException("Exception thrown by a callback during the native call " + function + argsToString(nativeArgs), e);
         }
+    }
+
+    @TruffleBoundary
+    private static String argsToString(Object[] nativeArgs) {
+        StringJoiner joiner = new StringJoiner(", ", "(", ")");
+        for (Object arg : nativeArgs) {
+            joiner.add(arg.toString());
+        }
+        return joiner.toString();
     }
 
     @TruffleBoundary
