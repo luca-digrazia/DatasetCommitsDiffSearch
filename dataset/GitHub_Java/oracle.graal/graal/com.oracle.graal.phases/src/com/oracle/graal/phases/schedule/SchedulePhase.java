@@ -150,9 +150,8 @@ public final class SchedulePhase extends Phase {
                 } else {
                     Block currentBlock = b;
                     assert currentBlock != null;
-
                     Block latestBlock = calcLatestBlock(b, isOutOfLoops, currentNode, currentNodeMap);
-                    assert checkLatestEarliestRelation(currentNode, currentBlock, latestBlock);
+                    assert AbstractControlFlowGraph.dominates(currentBlock, latestBlock) || currentNode instanceof VirtualState : currentNode + " " + currentBlock + " " + latestBlock;
                     if (latestBlock != currentBlock) {
                         if (currentNode instanceof FloatingReadNode) {
 
@@ -199,12 +198,6 @@ public final class SchedulePhase extends Phase {
             }
         }
         return watchListMap;
-    }
-
-    private static boolean checkLatestEarliestRelation(Node currentNode, Block earliestBlock, Block latestBlock) {
-        assert AbstractControlFlowGraph.dominates(earliestBlock, latestBlock) || (currentNode instanceof VirtualState && latestBlock == earliestBlock.getDominator()) : String.format("%s %s %s",
-                        currentNode, earliestBlock, latestBlock);
-        return true;
     }
 
     private static boolean verifySchedule(ControlFlowGraph cfg, BlockMap<List<Node>> blockToNodesMap, NodeMap<Block> nodeMap) {
@@ -307,7 +300,7 @@ public final class SchedulePhase extends Phase {
             for (ProxyNode proxy : loopExitNode.proxies()) {
                 unprocessed.clear(proxy);
                 ValueNode value = proxy.value();
-                if (value != null && nodeMap.get(value) == b) {
+                if (nodeMap.get(value) == b) {
                     sortIntoList(value, b, result, nodeMap, unprocessed, null);
                 }
             }
@@ -421,11 +414,9 @@ public final class SchedulePhase extends Phase {
         assert currentNode.hasUsages();
         for (Node usage : currentNode.usages()) {
             block = calcBlockForUsage(currentNode, usage, block, currentNodeMap);
-            assert checkLatestEarliestRelation(currentNode, earliestBlock, block);
             if (scheduleOutOfLoops) {
-                while (block.getLoopDepth() > earliestBlock.getLoopDepth() && block != earliestBlock.getDominator()) {
+                while (block.getLoopDepth() > earliestBlock.getLoopDepth()) {
                     block = block.getDominator();
-                    assert checkLatestEarliestRelation(currentNode, earliestBlock, block);
                 }
             }
             if (block == earliestBlock) {
