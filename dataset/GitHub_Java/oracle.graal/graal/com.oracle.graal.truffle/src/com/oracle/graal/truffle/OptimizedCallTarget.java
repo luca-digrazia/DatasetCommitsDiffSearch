@@ -27,7 +27,6 @@ import static com.oracle.graal.truffle.TruffleCompilerOptions.*;
 import java.io.*;
 import java.lang.reflect.*;
 import java.util.*;
-import java.util.concurrent.*;
 import java.util.concurrent.atomic.*;
 import java.util.stream.*;
 
@@ -161,7 +160,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         Object result = doInvoke(args);
         Class<?> klass = profiledReturnType;
         if (klass != null && CompilerDirectives.inCompiledCode() && profiledReturnTypeAssumption.isValid()) {
-            result = FrameWithoutBoxing.unsafeCast(result, klass, true, true);
+            result = CompilerDirectives.unsafeCast(result, klass, true, true);
         }
         return result;
     }
@@ -251,7 +250,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     public final Object callRoot(Object[] originalArguments) {
         Object[] args = originalArguments;
         if (this.profiledArgumentTypesAssumption != null && CompilerDirectives.inCompiledCode() && profiledArgumentTypesAssumption.isValid()) {
-            args = FrameWithoutBoxing.unsafeCast(castArrayFixedLength(args, profiledArgumentTypes.length), Object[].class, true, true);
+            args = CompilerDirectives.unsafeCast(castArrayFixedLength(args, profiledArgumentTypes.length), Object[].class, true, true);
             if (TruffleArgumentTypeSpeculation.getValue()) {
                 args = castArguments(args);
             }
@@ -315,18 +314,8 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     }
 
     public void compile() {
-        compile(TruffleBackgroundCompilation.getValue() && !TruffleCompilationExceptionsAreThrown.getValue());
-    }
-
-    public void compile(boolean mayBeAsynchronous) {
         if (!runtime.isCompiling(this)) {
-            runtime.compile(this, mayBeAsynchronous);
-        } else if (!mayBeAsynchronous && runtime.isCompiling(this)) {
-            try {
-                runtime.waitForCompilation(this, 20000);
-            } catch (ExecutionException | TimeoutException e) {
-                Debug.log(3, e.getMessage());
-            }
+            runtime.compile(this, TruffleBackgroundCompilation.getValue() && !TruffleCompilationExceptionsAreThrown.getValue());
         }
     }
 
@@ -408,7 +397,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     private Object[] castArguments(Object[] originalArguments) {
         Object[] castArguments = new Object[profiledArgumentTypes.length];
         for (int i = 0; i < profiledArgumentTypes.length; i++) {
-            castArguments[i] = profiledArgumentTypes[i] != null ? FrameWithoutBoxing.unsafeCast(originalArguments[i], profiledArgumentTypes[i], true, true) : originalArguments[i];
+            castArguments[i] = profiledArgumentTypes[i] != null ? CompilerDirectives.unsafeCast(originalArguments[i], profiledArgumentTypes[i], true, true) : originalArguments[i];
         }
         return castArguments;
     }

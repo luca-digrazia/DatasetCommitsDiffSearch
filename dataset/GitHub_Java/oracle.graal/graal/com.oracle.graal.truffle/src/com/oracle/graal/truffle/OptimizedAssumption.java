@@ -30,7 +30,6 @@ import java.util.stream.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.debug.*;
-import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.CompilerDirectives.*;
 import com.oracle.truffle.api.impl.*;
 import com.oracle.truffle.api.nodes.*;
@@ -51,8 +50,7 @@ public final class OptimizedAssumption extends AbstractAssumption {
 
     @Override
     public void check() throws InvalidAssumptionException {
-        if (!this.isValid()) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
+        if (!isValid) {
             throw new InvalidAssumptionException();
         }
     }
