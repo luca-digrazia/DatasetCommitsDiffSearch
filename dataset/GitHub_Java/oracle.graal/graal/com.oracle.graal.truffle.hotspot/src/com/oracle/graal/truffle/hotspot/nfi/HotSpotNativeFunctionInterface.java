@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,24 +23,25 @@
 package com.oracle.graal.truffle.hotspot.nfi;
 
 import static com.oracle.graal.truffle.hotspot.nfi.NativeCallStubGraphBuilder.getGraph;
+import static jdk.vm.ci.code.CodeUtil.getCallingConvention;
 import static jdk.vm.ci.common.UnsafeUtil.createCString;
 import static jdk.vm.ci.common.UnsafeUtil.writeCString;
 
 import java.lang.reflect.Field;
 
+import jdk.vm.ci.code.CallingConvention;
+import jdk.vm.ci.code.CallingConvention.Type;
+import jdk.vm.ci.code.CompilationResult;
 import jdk.vm.ci.code.InstalledCode;
-import jdk.vm.ci.hotspot.HotSpotCompiledCode;
 import jdk.vm.ci.hotspot.HotSpotVMConfig;
 import jdk.vm.ci.meta.DefaultProfilingInfo;
 import jdk.vm.ci.meta.TriState;
 import sun.misc.Unsafe;
 
-import com.oracle.graal.code.CompilationResult;
 import com.oracle.graal.compiler.GraalCompiler;
 import com.oracle.graal.compiler.target.Backend;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.hotspot.HotSpotCompiledCodeBuilder;
 import com.oracle.graal.hotspot.meta.HotSpotProviders;
 import com.oracle.graal.lir.asm.CompilationResultBuilderFactory;
 import com.oracle.graal.lir.phases.LIRSuites;
@@ -176,12 +177,12 @@ public class HotSpotNativeFunctionInterface implements NativeFunctionInterface {
         Suites suites = providers.getSuites().getDefaultSuites();
         LIRSuites lirSuites = providers.getSuites().getDefaultLIRSuites();
         PhaseSuite<HighTierContext> phaseSuite = backend.getSuites().getDefaultGraphBuilderSuite().copy();
-        CompilationResult compResult = GraalCompiler.compileGraph(g, g.method(), providers, backend, phaseSuite, OptimisticOptimizations.ALL, DefaultProfilingInfo.get(TriState.UNKNOWN), suites,
+        CallingConvention cc = getCallingConvention(providers.getCodeCache(), Type.JavaCallee, g.method(), false);
+        CompilationResult compResult = GraalCompiler.compileGraph(g, cc, g.method(), providers, backend, phaseSuite, OptimisticOptimizations.ALL, DefaultProfilingInfo.get(TriState.UNKNOWN), suites,
                         lirSuites, new CompilationResult(), CompilationResultBuilderFactory.Default);
         InstalledCode installedCode;
         try (Scope s = Debug.scope("CodeInstall", providers.getCodeCache(), g.method())) {
-            HotSpotCompiledCode compiledCode = HotSpotCompiledCodeBuilder.createCompiledCode(g.method(), null, compResult);
-            installedCode = providers.getCodeCache().addCode(g.method(), compiledCode, null, null);
+            installedCode = providers.getCodeCache().addCode(g.method(), compResult, null, null);
         } catch (Throwable e) {
             throw Debug.handle(e);
         }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,48 +22,56 @@
  */
 package com.oracle.graal.phases.tiers;
 
-import java.util.*;
-
-import com.oracle.graal.graph.*;
-import com.oracle.graal.phases.*;
+import com.oracle.graal.lir.phases.LIRSuites;
+import com.oracle.graal.phases.PhaseSuite;
 
 public final class Suites {
 
-    public final PhaseSuite<HighTierContext> highTier;
-    public final PhaseSuite<MidTierContext> midTier;
+    private final PhaseSuite<HighTierContext> highTier;
+    private final PhaseSuite<MidTierContext> midTier;
+    private final PhaseSuite<LowTierContext> lowTier;
+    private boolean immutable;
 
-    public static final Suites DEFAULT;
+    public PhaseSuite<HighTierContext> getHighTier() {
+        return highTier;
+    }
 
-    private static final Map<String, CompilerConfiguration> configurations;
+    public PhaseSuite<MidTierContext> getMidTier() {
+        return midTier;
+    }
 
-    static {
-        configurations = new HashMap<>();
-        for (CompilerConfiguration config : ServiceLoader.loadInstalled(CompilerConfiguration.class)) {
-            String name = config.getClass().getSimpleName();
-            if (name.endsWith("Configuration")) {
-                name = name.substring(0, name.length() - "Configuration".length());
-            }
-            configurations.put(name.toLowerCase(), config);
+    public PhaseSuite<LowTierContext> getLowTier() {
+        return lowTier;
+    }
+
+    public Suites(PhaseSuite<HighTierContext> highTier, PhaseSuite<MidTierContext> midTier, PhaseSuite<LowTierContext> lowTier) {
+        this.highTier = highTier;
+        this.midTier = midTier;
+        this.lowTier = lowTier;
+    }
+
+    public static Suites createSuites(CompilerConfiguration config) {
+        return new Suites(config.createHighTier(), config.createMidTier(), config.createLowTier());
+    }
+
+    public static LIRSuites createLIRSuites(CompilerConfiguration config) {
+        return new LIRSuites(config.createPreAllocationOptimizationStage(), config.createAllocationStage(), config.createPostAllocationOptimizationStage());
+    }
+
+    public boolean isImmutable() {
+        return immutable;
+    }
+
+    public synchronized void setImmutable() {
+        if (!immutable) {
+            highTier.setImmutable();
+            midTier.setImmutable();
+            lowTier.setImmutable();
+            immutable = true;
         }
-
-        DEFAULT = createDefaultSuites();
     }
 
-    private Suites(CompilerConfiguration config) {
-        highTier = config.createHighTier();
-        midTier = config.createMidTier();
+    public Suites copy() {
+        return new Suites(highTier.copy(), midTier.copy(), lowTier.copy());
     }
-
-    public static Suites createDefaultSuites() {
-        return createSuites(GraalOptions.CompilerConfiguration);
-    }
-
-    public static Suites createSuites(String name) {
-        CompilerConfiguration config = configurations.get(name);
-        if (config == null) {
-            throw new GraalInternalError("unknown compiler configuration: " + name);
-        }
-        return new Suites(config);
-    }
-
 }
