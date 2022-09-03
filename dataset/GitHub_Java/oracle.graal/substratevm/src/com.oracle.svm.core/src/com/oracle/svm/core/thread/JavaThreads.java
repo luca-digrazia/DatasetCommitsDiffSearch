@@ -566,7 +566,7 @@ final class Target_java_lang_Thread {
     @Inject @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.NewInstance, declClass = AtomicReference.class)//
     AtomicReference<ParkEvent> sleepParkEvent;
 
-    @Alias//
+    @Delete //
     private ClassLoader contextClassLoader;
 
     @Alias//
@@ -614,13 +614,15 @@ final class Target_java_lang_Thread {
     native void setPriority(int newPriority);
 
     @Substitute
+    @SuppressWarnings("static-method")
     public ClassLoader getContextClassLoader() {
-        return contextClassLoader;
+        /* null indicates the system class loader */
+        return null;
     }
 
     @Substitute
     public void setContextClassLoader(ClassLoader cl) {
-        contextClassLoader = cl;
+        // noop
     }
 
     /** Replace "synchronized" modifier with delegation to an atomic increment. */
@@ -690,7 +692,6 @@ final class Target_java_lang_Thread {
 
         this.group = g;
         this.daemon = parent.isDaemon();
-        contextClassLoader = parent.getContextClassLoader();
         this.priority = parent.getPriority();
         this.target = target;
         setPriority(priority);
