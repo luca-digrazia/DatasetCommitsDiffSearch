@@ -146,12 +146,12 @@ public abstract class Node implements NodeInterface, Cloneable {
      * To define node with <em>fixed</em> {@link SourceSection} that doesn't change after node
      * construction use:
      *
-     * {@codesnippet NodeWithFixedSourceSection}
+     * {@codesnippet source.section.fixed}
      *
      * To create a node which can associate and change the {@link SourceSection} later at any point
      * of time use:
      *
-     * {@codesnippet MutableSourceSectionNode}
+     * {@codesnippet source.section.mutable}
      *
      * @return the source code represented by this Node
      */
