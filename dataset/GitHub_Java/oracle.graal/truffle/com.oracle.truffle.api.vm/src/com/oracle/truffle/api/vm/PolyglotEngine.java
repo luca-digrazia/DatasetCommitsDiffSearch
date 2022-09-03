@@ -29,6 +29,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -826,12 +827,14 @@ public class PolyglotEngine {
                 @Override
                 protected Object compute() throws IOException {
                     try (final Closeable c = SPI.executionStart(PolyglotEngine.this, -1, debugger, null)) {
+                        List<Object> arr = new ArrayList<>();
+                        arr.addAll(Arrays.asList(args));
                         for (;;) {
                             try {
                                 if (target == null) {
-                                    target = SymbolInvokerImpl.createCallTarget(language[0], compute.get(), args);
+                                    target = SymbolInvokerImpl.createCallTarget(language[0], compute.get(), arr.toArray());
                                 }
-                                return target.call(args);
+                                return target.call(arr.toArray());
                             } catch (ArgumentsMishmashException ex) {
                                 target = null;
                             }
