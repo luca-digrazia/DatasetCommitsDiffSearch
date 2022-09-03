@@ -45,6 +45,7 @@ import com.oracle.truffle.api.debug.SuspendedEvent;
 import com.oracle.truffle.api.frame.FrameInstance;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.MaterializedFrame;
+import com.oracle.truffle.api.instrument.StandardSyntaxTag;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.LineLocation;
@@ -54,7 +55,6 @@ import com.oracle.truffle.api.vm.EventConsumer;
 import com.oracle.truffle.api.vm.PolyglotEngine;
 import com.oracle.truffle.api.vm.PolyglotEngine.Language;
 import com.oracle.truffle.api.vm.PolyglotEngine.Value;
-import com.oracle.truffle.tools.debug.shell.REPLMessage;
 import com.oracle.truffle.tools.debug.shell.client.SimpleREPLClient;
 import com.oracle.truffle.tools.debug.shell.server.InstrumentationUtils.ASTPrinter;
 import com.oracle.truffle.tools.debug.shell.server.InstrumentationUtils.LocationPrinter;
@@ -63,6 +63,7 @@ import com.oracle.truffle.tools.debug.shell.server.InstrumentationUtils.Location
  * The server side of a simple message-based protocol for a possibly remote language
  * Read-Eval-Print-Loop.
  */
+@SuppressWarnings("deprecation")
 public final class REPLServer {
 
     private static final boolean TRACE = Boolean.getBoolean("truffle.debug.trace");
@@ -114,17 +115,26 @@ public final class REPLServer {
 
     private Map<Integer, BreakpointInfo> breakpoints = new WeakHashMap<>();
 
-    public REPLServer(SimpleREPLClient client) {
-        this.replClient = client;
+    public REPLServer(String defaultMIMEType) {
         this.engine = PolyglotEngine.newBuilder().onEvent(onHalted).onEvent(onExec).build();
         this.db = Debugger.find(this.engine);
         engineLanguages.addAll(engine.getLanguages().values());
-
+        if (engineLanguages.size() == 0) {
+            throw new RuntimeException("No language implementations installed");
+        }
         for (Language language : engineLanguages) {
             nameToLanguage.put(language.getName(), language);
         }
 
-        statusPrefix = "";
+        if (defaultMIMEType == null) {
+            defaultLanguage = engineLanguages.iterator().next();
+        } else {
+            this.defaultLanguage = engine.getLanguages().get(defaultMIMEType);
+            if (defaultLanguage == null) {
+                throw new RuntimeException("Implementation not found for \"" + defaultMIMEType + "\"");
+            }
+        }
+        statusPrefix = languageName(defaultLanguage);
     }
 
     private final EventConsumer<SuspendedEvent> onHalted = new EventConsumer<SuspendedEvent>(SuspendedEvent.class) {
@@ -160,7 +170,7 @@ public final class REPLServer {
     }
 
     /**
-     * Start sever: load commands, generate initial context.
+     * Starts up a server; status returned in a message.
      */
     public void start() {
 
@@ -188,13 +198,14 @@ public final class REPLServer {
         add(REPLHandler.TRUFFLE_HANDLER);
         add(REPLHandler.TRUFFLE_NODE_HANDLER);
         add(REPLHandler.UNSET_BREAK_CONDITION_HANDLER);
-
+        this.replClient = new SimpleREPLClient(this);
         this.currentServerContext = new Context(null, null, defaultLanguage);
+        replClient.start();
     }
 
     @SuppressWarnings("static-method")
     public String getWelcome() {
-        return "GraalVM Polyglot Debugger 0.9\n" + "Copyright (c) 2013-6, Oracle and/or its affiliates";
+        return "GraalVM MultiLanguage Debugger 0.9\n" + "Copyright (c) 2013-5, Oracle and/or its affiliates";
     }
 
     public ASTPrinter getASTPrinter() {
@@ -207,18 +218,18 @@ public final class REPLServer {
 
     void haltedAt(SuspendedEvent event) {
         // Message the client that execution is halted and is in a new debugging context
-        final REPLMessage message = new REPLMessage();
-        message.put(REPLMessage.OP, REPLMessage.STOPPED);
+        final com.oracle.truffle.tools.debug.shell.REPLMessage message = new com.oracle.truffle.tools.debug.shell.REPLMessage();
+        message.put(com.oracle.truffle.tools.debug.shell.REPLMessage.OP, com.oracle.truffle.tools.debug.shell.REPLMessage.STOPPED);
 
         // Identify language execution where halted; default to previous context
         Language haltedLanguage = currentServerContext.currentLanguage;
         final String mimeType = findMime(event.getNode());
         if (mimeType == null) {
-            message.put(REPLMessage.WARNINGS, "unable to detect language at halt");
+            message.put(com.oracle.truffle.tools.debug.shell.REPLMessage.WARNINGS, "unable to detect language at halt");
         } else {
             final Language language = engine.getLanguages().get(mimeType);
             if (language == null) {
-                message.put(REPLMessage.WARNINGS, "no language installed for MIME type \"" + mimeType + "\"");
+                message.put(com.oracle.truffle.tools.debug.shell.REPLMessage.WARNINGS, "no language installed for MIME type \"" + mimeType + "\"");
             } else {
                 haltedLanguage = language;
             }
@@ -227,27 +238,27 @@ public final class REPLServer {
         // Create and push a new debug context where execution is halted
         currentServerContext = new Context(currentServerContext, event, haltedLanguage);
 
-        message.put(REPLMessage.LANG_NAME, haltedLanguage.getName());
+        message.put(com.oracle.truffle.tools.debug.shell.REPLMessage.LANG_NAME, haltedLanguage.getName());
         final SourceSection src = event.getNode().getSourceSection();
         final Source source = src.getSource();
-        message.put(REPLMessage.SOURCE_NAME, source.getName());
+        message.put(com.oracle.truffle.tools.debug.shell.REPLMessage.SOURCE_NAME, source.getName());
         final String path = source.getPath();
         if (path == null) {
-            message.put(REPLMessage.SOURCE_TEXT, source.getCode());
+            message.put(com.oracle.truffle.tools.debug.shell.REPLMessage.SOURCE_TEXT, source.getCode());
         } else {
-            message.put(REPLMessage.FILE_PATH, path);
+            message.put(com.oracle.truffle.tools.debug.shell.REPLMessage.FILE_PATH, path);
         }
-        message.put(REPLMessage.LINE_NUMBER, Integer.toString(src.getStartLine()));
+        message.put(com.oracle.truffle.tools.debug.shell.REPLMessage.LINE_NUMBER, Integer.toString(src.getStartLine()));
 
-        message.put(REPLMessage.STATUS, REPLMessage.SUCCEEDED);
-        message.put(REPLMessage.DEBUG_LEVEL, Integer.toString(currentServerContext.getLevel()));
+        message.put(com.oracle.truffle.tools.debug.shell.REPLMessage.STATUS, com.oracle.truffle.tools.debug.shell.REPLMessage.SUCCEEDED);
+        message.put(com.oracle.truffle.tools.debug.shell.REPLMessage.DEBUG_LEVEL, Integer.toString(currentServerContext.getLevel()));
         List<String> warnings = event.getRecentWarnings();
         if (!warnings.isEmpty()) {
             final StringBuilder sb = new StringBuilder();
             for (String warning : warnings) {
                 sb.append(warning + "\n");
             }
-            message.put(REPLMessage.WARNINGS, sb.toString());
+            message.put(com.oracle.truffle.tools.debug.shell.REPLMessage.WARNINGS, sb.toString());
         }
         try {
             // Cheat with synchrony: call client directly about entering a nested debugging
@@ -286,6 +297,7 @@ public final class REPLServer {
         private boolean steppingInto = false;  // Only true during a "stepInto" engine call
 
         Context(Context predecessor, SuspendedEvent event, Language language) {
+            assert language != null;
             this.level = predecessor == null ? 0 : predecessor.getLevel() + 1;
             this.predecessor = predecessor;
             this.event = event;
@@ -360,9 +372,6 @@ public final class REPLServer {
                 if (frameNumber != null) {
                     throw new IllegalStateException("Frame number requires a halted execution");
                 }
-                if (currentLanguage == null) {
-                    throw new IOException("No language set");
-                }
                 this.steppingInto = stepInto;
                 final String mimeType = defaultMIME(currentLanguage);
                 try {
@@ -397,16 +406,16 @@ public final class REPLServer {
         /**
          * Dispatches a REPL request to the appropriate handler.
          */
-        REPLMessage[] receive(REPLMessage request) {
-            final String command = request.get(REPLMessage.OP);
+        com.oracle.truffle.tools.debug.shell.REPLMessage[] receive(com.oracle.truffle.tools.debug.shell.REPLMessage request) {
+            final String command = request.get(com.oracle.truffle.tools.debug.shell.REPLMessage.OP);
             final REPLHandler handler = handlerMap.get(command);
 
             if (handler == null) {
-                final REPLMessage message = new REPLMessage();
-                message.put(REPLMessage.OP, command);
-                message.put(REPLMessage.STATUS, REPLMessage.FAILED);
-                message.put(REPLMessage.DISPLAY_MSG, statusPrefix + " op \"" + command + "\" not supported");
-                final REPLMessage[] reply = new REPLMessage[]{message};
+                final com.oracle.truffle.tools.debug.shell.REPLMessage message = new com.oracle.truffle.tools.debug.shell.REPLMessage();
+                message.put(com.oracle.truffle.tools.debug.shell.REPLMessage.OP, command);
+                message.put(com.oracle.truffle.tools.debug.shell.REPLMessage.STATUS, com.oracle.truffle.tools.debug.shell.REPLMessage.FAILED);
+                message.put(com.oracle.truffle.tools.debug.shell.REPLMessage.DISPLAY_MSG, statusPrefix + " op \"" + command + "\" not supported");
+                final com.oracle.truffle.tools.debug.shell.REPLMessage[] reply = new com.oracle.truffle.tools.debug.shell.REPLMessage[]{message};
                 return reply;
             }
             return handler.receive(request, REPLServer.this);
@@ -436,7 +445,7 @@ public final class REPLServer {
         }
 
         public String getLanguageName() {
-            return currentLanguage == null ? null : currentLanguage.getName();
+            return currentLanguage.getName();
         }
 
         /**
@@ -448,7 +457,7 @@ public final class REPLServer {
             assert name != null;
             final Language language = nameToLanguage.get(name);
             if (language == null) {
-                throw new IOException("Language \"" + name + "\" not supported");
+                throw new IOException("Language \" + name + \" not supported");
             }
             if (language == currentLanguage) {
                 return currentLanguage.getName();
@@ -487,12 +496,12 @@ public final class REPLServer {
      * operation where the protocol has possibly multiple messages being returned asynchronously in
      * response to each request.
      */
-    public REPLMessage[] receive(REPLMessage request) {
+    public com.oracle.truffle.tools.debug.shell.REPLMessage[] receive(com.oracle.truffle.tools.debug.shell.REPLMessage request) {
         if (currentServerContext == null) {
-            final REPLMessage message = new REPLMessage();
-            message.put(REPLMessage.STATUS, REPLMessage.FAILED);
-            message.put(REPLMessage.DISPLAY_MSG, "server not started");
-            final REPLMessage[] reply = new REPLMessage[]{message};
+            final com.oracle.truffle.tools.debug.shell.REPLMessage message = new com.oracle.truffle.tools.debug.shell.REPLMessage();
+            message.put(com.oracle.truffle.tools.debug.shell.REPLMessage.STATUS, com.oracle.truffle.tools.debug.shell.REPLMessage.FAILED);
+            message.put(com.oracle.truffle.tools.debug.shell.REPLMessage.DISPLAY_MSG, "server not started");
+            final com.oracle.truffle.tools.debug.shell.REPLMessage[] reply = new com.oracle.truffle.tools.debug.shell.REPLMessage[]{message};
             return reply;
         }
         return currentServerContext.receive(request);
@@ -531,9 +540,8 @@ public final class REPLServer {
         return info;
     }
 
-    @SuppressWarnings("deprecation")
     @Deprecated
-    BreakpointInfo setTagBreakpoint(int ignoreCount, com.oracle.truffle.api.instrument.StandardSyntaxTag tag, boolean oneShot) throws IOException {
+    BreakpointInfo setTagBreakpoint(int ignoreCount, StandardSyntaxTag tag, boolean oneShot) throws IOException {
         final BreakpointInfo info = new TagBreakpointInfo(tag, ignoreCount, oneShot);
         info.activate();
         return info;
@@ -578,15 +586,13 @@ public final class REPLServer {
     }
 
     final class TagBreakpointInfo extends BreakpointInfo {
-        @SuppressWarnings("deprecation") private final com.oracle.truffle.api.instrument.StandardSyntaxTag tag;
+        private final StandardSyntaxTag tag;
 
-        @SuppressWarnings("deprecation")
-        private TagBreakpointInfo(com.oracle.truffle.api.instrument.StandardSyntaxTag tag, int ignoreCount, boolean oneShot) {
+        private TagBreakpointInfo(StandardSyntaxTag tag, int ignoreCount, boolean oneShot) {
             super(ignoreCount, oneShot);
             this.tag = tag;
         }
 
-        @SuppressWarnings("deprecation")
         @Override
         protected void activate() throws IOException {
             breakpoint = db.setTagBreakpoint(ignoreCount, tag, oneShot);

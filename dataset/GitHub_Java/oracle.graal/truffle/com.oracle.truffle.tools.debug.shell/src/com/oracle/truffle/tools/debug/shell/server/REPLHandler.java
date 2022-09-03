@@ -200,7 +200,7 @@ public abstract class REPLHandler {
             final String lookupFile = (path == null || path.isEmpty()) ? fileName : path;
             Source source = null;
             try {
-                source = Source.fromFileName(lookupFile, false);
+                source = Source.fromFileName(lookupFile, true);
             } catch (Exception ex) {
                 return finishReplyFailed(reply, ex);
             }

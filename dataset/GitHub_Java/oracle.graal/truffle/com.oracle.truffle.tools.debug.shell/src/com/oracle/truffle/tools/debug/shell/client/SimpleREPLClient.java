@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -63,6 +63,9 @@ import com.oracle.truffle.tools.debug.shell.server.REPLServer;
  * <p>
  * In order to get
  * <ol>
+ * <li>A debugging session should start from this shell, but there is no machinery in place for
+ * doing that; instead, an entry into the language implementation creates both the server and this
+ * shell;</li>
  * <li>The current startup sequence is based on method calls, not messages;</li>
  * <li>Only a very few request types and keys are implemented, omitting for example request and
  * session ids;</li>
@@ -77,6 +80,8 @@ import com.oracle.truffle.tools.debug.shell.server.REPLServer;
 @SuppressWarnings("deprecation")
 public class SimpleREPLClient implements com.oracle.truffle.tools.debug.shell.REPLClient {
 
+    // TODO (mlvdv) Temporarily in hybrid mode; will work either single language or multi (sort of)
+
     private static final String REPLY_PREFIX = "==> ";
     private static final String FAIL_PREFIX = "**> ";
     private static final String WARNING_PREFIX = "!!> ";
@@ -89,13 +94,6 @@ public class SimpleREPLClient implements com.oracle.truffle.tools.debug.shell.RE
 
     private static final String STACK_FRAME_FORMAT = "    %3d: at %s in %s    %s\n";
     private static final String STACK_FRAME_SELECTED_FORMAT = "==> %3d: at %s in %s    %s\n";
-
-    public static void main(String[] args) {
-        final SimpleREPLClient client = new SimpleREPLClient();
-        final REPLServer replServer = new REPLServer(client);
-        replServer.start();
-        client.start(replServer);
-    }
 
     // Top level commands
     private final Map<String, REPLCommand> commandMap = new HashMap<>();
@@ -112,7 +110,7 @@ public class SimpleREPLClient implements com.oracle.truffle.tools.debug.shell.RE
 
     private final PrintStream writer;
 
-    private REPLServer replServer;
+    private final REPLServer replServer;
 
     private final LocalOption astDepthOption = new IntegerOption(9, "astdepth", "default depth for AST display");
 
@@ -145,7 +143,8 @@ public class SimpleREPLClient implements com.oracle.truffle.tools.debug.shell.RE
 
     private boolean quitting; // User has requested to "Quit"
 
-    public SimpleREPLClient() {
+    public SimpleREPLClient(REPLServer replServer) {
+        this.replServer = replServer;
         this.writer = System.out;
         try {
             this.reader = new ConsoleReader();
@@ -203,34 +202,12 @@ public class SimpleREPLClient implements com.oracle.truffle.tools.debug.shell.RE
         addOption(verboseBreakpointInfoOption);
     }
 
-    public void start(REPLServer server) {
+    public void start() {
 
-        this.replServer = server;
-        clientContext = new ClientContextImpl(null, null);
+        this.clientContext = new ClientContextImpl(null, null);
         showWelcome();
-        try {
-            final com.oracle.truffle.tools.debug.shell.REPLMessage[] replies = replServer.receive(infoLanguageCommand.createRequest(clientContext, NULL_ARGS));
-            if (replies.length == 0) {
-                clientContext.displayFailReply("No languages could be loaded");
-            } else if (replies.length == 1) {
-                final String[] args = new String[]{"", replies[0].get(com.oracle.truffle.tools.debug.shell.REPLMessage.LANG_NAME)};
-                final com.oracle.truffle.tools.debug.shell.REPLMessage[] results = replServer.receive(REPLRemoteCommand.SET_LANG_CMD.createRequest(clientContext, args));
-                if (results[0].get(com.oracle.truffle.tools.debug.shell.REPLMessage.STATUS).equals(com.oracle.truffle.tools.debug.shell.REPLMessage.FAILED)) {
-                    final String message = results[0].get(com.oracle.truffle.tools.debug.shell.REPLMessage.DISPLAY_MSG);
-                    clientContext.displayFailReply(message != null ? message : results[0].toString());
-                } else {
-                    clientContext.updatePrompt();
-                    clientContext.startContextSession();
-                }
-            } else {
-                clientContext.displayInfo("Languages supported (type \"lang <name>\" to set default)");
-                displayLanguages(replies);
-                clientContext.updatePrompt();
-                clientContext.startContextSession();
-            }
-        } finally {
-            clientContext.displayReply("Goodbye");
-        }
+        clientContext.startContextSession();
+        clientContext.displayReply("Goodbye");
     }
 
     private void showWelcome() {
@@ -275,10 +252,6 @@ public class SimpleREPLClient implements com.oracle.truffle.tools.debug.shell.RE
         private int selectedFrameNumber = 0;
 
         private String currentPrompt;
-
-        // A execution context stacked on top of this one was explicitly
-        // killed, and this context will receive the resulting exception.
-        private boolean killPending;
 
         /**
          * Create a new context on the occasion of an execution halting.
@@ -520,12 +493,7 @@ public class SimpleREPLClient implements com.oracle.truffle.tools.debug.shell.RE
             }
         }
 
-        public void notifyKilled() {
-            // A kill will not be received until after
-            // This context is released, so the exception
-            // must be handles specially by the
-            // context that will catch it.
-            predecessor.killPending = true;
+        public void displayKillMessage(String message) {
             writer.println(clientContext.currentPrompt + " killed");
         }
 
@@ -612,16 +580,7 @@ public class SimpleREPLClient implements com.oracle.truffle.tools.debug.shell.RE
                     } else {
                         assert false; // Should not happen.
                     }
-                } catch (ThreadDeath ex) {
-                    if (killPending) {
-                        // If the previous context was killed by REPL command, then
-                        // assume this exception is the result and the REPL should
-                        // continue debugging in this context.
-                        killPending = false;
-                    } else {
-                        // A legitimate use of the exception
-                        throw ex;
-                    }
+
                 } catch (REPLContinueException ex) {
                     break;
                 } catch (IOException e) {
@@ -989,7 +948,7 @@ public class SimpleREPLClient implements com.oracle.truffle.tools.debug.shell.RE
         }
     };
 
-    private final REPLRemoteCommand infoLanguageCommand = new REPLRemoteCommand("languages", "lang", "languages supported") {
+    private final REPLCommand infoLanguageCommand = new REPLRemoteCommand("languages", "lang", "languages supported") {
 
         final String[] help = {"info language:  list details about supported languages"};
 
@@ -1012,23 +971,16 @@ public class SimpleREPLClient implements com.oracle.truffle.tools.debug.shell.RE
                 clientContext.displayFailReply(replies[0].get(com.oracle.truffle.tools.debug.shell.REPLMessage.DISPLAY_MSG));
             } else {
                 clientContext.displayReply("Languages supported:");
-                displayLanguages(replies);
+                for (com.oracle.truffle.tools.debug.shell.REPLMessage message : replies) {
+                    final StringBuilder sb = new StringBuilder();
+                    sb.append(message.get(com.oracle.truffle.tools.debug.shell.REPLMessage.LANG_NAME));
+                    sb.append(" ver. ");
+                    sb.append(message.get(com.oracle.truffle.tools.debug.shell.REPLMessage.LANG_VER));
+                    clientContext.displayInfo(sb.toString());
+                }
             }
         }
     };
-
-    private void displayLanguages(com.oracle.truffle.tools.debug.shell.REPLMessage[] replies) {
-        for (com.oracle.truffle.tools.debug.shell.REPLMessage message : replies) {
-            final StringBuilder sb = new StringBuilder();
-            final String name = message.get(com.oracle.truffle.tools.debug.shell.REPLMessage.LANG_NAME);
-            if (!name.equals("")) {
-                sb.append(name);
-                sb.append(" ver. ");
-                sb.append(message.get(com.oracle.truffle.tools.debug.shell.REPLMessage.LANG_VER));
-                clientContext.displayInfo(sb.toString());
-            }
-        }
-    }
 
     private final REPLCommand infoSetCommand = new REPLLocalCommand("set", null, "info about settings") {
 
