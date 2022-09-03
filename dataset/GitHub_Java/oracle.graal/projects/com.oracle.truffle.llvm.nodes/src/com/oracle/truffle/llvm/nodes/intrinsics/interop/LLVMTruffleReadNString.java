@@ -29,29 +29,72 @@
  */
 package com.oracle.truffle.llvm.nodes.intrinsics.interop;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI32Node;
-import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic.LLVMAddressIntrinsic;
-import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.memory.LLVMMemory;
+import com.oracle.truffle.api.interop.ForeignAccess;
+import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.interop.UnknownIdentifierException;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
+import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
+import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
-@NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMI32Node.class)})
-public abstract class LLVMTruffleReadNString extends LLVMAddressIntrinsic {
+@NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
+public abstract class LLVMTruffleReadNString extends LLVMIntrinsic {
+
     @Specialization
+    protected Object doIntrinsic(LLVMNativePointer value, int n,
+                    @Cached("getLLVMMemory()") LLVMMemory memory) {
+        return getString(memory, value.asNative(), n);
+    }
+
     @TruffleBoundary
-    public Object executeIntrinsic(LLVMAddress value, int n) {
-        LLVMAddress adr = value;
+    private static Object getString(LLVMMemory memory, long start, int n) {
+        long ptr = start;
         int count = n < 0 ? 0 : n;
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < count; i++) {
-            sb.append((char) Byte.toUnsignedInt(LLVMMemory.getI8(adr)));
-            adr = adr.increment(Byte.BYTES);
+            sb.append((char) Byte.toUnsignedInt(memory.getI8(ptr)));
+            ptr += Byte.BYTES;
         }
         return sb.toString();
     }
 
+    @Specialization
+    protected Object interop(LLVMManagedPointer objectWithOffset, int n,
+                    @Cached("createForeignReadNode()") Node foreignRead,
+                    @Cached("createToByteNode()") ForeignToLLVM toLLVM) {
+        long offset = objectWithOffset.getOffset();
+        TruffleObject object = objectWithOffset.getObject();
+        char[] chars = new char[n];
+        for (int i = 0; i < n; i++) {
+            Object rawValue;
+            try {
+                rawValue = ForeignAccess.sendRead(foreignRead, object, offset + i);
+            } catch (UnknownIdentifierException | UnsupportedMessageException e) {
+                CompilerDirectives.transferToInterpreter();
+                throw new IllegalStateException(e);
+            }
+            byte byteValue = (byte) toLLVM.executeWithTarget(rawValue);
+            chars[i] = (char) Byte.toUnsignedInt(byteValue);
+        }
+        return new String(chars);
+    }
+
+    @Fallback
+    @TruffleBoundary
+    @SuppressWarnings("unused")
+    public Object fallback(Object value, Object n) {
+        System.err.println("Invalid arguments to \"read nstring\"-builtin.");
+        throw new IllegalArgumentException();
+    }
 }

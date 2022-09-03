@@ -30,7 +30,6 @@
 package com.oracle.truffle.llvm.nodes.intrinsics.interop;
 
 import com.oracle.truffle.llvm.runtime.interop.LLVMAsForeignNode;
-import com.oracle.truffle.llvm.runtime.interop.LLVMTypedForeignObject;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Fallback;
@@ -60,7 +59,7 @@ public abstract class LLVMReadStringNode extends LLVMNode {
         return address;
     }
 
-    @Specialization(guards = "isForeign(foreign)")
+    @Specialization
     String readForeign(LLVMManagedPointer foreign,
                     @Cached("create()") ForeignReadStringNode read) {
         return read.execute(foreign);
@@ -72,10 +71,6 @@ public abstract class LLVMReadStringNode extends LLVMNode {
             readOther = insert(PointerReadStringNode.create());
         }
         return readOther.readPointer(address);
-    }
-
-    protected static boolean isForeign(LLVMManagedPointer pointer) {
-        return pointer.getOffset() == 0 && pointer.getObject() instanceof LLVMTypedForeignObject;
     }
 
     abstract static class Dummy extends LLVMNode {

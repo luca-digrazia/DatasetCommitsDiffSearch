@@ -198,7 +198,7 @@ public abstract class LLVMLookupDispatchNode extends LLVMNode {
         }
     }
 
-    protected final LLVMMemory getLLVMMemoryCached() {
+    protected LLVMMemory getLLVMMemoryCached() {
         if (llvmMemory == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             llvmMemory = getLLVMMemory();

@@ -29,10 +29,9 @@
  */
 package com.oracle.truffle.llvm.nodes.intrinsics.interop;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.llvm.runtime.interop.LLVMAsForeignNode;
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
@@ -43,7 +42,6 @@ import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
-import com.oracle.truffle.llvm.runtime.except.LLVMPolyglotException;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
@@ -60,38 +58,27 @@ public abstract class LLVMTruffleGetSize extends LLVMIntrinsic {
         this.toLLVM = ForeignToLLVM.create(type);
     }
 
-    @Specialization(rewriteOn = UnsupportedMessageException.class)
-    protected Object doIntrinsic(LLVMManagedPointer value) throws UnsupportedMessageException {
-        TruffleObject foreign = asForeign.execute(value);
-        Object rawValue = ForeignAccess.sendGetSize(foreignGetSize, foreign);
-        return toLLVM.executeWithTarget(rawValue);
-    }
-
-    @Specialization
-    protected Object doIntrinsicCheckHasSize(LLVMManagedPointer value,
-                    @Cached("createHasSize()") Node hasSize) {
-        TruffleObject foreign = asForeign.execute(value);
-        if (ForeignAccess.sendHasSize(hasSize, foreign)) {
-            try {
-                Object rawValue = ForeignAccess.sendGetSize(foreignGetSize, foreign);
-                return toLLVM.executeWithTarget(rawValue);
-            } catch (UnsupportedMessageException ex) {
-                CompilerDirectives.transferToInterpreter();
-                throw ex.raise();
-            }
-        } else {
-            throw new LLVMPolyglotException(this, "Polyglot value is no array.");
+    private Object getSize(TruffleObject value) {
+        try {
+            Object rawValue = ForeignAccess.sendGetSize(foreignGetSize, value);
+            return toLLVM.executeWithTarget(rawValue);
+        } catch (UnsupportedMessageException e) {
+            CompilerDirectives.transferToInterpreter();
+            throw new IllegalStateException(e);
         }
     }
 
-    protected Node createHasSize() {
-        return Message.HAS_SIZE.createNode();
+    @Specialization
+    protected Object doIntrinsic(LLVMManagedPointer value) {
+        TruffleObject foreign = asForeign.execute(value);
+        return getSize(foreign);
     }
 
     @Fallback
     @TruffleBoundary
     @SuppressWarnings("unused")
     public Object fallback(Object value) {
-        throw new LLVMPolyglotException(this, "Invalid argument to polyglot builtin.");
+        System.err.println("Invalid arguments to getSize-builtin.");
+        throw new IllegalArgumentException();
     }
 }

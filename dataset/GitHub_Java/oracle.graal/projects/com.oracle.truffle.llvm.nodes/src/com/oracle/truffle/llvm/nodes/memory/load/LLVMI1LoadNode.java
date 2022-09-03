@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -30,68 +30,58 @@
 package com.oracle.truffle.llvm.nodes.memory.load;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.dsl.NodeChild;
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.llvm.nodes.base.LLVMAddressNode;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI1Node;
-import com.oracle.truffle.llvm.nodes.memory.load.LLVMI1LoadNodeFactory.LLVMI1DirectLoadNodeGen;
-import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.memory.LLVMMemory;
+import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
+import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobalReadNode.ReadI1Node;
+import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
+import com.oracle.truffle.llvm.runtime.memory.UnsafeArrayAccess;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
-// Truffle has no branch profiles for boolean
-public abstract class LLVMI1LoadNode extends LLVMI1Node {
+public abstract class LLVMI1LoadNode extends LLVMAbstractLoadNode {
 
-    @NodeChild(type = LLVMAddressNode.class)
-    public abstract static class LLVMI1DirectLoadNode extends LLVMI1LoadNode {
-
-        @Specialization
-        public boolean executeI1(LLVMAddress addr) {
-            return LLVMMemory.getI1(addr);
-        }
-
+    @Specialization
+    protected boolean doBoolean(LLVMGlobal addr,
+                    @Cached("create()") ReadI1Node globalAccess) {
+        return globalAccess.execute(addr);
     }
 
-    public static class LLVMI1UninitializedLoadNode extends LLVMI1LoadNode {
-
-        @Child private LLVMAddressNode addressNode;
-
-        public LLVMI1UninitializedLoadNode(LLVMAddressNode addressNode) {
-            this.addressNode = addressNode;
-        }
-
-        @Override
-        public boolean executeI1(VirtualFrame frame) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            boolean val = LLVMMemory.getI1(addressNode.executePointee(frame));
-            replace(new LLVMI1ProfilingLoadNode(addressNode, val));
-            return val;
-        }
-
+    @Specialization
+    protected boolean doI1(LLVMVirtualAllocationAddress address,
+                    @Cached("getUnsafeArrayAccess()") UnsafeArrayAccess memory) {
+        return address.getI1(memory);
     }
 
-    public static class LLVMI1ProfilingLoadNode extends LLVMI1LoadNode {
-
-        private final boolean profiledValue;
-        @Child private LLVMAddressNode addressNode;
-
-        public LLVMI1ProfilingLoadNode(LLVMAddressNode addressNode, boolean profiledValue) {
-            this.addressNode = addressNode;
-            this.profiledValue = profiledValue;
-        }
-
-        @Override
-        public boolean executeI1(VirtualFrame frame) {
-            boolean value = LLVMMemory.getI1(addressNode.executePointee(frame));
-            if (value == profiledValue) {
-                return profiledValue;
-            } else {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                replace(LLVMI1DirectLoadNodeGen.create(addressNode));
-                return value;
-            }
-        }
-
+    @Specialization(guards = "!isAutoDerefHandle(addr)")
+    protected boolean doI1Native(LLVMNativePointer addr) {
+        return getLLVMMemoryCached().getI1(addr);
     }
 
+    @Specialization(guards = "isAutoDerefHandle(addr)")
+    protected boolean doI1DerefHandle(LLVMNativePointer addr) {
+        return doI1Managed(getDerefHandleGetReceiverNode().execute(addr));
+    }
+
+    @Override
+    LLVMForeignReadNode createForeignRead() {
+        return new LLVMForeignReadNode(ForeignToLLVMType.I1);
+    }
+
+    @Specialization
+    protected boolean doI1Managed(LLVMManagedPointer addr) {
+        return (boolean) getForeignReadNode().execute(addr);
+    }
+
+    @Specialization
+    protected boolean doLLVMBoxedPrimitive(LLVMBoxedPrimitive addr) {
+        if (addr.getValue() instanceof Long) {
+            return getLLVMMemoryCached().getI1((long) addr.getValue());
+        } else {
+            CompilerDirectives.transferToInterpreter();
+            throw new IllegalAccessError("Cannot access address: " + addr.getValue());
+        }
+    }
 }

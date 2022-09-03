@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -34,9 +34,11 @@ import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemSetNode;
 import com.oracle.truffle.llvm.runtime.memory.UnsafeArrayAccess;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
 @NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class),
@@ -58,8 +60,24 @@ public abstract class LLVMMemSet extends LLVMBuiltin {
 
     @SuppressWarnings("unused")
     @Specialization
+    protected Object doOp(LLVMGlobal address, byte value, int length, int align, boolean isVolatile,
+                    @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess) {
+        memSet.executeWithTarget(globalAccess.executeWithTarget(address), value, length);
+        return address;
+    }
+
+    @SuppressWarnings("unused")
+    @Specialization
     protected Object doOp(LLVMPointer address, byte value, long length, int align, boolean isVolatile) {
         memSet.executeWithTarget(address, value, length);
+        return address;
+    }
+
+    @SuppressWarnings("unused")
+    @Specialization
+    protected Object doOp(LLVMGlobal address, byte value, long length, int align, boolean isVolatile,
+                    @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess) {
+        memSet.executeWithTarget(globalAccess.executeWithTarget(address), value, length);
         return address;
     }
 

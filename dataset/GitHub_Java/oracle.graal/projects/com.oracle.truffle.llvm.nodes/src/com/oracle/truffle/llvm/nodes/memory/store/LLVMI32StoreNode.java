@@ -52,36 +52,41 @@ public abstract class LLVMI32StoreNode extends LLVMStoreNodeCommon {
     }
 
     @Specialization
-    protected void doOp(LLVMGlobal address, int value,
+    protected Object doOp(LLVMGlobal address, int value,
                     @Cached("create()") WriteI32Node globalAccess) {
         globalAccess.execute(address, value);
+        return null;
     }
 
     @Specialization(guards = "!isAutoDerefHandle(addr)")
-    protected void doOp(LLVMNativePointer addr, int value) {
+    protected Object doOp(LLVMNativePointer addr, int value) {
         getLLVMMemoryCached().putI32(addr, value);
+        return null;
     }
 
     @Specialization(guards = "isAutoDerefHandle(addr)")
-    protected void doOpDerefHandle(LLVMNativePointer addr, int value) {
-        doOpManaged(getDerefHandleGetReceiverNode().execute(addr), value);
+    protected Object doOpDerefHandle(LLVMNativePointer addr, int value) {
+        return doOpManaged(getDerefHandleGetReceiverNode().execute(addr), value);
     }
 
     @Specialization
-    protected void doOp(LLVMVirtualAllocationAddress address, int value,
+    protected Object doOp(LLVMVirtualAllocationAddress address, int value,
                     @Cached("getUnsafeArrayAccess()") UnsafeArrayAccess memory) {
         address.writeI32(memory, value);
+        return null;
     }
 
     @Specialization
-    protected void doOpManaged(LLVMManagedPointer address, int value) {
+    protected Object doOpManaged(LLVMManagedPointer address, int value) {
         getForeignWriteNode().execute(address, value);
+        return null;
     }
 
     @Specialization
-    protected void doOp(LLVMBoxedPrimitive address, int value) {
+    protected Object doOp(LLVMBoxedPrimitive address, int value) {
         if (address.getValue() instanceof Long) {
             getLLVMMemoryCached().putI32((long) address.getValue(), value);
+            return null;
         } else {
             CompilerDirectives.transferToInterpreter();
             throw new IllegalAccessError("Cannot access address: " + address.getValue());

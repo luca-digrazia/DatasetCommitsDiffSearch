@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -30,114 +30,58 @@
 package com.oracle.truffle.llvm.nodes.memory.load;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.dsl.NodeChild;
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.interop.ForeignAccess;
-import com.oracle.truffle.api.interop.Message;
-import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.UnknownIdentifierException;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.llvm.nodes.base.LLVMAddressNode;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI16Node;
-import com.oracle.truffle.llvm.nodes.intrinsics.interop.ToLLVMNode;
-import com.oracle.truffle.llvm.nodes.memory.load.LLVMI16LoadNodeFactory.LLVMI16DirectLoadNodeGen;
-import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.LLVMTruffleObject;
-import com.oracle.truffle.llvm.types.memory.LLVMMemory;
+import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
+import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobalReadNode.ReadI16Node;
+import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
+import com.oracle.truffle.llvm.runtime.memory.UnsafeArrayAccess;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
-// Truffle has no branch profiles for short
-@NodeChild(type = LLVMAddressNode.class)
-public abstract class LLVMI16LoadNode extends LLVMI16Node {
-    @Child protected Node foreignRead = Message.READ.createNode();
-    @Child protected ToLLVMNode toLLVM = new ToLLVMNode();
+public abstract class LLVMI16LoadNode extends LLVMAbstractLoadNode {
 
-    protected short doForeignAccess(VirtualFrame frame, LLVMTruffleObject addr) {
-        try {
-            int index = (int) (addr.getOffset() / LLVMI16Node.BYTE_SIZE);
-            Object value = ForeignAccess.sendRead(foreignRead, frame, addr.getObject(), index);
-            return toLLVM.convert(frame, value, short.class);
-        } catch (UnknownIdentifierException | UnsupportedMessageException e) {
-            throw new IllegalStateException(e);
-        }
+    @Specialization
+    protected short doShort(LLVMGlobal addr,
+                    @Cached("create()") ReadI16Node globalAccess) {
+        return globalAccess.execute(addr);
     }
 
-    public abstract static class LLVMI16DirectLoadNode extends LLVMI16LoadNode {
-
-        @Specialization
-        public short executeI16(LLVMAddress addr) {
-            return LLVMMemory.getI16(addr);
-        }
-
-        @Specialization
-        public short executeI16(VirtualFrame frame, LLVMTruffleObject addr) {
-            return doForeignAccess(frame, addr);
-        }
-
-        @Specialization
-        public short executeI16(VirtualFrame frame, TruffleObject addr) {
-            return executeI16(frame, new LLVMTruffleObject(addr));
-        }
-
+    @Specialization(guards = "!isAutoDerefHandle(addr)")
+    protected short doShortNative(LLVMNativePointer addr) {
+        return getLLVMMemoryCached().getI16(addr);
     }
 
-    public static class LLVMI16UninitializedLoadNode extends LLVMI16LoadNode {
-
-        @Child private LLVMAddressNode addressNode;
-
-        public LLVMI16UninitializedLoadNode(LLVMAddressNode addressNode) {
-            this.addressNode = addressNode;
-        }
-
-        @Override
-        public short executeI16(VirtualFrame frame) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            Object addr = addressNode.executeGeneric(frame);
-            short val;
-            if (addr instanceof LLVMAddress) {
-                val = LLVMMemory.getI16((LLVMAddress) addr);
-            } else if (addr instanceof LLVMTruffleObject) {
-                val = doForeignAccess(frame, (LLVMTruffleObject) addr);
-            } else {
-                val = doForeignAccess(frame, new LLVMTruffleObject((TruffleObject) addr));
-            }
-            replace(new LLVMI16ProfilingLoadNode(addressNode, val));
-            return val;
-        }
-
+    @Specialization(guards = "isAutoDerefHandle(addr)")
+    protected short doShortDerefHandle(LLVMNativePointer addr) {
+        return doShortManaged(getDerefHandleGetReceiverNode().execute(addr));
     }
 
-    public static class LLVMI16ProfilingLoadNode extends LLVMI16LoadNode {
-
-        private final short profiledValue;
-        @Child private LLVMAddressNode addressNode;
-
-        public LLVMI16ProfilingLoadNode(LLVMAddressNode addressNode, short profiledValue) {
-            this.addressNode = addressNode;
-            this.profiledValue = profiledValue;
-        }
-
-        @Override
-        public short executeI16(VirtualFrame frame) {
-            Object addr = addressNode.executeGeneric(frame);
-            short value;
-            if (addr instanceof LLVMAddress) {
-                value = LLVMMemory.getI16((LLVMAddress) addr);
-            } else if (addr instanceof LLVMTruffleObject) {
-                value = doForeignAccess(frame, (LLVMTruffleObject) addr);
-            } else {
-                value = doForeignAccess(frame, new LLVMTruffleObject((TruffleObject) addr));
-            }
-            if (value == profiledValue) {
-                return profiledValue;
-            } else {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                replace(LLVMI16DirectLoadNodeGen.create(addressNode));
-                return value;
-            }
-        }
-
+    @Override
+    LLVMForeignReadNode createForeignRead() {
+        return new LLVMForeignReadNode(ForeignToLLVMType.I16);
     }
 
+    @Specialization
+    protected short doI16(LLVMVirtualAllocationAddress address,
+                    @Cached("getUnsafeArrayAccess()") UnsafeArrayAccess memory) {
+        return address.getI16(memory);
+    }
+
+    @Specialization
+    protected short doShortManaged(LLVMManagedPointer addr) {
+        return (short) getForeignReadNode().execute(addr);
+    }
+
+    @Specialization
+    protected short doLLVMBoxedPrimitive(LLVMBoxedPrimitive addr) {
+        if (addr.getValue() instanceof Long) {
+            return getLLVMMemoryCached().getI16((long) addr.getValue());
+        } else {
+            CompilerDirectives.transferToInterpreter();
+            throw new IllegalAccessError("Cannot access address: " + addr.getValue());
+        }
+    }
 }

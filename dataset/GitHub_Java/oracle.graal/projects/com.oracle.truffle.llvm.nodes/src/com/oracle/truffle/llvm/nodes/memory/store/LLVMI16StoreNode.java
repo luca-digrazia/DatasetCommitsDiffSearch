@@ -52,36 +52,41 @@ public abstract class LLVMI16StoreNode extends LLVMStoreNodeCommon {
     }
 
     @Specialization
-    protected void doOp(LLVMGlobal address, short value,
+    protected Object doOp(LLVMGlobal address, short value,
                     @Cached("create()") WriteI16Node globalAccess) {
         globalAccess.execute(address, value);
+        return null;
     }
 
     @Specialization
-    protected void doOp(LLVMVirtualAllocationAddress address, short value,
+    protected Object doOp(LLVMVirtualAllocationAddress address, short value,
                     @Cached("getUnsafeArrayAccess()") UnsafeArrayAccess memory) {
         address.writeI16(memory, value);
+        return null;
     }
 
     @Specialization(guards = "!isAutoDerefHandle(addr)")
-    protected void doOp(LLVMNativePointer addr, short value) {
+    protected Object doOp(LLVMNativePointer addr, short value) {
         getLLVMMemoryCached().putI16(addr, value);
+        return null;
     }
 
     @Specialization
-    protected void doOpManaged(LLVMManagedPointer address, short value) {
+    protected Object doOpManaged(LLVMManagedPointer address, short value) {
         getForeignWriteNode().execute(address, value);
+        return null;
     }
 
     @Specialization(guards = "isAutoDerefHandle(addr)")
-    protected void doOpDerefHandle(LLVMNativePointer addr, short value) {
-        doOpManaged(getDerefHandleGetReceiverNode().execute(addr), value);
+    protected Object doOpDerefHandle(LLVMNativePointer addr, short value) {
+        return doOpManaged(getDerefHandleGetReceiverNode().execute(addr), value);
     }
 
     @Specialization
-    protected void doOp(LLVMBoxedPrimitive address, short value) {
+    protected Object doOp(LLVMBoxedPrimitive address, short value) {
         if (address.getValue() instanceof Long) {
             getLLVMMemoryCached().putI16((long) address.getValue(), value);
+            return null;
         } else {
             CompilerDirectives.transferToInterpreter();
             throw new IllegalAccessError("Cannot access address: " + address.getValue());

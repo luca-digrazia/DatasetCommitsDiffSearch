@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,21 +29,28 @@
  */
 package com.oracle.truffle.llvm.nodes.intrinsics.interop;
 
+import com.oracle.truffle.llvm.runtime.interop.LLVMAsForeignNode;
+import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic.LLVMBooleanIntrinsic;
+import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 
+@SuppressWarnings("unused")
 @NodeChildren({@NodeChild(type = LLVMExpressionNode.class)})
-public abstract class LLVMTruffleIsTruffleObject extends LLVMBooleanIntrinsic {
+public abstract class LLVMTruffleIsTruffleObject extends LLVMIntrinsic {
 
-    @SuppressWarnings("unused")
     @Specialization
-    public boolean executeIntrinsic(VirtualFrame frame, Object value) {
-        return value instanceof TruffleObject;
+    boolean isLLVMManagedPointer(LLVMManagedPointer object,
+                    @Cached("createOptional()") LLVMAsForeignNode asForeign) {
+        return asForeign.execute(object) != null;
     }
 
+    @Fallback
+    public boolean fallback(Object object) {
+        return false;
+    }
 }

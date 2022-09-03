@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,7 +29,13 @@
  */
 package com.oracle.truffle.llvm.nodes.intrinsics.interop;
 
+import com.oracle.truffle.llvm.runtime.interop.LLVMAsForeignNode;
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.TruffleLanguage.ContextReference;
+import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
@@ -40,243 +46,90 @@ import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
+import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.nodes.func.LLVMCallNode;
-import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic.LLVMAddressIntrinsic;
-import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic.LLVMBooleanIntrinsic;
-import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic.LLVMDoubleIntrinsic;
-import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic.LLVMFloatIntrinsic;
-import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic.LLVMI32Intrinsic;
-import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic.LLVMI64Intrinsic;
-import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic.LLVMI8Intrinsic;
-import com.oracle.truffle.llvm.types.LLVMTruffleObject;
+import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
+import com.oracle.truffle.llvm.runtime.LLVMContext;
+import com.oracle.truffle.llvm.runtime.LLVMGetStackNode;
+import com.oracle.truffle.llvm.runtime.interop.LLVMDataEscapeNode;
+import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
+import com.oracle.truffle.llvm.runtime.memory.LLVMStack;
+import com.oracle.truffle.llvm.runtime.memory.LLVMStack.StackPointer;
+import com.oracle.truffle.llvm.runtime.memory.LLVMThreadingStack;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 
-public final class LLVMTruffleExecute {
+@NodeChildren({@NodeChild(type = LLVMExpressionNode.class)})
+public abstract class LLVMTruffleExecute extends LLVMIntrinsic {
 
-    private static final int NAMED_ARGS = 1;
+    @Children private final LLVMExpressionNode[] args;
+    @Children private final LLVMDataEscapeNode[] prepareValuesForEscape;
+    @Child private Node foreignExecute;
+    @Child private ForeignToLLVM toLLVM;
+    @Child private LLVMAsForeignNode asForeign = LLVMAsForeignNode.create();
 
-    private static Object doExecute(VirtualFrame frame, Node foreignExecute, LLVMTruffleObject value, ToLLVMNode toLLVM, Class<?> expectedType) {
-        int argsLength = getFunctionArgumentLength(frame);
-        Object[] args = new Object[argsLength];
-        for (int i = LLVMCallNode.ARG_START_INDEX + NAMED_ARGS, j = 0; i < frame.getArguments().length; i++, j++) {
-            args[j] = frame.getArguments()[i];
+    public LLVMTruffleExecute(ForeignToLLVM toLLVM, LLVMExpressionNode[] args) {
+        this.toLLVM = toLLVM;
+        this.args = args;
+        this.prepareValuesForEscape = new LLVMDataEscapeNode[args.length];
+        for (int i = 0; i < prepareValuesForEscape.length; i++) {
+            prepareValuesForEscape[i] = LLVMDataEscapeNode.create();
+        }
+        this.foreignExecute = Message.createExecute(args.length).createNode();
+    }
+
+    @CompilationFinal private LLVMThreadingStack threadingStack = null;
+
+    private LLVMThreadingStack getThreadingStack(LLVMContext context) {
+        if (threadingStack == null) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            threadingStack = context.getThreadingStack();
+        }
+        return threadingStack;
+    }
+
+    @ExplodeLoop
+    private Object doExecute(VirtualFrame frame, TruffleObject value, LLVMContext context, LLVMGetStackNode getStack) {
+        Object[] evaluatedArgs = new Object[args.length];
+        for (int i = 0; i < args.length; i++) {
+            evaluatedArgs[i] = prepareValuesForEscape[i].executeWithTarget(args[i].executeGeneric(frame));
         }
         try {
-            if (value.getOffset() != 0 || value.getName() != null) {
-                throw new IllegalAccessError("Pointee must be unmodified");
+            LLVMStack stack = getStack.executeWithTarget(getThreadingStack(context), Thread.currentThread());
+            Object rawValue;
+            try (StackPointer save = stack.newFrame()) {
+                rawValue = ForeignAccess.sendExecute(foreignExecute, value, evaluatedArgs);
             }
-            Object rawValue = ForeignAccess.sendExecute(foreignExecute, frame, value.getObject(), args);
-            return toLLVM.convert(frame, rawValue, expectedType);
+            return toLLVM.executeWithTarget(rawValue);
         } catch (UnsupportedMessageException | UnsupportedTypeException | ArityException e) {
+            CompilerDirectives.transferToInterpreter();
             throw new IllegalStateException(e);
         }
     }
 
-    private static Object doExecute(VirtualFrame frame, Node foreignExecute, TruffleObject value, ToLLVMNode toLLVM, Class<?> expectedType) {
-        int argsLength = getFunctionArgumentLength(frame);
-        Object[] args = new Object[argsLength];
-        for (int i = LLVMCallNode.ARG_START_INDEX + NAMED_ARGS, j = 0; i < frame.getArguments().length; i++, j++) {
-            args[j] = frame.getArguments()[i];
-        }
-        try {
-            Object rawValue = ForeignAccess.sendExecute(foreignExecute, frame, value, args);
-            return toLLVM.convert(frame, rawValue, expectedType);
-        } catch (UnsupportedMessageException | UnsupportedTypeException | ArityException e) {
-            throw new IllegalStateException(e);
-        }
+    @SuppressWarnings("unused")
+    @Specialization(guards = "value.equals(cachedValue)")
+    protected Object doIntrinsicCachedLLVMManagedPointer(VirtualFrame frame, LLVMManagedPointer value,
+                    @Cached("value") LLVMManagedPointer cachedValue,
+                    @Cached("getContextReference()") ContextReference<LLVMContext> context,
+                    @Cached("create()") LLVMGetStackNode getStack) {
+        TruffleObject foreign = asForeign.execute(cachedValue);
+        return doExecute(frame, foreign, context.get(), getStack);
     }
 
-    private static int getFunctionArgumentLength(VirtualFrame frame) {
-        return frame.getArguments().length - LLVMCallNode.ARG_START_INDEX - NAMED_ARGS;
+    @Specialization(replaces = "doIntrinsicCachedLLVMManagedPointer")
+    protected Object doIntrinsicLLVMManagedPointer(VirtualFrame frame, LLVMManagedPointer value,
+                    @Cached("getContextReference()") ContextReference<LLVMContext> context,
+                    @Cached("create()") LLVMGetStackNode getStack) {
+        TruffleObject foreign = asForeign.execute(value);
+        return doExecute(frame, foreign, context.get(), getStack);
     }
 
-    @NodeChildren({@NodeChild(type = LLVMExpressionNode.class)})
-    public abstract static class LLVMTruffleExecuteP extends LLVMAddressIntrinsic {
-
-        @Child private Node foreignExecute;
-        @Child private ToLLVMNode toLLVM = new ToLLVMNode();
-
-        private static final Class<?> expectedType = TruffleObject.class;
-
-        @Specialization
-        public Object executeIntrinsic(VirtualFrame frame, LLVMTruffleObject value) {
-            if (foreignExecute == null) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                foreignExecute = insert(Message.createExecute(getFunctionArgumentLength(frame)).createNode());
-            }
-            return doExecute(frame, foreignExecute, value, toLLVM, expectedType);
-        }
-
-        @Specialization
-        public Object executeIntrinsic(VirtualFrame frame, TruffleObject value) {
-            if (foreignExecute == null) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                foreignExecute = insert(Message.createExecute(getFunctionArgumentLength(frame)).createNode());
-            }
-            return doExecute(frame, foreignExecute, value, toLLVM, expectedType);
-        }
-    }
-
-    @NodeChildren({@NodeChild(type = LLVMExpressionNode.class)})
-    public abstract static class LLVMTruffleExecuteI extends LLVMI32Intrinsic {
-
-        @Child private Node foreignExecute;
-        @Child private ToLLVMNode toLLVM = new ToLLVMNode();
-
-        private static final Class<?> expectedType = int.class;
-
-        @Specialization
-        public int executeIntrinsic(VirtualFrame frame, LLVMTruffleObject value) {
-            if (foreignExecute == null) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                foreignExecute = insert(Message.createExecute(getFunctionArgumentLength(frame)).createNode());
-            }
-            return (int) doExecute(frame, foreignExecute, value, toLLVM, expectedType);
-        }
-
-        @Specialization
-        public int executeIntrinsic(VirtualFrame frame, TruffleObject value) {
-            if (foreignExecute == null) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                foreignExecute = insert(Message.createExecute(getFunctionArgumentLength(frame)).createNode());
-            }
-            return (int) doExecute(frame, foreignExecute, value, toLLVM, expectedType);
-        }
-    }
-
-    @NodeChildren({@NodeChild(type = LLVMExpressionNode.class)})
-    public abstract static class LLVMTruffleExecuteL extends LLVMI64Intrinsic {
-
-        @Child private Node foreignExecute;
-        @Child private ToLLVMNode toLLVM = new ToLLVMNode();
-
-        private static final Class<?> expectedType = long.class;
-
-        @Specialization
-        public long executeIntrinsic(VirtualFrame frame, LLVMTruffleObject value) {
-            if (foreignExecute == null) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                foreignExecute = insert(Message.createExecute(getFunctionArgumentLength(frame)).createNode());
-            }
-            return (long) doExecute(frame, foreignExecute, value, toLLVM, expectedType);
-        }
-
-        @Specialization
-        public long executeIntrinsic(VirtualFrame frame, TruffleObject value) {
-            if (foreignExecute == null) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                foreignExecute = insert(Message.createExecute(getFunctionArgumentLength(frame)).createNode());
-            }
-            return (long) doExecute(frame, foreignExecute, value, toLLVM, expectedType);
-        }
-    }
-
-    @NodeChildren({@NodeChild(type = LLVMExpressionNode.class)})
-    public abstract static class LLVMTruffleExecuteC extends LLVMI8Intrinsic {
-
-        @Child private Node foreignExecute;
-        @Child private ToLLVMNode toLLVM = new ToLLVMNode();
-
-        private static final Class<?> expectedType = byte.class;
-
-        @Specialization
-        public byte executeIntrinsic(VirtualFrame frame, LLVMTruffleObject value) {
-            if (foreignExecute == null) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                foreignExecute = insert(Message.createExecute(getFunctionArgumentLength(frame)).createNode());
-            }
-            return (byte) doExecute(frame, foreignExecute, value, toLLVM, expectedType);
-        }
-
-        @Specialization
-        public byte executeIntrinsic(VirtualFrame frame, TruffleObject value) {
-            if (foreignExecute == null) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                foreignExecute = insert(Message.createExecute(getFunctionArgumentLength(frame)).createNode());
-            }
-            return (byte) doExecute(frame, foreignExecute, value, toLLVM, expectedType);
-        }
-    }
-
-    @NodeChildren({@NodeChild(type = LLVMExpressionNode.class)})
-    public abstract static class LLVMTruffleExecuteF extends LLVMFloatIntrinsic {
-
-        @Child private Node foreignExecute;
-        @Child private ToLLVMNode toLLVM = new ToLLVMNode();
-
-        private static final Class<?> expectedType = float.class;
-
-        @Specialization
-        public float executeIntrinsic(VirtualFrame frame, LLVMTruffleObject value) {
-            if (foreignExecute == null) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                foreignExecute = insert(Message.createExecute(getFunctionArgumentLength(frame)).createNode());
-            }
-            return (float) doExecute(frame, foreignExecute, value, toLLVM, expectedType);
-        }
-
-        @Specialization
-        public float executeIntrinsic(VirtualFrame frame, TruffleObject value) {
-            if (foreignExecute == null) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                foreignExecute = insert(Message.createExecute(getFunctionArgumentLength(frame)).createNode());
-            }
-            return (float) doExecute(frame, foreignExecute, value, toLLVM, expectedType);
-        }
-    }
-
-    @NodeChildren({@NodeChild(type = LLVMExpressionNode.class)})
-    public abstract static class LLVMTruffleExecuteD extends LLVMDoubleIntrinsic {
-
-        @Child private Node foreignExecute;
-        @Child private ToLLVMNode toLLVM = new ToLLVMNode();
-
-        private static final Class<?> expectedType = double.class;
-
-        @Specialization
-        public double executeIntrinsic(VirtualFrame frame, LLVMTruffleObject value) {
-            if (foreignExecute == null) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                foreignExecute = insert(Message.createExecute(getFunctionArgumentLength(frame)).createNode());
-            }
-            return (double) doExecute(frame, foreignExecute, value, toLLVM, expectedType);
-        }
-
-        @Specialization
-        public double executeIntrinsic(VirtualFrame frame, TruffleObject value) {
-            if (foreignExecute == null) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                foreignExecute = insert(Message.createExecute(getFunctionArgumentLength(frame)).createNode());
-            }
-            return (double) doExecute(frame, foreignExecute, value, toLLVM, expectedType);
-        }
-    }
-
-    @NodeChildren({@NodeChild(type = LLVMExpressionNode.class)})
-    public abstract static class LLVMTruffleExecuteB extends LLVMBooleanIntrinsic {
-
-        @Child private Node foreignExecute;
-        @Child private ToLLVMNode toLLVM = new ToLLVMNode();
-
-        private static final Class<?> expectedType = boolean.class;
-
-        @Specialization
-        public boolean executeIntrinsic(VirtualFrame frame, LLVMTruffleObject value) {
-            if (foreignExecute == null) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                foreignExecute = insert(Message.createExecute(getFunctionArgumentLength(frame)).createNode());
-            }
-            return (boolean) doExecute(frame, foreignExecute, value, toLLVM, expectedType);
-        }
-
-        @Specialization
-        public boolean executeIntrinsic(VirtualFrame frame, TruffleObject value) {
-            if (foreignExecute == null) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                foreignExecute = insert(Message.createExecute(getFunctionArgumentLength(frame)).createNode());
-            }
-            return (boolean) doExecute(frame, foreignExecute, value, toLLVM, expectedType);
-        }
+    @Fallback
+    @TruffleBoundary
+    @SuppressWarnings("unused")
+    public Object fallback(Object value) {
+        System.err.println("Invalid arguments to execute-builtin.");
+        throw new IllegalArgumentException();
     }
 }

@@ -29,10 +29,9 @@
  */
 package com.oracle.truffle.llvm.nodes.intrinsics.interop;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.llvm.runtime.interop.LLVMAsForeignNode;
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
@@ -44,7 +43,6 @@ import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
-import com.oracle.truffle.llvm.runtime.except.LLVMPolyglotException;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
@@ -60,32 +58,10 @@ public abstract class LLVMTruffleUnbox extends LLVMIntrinsic {
         this.toLLVM = toLLVMNode;
     }
 
-    @Specialization(rewriteOn = UnsupportedMessageException.class)
-    protected Object doIntrinsic(LLVMManagedPointer value) throws UnsupportedMessageException {
-        TruffleObject foreign = asForeign.execute(value);
-        Object rawValue = ForeignAccess.sendUnbox(foreignUnbox, foreign);
-        return toLLVM.executeWithTarget(rawValue);
-    }
-
     @Specialization
-    protected Object doCheckIsBoxed(LLVMManagedPointer value,
-                    @Cached("createIsBoxed()") Node isBoxed) {
+    protected Object doIntrinsic(LLVMManagedPointer value) {
         TruffleObject foreign = asForeign.execute(value);
-        if (ForeignAccess.sendIsBoxed(isBoxed, foreign)) {
-            try {
-                Object rawValue = ForeignAccess.sendUnbox(foreignUnbox, foreign);
-                return toLLVM.executeWithTarget(rawValue);
-            } catch (UnsupportedMessageException ex) {
-                CompilerDirectives.transferToInterpreter();
-                throw ex.raise();
-            }
-        } else {
-            throw new LLVMPolyglotException(this, "Argument to polyglot_as_* is not a boxed primitive.");
-        }
-    }
-
-    protected Node createIsBoxed() {
-        return Message.IS_BOXED.createNode();
+        return doUnbox(foreign);
     }
 
     @Specialization
@@ -97,6 +73,17 @@ public abstract class LLVMTruffleUnbox extends LLVMIntrinsic {
     @TruffleBoundary
     @SuppressWarnings("unused")
     public Object fallback(Object value) {
-        throw new LLVMPolyglotException(this, "Invalid argument to polyglot_as_* builtin.");
+        System.err.println("Invalid arguments to unbox-builtin.");
+        throw new IllegalArgumentException();
+    }
+
+    private Object doUnbox(TruffleObject value) {
+        try {
+            Object rawValue = ForeignAccess.sendUnbox(foreignUnbox, value);
+            return toLLVM.executeWithTarget(rawValue);
+        } catch (UnsupportedMessageException e) {
+            CompilerDirectives.transferToInterpreter();
+            throw new IllegalStateException(e);
+        }
     }
 }

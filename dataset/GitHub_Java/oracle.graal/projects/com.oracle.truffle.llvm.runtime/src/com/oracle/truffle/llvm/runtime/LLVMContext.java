@@ -68,7 +68,6 @@ import com.oracle.truffle.llvm.runtime.memory.LLVMThreadingStack;
 import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 import com.oracle.truffle.llvm.runtime.types.AggregateType;
 import com.oracle.truffle.llvm.runtime.types.DataSpecConverter;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
@@ -107,7 +106,7 @@ public final class LLVMContext {
 
     // we are not able to clean up ThreadLocals properly, so we are using maps instead
     private final Map<Thread, Object> tls = new HashMap<>();
-    private final Map<Thread, LLVMPointer> clearChildTid = new HashMap<>();
+    private final Map<Thread, LLVMNativePointer> clearChildTid = new HashMap<>();
 
     // signals
     private final LLVMNativePointer sigDfl;
@@ -441,8 +440,8 @@ public final class LLVMContext {
     }
 
     @TruffleBoundary
-    public LLVMPointer getClearChildTid() {
-        LLVMPointer value = clearChildTid.get(Thread.currentThread());
+    public LLVMNativePointer getClearChildTid() {
+        LLVMNativePointer value = clearChildTid.get(Thread.currentThread());
         if (value != null) {
             return value;
         }
@@ -450,7 +449,7 @@ public final class LLVMContext {
     }
 
     @TruffleBoundary
-    public void setClearChildTid(LLVMPointer value) {
+    public void setClearChildTid(LLVMNativePointer value) {
         clearChildTid.put(Thread.currentThread(), value);
     }
 

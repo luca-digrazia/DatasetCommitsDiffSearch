@@ -36,12 +36,15 @@ import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
-import com.oracle.truffle.llvm.runtime.LLVMAddress;
+import com.oracle.truffle.llvm.nodes.memory.store.LLVM80BitFloatStoreNode;
+import com.oracle.truffle.llvm.nodes.memory.store.LLVM80BitFloatStoreNodeGen;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
 @NodeChild(value = "address", type = LLVMExpressionNode.class)
 public abstract class LLVM80BitFloatArrayLiteralNode extends LLVMExpressionNode {
@@ -55,19 +58,21 @@ public abstract class LLVM80BitFloatArrayLiteralNode extends LLVMExpressionNode 
     }
 
     @Specialization
-    protected LLVMAddress write(VirtualFrame frame, LLVMGlobalVariable global,
-                    @Cached(value = "createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
-        return write80BitFloat(frame, globalAccess.getNativeLocation(global));
+    protected LLVMNativePointer write(VirtualFrame frame, LLVMGlobal global,
+                    @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative,
+                    @Cached("getLLVMMemory()") LLVMMemory memory) {
+        return write80BitFloat(frame, toNative.executeWithTarget(global), memory);
     }
 
     @Specialization
     @ExplodeLoop
-    protected LLVMAddress write80BitFloat(VirtualFrame frame, LLVMAddress addr) {
-        long currentPtr = addr.getVal();
+    protected LLVMNativePointer write80BitFloat(VirtualFrame frame, LLVMNativePointer addr,
+                    @Cached("getLLVMMemory()") LLVMMemory memory) {
+        long currentPtr = addr.asNative();
         for (int i = 0; i < values.length; i++) {
             try {
                 LLVM80BitFloat currentValue = values[i].executeLLVM80BitFloat(frame);
-                LLVMMemory.put80BitFloat(currentPtr, currentValue);
+                memory.put80BitFloat(currentPtr, currentValue);
                 currentPtr += stride;
             } catch (UnexpectedResultException e) {
                 CompilerDirectives.transferToInterpreter();
@@ -75,5 +80,27 @@ public abstract class LLVM80BitFloatArrayLiteralNode extends LLVMExpressionNode 
             }
         }
         return addr;
+    }
+
+    @Specialization
+    @ExplodeLoop
+    protected LLVMManagedPointer foreignWrite(VirtualFrame frame, LLVMManagedPointer addr,
+                    @Cached("create80BitFloatStore()") LLVM80BitFloatStoreNode write) {
+        LLVMManagedPointer currentPtr = addr;
+        for (int i = 0; i < values.length; i++) {
+            try {
+                LLVM80BitFloat currentValue = values[i].executeLLVM80BitFloat(frame);
+                write.executeWithTarget(currentPtr, currentValue);
+                currentPtr = currentPtr.increment(stride);
+            } catch (UnexpectedResultException e) {
+                CompilerDirectives.transferToInterpreter();
+                throw new IllegalStateException(e);
+            }
+        }
+        return addr;
+    }
+
+    protected LLVM80BitFloatStoreNode create80BitFloatStore() {
+        return LLVM80BitFloatStoreNodeGen.create(null, null);
     }
 }

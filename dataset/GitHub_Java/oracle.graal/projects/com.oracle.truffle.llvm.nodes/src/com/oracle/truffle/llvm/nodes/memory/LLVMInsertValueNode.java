@@ -29,72 +29,33 @@
  */
 package com.oracle.truffle.llvm.nodes.memory;
 
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.llvm.nodes.base.LLVMAddressNode;
-import com.oracle.truffle.llvm.nodes.base.floating.LLVMDoubleNode;
-import com.oracle.truffle.llvm.nodes.base.floating.LLVMFloatNode;
-import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.memory.LLVMHeap;
-import com.oracle.truffle.llvm.types.memory.LLVMMemory;
+import com.oracle.truffle.api.dsl.NodeChild;
+import com.oracle.truffle.api.dsl.NodeChildren;
+import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStoreNode;
+import com.oracle.truffle.llvm.runtime.memory.LLVMMemMoveNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
-public abstract class LLVMInsertValueNode extends LLVMAddressNode {
+@NodeChildren({@NodeChild, @NodeChild, @NodeChild})
+public abstract class LLVMInsertValueNode extends LLVMExpressionNode {
 
-    @Child LLVMAddressNode sourceAggregate;
-    @Child LLVMAddressNode targetAggregate;
-    final int sourceAggregateSize;
-    final int offset;
+    protected final long sourceAggregateSize;
+    protected final long offset;
+    @Child private LLVMStoreNode store;
+    @Child private LLVMMemMoveNode memMove;
 
-    public LLVMInsertValueNode(LLVMAddressNode sourceAggregate, LLVMAddressNode targetAggregate, int sourceAggregateSize, int offset) {
-        this.sourceAggregate = sourceAggregate;
-        this.targetAggregate = targetAggregate;
+    public LLVMInsertValueNode(LLVMStoreNode store, LLVMMemMoveNode memMove, long sourceAggregateSize, long offset) {
         this.sourceAggregateSize = sourceAggregateSize;
         this.offset = offset;
+        this.store = store;
+        this.memMove = memMove;
     }
 
-    @Override
-    public LLVMAddress executePointee(VirtualFrame frame) {
-        LLVMAddress sourceAggr = sourceAggregate.executePointee(frame);
-        LLVMAddress targetAggr = targetAggregate.executePointee(frame);
-        LLVMHeap.memCopy(targetAggr, sourceAggr, sourceAggregateSize);
+    @Specialization
+    protected LLVMPointer doLLVMPointer(LLVMPointer sourceAggr, LLVMPointer targetAggr, Object element) {
+        memMove.executeWithTarget(targetAggr, sourceAggr, sourceAggregateSize);
+        store.executeWithTarget(targetAggr.increment(offset), element);
         return targetAggr;
     }
-
-    public static class LLVMInsertFloatValueNode extends LLVMInsertValueNode {
-
-        @Child private LLVMFloatNode element;
-
-        public LLVMInsertFloatValueNode(LLVMAddressNode sourceAggregate, LLVMAddressNode targetAggregate, int sourceAggregateSize, int offset, LLVMFloatNode element) {
-            super(sourceAggregate, targetAggregate, sourceAggregateSize, offset);
-            this.element = element;
-        }
-
-        @Override
-        public LLVMAddress executePointee(VirtualFrame frame) {
-            LLVMAddress targetAggr = super.executePointee(frame);
-            LLVMAddress insertPosition = targetAggr.increment(offset);
-            float value = element.executeFloat(frame);
-            LLVMMemory.putFloat(insertPosition, value);
-            return targetAggr;
-        }
-    }
-
-    public static class LLVMInsertDoubleValueNode extends LLVMInsertValueNode {
-
-        @Child private LLVMDoubleNode element;
-
-        public LLVMInsertDoubleValueNode(LLVMAddressNode sourceAggregate, LLVMAddressNode targetAggregate, int sourceAggregateSize, int offset, LLVMDoubleNode element) {
-            super(sourceAggregate, targetAggregate, sourceAggregateSize, offset);
-            this.element = element;
-        }
-
-        @Override
-        public LLVMAddress executePointee(VirtualFrame frame) {
-            LLVMAddress targetAggr = super.executePointee(frame);
-            LLVMAddress insertPosition = targetAggr.increment(offset);
-            double value = element.executeDouble(frame);
-            LLVMMemory.putDouble(insertPosition, value);
-            return targetAggr;
-        }
-    }
-
 }

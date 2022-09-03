@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,75 +29,62 @@
  */
 package com.oracle.truffle.llvm.nodes.memory.load;
 
-import com.oracle.truffle.api.dsl.NodeChild;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.interop.ForeignAccess;
-import com.oracle.truffle.api.interop.Message;
-import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.UnknownIdentifierException;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.profiles.DoubleValueProfile;
-import com.oracle.truffle.llvm.nodes.base.LLVMAddressNode;
-import com.oracle.truffle.llvm.nodes.base.floating.LLVMDoubleNode;
-import com.oracle.truffle.llvm.nodes.intrinsics.interop.ToLLVMNode;
-import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.LLVMTruffleObject;
-import com.oracle.truffle.llvm.types.memory.LLVMMemory;
+import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
+import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobalReadNode.ReadDoubleNode;
+import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
+import com.oracle.truffle.llvm.runtime.memory.UnsafeArrayAccess;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
-@NodeChild(type = LLVMAddressNode.class)
-public abstract class LLVMDoubleLoadNode extends LLVMDoubleNode {
-    @Child protected Node foreignRead = Message.READ.createNode();
-    @Child protected ToLLVMNode toLLVM = new ToLLVMNode();
+public abstract class LLVMDoubleLoadNode extends LLVMAbstractLoadNode {
 
-    protected double doForeignAccess(VirtualFrame frame, LLVMTruffleObject addr) {
-        try {
-            int index = (int) (addr.getOffset() / LLVMDoubleNode.BYTE_SIZE);
-            Object value = ForeignAccess.sendRead(foreignRead, frame, addr.getObject(), index);
-            return toLLVM.convert(frame, value, double.class);
-        } catch (UnknownIdentifierException | UnsupportedMessageException e) {
-            throw new IllegalStateException(e);
-        }
+    private final DoubleValueProfile profile = DoubleValueProfile.createRawIdentityProfile();
+
+    @Specialization
+    protected double doDouble(LLVMGlobal addr,
+                    @Cached("create()") ReadDoubleNode globalAccess) {
+        return profile.profile(globalAccess.execute(addr));
     }
 
-    public abstract static class LLVMDoubleDirectLoadNode extends LLVMDoubleLoadNode {
-
-        @Specialization
-        public double executeDouble(LLVMAddress addr) {
-            return LLVMMemory.getDouble(addr);
-        }
-
-        @Specialization
-        public double executeDouble(VirtualFrame frame, LLVMTruffleObject addr) {
-            return doForeignAccess(frame, addr);
-        }
-
-        @Specialization
-        public double executeDouble(VirtualFrame frame, TruffleObject addr) {
-            return executeDouble(frame, new LLVMTruffleObject(addr));
-        }
+    @Specialization
+    protected double doDouble(LLVMVirtualAllocationAddress address,
+                    @Cached("getUnsafeArrayAccess()") UnsafeArrayAccess memory) {
+        return address.getDouble(memory);
     }
 
-    public abstract static class LLVMDoubleProfilingLoadNode extends LLVMDoubleLoadNode {
-
-        private final DoubleValueProfile profile = DoubleValueProfile.createRawIdentityProfile();
-
-        @Specialization
-        public double executeDouble(LLVMAddress addr) {
-            double value = LLVMMemory.getDouble(addr);
-            return profile.profile(value);
-        }
-
-        @Specialization
-        public double executeDouble(VirtualFrame frame, LLVMTruffleObject addr) {
-            return doForeignAccess(frame, addr);
-        }
-
-        @Specialization
-        public double executeDouble(VirtualFrame frame, TruffleObject addr) {
-            return doForeignAccess(frame, new LLVMTruffleObject(addr));
-        }
+    @Specialization(guards = "!isAutoDerefHandle(addr)")
+    protected double doDoubleNative(LLVMNativePointer addr) {
+        return profile.profile(getLLVMMemoryCached().getDouble(addr));
     }
 
+    @Specialization(guards = "isAutoDerefHandle(addr)")
+    protected double doDoubleDerefHandle(LLVMNativePointer addr) {
+        return doDoubleManaged(getDerefHandleGetReceiverNode().execute(addr));
+    }
+
+    @Override
+    LLVMForeignReadNode createForeignRead() {
+        return new LLVMForeignReadNode(ForeignToLLVMType.DOUBLE);
+    }
+
+    @Specialization
+    protected double doDoubleManaged(LLVMManagedPointer addr) {
+        return (double) getForeignReadNode().execute(addr);
+    }
+
+    @Specialization
+    protected double doLLVMBoxedPrimitive(LLVMBoxedPrimitive addr) {
+        if (addr.getValue() instanceof Long) {
+            return getLLVMMemoryCached().getDouble((long) addr.getValue());
+        } else {
+            CompilerDirectives.transferToInterpreter();
+            throw new IllegalAccessError("Cannot access address: " + addr.getValue());
+        }
+    }
 }

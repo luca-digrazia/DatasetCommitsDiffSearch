@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,50 +29,28 @@
  */
 package com.oracle.truffle.llvm.nodes.intrinsics.interop;
 
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.TruffleLanguage.ContextReference;
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
-import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
-import com.oracle.truffle.llvm.runtime.LLVMLogger;
-import com.oracle.truffle.llvm.runtime.options.LLVMOptions;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
 @NodeChildren({@NodeChild(type = LLVMExpressionNode.class)})
 public abstract class LLVMTruffleHandleToManaged extends LLVMIntrinsic {
 
-    private static final boolean TRACE = !LLVMLogger.TARGET_NONE.equals(LLVMOptions.DEBUG.traceExecution());
-    @CompilationFinal private LLVMContext context;
-
     @Specialization
-    public TruffleObject executeIntrinsic(LLVMAddress handle) {
-        if (context == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            this.context = getContext();
-        }
-        TruffleObject object = context.getManagedObjectForHandle(handle);
-        if (TRACE) {
-            trace(handle, object);
-        }
-        return object;
-
+    protected LLVMManagedPointer doIntrinsic(Object rawHandle,
+                    @Cached("getContextReference()") ContextReference<LLVMContext> context,
+                    @Cached("createToNativeWithTarget()") LLVMToNativeNode forceAddressNode) {
+        LLVMNativePointer handle = forceAddressNode.executeWithTarget(rawHandle);
+        TruffleObject object = context.get().getManagedObjectForHandle(handle);
+        return LLVMManagedPointer.create(object);
     }
-
-    @Specialization(guards = "!isLLVMAddress(handle)")
-    public TruffleObject executeFail(Object handle) {
-        CompilerDirectives.transferToInterpreter();
-        throw new UnsupportedOperationException(handle + " not supported.");
-    }
-
-    @TruffleBoundary
-    private static void trace(LLVMAddress address, TruffleObject object) {
-        LLVMLogger.print(LLVMOptions.DEBUG.traceExecution()).accept(
-                        String.format("[sulong] Managed object (%s) for native handle (%s) requested.", String.valueOf(object), String.valueOf(address)));
-    }
-
 }

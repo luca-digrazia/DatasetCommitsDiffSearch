@@ -33,125 +33,214 @@ import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.llvm.runtime.LLVMAddress;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
+import com.oracle.truffle.llvm.nodes.memory.load.LLVMI1LoadNode;
+import com.oracle.truffle.llvm.nodes.memory.load.LLVMI1LoadNodeGen;
+import com.oracle.truffle.llvm.nodes.memory.store.LLVMI1StoreNode;
+import com.oracle.truffle.llvm.nodes.memory.store.LLVMI1StoreNodeGen;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
 @NodeChildren(value = {@NodeChild(type = LLVMExpressionNode.class, value = "pointerNode"), @NodeChild(type = LLVMExpressionNode.class, value = "valueNode")})
 public abstract class LLVMI1RMWNode extends LLVMExpressionNode {
 
+    protected static LLVMI1LoadNode createRead() {
+        return LLVMI1LoadNodeGen.create(null);
+    }
+
+    protected static LLVMI1StoreNode createWrite() {
+        return LLVMI1StoreNodeGen.create(null, null);
+    }
+
     public abstract static class LLVMI1RMWXchgNode extends LLVMI1RMWNode {
         @Specialization
-        public boolean execute(LLVMGlobalVariable address, boolean value, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
-            boolean old = globalAccess.getI1(address);
-            globalAccess.putI1(address, value);
-            return old;
+        protected boolean doOp(LLVMGlobal address, boolean value,
+                        @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative,
+                        @Cached("getLLVMMemory()") LLVMMemory memory) {
+            LLVMNativePointer adr = toNative.executeWithTarget(address);
+            return memory.getAndOpI1(adr, value, (a, b) -> b);
         }
 
         @Specialization
-        public boolean execute(LLVMAddress address, boolean value) {
-            boolean old = LLVMMemory.getI1(address);
-            LLVMMemory.putI1(address, value);
-            return old;
+        protected boolean doOp(LLVMNativePointer address, boolean value,
+                        @Cached("getLLVMMemory()") LLVMMemory memory) {
+            return memory.getAndOpI1(address, value, (a, b) -> b);
+        }
+
+        @Specialization
+        protected boolean doOp(LLVMManagedPointer address, boolean value,
+                        @Cached("createRead()") LLVMI1LoadNode read,
+                        @Cached("createWrite()") LLVMI1StoreNode write) {
+            synchronized (address.getObject()) {
+                boolean result = (boolean) read.executeWithTarget(address);
+                write.executeWithTarget(address, value);
+                return result;
+            }
         }
     }
 
     public abstract static class LLVMI1RMWAddNode extends LLVMI1RMWNode {
         @Specialization
-        public boolean execute(LLVMGlobalVariable address, boolean value, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
-            boolean old = globalAccess.getI1(address);
-            globalAccess.putI1(address, old ^ value);
-            return old;
+        protected boolean doOp(LLVMGlobal address, boolean value,
+                        @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative,
+                        @Cached("getLLVMMemory()") LLVMMemory memory) {
+            LLVMNativePointer adr = toNative.executeWithTarget(address);
+            return memory.getAndOpI1(adr, value, (a, b) -> a ^ b);
         }
 
         @Specialization
-        public boolean execute(LLVMAddress address, boolean value) {
-            boolean old = LLVMMemory.getI1(address);
-            LLVMMemory.putI1(address, old ^ value);
-            return old;
+        protected boolean doOp(LLVMNativePointer address, boolean value,
+                        @Cached("getLLVMMemory()") LLVMMemory memory) {
+            return memory.getAndOpI1(address, value, (a, b) -> a ^ b);
+        }
+
+        @Specialization
+        protected boolean doOp(LLVMManagedPointer address, boolean value,
+                        @Cached("createRead()") LLVMI1LoadNode read,
+                        @Cached("createWrite()") LLVMI1StoreNode write) {
+            synchronized (address.getObject()) {
+                boolean result = (boolean) read.executeWithTarget(address);
+                write.executeWithTarget(address, result ^ value);
+                return result;
+            }
         }
     }
 
     public abstract static class LLVMI1RMWSubNode extends LLVMI1RMWNode {
         @Specialization
-        public boolean execute(LLVMGlobalVariable address, boolean value, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
-            boolean old = globalAccess.getI1(address);
-            globalAccess.putI1(address, old ^ value);
-            return old;
+        protected boolean doOp(LLVMGlobal address, boolean value,
+                        @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative,
+                        @Cached("getLLVMMemory()") LLVMMemory memory) {
+            LLVMNativePointer adr = toNative.executeWithTarget(address);
+            return memory.getAndOpI1(adr, value, (a, b) -> a ^ b);
         }
 
         @Specialization
-        public boolean execute(LLVMAddress address, boolean value) {
-            boolean old = LLVMMemory.getI1(address);
-            LLVMMemory.putI1(address, old ^ value);
-            return old;
+        protected boolean doOp(LLVMNativePointer address, boolean value,
+                        @Cached("getLLVMMemory()") LLVMMemory memory) {
+            return memory.getAndOpI1(address, value, (a, b) -> a ^ b);
+        }
+
+        @Specialization
+        protected boolean doOp(LLVMManagedPointer address, boolean value,
+                        @Cached("createRead()") LLVMI1LoadNode read,
+                        @Cached("createWrite()") LLVMI1StoreNode write) {
+            synchronized (address.getObject()) {
+                boolean result = (boolean) read.executeWithTarget(address);
+                write.executeWithTarget(address, result ^ value);
+                return result;
+            }
         }
     }
 
     public abstract static class LLVMI1RMWAndNode extends LLVMI1RMWNode {
         @Specialization
-        public boolean execute(LLVMGlobalVariable address, boolean value, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
-            boolean old = globalAccess.getI1(address);
-            globalAccess.putI1(address, old & value);
-            return old;
+        protected boolean doOp(LLVMGlobal address, boolean value,
+                        @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative,
+                        @Cached("getLLVMMemory()") LLVMMemory memory) {
+            LLVMNativePointer adr = toNative.executeWithTarget(address);
+            return memory.getAndOpI1(adr, value, (a, b) -> a & b);
         }
 
         @Specialization
-        public boolean execute(LLVMAddress address, boolean value) {
-            boolean old = LLVMMemory.getI1(address);
-            LLVMMemory.putI1(address, old & value);
-            return old;
+        protected boolean doOp(LLVMNativePointer address, boolean value,
+                        @Cached("getLLVMMemory()") LLVMMemory memory) {
+            return memory.getAndOpI1(address, value, (a, b) -> a & b);
+        }
+
+        @Specialization
+        protected boolean doOp(LLVMManagedPointer address, boolean value,
+                        @Cached("createRead()") LLVMI1LoadNode read,
+                        @Cached("createWrite()") LLVMI1StoreNode write) {
+            synchronized (address.getObject()) {
+                boolean result = (boolean) read.executeWithTarget(address);
+                write.executeWithTarget(address, result & value);
+                return result;
+            }
         }
     }
 
     public abstract static class LLVMI1RMWNandNode extends LLVMI1RMWNode {
         @Specialization
-        public boolean execute(LLVMGlobalVariable address, boolean value, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
-            boolean old = globalAccess.getI1(address);
-            globalAccess.putI1(address, !(old & value));
-            return old;
+        protected boolean doOp(LLVMGlobal address, boolean value,
+                        @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative,
+                        @Cached("getLLVMMemory()") LLVMMemory memory) {
+            LLVMNativePointer adr = toNative.executeWithTarget(address);
+            return memory.getAndOpI1(adr, value, (a, b) -> !(a & b));
         }
 
         @Specialization
-        public boolean execute(LLVMAddress address, boolean value) {
-            boolean old = LLVMMemory.getI1(address);
-            LLVMMemory.putI1(address, !(old & value));
-            return old;
+        protected boolean doOp(LLVMNativePointer address, boolean value,
+                        @Cached("getLLVMMemory()") LLVMMemory memory) {
+            return memory.getAndOpI1(address, value, (a, b) -> !(a & b));
+        }
+
+        @Specialization
+        protected boolean doOp(LLVMManagedPointer address, boolean value,
+                        @Cached("createRead()") LLVMI1LoadNode read,
+                        @Cached("createWrite()") LLVMI1StoreNode write) {
+            synchronized (address.getObject()) {
+                boolean result = (boolean) read.executeWithTarget(address);
+                write.executeWithTarget(address, !(result & value));
+                return result;
+            }
         }
     }
 
     public abstract static class LLVMI1RMWOrNode extends LLVMI1RMWNode {
         @Specialization
-        public boolean execute(LLVMGlobalVariable address, boolean value, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
-            boolean old = globalAccess.getI1(address);
-            globalAccess.putI1(address, old | value);
-            return old;
+        protected boolean doOp(LLVMGlobal address, boolean value,
+                        @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative,
+                        @Cached("getLLVMMemory()") LLVMMemory memory) {
+            LLVMNativePointer adr = toNative.executeWithTarget(address);
+            return memory.getAndOpI1(adr, value, (a, b) -> a | b);
         }
 
         @Specialization
-        public boolean execute(LLVMAddress address, boolean value) {
-            boolean old = LLVMMemory.getI1(address);
-            LLVMMemory.putI1(address, old | value);
-            return old;
+        protected boolean doOp(LLVMNativePointer address, boolean value,
+                        @Cached("getLLVMMemory()") LLVMMemory memory) {
+            return memory.getAndOpI1(address, value, (a, b) -> a | b);
+        }
+
+        @Specialization
+        protected boolean doOp(LLVMManagedPointer address, boolean value,
+                        @Cached("createRead()") LLVMI1LoadNode read,
+                        @Cached("createWrite()") LLVMI1StoreNode write) {
+            synchronized (address.getObject()) {
+                boolean result = (boolean) read.executeWithTarget(address);
+                write.executeWithTarget(address, result | value);
+                return result;
+            }
         }
     }
 
     public abstract static class LLVMI1RMWXorNode extends LLVMI1RMWNode {
         @Specialization
-        public boolean execute(LLVMGlobalVariable address, boolean value, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
-            boolean old = globalAccess.getI1(address);
-            globalAccess.putI1(address, old ^ value);
-            return old;
+        protected boolean doOp(LLVMGlobal address, boolean value,
+                        @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative,
+                        @Cached("getLLVMMemory()") LLVMMemory memory) {
+            LLVMNativePointer adr = toNative.executeWithTarget(address);
+            return memory.getAndOpI1(adr, value, (a, b) -> a ^ b);
         }
 
         @Specialization
-        public boolean execute(LLVMAddress address, boolean value) {
-            boolean old = LLVMMemory.getI1(address);
-            LLVMMemory.putI1(address, old ^ value);
-            return old;
+        protected boolean doOp(LLVMNativePointer address, boolean value,
+                        @Cached("getLLVMMemory()") LLVMMemory memory) {
+            return memory.getAndOpI1(address, value, (a, b) -> a ^ b);
+        }
+
+        @Specialization
+        protected boolean doOp(LLVMManagedPointer address, boolean value,
+                        @Cached("createRead()") LLVMI1LoadNode read,
+                        @Cached("createWrite()") LLVMI1StoreNode write) {
+            synchronized (address.getObject()) {
+                boolean result = (boolean) read.executeWithTarget(address);
+                write.executeWithTarget(address, result ^ value);
+                return result;
+            }
         }
     }
-
 }

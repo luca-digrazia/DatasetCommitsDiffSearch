@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,28 +29,73 @@
  */
 package com.oracle.truffle.llvm.nodes.intrinsics.interop;
 
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.TruffleLanguage.ContextReference;
+import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI32Node;
-import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic.LLVMAddressIntrinsic;
-import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.memory.LLVMMemory;
+import com.oracle.truffle.api.interop.ForeignAccess;
+import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.interop.UnknownIdentifierException;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
+import com.oracle.truffle.llvm.runtime.LLVMContext;
+import com.oracle.truffle.llvm.runtime.interop.LLVMTypedForeignObject;
+import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
+import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
-@NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMI32Node.class)})
-public abstract class LLVMTruffleReadNBytes extends LLVMAddressIntrinsic {
+@NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
+public abstract class LLVMTruffleReadNBytes extends LLVMIntrinsic {
+
     @Specialization
-    public Object executeIntrinsic(LLVMAddress value, int n) {
-        LLVMAddress adr = value;
+    protected Object doIntrinsic(LLVMNativePointer value, int n,
+                    @Cached("getLLVMMemory()") LLVMMemory memory,
+                    @Cached("getContextReference()") ContextReference<LLVMContext> ctxRef) {
         int count = n < 0 ? 0 : n;
         byte[] bytes = new byte[count];
-        adr = value;
+        long ptr = value.asNative();
         for (int i = 0; i < count; i++) {
-            bytes[i] = LLVMMemory.getI8(adr);
-            adr = adr.increment(Byte.BYTES);
+            bytes[i] = memory.getI8(ptr);
+            ptr += Byte.BYTES;
         }
-        return bytes;
+        TruffleObject ret = (TruffleObject) ctxRef.get().getEnv().asGuestValue(bytes);
+        return LLVMManagedPointer.create(LLVMTypedForeignObject.createUnknown(ret));
     }
 
+    @Specialization
+    protected Object interop(LLVMManagedPointer objectWithOffset, int n,
+                    @Cached("createForeignReadNode()") Node foreignRead,
+                    @Cached("createToByteNode()") ForeignToLLVM toLLVM,
+                    @Cached("getContextReference()") ContextReference<LLVMContext> ctxRef) {
+        long offset = objectWithOffset.getOffset();
+        TruffleObject object = objectWithOffset.getObject();
+        byte[] chars = new byte[n];
+        for (int i = 0; i < n; i++) {
+            Object rawValue;
+            try {
+                rawValue = ForeignAccess.sendRead(foreignRead, object, offset + i);
+            } catch (UnknownIdentifierException | UnsupportedMessageException e) {
+                CompilerDirectives.transferToInterpreter();
+                throw new IllegalStateException(e);
+            }
+            chars[i] = (byte) toLLVM.executeWithTarget(rawValue);
+        }
+        TruffleObject ret = (TruffleObject) ctxRef.get().getEnv().asGuestValue(chars);
+        return LLVMManagedPointer.create(LLVMTypedForeignObject.createUnknown(ret));
+    }
+
+    @Fallback
+    @TruffleBoundary
+    @SuppressWarnings("unused")
+    public Object fallback(Object value, Object n) {
+        System.err.println("Invalid arguments to \"read n bytes\"-builtin.");
+        throw new IllegalArgumentException();
+    }
 }

@@ -56,13 +56,7 @@ public abstract class LLVMStructStoreNode extends LLVMStoreNodeCommon {
         this.memMove = memMove;
     }
 
-    @SuppressWarnings("unused")
-    @Specialization(guards = "getStructSize() == 0")
-    protected Object noCopy(Object address, Object value) {
-        return null;
-    }
-
-    @Specialization(guards = "getStructSize() > 0")
+    @Specialization
     protected Object doOp(LLVMGlobal address, LLVMGlobal value,
                     @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess1,
                     @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess2) {
@@ -70,32 +64,38 @@ public abstract class LLVMStructStoreNode extends LLVMStoreNodeCommon {
         return null;
     }
 
-    @Specialization(guards = "getStructSize() > 0")
+    @Specialization
     protected Object doOp(LLVMNativePointer addr, LLVMGlobal value,
                     @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess) {
         memMove.executeWithTarget(addr, globalAccess.executeWithTarget(value), getStructSize());
         return null;
     }
 
-    @Specialization(guards = "getStructSize() > 0")
+    @Specialization
     protected Object doOp(LLVMGlobal address, LLVMPointer value,
                     @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess) {
         memMove.executeWithTarget(globalAccess.executeWithTarget(address), value, getStructSize());
         return null;
     }
 
-    @Specialization(guards = {"getStructSize() > 0", "!isAutoDerefHandle(address)", "!isAutoDerefHandle(value)"})
+    @Specialization(guards = {"!isAutoDerefHandle(address)", "!isAutoDerefHandle(value)"})
     protected Object doOp(LLVMNativePointer address, LLVMNativePointer value) {
         memMove.executeWithTarget(address, value, getStructSize());
         return null;
     }
 
-    @Specialization(guards = {"getStructSize() > 0", "isAutoDerefHandle(addr)", "isAutoDerefHandle(value)"})
+    @Specialization(guards = {"isAutoDerefHandle(addr)", "isAutoDerefHandle(value)"})
     protected Object doOpDerefHandle(LLVMNativePointer addr, LLVMNativePointer value) {
         return doManaged(getDerefHandleGetReceiverNode().execute(addr), getDerefHandleGetReceiverNode().execute(value));
     }
 
-    @Specialization(guards = "getStructSize() > 0")
+    @SuppressWarnings("unused")
+    @Specialization(guards = "getStructSize() == 0")
+    protected Object noCopy(LLVMPointer address, Object value) {
+        return null;
+    }
+
+    @Specialization
     protected Object doManaged(LLVMManagedPointer address, LLVMManagedPointer value) {
         memMove.executeWithTarget(address, value, getStructSize());
         return null;

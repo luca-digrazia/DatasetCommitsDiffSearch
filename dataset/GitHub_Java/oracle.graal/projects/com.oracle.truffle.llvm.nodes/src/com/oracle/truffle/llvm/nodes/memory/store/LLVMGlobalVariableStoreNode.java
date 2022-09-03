@@ -39,11 +39,10 @@ import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalWriteNode.WriteObjectNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
 @NodeChild(type = LLVMExpressionNode.class)
-public abstract class LLVMGlobalVariableStoreNode extends LLVMStatementNode {
+public abstract class LLVMGlobalVariableStoreNode extends LLVMExpressionNode {
 
     protected final LLVMGlobal descriptor;
     private final LLVMSourceLocation source;
@@ -54,33 +53,38 @@ public abstract class LLVMGlobalVariableStoreNode extends LLVMStatementNode {
     }
 
     @Specialization
-    protected void doNative(LLVMVirtualAllocationAddress value,
+    protected Object doNative(LLVMVirtualAllocationAddress value,
                     @Cached("create()") WriteObjectNode globalAccess) {
         globalAccess.execute(descriptor, value);
+        return null;
     }
 
     @Specialization
-    protected void doNative(LLVMPointer value,
+    protected Object doNative(LLVMPointer value,
                     @Cached("create()") WriteObjectNode globalAccess) {
         globalAccess.execute(descriptor, value);
+        return null;
     }
 
     @Specialization
-    protected void doNative(LLVMFunctionDescriptor value,
+    protected Object doNative(LLVMFunctionDescriptor value,
                     @Cached("create()") WriteObjectNode globalAccess) {
         globalAccess.execute(descriptor, value);
+        return null;
     }
 
     @Specialization
-    protected void doNative(LLVMGlobal value,
+    protected Object doNative(LLVMGlobal value,
                     @Cached("create()") WriteObjectNode globalAccess) {
         globalAccess.execute(descriptor, value);
+        return null;
     }
 
     @Specialization
-    protected void doLLVMBoxedPrimitive(LLVMBoxedPrimitive value,
+    protected Object doLLVMBoxedPrimitive(LLVMBoxedPrimitive value,
                     @Cached("create()") WriteObjectNode globalAccess) {
         globalAccess.execute(descriptor, value);
+        return null;
     }
 
     @Override

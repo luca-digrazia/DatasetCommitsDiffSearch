@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -112,11 +112,15 @@ public abstract class LLVMMemoryIntrinsic extends LLVMExpressionNode {
         @Specialization
         protected LLVMNativePointer doVoid(LLVMNativePointer addr, int size,
                         @Cached("getLLVMMemory()") LLVMMemory memory) {
-            return doVoid(addr, (long) size, memory);
+            try {
+                return memory.reallocateMemory(addr, size);
+            } catch (OutOfMemoryError e) {
+                CompilerDirectives.transferToInterpreter();
+                return LLVMNativePointer.createNull();
+            }
         }
 
         @Specialization
-        @SuppressWarnings("deprecation")
         protected LLVMNativePointer doVoid(LLVMNativePointer addr, long size,
                         @Cached("getLLVMMemory()") LLVMMemory memory) {
             try {
