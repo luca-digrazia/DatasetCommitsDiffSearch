@@ -24,36 +24,33 @@
  */
 package com.oracle.truffle.api.interop.java;
 
-import java.lang.reflect.Field;
-
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.Node;
 
-abstract class LookupFieldNode extends Node {
+abstract class IsApplicableByArityNode extends Node {
     static final int LIMIT = 3;
 
-    LookupFieldNode() {
+    IsApplicableByArityNode() {
     }
 
-    static LookupFieldNode create() {
-        return LookupFieldNodeGen.create();
+    static IsApplicableByArityNode create() {
+        return IsApplicableByArityNodeGen.create();
     }
 
-    public abstract Field execute(JavaObject object, String name);
+    public abstract boolean execute(JavaMethodDesc object, int argsLength);
 
     @SuppressWarnings("unused")
-    @Specialization(guards = {"cachedField != null", "object.getClazz() == cachedClazz", "cachedName.equals(name)"}, limit = "LIMIT")
-    static Field doCached(JavaObject object, String name,
-                    @Cached("object.getClazz()") Class<?> cachedClazz,
-                    @Cached("name") String cachedName,
-                    @Cached("doUncached(object, name)") Field cachedField) {
-        assert cachedField == JavaInteropReflect.findField(object, name);
-        return cachedField;
+    @Specialization(guards = {"argsLength == cachedArgsLength"}, limit = "LIMIT")
+    static boolean doCached(JavaMethodDesc method, int argsLength,
+                    @Cached("argsLength") int cachedArgsLength,
+                    @Cached("doUncached(method, argsLength)") boolean applicableByArity) {
+        assert applicableByArity == JavaInteropReflect.isApplicableByArity(method, argsLength);
+        return applicableByArity;
     }
 
     @Specialization(replaces = "doCached")
-    static Field doUncached(JavaObject object, String name) {
-        return JavaInteropReflect.findField(object, name);
+    static boolean doUncached(JavaMethodDesc method, int argsLength) {
+        return JavaInteropReflect.isApplicableByArity(method, argsLength);
     }
 }

@@ -38,21 +38,20 @@ abstract class LookupMethodNode extends Node {
         return LookupMethodNodeGen.create();
     }
 
-    public abstract JavaMethodDesc execute(Class<?> clazz, String name, boolean onlyStatic);
+    public abstract JavaMethodDesc execute(JavaObject object, String name);
 
     @SuppressWarnings("unused")
-    @Specialization(guards = {"onlyStatic == cachedStatic", "clazz == cachedClazz", "cachedName.equals(name)"}, limit = "LIMIT")
-    static JavaMethodDesc doCached(Class<?> clazz, String name, boolean onlyStatic,
-                    @Cached("onlyStatic") boolean cachedStatic,
-                    @Cached("clazz") Class<?> cachedClazz,
+    @Specialization(guards = {"cachedMethod != null", "object.getClazz() == cachedClazz", "cachedName.equals(name)"}, limit = "LIMIT")
+    static JavaMethodDesc doCached(JavaObject object, String name,
+                    @Cached("object.getClazz()") Class<?> cachedClazz,
                     @Cached("name") String cachedName,
-                    @Cached("doUncached(clazz, name, onlyStatic)") JavaMethodDesc cachedMethod) {
-        assert cachedMethod == JavaInteropReflect.findMethod(clazz, name, onlyStatic);
+                    @Cached("doUncached(object, name)") JavaMethodDesc cachedMethod) {
+        assert cachedMethod == JavaInteropReflect.findMethod(object, name);
         return cachedMethod;
     }
 
     @Specialization(replaces = "doCached")
-    static JavaMethodDesc doUncached(Class<?> clazz, String name, boolean onlyStatic) {
-        return JavaInteropReflect.findMethod(clazz, name, onlyStatic);
+    static JavaMethodDesc doUncached(JavaObject object, String name) {
+        return JavaInteropReflect.findMethod(object, name);
     }
 }

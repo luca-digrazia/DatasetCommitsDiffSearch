@@ -245,11 +245,6 @@ final class JavaInteropReflect {
         throw ex.raise();
     }
 
-    @SuppressWarnings({"unchecked"})
-    static <E extends Throwable> RuntimeException rethrow(Throwable ex) throws E {
-        throw (E) ex;
-    }
-
     private static final class SingleHandler implements InvocationHandler {
 
         private final TruffleObject symbol;

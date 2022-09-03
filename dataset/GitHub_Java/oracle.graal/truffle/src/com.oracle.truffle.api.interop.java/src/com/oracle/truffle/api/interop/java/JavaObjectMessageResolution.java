@@ -25,6 +25,7 @@
 package com.oracle.truffle.api.interop.java;
 
 import java.lang.reflect.Array;
+import java.lang.reflect.Field;
 import java.util.Map;
 import java.util.Objects;
 
@@ -101,7 +102,7 @@ class JavaObjectMessageResolution {
             }
 
             // (2) look for a field; if found, read its value and if that IsExecutable, Execute it.
-            JavaFieldDesc foundField = lookupField(object, name);
+            Field foundField = lookupField(object, name);
             if (foundField != null) {
                 Object fieldValue = readField(foundField, object);
                 if (fieldValue instanceof TruffleObject) {
@@ -152,7 +153,7 @@ class JavaObjectMessageResolution {
             return isApplicableByArityNode.execute(foundMethod, argsLength);
         }
 
-        private JavaFieldDesc lookupField(JavaObject object, String name) {
+        private Field lookupField(JavaObject object, String name) {
             if (lookupField == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 lookupField = insert(LookupFieldNode.create());
@@ -160,7 +161,7 @@ class JavaObjectMessageResolution {
             return lookupField.execute(object, name);
         }
 
-        private Object readField(JavaFieldDesc field, JavaObject object) {
+        private Object readField(Field field, JavaObject object) {
             if (readField == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 readField = insert(ReadFieldNode.create());
@@ -273,7 +274,7 @@ class JavaObjectMessageResolution {
             if (TruffleOptions.AOT) {
                 return JavaObject.NULL;
             }
-            JavaFieldDesc foundField = lookupField(object, name);
+            Field foundField = lookupField(object, name);
             if (foundField != null) {
                 return readField(foundField, object);
             }
@@ -294,7 +295,7 @@ class JavaObjectMessageResolution {
             return JavaInterop.asTruffleValue(map.get(name));
         }
 
-        private Object readField(JavaFieldDesc field, JavaObject object) {
+        private Object readField(Field field, JavaObject object) {
             if (readField == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 readField = insert(ReadFieldNode.create());
@@ -302,7 +303,7 @@ class JavaObjectMessageResolution {
             return readField.execute(field, object);
         }
 
-        private JavaFieldDesc lookupField(JavaObject object, String name) {
+        private Field lookupField(JavaObject object, String name) {
             if (lookupField == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 lookupField = insert(LookupFieldNode.create());
@@ -350,7 +351,7 @@ class JavaObjectMessageResolution {
             if (TruffleOptions.AOT) {
                 throw UnsupportedMessageException.raise(Message.WRITE);
             }
-            JavaFieldDesc f = lookupField(receiver, name);
+            Field f = lookupField(receiver, name);
             if (f == null) {
                 throw UnknownIdentifierException.raise(name);
             }
@@ -366,7 +367,7 @@ class JavaObjectMessageResolution {
             return map.put(name, convertedValue);
         }
 
-        private JavaFieldDesc lookupField(JavaObject object, String name) {
+        private Field lookupField(JavaObject object, String name) {
             if (lookupField == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 lookupField = insert(LookupFieldNode.create());
@@ -374,7 +375,7 @@ class JavaObjectMessageResolution {
             return lookupField.execute(object, name);
         }
 
-        private void writeField(JavaFieldDesc field, JavaObject object, Object value) {
+        private void writeField(Field field, JavaObject object, Object value) {
             if (writeField == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 writeField = insert(WriteFieldNode.create());
