@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.graph;
 
-import static com.oracle.graal.graph.Edges.Type.*;
 import static com.oracle.graal.graph.Node.*;
 
 import java.util.*;
@@ -91,14 +90,14 @@ public class Graph {
         private final Node node;
 
         public CacheEntry(Node node) {
-            assert node instanceof ValueNumberable;
+            assert node.getNodeClass().valueNumberable();
             assert node.isLeafNode();
             this.node = node;
         }
 
         @Override
         public int hashCode() {
-            return Node.USE_GENERATED_NODES ? node.getValueNumber() : node.getNodeClass().valueNumber(node);
+            return node.getNodeClass().valueNumber(node);
         }
 
         @Override
@@ -108,8 +107,9 @@ public class Graph {
             }
             if (obj instanceof CacheEntry) {
                 CacheEntry other = (CacheEntry) obj;
+                NodeClass nodeClass = node.getNodeClass();
                 if (other.node.getClass() == node.getClass()) {
-                    return node.valueEquals(other.node);
+                    return nodeClass.valueEqual(node, other.node);
                 }
             }
             return false;
@@ -497,8 +497,7 @@ public class Graph {
             }
             if (minCountNode != null) {
                 for (Node usage : minCountNode.usages()) {
-                    if (usage != node && nodeClass == usage.getNodeClass() && node.valueEquals(usage) && nodeClass.getEdges(Inputs).areEqualIn(node, usage) &&
-                                    nodeClass.getEdges(Successors).areEqualIn(node, usage)) {
+                    if (usage != node && nodeClass == usage.getNodeClass() && nodeClass.valueEqual(node, usage) && nodeClass.edgesEqual(node, usage)) {
                         return usage;
                     }
                 }
@@ -610,7 +609,7 @@ public class Graph {
             return new PlaceHolderNode();
         }
 
-        protected PlaceHolderNode() {
+        PlaceHolderNode() {
         }
     }
 
