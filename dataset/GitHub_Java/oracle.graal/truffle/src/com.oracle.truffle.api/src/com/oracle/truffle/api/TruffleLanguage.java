@@ -42,8 +42,8 @@ import org.graalvm.options.OptionDescriptor;
 import org.graalvm.options.OptionDescriptors;
 import org.graalvm.options.OptionKey;
 import org.graalvm.options.OptionValues;
-import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Value;
+import org.graalvm.polyglot.Context;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
@@ -55,16 +55,12 @@ import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.impl.Accessor;
 import com.oracle.truffle.api.impl.ReadOnlyArrayList;
-import com.oracle.truffle.api.impl.SourceAccessorImpl;
 import com.oracle.truffle.api.nodes.ExecutableNode;
 import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
-import java.net.URI;
-import java.nio.file.FileSystemNotFoundException;
-import org.graalvm.polyglot.io.FileSystem;
 
 /**
  * A Truffle language implementation contains all the services a language should provide to make it
@@ -1116,18 +1112,6 @@ public abstract class TruffleLanguage<C> {
     }
 
     /**
-     * Returns the home location for this language. This corresponds to the directory in which the
-     * Jar file is located, if run from a Jar file. For an AOT compiled binary, this corresponds to
-     * the location of the language files in the default GraalVM distribution layout. executable or
-     * shared library.
-     *
-     * @since 1.0
-     */
-    protected final String getLanguageHome() {
-        return AccessAPI.engineAccess().getLanguageHome(AccessAPI.nodesAccess().getEngineObject(languageInfo));
-    }
-
-    /**
      * Represents execution environment of the {@link TruffleLanguage}. Each active
      * {@link TruffleLanguage} receives instance of the environment before any code is executed upon
      * it. The environment has knowledge of all active languages and can exchange symbols between
@@ -1147,7 +1131,6 @@ public abstract class TruffleLanguage<C> {
         private final Map<String, Object> config;
         private final OptionValues options;
         private final String[] applicationArguments;
-        private final FileSystem fileSystem;
         private List<Object> services;
         @CompilationFinal private volatile Object context = UNSET_CONTEXT;
         @CompilationFinal private volatile Assumption contextUnchangedAssumption = Truffle.getRuntime().createAssumption("Language context unchanged");
@@ -1156,8 +1139,7 @@ public abstract class TruffleLanguage<C> {
         @CompilationFinal private volatile boolean valid;
 
         @SuppressWarnings("unchecked")
-        private Env(Object vmObject, LanguageInfo language, OutputStream out, OutputStream err, InputStream in, Map<String, Object> config, OptionValues options, String[] applicationArguments,
-                        FileSystem fileSystem) {
+        private Env(Object vmObject, LanguageInfo language, OutputStream out, OutputStream err, InputStream in, Map<String, Object> config, OptionValues options, String[] applicationArguments) {
             this.vmObject = vmObject;
             this.language = language;
             this.spi = (TruffleLanguage<Object>) API.nodes().getLanguageSpi(language);
@@ -1168,7 +1150,6 @@ public abstract class TruffleLanguage<C> {
             this.options = options;
             this.applicationArguments = applicationArguments == null ? new String[0] : applicationArguments;
             this.valid = true;
-            this.fileSystem = fileSystem;
         }
 
         Object getVMObject() {
@@ -1371,22 +1352,8 @@ public abstract class TruffleLanguage<C> {
         }
 
         /**
-         * Returns <code>true</code> if host access is generally allowed. If this method returns
-         * <code>false</code> then {@link #lookupHostSymbol(String)} will always fail.
-         *
-         * @since 0.27
-         */
-        @TruffleBoundary
-        public boolean isHostLookupAllowed() {
-            return AccessAPI.engineAccess().isHostAccessAllowed(vmObject, this);
-        }
-
-        /**
          * Looks up a Java class in the top-most scope the host environment. Returns
-         * <code>null</code> if no symbol was found or the symbol was not accessible. Symbols might
-         * not be accessible if a
-         * {@link org.graalvm.polyglot.Context.Builder#hostClassFilter(java.util.function.Predicate)
-         * class filter} prevents access.
+         * <code>null</code> if no symbol was found.
          * <p>
          * The returned object can either be <code>TruffleObject</code> (e.g. a native object from
          * the other language) to support interoperability between languages, {@link String} or one
@@ -1403,106 +1370,14 @@ public abstract class TruffleLanguage<C> {
         }
 
         /**
-         * Returns <code>true</code> if the argument is Java host language object wrapped using
-         * Truffle interop.
+         * Returns <code>true</code> if host access is generally allowed. If this method returns
+         * <code>false</code> then {@link #lookupHostSymbol(String)} will always fail.
          *
-         * @see #asHostObject(Object)
-         * @since 1.0
+         * @since 0.27
          */
-        @SuppressWarnings("static-method")
-        public boolean isHostObject(Object value) {
-            return AccessAPI.javaAccess().isHostObject(value);
-        }
-
-        /**
-         * Returns the java host representation of a Truffle guest object if it represents a Java
-         * host language object. Throws {@link ClassCastException} if the provided argument is not a
-         * {@link #isHostObject(Object) host object}.
-         *
-         * @since 1.0
-         */
-        public Object asHostObject(Object value) {
-            if (!isHostObject(value)) {
-                CompilerDirectives.transferToInterpreter();
-                throw new ClassCastException();
-            }
-            return AccessAPI.javaAccess().asHostObject(value);
-        }
-
-        /**
-         * Converts a existing java host object to a guest language representation. The returned
-         * objects supports the interop contract to access the java members. The interpretation of
-         * converted objects is described in {@link Context#asValue(Object)}. If the value is
-         * already an interop value, then no conversion will be performed.
-         * <p>
-         * This method should be used exclusively to convert already allocated Java objects to a
-         * guest language representation. To allocate new host objects users should use
-         * {@link #lookupHostSymbol(String)} to lookup the class and then send a NEW interop message
-         * to that object to instantiate it. This method does not respect configured
-         * {@link org.graalvm.polyglot.Context.Builder#hostClassFilter(java.util.function.Predicate)
-         * class filters}.
-         *
-         * @param hostObject the host object to convert
-         * @since 1.0
-         */
-        public Object asGuestValue(Object hostObject) {
-            return AccessAPI.engineAccess().toGuestValue(hostObject, vmObject);
-        }
-
-        /**
-         * Find a meta-object of a value, if any. The meta-object represents a description of the
-         * object, reveals it's kind and it's features. Some information that a meta-object might
-         * define includes the base object's type, interface, class, methods, attributes, etc.
-         * <p>
-         * When no meta-object is known, returns <code>null</code>. The meta-object is an interop
-         * value. An interop value can be either a <code>TruffleObject</code> (e.g. a native object
-         * from the other language) to support interoperability between languages or a
-         * {@link String}.
-         *
-         * @param value the value to find the meta object for.
-         * @since 1.0
-         */
-        public Object findMetaObject(Object value) {
-            return AccessAPI.engineAccess().findMetaObjectForLanguage(vmObject, value);
-        }
-
-        /**
-         * Tests whether an exception is a host exception thrown by a Java Interop method
-         * invocation.
-         *
-         * Host exceptions may be thrown by {@linkplain com.oracle.truffle.api.interop.Message
-         * messages} sent to Java objects that involve the invocation of a Java method or
-         * constructor ({@code EXECUTE}, {@code INVOKE}, {@code NEW}). The host exception may be
-         * unwrapped using {@link #asHostException(Throwable)}.
-         *
-         * @param exception the {@link Throwable} to test
-         * @return {@code true} if the {@code exception} is a host exception, {@code false}
-         *         otherwise
-         * @see #asHostException(Throwable)
-         * @since 1.0
-         */
-        @SuppressWarnings("static-method")
-        public boolean isHostException(Throwable exception) {
-            return AccessAPI.engineAccess().isHostException(exception);
-        }
-
-        /**
-         * Unwraps a host exception thrown by a Java method invocation.
-         *
-         * Host exceptions may be thrown by {@linkplain com.oracle.truffle.api.interop.Message
-         * messages} sent to Java objects that involve the invocation of a Java method or
-         * constructor ({@code EXECUTE}, {@code INVOKE}, {@code NEW}). Host exceptions can be
-         * identified using {@link #isHostException(Throwable)} .
-         *
-         * @param exception the host exception to unwrap
-         * @return the original Java exception
-         * @throws IllegalArgumentException if the {@code exception} is not a host exception
-         * @see #isHostException(Throwable)
-         * @since 1.0
-         */
-        @SuppressWarnings("static-method")
-        public Throwable asHostException(Throwable exception) {
-            return AccessAPI.engineAccess().asHostException(exception);
+        @TruffleBoundary
+        public boolean isHostLookupAllowed() {
+            return AccessAPI.engineAccess().isHostAccessAllowed(vmObject, this);
         }
 
         /**
@@ -1696,52 +1571,6 @@ public abstract class TruffleLanguage<C> {
             return AccessAPI.engineAccess().getPolyglotContext(vmObject);
         }
 
-        /**
-         * Returns a {@link TruffleFile} for given path.
-         *
-         * @param path the absolute or relative path to create {@link TruffleFile} for
-         * @return {@link TruffleFile}
-         * @since 1.0
-         */
-        @TruffleBoundary
-        public TruffleFile getTruffleFile(String path) {
-            return new TruffleFile(fileSystem, fileSystem.parsePath(path).normalize());
-        }
-
-        /**
-         * Returns a {@link TruffleFile} for given {@link URI}.
-         *
-         * @param uri the {@link URI} to create {@link TruffleFile} for
-         * @return {@link TruffleFile}
-         * @since 1.0
-         */
-        @TruffleBoundary
-        public TruffleFile getTruffleFile(URI uri) {
-            checkDisposed();
-            try {
-                return new TruffleFile(fileSystem, fileSystem.parsePath(uri).normalize());
-            } catch (UnsupportedOperationException e) {
-                throw new FileSystemNotFoundException("FileSystem for: " + uri.getScheme() + " scheme is not supported.");
-            }
-        }
-
-        /**
-         * Builds new {@link Source source} from a {@link TruffleFile}. Once the source is built the
-         * {@link Source#getName() name} will become {@link TruffleFile#getName()} and the
-         * {@link Source#getCharacters()} will be loaded from the {@link TruffleFile file}, unless
-         * {@link com.oracle.truffle.api.source.Source.Builder#content(java.lang.String) redefined}
-         * on the builder.
-         *
-         * @param file the {@link TruffleFile} to create {@link Source} for
-         * @return new builder to configure additional properties
-         * @since 1.0
-         */
-        @SuppressWarnings("static-method")
-        public Source.Builder<IOException, RuntimeException, RuntimeException> newSourceBuilder(final TruffleFile file) {
-            Objects.requireNonNull(file, "File must be non null");
-            return Source.newBuilder(SourceAccessorImpl.asFile(file));
-        }
-
         @SuppressWarnings("rawtypes")
         @TruffleBoundary
         <E extends TruffleLanguage> E getLanguage(Class<E> languageClass) {
@@ -1770,7 +1599,7 @@ public abstract class TruffleLanguage<C> {
             }
         }
 
-        Object findMetaObjectImpl(Object obj) {
+        Object findMetaObject(Object obj) {
             Object c = getLanguageContext();
             if (c != UNSET_CONTEXT) {
                 final Object rawValue = AccessAPI.engineAccess().findOriginalObject(obj);
@@ -1928,10 +1757,6 @@ public abstract class TruffleLanguage<C> {
             return API.interopSupport();
         }
 
-        static JavaInteropSupport javaAccess() {
-            return API.javaInteropSupport();
-        }
-
         @Override
         protected LanguageSupport languageSupport() {
             return new LanguageImpl();
@@ -1978,8 +1803,8 @@ public abstract class TruffleLanguage<C> {
 
         @Override
         public Env createEnv(Object vmObject, LanguageInfo language, OutputStream stdOut, OutputStream stdErr, InputStream stdIn, Map<String, Object> config, OptionValues options,
-                        String[] applicationArguments, FileSystem fileSystem) {
-            Env env = new Env(vmObject, language, stdOut, stdErr, stdIn, config, options, applicationArguments, fileSystem);
+                        String[] applicationArguments) {
+            Env env = new Env(vmObject, language, stdOut, stdErr, stdIn, config, options, applicationArguments);
             LinkedHashSet<Object> collectedServices = new LinkedHashSet<>();
             AccessAPI.instrumentAccess().collectEnvServices(collectedServices, API.nodes().getEngineObject(language), language);
             env.services = new ArrayList<>(collectedServices);
@@ -2136,7 +1961,7 @@ public abstract class TruffleLanguage<C> {
 
         @Override
         public Object findMetaObject(Env env, Object obj) {
-            return env.findMetaObjectImpl(obj);
+            return env.findMetaObject(obj);
         }
 
         @Override
@@ -2187,8 +2012,7 @@ public abstract class TruffleLanguage<C> {
         }
 
         @Override
-        public Env patchEnvContext(Env env, OutputStream stdOut, OutputStream stdErr, InputStream stdIn, Map<String, Object> config, OptionValues options, String[] applicationArguments,
-                        FileSystem fileSystem) {
+        public Env patchEnvContext(Env env, OutputStream stdOut, OutputStream stdErr, InputStream stdIn, Map<String, Object> config, OptionValues options, String[] applicationArguments) {
             final Env newEnv = createEnv(
                             env.vmObject,
                             env.language,
@@ -2197,8 +2021,7 @@ public abstract class TruffleLanguage<C> {
                             stdIn,
                             config,
                             options,
-                            applicationArguments,
-                            fileSystem);
+                            applicationArguments);
             newEnv.context = env.context;
             env.valid = false;
             return env.spi.patchContext(env.context, newEnv) ? newEnv : null;
