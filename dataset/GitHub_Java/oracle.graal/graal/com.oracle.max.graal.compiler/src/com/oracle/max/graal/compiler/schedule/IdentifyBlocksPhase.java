@@ -39,7 +39,7 @@ public class IdentifyBlocksPhase extends Phase {
     private boolean scheduleAllNodes;
 
     public IdentifyBlocksPhase(boolean scheduleAllNodes) {
-        super(scheduleAllNodes ? "FullSchedule" : "PartSchedule", false);
+        super(scheduleAllNodes ? "FullSchedule" : "PartSchedule");
         this.scheduleAllNodes = scheduleAllNodes;
     }
 
