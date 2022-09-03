@@ -243,7 +243,7 @@ public class Conditional extends Binary {
             } else if (condition instanceof Constant) {
                 generator.lir().move(generator.createResultVariable(conditional), condition.asConstant());
             } else if (condition instanceof InstanceOf) {
-                if (conditional instanceof MaterializeNode && !negate) {
+                if (conditional instanceof MaterializeNode) {
                     generator.emitMaterializeInstanceOf((MaterializeNode) conditional, conditional, null);
                 } else {
                     generator.emitMaterializeInstanceOf((MaterializeNode) conditional, condition, null);

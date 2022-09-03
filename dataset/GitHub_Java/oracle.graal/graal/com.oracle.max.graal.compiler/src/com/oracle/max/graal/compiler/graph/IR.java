@@ -25,13 +25,13 @@ package com.oracle.max.graal.compiler.graph;
 import java.util.*;
 
 import com.oracle.max.graal.compiler.*;
-import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.ir.*;
 import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.compiler.observer.*;
-import com.oracle.max.graal.compiler.opt.*;
+import com.oracle.max.graal.compiler.phases.*;
 import com.oracle.max.graal.compiler.schedule.*;
 import com.oracle.max.graal.compiler.value.*;
+import com.oracle.max.graal.extensions.*;
 import com.oracle.max.graal.graph.*;
 
 /**
@@ -43,7 +43,7 @@ public class IR {
     /**
      * The compilation associated with this IR.
      */
-    public final C1XCompilation compilation;
+    public final GraalCompilation compilation;
 
     /**
      * The start block of this IR.
@@ -53,13 +53,18 @@ public class IR {
     /**
      * The linear-scan ordered list of blocks.
      */
-    private List<LIRBlock> orderedBlocks;
+    private List<LIRBlock> linearScanOrder;
+
+    /**
+     * The order in which the code is emitted.
+     */
+    private List<LIRBlock> codeEmittingOrder;
 
     /**
      * Creates a new IR instance for the specified compilation.
      * @param compilation the compilation
      */
-    public IR(C1XCompilation compilation) {
+    public IR(GraalCompilation compilation) {
         this.compilation = compilation;
     }
 
@@ -69,41 +74,95 @@ public class IR {
      * Builds the graph, optimizes it, and computes the linear scan block order.
      */
     public void build() {
-        if (C1XOptions.PrintTimers) {
-            C1XTimers.HIR_CREATE.start();
-        }
 
-        buildGraph();
-
-        if (C1XOptions.PrintTimers) {
-            C1XTimers.HIR_CREATE.stop();
-            C1XTimers.HIR_OPTIMIZE.start();
-        }
+//        Object stored = GraphBuilderPhase.cachedGraphs.get(compilation.method);
+//        if (stored != null) {
+//            Map<Node, Node> replacements = new HashMap<Node, Node>();
+//            CompilerGraph duplicate = (CompilerGraph) stored;
+//            replacements.put(duplicate.start(), compilation.graph.start());
+//            compilation.graph.addDuplicate(duplicate.getNodes(), replacements);
+//        } else {
+            new GraphBuilderPhase(compilation, compilation.method, false).apply(compilation.graph);
+//        }
 
         Graph graph = compilation.graph;
 
-        if (C1XOptions.OptCanonicalizer) {
-            new CanonicalizerPhase().apply(graph);
-            verifyAndPrint("After canonicalization");
+        if (GraalOptions.TestGraphDuplication) {
+            new DuplicationPhase().apply(graph);
         }
 
-        // Split critical edges.
-        List<Node> nodes = graph.getNodes();
-        for (int i = 0; i < nodes.size(); ++i) {
-            Node n = nodes.get(i);
-            if (Schedule.trueSuccessorCount(n) > 1) {
-                for (int j = 0; j < n.successors().size(); ++j) {
-                    Node succ = n.successors().get(j);
-                    if (Schedule.truePredecessorCount(succ) > 1) {
-                        Anchor a = new Anchor(graph);
-                        a.successors().setAndClear(1, n, j);
-                        n.successors().set(j, a);
-                    }
-                }
+        new DeadCodeEliminationPhase().apply(graph);
+
+        if (GraalOptions.ProbabilityAnalysis) {
+            new ComputeProbabilityPhase().apply(graph);
+        }
+
+        if (GraalOptions.Inline) {
+            new InliningPhase(compilation, this, null).apply(graph);
+        }
+
+
+        if (GraalOptions.OptCanonicalizer) {
+            new CanonicalizerPhase().apply(graph);
+            new DeadCodeEliminationPhase().apply(graph);
+        }
+
+        if (GraalOptions.Extend) {
+            extensionOptimizations(graph);
+        }
+
+        if (GraalOptions.OptLoops) {
+            graph.mark();
+            new LoopPhase().apply(graph);
+            if (GraalOptions.OptCanonicalizer) {
+                new CanonicalizerPhase(true).apply(graph);
+                new DeadCodeEliminationPhase().apply(graph);
             }
         }
 
-        Schedule schedule = new Schedule(graph);
+        if (GraalOptions.EscapeAnalysis) {
+            new EscapeAnalysisPhase(compilation, this).apply(graph);
+            new CanonicalizerPhase().apply(graph);
+            new DeadCodeEliminationPhase().apply(graph);
+        }
+
+        if (GraalOptions.OptGVN) {
+            graph.recordModifications(EdgeType.USAGES); // GVN 'ideals' will get new usages
+            new GlobalValueNumberingPhase().apply(graph);
+            if (GraalOptions.Rematerialize) {
+                //new Rematerialization2Phase().apply(graph);
+                //new RematerializationPhase().apply(graph);
+            }
+            graph.stopRecordModifications();
+        }
+
+        new LoweringPhase(compilation.runtime).apply(graph);
+        if (GraalOptions.Lower) {
+            new MemoryPhase().apply(graph);
+            if (GraalOptions.OptGVN) {
+                graph.recordModifications(EdgeType.USAGES);
+                new GlobalValueNumberingPhase().apply(graph);
+                if (GraalOptions.Rematerialize) {
+                    //new RematerializationPhase().apply(graph);
+                }
+                graph.stopRecordModifications();
+            }
+            if (GraalOptions.OptReadElimination) {
+                new ReadEliminationPhase().apply(graph);
+            }
+        }
+
+        IdentifyBlocksPhase schedule = new IdentifyBlocksPhase(true);
+        schedule.apply(graph);
+        compilation.stats.loopCount = schedule.loopCount();
+
+        if (compilation.compiler.isObserved()) {
+            Map<String, Object> debug = new HashMap<String, Object>();
+            debug.put("schedule", schedule);
+            compilation.compiler.fireCompilationEvent(new CompilationEvent(compilation, "After IdentifyBlocksPhase", graph, true, false, debug));
+        }
+
+
         List<Block> blocks = schedule.getBlocks();
         List<LIRBlock> lirBlocks = new ArrayList<LIRBlock>();
         Map<Block, LIRBlock> map = new HashMap<Block, LIRBlock>();
@@ -112,6 +171,16 @@ public class IR {
             map.put(b, block);
             block.setInstructions(b.getInstructions());
             block.setLinearScanNumber(b.blockID());
+            block.setLoopDepth(b.loopDepth());
+            block.setLoopIndex(b.loopIndex());
+
+            if (b.isLoopEnd()) {
+                block.setLinearScanLoopEnd();
+            }
+
+            if (b.isLoopHeader()) {
+                block.setLinearScanLoopHeader();
+            }
 
             block.setFirstInstruction(b.firstNode());
             block.setLastInstruction(b.lastNode());
@@ -128,57 +197,52 @@ public class IR {
             }
         }
 
-        orderedBlocks = lirBlocks;
         valueToBlock = new HashMap<Node, LIRBlock>();
-        for (LIRBlock b : orderedBlocks) {
+        for (LIRBlock b : lirBlocks) {
             for (Node i : b.getInstructions()) {
                 valueToBlock.put(i, b);
             }
         }
-        startBlock = lirBlocks.get(0);
+        startBlock = valueToBlock.get(graph.start());
         assert startBlock != null;
         assert startBlock.blockPredecessors().size() == 0;
 
-        ComputeLinearScanOrder clso = new ComputeLinearScanOrder(lirBlocks.size(), startBlock);
-        orderedBlocks = clso.linearScanOrder();
-        this.compilation.stats.loopCount = clso.numLoops();
+
+        if (GraalOptions.Time) {
+            GraalTimers.COMPUTE_LINEAR_SCAN_ORDER.start();
+        }
+
+        ComputeLinearScanOrder clso = new ComputeLinearScanOrder(lirBlocks.size(), compilation.stats.loopCount, startBlock);
+        linearScanOrder = clso.linearScanOrder();
+        codeEmittingOrder = clso.codeEmittingOrder();
 
         int z = 0;
-        for (LIRBlock b : orderedBlocks) {
+        for (LIRBlock b : linearScanOrder) {
             b.setLinearScanNumber(z++);
         }
 
-        verifyAndPrint("After linear scan order");
+        printGraph("After linear scan order", compilation.graph);
 
-        if (C1XOptions.PrintTimers) {
-            C1XTimers.HIR_OPTIMIZE.stop();
+        if (GraalOptions.Time) {
+            GraalTimers.COMPUTE_LINEAR_SCAN_ORDER.stop();
         }
+
     }
 
-    private void buildGraph() {
-        // Graph builder must set the startBlock and the osrEntryBlock
-        new GraphBuilder(compilation, compilation.method, compilation.graph).build(false);
 
-//        CompilerGraph duplicate = new CompilerGraph();
-//        Map<Node, Node> replacements = new HashMap<Node, Node>();
-//        replacements.put(compilation.graph.start(), duplicate.start());
-//        duplicate.addDuplicate(compilation.graph.getNodes(), replacements);
-//        compilation.graph = duplicate;
 
-        verifyAndPrint("After graph building");
+    public static ThreadLocal<ServiceLoader<Optimizer>> optimizerLoader = new ThreadLocal<ServiceLoader<Optimizer>>();
 
-        DeadCodeElimination dce = new DeadCodeElimination();
-        dce.apply(compilation.graph);
-        if (dce.deletedNodeCount > 0) {
-            verifyAndPrint("After dead code elimination");
+    private void extensionOptimizations(Graph graph) {
+
+        ServiceLoader<Optimizer> serviceLoader = optimizerLoader.get();
+        if (serviceLoader == null) {
+            serviceLoader = ServiceLoader.load(Optimizer.class);
+            optimizerLoader.set(serviceLoader);
         }
 
-        if (C1XOptions.Inline) {
-            new Inlining(compilation, this).apply(compilation.graph);
-        }
-
-        if (C1XOptions.PrintCompilation) {
-            TTY.print(String.format("%3d blocks | ", compilation.stats.blockCount));
+        for (Optimizer o : serviceLoader) {
+            o.optimize(compilation.runtime, graph);
         }
     }
 
@@ -187,39 +251,14 @@ public class IR {
      * @return the blocks in linear scan order
      */
     public List<LIRBlock> linearScanOrder() {
-        return orderedBlocks;
+        return linearScanOrder;
     }
 
-    private void print(boolean cfgOnly) {
-        if (!TTY.isSuppressed()) {
-            TTY.println("IR for " + compilation.method);
-            final InstructionPrinter ip = new InstructionPrinter(TTY.out());
-            final BlockPrinter bp = new BlockPrinter(this, ip, cfgOnly);
-            //getHIRStartBlock().iteratePreOrder(bp);
-        }
-    }
-
-    /**
-     * Verifies the IR and prints it out if the relevant options are set.
-     * @param phase the name of the phase for printing
-     */
-    public void verifyAndPrint(String phase) {
-        if (C1XOptions.PrintHIR && !TTY.isSuppressed()) {
-            TTY.println(phase);
-            print(false);
-        }
-
-        if (compilation.compiler.isObserved()) {
-            compilation.compiler.fireCompilationEvent(new CompilationEvent(compilation, phase, compilation.graph, true, false));
-        }
+    public List<LIRBlock> codeEmittingOrder() {
+        return codeEmittingOrder;
     }
 
     public void printGraph(String phase, Graph graph) {
-        if (C1XOptions.PrintHIR && !TTY.isSuppressed()) {
-            TTY.println(phase);
-            print(false);
-        }
-
         if (compilation.compiler.isObserved()) {
             compilation.compiler.fireCompilationEvent(new CompilationEvent(compilation, phase, graph, true, false));
         }
@@ -236,7 +275,12 @@ public class IR {
         int maxLocks = 0;
         for (Node node : compilation.graph.getNodes()) {
             if (node instanceof FrameState) {
-                int lockCount = ((FrameState) node).locksSize();
+                FrameState current = (FrameState) node;
+                int lockCount = 0;
+                while (current != null) {
+                    lockCount += current.locksSize();
+                    current = current.outerFrameState();
+                }
                 if (lockCount > maxLocks) {
                     maxLocks = lockCount;
                 }
@@ -245,7 +289,7 @@ public class IR {
         return maxLocks;
     }
 
-    public Instruction getHIRStartBlock() {
-        return (Instruction) compilation.graph.start().successors().get(0);
+    public FixedNodeWithNext getHIRStartBlock() {
+        return (FixedNodeWithNext) compilation.graph.start().successors().first();
     }
 }

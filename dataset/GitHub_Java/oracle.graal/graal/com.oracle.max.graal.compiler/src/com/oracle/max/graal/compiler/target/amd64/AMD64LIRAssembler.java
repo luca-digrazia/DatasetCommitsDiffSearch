@@ -64,7 +64,7 @@ public final class AMD64LIRAssembler extends LIRAssembler {
     final int wordSize;
     final CiRegister rscratch1;
 
-    public AMD64LIRAssembler(C1XCompilation compilation) {
+    public AMD64LIRAssembler(GraalCompilation compilation) {
         super(compilation);
         masm = (AMD64MacroAssembler) asm;
         target = compilation.target;
@@ -148,7 +148,7 @@ public final class AMD64LIRAssembler extends LIRAssembler {
 
     @Override
     public void emitTraps() {
-        for (int i = 0; i < C1XOptions.MethodEndBreakpointGuards; ++i) {
+        for (int i = 0; i < GraalOptions.MethodEndBreakpointGuards; ++i) {
             masm.int3();
         }
     }
@@ -411,7 +411,7 @@ public final class AMD64LIRAssembler extends LIRAssembler {
     protected void emitReadPrefetch(CiValue src) {
         CiAddress addr = (CiAddress) src;
         // Checkstyle: off
-        switch (C1XOptions.ReadPrefetchInstr) {
+        switch (GraalOptions.ReadPrefetchInstr) {
             case 0  : masm.prefetchnta(addr); break;
             case 1  : masm.prefetcht0(addr); break;
             case 2  : masm.prefetcht2(addr); break;
@@ -439,22 +439,11 @@ public final class AMD64LIRAssembler extends LIRAssembler {
 
     private boolean assertEmitBranch(LIRBranch op) {
         assert op.block() == null || op.block().label() == op.label() : "wrong label";
-        if (op.block() != null) {
-            branchTargetBlocks.add(op.block());
-        }
-        if (op.unorderedBlock() != null) {
-            branchTargetBlocks.add(op.unorderedBlock());
-        }
         return true;
     }
 
     private boolean assertEmitTableSwitch(LIRTableSwitch op) {
         assert op.defaultTarget != null;
-        branchTargetBlocks.add(op.defaultTarget);
-        for (LIRBlock target : op.targets) {
-            assert target != null;
-            branchTargetBlocks.add(target);
-        }
         return true;
     }
 
@@ -537,17 +526,24 @@ public final class AMD64LIRAssembler extends LIRAssembler {
             masm.jmp(op.label());
         } else {
             ConditionFlag acond = ConditionFlag.zero;
+            Label unorderedLabel = null;
             if (op.code == LIROpcode.CondFloatBranch) {
-                assert op.unorderedBlock() != null : "must have unordered successor";
-                masm.jcc(ConditionFlag.parity, op.unorderedBlock().label());
+                if (op.unorderedBlock() == null) {
+                    unorderedLabel = new Label();
+                } else {
+                    unorderedLabel = op.unorderedBlock().label;
+                }
+                if (unorderedLabel != op.label() || !trueOnUnordered(op.cond())) {
+                    masm.jcc(ConditionFlag.parity, unorderedLabel);
+                }
                 // Checkstyle: off
                 switch (op.cond()) {
                     case EQ : acond = ConditionFlag.equal; break;
                     case NE : acond = ConditionFlag.notEqual; break;
-                    case LT : acond = ConditionFlag.below; break;
-                    case LE : acond = ConditionFlag.belowEqual; break;
-                    case GE : acond = ConditionFlag.aboveEqual; break;
-                    case GT : acond = ConditionFlag.above; break;
+                    case BT : acond = ConditionFlag.below; break;
+                    case BE : acond = ConditionFlag.belowEqual; break;
+                    case AE : acond = ConditionFlag.aboveEqual; break;
+                    case AT : acond = ConditionFlag.above; break;
                     default : throw Util.shouldNotReachHere();
                 }
             } else {
@@ -560,11 +556,18 @@ public final class AMD64LIRAssembler extends LIRAssembler {
                     case GT : acond = ConditionFlag.greater; break;
                     case BE : acond = ConditionFlag.belowEqual; break;
                     case AE : acond = ConditionFlag.aboveEqual; break;
+                    case AT : acond = ConditionFlag.above; break;
+                    case BT : acond = ConditionFlag.below; break;
+                    case OF : acond = ConditionFlag.overflow; break;
+                    case NOF : acond = ConditionFlag.noOverflow; break;
                     default : throw Util.shouldNotReachHere();
                 }
                 // Checkstyle: on
             }
             masm.jcc(acond, op.label());
+            if (unorderedLabel != null && op.unorderedBlock() == null) {
+                masm.bind(unorderedLabel);
+            }
         }
     }
 
@@ -709,7 +712,8 @@ public final class AMD64LIRAssembler extends LIRAssembler {
     }
 
     @Override
-    protected void emitConditionalMove(Condition condition, CiValue opr1, CiValue opr2, CiValue result) {
+    protected void emitConditionalMove(Condition condition, CiValue opr1, CiValue opr2, CiValue result, boolean mayBeUnordered, boolean unorderedcmovOpr1) {
+        //TTY.println("cmov " + condition + " " + opr1 + " : " + opr2 + " mayBeUnordered:" + mayBeUnordered + " pcmovop=" + (unorderedcmovOpr1 ? 1 : 2));
         ConditionFlag acond;
         ConditionFlag ncond;
         switch (condition) {
@@ -753,6 +757,14 @@ public final class AMD64LIRAssembler extends LIRAssembler {
                 acond = ConditionFlag.above;
                 ncond = ConditionFlag.belowEqual;
                 break;
+            case OF:
+                acond = ConditionFlag.overflow;
+                ncond = ConditionFlag.noOverflow;
+                break;
+            case NOF:
+                acond = ConditionFlag.noOverflow;
+                ncond = ConditionFlag.overflow;
+                break;
             default:
                 throw Util.shouldNotReachHere();
         }
@@ -765,13 +777,17 @@ public final class AMD64LIRAssembler extends LIRAssembler {
             def = opr2;
             other = opr1;
             // and flip the condition
+            condition = condition.negate();
             ConditionFlag tcond = acond;
             acond = ncond;
             ncond = tcond;
+            unorderedcmovOpr1 = !unorderedcmovOpr1;
         }
 
         if (def.isRegister()) {
-            reg2reg(def, result);
+            if (def.asRegister() != result.asRegister()) {
+                reg2reg(def, result);
+            }
         } else if (def.isStackSlot()) {
             stack2reg(def, result, result.kind);
         } else {
@@ -779,29 +795,24 @@ public final class AMD64LIRAssembler extends LIRAssembler {
             const2reg(def, result, null);
         }
 
-        if (!other.isConstant()) {
+        boolean cmovOnParity = (unorderedcmovOpr1 && mayBeTrueOnUnordered(condition.negate())) || (!unorderedcmovOpr1 && mayBeFalseOnUnordered(condition.negate()));
+        if (!other.isConstant() && !(cmovOnParity && def.isConstant())) {
             // optimized version that does not require a branch
-            if (other.isRegister()) {
-                assert other.asRegister() != result.asRegister() : "other already overwritten by previous move";
-                if (other.kind.isInt()) {
-                    masm.cmovq(ncond, result.asRegister(), other.asRegister());
-                } else {
-                    masm.cmovq(ncond, result.asRegister(), other.asRegister());
-                }
-            } else {
-                assert other.isStackSlot();
-                CiStackSlot otherSlot = (CiStackSlot) other;
-                if (other.kind.isInt()) {
-                    masm.cmovl(ncond, result.asRegister(), frameMap.toStackAddress(otherSlot));
-                } else {
-                    masm.cmovq(ncond, result.asRegister(), frameMap.toStackAddress(otherSlot));
-                }
+            //TTY.println("> emitting cmov" + (mayBeUnordered && cmovOnParity ? " (with parity check)" : ""));
+            cmov(result, ncond, other);
+            if (mayBeUnordered && cmovOnParity) {
+                cmov(result, ConditionFlag.parity, unorderedcmovOpr1 ? def : other);
             }
-
         } else {
+            //TTY.println("> emitting jumps instead of cmov");
             // conditional move not available, use emit a branch and move
             Label skip = new Label();
+            Label mov = new Label();
+            if (mayBeUnordered && ((mayBeTrueOnUnordered(condition) && !unorderedcmovOpr1) || (mayBeFalseOnUnordered(condition) && unorderedcmovOpr1))) {
+                masm.jcc(ConditionFlag.parity, unorderedcmovOpr1 ? skip : mov);
+            }
             masm.jcc(acond, skip);
+            masm.bind(mov);
             if (other.isRegister()) {
                 reg2reg(other, result);
             } else if (other.isStackSlot()) {
@@ -811,6 +822,25 @@ public final class AMD64LIRAssembler extends LIRAssembler {
                 const2reg(other, result, null);
             }
             masm.bind(skip);
+        }
+    }
+
+    private void cmov(CiValue result, ConditionFlag ncond, CiValue other) {
+        if (other.isRegister()) {
+            assert other.asRegister() != result.asRegister() : "other already overwritten by previous move";
+            if (other.kind.isInt()) {
+                masm.cmovl(ncond, result.asRegister(), other.asRegister());
+            } else {
+                masm.cmovq(ncond, result.asRegister(), other.asRegister());
+            }
+        } else {
+            assert other.isStackSlot();
+            CiStackSlot otherSlot = (CiStackSlot) other;
+            if (other.kind.isInt()) {
+                masm.cmovl(ncond, result.asRegister(), frameMap.toStackAddress(otherSlot));
+            } else {
+                masm.cmovq(ncond, result.asRegister(), frameMap.toStackAddress(otherSlot));
+            }
         }
     }
 
@@ -1091,22 +1121,6 @@ public final class AMD64LIRAssembler extends LIRAssembler {
             moveRegs(lreg, AMD64.rax);
 
             Label continuation = new Label();
-
-            if (C1XOptions.GenSpecialDivChecks) {
-                // check for special case of Integer.MIN_VALUE / -1
-                Label normalCase = new Label();
-                masm.cmpl(AMD64.rax, Integer.MIN_VALUE);
-                masm.jcc(ConditionFlag.notEqual, normalCase);
-                if (code == LIROpcode.Irem) {
-                    // prepare X86Register.rdx for possible special case where remainder = 0
-                    masm.xorl(AMD64.rdx, AMD64.rdx);
-                }
-                masm.cmpl(rreg, -1);
-                masm.jcc(ConditionFlag.equal, continuation);
-
-                // handle normal case
-                masm.bind(normalCase);
-            }
             masm.cdql();
             int offset = masm.codeBuffer.position();
             masm.idivl(rreg);
@@ -1140,16 +1154,13 @@ public final class AMD64LIRAssembler extends LIRAssembler {
 
         Label continuation = new Label();
 
-        if (C1XOptions.GenSpecialDivChecks) {
+        System.out.println("gen check" + code);
+        if (GraalOptions.GenSpecialDivChecks && code == LIROpcode.Ldiv) {
             // check for special case of Long.MIN_VALUE / -1
             Label normalCase = new Label();
             masm.movq(AMD64.rdx, java.lang.Long.MIN_VALUE);
             masm.cmpq(AMD64.rax, AMD64.rdx);
             masm.jcc(ConditionFlag.notEqual, normalCase);
-            if (code == LIROpcode.Lrem) {
-                // prepare X86Register.rdx for possible special case (where remainder = 0)
-                masm.xorq(AMD64.rdx, AMD64.rdx);
-            }
             masm.cmpl(rreg, -1);
             masm.jcc(ConditionFlag.equal, continuation);
 
@@ -1263,8 +1274,8 @@ public final class AMD64LIRAssembler extends LIRAssembler {
                     case Double  : masm.ucomisd(reg1, tasm.recordDataReferenceInCode(CiConstant.forDouble(((CiConstant) opr2).asDouble()))); break;
                     case Long    :
                     case Word    : {
-                        if (c.asLong() == 0) {
-                            masm.cmpq(reg1, 0);
+                        if (NumUtil.isInt(c.asLong())) {
+                            masm.cmpq(reg1, (int) c.asLong());
                         } else {
                             masm.movq(rscratch1, c.asLong());
                             masm.cmpq(reg1, rscratch1);
@@ -1294,18 +1305,29 @@ public final class AMD64LIRAssembler extends LIRAssembler {
                     case Short   :
                     case Int     : masm.cmpl(left, right.asInt()); break;
                     case Long    :
-                    case Word    : assert NumUtil.isInt(right.asLong());
-                                   masm.cmpq(left, right.asInt()); break;
-                    case Object  : assert right.isNull();
-                                   masm.cmpq(left, 0); break;
+                    case Word    : if (NumUtil.isInt(right.asLong())) {
+                                       masm.cmpq(left, (int) right.asLong());
+                                   } else {
+                                       masm.movq(rscratch1, right.asLong());
+                                       masm.cmpq(left, rscratch1);
+
+                                   }
+                                   break;
+                    case Object  : if (right.isNull()) {
+                                       masm.cmpq(left, 0);
+                                   } else {
+                                       movoop(rscratch1, right);
+                                       masm.cmpq(left, rscratch1);
+                                   }
+                                   break;
                     default      : throw Util.shouldNotReachHere();
                 }
             } else {
-                throw Util.shouldNotReachHere();
+                throw Util.shouldNotReachHere("opr1=" + opr1.toString() + " opr2=" + opr2);
             }
 
         } else {
-            throw Util.shouldNotReachHere(opr1.toString() + " opr2 = " + opr2);
+            throw Util.shouldNotReachHere("opr1=" + opr1.toString() + " opr2=" + opr2);
         }
         // Checkstyle: on
     }
@@ -1344,7 +1366,7 @@ public final class AMD64LIRAssembler extends LIRAssembler {
 
     @Override
     protected void emitCallAlignment(LIROpcode code) {
-        if (C1XOptions.AlignCallsForPatching) {
+        if (GraalOptions.AlignCallsForPatching) {
             // make sure that the displacement word of the call ends up word aligned
             int offset = masm.codeBuffer.position();
             offset += compilation.target.arch.machineCodeCallDisplacementOffset;
@@ -1516,14 +1538,12 @@ public final class AMD64LIRAssembler extends LIRAssembler {
             if (asXmmFloatReg(left) != asXmmFloatReg(dest)) {
                 masm.movflt(asXmmFloatReg(dest), asXmmFloatReg(left));
             }
-            callGlobalStub(op.globalStub, null, asXmmFloatReg(dest), dest);
-
+            masm.xorps(asXmmFloatReg(dest), tasm.recordDataReferenceInCode(CiConstant.forLong(0x8000000080000000L)));
         } else if (dest.kind.isDouble()) {
             if (asXmmDoubleReg(left) != asXmmDoubleReg(dest)) {
                 masm.movdbl(asXmmDoubleReg(dest), asXmmDoubleReg(left));
             }
-
-            callGlobalStub(op.globalStub, null, asXmmDoubleReg(dest), dest);
+            masm.xorpd(asXmmDoubleReg(dest), tasm.recordDataReferenceInCode(CiConstant.forLong(0x8000000000000000L)));
         } else {
             CiRegister lreg = left.asRegister();
             CiRegister dreg = dest.asRegister();
@@ -1541,7 +1561,7 @@ public final class AMD64LIRAssembler extends LIRAssembler {
     @Override
     protected void emitNullCheck(CiValue src, LIRDebugInfo info) {
         assert src.isRegister();
-        if (C1XOptions.NullCheckUniquePc) {
+        if (GraalOptions.NullCheckUniquePc) {
             masm.nop();
         }
         tasm.recordImplicitException(codePos(), info);
@@ -1597,11 +1617,34 @@ public final class AMD64LIRAssembler extends LIRAssembler {
     protected void emitXir(LIRXirInstruction instruction) {
         XirSnippet snippet = instruction.snippet;
 
+
+        Label endLabel = null;
         Label[] labels = new Label[snippet.template.labels.length];
         for (int i = 0; i < labels.length; i++) {
             labels[i] = new Label();
+            if (snippet.template.labels[i].name == XirLabel.TrueSuccessor) {
+                if (instruction.trueSuccessor() == null) {
+                    assert endLabel == null;
+                    endLabel = new Label();
+                    labels[i] = endLabel;
+                } else {
+                    labels[i] = instruction.trueSuccessor().label;
+                }
+            } else if (snippet.template.labels[i].name == XirLabel.FalseSuccessor) {
+                if (instruction.falseSuccessor() == null) {
+                    assert endLabel == null;
+                    endLabel = new Label();
+                    labels[i] = endLabel;
+                } else {
+                    labels[i] = instruction.falseSuccessor().label;
+                }
+            }
         }
         emitXirInstructions(instruction, snippet.template.fastPath, labels, instruction.getOperands(), snippet.marks);
+        if (endLabel != null) {
+            masm.bind(endLabel);
+        }
+
         if (snippet.template.slowPath != null) {
             addSlowPath(new SlowPath(instruction, labels, snippet.marks));
         }
@@ -1610,13 +1653,13 @@ public final class AMD64LIRAssembler extends LIRAssembler {
     @Override
     protected void emitSlowPath(SlowPath sp) {
         int start = -1;
-        if (C1XOptions.TraceAssembler) {
+        if (GraalOptions.TraceAssembler) {
             TTY.println("Emitting slow path for XIR instruction " + sp.instruction.snippet.template.name);
             start = masm.codeBuffer.position();
         }
         emitXirInstructions(sp.instruction, sp.instruction.snippet.template.slowPath, sp.labels, sp.instruction.getOperands(), sp.marks);
         masm.nop();
-        if (C1XOptions.TraceAssembler) {
+        if (GraalOptions.TraceAssembler) {
             TTY.println("From " + start + " to " + masm.codeBuffer.position());
         }
     }
@@ -1950,7 +1993,7 @@ public final class AMD64LIRAssembler extends LIRAssembler {
                     int lastFramePage = frameSize / target.pageSize;
                     // emit multiple stack bangs for methods with frames larger than a page
                     for (int i = 0; i <= lastFramePage; i++) {
-                        int offset = (i + C1XOptions.StackShadowPages) * target.pageSize;
+                        int offset = (i + GraalOptions.StackShadowPages) * target.pageSize;
                         // Deduct 'frameSize' to handle frames larger than the shadow
                         bangStackWithOffset(offset - frameSize);
                     }
@@ -1959,13 +2002,13 @@ public final class AMD64LIRAssembler extends LIRAssembler {
                 case PushFrame: {
                     int frameSize = initialFrameSizeInBytes();
                     masm.decrementq(AMD64.rsp, frameSize); // does not emit code for frameSize == 0
-                    if (C1XOptions.ZapStackOnMethodEntry) {
+                    if (GraalOptions.ZapStackOnMethodEntry) {
                         final int intSize = 4;
                         for (int i = 0; i < frameSize / intSize; ++i) {
                             masm.movl(new CiAddress(CiKind.Int, AMD64.rsp.asValue(), i * intSize), 0xC1C1C1C1);
                         }
                     }
-                    CiCalleeSaveArea csa = compilation.registerConfig.getCalleeSaveArea();
+                    CiCalleeSaveLayout csa = compilation.registerConfig.getCalleeSaveLayout();
                     if (csa.size != 0) {
                         int frameToCSA = frameMap.offsetToCalleeSaveAreaStart();
                         assert frameToCSA >= 0;
@@ -1976,7 +2019,7 @@ public final class AMD64LIRAssembler extends LIRAssembler {
                 case PopFrame: {
                     int frameSize = initialFrameSizeInBytes();
 
-                    CiCalleeSaveArea csa = compilation.registerConfig.getCalleeSaveArea();
+                    CiCalleeSaveLayout csa = compilation.registerConfig.getCalleeSaveLayout();
                     if (csa.size != 0) {
                         registerRestoreEpilogueOffset = masm.codeBuffer.position();
                         // saved all registers, restore all registers
@@ -2070,6 +2113,30 @@ public final class AMD64LIRAssembler extends LIRAssembler {
     @Override
     public void emitDeoptizationStub(DeoptimizationStub stub) {
         masm.bind(stub.label);
+        int code;
+        switch(stub.action) {
+            case None:
+                code = 0;
+                break;
+            case Recompile:
+                code = 1;
+                break;
+            case InvalidateReprofile:
+                code = 2;
+                break;
+            case InvalidateRecompile:
+                code = 3;
+                break;
+            case InvalidateStopCompiling:
+                code = 4;
+                break;
+            default:
+                throw Util.shouldNotReachHere();
+        }
+        if (code == 0) {
+            throw new RuntimeException();
+        }
+        masm.movq(rscratch1, code);
         directCall(CiRuntimeCall.Deoptimize, stub.info);
         shouldNotReachHere();
     }
@@ -2100,7 +2167,7 @@ public final class AMD64LIRAssembler extends LIRAssembler {
         }
 
         // Clear out parameters
-        if (C1XOptions.GenAssertionCode) {
+        if (GraalOptions.GenAssertionCode) {
             for (int i = 0; i < args.length; i++) {
                 masm.movptr(new CiAddress(CiKind.Word, AMD64.RSP, stub.argOffsets[i]), 0);
             }
@@ -2183,8 +2250,53 @@ public final class AMD64LIRAssembler extends LIRAssembler {
         tasm.recordExceptionHandlers(after, info);
     }
 
+    @Override
+    public boolean falseOnUnordered(Condition condition) {
+        switch(condition) {
+            case AE:
+            case NE:
+            case GT:
+            case AT:
+                return true;
+            case EQ:
+            case LE:
+            case BE:
+            case BT:
+            case LT:
+            case GE:
+            case OF:
+            case NOF:
+                return false;
+            default:
+                throw Util.shouldNotReachHere();
+        }
+    }
+
+    @Override
+    public boolean trueOnUnordered(Condition condition) {
+        switch(condition) {
+            case AE:
+            case NE:
+            case GT:
+            case AT:
+                return false;
+            case EQ:
+            case LE:
+            case BE:
+            case BT:
+                return true;
+            case LT:
+            case GE:
+            case OF:
+            case NOF:
+                return false;
+            default:
+                throw Util.shouldNotReachHere();
+        }
+    }
+
     protected void stop(String msg) {
-        if (C1XOptions.GenAssertionCode) {
+        if (GraalOptions.GenAssertionCode) {
             // TODO: pass a pointer to the message
             directCall(CiRuntimeCall.Debug, null);
             masm.hlt();
