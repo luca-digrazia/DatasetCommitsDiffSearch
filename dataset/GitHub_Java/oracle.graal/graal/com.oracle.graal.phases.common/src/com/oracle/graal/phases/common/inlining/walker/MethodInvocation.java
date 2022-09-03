@@ -28,11 +28,6 @@ import com.oracle.graal.api.meta.ResolvedJavaMethod;
 import com.oracle.graal.nodes.CallTargetNode;
 import com.oracle.graal.nodes.java.MethodCallTargetNode;
 import com.oracle.graal.phases.common.inlining.info.InlineInfo;
-import com.oracle.graal.phases.common.inlining.info.elem.Inlineable;
-import com.oracle.graal.phases.common.inlining.info.elem.InlineableGraph;
-import com.oracle.graal.phases.common.inlining.info.elem.InlineableMacroNode;
-
-import java.util.BitSet;
 
 /**
  * <p>
@@ -54,39 +49,11 @@ public class MethodInvocation {
 
     private int processedGraphs;
 
-    /**
-     * <p>
-     * The immutable positions of freshly instantiated arguments (ie, positions in
-     * <code>callee.invoke.callTarget.arguments</code>).
-     * </p>
-     *
-     * <p>
-     * A freshly instantiated argument is either:
-     * <uL>
-     * <li>an {@link InliningData#isFreshInstantiation(com.oracle.graal.nodes.ValueNode)}</li>
-     * <li>a fixed-param of the graph containing the callsite (ie, of <code>callee.graph()</code>
-     * that contains <code>callee.invoke</code>)</li>
-     * </uL>
-     * </p>
-     *
-     * <p>
-     * Given those positions, the
-     * {@link com.oracle.graal.phases.common.inlining.walker.CallsiteHolderExplorable} instantiated
-     * in {@link #buildCallsiteHolderForElement(int)} can determine which of <i>its</i> parameters
-     * are fixed.
-     * </p>
-     */
-    private final BitSet freshlyInstantiatedArguments;
-
-    private final int sizeFreshArgs;
-
-    public MethodInvocation(InlineInfo info, Assumptions assumptions, double probability, double relevance, BitSet freshlyInstantiatedArguments) {
+    public MethodInvocation(InlineInfo info, Assumptions assumptions, double probability, double relevance) {
         this.callee = info;
         this.assumptions = assumptions;
         this.probability = probability;
         this.relevance = relevance;
-        this.freshlyInstantiatedArguments = freshlyInstantiatedArguments;
-        this.sizeFreshArgs = freshlyInstantiatedArguments == null ? 0 : freshlyInstantiatedArguments.cardinality();
     }
 
     public void incrementProcessedGraphs() {
@@ -121,27 +88,6 @@ public class MethodInvocation {
 
     public boolean isRoot() {
         return callee == null;
-    }
-
-    public BitSet getFreshlyInstantiatedArguments() {
-        return freshlyInstantiatedArguments;
-    }
-
-    public int getSizeFreshArgs() {
-        return sizeFreshArgs;
-    }
-
-    public CallsiteHolder buildCallsiteHolderForElement(int index) {
-        Inlineable elem = callee.inlineableElementAt(index);
-        if (elem instanceof InlineableGraph) {
-            InlineableGraph ig = (InlineableGraph) elem;
-            final double invokeProbability = probability * callee.probabilityAt(index);
-            final double invokeRelevance = relevance * callee.relevanceAt(index);
-            return new CallsiteHolderExplorable(ig.getGraph(), invokeProbability, invokeRelevance, freshlyInstantiatedArguments);
-        } else {
-            assert elem instanceof InlineableMacroNode;
-            return CallsiteHolderDummy.DUMMY_CALLSITE_HOLDER;
-        }
     }
 
     @Override
