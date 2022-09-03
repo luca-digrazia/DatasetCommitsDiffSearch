@@ -330,7 +330,7 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
         this.speculationLog = speculationLog;
         this.useProfilingInfo = useProfilingInfo;
         this.cancellable = cancellable;
-        this.inliningLog = new InliningLog(rootMethod);
+        this.inliningLog = new InliningLog();
     }
 
     public void setLastSchedule(ScheduleResult result) {
