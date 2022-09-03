@@ -47,16 +47,17 @@
  )
  */
 /**
- * <h1>Truffle Tutorial: Implementing a Language with Truffle</h1>
+ * <h1>Truffle Tutorial: Implementing a New Language with Truffle</h1>
  *
  * <div id="contents">
  *
  * For an excellent, in-depth presentation on how to implement your language with Truffle,
- * please have a look at a three hour walkthrough presented at a recent
+ * please have a look at a 
+ * <a href="https://youtu.be/FJY96_6Y3a4">three hour walkthrough</a> presented at a recent
  * Conference on Programming Language Design and Implementation
  * (<a href="http://conf.researchr.org/home/pldi-2016">PLDI 2016</a>).
  * <p>
- * <a href="https://youtu.be/FJY96_6Y3a4">Video recording</a>
+ * <iframe width="854" height="480" src="https://www.youtube.com/embed/FJY96_6Y3a4" frameborder="0" allowfullscreen></iframe>
  * <br>
  * <a href="https://lafo.ssw.uni-linz.ac.at/pub/papers/2016_PLDI_Truffle.pdf">Download Slides</a>
  * <p>
@@ -64,9 +65,8 @@
  * </ul>
  * <li>{@link com.oracle.truffle.api.TruffleLanguage}: base class for Truffle language implementations.</li>
  * <li>{@link com.oracle.truffle.api.vm.PolyglotEngine}: execution environment for Truffle-implemented languages.</li>
- * <li>{@code com.oracle.truffle.sl.SLLanguage - link?}: Truffle implementation of the tutorial <em>Simple Language</em>.</li>
- * <li><a href=
- * "{@docRoot}/com/oracle/truffle/tutorial/package-summary.html">Other Truffle Tutorials</a></li>
+ * <li><a href="https://github.com/graalvm/simplelanguage">SimpleLanguage</a>: the tutorial Truffle language implementation.</li>
+ * <li>{@linkplain com.oracle.truffle.tutorial Other Truffle Tutorials}
  * </ul>
  *
  * </div>
