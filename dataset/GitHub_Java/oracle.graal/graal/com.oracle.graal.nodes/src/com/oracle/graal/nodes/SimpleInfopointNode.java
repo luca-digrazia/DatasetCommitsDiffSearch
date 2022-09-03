@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,13 +24,17 @@ package com.oracle.graal.nodes;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.spi.*;
 
-public class SimpleInfopointNode extends InfopointNode implements LIRLowerable, IterableNodeType {
-    private BytecodePosition position;
+@NodeInfo
+public final class SimpleInfopointNode extends InfopointNode implements LIRLowerable, IterableNodeType, Simplifiable {
+    public static final NodeClass<SimpleInfopointNode> TYPE = NodeClass.create(SimpleInfopointNode.class);
+    protected BytecodePosition position;
 
     public SimpleInfopointNode(InfopointReason reason, BytecodePosition position) {
-        super(reason);
+        super(TYPE, reason);
         this.position = position;
     }
 
@@ -44,14 +48,30 @@ public class SimpleInfopointNode extends InfopointNode implements LIRLowerable, 
     }
 
     public void addCaller(BytecodePosition caller) {
-        this.position = relink(this.position, caller);
+        this.position = position.addCaller(caller);
     }
 
-    private static BytecodePosition relink(BytecodePosition position, BytecodePosition link) {
-        if (position.getCaller() == null) {
-            return new BytecodePosition(link, position.getMethod(), position.getBCI());
-        } else {
-            return new BytecodePosition(relink(position.getCaller(), link), position.getMethod(), position.getBCI());
+    @Override
+    public void simplify(SimplifierTool tool) {
+        if (next() instanceof SimpleInfopointNode) {
+            graph().removeFixed(this);
         }
+    }
+
+    public void setPosition(BytecodePosition position) {
+        this.position = position;
+    }
+
+    @Override
+    public boolean verify() {
+        BytecodePosition pos = position;
+        if (pos != null) {
+            // Verify that the outermost position belongs to this graph.
+            while (pos.getCaller() != null) {
+                pos = pos.getCaller();
+            }
+            assert pos.getMethod().equals(graph().method());
+        }
+        return super.verify();
     }
 }

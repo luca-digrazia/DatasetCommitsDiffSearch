@@ -53,6 +53,12 @@ import com.oracle.graal.phases.common.inlining.info.*;
 public class InliningUtil {
 
     private static final String inliningDecisionsScopeString = "InliningDecisions";
+    /**
+     * Meters the size (in bytecodes) of all methods processed during compilation (i.e., top level
+     * and all inlined methods), irrespective of how many bytecodes in each method are actually
+     * parsed (which may be none for methods whose IR is retrieved from a cache).
+     */
+    public static final DebugMetric InlinedBytecodes = Debug.metric("InlinedBytecodes");
 
     /**
      * Print a HotSpot-style inlining message to the console.
@@ -315,7 +321,7 @@ public class InliningUtil {
             unwindNode = (UnwindNode) duplicates.get(unwindNode);
         }
 
-        finishInlining(invoke, graph, firstCFGNode, returnNodes, unwindNode, inlineGraph.getAssumptions(), inlineGraph, canonicalizedNodes);
+        finishInlining(invoke, graph, firstCFGNode, returnNodes, unwindNode, inlineGraph.getAssumptions(), inlineGraph.getInlinedMethods(), canonicalizedNodes);
 
         GraphUtil.killCFG(invokeNode);
 
@@ -323,7 +329,7 @@ public class InliningUtil {
     }
 
     public static ValueNode finishInlining(Invoke invoke, StructuredGraph graph, FixedNode firstNode, List<ReturnNode> returnNodes, UnwindNode unwindNode, Assumptions inlinedAssumptions,
-                    StructuredGraph inlineGraph, List<Node> canonicalizedNodes) {
+                    Set<ResolvedJavaMethod> inlinedMethods, List<Node> canonicalizedNodes) {
         FixedNode invokeNode = invoke.asNode();
         FrameState stateAfter = invoke.stateAfter();
         assert stateAfter == null || stateAfter.isAlive();
@@ -395,7 +401,9 @@ public class InliningUtil {
         }
 
         // Copy inlined methods from inlinee to caller
-        graph.updateInlinedMethods(inlineGraph);
+        if (inlinedMethods != null && graph.getInlinedMethods() != null) {
+            graph.getInlinedMethods().addAll(inlinedMethods);
+        }
 
         return returnValue;
     }
@@ -460,28 +468,14 @@ public class InliningUtil {
         Kind invokeReturnKind = invoke.asNode().getKind();
 
         if (frameState.bci == BytecodeFrame.AFTER_BCI) {
-            FrameState stateAfterReturn = stateAtReturn;
-            if (frameState.method() == null) {
-                // This is a frame state for a side effect within an intrinsic
-                // that was parsed for post-parse intrinsification
-                for (Node usage : frameState.usages()) {
-                    if (usage instanceof ForeignCallNode) {
-                        // A foreign call inside an intrinsic needs to have
-                        // the BCI of the invoke being intrinsified
-                        ForeignCallNode foreign = (ForeignCallNode) usage;
-                        foreign.setBci(invoke.bci());
-                    }
-                }
-            }
-
             /*
              * pop return kind from invoke's stateAfter and replace with this frameState's return
              * value (top of stack)
              */
+            FrameState stateAfterReturn = stateAtReturn;
             if (invokeReturnKind != Kind.Void && (alwaysDuplicateStateAfter || (frameState.stackSize() > 0 && stateAfterReturn.stackAt(0) != frameState.stackAt(0)))) {
                 stateAfterReturn = stateAtReturn.duplicateModified(invokeReturnKind, frameState.stackAt(0));
             }
-
             frameState.replaceAndDelete(stateAfterReturn);
             return stateAfterReturn;
         } else if (stateAtExceptionEdge != null && isStateAfterException(frameState)) {
@@ -587,26 +581,25 @@ public class InliningUtil {
         ValueNode singleReturnValue = null;
         PhiNode returnValuePhi = null;
         for (ReturnNode returnNode : returnNodes) {
-            ValueNode result = returnNode.result();
-            if (result != null) {
-                if (returnValuePhi == null && (singleReturnValue == null || singleReturnValue == result)) {
+            if (returnNode.result() != null) {
+                if (returnValuePhi == null && (singleReturnValue == null || singleReturnValue == returnNode.result())) {
                     /* Only one return value, so no need yet for a phi node. */
-                    singleReturnValue = result;
+                    singleReturnValue = returnNode.result();
 
                 } else if (returnValuePhi == null) {
                     /* Found a second return value, so create phi node. */
-                    returnValuePhi = merge.graph().addWithoutUnique(new ValuePhiNode(result.stamp().unrestricted(), merge));
+                    returnValuePhi = merge.graph().addWithoutUnique(new ValuePhiNode(returnNode.result().stamp().unrestricted(), merge));
                     if (canonicalizedNodes != null) {
                         canonicalizedNodes.add(returnValuePhi);
                     }
                     for (int i = 0; i < merge.forwardEndCount(); i++) {
                         returnValuePhi.addInput(singleReturnValue);
                     }
-                    returnValuePhi.addInput(result);
+                    returnValuePhi.addInput(returnNode.result());
 
                 } else {
                     /* Multiple return values, just add to existing phi node. */
-                    returnValuePhi.addInput(result);
+                    returnValuePhi.addInput(returnNode.result());
                 }
             }
 

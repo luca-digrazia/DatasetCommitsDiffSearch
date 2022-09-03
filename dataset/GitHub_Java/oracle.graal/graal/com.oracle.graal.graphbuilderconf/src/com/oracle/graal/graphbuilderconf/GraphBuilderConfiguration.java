@@ -24,8 +24,7 @@ package com.oracle.graal.graphbuilderconf;
 
 import java.util.*;
 
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.nodes.*;
 
@@ -33,9 +32,12 @@ public class GraphBuilderConfiguration {
 
     public static class Plugins {
         private final InvocationPlugins invocationPlugins;
-        private NodePlugin[] nodePlugins;
-        private ParameterPlugin[] parameterPlugins;
-        private InlineInvokePlugin[] inlineInvokePlugins;
+        private LoadFieldPlugin loadFieldPlugin;
+        private LoadIndexedPlugin loadIndexedPlugin;
+        private TypeCheckPlugin typeCheckPlugin;
+        private ParameterPlugin parameterPlugin;
+        private InlineInvokePlugin inlineInvokePlugin;
+        private GenericInvocationPlugin genericInvocationPlugin;
         private LoopExplosionPlugin loopExplosionPlugin;
 
         /**
@@ -45,10 +47,13 @@ public class GraphBuilderConfiguration {
          */
         public Plugins(Plugins copyFrom) {
             this.invocationPlugins = new InvocationPlugins(copyFrom.invocationPlugins);
-            this.nodePlugins = copyFrom.nodePlugins;
-            this.parameterPlugins = copyFrom.parameterPlugins;
-            this.inlineInvokePlugins = copyFrom.inlineInvokePlugins;
+            this.parameterPlugin = copyFrom.parameterPlugin;
+            this.loadFieldPlugin = copyFrom.loadFieldPlugin;
+            this.loadIndexedPlugin = copyFrom.loadIndexedPlugin;
+            this.typeCheckPlugin = copyFrom.typeCheckPlugin;
+            this.inlineInvokePlugin = copyFrom.inlineInvokePlugin;
             this.loopExplosionPlugin = copyFrom.loopExplosionPlugin;
+            this.genericInvocationPlugin = copyFrom.genericInvocationPlugin;
         }
 
         /**
@@ -59,73 +64,58 @@ public class GraphBuilderConfiguration {
          */
         public Plugins(InvocationPlugins invocationPlugins) {
             this.invocationPlugins = invocationPlugins;
-            this.nodePlugins = new NodePlugin[0];
-            this.parameterPlugins = new ParameterPlugin[0];
-            this.inlineInvokePlugins = new InlineInvokePlugin[0];
         }
 
         public InvocationPlugins getInvocationPlugins() {
             return invocationPlugins;
         }
 
-        public NodePlugin[] getNodePlugins() {
-            return nodePlugins;
+        public GenericInvocationPlugin getGenericInvocationPlugin() {
+            return genericInvocationPlugin;
         }
 
-        public void appendNodePlugin(NodePlugin plugin) {
-            nodePlugins = Arrays.copyOf(nodePlugins, nodePlugins.length + 1);
-            nodePlugins[nodePlugins.length - 1] = plugin;
+        public void setGenericInvocationPlugin(GenericInvocationPlugin plugin) {
+            this.genericInvocationPlugin = plugin;
         }
 
-        public void prependNodePlugin(NodePlugin plugin) {
-            NodePlugin[] newPlugins = new NodePlugin[nodePlugins.length + 1];
-            System.arraycopy(nodePlugins, 0, newPlugins, 1, nodePlugins.length);
-            newPlugins[0] = plugin;
-            nodePlugins = newPlugins;
+        public LoadFieldPlugin getLoadFieldPlugin() {
+            return loadFieldPlugin;
         }
 
-        public void clearNodePlugin() {
-            nodePlugins = new NodePlugin[0];
+        public void setLoadFieldPlugin(LoadFieldPlugin plugin) {
+            this.loadFieldPlugin = plugin;
         }
 
-        public ParameterPlugin[] getParameterPlugins() {
-            return parameterPlugins;
+        public LoadIndexedPlugin getLoadIndexedPlugin() {
+            return loadIndexedPlugin;
         }
 
-        public void appendParameterPlugin(ParameterPlugin plugin) {
-            parameterPlugins = Arrays.copyOf(parameterPlugins, parameterPlugins.length + 1);
-            parameterPlugins[parameterPlugins.length - 1] = plugin;
+        public void setLoadIndexedPlugin(LoadIndexedPlugin plugin) {
+            this.loadIndexedPlugin = plugin;
         }
 
-        public void prependParameterPlugin(ParameterPlugin plugin) {
-            ParameterPlugin[] newPlugins = new ParameterPlugin[parameterPlugins.length + 1];
-            System.arraycopy(parameterPlugins, 0, newPlugins, 1, parameterPlugins.length);
-            newPlugins[0] = plugin;
-            parameterPlugins = newPlugins;
+        public TypeCheckPlugin getTypeCheckPlugin() {
+            return typeCheckPlugin;
         }
 
-        public void clearParameterPlugin() {
-            parameterPlugins = new ParameterPlugin[0];
+        public void setTypeCheckPlugin(TypeCheckPlugin typeCheckPlugin) {
+            this.typeCheckPlugin = typeCheckPlugin;
         }
 
-        public InlineInvokePlugin[] getInlineInvokePlugins() {
-            return inlineInvokePlugins;
+        public ParameterPlugin getParameterPlugin() {
+            return parameterPlugin;
         }
 
-        public void appendInlineInvokePlugin(InlineInvokePlugin plugin) {
-            inlineInvokePlugins = Arrays.copyOf(inlineInvokePlugins, inlineInvokePlugins.length + 1);
-            inlineInvokePlugins[inlineInvokePlugins.length - 1] = plugin;
+        public void setParameterPlugin(ParameterPlugin plugin) {
+            this.parameterPlugin = plugin;
         }
 
-        public void prependInlineInvokePlugin(InlineInvokePlugin plugin) {
-            InlineInvokePlugin[] newPlugins = new InlineInvokePlugin[inlineInvokePlugins.length + 1];
-            System.arraycopy(inlineInvokePlugins, 0, newPlugins, 1, inlineInvokePlugins.length);
-            newPlugins[0] = plugin;
-            inlineInvokePlugins = newPlugins;
+        public InlineInvokePlugin getInlineInvokePlugin() {
+            return inlineInvokePlugin;
         }
 
-        public void clearInlineInvokePlugins() {
-            inlineInvokePlugins = new InlineInvokePlugin[0];
+        public void setInlineInvokePlugin(InlineInvokePlugin plugin) {
+            this.inlineInvokePlugin = plugin;
         }
 
         public LoopExplosionPlugin getLoopExplosionPlugin() {
@@ -141,10 +131,9 @@ public class GraphBuilderConfiguration {
 
     private final boolean eagerResolving;
     private final boolean omitAllExceptionEdges;
-    private final boolean omitAssertions;
     private final ResolvedJavaType[] skippedExceptionTypes;
     private final DebugInfoMode debugInfoMode;
-    private final boolean clearNonLiveLocals;
+    private final boolean doLivenessAnalysis;
     private boolean useProfiling;
     private final Plugins plugins;
 
@@ -172,14 +161,13 @@ public class GraphBuilderConfiguration {
         Full,
     }
 
-    protected GraphBuilderConfiguration(boolean eagerResolving, boolean omitAllExceptionEdges, boolean omitAssertions, DebugInfoMode debugInfoMode, ResolvedJavaType[] skippedExceptionTypes,
-                    boolean clearNonLiveLocals, Plugins plugins) {
+    protected GraphBuilderConfiguration(boolean eagerResolving, boolean omitAllExceptionEdges, DebugInfoMode debugInfoMode, ResolvedJavaType[] skippedExceptionTypes, boolean doLivenessAnalysis,
+                    Plugins plugins) {
         this.eagerResolving = eagerResolving;
         this.omitAllExceptionEdges = omitAllExceptionEdges;
-        this.omitAssertions = omitAssertions;
         this.debugInfoMode = debugInfoMode;
         this.skippedExceptionTypes = skippedExceptionTypes;
-        this.clearNonLiveLocals = clearNonLiveLocals;
+        this.doLivenessAnalysis = doLivenessAnalysis;
         this.useProfiling = true;
         this.plugins = plugins;
     }
@@ -191,7 +179,7 @@ public class GraphBuilderConfiguration {
      */
     public GraphBuilderConfiguration copy() {
         Plugins newPlugins = new Plugins(plugins);
-        GraphBuilderConfiguration result = new GraphBuilderConfiguration(eagerResolving, omitAllExceptionEdges, omitAssertions, debugInfoMode, skippedExceptionTypes, clearNonLiveLocals, newPlugins);
+        GraphBuilderConfiguration result = new GraphBuilderConfiguration(eagerResolving, omitAllExceptionEdges, debugInfoMode, skippedExceptionTypes, doLivenessAnalysis, newPlugins);
         result.useProfiling = useProfiling;
         return result;
     }
@@ -204,29 +192,21 @@ public class GraphBuilderConfiguration {
         this.useProfiling = b;
     }
 
-    public GraphBuilderConfiguration withEagerResolving(boolean newEagerResolving) {
-        return new GraphBuilderConfiguration(newEagerResolving, omitAllExceptionEdges, omitAssertions, debugInfoMode, skippedExceptionTypes, clearNonLiveLocals, plugins);
-    }
-
     public GraphBuilderConfiguration withSkippedExceptionTypes(ResolvedJavaType[] newSkippedExceptionTypes) {
-        return new GraphBuilderConfiguration(eagerResolving, omitAllExceptionEdges, omitAssertions, debugInfoMode, newSkippedExceptionTypes, clearNonLiveLocals, plugins);
+        return new GraphBuilderConfiguration(eagerResolving, omitAllExceptionEdges, debugInfoMode, newSkippedExceptionTypes, doLivenessAnalysis, plugins);
     }
 
     public GraphBuilderConfiguration withOmitAllExceptionEdges(boolean newOmitAllExceptionEdges) {
-        return new GraphBuilderConfiguration(eagerResolving, newOmitAllExceptionEdges, omitAssertions, debugInfoMode, skippedExceptionTypes, clearNonLiveLocals, plugins);
-    }
-
-    public GraphBuilderConfiguration withOmitAssertions(boolean newOmitAssertions) {
-        return new GraphBuilderConfiguration(eagerResolving, omitAllExceptionEdges, newOmitAssertions, debugInfoMode, skippedExceptionTypes, clearNonLiveLocals, plugins);
+        return new GraphBuilderConfiguration(eagerResolving, newOmitAllExceptionEdges, debugInfoMode, skippedExceptionTypes, doLivenessAnalysis, plugins);
     }
 
     public GraphBuilderConfiguration withDebugInfoMode(DebugInfoMode newDebugInfoMode) {
         ResolvedJavaType[] newSkippedExceptionTypes = skippedExceptionTypes == EMPTY ? EMPTY : Arrays.copyOf(skippedExceptionTypes, skippedExceptionTypes.length);
-        return new GraphBuilderConfiguration(eagerResolving, omitAllExceptionEdges, omitAssertions, newDebugInfoMode, newSkippedExceptionTypes, clearNonLiveLocals, plugins);
+        return new GraphBuilderConfiguration(eagerResolving, omitAllExceptionEdges, newDebugInfoMode, newSkippedExceptionTypes, doLivenessAnalysis, plugins);
     }
 
-    public GraphBuilderConfiguration withClearNonLiveLocals(boolean newClearNonLiveLocals) {
-        return new GraphBuilderConfiguration(eagerResolving, omitAllExceptionEdges, omitAssertions, debugInfoMode, skippedExceptionTypes, newClearNonLiveLocals, plugins);
+    public GraphBuilderConfiguration withDoLivenessAnalysis(boolean newLivenessAnalysis) {
+        return new GraphBuilderConfiguration(eagerResolving, omitAllExceptionEdges, debugInfoMode, skippedExceptionTypes, newLivenessAnalysis, plugins);
     }
 
     public ResolvedJavaType[] getSkippedExceptionTypes() {
@@ -241,10 +221,6 @@ public class GraphBuilderConfiguration {
         return omitAllExceptionEdges;
     }
 
-    public boolean omitAssertions() {
-        return omitAssertions;
-    }
-
     public boolean insertNonSafepointDebugInfo() {
         return debugInfoMode.ordinal() >= DebugInfoMode.Simple.ordinal();
     }
@@ -257,32 +233,32 @@ public class GraphBuilderConfiguration {
         return debugInfoMode == DebugInfoMode.Simple;
     }
 
-    public boolean clearNonLiveLocals() {
-        return clearNonLiveLocals;
+    public boolean doLivenessAnalysis() {
+        return doLivenessAnalysis;
     }
 
     public static GraphBuilderConfiguration getDefault(Plugins plugins) {
-        return new GraphBuilderConfiguration(false, false, false, DebugInfoMode.SafePointsOnly, EMPTY, GraalOptions.OptClearNonLiveLocals.getValue(), plugins);
+        return new GraphBuilderConfiguration(false, false, DebugInfoMode.SafePointsOnly, EMPTY, GraalOptions.OptLivenessAnalysis.getValue(), plugins);
     }
 
     public static GraphBuilderConfiguration getInfopointDefault(Plugins plugins) {
-        return new GraphBuilderConfiguration(true, false, false, DebugInfoMode.Simple, EMPTY, GraalOptions.OptClearNonLiveLocals.getValue(), plugins);
+        return new GraphBuilderConfiguration(true, false, DebugInfoMode.Simple, EMPTY, GraalOptions.OptLivenessAnalysis.getValue(), plugins);
     }
 
     public static GraphBuilderConfiguration getEagerDefault(Plugins plugins) {
-        return new GraphBuilderConfiguration(true, false, false, DebugInfoMode.SafePointsOnly, EMPTY, GraalOptions.OptClearNonLiveLocals.getValue(), plugins);
+        return new GraphBuilderConfiguration(true, false, DebugInfoMode.SafePointsOnly, EMPTY, GraalOptions.OptLivenessAnalysis.getValue(), plugins);
     }
 
     public static GraphBuilderConfiguration getInfopointEagerDefault(Plugins plugins) {
-        return new GraphBuilderConfiguration(true, false, false, DebugInfoMode.Simple, EMPTY, GraalOptions.OptClearNonLiveLocals.getValue(), plugins);
+        return new GraphBuilderConfiguration(true, false, DebugInfoMode.Simple, EMPTY, GraalOptions.OptLivenessAnalysis.getValue(), plugins);
     }
 
     public static GraphBuilderConfiguration getSnippetDefault(Plugins plugins) {
-        return new GraphBuilderConfiguration(true, true, false, DebugInfoMode.SafePointsOnly, EMPTY, GraalOptions.OptClearNonLiveLocals.getValue(), plugins);
+        return new GraphBuilderConfiguration(true, true, DebugInfoMode.SafePointsOnly, EMPTY, GraalOptions.OptLivenessAnalysis.getValue(), plugins);
     }
 
     public static GraphBuilderConfiguration getFullDebugDefault(Plugins plugins) {
-        return new GraphBuilderConfiguration(true, false, false, DebugInfoMode.Full, EMPTY, GraalOptions.OptClearNonLiveLocals.getValue(), plugins);
+        return new GraphBuilderConfiguration(true, false, DebugInfoMode.Full, EMPTY, GraalOptions.OptLivenessAnalysis.getValue(), plugins);
     }
 
     /**

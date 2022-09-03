@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,57 +23,98 @@
 package com.oracle.graal.java;
 
 import static com.oracle.graal.graph.iterators.NodePredicates.*;
-import static com.oracle.graal.nodes.ValueNodeUtil.*;
-import static java.lang.reflect.Modifier.*;
 
 import java.util.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.debug.*;
-import com.oracle.graal.graph.Node.Verbosity;
-import com.oracle.graal.java.BciBlockMapping.Block;
-import com.oracle.graal.java.BciBlockMapping.LocalLiveness;
+import com.oracle.graal.graphbuilderconf.*;
+import com.oracle.graal.java.BciBlockMapping.BciBlock;
+import com.oracle.graal.java.GraphBuilderPhase.Instance.BytecodeParser;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
 
-public class HIRFrameStateBuilder extends AbstractFrameStateBuilder<ValueNode> {
+public final class HIRFrameStateBuilder {
 
-    private static final ValueNode[] EMPTY_ARRAY = new ValueNode[0];
-    private static final MonitorIdNode[] EMPTY_MONITOR_ARRAY = new MonitorIdNode[0];
+    static final ValueNode[] EMPTY_ARRAY = new ValueNode[0];
+    static final MonitorIdNode[] EMPTY_MONITOR_ARRAY = new MonitorIdNode[0];
 
-    private final ValueNode[] locals;
-    private final ValueNode[] stack;
-    private ValueNode[] lockedObjects;
-    private MonitorIdNode[] monitorIds;
-    private final StructuredGraph graph;
+    protected final BytecodeParser parser;
+    protected final ResolvedJavaMethod method;
+    protected int stackSize;
+    protected final ValueNode[] locals;
+    protected final ValueNode[] stack;
+    protected ValueNode[] lockedObjects;
 
     /**
      * @see BytecodeFrame#rethrowException
      */
-    private boolean rethrowException;
+    protected boolean rethrowException;
 
-    public HIRFrameStateBuilder(ResolvedJavaMethod method, StructuredGraph graph, boolean eagerResolve) {
-        super(method);
+    private MonitorIdNode[] monitorIds;
+    private final StructuredGraph graph;
+    private FrameState outerFrameState;
+
+    /**
+     * Creates a new frame state builder for the given method and the given target graph.
+     *
+     * @param method the method whose frame is simulated
+     * @param graph the target graph of Graal nodes created by the builder
+     */
+    public HIRFrameStateBuilder(BytecodeParser parser, ResolvedJavaMethod method, StructuredGraph graph) {
+        this.parser = parser;
+        this.method = method;
+        this.locals = allocateArray(method.getMaxLocals());
+        this.stack = allocateArray(Math.max(1, method.getMaxStackSize()));
+        this.lockedObjects = allocateArray(0);
 
         assert graph != null;
 
-        this.locals = new ValueNode[method.getMaxLocals()];
-        // we always need at least one stack slot (for exceptions)
-        this.stack = new ValueNode[Math.max(1, method.getMaxStackSize())];
-        this.lockedObjects = EMPTY_ARRAY;
         this.monitorIds = EMPTY_MONITOR_ARRAY;
         this.graph = graph;
+    }
+
+    public void initializeFromArgumentsArray(ValueNode[] arguments) {
 
         int javaIndex = 0;
         int index = 0;
-        if (!isStatic(method.getModifiers())) {
+        if (!method.isStatic()) {
+            // set the receiver
+            locals[javaIndex] = arguments[index];
+            javaIndex = 1;
+            index = 1;
+        }
+        Signature sig = method.getSignature();
+        int max = sig.getParameterCount(false);
+        for (int i = 0; i < max; i++) {
+            Kind kind = sig.getParameterKind(i);
+            locals[javaIndex] = arguments[index];
+            javaIndex += kind.getSlotCount();
+            index++;
+        }
+    }
+
+    public void initializeForMethodStart(boolean eagerResolve, ParameterPlugin parameterPlugin) {
+
+        int javaIndex = 0;
+        int index = 0;
+        if (!method.isStatic()) {
             // add the receiver
-            ParameterNode receiver = graph.unique(new ParameterNode(javaIndex, StampFactory.declaredNonNull(method.getDeclaringClass())));
-            storeLocal(javaIndex, receiver);
+            FloatingNode receiver = null;
+            Stamp receiverStamp = StampFactory.declaredNonNull(method.getDeclaringClass());
+            if (parameterPlugin != null) {
+                receiver = parameterPlugin.interceptParameter(parser, index, receiverStamp);
+            }
+            if (receiver == null) {
+                receiver = new ParameterNode(javaIndex, receiverStamp);
+            }
+            locals[javaIndex] = graph.unique(receiver);
             javaIndex = 1;
             index = 1;
         }
@@ -85,34 +126,57 @@ public class HIRFrameStateBuilder extends AbstractFrameStateBuilder<ValueNode> {
             if (eagerResolve) {
                 type = type.resolve(accessingClass);
             }
-            Kind kind = type.getKind().getStackKind();
+            Kind kind = type.getKind();
             Stamp stamp;
             if (kind == Kind.Object && type instanceof ResolvedJavaType) {
                 stamp = StampFactory.declared((ResolvedJavaType) type);
             } else {
                 stamp = StampFactory.forKind(kind);
             }
-            ParameterNode param = graph.unique(new ParameterNode(index, stamp));
-            storeLocal(javaIndex, param);
-            javaIndex += stackSlots(kind);
+            FloatingNode param = null;
+            if (parameterPlugin != null) {
+                param = parameterPlugin.interceptParameter(parser, index, stamp);
+            }
+            if (param == null) {
+                param = new ParameterNode(index, stamp);
+            }
+            locals[javaIndex] = graph.unique(param);
+            javaIndex += kind.getSlotCount();
             index++;
+        }
+
+        if (parser.replacementContext instanceof IntrinsicContext) {
+            IntrinsicContext intrinsic = (IntrinsicContext) parser.replacementContext;
+            if (intrinsic.isCompilationRoot()) {
+                // Records the parameters to an root compiled intrinsic
+                intrinsic.args = locals.clone();
+            }
         }
     }
 
     private HIRFrameStateBuilder(HIRFrameStateBuilder other) {
-        super(other);
+        this.parser = other.parser;
+        this.method = other.method;
+        this.stackSize = other.stackSize;
+        this.locals = other.locals.clone();
+        this.stack = other.stack.clone();
+        this.lockedObjects = other.lockedObjects.length == 0 ? other.lockedObjects : other.lockedObjects.clone();
+        this.rethrowException = other.rethrowException;
+
+        assert locals.length == method.getMaxLocals();
+        assert stack.length == Math.max(1, method.getMaxStackSize());
+
         assert other.graph != null;
         graph = other.graph;
-        locals = other.locals.clone();
-        stack = other.stack.clone();
-        lockedObjects = other.lockedObjects == EMPTY_ARRAY ? EMPTY_ARRAY : other.lockedObjects.clone();
-        monitorIds = other.monitorIds == EMPTY_MONITOR_ARRAY ? EMPTY_MONITOR_ARRAY : other.monitorIds.clone();
-        stackSize = other.stackSize;
-        rethrowException = other.rethrowException;
+        monitorIds = other.monitorIds.length == 0 ? other.monitorIds : other.monitorIds.clone();
 
         assert locals.length == method.getMaxLocals();
         assert stack.length == Math.max(1, method.getMaxStackSize());
         assert lockedObjects.length == monitorIds.length;
+    }
+
+    private static ValueNode[] allocateArray(int length) {
+        return length == 0 ? EMPTY_ARRAY : new ValueNode[length];
     }
 
     @Override
@@ -139,7 +203,67 @@ public class HIRFrameStateBuilder extends AbstractFrameStateBuilder<ValueNode> {
     }
 
     public FrameState create(int bci) {
-        return graph.add(new FrameState(method, bci, locals, Arrays.asList(stack).subList(0, stackSize), lockedObjects, monitorIds, rethrowException, false));
+        BytecodeParser parent = parser.getParent();
+        if (parser.parsingReplacement()) {
+            IntrinsicContext intrinsic = parser.replacementContext.asIntrinsic();
+            if (intrinsic != null) {
+                return intrinsic.getInvokeStateBefore(parser.getGraph(), parent);
+            }
+        }
+        // If this is the recursive call in a partial intrinsification
+        // the frame(s) of the intrinsic method are omitted
+        while (parent != null && parent.parsingReplacement() && parent.replacementContext.asIntrinsic() != null) {
+            parent = parent.getParent();
+        }
+        return create(bci, parent, false);
+    }
+
+    public FrameState create(int bci, BytecodeParser parent, boolean duringCall) {
+        if (outerFrameState == null && parent != null) {
+            outerFrameState = parent.getFrameState().create(parent.bci());
+        }
+        if (bci == BytecodeFrame.AFTER_EXCEPTION_BCI && parent != null) {
+            FrameState newFrameState = outerFrameState.duplicateModified(outerFrameState.bci, true, Kind.Void, this.peek(0));
+            return newFrameState;
+        }
+        if (bci == BytecodeFrame.INVALID_FRAMESTATE_BCI) {
+            throw GraalInternalError.shouldNotReachHere();
+            // return graph.add(new FrameState(bci));
+        }
+        return graph.add(new FrameState(outerFrameState, method, bci, locals, stack, stackSize, lockedObjects, Arrays.asList(monitorIds), rethrowException, duringCall));
+    }
+
+    public BytecodePosition createBytecodePosition(int bci) {
+        BytecodeParser parent = parser.getParent();
+        if (AbstractBytecodeParser.Options.HideSubstitutionStates.getValue()) {
+            if (parser.parsingReplacement()) {
+                IntrinsicContext intrinsic = parser.replacementContext.asIntrinsic();
+                if (intrinsic != null) {
+                    // Attribute to the method being replaced
+                    return new BytecodePosition(FrameState.toBytecodePosition(intrinsic.getInvokeStateBefore(parser.getGraph(), parent)), intrinsic.method, -1);
+                }
+            }
+            // If this is the recursive call in a partial intrinsification
+            // the frame(s) of the intrinsic method are omitted
+            while (parent != null && parent.parsingReplacement() && parent.replacementContext.asIntrinsic() != null) {
+                parent = parent.getParent();
+            }
+        }
+        return create(null, bci, parent);
+    }
+
+    private BytecodePosition create(BytecodePosition o, int bci, BytecodeParser parent) {
+        BytecodePosition outer = o;
+        if (outer == null && parent != null) {
+            outer = parent.getFrameState().createBytecodePosition(parent.bci());
+        }
+        if (bci == BytecodeFrame.AFTER_EXCEPTION_BCI && parent != null) {
+            return FrameState.toBytecodePosition(outerFrameState);
+        }
+        if (bci == BytecodeFrame.INVALID_FRAMESTATE_BCI) {
+            throw GraalInternalError.shouldNotReachHere();
+        }
+        return new BytecodePosition(outer, method, bci);
     }
 
     public HIRFrameStateBuilder copy() {
@@ -171,14 +295,22 @@ public class HIRFrameStateBuilder extends AbstractFrameStateBuilder<ValueNode> {
         return true;
     }
 
-    public void merge(MergeNode block, HIRFrameStateBuilder other) {
+    public void merge(AbstractMergeNode block, HIRFrameStateBuilder other) {
         assert isCompatibleWith(other);
 
         for (int i = 0; i < localsSize(); i++) {
-            storeLocal(i, merge(localAt(i), other.localAt(i), block));
+            ValueNode curLocal = localAt(i);
+            ValueNode mergedLocal = merge(curLocal, other.localAt(i), block);
+            if (curLocal != mergedLocal) {
+                storeLocal(i, mergedLocal);
+            }
         }
         for (int i = 0; i < stackSize(); i++) {
-            storeStack(i, merge(stackAt(i), other.stackAt(i), block));
+            ValueNode curStack = stackAt(i);
+            ValueNode mergedStack = merge(curStack, other.stackAt(i), block);
+            if (curStack != mergedStack) {
+                storeStack(i, mergedStack);
+            }
         }
         for (int i = 0; i < lockedObjects.length; i++) {
             lockedObjects[i] = merge(lockedObjects[i], other.lockedObjects[i], block);
@@ -186,48 +318,48 @@ public class HIRFrameStateBuilder extends AbstractFrameStateBuilder<ValueNode> {
         }
     }
 
-    private ValueNode merge(ValueNode currentValue, ValueNode otherValue, MergeNode block) {
+    private ValueNode merge(ValueNode currentValue, ValueNode otherValue, AbstractMergeNode block) {
         if (currentValue == null || currentValue.isDeleted()) {
             return null;
-
         } else if (block.isPhiAtMerge(currentValue)) {
             if (otherValue == null || otherValue.isDeleted() || currentValue.getKind() != otherValue.getKind()) {
-                propagateDelete((PhiNode) currentValue);
+                propagateDelete((ValuePhiNode) currentValue);
                 return null;
             }
             ((PhiNode) currentValue).addInput(otherValue);
             return currentValue;
-
         } else if (currentValue != otherValue) {
-            assert !(block instanceof LoopBeginNode) : "Phi functions for loop headers are create eagerly for all locals and stack slots";
+            assert !(block instanceof LoopBeginNode) : String.format("Phi functions for loop headers are create eagerly for changed locals and all stack slots: %s != %s", currentValue, otherValue);
             if (otherValue == null || otherValue.isDeleted() || currentValue.getKind() != otherValue.getKind()) {
                 return null;
             }
-
-            PhiNode phi = graph.addWithoutUnique(new PhiNode(currentValue.stamp().unrestricted(), block));
-            for (int i = 0; i < block.phiPredecessorCount(); i++) {
-                phi.addInput(currentValue);
-            }
-            phi.addInput(otherValue);
-            assert phi.valueCount() == block.phiPredecessorCount() + 1 : "valueCount=" + phi.valueCount() + " predSize= " + block.phiPredecessorCount();
-            return phi;
-
+            return createValuePhi(currentValue, otherValue, block);
         } else {
             return currentValue;
         }
     }
 
+    private ValuePhiNode createValuePhi(ValueNode currentValue, ValueNode otherValue, AbstractMergeNode block) {
+        ValuePhiNode phi = graph.addWithoutUnique(new ValuePhiNode(currentValue.stamp().unrestricted(), block));
+        for (int i = 0; i < block.phiPredecessorCount(); i++) {
+            phi.addInput(currentValue);
+        }
+        phi.addInput(otherValue);
+        assert phi.valueCount() == block.phiPredecessorCount() + 1;
+        return phi;
+    }
+
     private void propagateDelete(FloatingNode node) {
-        assert node instanceof PhiNode || node instanceof ProxyNode;
+        assert node instanceof ValuePhiNode || node instanceof ProxyNode;
         if (node.isDeleted()) {
             return;
         }
         // Collect all phi functions that use this phi so that we can delete them recursively (after
         // we delete ourselves to avoid circles).
-        List<FloatingNode> propagateUsages = node.usages().filter(FloatingNode.class).filter(isA(PhiNode.class).or(ProxyNode.class)).snapshot();
+        List<FloatingNode> propagateUsages = node.usages().filter(FloatingNode.class).filter(isA(ValuePhiNode.class).or(ProxyNode.class)).snapshot();
 
         // Remove the phi function from all FrameStates where it is used and then delete it.
-        assert node.usages().filter(isNotA(FrameState.class).nor(PhiNode.class).nor(ProxyNode.class)).isEmpty() : "phi function that gets deletes must only be used in frame states";
+        assert node.usages().filter(isNotA(FrameState.class).nor(ValuePhiNode.class).nor(ProxyNode.class)).isEmpty() : "phi function that gets deletes must only be used in frame states";
         node.replaceAtUsages(null);
         node.safeDelete();
 
@@ -236,9 +368,11 @@ public class HIRFrameStateBuilder extends AbstractFrameStateBuilder<ValueNode> {
         }
     }
 
-    public void insertLoopPhis(LoopBeginNode loopBegin) {
+    public void insertLoopPhis(LocalLiveness liveness, int loopId, LoopBeginNode loopBegin) {
         for (int i = 0; i < localsSize(); i++) {
-            storeLocal(i, createLoopPhi(loopBegin, localAt(i)));
+            if (loopBegin.graph().isOSR() || liveness.localIsChangedInLoop(loopId, i)) {
+                storeLocal(i, createLoopPhi(loopBegin, localAt(i)));
+            }
         }
         for (int i = 0; i < stackSize(); i++) {
             storeStack(i, createLoopPhi(loopBegin, stackAt(i)));
@@ -296,27 +430,85 @@ public class HIRFrameStateBuilder extends AbstractFrameStateBuilder<ValueNode> {
         }
     }
 
-    private PhiNode createLoopPhi(MergeNode block, ValueNode value) {
+    private ValuePhiNode createLoopPhi(AbstractMergeNode block, ValueNode value) {
         if (value == null) {
             return null;
         }
         assert !block.isPhiAtMerge(value) : "phi function for this block already created";
 
-        PhiNode phi = graph.addWithoutUnique(new PhiNode(value.stamp().unrestricted(), block));
+        ValuePhiNode phi = graph.addWithoutUnique(new ValuePhiNode(value.stamp().unrestricted(), block));
         phi.addInput(value);
         return phi;
     }
 
-    public void cleanupDeletedPhis() {
-        for (int i = 0; i < localsSize(); i++) {
-            if (localAt(i) != null && localAt(i).isDeleted()) {
-                assert localAt(i) instanceof PhiNode || localAt(i) instanceof ProxyNode : "Only phi and value proxies can be deleted during parsing: " + localAt(i);
-                storeLocal(i, null);
-            }
+    /**
+     * Adds a locked monitor to this frame state.
+     *
+     * @param object the object whose monitor will be locked.
+     */
+    public void pushLock(ValueNode object, MonitorIdNode monitorId) {
+        assert object.isAlive() && object.getKind() == Kind.Object : "unexpected value: " + object;
+        lockedObjects = Arrays.copyOf(lockedObjects, lockedObjects.length + 1);
+        monitorIds = Arrays.copyOf(monitorIds, monitorIds.length + 1);
+        lockedObjects[lockedObjects.length - 1] = object;
+        monitorIds[monitorIds.length - 1] = monitorId;
+        assert lockedObjects.length == monitorIds.length;
+    }
+
+    /**
+     * Removes a locked monitor from this frame state.
+     *
+     * @return the object whose monitor was removed from the locks list.
+     */
+    public ValueNode popLock() {
+        try {
+            return lockedObjects[lockedObjects.length - 1];
+        } finally {
+            lockedObjects = lockedObjects.length == 1 ? EMPTY_ARRAY : Arrays.copyOf(lockedObjects, lockedObjects.length - 1);
+            monitorIds = monitorIds.length == 1 ? EMPTY_MONITOR_ARRAY : Arrays.copyOf(monitorIds, monitorIds.length - 1);
+            assert lockedObjects.length == monitorIds.length;
         }
     }
 
-    public void clearNonLiveLocals(Block block, LocalLiveness liveness, boolean liveIn) {
+    public MonitorIdNode peekMonitorId() {
+        return monitorIds[monitorIds.length - 1];
+    }
+
+    /**
+     * @return the current lock depth
+     */
+    public int lockDepth() {
+        assert lockedObjects.length == monitorIds.length;
+        return lockedObjects.length;
+    }
+
+    public boolean contains(ValueNode value) {
+        for (int i = 0; i < localsSize(); i++) {
+            if (localAt(i) == value) {
+                return true;
+            }
+        }
+        for (int i = 0; i < stackSize(); i++) {
+            if (stackAt(i) == value) {
+                return true;
+            }
+        }
+        assert lockedObjects.length == monitorIds.length;
+        for (int i = 0; i < lockedObjects.length; i++) {
+            if (lockedObjects[i] == value || monitorIds[i] == value) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public void clearNonLiveLocals(BciBlock block, LocalLiveness liveness, boolean liveIn) {
+        /*
+         * (lstadler) if somebody is tempted to remove/disable this clearing code: it's possible to
+         * remove it for normal compilations, but not for OSR compilations - otherwise dead object
+         * slots at the OSR entry aren't cleared. it is also not enough to rely on PiNodes with
+         * Kind.Illegal, because the conflicting branch might not have been parsed.
+         */
         if (liveness == null) {
             return;
         }
@@ -349,231 +541,466 @@ public class HIRFrameStateBuilder extends AbstractFrameStateBuilder<ValueNode> {
         rethrowException = b;
     }
 
-    @Override
+    /**
+     * Returns the size of the local variables.
+     *
+     * @return the size of the local variables
+     */
     public int localsSize() {
         return locals.length;
     }
 
-    @Override
+    /**
+     * Gets the current size (height) of the stack.
+     */
+    public int stackSize() {
+        return stackSize;
+    }
+
+    /**
+     * Gets the value in the local variables at the specified index, without any sanity checking.
+     *
+     * @param i the index into the locals
+     * @return the instruction that produced the value for the specified local
+     */
     public ValueNode localAt(int i) {
         return locals[i];
     }
 
-    @Override
+    /**
+     * Get the value on the stack at the specified stack index.
+     *
+     * @param i the index into the stack, with {@code 0} being the bottom of the stack
+     * @return the instruction at the specified position in the stack
+     */
     public ValueNode stackAt(int i) {
         return stack[i];
     }
 
     /**
-     * Adds a locked monitor to this frame state.
-     * 
-     * @param object the object whose monitor will be locked.
+     * Gets the value in the lock at the specified index, without any sanity checking.
+     *
+     * @param i the index into the lock
+     * @return the instruction that produced the value for the specified lock
      */
-    public void pushLock(ValueNode object, MonitorIdNode monitorId) {
-        assert object.isAlive() && object.getKind() == Kind.Object : "unexpected value: " + object;
-        lockedObjects = Arrays.copyOf(lockedObjects, lockedObjects.length + 1);
-        monitorIds = Arrays.copyOf(monitorIds, monitorIds.length + 1);
-        lockedObjects[lockedObjects.length - 1] = object;
-        monitorIds[monitorIds.length - 1] = monitorId;
-        assert lockedObjects.length == monitorIds.length;
+    public ValueNode lockAt(int i) {
+        return lockedObjects[i];
+    }
+
+    public void storeLock(int i, ValueNode lock) {
+        lockedObjects[i] = lock;
     }
 
     /**
-     * Removes a locked monitor from this frame state.
-     * 
-     * @return the object whose monitor was removed from the locks list.
+     * Loads the local variable at the specified index, checking that the returned value is non-null
+     * and that two-stack values are properly handled.
+     *
+     * @param i the index of the local variable to load
+     * @return the instruction that produced the specified local
      */
-    public ValueNode popLock() {
-        try {
-            return lockedObjects[lockedObjects.length - 1];
-        } finally {
-            lockedObjects = lockedObjects.length == 1 ? EMPTY_ARRAY : Arrays.copyOf(lockedObjects, lockedObjects.length - 1);
-            monitorIds = monitorIds.length == 1 ? EMPTY_MONITOR_ARRAY : Arrays.copyOf(monitorIds, monitorIds.length - 1);
-        }
-    }
-
-    public MonitorIdNode peekMonitorId() {
-        return monitorIds[monitorIds.length - 1];
-    }
-
-    /**
-     * @return the current lock depth
-     */
-    public int lockDepth() {
-        assert lockedObjects.length == monitorIds.length;
-        return lockedObjects.length;
-    }
-
-    @Override
     public ValueNode loadLocal(int i) {
         ValueNode x = locals[i];
-        assert !x.isDeleted();
-        assert !isTwoSlot(x.getKind()) || locals[i + 1] == null;
-        assert i == 0 || locals[i - 1] == null || !isTwoSlot(locals[i - 1].getKind());
+        assert assertLoadLocal(i, x);
         return x;
     }
 
-    @Override
+    private boolean assertLoadLocal(int i, ValueNode x) {
+        assert x != null : i;
+        assert parser.parsingReplacement() || (x.getKind().getSlotCount() == 1 || locals[i + 1] == null);
+        assert parser.parsingReplacement() || (i == 0 || locals[i - 1] == null || locals[i - 1].getKind().getSlotCount() == 1);
+        return true;
+    }
+
     public void storeLocal(int i, ValueNode x) {
-        assert x == null || x.isAlive() && x.getKind() != Kind.Void && x.getKind() != Kind.Illegal : "unexpected value: " + x;
+        storeLocal(i, x, x == null ? null : x.getKind());
+    }
+
+    /**
+     * Stores a given local variable at the specified index. If the value occupies two slots, then
+     * the next local variable index is also overwritten.
+     *
+     * @param i the index at which to store
+     * @param x the instruction which produces the value for the local
+     */
+    public void storeLocal(int i, ValueNode x, Kind kind) {
+        assert assertStoreLocal(x);
         locals[i] = x;
-        if (x != null && isTwoSlot(x.getKind())) {
-            // if this is a double word, then kill i+1
-            locals[i + 1] = null;
-        }
-        if (x != null && i > 0) {
-            ValueNode p = locals[i - 1];
-            if (p != null && isTwoSlot(p.getKind())) {
-                // if there was a double word at i - 1, then kill it
-                locals[i - 1] = null;
+        if (x != null) {
+            if (kind.needsTwoSlots() && !parser.parsingReplacement()) {
+                // if this is a double word, then kill i+1
+                locals[i + 1] = null;
+            }
+            if (i > 0 && !parser.parsingReplacement()) {
+                ValueNode p = locals[i - 1];
+                if (p != null && p.getKind().needsTwoSlots()) {
+                    // if there was a double word at i - 1, then kill it
+                    locals[i - 1] = null;
+                }
             }
         }
     }
 
-    @Override
+    private boolean assertStoreLocal(ValueNode x) {
+        assert x == null || parser.parsingReplacement() || (x.getKind() != Kind.Void && x.getKind() != Kind.Illegal) : "unexpected value: " + x;
+        return true;
+    }
+
     public void storeStack(int i, ValueNode x) {
-        assert x == null || x.isAlive() && (stack[i] == null || x.getKind() == stack[i].getKind()) : "Method does not handle changes from one-slot to two-slot values or non-alive values";
+        assert assertStoreStack(i, x);
         stack[i] = x;
     }
 
-    @Override
+    private boolean assertStoreStack(int i, ValueNode x) {
+        assert x == null || (stack[i] == null || x.getKind() == stack[i].getKind()) : "Method does not handle changes from one-slot to two-slot values or non-alive values";
+        return true;
+    }
+
+    /**
+     * Pushes an instruction onto the stack with the expected type.
+     *
+     * @param kind the type expected for this instruction
+     * @param x the instruction to push onto the stack
+     */
     public void push(Kind kind, ValueNode x) {
-        assert x.isAlive() && x.getKind() != Kind.Void && x.getKind() != Kind.Illegal;
-        xpush(assertKind(kind, x));
-        if (isTwoSlot(kind)) {
+        assert assertPush(kind, x);
+        xpush(x);
+        if (kind.needsTwoSlots()) {
             xpush(null);
         }
     }
 
-    @Override
+    private boolean assertPush(Kind kind, ValueNode x) {
+        assert parser.parsingReplacement() || (x.getKind() != Kind.Void && x.getKind() != Kind.Illegal);
+        assert x != null && (parser.parsingReplacement() || x.getKind() == kind);
+        return true;
+    }
+
+    /**
+     * Pushes a value onto the stack without checking the type.
+     *
+     * @param x the instruction to push onto the stack
+     */
     public void xpush(ValueNode x) {
-        assert x == null || (x.isAlive() && x.getKind() != Kind.Void && x.getKind() != Kind.Illegal);
+        assert assertXpush(x);
         stack[stackSize++] = x;
     }
 
-    @Override
+    private boolean assertXpush(ValueNode x) {
+        assert parser.parsingReplacement() || (x == null || (x.getKind() != Kind.Void && x.getKind() != Kind.Illegal));
+        return true;
+    }
+
+    /**
+     * Pushes a value onto the stack and checks that it is an int.
+     *
+     * @param x the instruction to push onto the stack
+     */
     public void ipush(ValueNode x) {
-        xpush(assertInt(x));
+        assert assertInt(x);
+        xpush(x);
     }
 
-    @Override
+    /**
+     * Pushes a value onto the stack and checks that it is a float.
+     *
+     * @param x the instruction to push onto the stack
+     */
     public void fpush(ValueNode x) {
-        xpush(assertFloat(x));
+        assert assertFloat(x);
+        xpush(x);
     }
 
-    @Override
+    /**
+     * Pushes a value onto the stack and checks that it is an object.
+     *
+     * @param x the instruction to push onto the stack
+     */
     public void apush(ValueNode x) {
-        xpush(assertObject(x));
+        assert assertObject(x);
+        xpush(x);
     }
 
-    @Override
+    /**
+     * Pushes a value onto the stack and checks that it is a long.
+     *
+     * @param x the instruction to push onto the stack
+     */
     public void lpush(ValueNode x) {
-        xpush(assertLong(x));
+        assert assertLong(x);
+        xpush(x);
         xpush(null);
     }
 
-    @Override
+    /**
+     * Pushes a value onto the stack and checks that it is a double.
+     *
+     * @param x the instruction to push onto the stack
+     */
     public void dpush(ValueNode x) {
-        xpush(assertDouble(x));
+        assert assertDouble(x);
+        xpush(x);
         xpush(null);
     }
 
-    @Override
     public void pushReturn(Kind kind, ValueNode x) {
         if (kind != Kind.Void) {
             push(kind.getStackKind(), x);
         }
     }
 
-    @Override
+    /**
+     * Pops an instruction off the stack with the expected type.
+     *
+     * @param kind the expected type
+     * @return the instruction on the top of the stack
+     */
     public ValueNode pop(Kind kind) {
-        assert kind != Kind.Void;
-        if (isTwoSlot(kind)) {
+        if (kind.needsTwoSlots()) {
             xpop();
         }
-        return assertKind(kind, xpop());
+        assert assertPop(kind);
+        return xpop();
     }
 
-    @Override
+    private boolean assertPop(Kind kind) {
+        assert kind != Kind.Void;
+        ValueNode x = xpeek();
+        assert x != null && (parser.parsingReplacement() || x.getKind() == kind);
+        return true;
+    }
+
+    /**
+     * Pops a value off of the stack without checking the type.
+     *
+     * @return x the instruction popped off the stack
+     */
     public ValueNode xpop() {
-        ValueNode result = stack[--stackSize];
-        assert result == null || !result.isDeleted();
+        return stack[--stackSize];
+    }
+
+    public ValueNode xpeek() {
+        return stack[stackSize - 1];
+    }
+
+    /**
+     * Pops a value off of the stack and checks that it is an int.
+     *
+     * @return x the instruction popped off the stack
+     */
+    public ValueNode ipop() {
+        assert assertIntPeek();
+        return xpop();
+    }
+
+    /**
+     * Pops a value off of the stack and checks that it is a float.
+     *
+     * @return x the instruction popped off the stack
+     */
+    public ValueNode fpop() {
+        assert assertFloatPeek();
+        return xpop();
+    }
+
+    /**
+     * Pops a value off of the stack and checks that it is an object.
+     *
+     * @return x the instruction popped off the stack
+     */
+    public ValueNode apop() {
+        assert assertObjectPeek();
+        return xpop();
+    }
+
+    /**
+     * Pops a value off of the stack and checks that it is a long.
+     *
+     * @return x the instruction popped off the stack
+     */
+    public ValueNode lpop() {
+        assert assertHighPeek();
+        xpop();
+        assert assertLongPeek();
+        return xpop();
+    }
+
+    /**
+     * Pops a value off of the stack and checks that it is a double.
+     *
+     * @return x the instruction popped off the stack
+     */
+    public ValueNode dpop() {
+        assert assertHighPeek();
+        xpop();
+        assert assertDoublePeek();
+        return xpop();
+    }
+
+    /**
+     * Pop the specified number of slots off of this stack and return them as an array of
+     * instructions.
+     *
+     * @return an array containing the arguments off of the stack
+     */
+    public ValueNode[] popArguments(int argSize) {
+        ValueNode[] result = allocateArray(argSize);
+        int newStackSize = stackSize;
+        for (int i = argSize - 1; i >= 0; i--) {
+            newStackSize--;
+            if (stack[newStackSize] == null) {
+                /* Two-slot value. */
+                newStackSize--;
+                assert stack[newStackSize].getKind().needsTwoSlots();
+            } else {
+                assert parser.parsingReplacement() || (stack[newStackSize].getKind().getSlotCount() == 1);
+            }
+            result[i] = stack[newStackSize];
+        }
+        stackSize = newStackSize;
         return result;
     }
 
-    @Override
-    public ValueNode ipop() {
-        return assertInt(xpop());
-    }
-
-    @Override
-    public ValueNode fpop() {
-        return assertFloat(xpop());
-    }
-
-    @Override
-    public ValueNode apop() {
-        return assertObject(xpop());
-    }
-
-    @Override
-    public ValueNode lpop() {
-        assertHigh(xpop());
-        return assertLong(xpop());
-    }
-
-    @Override
-    public ValueNode dpop() {
-        assertHigh(xpop());
-        return assertDouble(xpop());
-    }
-
-    @Override
-    public ValueNode[] popArguments(int slotSize, int argSize) {
-        int base = stackSize - slotSize;
-        ValueNode[] r = new ValueNode[argSize];
-        int argIndex = 0;
-        int stackindex = 0;
-        while (stackindex < slotSize) {
-            ValueNode element = stack[base + stackindex];
-            assert element != null;
-            r[argIndex++] = element;
-            stackindex += stackSlots(element.getKind());
-        }
-        stackSize = base;
-        return r;
-    }
-
-    @Override
+    /**
+     * Peeks an element from the operand stack.
+     *
+     * @param argumentNumber The number of the argument, relative from the top of the stack (0 =
+     *            top). Long and double arguments only count as one argument, i.e., null-slots are
+     *            ignored.
+     * @return The peeked argument.
+     */
     public ValueNode peek(int argumentNumber) {
         int idx = stackSize() - 1;
         for (int i = 0; i < argumentNumber; i++) {
             if (stackAt(idx) == null) {
                 idx--;
-                assert isTwoSlot(stackAt(idx).getKind());
+                assert stackAt(idx).getKind().needsTwoSlots();
             }
             idx--;
         }
         return stackAt(idx);
     }
 
-    public boolean contains(ValueNode value) {
-        for (int i = 0; i < localsSize(); i++) {
-            if (localAt(i) == value) {
-                return true;
+    /**
+     * Clears all values on this stack.
+     */
+    public void clearStack() {
+        stackSize = 0;
+    }
+
+    private boolean assertLongPeek() {
+        return assertLong(xpeek());
+    }
+
+    private static boolean assertLong(ValueNode x) {
+        assert x != null && (x.getKind() == Kind.Long);
+        return true;
+    }
+
+    private boolean assertIntPeek() {
+        return assertInt(xpeek());
+    }
+
+    private static boolean assertInt(ValueNode x) {
+        assert x != null && (x.getKind() == Kind.Int);
+        return true;
+    }
+
+    private boolean assertFloatPeek() {
+        return assertFloat(xpeek());
+    }
+
+    private static boolean assertFloat(ValueNode x) {
+        assert x != null && (x.getKind() == Kind.Float);
+        return true;
+    }
+
+    private boolean assertObjectPeek() {
+        return assertObject(xpeek());
+    }
+
+    private boolean assertObject(ValueNode x) {
+        assert x != null && (parser.parsingReplacement() || (x.getKind() == Kind.Object));
+        return true;
+    }
+
+    private boolean assertDoublePeek() {
+        return assertDouble(xpeek());
+    }
+
+    private static boolean assertDouble(ValueNode x) {
+        assert x != null && (x.getKind() == Kind.Double);
+        return true;
+    }
+
+    private boolean assertHighPeek() {
+        assert xpeek() == null;
+        return true;
+    }
+
+    @Override
+    public int hashCode() {
+        int result = hashCode(locals, locals.length);
+        result *= 13;
+        result += hashCode(stack, this.stackSize);
+        return result;
+    }
+
+    private static int hashCode(Object[] a, int length) {
+        int result = 1;
+        for (int i = 0; i < length; ++i) {
+            Object element = a[i];
+            result = 31 * result + (element == null ? 0 : System.identityHashCode(element));
+        }
+        return result;
+    }
+
+    private static boolean equals(ValueNode[] a, ValueNode[] b, int length) {
+        for (int i = 0; i < length; ++i) {
+            if (a[i] != b[i]) {
+                return false;
             }
         }
-        for (int i = 0; i < stackSize(); i++) {
-            if (stackAt(i) == value) {
-                return true;
+        return true;
+    }
+
+    @Override
+    public boolean equals(Object otherObject) {
+        if (otherObject instanceof HIRFrameStateBuilder) {
+            HIRFrameStateBuilder other = (HIRFrameStateBuilder) otherObject;
+            if (!other.method.equals(method)) {
+                return false;
             }
-        }
-        assert lockedObjects.length == monitorIds.length;
-        for (int i = 0; i < lockedObjects.length; i++) {
-            if (lockedObjects[i] == value || monitorIds[i] == value) {
-                return true;
+            if (other.stackSize != stackSize) {
+                return false;
             }
+            if (other.parser != parser) {
+                return false;
+            }
+            if (other.rethrowException != rethrowException) {
+                return false;
+            }
+            if (other.graph != graph) {
+                return false;
+            }
+            if (other.locals.length != locals.length) {
+                return false;
+            }
+            return equals(other.locals, locals, locals.length) && equals(other.stack, stack, stackSize) && equals(other.lockedObjects, lockedObjects, lockedObjects.length) &&
+                            equals(other.monitorIds, monitorIds, monitorIds.length);
         }
         return false;
+    }
+
+    public void replace(ValueNode oldValue, ValueNode newValue) {
+        for (int i = 0; i < locals.length; i++) {
+            if (locals[i] == oldValue) {
+                locals[i] = newValue;
+            }
+        }
+        for (int i = 0; i < stackSize; i++) {
+            if (stack[i] == oldValue) {
+                stack[i] = newValue;
+            }
+        }
     }
 }
