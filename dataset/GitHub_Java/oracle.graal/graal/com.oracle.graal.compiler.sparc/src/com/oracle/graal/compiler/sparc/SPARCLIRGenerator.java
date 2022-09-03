@@ -80,7 +80,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
 
     public SPARCLIRGenerator(StructuredGraph graph, Providers providers, FrameMap frameMap, CallingConvention cc, LIR lir) {
         super(graph, providers, frameMap, cc, lir);
-        lir.setSpillMoveFactory(new SPARCSpillMoveFactory());
+        lir.spillMoveFactory = new SPARCSpillMoveFactory();
     }
 
     @Override

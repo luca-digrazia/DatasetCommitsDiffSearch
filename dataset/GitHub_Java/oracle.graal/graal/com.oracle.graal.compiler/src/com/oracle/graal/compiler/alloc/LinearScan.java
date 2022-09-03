@@ -897,9 +897,25 @@ public final class LinearScan {
         return null;
     }
 
+    private static StructuredGraph getGraphFromDebugContext() {
+        LIRGenerator gen = getLIRGeneratorFromDebugContext();
+        if (gen != null) {
+            return gen.getGraph();
+        }
+        return null;
+    }
+
+    private static ResolvedJavaMethod getMethodFromDebugContext() {
+        StructuredGraph graph = getGraphFromDebugContext();
+        if (graph != null) {
+            return graph.method();
+        }
+        return null;
+    }
+
     private void reportFailure(int numBlocks) {
         try (Scope s = Debug.forceLog()) {
-            Indent indent = Debug.logAndIndent("report failure");
+            Indent indent = Debug.logAndIndent("report failure, graph: %s", getGraphFromDebugContext());
 
             BitSet startBlockLiveIn = blockData.get(ir.cfg.getStartBlock()).liveIn;
             try (Indent indent2 = Debug.logAndIndent("Error: liveIn set of first block must be empty (when this fails, variables are used before they are defined):")) {
@@ -1857,7 +1873,7 @@ public final class LinearScan {
         /*
          * This is the point to enable debug logging for the whole register allocation.
          */
-        Indent indent = Debug.logAndIndent("LinearScan allocate");
+        Indent indent = Debug.logAndIndent("LinearScan allocate %s", getMethodFromDebugContext());
 
         try (Scope s = Debug.scope("LifetimeAnalysis")) {
             numberInstructions();

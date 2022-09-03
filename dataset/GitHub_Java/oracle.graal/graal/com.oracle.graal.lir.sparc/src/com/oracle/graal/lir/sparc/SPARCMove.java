@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,16 +28,14 @@ import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 import static com.oracle.graal.sparc.SPARC.*;
 
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.code.CompilationResult.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.ImplicitNullCheck;
 import com.oracle.graal.lir.StandardOp.MoveOp;
 import com.oracle.graal.lir.StandardOp.NullCheck;
 import com.oracle.graal.lir.asm.*;
-import com.oracle.graal.sparc.*;
 
 public class SPARCMove {
 
@@ -137,33 +135,32 @@ public class SPARCMove {
 
         @Override
         public void emitMemAccess(SPARCMacroAssembler masm) {
-            final SPARCAddress addr = address.toAddress();
-            final Register dst = asRegister(result);
+            SPARCAddress addr = address.toAddress();
             switch (kind) {
                 case Boolean:
                 case Byte:
-                    new Ldsb(addr, dst).emit(masm);
+                    new Ldsb(addr, asRegister(result)).emit(masm);
                     break;
                 case Short:
-                    new Ldsh(addr, dst).emit(masm);
+                    new Ldsh(addr, asRegister(result)).emit(masm);
                     break;
                 case Char:
-                    new Lduh(addr, dst).emit(masm);
+                    new Lduh(addr, asRegister(result)).emit(masm);
                     break;
                 case Int:
-                    new Ldsw(addr, dst).emit(masm);
+                    new Ldsw(addr, asRegister(result)).emit(masm);
                     break;
                 case Long:
-                    new Ldx(addr, dst).emit(masm);
+                    new Ldx(addr, asRegister(result)).emit(masm);
                     break;
                 case Float:
-                    new Ldf(addr, dst).emit(masm);
+                    new Ldf(addr, asRegister(result)).emit(masm);
                     break;
                 case Double:
-                    new Lddf(addr, dst).emit(masm);
+                    new Lddf(addr, asRegister(result)).emit(masm);
                     break;
                 case Object:
-                    new Ldx(addr, dst).emit(masm);
+                    new Ldx(addr, asRegister(result)).emit(masm);
                     break;
                 default:
                     throw GraalInternalError.shouldNotReachHere();
@@ -189,32 +186,6 @@ public class SPARCMove {
             } else {
                 new Add(addr.getBase(), addr.getDisplacement(), asLongReg(result)).emit(masm);
             }
-        }
-    }
-
-    public static class LoadDataAddressOp extends SPARCLIRInstruction {
-
-        @Def({REG}) protected AllocatableValue result;
-        private final byte[] data;
-
-        public LoadDataAddressOp(AllocatableValue result, byte[] data) {
-            this.result = result;
-            this.data = data;
-        }
-
-        @Override
-        public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-            RawData rawData = new RawData(data, 16);
-            SPARCAddress addr = (SPARCAddress) crb.recordDataReferenceInCode(rawData);
-            assert addr == masm.getPlaceholder();
-            final boolean forceRelocatable = true;
-            Register dstReg = asRegister(result);
-            new Setx(0, dstReg, forceRelocatable).emit(masm);
-            // TODO: Fix this issue with the pc relative addressing (This is just my first guess how
-            // to do this)
-            new SPARCAssembler.Sub(dstReg, 10 * 4, dstReg).emit(masm);
-            new SPARCAssembler.Rdpc(SPARC.g5).emit(masm);
-            new SPARCAssembler.Add(SPARC.g5, dstReg, dstReg).emit(masm);
         }
     }
 
@@ -336,10 +307,12 @@ public class SPARCMove {
     public static class StoreConstantOp extends MemOp {
 
         protected final Constant input;
+        private final boolean compress;
 
-        public StoreConstantOp(Kind kind, SPARCAddressValue address, Constant input, LIRFrameState state) {
+        public StoreConstantOp(Kind kind, SPARCAddressValue address, Constant input, LIRFrameState state, boolean compress) {
             super(kind, address, state);
             this.input = input;
+            this.compress = compress;
             if (!input.isDefaultForKind()) {
                 throw GraalInternalError.shouldNotReachHere("Can only store null constants to memory");
             }
@@ -361,7 +334,11 @@ public class SPARCMove {
                     break;
                 case Long:
                 case Object:
-                    new Stx(g0, address.toAddress()).emit(masm);
+                    if (compress) {
+                        new Stw(g0, address.toAddress()).emit(masm);
+                    } else {
+                        new Stx(g0, address.toAddress()).emit(masm);
+                    }
                     break;
                 case Float:
                 case Double:
@@ -399,25 +376,19 @@ public class SPARCMove {
     }
 
     private static void reg2reg(SPARCAssembler masm, Value result, Value input) {
-        final Register src = asRegister(input);
-        final Register dst = asRegister(result);
-        if (src.equals(dst)) {
+        if (asRegister(input).equals(asRegister(result))) {
             return;
         }
         switch (input.getKind()) {
             case Int:
             case Long:
             case Object:
-                new Mov(src, dst).emit(masm);
+                new Mov(asRegister(input), asRegister(result)).emit(masm);
                 break;
             case Float:
-                new Fmovs(src, dst).emit(masm);
-                break;
             case Double:
-                new Fmovd(src, dst).emit(masm);
-                break;
             default:
-                throw GraalInternalError.shouldNotReachHere();
+                throw GraalInternalError.shouldNotReachHere("missing: " + input.getKind());
         }
     }
 
@@ -433,11 +404,7 @@ public class SPARCMove {
                 new Stx(src, dst).emit(masm);
                 break;
             case Float:
-                new Stf(src, dst).emit(masm);
-                break;
             case Double:
-                new Stdf(src, dst).emit(masm);
-                break;
             default:
                 throw GraalInternalError.shouldNotReachHere();
         }
@@ -475,7 +442,7 @@ public class SPARCMove {
                     }
                 }
                 break;
-            case Long:
+            case Long: {
                 if (crb.codeCache.needsDataPatch(input)) {
                     crb.recordInlineDataInCode(input);
                     new Setx(input.asLong(), asRegister(result), true).emit(masm);
@@ -487,10 +454,8 @@ public class SPARCMove {
                     }
                 }
                 break;
-            case Float:
-                new Ldf((SPARCAddress) crb.asFloatConstRef(input), asFloatReg(result)).emit(masm);
-                break;
-            case Object:
+            }
+            case Object: {
                 if (input.isNull()) {
                     new Clr(asRegister(result)).emit(masm);
                 } else if (crb.target.inlineObjects) {
@@ -504,6 +469,7 @@ public class SPARCMove {
                     throw GraalInternalError.shouldNotReachHere("the patched offset might be too big for the load");
                 }
                 break;
+            }
             default:
                 throw GraalInternalError.shouldNotReachHere("missing: " + input.getKind());
         }

@@ -29,7 +29,6 @@ import static java.lang.Float.*;
 
 import com.oracle.graal.amd64.*;
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.code.CompilationResult.RawData;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
 import com.oracle.graal.asm.amd64.*;
@@ -172,38 +171,6 @@ public class AMD64Move {
         }
     }
 
-    public static class ZeroExtendLoadOp extends MemOp {
-
-        @Def({REG}) protected AllocatableValue result;
-
-        public ZeroExtendLoadOp(Kind kind, AllocatableValue result, AMD64AddressValue address, LIRFrameState state) {
-            super(kind, address, state);
-            this.result = result;
-        }
-
-        @Override
-        public void emitMemAccess(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
-            switch (kind) {
-                case Boolean:
-                case Byte:
-                    masm.movzbl(asRegister(result), address.toAddress());
-                    break;
-                case Char:
-                case Short:
-                    masm.movzwl(asRegister(result), address.toAddress());
-                    break;
-                case Int:
-                    masm.movl(asRegister(result), address.toAddress());
-                    break;
-                case Long:
-                    masm.movq(asRegister(result), address.toAddress());
-                    break;
-                default:
-                    throw GraalInternalError.shouldNotReachHere();
-            }
-        }
-    }
-
     public static class StoreOp extends MemOp {
 
         @Use({REG}) protected AllocatableValue input;
@@ -307,23 +274,6 @@ public class AMD64Move {
         @Override
         public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
             masm.leaq(asLongReg(result), address.toAddress());
-        }
-    }
-
-    public static class LeaDataOp extends AMD64LIRInstruction {
-
-        @Def({REG}) protected AllocatableValue result;
-        private final byte[] data;
-
-        public LeaDataOp(AllocatableValue result, byte[] data) {
-            this.result = result;
-            this.data = data;
-        }
-
-        @Override
-        public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
-            RawData rawData = new RawData(data, 16);
-            masm.leaq(asRegister(result), (AMD64Address) crb.recordDataReferenceInCode(rawData));
         }
     }
 
@@ -459,14 +409,6 @@ public class AMD64Move {
     private static void reg2stack(CompilationResultBuilder crb, AMD64MacroAssembler masm, Value result, Value input) {
         AMD64Address dest = (AMD64Address) crb.asAddress(result);
         switch (input.getKind()) {
-            case Boolean:
-            case Byte:
-                masm.movb(dest, asRegister(input));
-                break;
-            case Short:
-            case Char:
-                masm.movw(dest, asRegister(input));
-                break;
             case Int:
                 masm.movl(dest, asRegister(input));
                 break;
@@ -490,18 +432,6 @@ public class AMD64Move {
     private static void stack2reg(CompilationResultBuilder crb, AMD64MacroAssembler masm, Value result, Value input) {
         AMD64Address src = (AMD64Address) crb.asAddress(input);
         switch (input.getKind()) {
-            case Boolean:
-                masm.movzbl(asRegister(result), src);
-                break;
-            case Byte:
-                masm.movsbl(asRegister(result), src);
-                break;
-            case Short:
-                masm.movswl(asRegister(result), src);
-                break;
-            case Char:
-                masm.movzwl(asRegister(result), src);
-                break;
             case Int:
                 masm.movl(asRegister(result), src);
                 break;
