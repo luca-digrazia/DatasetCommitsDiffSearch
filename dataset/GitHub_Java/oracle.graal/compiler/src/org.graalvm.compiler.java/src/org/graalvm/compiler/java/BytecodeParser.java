@@ -424,7 +424,6 @@ import org.graalvm.compiler.nodes.util.GraphUtil;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.OptimisticOptimizations;
 import org.graalvm.compiler.phases.util.ValueMergeUtil;
-import org.graalvm.compiler.serviceprovider.GraalServices;
 import org.graalvm.word.LocationIdentity;
 
 import jdk.vm.ci.code.BailoutException;
@@ -3924,46 +3923,10 @@ public class BytecodeParser implements GraphBuilderContext {
         return result;
     }
 
-    private String unresolvedMethodAssertionMessage(JavaMethod result) {
-        String message = result.format("%H.%n(%P)%R");
-        if (GraalServices.Java8OrEarlier) {
-            JavaType declaringClass = result.getDeclaringClass();
-            String className = declaringClass.getName();
-            switch (className) {
-                case "Ljava/nio/ByteBuffer;":
-                case "Ljava/nio/ShortBuffer;":
-                case "Ljava/nio/CharBuffer;":
-                case "Ljava/nio/IntBuffer;":
-                case "Ljava/nio/LongBuffer;":
-                case "Ljava/nio/FloatBuffer;":
-                case "Ljava/nio/DoubleBuffer;":
-                case "Ljava/nio/MappedByteBuffer;": {
-                    switch (result.getName()) {
-                        case "position":
-                        case "limit":
-                        case "mark":
-                        case "reset":
-                        case "clear":
-                        case "flip":
-                        case "rewind": {
-                            String returnType = result.getSignature().getReturnType(null).toJavaName();
-                            if (returnType.equals(declaringClass.toJavaName())) {
-                                message += String.format(" [Probably cause: %s was compiled with javac from JDK 9+ using " +
-                                                "`-target 8` and `-source 8` options. See https://bugs.openjdk.java.net/browse/JDK-4774077 for details.]", method.getDeclaringClass().toClassName());
-                            }
-                        }
-                    }
-                    break;
-                }
-            }
-        }
-        return message;
-    }
-
     private JavaMethod lookupMethod(int cpi, int opcode) {
         maybeEagerlyResolve(cpi, opcode);
         JavaMethod result = constantPool.lookupMethod(cpi, opcode);
-        assert !graphBuilderConfig.unresolvedIsError() || result instanceof ResolvedJavaMethod : unresolvedMethodAssertionMessage(result);
+        assert !graphBuilderConfig.unresolvedIsError() || result instanceof ResolvedJavaMethod : result;
         return result;
     }
 
@@ -4450,9 +4413,18 @@ public class BytecodeParser implements GraphBuilderContext {
          * Javac does not allow use of "$assertionsDisabled" for a field name but Eclipse does, in
          * which case a suffix is added to the generated field.
          */
-        if ((parsingIntrinsic() || graphBuilderConfig.omitAssertions()) && resolvedField.isSynthetic() && resolvedField.getName().startsWith("$assertionsDisabled")) {
-            frameState.push(field.getJavaKind(), ConstantNode.forBoolean(true, graph));
-            return;
+        if (resolvedField.isSynthetic() && resolvedField.getName().startsWith("$assertionsDisabled")) {
+            if (parsingIntrinsic()) {
+                if (parent != null && parent.parsingIntrinsic()) {
+                    frameState.push(field.getJavaKind(), ConstantNode.forBoolean(true, graph));
+                    return;
+                } else {
+                    throw new BytecodeParserError("assertion is not allowed in intrinsic: %s", method.format("%H.%n(%p)"));
+                }
+            } else if (graphBuilderConfig.omitAssertions()) {
+                frameState.push(field.getJavaKind(), ConstantNode.forBoolean(true, graph));
+                return;
+            }
         }
 
         ClassInitializationPlugin classInitializationPlugin = this.graphBuilderConfig.getPlugins().getClassInitializationPlugin();

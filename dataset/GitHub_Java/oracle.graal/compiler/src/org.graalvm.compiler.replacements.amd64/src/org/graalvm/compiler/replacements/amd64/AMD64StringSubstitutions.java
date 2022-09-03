@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -32,7 +32,6 @@ import org.graalvm.compiler.core.common.SuppressFBWarnings;
 import org.graalvm.compiler.graph.Node.ConstantNodeParameter;
 import org.graalvm.compiler.replacements.StringSubstitutions;
 import org.graalvm.compiler.replacements.nodes.ArrayCompareToNode;
-import org.graalvm.compiler.replacements.nodes.ArrayRegionEqualsNode;
 import org.graalvm.compiler.word.Word;
 import org.graalvm.word.Pointer;
 
@@ -83,27 +82,13 @@ public class AMD64StringSubstitutions {
             return -1;
         }
 
-        if (targetCount == 1) {
-            return AMD64ArrayIndexOf.indexOf1Char(source, sourceCount, totalOffset, target[targetOffset]);
-        } else if (targetCount == 2) {
-            return AMD64ArrayIndexOf.indexOfTwoConsecutiveChars(source, sourceCount, totalOffset, target[targetOffset], target[targetOffset + 1]);
-        } else {
-            int haystackLength = sourceCount - (targetCount - 2);
-            while (totalOffset < haystackLength) {
-                int indexOfResult = AMD64ArrayIndexOf.indexOfTwoConsecutiveChars(source, haystackLength, totalOffset, target[targetOffset], target[targetOffset + 1]);
-                if (indexOfResult < 0) {
-                    return -1;
-                }
-                totalOffset = indexOfResult;
-                Pointer cmpSourcePointer = Word.objectToTrackedPointer(source).add(charArrayBaseOffset(INJECTED)).add(totalOffset * charArrayIndexScale(INJECTED));
-                Pointer targetPointer = Word.objectToTrackedPointer(target).add(charArrayBaseOffset(INJECTED)).add(targetOffset * charArrayIndexScale(INJECTED));
-                if (ArrayRegionEqualsNode.regionEquals(cmpSourcePointer, targetPointer, targetCount, JavaKind.Char)) {
-                    return totalOffset;
-                }
-                totalOffset++;
-            }
-            return -1;
+        Pointer sourcePointer = Word.objectToTrackedPointer(source).add(charArrayBaseOffset(INJECTED)).add(totalOffset * charArrayIndexScale(INJECTED));
+        Pointer targetPointer = Word.objectToTrackedPointer(target).add(charArrayBaseOffset(INJECTED)).add(targetOffset * charArrayIndexScale(INJECTED));
+        int result = AMD64StringIndexOfNode.optimizedStringIndexPointer(sourcePointer, sourceCount - fromIndex, targetPointer, targetCount);
+        if (result >= 0) {
+            return result + totalOffset;
         }
+        return result;
     }
 
     // Only exists in JDK <= 8
@@ -121,7 +106,13 @@ public class AMD64StringSubstitutions {
 
         if (ch < Character.MIN_SUPPLEMENTARY_CODE_POINT) {
             char[] sourceArray = StringSubstitutions.getValue(source);
-            return AMD64ArrayIndexOf.indexOf1Char(sourceArray, sourceCount, fromIndex, (char) ch);
+
+            Pointer sourcePointer = Word.objectToTrackedPointer(sourceArray).add(charArrayBaseOffset(INJECTED)).add(fromIndex * charArrayIndexScale(INJECTED));
+            int result = AMD64ArrayIndexOfNode.optimizedArrayIndexOf(sourcePointer, sourceCount - fromIndex, (char) ch, JavaKind.Char);
+            if (result != -1) {
+                return result + fromIndex;
+            }
+            return result;
         } else {
             return indexOf(source, ch, origFromIndex);
         }
