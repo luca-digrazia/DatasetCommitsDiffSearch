@@ -589,10 +589,8 @@ public abstract class TruffleLanguage<C> {
      * @return
      */
     final /* protected */ <T> T lookup(Class<T> clazz) {
-        if (clazz.isInterface()) {
-            if (clazz.isInstance(this)) {
-                return clazz.cast(this);
-            }
+        if (clazz.isInstance(this)) {
+            return clazz.cast(this);
         }
         return null;
     }

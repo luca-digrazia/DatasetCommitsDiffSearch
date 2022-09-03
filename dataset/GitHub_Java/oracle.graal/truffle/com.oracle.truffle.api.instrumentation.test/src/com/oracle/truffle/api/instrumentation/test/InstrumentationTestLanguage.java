@@ -25,6 +25,9 @@
 package com.oracle.truffle.api.instrumentation.test;
 
 import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -37,10 +40,7 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.Registration;
-import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
-import com.oracle.truffle.api.frame.FrameSlotTypeException;
-import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrumentation.Instrumentable;
 import com.oracle.truffle.api.instrumentation.ProvidedTags;
@@ -89,11 +89,11 @@ import com.oracle.truffle.api.source.SourceSection;
 @Registration(mimeType = InstrumentationTestLanguage.MIME_TYPE, name = "InstrumentTestLang", version = "2.0")
 @ProvidedTags({ExpressionNode.class, DefineNode.class, LoopNode.class,
                 StandardTags.StatementTag.class, StandardTags.CallTag.class, StandardTags.RootTag.class, BlockNode.class, StandardTags.RootTag.class})
-public class InstrumentationTestLanguage extends TruffleLanguage<Map<String, CallTarget>> {
+public class InstrumentationTestLanguage extends TruffleLanguage<Context>
+                implements SpecialService {
 
     public static final String MIME_TYPE = "application/x-truffle-instrumentation-test-language";
     public static final String FILENAME_EXTENSION = ".titl";
-    public static final InstrumentationTestLanguage INSTANCE = new InstrumentationTestLanguage();
 
     public static final Class<?> EXPRESSION = ExpressionNode.class;
     public static final Class<?> DEFINE = DefineNode.class;
@@ -104,23 +104,40 @@ public class InstrumentationTestLanguage extends TruffleLanguage<Map<String, Cal
     public static final Class<?> BLOCK = BlockNode.class;
 
     public static final Class<?>[] TAGS = new Class<?>[]{EXPRESSION, DEFINE, LOOP, STATEMENT, CALL, BLOCK, ROOT};
-    public static final String[] TAG_NAMES = new String[]{"EXPRESSION", "DEFINE", "LOOP", "STATEMENT", "CALL", "BLOCK", "ROOT", "CONSTANT", "VARIABLE"};
+    public static final String[] TAG_NAMES = new String[]{"EXPRESSION", "DEFINE", "LOOP", "STATEMENT", "CALL", "BLOCK", "ROOT", "CONSTANT", "VARIABLE", "PRINT"};
 
-    @Override
-    protected Map<String, CallTarget> createContext(TruffleLanguage.Env env) {
-        return new HashMap<>();
-    }
+    // used to test that no getSourceSection calls happen in certain situations
+    private static int rootSourceSectionQueryCount;
 
-    public Node createFindContextNode0() {
-        return super.createFindContextNode();
-    }
-
-    public Map<String, CallTarget> findContext0(Node contextNode) {
-        return findContext(contextNode);
+    public InstrumentationTestLanguage() {
     }
 
     @Override
-    protected CallTarget parse(Source code, Node context, String... argumentNames) throws IOException {
+    public String fileExtension() {
+        return FILENAME_EXTENSION;
+    }
+
+    @Override
+    protected Context createContext(TruffleLanguage.Env env) {
+        Object[] sharedContext = (Object[]) env.getConfig().get("context");
+        if (sharedContext == null || sharedContext[0] == null) {
+            Context c = new Context(env.out(), env.err());
+            if (sharedContext != null) {
+                sharedContext[0] = c;
+            }
+            return c;
+        } else {
+            return forkContext((Context) sharedContext[0]);
+        }
+    }
+
+    protected Context forkContext(Context context) {
+        return context;
+    }
+
+    @Override
+    protected CallTarget parse(ParsingRequest request) throws Exception {
+        Source code = request.getSource();
         SourceSection outer = code.createSection(0, code.getLength());
         BaseNode node;
         try {
@@ -128,137 +145,24 @@ public class InstrumentationTestLanguage extends TruffleLanguage<Map<String, Cal
         } catch (LanguageError e) {
             throw new IOException(e);
         }
-        return Truffle.getRuntime().createCallTarget(new InstrumentationTestRootNode("", outer, node));
+        return Truffle.getRuntime().createCallTarget(new InstrumentationTestRootNode(this, "", outer, node));
     }
 
-    @Override
-    protected Object evalInContext(Source code, Node context, final MaterializedFrame mFrame) throws IOException {
-        BaseNode node;
-        try {
-            node = parse(code);
-        } catch (LanguageError e) {
-            throw new IOException(e);
-        }
-
-        // TODO find a better way to convert from materialized frame to virtual frame.
-        // maybe we should always use Frame everywhere?
-        return node.execute(new VirtualFrame() {
-
-            public void setObject(FrameSlot slot, Object value) {
-                mFrame.setObject(slot, value);
-            }
-
-            public void setLong(FrameSlot slot, long value) {
-                mFrame.setLong(slot, value);
-            }
-
-            public void setInt(FrameSlot slot, int value) {
-                mFrame.setInt(slot, value);
-            }
-
-            public void setFloat(FrameSlot slot, float value) {
-                mFrame.setFloat(slot, value);
-            }
-
-            public void setDouble(FrameSlot slot, double value) {
-                mFrame.setDouble(slot, value);
-            }
-
-            public void setByte(FrameSlot slot, byte value) {
-                mFrame.setByte(slot, value);
-            }
-
-            public void setBoolean(FrameSlot slot, boolean value) {
-                mFrame.setBoolean(slot, value);
-            }
-
-            public MaterializedFrame materialize() {
-                return mFrame;
-            }
-
-            public boolean isObject(FrameSlot slot) {
-                return mFrame.isObject(slot);
-            }
-
-            public boolean isLong(FrameSlot slot) {
-                return mFrame.isLong(slot);
-            }
-
-            public boolean isInt(FrameSlot slot) {
-                return mFrame.isInt(slot);
-            }
-
-            public boolean isFloat(FrameSlot slot) {
-                return mFrame.isFloat(slot);
-            }
-
-            public boolean isDouble(FrameSlot slot) {
-                return mFrame.isDouble(slot);
-            }
-
-            public boolean isByte(FrameSlot slot) {
-                return mFrame.isByte(slot);
-            }
-
-            public boolean isBoolean(FrameSlot slot) {
-                return mFrame.isBoolean(slot);
-            }
-
-            public Object getValue(FrameSlot slot) {
-                return mFrame.getValue(slot);
-            }
-
-            public Object getObject(FrameSlot slot) throws FrameSlotTypeException {
-                return mFrame.getObject(slot);
-            }
-
-            public long getLong(FrameSlot slot) throws FrameSlotTypeException {
-                return mFrame.getLong(slot);
-            }
-
-            public int getInt(FrameSlot slot) throws FrameSlotTypeException {
-                return mFrame.getInt(slot);
-            }
-
-            public FrameDescriptor getFrameDescriptor() {
-                return mFrame.getFrameDescriptor();
-            }
-
-            public float getFloat(FrameSlot slot) throws FrameSlotTypeException {
-                return mFrame.getFloat(slot);
-            }
-
-            public double getDouble(FrameSlot slot) throws FrameSlotTypeException {
-                return mFrame.getDouble(slot);
-            }
-
-            public byte getByte(FrameSlot slot) throws FrameSlotTypeException {
-                return mFrame.getByte(slot);
-            }
-
-            public boolean getBoolean(FrameSlot slot) throws FrameSlotTypeException {
-                return mFrame.getBoolean(slot);
-            }
-
-            public Object[] getArguments() {
-                return mFrame.getArguments();
-            }
-        });
-    }
-
-    public static BaseNode parse(Source code) {
-        return new Parser(code).parse();
+    public BaseNode parse(Source code) {
+        return new Parser(this, code).parse();
     }
 
     private static final class Parser {
 
         private static final char EOF = (char) -1;
 
+        private final InstrumentationTestLanguage lang;
         private final Source source;
         private final String code;
         private int current;
 
-        Parser(Source source) {
+        Parser(InstrumentationTestLanguage lang, Source source) {
+            this.lang = lang;
             this.source = source;
             this.code = source.getCode();
         }
@@ -289,7 +193,7 @@ public class InstrumentationTestLanguage extends TruffleLanguage<Map<String, Cal
             int numberOfIdents = 0;
             if (tag.equals("DEFINE") || tag.equals("CALL") || tag.equals("LOOP") || tag.equals("CONSTANT")) {
                 numberOfIdents = 1;
-            } else if (tag.equals("VARIABLE")) {
+            } else if (tag.equals("VARIABLE") || tag.equals("PRINT")) {
                 numberOfIdents = 2;
             }
             String[] idents = new String[numberOfIdents];
@@ -321,7 +225,6 @@ public class InstrumentationTestLanguage extends TruffleLanguage<Map<String, Cal
                         error("missing closing bracket");
                     }
                     next();
-                    skipWhiteSpace();
                 }
 
             }
@@ -347,10 +250,10 @@ public class InstrumentationTestLanguage extends TruffleLanguage<Map<String, Cal
             return false;
         }
 
-        private static BaseNode createNode(String tag, String[] idents, SourceSection sourceSection, BaseNode[] childArray) throws AssertionError {
+        private BaseNode createNode(String tag, String[] idents, SourceSection sourceSection, BaseNode[] childArray) throws AssertionError {
             switch (tag) {
                 case "DEFINE":
-                    return new DefineNode(idents[0], sourceSection, childArray);
+                    return new DefineNode(lang, idents[0], sourceSection, childArray);
                 case "CALL":
                     return new CallNode(idents[0], childArray);
                 case "LOOP":
@@ -367,6 +270,8 @@ public class InstrumentationTestLanguage extends TruffleLanguage<Map<String, Cal
                     return new ConstantNode(idents[0], childArray);
                 case "VARIABLE":
                     return new VariableNode(idents[0], idents[1], childArray);
+                case "PRINT":
+                    return new PrintNode(idents[0], idents[1], childArray);
                 default:
                     throw new AssertionError();
             }
@@ -420,12 +325,20 @@ public class InstrumentationTestLanguage extends TruffleLanguage<Map<String, Cal
     private static class InstrumentationTestRootNode extends RootNode {
 
         private final String name;
+        private final SourceSection sourceSection;
         @Children private final BaseNode[] expressions;
 
-        protected InstrumentationTestRootNode(String name, SourceSection sourceSection, BaseNode... expressions) {
-            super(InstrumentationTestLanguage.class, sourceSection, null);
+        protected InstrumentationTestRootNode(InstrumentationTestLanguage lang, String name, SourceSection sourceSection, BaseNode... expressions) {
+            super(lang);
             this.name = name;
+            this.sourceSection = sourceSection;
             this.expressions = expressions;
+        }
+
+        @Override
+        public SourceSection getSourceSection() {
+            rootSourceSectionQueryCount++;
+            return sourceSection;
         }
 
         @Override
@@ -453,7 +366,7 @@ public class InstrumentationTestLanguage extends TruffleLanguage<Map<String, Cal
 
         @Override
         public String toString() {
-            return "Root[" + getSourceSection().toString().replaceAll("\n", "\\\\n") + "]";
+            return "Root[" + name + "]";
         }
     }
 
@@ -530,12 +443,9 @@ public class InstrumentationTestLanguage extends TruffleLanguage<Map<String, Cal
         private final String identifier;
         private final CallTarget target;
 
-        @Child private Node contextNode;
-
-        DefineNode(String identifier, SourceSection source, BaseNode[] children) {
+        DefineNode(InstrumentationTestLanguage lang, String identifier, SourceSection source, BaseNode[] children) {
             this.identifier = identifier;
-            this.target = Truffle.getRuntime().createCallTarget(new InstrumentationTestRootNode(identifier, source, children));
-            this.contextNode = InstrumentationTestLanguage.INSTANCE.createFindContextNode0();
+            this.target = Truffle.getRuntime().createCallTarget(new InstrumentationTestRootNode(lang, identifier, source, children));
         }
 
         @Override
@@ -546,13 +456,13 @@ public class InstrumentationTestLanguage extends TruffleLanguage<Map<String, Cal
 
         @TruffleBoundary
         private void defineFunction() {
-            Map<String, CallTarget> context = InstrumentationTestLanguage.INSTANCE.findContext(contextNode);
-            if (context.containsKey(identifier)) {
-                if (context.get(identifier) != target) {
+            Context context = getRootNode().getLanguage(InstrumentationTestLanguage.class).getContextReference().get();
+            if (context.callTargets.containsKey(identifier)) {
+                if (context.callTargets.get(identifier) != target) {
                     throw new IllegalArgumentException("Identifier redefinition not supported.");
                 }
             }
-            context.put(this.identifier, target);
+            context.callTargets.put(this.identifier, target);
         }
 
     }
@@ -560,13 +470,10 @@ public class InstrumentationTestLanguage extends TruffleLanguage<Map<String, Cal
     private static class CallNode extends InstrumentedNode {
 
         @Child private DirectCallNode callNode;
-        @Child private Node contextNode;
-
         private final String identifier;
 
         CallNode(String identifier, BaseNode[] children) {
             super(children);
-            this.contextNode = InstrumentationTestLanguage.INSTANCE.createFindContextNode0();
             this.identifier = identifier;
         }
 
@@ -574,11 +481,11 @@ public class InstrumentationTestLanguage extends TruffleLanguage<Map<String, Cal
         public Object execute(VirtualFrame frame) {
             if (callNode == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
-                Map<String, CallTarget> context = InstrumentationTestLanguage.INSTANCE.findContext(contextNode);
-                CallTarget target = context.get(identifier);
+                Context context = getRootNode().getLanguage(InstrumentationTestLanguage.class).getContextReference().get();
+                CallTarget target = context.callTargets.get(identifier);
                 callNode = insert(Truffle.getRuntime().createDirectCallNode(target));
             }
-            return callNode.call(frame, new Object[0]);
+            return callNode.call(new Object[0]);
         }
     }
 
@@ -667,6 +574,50 @@ public class InstrumentationTestLanguage extends TruffleLanguage<Map<String, Cal
         }
     }
 
+    static class PrintNode extends InstrumentedNode {
+
+        enum Output {
+            OUT,
+            ERR
+        }
+
+        private final Output where;
+        private final String what;
+        @CompilationFinal private PrintWriter writer;
+
+        PrintNode(String where, String what, BaseNode[] children) {
+            super(children);
+            if (what == null) {
+                this.where = Output.OUT;
+                this.what = where;
+            } else {
+                this.where = Output.valueOf(where);
+                this.what = what;
+            }
+        }
+
+        @Override
+        public Object execute(VirtualFrame frame) {
+            if (writer == null) {
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                Context context = getRootNode().getLanguage(InstrumentationTestLanguage.class).getContextReference().get();
+                switch (where) {
+                    case OUT:
+                        writer = new PrintWriter(new OutputStreamWriter(context.out));
+                        break;
+                    case ERR:
+                        writer = new PrintWriter(new OutputStreamWriter(context.err));
+                        break;
+                    default:
+                        throw new AssertionError(where);
+                }
+            }
+            writer.write(what);
+            writer.flush();
+            return null;
+        }
+    }
+
     public abstract static class BaseNode extends Node {
 
         private SourceSection sourceSection;
@@ -693,12 +644,12 @@ public class InstrumentationTestLanguage extends TruffleLanguage<Map<String, Cal
     }
 
     @Override
-    protected Object findExportedSymbol(Map<String, CallTarget> context, String globalName, boolean onlyExplicit) {
-        return context.get(globalName);
+    protected Object findExportedSymbol(Context context, String globalName, boolean onlyExplicit) {
+        return context.callTargets.get(globalName);
     }
 
     @Override
-    protected Object getLanguageGlobal(Map<String, CallTarget> context) {
+    protected Object getLanguageGlobal(Context context) {
         return context;
     }
 
@@ -707,4 +658,47 @@ public class InstrumentationTestLanguage extends TruffleLanguage<Map<String, Cal
         return false;
     }
 
+    @Override
+    protected Object findMetaObject(Context context, Object obj) {
+        if (obj instanceof Integer || obj instanceof Long) {
+            return "Integer";
+        }
+        if (obj instanceof Boolean) {
+            return "Boolean";
+        }
+        if (obj != null && obj.equals(Double.POSITIVE_INFINITY)) {
+            return "Infinity";
+        }
+        return null;
+    }
+
+    @Override
+    protected SourceSection findSourceLocation(Context context, Object obj) {
+        if (obj instanceof Integer || obj instanceof Long) {
+            return Source.newBuilder("source integer").name("integer").mimeType(MIME_TYPE).build().createSection(1);
+        }
+        if (obj instanceof Boolean) {
+            return Source.newBuilder("source boolean").name("boolean").mimeType(MIME_TYPE).build().createSection(1);
+        }
+        if (obj != null && obj.equals(Double.POSITIVE_INFINITY)) {
+            return Source.newBuilder("source infinity").name("double").mimeType(MIME_TYPE).build().createSection(1);
+        }
+        return null;
+    }
+
+    public static int getRootSourceSectionQueryCount() {
+        return rootSourceSectionQueryCount;
+    }
+}
+
+class Context {
+
+    final Map<String, CallTarget> callTargets = new HashMap<>();
+    final OutputStream out;
+    final OutputStream err;
+
+    Context(OutputStream out, OutputStream err) {
+        this.out = out;
+        this.err = err;
+    }
 }
