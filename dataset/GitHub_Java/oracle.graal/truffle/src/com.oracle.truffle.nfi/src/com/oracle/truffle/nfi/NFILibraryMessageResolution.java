@@ -38,7 +38,6 @@ import com.oracle.truffle.api.interop.Resolve;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
-import com.oracle.truffle.api.interop.java.JavaInterop;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.nfi.NFILibraryMessageResolutionFactory.CachedLookupSymbolNodeGen;
 import com.oracle.truffle.nfi.NFILibraryMessageResolutionFactory.IdentToStringNodeGen;
@@ -105,16 +104,10 @@ class NFILibraryMessageResolution {
         }
     }
 
-    @Resolve(message = "KEYS")
-    abstract static class KeysNode extends Node {
-
-        public Object access(NFILibrary receiver) {
-            return JavaInterop.asTruffleObject(receiver.getSymbols());
-        }
-    }
-
     @Resolve(message = "KEY_INFO")
     abstract static class KeyInfoNode extends Node {
+
+        private static final int READ_AND_INVOCABLE = KeyInfo.newBuilder().setReadable(true).setInvocable(true).build();
 
         @Child private IdentToStringNode toString = IdentToStringNode.create();
         @Child private Node keyInfo = Message.KEY_INFO.createNode();
@@ -122,7 +115,7 @@ class NFILibraryMessageResolution {
         public int access(NFILibrary receiver, Object arg) {
             String symbol = toString.execute(arg);
             if (receiver.findSymbol(symbol) != null) {
-                return KeyInfo.READABLE | KeyInfo.INVOCABLE;
+                return READ_AND_INVOCABLE;
             } else {
                 return ForeignAccess.sendKeyInfo(keyInfo, receiver.getLibrary(), symbol);
             }

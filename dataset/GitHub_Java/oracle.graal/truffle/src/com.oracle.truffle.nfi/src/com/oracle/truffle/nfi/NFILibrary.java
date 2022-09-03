@@ -58,9 +58,4 @@ final class NFILibrary implements TruffleObject {
     void preBindSymbol(String name, TruffleObject symbol) {
         symbols.put(name, symbol);
     }
-
-    @TruffleBoundary
-    String[] getSymbols() {
-        return symbols.keySet().toArray(new String[0]);
-    }
 }

@@ -28,8 +28,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Parsed representation of a Truffle NFI source. To use the Truffle NFI, evaluate a source with the
- * mime-type application/x-native. See {@link Parser} for the syntax of the Truffle NFI source.
  */
 public final class NativeSource {
 

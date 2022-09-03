@@ -31,6 +31,9 @@ final class Lexer {
         CLOSEPAREN(")"),
         OPENBRACKET("["),
         CLOSEBRACKET("]"),
+        OPENBRACE("{"),
+        CLOSEBRACE("}"),
+        SEMICOLON(";"),
         COLON(":"),
         COMMA(","),
         OR("|"),
@@ -54,8 +57,11 @@ final class Lexer {
     private final CharSequence source;
     private int position;
 
+    private Token curToken;
     private int curTokenStart;
     private int curTokenEnd;
+
+    private int mark;
 
     private Token nextToken;
     private int nextTokenStart;
@@ -67,7 +73,6 @@ final class Lexer {
     }
 
     public Token next() {
-        Token curToken = nextToken;
         lex();
         return curToken;
     }
@@ -80,8 +85,32 @@ final class Lexer {
         if (curTokenEnd > source.length()) {
             return "<EOF>";
         } else {
-            return source.subSequence(curTokenStart, curTokenEnd).toString();
+            int start = curTokenStart;
+            int end = curTokenEnd;
+            if (curToken == Token.STRING) {
+                // cut off string delimiters
+                start++;
+                end--;
+            }
+            return source.subSequence(start, end).toString();
         }
+    }
+
+    public String peekValue() {
+        if (position > source.length()) {
+            return "<EOF>";
+        } else {
+            return source.subSequence(nextTokenStart, position).toString();
+        }
+    }
+
+    public void mark() {
+        mark = nextTokenStart;
+    }
+
+    public String markedValue() {
+        int to = Math.min(curTokenEnd, source.length());
+        return source.subSequence(mark, to).toString();
     }
 
     private boolean atEnd() {
@@ -97,14 +126,9 @@ final class Lexer {
     }
 
     private void lex() {
+        curToken = nextToken;
         curTokenStart = nextTokenStart;
         curTokenEnd = position;
-
-        if (nextToken == Token.STRING) {
-            // cut off string delimiters
-            curTokenStart++;
-            curTokenEnd--;
-        }
 
         while (Character.isWhitespace(ch())) {
             position++;
@@ -147,8 +171,14 @@ final class Lexer {
                     return Token.OPENBRACKET;
                 case ']':
                     return Token.CLOSEBRACKET;
+                case '{':
+                    return Token.OPENBRACE;
+                case '}':
+                    return Token.CLOSEBRACE;
                 case ':':
                     return Token.COLON;
+                case ';':
+                    return Token.SEMICOLON;
                 case ',':
                     return Token.COMMA;
                 case '|':
