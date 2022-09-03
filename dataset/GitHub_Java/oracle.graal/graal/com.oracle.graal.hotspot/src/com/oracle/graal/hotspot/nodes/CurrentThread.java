@@ -33,17 +33,20 @@ public final class CurrentThread extends FloatingNode implements LIRLowerable {
 
     private int threadObjectOffset;
 
-    public CurrentThread(int threadObjectOffset) {
-        super(StampFactory.declaredNonNull(HotSpotGraalRuntime.getInstance().getRuntime().lookupJavaType(Thread.class)));
+    public CurrentThread(int threadObjectOffset, CodeCacheProvider runtime) {
+        super(StampFactory.declaredNonNull(runtime.getResolvedJavaType(Thread.class)));
         this.threadObjectOffset = threadObjectOffset;
     }
 
     @Override
     public void generate(LIRGeneratorTool gen) {
-        Register thread = HotSpotGraalRuntime.getInstance().getRuntime().threadRegister();
+        Register thread = HotSpotGraalRuntime.getInstance().getConfig().threadRegister;
         gen.setResult(this, gen.emitLoad(new Address(Kind.Object, thread.asValue(gen.target().wordKind), threadObjectOffset), false));
     }
 
+    @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static native Thread get(@ConstantNodeParameter int threadObjectOffset);
+    public static Object get(@ConstantNodeParameter int threadObjectOffset) {
+        throw new UnsupportedOperationException();
+    }
 }

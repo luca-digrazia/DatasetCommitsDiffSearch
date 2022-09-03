@@ -28,6 +28,7 @@ import static com.oracle.graal.hotspot.snippets.HotSpotSnippetUtils.*;
 import static com.oracle.graal.snippets.SnippetTemplate.Arguments.*;
 import static com.oracle.graal.snippets.nodes.DirectObjectStoreNode.*;
 import static com.oracle.graal.snippets.nodes.ExplodeLoopNode.*;
+import static com.oracle.max.asm.target.amd64.AMD64.*;
 import static com.oracle.max.criutils.UnsignedMath.*;
 
 import com.oracle.graal.api.code.*;
@@ -161,16 +162,10 @@ public class NewObjectSnippets implements SnippetsInterface {
     private static final int MAX_UNROLLED_OBJECT_ZEROING_SIZE = 10 * wordSize();
 
     /**
-     * Setting this to false causes (as yet inexplicable) crashes on lusearch.
-     */
-    private static final boolean USE_STATIC_INITIAL_MARK_WORD = true;
-
-    /**
      * Formats some allocated memory with an object header zeroes out the rest.
      */
-    private static void formatObject(Object hub, int size, Word memory, Word staticInitialMarkWord, boolean fillContents) {
-        Word initialMarkWord = USE_STATIC_INITIAL_MARK_WORD ? staticInitialMarkWord : loadWord(asWord(hub), initialMarkWordOffset());
-        storeObject(memory, 0, markOffset(), initialMarkWord);
+    private static void formatObject(Object hub, int size, Word memory, Word headerPrototype, boolean fillContents) {
+        storeObject(memory, 0, markOffset(), headerPrototype);
         storeObject(memory, 0, hubOffset(), hub);
         if (fillContents) {
             if (size <= MAX_UNROLLED_OBJECT_ZEROING_SIZE) {
@@ -191,8 +186,8 @@ public class NewObjectSnippets implements SnippetsInterface {
     /**
      * Formats some allocated memory with an object header zeroes out the rest.
      */
-    private static void formatArray(Object hub, int size, int length, int headerSize, Word memory, Word initialMarkWord, boolean fillContents) {
-        storeObject(memory, 0, markOffset(), initialMarkWord);
+    private static void formatArray(Object hub, int size, int length, int headerSize, Word memory, Word headerPrototype, boolean fillContents) {
+        storeObject(memory, 0, markOffset(), headerPrototype);
         storeObject(memory, 0, hubOffset(), hub);
         storeInt(memory, 0, arrayLengthOffset(), length);
         if (fillContents) {
