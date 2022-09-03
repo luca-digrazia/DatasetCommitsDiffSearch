@@ -117,18 +117,9 @@ public class HotSpotRuntimeCallTarget implements RuntimeCallTarget, InvokeTarget
     }
 
     @Override
-    public boolean destroysRegisters() {
-        if (isCRuntimeCall) {
-            // Even though most native ABIs define some callee saved registers,
-            // for simplicity we force the register allocator to save all live
-            // registers across a C runtime call as such calls are only made from
-            // compiled stubs which a) are slow path and b) will typically only
-            // have very few live registers across a C runtime call
-            return true;
-        }
-        // This is a call to a compiled (or assembler) stub which saves
-        // all registers (apart from its temporaries)
-        return false;
+    public boolean preservesRegisters() {
+        assert address != 0;
+        return true;
     }
 
     /**
