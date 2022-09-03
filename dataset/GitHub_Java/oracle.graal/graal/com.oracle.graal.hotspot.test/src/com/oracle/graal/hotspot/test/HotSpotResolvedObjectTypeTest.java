@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,18 +22,38 @@
  */
 package com.oracle.graal.hotspot.test;
 
-import org.junit.*;
+import org.junit.Assert;
+import org.junit.Test;
 
-import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
+
+import jdk.vm.ci.hotspot.HotSpotResolvedJavaMethod;
+import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
+import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.MemoryAccessProvider;
+import jdk.vm.ci.meta.PrimitiveConstant;
 
 /**
- * Tests {@link HotSpotResolvedObjectType} functionality.
+ * Tests {@link HotSpotResolvedJavaMethod} functionality.
  */
-public class HotSpotResolvedObjectTypeTest {
+public class HotSpotResolvedObjectTypeTest extends HotSpotGraalCompilerTest {
 
     @Test
     public void testGetSourceFileName() throws Throwable {
         Assert.assertEquals("Object.java", HotSpotResolvedObjectType.fromObjectClass(Object.class).getSourceFileName());
         Assert.assertEquals("HotSpotResolvedObjectTypeTest.java", HotSpotResolvedObjectType.fromObjectClass(this.getClass()).getSourceFileName());
+    }
+
+    @Test
+    public void testKlassLayoutHelper() {
+        Constant klass = HotSpotResolvedObjectType.fromObjectClass(this.getClass()).klass();
+        MemoryAccessProvider memoryAccess = getProviders().getConstantReflection().getMemoryAccessProvider();
+        GraalHotSpotVMConfig config = runtime().getVMConfig();
+        Constant c = StampFactory.forKind(JavaKind.Int).readConstant(memoryAccess, klass, config.klassLayoutHelperOffset);
+        assertTrue(c.toString(), c.getClass() == PrimitiveConstant.class);
+        PrimitiveConstant pc = (PrimitiveConstant) c;
+        assertTrue(pc.toString(), pc.getJavaKind() == JavaKind.Int);
     }
 }

@@ -22,34 +22,40 @@
  */
 package com.oracle.graal.hotspot.amd64;
 
-import static com.oracle.graal.amd64.AMD64.*;
-import static com.oracle.graal.api.code.ValueUtil.*;
-import static com.oracle.graal.asm.NumUtil.*;
-import static com.oracle.graal.asm.amd64.AMD64Assembler.AMD64BinaryArithmetic.*;
-import static com.oracle.graal.asm.amd64.AMD64Assembler.AMD64MOp.*;
-import static com.oracle.graal.asm.amd64.AMD64Assembler.OperandSize.*;
-import static com.oracle.graal.compiler.common.GraalInternalError.*;
+import static com.oracle.graal.lir.LIRValueUtil.asJavaConstant;
+import static com.oracle.graal.lir.LIRValueUtil.isJavaConstant;
+import static jdk.vm.ci.amd64.AMD64.rax;
+import static jdk.vm.ci.amd64.AMD64.rbx;
+import static jdk.vm.ci.code.ValueUtil.asRegister;
+import static jdk.vm.ci.code.ValueUtil.isRegister;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.asm.amd64.*;
-import com.oracle.graal.hotspot.*;
-import com.oracle.graal.hotspot.meta.*;
-import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.asm.amd64.AMD64Address;
+import com.oracle.graal.asm.amd64.AMD64MacroAssembler;
+import com.oracle.graal.debug.GraalError;
+import com.oracle.graal.hotspot.HotSpotCounterOp;
+import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
+import com.oracle.graal.hotspot.meta.HotSpotRegistersProvider;
+import com.oracle.graal.lir.LIRInstructionClass;
+import com.oracle.graal.lir.Opcode;
+import com.oracle.graal.lir.asm.CompilationResultBuilder;
+
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.meta.AllocatableValue;
+import jdk.vm.ci.meta.Value;
 
 @Opcode("BenchMarkCounter")
 public class AMD64HotSpotCounterOp extends HotSpotCounterOp {
     public static final LIRInstructionClass<AMD64HotSpotCounterOp> TYPE = LIRInstructionClass.create(AMD64HotSpotCounterOp.class);
 
-    @Alive({OperandFlag.STACK, OperandFlag.UNINITIALIZED}) private StackSlotValue backupSlot;
+    @Alive({OperandFlag.STACK, OperandFlag.UNINITIALIZED}) private AllocatableValue backupSlot;
 
-    public AMD64HotSpotCounterOp(String name, String group, Value increment, HotSpotRegistersProvider registers, HotSpotVMConfig config, StackSlotValue backupSlot) {
+    public AMD64HotSpotCounterOp(String name, String group, Value increment, HotSpotRegistersProvider registers, GraalHotSpotVMConfig config, AllocatableValue backupSlot) {
         super(TYPE, name, group, increment, registers, config);
         this.backupSlot = backupSlot;
     }
 
-    public AMD64HotSpotCounterOp(String[] names, String[] groups, Value[] increments, HotSpotRegistersProvider registers, HotSpotVMConfig config, StackSlotValue backupSlot) {
+    public AMD64HotSpotCounterOp(String[] names, String[] groups, Value[] increments, HotSpotRegistersProvider registers, GraalHotSpotVMConfig config, AllocatableValue backupSlot) {
         super(TYPE, names, groups, increments, registers, config);
         this.backupSlot = backupSlot;
     }
@@ -70,11 +76,11 @@ public class AMD64HotSpotCounterOp extends HotSpotCounterOp {
             // In this case rax and rbx are used as increment. Either we implement a third register
             // or we implement a spillover the value from rax to rbx or vice versa during
             // emitIncrement().
-            throw unimplemented("RAX and RBX are increment registers a the same time, spilling over the scratch register is not supported right now");
+            throw GraalError.unimplemented("RAX and RBX are increment registers at the same time, spilling over the scratch register is not supported right now");
         }
 
         // address for counters array
-        AMD64Address countersArrayAddr = new AMD64Address(thread, config.graalCountersThreadOffset);
+        AMD64Address countersArrayAddr = new AMD64Address(thread, config.jvmciCountersThreadOffset);
         Register countersArrayReg = scratch;
 
         // backup scratch register
@@ -105,13 +111,9 @@ public class AMD64HotSpotCounterOp extends HotSpotCounterOp {
         // address for counter value
         AMD64Address counterAddr = new AMD64Address(countersArrayReg, displacement);
         // increment counter (in memory)
-        if (isConstant(incrementValue)) {
-            int increment = asInt(asConstant(incrementValue));
-            if (increment == 1) {
-                INC.emit(masm, QWORD, counterAddr);
-            } else {
-                ADD.getMIOpcode(QWORD, isByte(increment)).emit(masm, QWORD, counterAddr, increment);
-            }
+        if (isJavaConstant(incrementValue)) {
+            int increment = asInt(asJavaConstant(incrementValue));
+            masm.incrementq(counterAddr, increment);
         } else {
             masm.addq(counterAddr, asRegister(incrementValue));
         }

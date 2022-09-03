@@ -22,31 +22,36 @@
  */
 package com.oracle.graal.hotspot.amd64;
 
-import static com.oracle.graal.amd64.AMD64.*;
-import static com.oracle.graal.api.code.ValueUtil.*;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
+import static jdk.vm.ci.amd64.AMD64.rsp;
+import static jdk.vm.ci.code.ValueUtil.asRegister;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.asm.amd64.*;
-import com.oracle.graal.hotspot.*;
-import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.amd64.*;
-import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.asm.amd64.AMD64Address;
+import com.oracle.graal.asm.amd64.AMD64MacroAssembler;
+import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
+import com.oracle.graal.lir.LIRInstructionClass;
+import com.oracle.graal.lir.Opcode;
+import com.oracle.graal.lir.amd64.AMD64LIRInstruction;
+import com.oracle.graal.lir.asm.CompilationResultBuilder;
+
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.meta.AllocatableValue;
 
 /**
  * Pushes an interpreter frame to the stack.
  */
 @Opcode("PUSH_INTERPRETER_FRAME")
 final class AMD64HotSpotPushInterpreterFrameOp extends AMD64LIRInstruction {
+    public static final LIRInstructionClass<AMD64HotSpotPushInterpreterFrameOp> TYPE = LIRInstructionClass.create(AMD64HotSpotPushInterpreterFrameOp.class);
 
     @Alive(REG) AllocatableValue frameSize;
     @Alive(REG) AllocatableValue framePc;
     @Alive(REG) AllocatableValue senderSp;
     @Alive(REG) AllocatableValue initialInfo;
-    private final HotSpotVMConfig config;
+    private final GraalHotSpotVMConfig config;
 
-    AMD64HotSpotPushInterpreterFrameOp(AllocatableValue frameSize, AllocatableValue framePc, AllocatableValue senderSp, AllocatableValue initialInfo, HotSpotVMConfig config) {
+    AMD64HotSpotPushInterpreterFrameOp(AllocatableValue frameSize, AllocatableValue framePc, AllocatableValue senderSp, AllocatableValue initialInfo, GraalHotSpotVMConfig config) {
+        super(TYPE);
         this.frameSize = frameSize;
         this.framePc = framePc;
         this.senderSp = senderSp;

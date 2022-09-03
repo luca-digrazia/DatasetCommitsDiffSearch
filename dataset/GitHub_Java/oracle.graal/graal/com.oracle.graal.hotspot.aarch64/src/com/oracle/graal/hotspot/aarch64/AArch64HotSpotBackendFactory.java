@@ -28,14 +28,12 @@ import static jdk.vm.ci.common.InitTimer.timer;
 import com.oracle.graal.api.replacements.SnippetReflectionProvider;
 import com.oracle.graal.compiler.aarch64.AArch64AddressLowering;
 import com.oracle.graal.compiler.aarch64.AArch64SuitesProvider;
-import com.oracle.graal.hotspot.CompilerConfigurationFactory;
-import com.oracle.graal.hotspot.EconomyCompilerConfigurationFactory;
-import com.oracle.graal.hotspot.CoreCompilerConfigurationFactory;
-import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
+import com.oracle.graal.hotspot.DefaultHotSpotGraalCompilerFactory;
 import com.oracle.graal.hotspot.HotSpotBackend;
 import com.oracle.graal.hotspot.HotSpotBackendFactory;
 import com.oracle.graal.hotspot.HotSpotGraalRuntimeProvider;
 import com.oracle.graal.hotspot.HotSpotReplacementsImpl;
+import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
 import com.oracle.graal.hotspot.meta.HotSpotConstantFieldProvider;
 import com.oracle.graal.hotspot.meta.HotSpotForeignCallsProvider;
 import com.oracle.graal.hotspot.meta.HotSpotGraalConstantFieldProvider;
@@ -48,10 +46,8 @@ import com.oracle.graal.hotspot.meta.HotSpotRegistersProvider;
 import com.oracle.graal.hotspot.meta.HotSpotSnippetReflectionProvider;
 import com.oracle.graal.hotspot.meta.HotSpotStampProvider;
 import com.oracle.graal.hotspot.meta.HotSpotSuitesProvider;
-import com.oracle.graal.hotspot.nodes.HotSpotNodeCostProvider;
 import com.oracle.graal.hotspot.word.HotSpotWordTypes;
 import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
-import com.oracle.graal.nodes.spi.NodeCostProvider;
 import com.oracle.graal.phases.tiers.CompilerConfiguration;
 import com.oracle.graal.phases.util.Providers;
 import com.oracle.graal.replacements.aarch64.AArch64GraphBuilderPlugins;
@@ -59,8 +55,7 @@ import com.oracle.graal.serviceprovider.ServiceProvider;
 import com.oracle.graal.word.WordTypes;
 
 import jdk.vm.ci.aarch64.AArch64;
-import jdk.vm.ci.code.Architecture;
-import jdk.vm.ci.code.RegisterArray;
+import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.RegisterConfig;
 import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.common.InitTimer;
@@ -76,13 +71,8 @@ import jdk.vm.ci.runtime.JVMCIBackend;
 public class AArch64HotSpotBackendFactory implements HotSpotBackendFactory {
 
     @Override
-    public Class<? extends Architecture> getArchitecture() {
-        return AArch64.class;
-    }
-
-    @Override
-    public boolean isAssociatedWith(CompilerConfigurationFactory factory) {
-        return factory instanceof CoreCompilerConfigurationFactory || factory instanceof EconomyCompilerConfigurationFactory;
+    public void register() {
+        DefaultHotSpotGraalCompilerFactory.registerBackend(AArch64.class, this);
     }
 
     @Override
@@ -107,7 +97,6 @@ public class AArch64HotSpotBackendFactory implements HotSpotBackendFactory {
         HotSpotSuitesProvider suites;
         HotSpotWordTypes wordTypes;
         Plugins plugins;
-        NodeCostProvider nodeCostProvider;
         try (InitTimer t = timer("create providers")) {
             try (InitTimer rt = timer("create HotSpotRegisters provider")) {
                 registers = createRegisters();
@@ -124,11 +113,8 @@ public class AArch64HotSpotBackendFactory implements HotSpotBackendFactory {
             try (InitTimer rt = timer("create Lowerer provider")) {
                 lowerer = createLowerer(graalRuntime, metaAccess, foreignCalls, registers, constantReflection, target);
             }
-            try (InitTimer rt = timer("create NodeCost provider")) {
-                nodeCostProvider = createNodeCostProvider();
-            }
             HotSpotStampProvider stampProvider = new HotSpotStampProvider();
-            Providers p = new Providers(metaAccess, codeCache, constantReflection, constantFieldProvider, foreignCalls, lowerer, null, stampProvider, nodeCostProvider);
+            Providers p = new Providers(metaAccess, codeCache, constantReflection, constantFieldProvider, foreignCalls, lowerer, null, stampProvider);
 
             try (InitTimer rt = timer("create SnippetReflection provider")) {
                 snippetReflection = createSnippetReflection(graalRuntime, constantReflection, wordTypes);
@@ -143,8 +129,7 @@ public class AArch64HotSpotBackendFactory implements HotSpotBackendFactory {
             try (InitTimer rt = timer("create Suites provider")) {
                 suites = createSuites(config, graalRuntime, compilerConfiguration, plugins);
             }
-            providers = new HotSpotProviders(metaAccess, codeCache, constantReflection, constantFieldProvider, foreignCalls, lowerer, replacements, nodeCostProvider, suites, registers,
-                            snippetReflection, wordTypes,
+            providers = new HotSpotProviders(metaAccess, codeCache, constantReflection, constantFieldProvider, foreignCalls, lowerer, replacements, suites, registers, snippetReflection, wordTypes,
                             plugins);
         }
         try (InitTimer rt = timer("instantiate backend")) {
@@ -190,17 +175,12 @@ public class AArch64HotSpotBackendFactory implements HotSpotBackendFactory {
         return new AArch64HotSpotLoweringProvider(runtime, metaAccess, foreignCalls, registers, constantReflection, target);
     }
 
-    protected HotSpotNodeCostProvider createNodeCostProvider() {
-        return new AArchHotSpotNodeCostProvider();
-    }
-
     protected static Value[] createNativeABICallerSaveRegisters(@SuppressWarnings("unused") GraalHotSpotVMConfig config, RegisterConfig regConfig) {
         AArch64HotSpotRegisterConfig conf = (AArch64HotSpotRegisterConfig) regConfig;
-        RegisterArray callerSavedRegisters = conf.getCallerSaveRegisters();
-        int size = callerSavedRegisters.size();
-        Value[] nativeABICallerSaveRegisters = new Value[size];
-        for (int i = 0; i < size; i++) {
-            nativeABICallerSaveRegisters[i] = callerSavedRegisters.get(i).asValue();
+        Register[] callerSavedRegisters = conf.getCallerSaveRegisters();
+        Value[] nativeABICallerSaveRegisters = new Value[callerSavedRegisters.length];
+        for (int i = 0; i < callerSavedRegisters.length; i++) {
+            nativeABICallerSaveRegisters[i] = callerSavedRegisters[i].asValue();
         }
         return nativeABICallerSaveRegisters;
     }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,18 +22,20 @@
  */
 package com.oracle.graal.hotspot.sparc;
 
-import static com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind.*;
-import static com.oracle.graal.sparc.SPARC.*;
+import static jdk.vm.ci.sparc.SPARC.g5;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler.*;
-import com.oracle.graal.hotspot.*;
-import com.oracle.graal.hotspot.bridge.*;
-import com.oracle.graal.lir.*;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler;
+import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
+import com.oracle.graal.lir.LIRFrameState;
+import com.oracle.graal.lir.LIRInstructionClass;
+import com.oracle.graal.lir.Opcode;
+import com.oracle.graal.lir.asm.CompilationResultBuilder;
 import com.oracle.graal.lir.sparc.SPARCCall.DirectCallOp;
-import com.oracle.graal.lir.asm.*;
-import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
+import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
+
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.Value;
 
 /**
  * A direct call that complies with the conventions for such calls in HotSpot. In particular, for
@@ -41,28 +43,25 @@ import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
  */
 @Opcode("CALL_DIRECT")
 final class SPARCHotspotDirectVirtualCallOp extends DirectCallOp {
+    public static final LIRInstructionClass<SPARCHotspotDirectVirtualCallOp> TYPE = LIRInstructionClass.create(SPARCHotspotDirectVirtualCallOp.class);
+    public static final SizeEstimate SIZE = SizeEstimate.create(8);
 
-    private static final long nonOopBits = HotSpotGraalRuntime.graalRuntime().getConfig().nonOopBits;
     private final InvokeKind invokeKind;
+    private final GraalHotSpotVMConfig config;
 
-    SPARCHotspotDirectVirtualCallOp(ResolvedJavaMethod target, Value result, Value[] parameters, Value[] temps, LIRFrameState state, InvokeKind invokeKind) {
-        super(target, result, parameters, temps, state);
+    SPARCHotspotDirectVirtualCallOp(ResolvedJavaMethod target, Value result, Value[] parameters, Value[] temps, LIRFrameState state, InvokeKind invokeKind, GraalHotSpotVMConfig config) {
+        super(TYPE, SIZE, target, result, parameters, temps, state);
         this.invokeKind = invokeKind;
-        assert invokeKind == InvokeKind.Interface || invokeKind == InvokeKind.Virtual;
+        this.config = config;
+        assert invokeKind.isIndirect();
     }
 
     @Override
-    public void emitCode(TargetMethodAssembler tasm, SPARCMacroAssembler masm) {
+    public void emitCallPrefixCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
         // The mark for an invocation that uses an inline cache must be placed at the
         // instruction that loads the Klass from the inline cache.
-// new Rdpc(g3).emit(masm);
-// tasm.asLongConstRef(nonOopBitsConstant);
-// tasm.recordMark(invokeKind == Virtual ? Marks.MARK_INVOKEVIRTUAL : Marks.MARK_INVOKEINTERFACE);
-// new Ldx(new SPARCAddress(g3, 0), g3).emit(masm);
-
-        tasm.recordMark(invokeKind == Virtual ? Marks.MARK_INVOKEVIRTUAL : Marks.MARK_INVOKEINTERFACE);
-        // SPARCMove.move(tasm, masm, g3.asValue(Kind.Long), nonOopBitsConstant);
-        new Setx(nonOopBits, g3, true).emit(masm);
-        super.emitCode(tasm, masm);
+        crb.recordMark(invokeKind == InvokeKind.Virtual ? config.MARKID_INVOKEVIRTUAL : config.MARKID_INVOKEINTERFACE);
+        Register scratchRegister = g5;
+        masm.setx(config.nonOopBits, scratchRegister, true);
     }
 }

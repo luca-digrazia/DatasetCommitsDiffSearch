@@ -101,7 +101,6 @@ import com.oracle.graal.lir.sparc.SPARCImmediateAddressValue;
 import com.oracle.graal.lir.sparc.SPARCMove.CompareAndSwapOp;
 import com.oracle.graal.lir.sparc.SPARCMove.NullCheckOp;
 import com.oracle.graal.lir.sparc.SPARCMove.StoreOp;
-import com.oracle.graal.lir.sparc.SPARCPrefetchOp;
 import com.oracle.graal.lir.sparc.SPARCSaveRegistersOp;
 
 import jdk.vm.ci.code.CallingConvention;
@@ -534,10 +533,4 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
     public void setDebugInfoBuilder(HotSpotDebugInfoBuilder debugInfoBuilder) {
         this.debugInfoBuilder = debugInfoBuilder;
     }
-
-    @Override
-    public SaveRegistersOp createZapRegisters(Register[] zappedRegisters, JavaConstant[] zapValues) {
-        throw GraalError.unimplemented();
-    }
-
 }

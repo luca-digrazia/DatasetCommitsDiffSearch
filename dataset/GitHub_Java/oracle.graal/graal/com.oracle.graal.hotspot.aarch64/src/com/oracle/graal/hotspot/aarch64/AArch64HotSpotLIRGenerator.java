@@ -61,7 +61,6 @@ import com.oracle.graal.lir.aarch64.AArch64Call;
 import com.oracle.graal.lir.aarch64.AArch64ControlFlow.StrategySwitchOp;
 import com.oracle.graal.lir.aarch64.AArch64FrameMapBuilder;
 import com.oracle.graal.lir.aarch64.AArch64Move.StoreOp;
-import com.oracle.graal.lir.aarch64.AArch64PrefetchOp;
 import com.oracle.graal.lir.gen.LIRGenerationResult;
 
 import jdk.vm.ci.aarch64.AArch64;
@@ -338,11 +337,6 @@ public class AArch64HotSpotLIRGenerator extends AArch64LIRGenerator implements H
 
     public void setDebugInfoBuilder(HotSpotDebugInfoBuilder debugInfoBuilder) {
         this.debugInfoBuilder = debugInfoBuilder;
-    }
-
-    @Override
-    public SaveRegistersOp createZapRegisters(Register[] zappedRegisters, JavaConstant[] zapValues) {
-        throw GraalError.unimplemented();
     }
 
 }

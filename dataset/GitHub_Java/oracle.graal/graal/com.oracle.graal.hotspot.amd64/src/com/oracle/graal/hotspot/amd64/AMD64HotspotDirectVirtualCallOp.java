@@ -22,45 +22,44 @@
  */
 package com.oracle.graal.hotspot.amd64;
 
-import static com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind.*;
-
-import com.oracle.graal.amd64.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.asm.amd64.*;
-import com.oracle.graal.hotspot.bridge.*;
-import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.LIRInstruction.Opcode;
-import com.oracle.graal.lir.amd64.*;
+import com.oracle.graal.asm.amd64.AMD64MacroAssembler;
+import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
+import com.oracle.graal.lir.LIRFrameState;
+import com.oracle.graal.lir.LIRInstructionClass;
+import com.oracle.graal.lir.Opcode;
 import com.oracle.graal.lir.amd64.AMD64Call.DirectCallOp;
-import com.oracle.graal.lir.asm.*;
-import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
+import com.oracle.graal.lir.asm.CompilationResultBuilder;
+import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
+
+import jdk.vm.ci.amd64.AMD64;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.Value;
 
 /**
  * A direct call that complies with the conventions for such calls in HotSpot. In particular, for
  * calls using an inline cache, a MOVE instruction is emitted just prior to the aligned direct call.
- * This instruction (which moves 0L in RAX) is patched by the C++ Graal code to replace the 0L
- * constant with Universe::non_oop_word(), a special sentinel used for the initial value of the
- * Klass in an inline cache.
  */
 @Opcode("CALL_DIRECT")
 final class AMD64HotspotDirectVirtualCallOp extends DirectCallOp {
+    public static final LIRInstructionClass<AMD64HotspotDirectVirtualCallOp> TYPE = LIRInstructionClass.create(AMD64HotspotDirectVirtualCallOp.class);
 
     private final InvokeKind invokeKind;
+    private final GraalHotSpotVMConfig config;
 
-    AMD64HotspotDirectVirtualCallOp(ResolvedJavaMethod target, Value result, Value[] parameters, Value[] temps, LIRFrameState state, InvokeKind invokeKind) {
-        super(target, result, parameters, temps, state);
+    AMD64HotspotDirectVirtualCallOp(ResolvedJavaMethod target, Value result, Value[] parameters, Value[] temps, LIRFrameState state, InvokeKind invokeKind, GraalHotSpotVMConfig config) {
+        super(TYPE, target, result, parameters, temps, state);
         this.invokeKind = invokeKind;
-        assert invokeKind == InvokeKind.Interface || invokeKind == InvokeKind.Virtual;
+        this.config = config;
+        assert invokeKind.isIndirect();
     }
 
     @Override
-    public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
+    public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
         // The mark for an invocation that uses an inline cache must be placed at the
-        // instruction
-        // that loads the Klass from the inline cache so that the C++ code can find it
-        // and replace the inline 0L value with Universe::non_oop_word()
-        tasm.recordMark(invokeKind == Virtual ? Marks.MARK_INVOKEVIRTUAL : Marks.MARK_INVOKEINTERFACE);
-        AMD64Move.move(tasm, masm, AMD64.rax.asValue(Kind.Long), Constant.LONG_0);
-        super.emitCode(tasm, masm);
+        // instruction that loads the Klass from the inline cache.
+        crb.recordMark(invokeKind == InvokeKind.Virtual ? config.MARKID_INVOKEVIRTUAL : config.MARKID_INVOKEINTERFACE);
+        // This must be emitted exactly like this to ensure it's patchable
+        masm.movq(AMD64.rax, config.nonOopBits);
+        super.emitCode(crb, masm);
     }
 }

@@ -22,51 +22,59 @@
  */
 package com.oracle.graal.hotspot.amd64;
 
-import static com.oracle.graal.api.code.ValueUtil.*;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
+import static jdk.vm.ci.code.ValueUtil.asRegister;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.hotspot.bridge.*;
-import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.LIRInstruction.Opcode;
-import com.oracle.graal.lir.amd64.*;
+import com.oracle.graal.asm.amd64.AMD64MacroAssembler;
+import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
+import com.oracle.graal.lir.LIRFrameState;
+import com.oracle.graal.lir.LIRInstructionClass;
+import com.oracle.graal.lir.Opcode;
+import com.oracle.graal.lir.amd64.AMD64Call;
 import com.oracle.graal.lir.amd64.AMD64Call.IndirectCallOp;
-import com.oracle.graal.lir.asm.*;
-import com.oracle.max.asm.amd64.*;
+import com.oracle.graal.lir.asm.CompilationResultBuilder;
+
+import jdk.vm.ci.amd64.AMD64;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.Value;
 
 /**
- * A register indirect call that complies with the extra conventions for such calls in HotSpot.
- * In particular, the methodOop of the callee must be in RBX for the case where a vtable entry's
- * _from_compiled_entry is the address of an C2I adapter. Such adapters expect the target
- * method to be in RBX.
+ * A register indirect call that complies with the extra conventions for such calls in HotSpot. In
+ * particular, the metaspace Method of the callee must be in RBX for the case where a vtable entry's
+ * _from_compiled_entry is the address of an C2I adapter. Such adapters expect the target method to
+ * be in RBX.
  */
 @Opcode("CALL_INDIRECT")
 final class AMD64IndirectCallOp extends IndirectCallOp {
+    public static final LIRInstructionClass<AMD64IndirectCallOp> TYPE = LIRInstructionClass.create(AMD64IndirectCallOp.class);
 
     /**
-     * Vtable stubs expect the methodOop in RBX.
+     * Vtable stubs expect the metaspace Method in RBX.
      */
-    public static final Register METHOD_OOP = AMD64.rbx;
+    public static final Register METHOD = AMD64.rbx;
 
-    @Use({REG}) protected Value methodOop;
+    @Use({REG}) protected Value metaspaceMethod;
 
-    AMD64IndirectCallOp(Object targetMethod, Value result, Value[] parameters, Value[] temps, Value methodOop, Value targetAddress, LIRFrameState state) {
-        super(targetMethod, result, parameters, temps, targetAddress, state);
-        this.methodOop = methodOop;
+    private final GraalHotSpotVMConfig config;
+
+    AMD64IndirectCallOp(ResolvedJavaMethod targetMethod, Value result, Value[] parameters, Value[] temps, Value metaspaceMethod, Value targetAddress, LIRFrameState state, GraalHotSpotVMConfig config) {
+        super(TYPE, targetMethod, result, parameters, temps, targetAddress, state);
+        this.metaspaceMethod = metaspaceMethod;
+        this.config = config;
     }
 
     @Override
-    public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-        tasm.recordMark(Marks.MARK_INLINE_INVOKEVIRTUAL);
+    public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
+        crb.recordMark(config.MARKID_INLINE_INVOKE);
         Register callReg = asRegister(targetAddress);
-        assert callReg != METHOD_OOP;
-        AMD64Call.indirectCall(tasm, masm, callReg, targetMethod, state);
+        assert !callReg.equals(METHOD);
+        AMD64Call.indirectCall(crb, masm, callReg, callTarget, state);
     }
 
     @Override
-    protected void verify() {
+    public void verify() {
         super.verify();
-        assert asRegister(methodOop) == METHOD_OOP;
+        assert asRegister(metaspaceMethod).equals(METHOD);
     }
 }

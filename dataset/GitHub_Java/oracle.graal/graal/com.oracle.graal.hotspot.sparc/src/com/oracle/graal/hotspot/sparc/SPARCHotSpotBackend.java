@@ -372,9 +372,6 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
     private static int calculateConstantSize(LIR lir) {
         int size = 0;
         for (AbstractBlockBase<?> block : lir.codeEmittingOrder()) {
-            if (block == null) {
-                continue;
-            }
             for (LIRInstruction inst : lir.getLIRforBlock(block)) {
                 if (inst instanceof SPARCLIRInstructionMixin) {
                     SizeEstimate pred = ((SPARCLIRInstructionMixin) inst).estimateSize();
@@ -389,9 +386,6 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
 
     private static void resetDelayedControlTransfers(LIR lir) {
         for (AbstractBlockBase<?> block : lir.codeEmittingOrder()) {
-            if (block == null) {
-                continue;
-            }
             for (LIRInstruction inst : lir.getLIRforBlock(block)) {
                 if (inst instanceof SPARCDelayedControlTransfer) {
                     ((SPARCDelayedControlTransfer) inst).resetState();
@@ -408,9 +402,7 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
      */
     private static void stuffDelayedControlTransfers(LIR l) {
         for (AbstractBlockBase<?> b : l.codeEmittingOrder()) {
-            if (b != null) {
-                stuffDelayedControlTransfers(l, b);
-            }
+            stuffDelayedControlTransfers(l, b);
         }
     }
 
@@ -521,6 +513,6 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
 
     private Register translateInputToOutputRegister(Register register) {
         assert i0.number <= register.number && register.number <= i7.number : "Not an input register " + register;
-        return getTarget().arch.getRegisters().get(o0.number + register.number - i0.number);
+        return getTarget().arch.getRegisters()[o0.number + register.number - i0.number];
     }
 }

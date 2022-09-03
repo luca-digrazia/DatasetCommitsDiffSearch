@@ -30,7 +30,6 @@ import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
 import com.oracle.graal.lir.LIRInstructionClass;
 import com.oracle.graal.lir.Opcode;
 import com.oracle.graal.lir.asm.CompilationResultBuilder;
-import com.oracle.graal.lir.gen.DiagnosticLIRGeneratorTool.ZapStackArgumentSpaceBeforeInstruction;
 
 import jdk.vm.ci.code.Register;
 import jdk.vm.ci.meta.Value;
@@ -39,7 +38,7 @@ import jdk.vm.ci.meta.Value;
  * Returns from a function.
  */
 @Opcode("RETURN")
-final class AMD64HotSpotReturnOp extends AMD64HotSpotEpilogueBlockEndOp implements ZapStackArgumentSpaceBeforeInstruction {
+final class AMD64HotSpotReturnOp extends AMD64HotSpotEpilogueBlockEndOp {
 
     public static final LIRInstructionClass<AMD64HotSpotReturnOp> TYPE = LIRInstructionClass.create(AMD64HotSpotReturnOp.class);
     @Use({REG, ILLEGAL}) protected Value value;

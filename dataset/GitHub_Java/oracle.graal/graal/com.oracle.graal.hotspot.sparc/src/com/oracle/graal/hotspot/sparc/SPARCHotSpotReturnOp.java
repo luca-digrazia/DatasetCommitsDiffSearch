@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,40 +22,46 @@
  */
 package com.oracle.graal.hotspot.sparc;
 
-import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
-import static com.oracle.graal.phases.GraalOptions.*;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.ILLEGAL;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
+import static jdk.vm.ci.code.ValueUtil.asRegister;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler;
+import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
+import com.oracle.graal.lir.LIRInstructionClass;
+import com.oracle.graal.lir.Opcode;
+import com.oracle.graal.lir.asm.CompilationResultBuilder;
 import com.oracle.graal.lir.sparc.SPARCControlFlow.ReturnOp;
+
+import jdk.vm.ci.meta.Value;
 
 /**
  * Returns from a function.
  */
 @Opcode("RETURN")
 final class SPARCHotSpotReturnOp extends SPARCHotSpotEpilogueOp {
+    public static final LIRInstructionClass<SPARCHotSpotReturnOp> TYPE = LIRInstructionClass.create(SPARCHotSpotReturnOp.class);
+    public static final SizeEstimate SIZE = SizeEstimate.create(2);
 
     @Use({REG, ILLEGAL}) protected Value value;
+    @Use({REG}) protected Value safepointPollAddress;
     private final boolean isStub;
+    private final GraalHotSpotVMConfig config;
 
-    SPARCHotSpotReturnOp(Value value, boolean isStub) {
+    SPARCHotSpotReturnOp(Value value, boolean isStub, GraalHotSpotVMConfig config, Value safepointPoll) {
+        super(TYPE, SIZE);
         this.value = value;
         this.isStub = isStub;
+        this.config = config;
+        this.safepointPollAddress = safepointPoll;
     }
 
     @Override
-    public void emitCode(TargetMethodAssembler tasm, SPARCMacroAssembler masm) {
-        leaveFrame(tasm);
-        if (!isStub && tasm.frameContext != null || !OptEliminateSafepoints.getValue()) {
-            Register scratchForSafepointOnReturn = null;
-            GraalInternalError.unimplemented("need to find a scratch register for the safepoint instruction sequence");
-            SPARCHotSpotSafepointOp.emitCode(tasm, masm, graalRuntime().getConfig(), true, null, scratchForSafepointOnReturn);
+    public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
+        if (!isStub) {
+            // Every non-stub compile method must have a poll before the return.
+            SPARCHotSpotSafepointOp.emitCode(crb, masm, config, true, null, asRegister(safepointPollAddress));
         }
-        ReturnOp.emitCodeHelper(tasm, masm);
+        ReturnOp.emitCodeHelper(crb, masm);
     }
 }

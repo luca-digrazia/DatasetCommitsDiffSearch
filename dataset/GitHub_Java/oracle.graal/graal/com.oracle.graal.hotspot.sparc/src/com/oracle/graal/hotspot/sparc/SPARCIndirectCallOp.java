@@ -22,18 +22,22 @@
  */
 package com.oracle.graal.hotspot.sparc;
 
-import static com.oracle.graal.api.code.ValueUtil.*;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
-import static com.oracle.graal.sparc.SPARC.*;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
+import static jdk.vm.ci.code.ValueUtil.asRegister;
+import static jdk.vm.ci.sparc.SPARC.g5;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.hotspot.meta.HotSpotCodeCacheProvider.MarkId;
-import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.asm.*;
-import com.oracle.graal.lir.sparc.*;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler;
+import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
+import com.oracle.graal.lir.LIRFrameState;
+import com.oracle.graal.lir.LIRInstructionClass;
+import com.oracle.graal.lir.Opcode;
+import com.oracle.graal.lir.asm.CompilationResultBuilder;
+import com.oracle.graal.lir.sparc.SPARCCall;
 import com.oracle.graal.lir.sparc.SPARCCall.IndirectCallOp;
+
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.Value;
 
 /**
  * A register indirect call that complies with the extra conventions for such calls in HotSpot. In
@@ -43,6 +47,8 @@ import com.oracle.graal.lir.sparc.SPARCCall.IndirectCallOp;
  */
 @Opcode("CALL_INDIRECT")
 final class SPARCIndirectCallOp extends IndirectCallOp {
+    public static final LIRInstructionClass<SPARCIndirectCallOp> TYPE = LIRInstructionClass.create(SPARCIndirectCallOp.class);
+    public static final SizeEstimate SIZE = SizeEstimate.create(2);
 
     /**
      * Vtable stubs expect the metaspace Method in g5.
@@ -51,21 +57,24 @@ final class SPARCIndirectCallOp extends IndirectCallOp {
 
     @Use({REG}) protected Value metaspaceMethod;
 
-    SPARCIndirectCallOp(ResolvedJavaMethod targetMethod, Value result, Value[] parameters, Value[] temps, Value metaspaceMethod, Value targetAddress, LIRFrameState state) {
-        super(targetMethod, result, parameters, temps, targetAddress, state);
+    private final GraalHotSpotVMConfig config;
+
+    SPARCIndirectCallOp(ResolvedJavaMethod targetMethod, Value result, Value[] parameters, Value[] temps, Value metaspaceMethod, Value targetAddress, LIRFrameState state, GraalHotSpotVMConfig config) {
+        super(TYPE, SIZE, targetMethod, result, parameters, temps, targetAddress, state);
         this.metaspaceMethod = metaspaceMethod;
+        this.config = config;
     }
 
     @Override
     public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-        MarkId.recordMark(crb, MarkId.INLINE_INVOKE);
+        crb.recordMark(config.MARKID_INLINE_INVOKE);
         Register callReg = asRegister(targetAddress);
         assert !callReg.equals(METHOD);
         SPARCCall.indirectCall(crb, masm, callReg, callTarget, state);
     }
 
     @Override
-    protected void verify() {
+    public void verify() {
         super.verify();
         assert asRegister(metaspaceMethod).equals(METHOD);
     }

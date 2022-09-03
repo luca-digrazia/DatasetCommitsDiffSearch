@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,6 +28,7 @@ import static jdk.vm.ci.code.ValueUtil.asRegister;
 
 import com.oracle.graal.asm.aarch64.AArch64MacroAssembler;
 import com.oracle.graal.compiler.common.spi.ForeignCallLinkage;
+import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
 import com.oracle.graal.hotspot.stubs.UnwindExceptionToCallerStub;
 import com.oracle.graal.lir.LIRInstructionClass;
 import com.oracle.graal.lir.Opcode;
@@ -37,18 +38,17 @@ import com.oracle.graal.lir.asm.CompilationResultBuilder;
 import jdk.vm.ci.code.CallingConvention;
 import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.RegisterValue;
-import jdk.vm.ci.hotspot.HotSpotVMConfig;
 
 /**
  * Removes the current frame and jumps to the {@link UnwindExceptionToCallerStub}.
  */
 @Opcode("UNWIND")
-public class AArch64HotSpotUnwindOp extends AArch64HotSpotEpilogueOp {
+public final class AArch64HotSpotUnwindOp extends AArch64HotSpotEpilogueOp {
     public static final LIRInstructionClass<AArch64HotSpotUnwindOp> TYPE = LIRInstructionClass.create(AArch64HotSpotUnwindOp.class);
 
     @Use protected RegisterValue exception;
 
-    public AArch64HotSpotUnwindOp(HotSpotVMConfig config, RegisterValue exception) {
+    public AArch64HotSpotUnwindOp(GraalHotSpotVMConfig config, RegisterValue exception) {
         super(TYPE, config);
         this.exception = exception;
     }
