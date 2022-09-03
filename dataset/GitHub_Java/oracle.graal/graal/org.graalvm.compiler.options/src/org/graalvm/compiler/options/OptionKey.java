@@ -23,6 +23,7 @@
 package org.graalvm.compiler.options;
 
 import java.util.Formatter;
+import java.util.ServiceLoader;
 
 import org.graalvm.util.EconomicMap;
 
@@ -81,7 +82,8 @@ public class OptionKey<T> {
      */
     static class Lazy {
         static {
-            for (OptionDescriptors opts : OptionsParser.getOptionsLoader()) {
+            ServiceLoader<OptionDescriptors> loader = ServiceLoader.load(OptionDescriptors.class, OptionDescriptors.class.getClassLoader());
+            for (OptionDescriptors opts : loader) {
                 for (OptionDescriptor desc : opts) {
                     desc.getName();
                 }
