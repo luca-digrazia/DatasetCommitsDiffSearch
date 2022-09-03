@@ -67,7 +67,6 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
-import java.util.Objects;
 
 /**
  * <p>
@@ -133,7 +132,6 @@ public class InstrumentationTestLanguage extends TruffleLanguage<Context>
 
     // used to test that no getSourceSection calls happen in certain situations
     private static int rootSourceSectionQueryCount;
-    private final FunctionMetaObject functionMetaObject = new FunctionMetaObject();
 
     public InstrumentationTestLanguage() {
     }
@@ -877,7 +875,7 @@ public class InstrumentationTestLanguage extends TruffleLanguage<Context>
 
     @Override
     protected boolean isObjectOfLanguage(Object object) {
-        return object instanceof Function || object == functionMetaObject;
+        return false;
     }
 
     @Override
@@ -890,9 +888,6 @@ public class InstrumentationTestLanguage extends TruffleLanguage<Context>
         }
         if (obj != null && obj.equals(Double.POSITIVE_INFINITY)) {
             return "Infinity";
-        }
-        if (obj instanceof Function) {
-            return functionMetaObject;
         }
         return null;
     }
@@ -909,15 +904,6 @@ public class InstrumentationTestLanguage extends TruffleLanguage<Context>
             return Source.newBuilder("source infinity").name("double").mimeType(MIME_TYPE).build().createSection(1);
         }
         return null;
-    }
-
-    @Override
-    protected String toString(Context context, Object value) {
-        if (value == functionMetaObject) {
-            return "Function";
-        } else {
-            return Objects.toString(value);
-        }
     }
 
     public static int getRootSourceSectionQueryCount() {
@@ -1119,22 +1105,6 @@ public class InstrumentationTestLanguage extends TruffleLanguage<Context>
             }
         }
 
-    }
-
-    static class FunctionMetaObject implements TruffleObject {
-
-        @Override
-        public ForeignAccess getForeignAccess() {
-            return FunctionMetaObjectMessageResolutionForeign.ACCESS;
-        }
-
-        public static boolean isInstance(TruffleObject obj) {
-            return obj instanceof FunctionMetaObject;
-        }
-
-        @MessageResolution(receiverType = FunctionMetaObject.class)
-        static final class FunctionMetaObjectMessageResolution {
-        }
     }
 }
 
