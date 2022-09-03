@@ -224,8 +224,6 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
                     double trueDestinationProbability) {
         boolean mirrored = emitCompare(cmpKind, left, right);
         Condition finalCondition = mirrored ? cond.mirror() : cond;
-        boolean finalUnorderedIsTrue = mirrored ? !unorderedIsTrue : unorderedIsTrue;
-
         Kind kind = left.getKind().getStackKind();
         switch (kind) {
             case Int:
@@ -235,7 +233,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
                 break;
             case Float:
             case Double:
-                append(new BranchOp(finalCondition, trueDestination, falseDestination, kind, finalUnorderedIsTrue));
+                append(new BranchOp(finalCondition, trueDestination, falseDestination, kind));
                 break;
             default:
                 throw GraalInternalError.shouldNotReachHere("" + left.getKind());
@@ -245,6 +243,8 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
     @Override
     public void emitOverflowCheckBranch(LabelRef overflow, LabelRef noOverflow, double overflowProbability) {
         append(new BranchOp(ConditionFlag.CarrySet, overflow, noOverflow, Kind.Long));
+        // append(new BranchOp(negated ? ConditionFlag.NoOverflow : ConditionFlag.Overflow, label));
+// throw GraalInternalError.unimplemented();
     }
 
     @Override
