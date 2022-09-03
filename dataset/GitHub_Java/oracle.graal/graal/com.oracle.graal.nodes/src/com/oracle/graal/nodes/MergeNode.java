@@ -137,34 +137,25 @@ public class MergeNode extends BeginNode implements Node.IterableNodeType, LIRLo
     @Override
     public void simplify(SimplifierTool tool) {
         FixedNode next = next();
-        if (next instanceof EndNode) {
-            EndNode origLoopEnd = (EndNode) next;
-            MergeNode merge = origLoopEnd.merge();
-            if (merge instanceof LoopBeginNode && !(origLoopEnd instanceof LoopEndNode)) {
-                return;
-            }
+        if (next instanceof LoopEndNode) {
+            LoopEndNode origLoopEnd = (LoopEndNode) next;
+            LoopBeginNode begin = origLoopEnd.loopBegin();
             for (PhiNode phi : phis()) {
                 for (Node usage : phi.usages().filter(isNotA(FrameState.class))) {
-                    if (!merge.isPhiAtMerge(usage)) {
+                    if (!begin.isPhiAtMerge(usage)) {
                         return;
                     }
                 }
             }
             FixedNode evacuateAnchoredTo = new ComputeImmediateDominator(this).compute();
-            Debug.log("Split %s into ends for %s. Evacuate to %s", this, merge, evacuateAnchoredTo);
+            Debug.log("Split %s into loop ends for %s. Evacuate to %s", this, begin, evacuateAnchoredTo);
             this.prepareDelete(evacuateAnchoredTo);
             int numEnds = this.forwardEndCount();
             StructuredGraph graph = (StructuredGraph) graph();
             for (int i = 0; i < numEnds - 1; i++) {
                 EndNode end = forwardEndAt(numEnds - 1 - i);
-                EndNode newEnd;
-                if (merge instanceof LoopBeginNode) {
-                    newEnd = graph.add(new LoopEndNode((LoopBeginNode) merge));
-                } else {
-                    newEnd = graph.add(new EndNode());
-                    merge.addForwardEnd(newEnd);
-                }
-                for (PhiNode phi : merge.phis()) {
+                LoopEndNode loopEnd = graph.add(new LoopEndNode(begin));
+                for (PhiNode phi : begin.phis()) {
                     ValueNode v = phi.valueAt(origLoopEnd);
                     ValueNode newInput;
                     if (isPhiAtMerge(v)) {
@@ -176,9 +167,9 @@ public class MergeNode extends BeginNode implements Node.IterableNodeType, LIRLo
                     phi.addInput(newInput);
                 }
                 this.removeEnd(end);
-                end.replaceAtPredecessors(newEnd);
+                end.replaceAtPredecessors(loopEnd);
                 end.safeDelete();
-                tool.addToWorkList(newEnd.predecessor()); // ?
+                tool.addToWorkList(loopEnd.predecessor());
             }
             graph.reduceTrivialMerge(this);
         }
