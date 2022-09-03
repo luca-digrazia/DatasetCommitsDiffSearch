@@ -30,14 +30,12 @@
 package com.oracle.truffle.llvm.nodes.intrinsics.llvm;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
-import com.oracle.truffle.llvm.runtime.memory.LLVMMemSetNode;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
+import com.oracle.truffle.llvm.runtime.memory.LLVMProfiledMemSet;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
 public abstract class LLVMMemoryIntrinsic extends LLVMExpressionNode {
@@ -46,10 +44,9 @@ public abstract class LLVMMemoryIntrinsic extends LLVMExpressionNode {
     public abstract static class LLVMMalloc extends LLVMMemoryIntrinsic {
 
         @Specialization
-        protected LLVMAddress doVoid(int size,
-                        @Cached("getLLVMMemory()") LLVMMemory memory) {
+        public LLVMAddress executeVoid(int size) {
             try {
-                return memory.allocateMemory(size);
+                return LLVMMemory.allocateMemory(size);
             } catch (OutOfMemoryError e) {
                 CompilerDirectives.transferToInterpreter();
                 return LLVMAddress.nullPointer();
@@ -57,10 +54,9 @@ public abstract class LLVMMemoryIntrinsic extends LLVMExpressionNode {
         }
 
         @Specialization
-        protected LLVMAddress doVoid(long size,
-                        @Cached("getLLVMMemory()") LLVMMemory memory) {
+        public LLVMAddress executeVoid(long size) {
             try {
-                return memory.allocateMemory(size);
+                return LLVMMemory.allocateMemory(size);
             } catch (OutOfMemoryError e) {
                 CompilerDirectives.transferToInterpreter();
                 return LLVMAddress.nullPointer();
@@ -70,19 +66,14 @@ public abstract class LLVMMemoryIntrinsic extends LLVMExpressionNode {
 
     @NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
     public abstract static class LLVMCalloc extends LLVMMemoryIntrinsic {
-        @Child private LLVMMemSetNode memSet;
-
-        public LLVMCalloc(LLVMMemSetNode memSet) {
-            this.memSet = memSet;
-        }
+        private final LLVMProfiledMemSet profiledMemSet = new LLVMProfiledMemSet();
 
         @Specialization
-        protected LLVMAddress doVoid(VirtualFrame frame, int n, int size,
-                        @Cached("getLLVMMemory()") LLVMMemory memory) {
+        public LLVMAddress executeVoid(int n, int size) {
             try {
                 long length = Math.multiplyExact(n, size);
-                LLVMAddress address = memory.allocateMemory(length);
-                memSet.executeWithTarget(frame, address, (byte) 0, length);
+                LLVMAddress address = LLVMMemory.allocateMemory(length);
+                profiledMemSet.memset(address, (byte) 0, length);
                 return address;
             } catch (OutOfMemoryError | ArithmeticException e) {
                 CompilerDirectives.transferToInterpreter();
@@ -91,12 +82,11 @@ public abstract class LLVMMemoryIntrinsic extends LLVMExpressionNode {
         }
 
         @Specialization
-        protected LLVMAddress doVoid(VirtualFrame frame, long n, long size,
-                        @Cached("getLLVMMemory()") LLVMMemory memory) {
+        public LLVMAddress executeVoid(long n, long size) {
             try {
                 long length = Math.multiplyExact(n, size);
-                LLVMAddress address = memory.allocateMemory(length);
-                memSet.executeWithTarget(frame, address, (byte) 0, length);
+                LLVMAddress address = LLVMMemory.allocateMemory(length);
+                profiledMemSet.memset(address, (byte) 0, length);
                 return address;
             } catch (OutOfMemoryError | ArithmeticException e) {
                 CompilerDirectives.transferToInterpreter();
@@ -109,10 +99,9 @@ public abstract class LLVMMemoryIntrinsic extends LLVMExpressionNode {
     public abstract static class LLVMRealloc extends LLVMMemoryIntrinsic {
 
         @Specialization
-        protected LLVMAddress doVoid(LLVMAddress addr, int size,
-                        @Cached("getLLVMMemory()") LLVMMemory memory) {
+        public LLVMAddress executeVoid(LLVMAddress addr, int size) {
             try {
-                return memory.reallocateMemory(addr, size);
+                return LLVMMemory.reallocateMemory(addr, size);
             } catch (OutOfMemoryError e) {
                 CompilerDirectives.transferToInterpreter();
                 return LLVMAddress.nullPointer();
@@ -120,10 +109,9 @@ public abstract class LLVMMemoryIntrinsic extends LLVMExpressionNode {
         }
 
         @Specialization
-        protected LLVMAddress doVoid(LLVMAddress addr, long size,
-                        @Cached("getLLVMMemory()") LLVMMemory memory) {
+        public LLVMAddress executeVoid(LLVMAddress addr, long size) {
             try {
-                return memory.reallocateMemory(addr, size);
+                return LLVMMemory.reallocateMemory(addr, size);
             } catch (OutOfMemoryError e) {
                 CompilerDirectives.transferToInterpreter();
                 return LLVMAddress.nullPointer();
@@ -135,9 +123,8 @@ public abstract class LLVMMemoryIntrinsic extends LLVMExpressionNode {
     public abstract static class LLVMFree extends LLVMMemoryIntrinsic {
 
         @Specialization
-        protected Object doVoid(LLVMAddress address,
-                        @Cached("getLLVMMemory()") LLVMMemory memory) {
-            memory.free(address);
+        public Object executeVoid(LLVMAddress address) {
+            LLVMMemory.free(address);
             return null;
         }
     }
