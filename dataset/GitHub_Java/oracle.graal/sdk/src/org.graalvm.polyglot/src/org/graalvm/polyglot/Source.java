@@ -360,13 +360,8 @@ public final class Source {
         return new Builder(source);
     }
 
-    @Deprecated
     public static Builder newBuilder(Reader source) {
         return new Builder(source);
-    }
-
-    public static String detectLanguage(File file) {
-        return null;
     }
 
     public static Source create(CharSequence source) {
