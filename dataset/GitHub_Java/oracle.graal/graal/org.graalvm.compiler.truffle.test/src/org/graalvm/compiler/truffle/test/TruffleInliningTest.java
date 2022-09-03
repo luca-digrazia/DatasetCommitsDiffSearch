@@ -260,6 +260,16 @@ public class TruffleInliningTest {
 
     @Test
     public void testDeepInline() {
+        TruffleInlining decisions = builder.target("a").target("b").calls("a").target("c").calls("b").target("d").calls("c").target("e").calls("d").target("f").calls("e").build();
+        assertInlined(decisions, "a");
+        assertInlined(decisions, "b");
+        assertInlined(decisions, "c");
+        assertInlined(decisions, "d");
+        assertInlined(decisions, "e");
+    }
+
+    @Test
+    public void testReallyDeepInline() {
         // Limited to 14 at the moment because of TruffleInlining:97
         int depth = 14;
         builder.target("0");
@@ -277,7 +287,7 @@ public class TruffleInliningTest {
     }
 
     @Test
-    public void testWideInline() {
+    public void testReallyWideInline() {
         int width = 1000;
         builder.target("leaf").target("main");
         for (Integer i = 0; i < width; i++) {
