@@ -57,25 +57,21 @@ public class VerifyHotSpotOptionsPhase extends Phase {
             for (OptionDescriptor desc : opts) {
                 if (HotSpotOptions.isHotSpotOption(desc)) {
                     HotSpotResolvedObjectType holder = (HotSpotResolvedObjectType) runtime.lookupJavaType(desc.getDeclaringClass());
-                    checkType(holder, desc, runtime, checked);
+                    checkType(runtime, checked, holder);
                 }
             }
         }
         return true;
     }
 
-    private static void checkType(HotSpotResolvedObjectType type, OptionDescriptor option, HotSpotRuntime runtime, Set<HotSpotResolvedObjectType> checked) {
-        if (!checked.contains(type)) {
-            checked.add(type);
-            HotSpotResolvedObjectType superType = type.getSupertype();
-            if (superType != null && !MetaUtil.isJavaLangObject(superType)) {
-                checkType(superType, option, runtime, checked);
-            }
-            for (ResolvedJavaMethod method : type.getMethods()) {
+    private static void checkType(HotSpotRuntime runtime, Set<HotSpotResolvedObjectType> checked, HotSpotResolvedObjectType holder) {
+        if (!checked.contains(holder)) {
+            checked.add(holder);
+            for (ResolvedJavaMethod method : holder.getMethods()) {
                 if (method.isClassInitializer()) {
                     StructuredGraph graph = new StructuredGraph(method);
                     new GraphBuilderPhase(runtime, GraphBuilderConfiguration.getEagerDefault(), OptimisticOptimizations.ALL).apply(graph);
-                    new VerifyHotSpotOptionsPhase(type, runtime, option).apply(graph);
+                    new VerifyHotSpotOptionsPhase(holder, runtime).apply(graph);
                 }
             }
         }
@@ -85,13 +81,11 @@ public class VerifyHotSpotOptionsPhase extends Phase {
     private final ResolvedJavaType declaringClass;
     private final ResolvedJavaType optionValueType;
     private final Set<ResolvedJavaType> boxingTypes;
-    private final OptionDescriptor option;
 
-    public VerifyHotSpotOptionsPhase(ResolvedJavaType declaringClass, HotSpotRuntime runtime, OptionDescriptor option) {
+    public VerifyHotSpotOptionsPhase(ResolvedJavaType declaringClass, HotSpotRuntime runtime) {
         this.runtime = runtime;
         this.declaringClass = declaringClass;
         this.optionValueType = runtime.lookupJavaType(OptionValue.class);
-        this.option = option;
         this.boxingTypes = new HashSet<>();
         for (Class c : new Class[]{Boolean.class, Byte.class, Short.class, Character.class, Integer.class, Float.class, Long.class, Double.class}) {
             this.boxingTypes.add(runtime.lookupJavaType(c));
@@ -146,9 +140,7 @@ public class VerifyHotSpotOptionsPhase extends Phase {
 
     private void error(Node node, String message) {
         String loc = GraphUtil.approxSourceLocation(node);
-        throw new GraalInternalError(String.format("The " + option.getName() + " option is declared in " + option.getDeclaringClass() +
-                        " whose class hierarchy contains a class initializer (in %s) with a code pattern at or near %s implying an action other than initialization of an option:%n%n    %s%n%n" +
-                        "The recommended solution is to move " + option.getName() + " into a separate class (e.g., " + option.getDeclaringClass().getName() + ".Options).%n",
+        throw new GraalInternalError(String.format("HotSpot option declarer %s contains code pattern implying action other than initialization of an option:%n    %s%n    %s",
                         toJavaName(declaringClass), loc, message));
     }
 }

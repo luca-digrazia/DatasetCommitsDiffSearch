@@ -24,7 +24,6 @@
 package com.oracle.graal.hotspot;
 
 import static com.oracle.graal.compiler.GraalDebugConfig.*;
-import static com.oracle.graal.hotspot.HotSpotVMConfig.*;
 import static java.nio.file.Files.*;
 
 import java.io.*;
@@ -181,7 +180,7 @@ public class HotSpotOptions {
      * {@link #setOption(String)}.
      */
     public static void finalizeOptions() {
-        if (areDebugScopePatternsEnabled() || getVMOption("CITime")) {
+        if (Dump.getValue() != null || Meter.getValue() != null || Time.getValue() != null || Log.getValue() != null || HotSpotVMConfig.getVMOption("CITime")) {
             Debug.enable();
         }
     }

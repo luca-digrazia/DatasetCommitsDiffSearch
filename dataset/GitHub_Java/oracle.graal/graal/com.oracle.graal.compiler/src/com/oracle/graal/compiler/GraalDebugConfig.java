@@ -66,7 +66,7 @@ public class GraalDebugConfig implements DebugConfig {
     };
     // @formatter:on
 
-    public static boolean areDebugScopePatternsEnabled() {
+    public static boolean isDebugEnabled() {
         return Dump.getValue() != null || Meter.getValue() != null || Time.getValue() != null || Log.getValue() != null;
     }
 

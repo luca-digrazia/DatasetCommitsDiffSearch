@@ -29,7 +29,6 @@ import static com.oracle.graal.hotspot.CompilationTask.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 import static com.oracle.graal.java.GraphBuilderPhase.*;
 import static com.oracle.graal.phases.GraalOptions.*;
-import static com.oracle.graal.phases.common.InliningUtil.*;
 
 import java.io.*;
 import java.lang.reflect.*;
@@ -52,6 +51,7 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.options.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.PhasePlan.PhasePosition;
+import com.oracle.graal.phases.common.*;
 import com.oracle.graal.printer.*;
 import com.oracle.graal.replacements.*;
 
@@ -104,6 +104,8 @@ public class VMToCompilerImpl implements VMToCompiler {
     private volatile boolean bootstrapRunning;
 
     private PrintStream log = System.out;
+
+    private boolean quietMeterAndTime;
 
     private long compilerStartTime;
 
@@ -163,9 +165,9 @@ public class VMToCompilerImpl implements VMToCompiler {
         }
 
         if (config.ciTime) {
-            BytecodesParsed.setConditional(false);
-            InlinedBytecodes.setConditional(false);
-            CompilationTime.setConditional(false);
+            quietMeterAndTime = (Meter.getValue() == null && Time.getValue() == null);
+            Meter.setValue("");
+            Time.setValue("");
         }
 
         if (Debug.isEnabled()) {
@@ -371,7 +373,7 @@ public class VMToCompilerImpl implements VMToCompiler {
         CompilationStatistics.clear(phase);
         if (graalRuntime.getConfig().ciTime) {
             parsedBytecodesPerSecond = MetricRateInPhase.snapshot(phase, parsedBytecodesPerSecond, BytecodesParsed, CompilationTime, TimeUnit.SECONDS);
-            inlinedBytecodesPerSecond = MetricRateInPhase.snapshot(phase, inlinedBytecodesPerSecond, InlinedBytecodes, CompilationTime, TimeUnit.SECONDS);
+            inlinedBytecodesPerSecond = MetricRateInPhase.snapshot(phase, inlinedBytecodesPerSecond, InliningUtil.InlinedBytecodes, CompilationTime, TimeUnit.SECONDS);
         }
     }
 
@@ -473,7 +475,7 @@ public class VMToCompilerImpl implements VMToCompiler {
             CompilationTask.withinEnqueue.set(Boolean.FALSE);
         }
 
-        if (Debug.isEnabled() && areDebugScopePatternsEnabled()) {
+        if (Debug.isEnabled() && !quietMeterAndTime) {
             List<DebugValueMap> topLevelMaps = DebugValueMap.getTopLevelMaps();
             List<DebugValue> debugValues = KeyRegistry.getDebugValues();
             if (debugValues.size() > 0) {
