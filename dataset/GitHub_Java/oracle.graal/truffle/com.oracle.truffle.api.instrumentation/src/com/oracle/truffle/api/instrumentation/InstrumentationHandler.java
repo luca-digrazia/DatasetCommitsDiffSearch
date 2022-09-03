@@ -51,31 +51,28 @@ import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 
 /**
- * Central coordinator class for the Truffle instrumentation framework. Allocated once per
- * {@linkplain com.oracle.truffle.api.vm.PolyglotEngine engine}.
+ * Central coordinator class for the Truffle instrumentation framework. Allocated once per engine.
  */
 final class InstrumentationHandler {
 
     /* Enable trace output to stdout. */
     private static final boolean TRACE = Boolean.getBoolean("truffle.instrumentation.trace");
 
-    /* All roots that have been initialized (executed at least once) */
+    /* All roots that were initialized (executed at least once) */
     private final Map<RootNode, Void> roots = Collections.synchronizedMap(new WeakHashMap<RootNode, Void>());
 
-    /* All bindings that have been globally created by instrumenter instances. */
+    /* All bindings that where globally created by instrumenters. */
     private final List<EventBinding<?>> bindings = new ArrayList<>();
 
     /* Cached instance for reuse for newly installed root nodes. */
     private final AddBindingsVisitor addAllBindingsVisitor = new AddBindingsVisitor(bindings);
 
     /*
-     * Fast lookup of instrumenter instances based on a key provided by the accessor.
+     * Fast lookup of instrumenters based on a key provided by the accessor.
      */
-    private final Map<Object, AbstractInstrumenter> instrumenterMap = new HashMap<>();
+    private final Map<Object, AbstractInstrumenter> instrumentations = new HashMap<>();
 
-
-    private volatile boolean instrumentationInitialized;
-
+    private volatile boolean initialized;
 
     private final OutputStream out;
     private final OutputStream err;
@@ -91,22 +88,22 @@ final class InstrumentationHandler {
         if (!ACCESSOR.isInstrumentable(root)) {
             return;
         }
-        if (!instrumentationInitialized) {
-            initializeInstrumentation();
+        if (!initialized) {
+            initialize();
         }
         roots.put(root, null);
         visitRoot(root, addAllBindingsVisitor);
     }
 
-    void addInstrument(Object key, Class<?> clazz) {
+    void addInstrumentation(Object key, Class<?> clazz) {
         addInstrumenter(key, new InstrumentationInstrumenter(clazz, out, err, in));
     }
 
-    void disposeInstrumenter(Object key, boolean cleanupRequired) {
+    void disposeInstrumentation(Object key, boolean cleanupRequired) {
         if (TRACE) {
             trace("Dispose instrumenter %n", key);
         }
-        AbstractInstrumenter disposedInstrumenter = instrumenterMap.get(key);
+        AbstractInstrumenter disposedInstrumenter = instrumentations.get(key);
         List<EventBinding<?>> disposedBindings = new ArrayList<>();
         for (Iterator<EventBinding<?>> iterator = bindings.listIterator(); iterator.hasNext();) {
             EventBinding<?> binding = iterator.next();
@@ -116,7 +113,7 @@ final class InstrumentationHandler {
             }
         }
         disposedInstrumenter.dispose();
-        instrumenterMap.remove(key);
+        instrumentations.remove(key);
 
         if (cleanupRequired) {
             DisposeBindingsVisitor disposeVisitor = new DisposeBindingsVisitor(disposedBindings);
@@ -135,12 +132,12 @@ final class InstrumentationHandler {
     }
 
     void detachLanguage(Object context) {
-        if (instrumenterMap.containsKey(context)) {
+        if (instrumentations.containsKey(context)) {
             /*
              * TODO (chumer): do we need cleanup/invalidate here? With shared CallTargets we
              * probably will.
              */
-            disposeInstrumenter(context, false);
+            disposeInstrumentation(context, false);
         }
     }
 
@@ -151,7 +148,7 @@ final class InstrumentationHandler {
 
         this.bindings.add(binding);
 
-        if (instrumentationInitialized) {
+        if (initialized) {
             AddBindingVisitor addBindingsVisitor = new AddBindingVisitor(binding);
             for (RootNode root : roots.keySet()) {
                 visitRoot(root, addBindingsVisitor);
@@ -191,7 +188,7 @@ final class InstrumentationHandler {
         EventChainNode parent = null;
         for (int i = 0; i < bindings.size(); i++) {
             EventBinding<?> binding = bindings.get(i);
-            if (isInstrumented(null, probeNodeImpl, binding, sourceSection)) {
+            if (isInstrumented(probeNodeImpl, binding, sourceSection)) {
                 if (TRACE) {
                     trace("Found binding %s, %s%n", binding.getFilter(), binding.getElement());
                 }
@@ -216,29 +213,29 @@ final class InstrumentationHandler {
         return root;
     }
 
-    private void initializeInstrumentation() {
+    private void initialize() {
         synchronized (this) {
-            if (!instrumentationInitialized) {
+            if (!initialized) {
                 if (TRACE) {
                     trace("Initialize instrumentation%n");
                 }
-                for (AbstractInstrumenter instrumenter : instrumenterMap.values()) {
+                for (AbstractInstrumenter instrumenter : instrumentations.values()) {
                     instrumenter.initialize();
                 }
                 if (TRACE) {
                     trace("Initialized instrumentation%n");
                 }
-                instrumentationInitialized = true;
+                initialized = true;
             }
         }
     }
 
     private void addInstrumenter(Object key, AbstractInstrumenter instrumenter) throws AssertionError {
-        if (instrumenterMap.containsKey(key)) {
+        if (instrumentations.containsKey(key)) {
             throw new AssertionError("Instrument already added.");
         }
 
-        if (instrumentationInitialized) {
+        if (initialized) {
             instrumenter.initialize();
             List<EventBinding<?>> addedBindings = new ArrayList<>();
             for (EventBinding<?> binding : bindings) {
@@ -252,7 +249,7 @@ final class InstrumentationHandler {
                 visitRoot(root, visitor);
             }
         }
-        instrumenterMap.put(key, instrumenter);
+        instrumentations.put(key, instrumenter);
     }
 
     @SuppressWarnings("unchecked")
@@ -329,23 +326,20 @@ final class InstrumentationHandler {
         return !(node instanceof WrapperNode) && !(node instanceof RootNode);
     }
 
-    private static boolean isInstrumented(RootNode rootNode, Node node, EventBinding<?> binding, SourceSection section) {
-        if (isInstrumentedLeaf(binding, section)) {
-            RootNode root = rootNode == null ? node.getRootNode() : rootNode;
-            if (root == null) {
-                return false;
-            }
-            return isInstrumentedRoot(root, binding, root.getSourceSection());
-        }
-        return false;
+    private static boolean isInstrumented(Node node, EventBinding<?> binding, SourceSection section) {
+        return binding.getInstrumenter().isInstrumentable(node) && binding.getFilter().isInstrumented(section);
     }
 
     private static boolean isInstrumentedRoot(RootNode node, EventBinding<?> binding, SourceSection section) {
         return binding.getInstrumenter().isInstrumentable(node) && binding.getFilter().isInstrumentedRoot(section);
     }
 
-    private static boolean isInstrumentedLeaf(EventBinding<?> binding, SourceSection section) {
-        return binding.getFilter().isInstrumentedNode(section);
+    private static boolean isInstrumentedLeaf(Node node, EventBinding<?> binding, SourceSection section) {
+        if (binding.getFilter().isInstrumentedNode(section)) {
+            assert isInstrumented(node, binding, section);
+            return true;
+        }
+        return false;
     }
 
     private static void trace(String message, Object... args) {
@@ -358,8 +352,7 @@ final class InstrumentationHandler {
             trace("Visit root %s wrappers for %s%n", visitor, root.toString());
         }
 
-        visitor.root = root;
-        if (visitor.shouldVisit()) {
+        if (visitor.shouldVisit(root)) {
             // found a filter that matched
             root.atomic(new Runnable() {
                 public void run() {
@@ -367,7 +360,6 @@ final class InstrumentationHandler {
                 }
             });
         }
-        visitor.root = null;
         if (TRACE) {
             trace("Visited root %s wrappers for %s%n", visitor, root.toString());
         }
@@ -410,15 +402,13 @@ final class InstrumentationHandler {
     }
 
     private <T> T lookup(Object key, Class<T> type) {
-        AbstractInstrumenter value = instrumenterMap.get(key);
+        AbstractInstrumenter value = instrumentations.get(key);
         return value == null ? null : value.lookup(this, type);
     }
 
     private abstract class AbstractNodeVisitor implements NodeVisitor {
 
-        protected RootNode root;
-
-        abstract boolean shouldVisit();
+        abstract boolean shouldVisit(RootNode root);
 
     }
 
@@ -431,14 +421,14 @@ final class InstrumentationHandler {
         }
 
         @Override
-        boolean shouldVisit() {
+        boolean shouldVisit(RootNode root) {
             return isInstrumentedRoot(root, binding, root.getSourceSection());
         }
 
         public final boolean visit(Node node) {
             SourceSection sourceSection = node.getSourceSection();
             if (sourceSection != null) {
-                if (isInstrumentableNode(node) && isInstrumentedLeaf(binding, sourceSection)) {
+                if (isInstrumentedLeaf(node, binding, sourceSection) && isInstrumentableNode(node)) {
                     if (TRACE) {
                         trace("Filter hit section:%s%n", sourceSection);
                     }
@@ -461,7 +451,7 @@ final class InstrumentationHandler {
         }
 
         @Override
-        boolean shouldVisit() {
+        boolean shouldVisit(RootNode root) {
             SourceSection sourceSection = root.getSourceSection();
             for (int i = 0; i < bindings.size(); i++) {
                 EventBinding<?> binding = bindings.get(i);
@@ -478,7 +468,7 @@ final class InstrumentationHandler {
                 List<EventBinding<?>> b = bindings;
                 for (int i = 0; i < b.size(); i++) {
                     EventBinding<?> binding = b.get(i);
-                    if (isInstrumentableNode(node) && isInstrumented(root, node, binding, sourceSection)) {
+                    if (isInstrumented(node, binding, sourceSection) && isInstrumentableNode(node)) {
                         if (TRACE) {
                             trace("Filter hit section:%s", sourceSection);
                         }
@@ -550,13 +540,13 @@ final class InstrumentationHandler {
      */
     final class InstrumentationInstrumenter extends AbstractInstrumenter {
 
-        private final Class<?> instrumentClass;
+        private final Class<?> instrumentationClass;
         private Object[] services;
-        private TruffleInstrument instrument;
+        private TruffleInstrument instrumentation;
         private final Env env;
 
-        InstrumentationInstrumenter(Class<?> instrumentClass, OutputStream out, OutputStream err, InputStream in) {
-            this.instrumentClass = instrumentClass;
+        InstrumentationInstrumenter(Class<?> instrumentationClass, OutputStream out, OutputStream err, InputStream in) {
+            this.instrumentationClass = instrumentationClass;
             this.env = new Env(this, out, err, in);
         }
 
@@ -565,8 +555,8 @@ final class InstrumentationHandler {
             return true;
         }
 
-        Class<?> getInstrumentClass() {
-            return instrumentClass;
+        Class<?> getInstrumentationClass() {
+            return instrumentationClass;
         }
 
         Env getEnv() {
@@ -576,51 +566,51 @@ final class InstrumentationHandler {
         @Override
         void initialize() {
             if (TRACE) {
-                trace("Initialize instrument %s class %s %n", instrument, instrumentClass);
+                trace("Initialize instrumentation %s class %s %n", instrumentation, instrumentationClass);
             }
-            assert instrument == null;
+            assert instrumentation == null;
             try {
-                this.instrument = (TruffleInstrument) instrumentClass.newInstance();
+                this.instrumentation = (TruffleInstrument) instrumentationClass.newInstance();
             } catch (InstantiationException | IllegalAccessException e) {
-                failInstrumentInitialization(String.format("Failed to create new instrumenter class %s", instrumentClass.getName()), e);
+                failInstrumentationInitialization(String.format("Failed to create new instrumenter class %s", instrumentationClass.getName()), e);
                 return;
             }
             try {
-                services = env.onCreate(instrument);
+                services = env.onCreate(instrumentation);
             } catch (Throwable e) {
-                failInstrumentInitialization(String.format("Failed calling onCreate of instrument class %s", instrumentClass.getName()), e);
+                failInstrumentationInitialization(String.format("Failed calling onCreate of instrumentation class %s", instrumentationClass.getName()), e);
                 return;
             }
             if (TRACE) {
-                trace("Initialized instrument %s class %s %n", instrument, instrumentClass);
+                trace("Initialized instrumentation %s class %s %n", instrumentation, instrumentationClass);
             }
         }
 
-        private void failInstrumentInitialization(String message, Throwable t) {
+        private void failInstrumentationInitialization(String message, Throwable t) {
             Exception exception = new Exception(message, t);
             PrintStream stream = new PrintStream(env.err());
             exception.printStackTrace(stream);
         }
 
         boolean isInitialized() {
-            return instrument != null;
+            return instrumentation != null;
         }
 
         TruffleInstrument getInstrumentation() {
-            return instrument;
+            return instrumentation;
         }
 
         @Override
         void dispose() {
             if (isInitialized()) {
-                instrument.onDispose(env);
+                instrumentation.onDispose(env);
             }
         }
 
         @Override
         <T> T lookup(InstrumentationHandler handler, Class<T> type) {
-            if (instrument == null) {
-                handler.initializeInstrumentation();
+            if (instrumentation == null) {
+                handler.initialize();
             }
             if (services != null) {
                 for (Object service : services) {
@@ -657,12 +647,12 @@ final class InstrumentationHandler {
 
         @Override
         void initialize() {
-            // nothing to do
+            // language.installInstrumentations(env, this);
         }
 
         @Override
         void dispose() {
-            // nothing to do
+            // nothing todo
         }
 
         @Override
@@ -724,13 +714,13 @@ final class InstrumentationHandler {
         }
 
         @Override
-        protected void addInstrument(Object instrumentationHandler, Object key, Class<?> instrumentClass) {
-            ((InstrumentationHandler) instrumentationHandler).addInstrument(key, instrumentClass);
+        protected void addInstrumentation(Object instrumentationHandler, Object key, Class<?> instrumentationClass) {
+            ((InstrumentationHandler) instrumentationHandler).addInstrumentation(key, instrumentationClass);
         }
 
         @Override
-        protected void disposeInstrument(Object instrumentationHandler, Object key, boolean cleanupRequired) {
-            ((InstrumentationHandler) instrumentationHandler).disposeInstrumenter(key, cleanupRequired);
+        protected void disposeInstrumentation(Object instrumentationHandler, Object key, boolean cleanupRequired) {
+            ((InstrumentationHandler) instrumentationHandler).disposeInstrumentation(key, cleanupRequired);
         }
 
         @Override
@@ -752,7 +742,7 @@ final class InstrumentationHandler {
         }
 
         @Override
-        protected void detachLanguageFromInstrumentation(Object vm, com.oracle.truffle.api.TruffleLanguage.Env env) {
+        protected void detachFromInstrumentation(Object vm, com.oracle.truffle.api.TruffleLanguage.Env env) {
             InstrumentationHandler instrumentationHandler = (InstrumentationHandler) ACCESSOR.getInstrumentationHandler(vm);
             instrumentationHandler.detachLanguage(findContext(env));
         }
