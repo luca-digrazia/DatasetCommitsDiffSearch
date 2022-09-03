@@ -25,7 +25,6 @@
 package com.oracle.truffle.api.vm;
 
 import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleOptions;
@@ -83,17 +82,6 @@ final class EngineTruffleObject implements TruffleObject, ForeignAccess.Factory 
 
     TruffleObject getDelegate() {
         return delegate;
-    }
-
-    void assertEngine(PolyglotEngine other) {
-        if (this.engine != other) {
-            throwEngine(other);
-        }
-    }
-
-    @CompilerDirectives.TruffleBoundary
-    private void throwEngine(PolyglotEngine other) throws IllegalArgumentException {
-        throw new IllegalArgumentException("This object comes from " + this.engine + " and cannot be sent to " + other);
     }
 
     @Override
