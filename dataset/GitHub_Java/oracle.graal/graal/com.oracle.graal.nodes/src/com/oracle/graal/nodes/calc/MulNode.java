@@ -26,9 +26,8 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp;
-import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp.Mul;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.Canonicalizable.BinaryCommutative;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.nodeinfo.*;
@@ -36,7 +35,7 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo(shortName = "*")
-public class MulNode extends BinaryArithmeticNode<Mul> implements NarrowableArithmeticNode, BinaryCommutative<ValueNode> {
+public class MulNode extends BinaryArithmeticNode<Mul> implements NarrowableArithmeticNode {
 
     public static final NodeClass<MulNode> TYPE = NodeClass.create(MulNode.class);
 
@@ -55,7 +54,7 @@ public class MulNode extends BinaryArithmeticNode<Mul> implements NarrowableArit
         if (tryConstantFold != null) {
             return tryConstantFold;
         } else {
-            return new MulNode(x, y).maybeCommuteInputs();
+            return new MulNode(x, y);
         }
     }
 
