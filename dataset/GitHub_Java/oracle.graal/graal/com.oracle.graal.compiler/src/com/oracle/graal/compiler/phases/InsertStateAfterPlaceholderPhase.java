@@ -38,11 +38,6 @@ public class InsertStateAfterPlaceholderPhase extends Phase {
         public void generate(LIRGeneratorTool gen) {
             // nothing to do
         }
-
-        @Override
-        public boolean hasSideEffect() {
-            return false;
-        }
     }
 
     @Override
