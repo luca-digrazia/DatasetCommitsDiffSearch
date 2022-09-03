@@ -100,7 +100,6 @@ class DefaultOptionHandler extends NativeImage.OptionHandler<NativeImage> {
                     NativeImage.showError("-jar requires jar file specification");
                 }
                 handleJarFileArg(nativeImage.canonicalize(Paths.get(jarFilePathStr)));
-                nativeImage.setJarOptionMode(true);
                 return true;
             case "--verbose":
                 args.poll();
@@ -183,9 +182,6 @@ class DefaultOptionHandler extends NativeImage.OptionHandler<NativeImage> {
     private void handleJarFileArg(Path filePath) {
         try (JarFile jarFile = new JarFile(filePath.toFile())) {
             Manifest manifest = jarFile.getManifest();
-            if (manifest == null) {
-                NativeImage.showError("No manifest in " + filePath);
-            }
             Attributes mainAttributes = manifest.getMainAttributes();
             String mainClass = mainAttributes.getValue("Main-Class");
             if (mainClass == null) {
