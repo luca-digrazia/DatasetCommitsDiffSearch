@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -33,16 +33,8 @@ import static jdk.vm.ci.code.ValueUtil.asRegister;
 import static jdk.vm.ci.hotspot.HotSpotVMConfig.config;
 import static jdk.vm.ci.hotspot.aarch64.AArch64HotSpotRegisterConfig.fp;
 
+import java.lang.reflect.Field;
 import java.util.Set;
-
-import jdk.vm.ci.code.CallingConvention;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.RegisterConfig;
-import jdk.vm.ci.code.StackSlot;
-import jdk.vm.ci.hotspot.HotSpotVMConfig;
-import jdk.vm.ci.hotspot.aarch64.AArch64HotSpotRegisterConfig;
-import jdk.vm.ci.meta.JavaType;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 import com.oracle.graal.asm.Assembler;
 import com.oracle.graal.asm.Label;
@@ -50,14 +42,11 @@ import com.oracle.graal.asm.aarch64.AArch64Address;
 import com.oracle.graal.asm.aarch64.AArch64Assembler;
 import com.oracle.graal.asm.aarch64.AArch64MacroAssembler;
 import com.oracle.graal.asm.aarch64.AArch64MacroAssembler.ScratchRegister;
-import com.oracle.graal.code.CompilationResult;
 import com.oracle.graal.compiler.aarch64.AArch64NodeMatchRules;
 import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig;
 import com.oracle.graal.compiler.common.spi.ForeignCallLinkage;
-import com.oracle.graal.hotspot.HotSpotDataBuilder;
 import com.oracle.graal.hotspot.HotSpotGraalRuntimeProvider;
 import com.oracle.graal.hotspot.HotSpotHostBackend;
-import com.oracle.graal.hotspot.HotSpotLIRGenerationResult;
 import com.oracle.graal.hotspot.meta.HotSpotForeignCallsProvider;
 import com.oracle.graal.hotspot.meta.HotSpotProviders;
 import com.oracle.graal.hotspot.stubs.Stub;
@@ -67,7 +56,6 @@ import com.oracle.graal.lir.aarch64.AArch64FrameMap;
 import com.oracle.graal.lir.aarch64.AArch64FrameMapBuilder;
 import com.oracle.graal.lir.asm.CompilationResultBuilder;
 import com.oracle.graal.lir.asm.CompilationResultBuilderFactory;
-import com.oracle.graal.lir.asm.DataBuilder;
 import com.oracle.graal.lir.asm.FrameContext;
 import com.oracle.graal.lir.framemap.FrameMap;
 import com.oracle.graal.lir.framemap.FrameMapBuilder;
@@ -75,6 +63,17 @@ import com.oracle.graal.lir.gen.LIRGenerationResult;
 import com.oracle.graal.lir.gen.LIRGeneratorTool;
 import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+
+import jdk.vm.ci.code.CallingConvention;
+import jdk.vm.ci.code.CompilationResult;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.RegisterConfig;
+import jdk.vm.ci.code.StackSlot;
+import jdk.vm.ci.hotspot.HotSpotVMConfig;
+import jdk.vm.ci.hotspot.aarch64.AArch64HotSpotRegisterConfig;
+import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import sun.misc.Unsafe;
 
 /**
  * HotSpot AArch64 specific backend.
@@ -97,13 +96,13 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend {
     }
 
     @Override
-    public LIRGeneratorTool newLIRGenerator(LIRGenerationResult lirGenRes) {
-        return new AArch64HotSpotLIRGenerator(getProviders(), config(), lirGenRes);
+    public LIRGeneratorTool newLIRGenerator(CallingConvention cc, LIRGenerationResult lirGenRes) {
+        return new AArch64HotSpotLIRGenerator(getProviders(), config(), cc, lirGenRes);
     }
 
     @Override
-    public LIRGenerationResult newLIRGenerationResult(String compilationUnitName, LIR lir, FrameMapBuilder frameMapBuilder, StructuredGraph graph, Object stub) {
-        return new HotSpotLIRGenerationResult(compilationUnitName, lir, frameMapBuilder, makeCallingConvention(graph, (Stub) stub), stub);
+    public LIRGenerationResult newLIRGenerationResult(String compilationUnitName, LIR lir, FrameMapBuilder frameMapBuilder, ResolvedJavaMethod method, Object stub) {
+        return new AArch64HotSpotLIRGenerationResult(compilationUnitName, lir, frameMapBuilder, stub);
     }
 
     @Override
@@ -111,13 +110,32 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend {
         return new AArch64HotSpotNodeLIRBuilder(graph, lirGen, new AArch64NodeMatchRules(lirGen));
     }
 
-    @Override
-    protected void bangStackWithOffset(CompilationResultBuilder crb, int bangOffset) {
-        AArch64MacroAssembler masm = (AArch64MacroAssembler) crb.asm;
-        try (ScratchRegister sc = masm.getScratchRegister()) {
-            Register scratch = sc.getRegister();
-            AArch64Address address = masm.makeAddress(sp, -bangOffset, scratch, 8, /* allowOverwrite */false);
-            masm.str(64, zr, address);
+    /**
+     * Emits code to do stack overflow checking.
+     *
+     * @param afterFrameInit specifies if the stack pointer has already been adjusted to allocate
+     *            the current frame
+     */
+    protected static void emitStackOverflowCheck(CompilationResultBuilder crb, int pagesToBang, boolean afterFrameInit) {
+        if (pagesToBang > 0) {
+            AArch64MacroAssembler masm = (AArch64MacroAssembler) crb.asm;
+            int frameSize = crb.frameMap.totalFrameSize();
+            if (frameSize > 0) {
+                int lastFramePage = frameSize / UNSAFE.pageSize();
+                // emit multiple stack bangs for methods with frames larger than a page
+                for (int i = 0; i <= lastFramePage; i++) {
+                    int disp = (i + pagesToBang) * UNSAFE.pageSize();
+                    if (afterFrameInit) {
+                        disp -= frameSize;
+                    }
+                    crb.blockComment("[stack overflow check]");
+                    try (ScratchRegister sc = masm.getScratchRegister()) {
+                        Register scratch = sc.getRegister();
+                        AArch64Address address = masm.makeAddress(sp, -disp, scratch, 8, /* allowOverwrite */false);
+                        masm.str(64, zr, address);
+                    }
+                }
+            }
         }
     }
 
@@ -135,8 +153,8 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend {
             final int totalFrameSize = frameMap.totalFrameSize();
             assert frameSize + 2 * crb.target.arch.getWordSize() == totalFrameSize : "total framesize should be framesize + 2 words";
             AArch64MacroAssembler masm = (AArch64MacroAssembler) crb.asm;
-            if (!isStub) {
-                emitStackOverflowCheck(crb);
+            if (!isStub && pagesToBang > 0) {
+                emitStackOverflowCheck(crb, pagesToBang, false);
             }
             crb.blockComment("[method prologue]");
 
@@ -214,7 +232,7 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend {
 
     @Override
     public CompilationResultBuilder newCompilationResultBuilder(LIRGenerationResult lirGenRen, FrameMap frameMap, CompilationResult compilationResult, CompilationResultBuilderFactory factory) {
-        HotSpotLIRGenerationResult gen = (HotSpotLIRGenerationResult) lirGenRen;
+        AArch64HotSpotLIRGenerationResult gen = (AArch64HotSpotLIRGenerationResult) lirGenRen;
         LIR lir = gen.getLIR();
         assert gen.getDeoptimizationRescueSlot() == null || frameMap.frameNeedsAllocating() : "method that can deoptimize must have a frame";
 
@@ -222,10 +240,8 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend {
         Assembler masm = createAssembler(frameMap);
         HotSpotFrameContext frameContext = new HotSpotFrameContext(stub != null);
 
-        DataBuilder dataBuilder = new HotSpotDataBuilder(getCodeCache().getTarget());
-        CompilationResultBuilder crb = factory.createBuilder(getCodeCache(), getForeignCalls(), frameMap, masm, dataBuilder, frameContext, compilationResult);
+        CompilationResultBuilder crb = factory.createBuilder(getCodeCache(), getForeignCalls(), frameMap, masm, frameContext, compilationResult);
         crb.setTotalFrameSize(frameMap.frameSize());
-        crb.setMaxInterpreterFrameSize(gen.getMaxInterpreterFrameSize());
         StackSlot deoptimizationRescueSlot = gen.getDeoptimizationRescueSlot();
         if (deoptimizationRescueSlot != null && stub == null) {
             crb.compilationResult.setCustomStackAreaOffset(frameMap.offsetForStackSlot(deoptimizationRescueSlot));
@@ -316,5 +332,21 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend {
     public RegisterAllocationConfig newRegisterAllocationConfig(RegisterConfig registerConfig) {
         RegisterConfig registerConfigNonNull = registerConfig == null ? getCodeCache().getRegisterConfig() : registerConfig;
         return new AArch64HotSpotRegisterAllocationConfig(registerConfigNonNull);
+    }
+
+    private static final Unsafe UNSAFE = initUnsafe();
+
+    private static Unsafe initUnsafe() {
+        try {
+            return Unsafe.getUnsafe();
+        } catch (SecurityException se) {
+            try {
+                Field theUnsafe = Unsafe.class.getDeclaredField("theUnsafe");
+                theUnsafe.setAccessible(true);
+                return (Unsafe) theUnsafe.get(Unsafe.class);
+            } catch (Exception e) {
+                throw new RuntimeException("exception while trying to get Unsafe", e);
+            }
+        }
     }
 }
