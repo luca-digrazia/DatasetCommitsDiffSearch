@@ -23,10 +23,9 @@
 
 package com.sun.c1x.target.amd64;
 
-import static com.sun.cri.bytecode.Bytecodes.UnsignedComparisons.*;
-
+import com.oracle.max.asm.*;
+import com.oracle.max.asm.target.amd64.*;
 import com.sun.c1x.*;
-import com.sun.c1x.alloc.OperandPool.VariableFlag;
 import com.sun.c1x.gen.*;
 import com.sun.c1x.globalstub.*;
 import com.sun.c1x.ir.*;
@@ -34,12 +33,12 @@ import com.sun.c1x.lir.*;
 import com.sun.c1x.util.*;
 import com.sun.cri.bytecode.*;
 import com.sun.cri.ci.*;
+import com.sun.cri.ri.*;
+import com.sun.cri.ri.RiType.*;
+import com.sun.cri.xir.*;
 
 /**
  * This class implements the X86-specific portion of the LIR generator.
- *
- * @author Thomas Wuerthinger
- * @author Ben L. Titzer
  */
 public class AMD64LIRGenerator extends LIRGenerator {
 
@@ -66,11 +65,6 @@ public class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    protected CiValue exceptionPcOpr() {
-        return ILLEGAL;
-    }
-
-    @Override
     protected boolean canStoreAsConstant(Value v, CiKind kind) {
         if (kind == CiKind.Short || kind == CiKind.Char) {
             // there is no immediate move of word values in asemblerI486.?pp
@@ -82,7 +76,7 @@ public class AMD64LIRGenerator extends LIRGenerator {
     @Override
     protected boolean canInlineAsConstant(Value v) {
         if (v.kind == CiKind.Long) {
-            if (v.isConstant() && Util.isInt(v.asConstant().asLong())) {
+            if (v.isConstant() && NumUtil.isInt(v.asConstant().asLong())) {
                 return true;
             }
             return false;
@@ -145,33 +139,16 @@ public class AMD64LIRGenerator extends LIRGenerator {
         setResult(x, reg);
     }
 
-    @Override
-    public void visitSignificantBit(SignificantBitOp x) {
-        LIRItem value = new LIRItem(x.value(), this);
-        value.setDestroysRegister();
-        value.loadItem();
-        CiValue reg = createResultVariable(x);
-        if (x.op == Bytecodes.LSB) {
-            lir.lsb(value.result(), reg);
-        } else {
-            lir.msb(value.result(), reg);
-        }
-    }
-
     public boolean livesLonger(Value x, Value y) {
-        BlockBegin bx = x.block();
-        BlockBegin by = y.block();
-        if (bx == null || by == null) {
-            return false;
-        }
-        return bx.loopDepth() < by.loopDepth();
+        // TODO(tw): Estimate which value will live longer.
+        return false;
     }
 
     public void visitArithmeticOpFloat(ArithmeticOp x) {
         LIRItem left = new LIRItem(x.x(), this);
         LIRItem right = new LIRItem(x.y(), this);
         assert !left.isStack() || !right.isStack() : "can't both be memory operands";
-        boolean mustLoadBoth = (x.opcode == Bytecodes.FREM || x.opcode == Bytecodes.DREM);
+        boolean mustLoadBoth = x.opcode == Bytecodes.FREM || x.opcode == Bytecodes.DREM;
 
         // Both are in register, swap operands such that the short-living one is on the left side.
         if (x.isCommutative() && left.isRegisterOrVariable() && right.isRegisterOrVariable()) {
@@ -212,7 +189,7 @@ public class AMD64LIRGenerator extends LIRGenerator {
         int opcode = x.opcode;
         if (opcode == Bytecodes.LDIV || opcode == Bytecodes.LREM) {
             // emit inline 64-bit code
-            LIRDebugInfo info = x.needsZeroCheck() ? stateFor(x) : null;
+            LIRDebugInfo info = stateFor(x);
             CiValue dividend = force(x.x(), RAX_L); // dividend must be in RAX
             CiValue divisor = load(x.y());            // divisor can be in any (other) register
 
@@ -260,7 +237,7 @@ public class AMD64LIRGenerator extends LIRGenerator {
             // force the evaluation of other instructions that are needed for
             // correct debug info.  Otherwise the live range of the fixed
             // register might be too long.
-            LIRDebugInfo info = x.needsZeroCheck() ? stateFor(x) : null;
+            LIRDebugInfo info = stateFor(x);
 
             CiValue dividend = force(x.x(), RAX_I); // dividend must be in RAX
             CiValue divisor = load(x.y());          // divisor can be in any (other) register
@@ -334,7 +311,7 @@ public class AMD64LIRGenerator extends LIRGenerator {
         if (opcode == Bytecodes.WDIV || opcode == Bytecodes.WREM || opcode == Bytecodes.WDIVI || opcode == Bytecodes.WREMI) {
             // emit code for long division or modulus
                 // emit inline 64-bit code
-                LIRDebugInfo info = x.needsZeroCheck() ? stateFor(x) : null;
+                LIRDebugInfo info = stateFor(x);
                 CiValue dividend = force(x.x(), RAX_L); // dividend must be in RAX
                 CiValue divisor = load(x.y());            // divisor can be in any (other) register
 
@@ -454,157 +431,12 @@ public class AMD64LIRGenerator extends LIRGenerator {
         } else if (x.x().kind.isFloat() || x.x().kind.isDouble()) {
             CiValue reg = createResultVariable(x);
             int code = x.opcode;
-            lir.fcmp2int(left.result(), right.result(), reg, (code == Bytecodes.FCMPL || code == Bytecodes.DCMPL));
+            lir.fcmp2int(left.result(), right.result(), reg, code == Bytecodes.FCMPL || code == Bytecodes.DCMPL);
         } else if (x.x().kind.isLong() || x.x().kind.isWord()) {
             CiValue reg = createResultVariable(x);
             lir.lcmp2int(left.result(), right.result(), reg);
         } else {
-            Util.unimplemented();
-        }
-    }
-
-    @Override
-    public void visitUnsignedCompareOp(UnsignedCompareOp x) {
-        LIRItem left = new LIRItem(x.x(), this);
-        LIRItem right = new LIRItem(x.y(), this);
-        left.loadItem();
-        right.loadItem();
-        Condition condition = null;
-        switch (x.op) {
-            case BELOW_THAN  : condition = Condition.BT; break;
-            case ABOVE_THAN  : condition = Condition.AT; break;
-            case BELOW_EQUAL : condition = Condition.BE; break;
-            case ABOVE_EQUAL : condition = Condition.AE; break;
-            default:
-                Util.unimplemented();
-        }
-        CiValue result = createResultVariable(x);
-        lir.cmp(condition, left.result(), right.result());
-        lir.cmove(condition, CiConstant.INT_1, CiConstant.INT_0, result);
-    }
-
-    @Override
-    public void visitCompareAndSwap(CompareAndSwap x) {
-
-        // (tw) TODO: Factor out common code with genCompareAndSwap.
-
-        CiKind dataKind = x.dataKind;
-        CiValue tempPointer = load(x.pointer());
-        CiAddress addr = getAddressForPointerOp(x, dataKind, tempPointer);
-
-        CiValue expectedValue = force(x.expectedValue(), AMD64.rax.asValue(dataKind));
-        CiValue newValue = load(x.newValue());
-        assert Util.archKindsEqual(newValue.kind, dataKind) : "invalid type";
-
-        if (dataKind.isObject()) { // Write-barrier needed for Object fields.
-            // Do the pre-write barrier : if any.
-            preGCWriteBarrier(addr, false, null);
-        }
-
-        CiValue pointer = newVariable(CiKind.Word);
-        lir.lea(addr, pointer);
-        CiValue result = createResultVariable(x);
-        CiValue resultReg = AMD64.rax.asValue(dataKind);
-        if (dataKind.isObject()) {
-            lir.casObj(pointer, expectedValue, newValue);
-        } else if (dataKind.isInt()) {
-            lir.casInt(pointer, expectedValue, newValue);
-        } else {
-            assert dataKind.isLong() || dataKind.isWord();
-            lir.casLong(pointer, expectedValue, newValue);
-        }
-
-        lir.move(resultReg, result);
-
-        if (dataKind.isObject()) { // Write-barrier needed for Object fields.
-            // Seems to be precise
-            postGCWriteBarrier(pointer, newValue);
-        }
-    }
-
-    @Override
-    protected void genCompareAndSwap(Intrinsic x, CiKind kind) {
-        assert x.numberOfArguments() == 5 : "wrong number of arguments: " + x.numberOfArguments();
-        // Argument 0 is the receiver.
-        LIRItem obj = new LIRItem(x.argumentAt(1), this); // object
-        LIRItem offset = new LIRItem(x.argumentAt(2), this); // offset of field
-        LIRItem val = new LIRItem(x.argumentAt(4), this); // replace field with val if matches cmp
-
-        assert obj.instruction.kind.isObject() : "invalid type";
-
-        assert val.instruction.kind == kind : "invalid type";
-
-        // get address of field
-        obj.loadItem();
-        offset.loadNonconstant();
-        CiAddress addr;
-        if (offset.result().isConstant()) {
-            addr = new CiAddress(kind, obj.result(), (int) ((CiConstant) offset.result()).asLong());
-        } else {
-            addr = new CiAddress(kind, obj.result(), offset.result());
-        }
-
-        // Compare operand needs to be in RAX.
-        CiValue cmp = force(x.argumentAt(3), AMD64.rax.asValue(kind));
-        val.loadItem();
-
-        CiValue pointer = newVariable(CiKind.Word);
-        lir.lea(addr, pointer);
-
-        if (kind.isObject()) { // Write-barrier needed for Object fields.
-            // Do the pre-write barrier : if any.
-            preGCWriteBarrier(pointer, false, null);
-        }
-
-        if (kind.isObject()) {
-            lir.casObj(pointer, cmp, val.result());
-        } else if (kind.isInt()) {
-            lir.casInt(pointer, cmp, val.result());
-        } else if (kind.isLong()) {
-            lir.casLong(pointer, cmp, val.result());
-        } else {
-            Util.shouldNotReachHere();
-        }
-
-        // generate conditional move of boolean result
-        CiValue result = createResultVariable(x);
-        lir.cmove(Condition.EQ, CiConstant.INT_1, CiConstant.INT_0, result);
-        if (kind.isObject()) { // Write-barrier needed for Object fields.
-            // Seems to be precise
-            postGCWriteBarrier(pointer, val.result());
-        }
-    }
-
-    @Override
-    protected void genMathIntrinsic(Intrinsic x) {
-        assert x.numberOfArguments() == 1 : "wrong type";
-
-        CiValue calcInput = load(x.argumentAt(0));
-
-        switch (x.intrinsic()) {
-            case java_lang_Math$abs:
-                lir.abs(calcInput, createResultVariable(x), ILLEGAL);
-                break;
-            case java_lang_Math$sqrt:
-                lir.sqrt(calcInput, createResultVariable(x), ILLEGAL);
-                break;
-            case java_lang_Math$sin:
-                setResult(x, callRuntimeWithResult(CiRuntimeCall.ArithmeticSin, null, calcInput));
-                break;
-            case java_lang_Math$cos:
-                setResult(x, callRuntimeWithResult(CiRuntimeCall.ArithmeticCos, null, calcInput));
-                break;
-            case java_lang_Math$tan:
-                setResult(x, callRuntimeWithResult(CiRuntimeCall.ArithmeticTan, null, calcInput));
-                break;
-            case java_lang_Math$log:
-                setResult(x, callRuntimeWithResult(CiRuntimeCall.ArithmeticLog, null, calcInput));
-                break;
-            case java_lang_Math$log10:
-                setResult(x, callRuntimeWithResult(CiRuntimeCall.ArithmeticLog10, null, calcInput));
-                break;
-            default:
-                Util.shouldNotReachHere("Unknown math intrinsic");
+            assert false;
         }
     }
 
@@ -614,12 +446,14 @@ public class AMD64LIRGenerator extends LIRGenerator {
         CiVariable result = newVariable(x.kind);
         // arguments of lirConvert
         GlobalStub globalStub = null;
+        // Checkstyle: off
         switch (x.opcode) {
             case Bytecodes.F2I: globalStub = stubFor(GlobalStub.Id.f2i); break;
             case Bytecodes.F2L: globalStub = stubFor(GlobalStub.Id.f2l); break;
             case Bytecodes.D2I: globalStub = stubFor(GlobalStub.Id.d2i); break;
             case Bytecodes.D2L: globalStub = stubFor(GlobalStub.Id.d2l); break;
         }
+        // Checkstyle: on
         if (globalStub != null) {
             // Force result to be rax to match global stubs expectation.
             CiValue stubResult = x.kind == CiKind.Int ? RAX_I : RAX_L;
@@ -632,7 +466,7 @@ public class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public void visitBlockBegin(BlockBegin x) {
+    public void visitMerge(Merge x) {
         // nothing to do for now
     }
 
@@ -665,82 +499,52 @@ public class AMD64LIRGenerator extends LIRGenerator {
             yin.loadItem();
         }
 
-        // add safepoint before generating condition code so it can be recomputed
-        if (x.isSafepoint()) {
-            emitXir(xir.genSafepoint(site(x)), x, stateFor(x, x.stateAfter()), null, false);
-        }
         setNoResult(x);
 
         CiValue left = xin.result();
         CiValue right = yin.result();
         lir.cmp(cond, left, right);
-        moveToPhi(x.stateAfter());
         if (x.x().kind.isFloat() || x.x().kind.isDouble()) {
-            lir.branch(cond, right.kind, x.trueSuccessor(), x.unorderedSuccessor());
+            lir.branch(cond, right.kind, getLIRBlock(x.trueSuccessor()), getLIRBlock(x.unorderedSuccessor()));
         } else {
-            lir.branch(cond, right.kind, x.trueSuccessor());
+            lir.branch(cond, right.kind, getLIRBlock(x.trueSuccessor()));
         }
         assert x.defaultSuccessor() == x.falseSuccessor() : "wrong destination above";
-        lir.jump(x.defaultSuccessor());
+        lir.jump(getLIRBlock(x.defaultSuccessor()));
     }
 
     @Override
-    protected void genGetObjectUnsafe(CiValue dst, CiValue src, CiValue offset, CiKind kind, boolean isVolatile) {
-        if (isVolatile && kind == CiKind.Long) {
-            CiAddress addr = new CiAddress(CiKind.Double, src, offset);
-            CiValue tmp = newVariable(CiKind.Double);
-            lir.load(addr, tmp, null);
-            CiValue spill = operands.newVariable(CiKind.Long, VariableFlag.MustStartInMemory);
-            lir.move(tmp, spill);
-            lir.move(spill, dst);
-        } else {
-            CiAddress addr = new CiAddress(kind, src, offset);
-            lir.load(addr, dst, null);
-        }
+    public void visitExceptionDispatch(ExceptionDispatch x) {
+        // TODO ls: this needs some more work...
+
+        RiType riType = x.catchType();
+        assert riType.isResolved();
+
+        XirArgument obj = toXirArgument(x.exception());
+        XirArgument clazz = toXirArgument(riType.getEncoding(Representation.ObjectHub));
+        XirSnippet snippet = xir.genInstanceOf(site(x), obj, clazz, riType);
+        CiValue result = emitXir(snippet, x, stateFor(x), null, true);
+
+        lir.cmp(Condition.EQ, result, CiConstant.TRUE);
+        lir.branch(Condition.EQ, CiKind.Boolean, getLIRBlock(x.catchSuccessor()));
+
+        lir.jump(getLIRBlock(x.otherSuccessor()));
     }
 
     @Override
-    protected void genPutObjectUnsafe(CiValue src, CiValue offset, CiValue data, CiKind kind, boolean isVolatile) {
-        if (isVolatile && kind == CiKind.Long) {
-            CiAddress addr = new CiAddress(CiKind.Double, src, offset);
-            CiValue tmp = newVariable(CiKind.Double);
-            CiValue spill = operands.newVariable(CiKind.Double, VariableFlag.MustStartInMemory);
-            lir.move(data, spill);
-            lir.move(spill, tmp);
-            lir.move(tmp, addr);
-        } else {
-            CiAddress addr = new CiAddress(kind, src, offset);
-            boolean isObj = (kind == CiKind.Jsr || kind == CiKind.Object);
-            if (isObj) {
-                // Do the pre-write barrier, if any.
-                preGCWriteBarrier(addr, false, null);
-                lir.move(data, addr);
-                assert src.isVariableOrRegister() : "must be register";
-                // Seems to be a precise address
-                postGCWriteBarrier(addr, data);
-            } else {
-                lir.move(data, addr);
-            }
-        }
+    public void visitLoopBegin(LoopBegin x) {
+        visitMerge(x);
     }
 
     @Override
-    protected CiValue osrBufferPointer() {
-        return Util.nonFatalUnimplemented(null);
+    public void visitLoopEnd(LoopEnd x) {
+        setNoResult(x);
+
+        // emit phi-instruction moves after safepoint since this simplifies
+        // describing the state at the safepoint.
+
+        moveToPhi();
+        lir.jump(getLIRBlock(x.loopBegin()));
     }
 
-    @Override
-    public void visitBoundsCheck(BoundsCheck boundsCheck) {
-        Value x = boundsCheck.index();
-        Value y = boundsCheck.length();
-        CiValue left = load(x);
-        CiValue right = null;
-        if (y.isConstant()) {
-            right = makeOperand(y);
-        } else {
-            right = load(y);
-        }
-        lir.cmp(boundsCheck.condition.negate(), left, right);
-        emitGuard(boundsCheck);
-    }
 }

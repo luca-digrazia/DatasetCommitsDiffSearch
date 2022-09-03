@@ -25,10 +25,12 @@ package com.oracle.graal.graph.vis;
 import java.awt.Color;
 import java.io.OutputStream;
 import java.io.PrintStream;
+import java.util.HashMap;
+import java.util.HashSet;
 
 import com.oracle.graal.graph.Graph;
 import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.Node.NodeArray;
+import com.oracle.graal.graph.NodeArray;
 
 /**
  * Generates a representation of {@link Node Nodes} or entire {@link Graph Graphs} in the DOT language that can be
@@ -44,12 +46,22 @@ public class GraphvizPrinter {
     }
 
     private final PrintStream out;
+    private final HashSet<Class<?>> omittedClasses = new HashSet<Class<?>>();
+    private final HashMap<Class<?>, String> classColors = new HashMap<Class<?>, String>();
 
     /**
      * Creates a new {@link GraphvizPrinter} that writes to the specified output stream.
      */
     public GraphvizPrinter(OutputStream out) {
         this.out = new PrintStream(out);
+    }
+
+    public void addOmittedClass(Class<?> clazz) {
+        omittedClasses.add(clazz);
+    }
+
+    public void addClassColor(Class<?> clazz, String color) {
+        classColors.put(clazz, color);
     }
 
     /**
@@ -80,7 +92,9 @@ public class GraphvizPrinter {
     public void print(Graph graph, boolean shortNames) {
         // graph.getNodes() returns all the graph's nodes, not just "roots"
         for (Node n : graph.getNodes()) {
-            printNode(n, shortNames);
+            if (n != null) {
+                printNode(n, shortNames);
+            }
         }
     }
 
@@ -88,27 +102,32 @@ public class GraphvizPrinter {
      * Prints a single node and edges for all its inputs and successors.
      */
     public void printNode(Node node, boolean shortNames) {
+        if (omittedClasses.contains(node.getClass())) {
+            return;
+        }
         int id = node.id();
         String name = "n" + id;
         NodeArray inputs = node.inputs();
         NodeArray successors = node.successors();
 
+        String color = classColors.get(node.getClass());
+
         if (shortNames) {
-            printNode(name, node.shortName(), inputs.size(), successors.size());
+            printNode(name, node.id(), excapeLabel(node.shortName()), color, inputs.size(), successors.size());
         } else {
-            printNode(name, node.toString(), inputs.size(), successors.size());
+            printNode(name, node.id(), excapeLabel(node.toString()), color, inputs.size(), successors.size());
         }
 
         for (int i = 0; i < successors.size(); ++i) {
             Node successor = successors.get(i);
-            if (successor != Node.Null) {
+            if (successor != Node.Null && !omittedClasses.contains(successor.getClass())) {
                 printControlEdge(id, i, successor.id());
             }
         }
 
         for (int i = 0; i < inputs.size(); ++i) {
             Node input = inputs.get(i);
-            if (input != Node.Null) {
+            if (input != Node.Null && !omittedClasses.contains(input.getClass())) {
                 if (node.getClass().getSimpleName().equals("FrameState") && input.getClass().getSimpleName().equals("Local")) {
                     continue;
                 }
@@ -117,49 +136,63 @@ public class GraphvizPrinter {
         }
     }
 
-    private void printNode(String name, String label, int ninputs, int nsuccessors) {
+    private void printNode(String name, Number number, String label, String color, int ninputs, int nsuccessors) {
+        int minWidth = Math.min(1 + label.length() / 3, 10);
+        minWidth = Math.max(minWidth, Math.max(ninputs + 1, nsuccessors + 1));
         out.println(name + "  [shape=plaintext,");
-        out.println("   label=< <TABLE BORDER=\"0\" CELLSPACING=\"0\"><TR><TD CELLPADDING=\"0\">");
-        out.println("    <TABLE BORDER=\"0\" CELLSPACING=\"2\" CELLPADDING=\"0\"><TR>");
-        out.println("    <TD WIDTH=\"15\" HEIGHT=\"5\" PORT=\"predecessors\" BGCOLOR=\"rosybrown1\"></TD></TR></TABLE>");
-        out.println("    </TD><TD COLSPAN=\"2\" CELLPADDING=\"0\" ALIGN=\"RIGHT\"><TABLE BORDER=\"0\" CELLSPACING=\"2\" CELLPADDING=\"0\"><TR>");
+        out.println("   label=< <TABLE BORDER=\"0\" CELLSPACING=\"0\"><TR>");
 
-        if ((ninputs == 1 && nsuccessors == 1) || (ninputs == 0 && nsuccessors == 0)) {
-            out.println("    <TD WIDTH=\"15\" HEIGHT=\"5\"></TD>");
-        }
+        printPort("predecessors", "rosybrown1");
 
-        for (int i = 0; i < nsuccessors - ninputs; i++) {
-            out.println("    <TD WIDTH=\"15\" HEIGHT=\"5\"></TD>");
+        for (int i = 1; i < minWidth - ninputs; i++) {
+            printEmptyPort();
         }
 
         for (int i = 0; i < ninputs; i++) {
-            out.println("    <TD WIDTH=\"15\" HEIGHT=\"5\" PORT=\"in" + i + "\" BGCOLOR=\"lightgrey\"></TD>");
+            printPort("in" + i, "lightgrey");
         }
 
+        if (number != null) {
+            label = "<FONT POINT-SIZE=\"8\">" + number + "</FONT> " + label;
+        }
+
+        out.println("    </TR><TR><TD BORDER=\"1\" COLSPAN=\"" + minWidth + "\" BGCOLOR=\"" + (color != null ? color : NODE_BGCOLOR_STRING) + "\">" + label + "</TD></TR><TR>");
+
+        for (int i = 0; i < nsuccessors; i++) {
+            printPort("succ" + i, "rosybrown1");
+        }
+
+        for (int i = 1; i < minWidth - nsuccessors; i++) {
+            printEmptyPort();
+        }
+
+        printPort("usages", "lightgrey");
+
+        out.println("    </TR></TABLE>>]; ");
+    }
+
+    private static String excapeLabel(String label) {
         label = label.replace("&", "&amp;");
         label = label.replace("<", "&lt;");
         label = label.replace(">", "&gt;");
-        out.println("    </TR></TABLE></TD></TR><TR><TD BORDER=\"1\" COLSPAN=\"3\" BGCOLOR=\"" + NODE_BGCOLOR_STRING + "\">" + label + "</TD></TR>");
-        out.println("    <TR><TD COLSPAN=\"2\" CELLPADDING=\"0\" ALIGN=\"RIGHT\"><TABLE BORDER=\"0\" CELLSPACING=\"2\" CELLPADDING=\"0\"><TR>");
+        label = label.replace("\"", "&quot;");
+        return label;
+    }
 
-        for (int i = 0; i < nsuccessors; i++) {
-            out.println("    <TD WIDTH=\"15\" HEIGHT=\"5\" PORT=\"succ" + i + "\" BGCOLOR=\"rosybrown1\"></TD>");
-        }
+    private void printPort(String name, String color) {
+        out.print("    <TD CELLPADDING=\"0\" WIDTH=\"15\"><TABLE BORDER=\"0\" CELLSPACING=\"2\" CELLPADDING=\"0\"><TR><TD WIDTH=\"15\" HEIGHT=\"5\" PORT=\"");
+        out.print(name);
+        out.print("\" BGCOLOR=\"");
+        out.print(color);
+        out.println("\"></TD></TR></TABLE></TD>");
+    }
 
-        for (int i = 0; i < ninputs - nsuccessors; i++) {
-            out.println("    <TD WIDTH=\"15\" HEIGHT=\"5\"></TD>");
-        }
-
-        if ((ninputs == 1 && nsuccessors == 1) || (ninputs == 0 && nsuccessors == 0)) {
-            out.println("    <TD WIDTH=\"15\" HEIGHT=\"5\"></TD>");
-        }
-
-        out.println("    </TR></TABLE></TD><TD CELLPADDING=\"0\"><TABLE BORDER=\"0\" CELLSPACING=\"2\" CELLPADDING=\"0\"><TR>");
-        out.println("    <TD WIDTH=\"15\" HEIGHT=\"5\" PORT=\"usages\" BGCOLOR=\"lightgrey\"></TD></TR></TABLE></TD></TR></TABLE>>]; ");
+    private void printEmptyPort() {
+        out.print("    <TD CELLPADDING=\"0\" WIDTH=\"15\"><TABLE BORDER=\"0\" CELLSPACING=\"2\" CELLPADDING=\"0\"><TR><TD WIDTH=\"15\" HEIGHT=\"5\"></TD></TR></TABLE></TD>");
     }
 
     private void printControlEdge(int from, int fromPort, int to) {
-        out.println("n" + from + ":succ" + fromPort + " -> n" + to + ":predecessors:n [color=red, weight=10];");
+        out.println("n" + from + ":succ" + fromPort + ":s -> n" + to + ":predecessors:n [color=red, weight=2];");
     }
 
     private void printDataEdge(int from, int fromPort, int to) {

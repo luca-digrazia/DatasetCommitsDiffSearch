@@ -57,10 +57,4 @@ public class LoopBegin extends Merge {
         out.print("loopBegin");
     }
 
-    @Override
-    public Node copy(Graph into) {
-        LoopBegin x = new LoopBegin(into);
-        x.setNonNull(isNonNull());
-        return x;
-    }
 }

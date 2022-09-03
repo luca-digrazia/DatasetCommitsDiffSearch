@@ -27,7 +27,6 @@ import java.util.*;
 import com.oracle.graal.graph.*;
 import com.sun.c1x.debug.*;
 import com.sun.c1x.ir.*;
-import com.sun.cri.ci.*;
 
 
 public class Schedule {
@@ -67,7 +66,9 @@ public class Schedule {
     private Block assignBlock(Node n, Block b) {
         assert nodeToBlock.get(n) == null;
         nodeToBlock.set(n, b);
-        b.getInstructions().add(n);
+        if (n != n.graph().start()) {
+            b.getInstructions().add((Instruction) n);
+        }
         return b;
     }
 
@@ -83,6 +84,13 @@ public class Schedule {
             public boolean visit(Node n) {
                 if (!isCFG(n)) {
                     return false;
+                }
+
+                if (n instanceof LoopBegin) {
+                    // a LoopBegin is always a merge
+                    assignBlock(n);
+                    blockBeginNodes.add(n);
+                    return true;
                 }
 
                 Node singlePred = null;
@@ -146,158 +154,27 @@ public class Schedule {
                     predBlock.addSuccessor(block);
                 }
             }
-        }
-
-        computeDominators();
-        assignLatestPossibleBlockToNodes();
-        sortNodesWithinBlocks();
-        //print();
-    }
-
-    private void assignLatestPossibleBlockToNodes() {
-        for (Node n : graph.getNodes()) {
-            assignLatestPossibleBlockToNode(n);
-        }
-    }
-
-    private Block assignLatestPossibleBlockToNode(Node n) {
-        if (n == null) {
-            return null;
-        }
-
-        Block prevBlock = nodeToBlock.get(n);
-        if (prevBlock != null) {
-            return prevBlock;
-        }
-
-        Block block = null;
-        for (Node succ : n.successors()) {
-            block = getCommonDominator(block, assignLatestPossibleBlockToNode(succ));
-        }
-        for (Node usage : n.usages()) {
-            block = getCommonDominator(block, assignLatestPossibleBlockToNode(usage));
-        }
-
-        nodeToBlock.set(n, block);
-        return block;
-    }
-
-    private Block getCommonDominator(Block a, Block b) {
-        if (a == null) {
-            return b;
-        }
-        if (b == null) {
-            return a;
-        }
-        return commonDominator(a, b);
-    }
-
-    private void sortNodesWithinBlocks() {
-        NodeBitMap map = graph.createNodeBitMap();
-        for (Block b : blocks) {
-            sortNodesWithinBlocks(b, map);
-        }
-    }
-
-    private void sortNodesWithinBlocks(Block b, NodeBitMap map) {
-        List<Node> instructions = b.getInstructions();
-        Collections.shuffle(instructions);
-
-        List<Node> sortedInstructions = new ArrayList<Node>();
-        for (Node i : instructions) {
-            addToSorting(b, i, sortedInstructions, map);
-        }
-        b.setInstructions(sortedInstructions);
-    }
-
-    private void addToSorting(Block b, Node i, List<Node> sortedInstructions, NodeBitMap map) {
-        if (i == null || map.isMarked(i) || nodeToBlock.get(i) != b) {
-            return;
-        }
-        TTY.println("addToSorting " + i.id() + " " + i.getClass().getName());
-
-        for (Node input : i.inputs()) {
-            if (input != null) TTY.println("visiting input " + input.id() + " " + input.getClass().getName());
-            addToSorting(b, input, sortedInstructions, map);
-        }
-
-        for (Node pred : i.predecessors()) {
-            addToSorting(b, pred, sortedInstructions, map);
-        }
-
-        // Now predecessors and inputs are scheduled => we can add this node.
-        sortedInstructions.add(i);
-        map.mark(i);
-    }
-
-    private void computeDominators() {
-        Block dominatorRoot = nodeToBlock.get(graph.start());
-        assert dominatorRoot.getPredecessors().size() == 0;
-        CiBitMap visited = new CiBitMap(blocks.size());
-        visited.set(dominatorRoot.blockID());
-        LinkedList<Block> workList = new LinkedList<Block>();
-        workList.add(dominatorRoot);
-
-        while (!workList.isEmpty()) {
-            Block b = workList.remove();
-
-            TTY.println("processing" + b);
-            List<Block> predecessors = b.getPredecessors();
-            if (predecessors.size() == 1) {
-                b.setDominator(predecessors.get(0));
-            } else if (predecessors.size() > 0) {
-                boolean delay = false;
-                for (Block pred : predecessors) {
-                    if (pred != dominatorRoot && pred.dominator() == null) {
-                        delay = true;
-                        break;
-                    }
-                }
-
-                if (delay) {
-                    workList.add(b);
-                    continue;
-                }
-
-                Block dominator = null;
-                for (Block pred : predecessors) {
-                    if (dominator == null) {
-                        dominator = pred;
-                    } else {
-                        dominator = commonDominator(dominator, pred);
-                    }
-                }
-                b.setDominator(dominator);
-            }
-
-            for (Block succ : b.getSuccessors()) {
-                if (!visited.get(succ.blockID())) {
-                    visited.set(succ.blockID());
-                    workList.add(succ);
-                }
+            if (n instanceof LoopBegin) {
+                LoopBegin loopBegin = (LoopBegin) n;
+                nodeToBlock.get(loopBegin.loopEnd()).addSuccessor(block);
+//                System.out.println("added LoopEnd to LoopBegin successor 2: " + loopBegin.loopEnd() + "->" + loopBegin);
             }
         }
+
+        orderBlocks();
+//        print();
     }
 
-    public Block commonDominator(Block a, Block b) {
-        CiBitMap bitMap = new CiBitMap(blocks.size());
-        Block cur = a;
-        while (cur != null) {
-            bitMap.set(cur.blockID());
-            cur = cur.dominator();
-        }
+    private void orderBlocks() {
+       /* List<Block> orderedBlocks = new ArrayList<Block>();
+        Block startBlock = nodeToBlock.get(graph.start().start());
+        List<Block> toSchedule = new ArrayList<Block>();
+        toSchedule.add(startBlock);
 
-        cur = b;
-        while (cur != null) {
-            if (bitMap.get(cur.blockID())) {
-                return cur;
-            }
-            cur = cur.dominator();
-        }
+        while (toSchedule.size() != 0) {
 
-        print();
-        assert false : "no common dominator between " + a + " and " + b;
-        return null;
+
+        }*/
     }
 
     private void print() {
@@ -319,10 +196,6 @@ public class Schedule {
            TTY.print(" preds=");
            for (Block pred : b.getPredecessors()) {
                TTY.print(pred + ";");
-           }
-
-           if (b.dominator() != null) {
-               TTY.print(" dom=" + b.dominator());
            }
            TTY.println();
 

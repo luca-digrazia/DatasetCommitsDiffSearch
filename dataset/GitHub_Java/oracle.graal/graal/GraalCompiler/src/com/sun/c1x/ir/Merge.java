@@ -81,22 +81,20 @@ public class Merge extends StateSplit {
         builder.append(" [");
 
         builder.append("]");
-
-        builder.append(" -> ");
-        boolean hasSucc = false;
-        for (Node s : this.successors()) {
-            if (hasSucc) {
-                builder.append(", ");
+        //if (end() != null) {
+            builder.append(" -> ");
+            boolean hasSucc = false;
+            for (Node s : this.successors()) {
+                if (s != null) {
+                    if (hasSucc) {
+                        builder.append(", ");
+                    }
+                    builder.append("#");
+                    builder.append(s.id());
+                    hasSucc = true;
+                }
             }
-            builder.append("#");
-            if (s != null) {
-                builder.append(s.id());
-            } else {
-                builder.append("null");
-            }
-            hasSucc = true;
-        }
-
+        //}
         return builder.toString();
     }
 
@@ -248,6 +246,10 @@ public class Merge extends StateSplit {
                 sb.append("] ");
             }
         }
+        if (value != null && value.hasSubst()) {
+            sb.append("alias ").append(Util.valueString(value.subst()));
+        }
         return sb.toString();
     }
+
 }

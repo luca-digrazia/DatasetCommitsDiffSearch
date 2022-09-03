@@ -1031,15 +1031,11 @@ public final class GraphBuilder {
     }
 
     private Value appendConstant(CiConstant constant) {
-        return append(new Constant(constant, graph));
+        return appendWithBCI(new Constant(constant, graph));
     }
 
     private Value append(Instruction x) {
         return appendWithBCI(x);
-    }
-
-    private Value append(Value v) {
-        return v;
     }
 
     private Value appendWithBCI(Instruction x) {
@@ -1097,7 +1093,7 @@ public final class GraphBuilder {
     private Value synchronizedObject(FrameStateAccess state, RiMethod target) {
         if (isStatic(target.accessFlags())) {
             Constant classConstant = new Constant(target.holder().getEncoding(Representation.JavaClass), graph);
-            return append(classConstant);
+            return appendWithBCI(classConstant);
         } else {
             return state.localAt(0);
         }
