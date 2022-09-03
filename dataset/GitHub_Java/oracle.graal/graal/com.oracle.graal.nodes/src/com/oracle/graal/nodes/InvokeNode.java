@@ -42,7 +42,6 @@ public final class InvokeNode extends AbstractStateSplit implements StateSplit, 
     private boolean polymorphic;
     private boolean useForInlining;
     private final long leafGraphId;
-    private double inliningRelevance;
 
     /**
      * Constructs a new Invoke instruction.
@@ -57,7 +56,6 @@ public final class InvokeNode extends AbstractStateSplit implements StateSplit, 
         this.leafGraphId = leafGraphId;
         this.polymorphic = false;
         this.useForInlining = true;
-        this.inliningRelevance = Double.NaN;
     }
 
     @Override
@@ -90,16 +88,6 @@ public final class InvokeNode extends AbstractStateSplit implements StateSplit, 
     }
 
     @Override
-    public double inliningRelevance() {
-        return inliningRelevance;
-    }
-
-    @Override
-    public void setInliningRelevance(double value) {
-        inliningRelevance = value;
-    }
-
-    @Override
     public long leafGraphId() {
         return leafGraphId;
     }
@@ -109,6 +97,8 @@ public final class InvokeNode extends AbstractStateSplit implements StateSplit, 
         Map<Object, Object> debugProperties = super.getDebugProperties(map);
         if (callTarget instanceof MethodCallTargetNode && methodCallTarget().targetMethod() != null) {
             debugProperties.put("targetMethod", methodCallTarget().targetMethod());
+        } else if (callTarget instanceof AbstractCallTargetNode) {
+            debugProperties.put("targetMethod", ((AbstractCallTargetNode) callTarget).target());
         }
         return debugProperties;
     }

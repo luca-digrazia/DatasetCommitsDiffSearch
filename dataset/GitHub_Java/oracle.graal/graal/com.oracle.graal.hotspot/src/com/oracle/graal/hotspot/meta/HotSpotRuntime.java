@@ -458,11 +458,6 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, SnippetP
     }
 
     @Override
-    public Signature parseMethodDescriptor(String signature) {
-        return new HotSpotSignature(signature);
-    }
-
-    @Override
     public int getSizeOfLockData() {
         return config.basicLockSize;
     }
