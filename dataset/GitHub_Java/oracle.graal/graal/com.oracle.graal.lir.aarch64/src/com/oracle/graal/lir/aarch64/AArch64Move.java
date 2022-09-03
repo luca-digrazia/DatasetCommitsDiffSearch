@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,126 +23,103 @@
 package com.oracle.graal.lir.aarch64;
 
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.COMPOSITE;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.HINT;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.STACK;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.UNINITIALIZED;
 import static com.oracle.graal.lir.LIRValueUtil.asJavaConstant;
 import static com.oracle.graal.lir.LIRValueUtil.isJavaConstant;
+import static jdk.vm.ci.aarch64.AArch64.sp;
 import static jdk.vm.ci.aarch64.AArch64.zr;
 import static jdk.vm.ci.code.ValueUtil.asAllocatableValue;
 import static jdk.vm.ci.code.ValueUtil.asRegister;
 import static jdk.vm.ci.code.ValueUtil.asStackSlot;
 import static jdk.vm.ci.code.ValueUtil.isRegister;
 import static jdk.vm.ci.code.ValueUtil.isStackSlot;
-import jdk.vm.ci.aarch64.AArch64;
+
+import com.oracle.graal.asm.Label;
+import com.oracle.graal.asm.aarch64.AArch64Address;
+import com.oracle.graal.asm.aarch64.AArch64Assembler;
+import com.oracle.graal.asm.aarch64.AArch64MacroAssembler;
+import com.oracle.graal.asm.aarch64.AArch64MacroAssembler.ScratchRegister;
+import com.oracle.graal.compiler.common.LIRKind;
+import com.oracle.graal.compiler.common.type.DataPointerConstant;
+import com.oracle.graal.debug.GraalError;
+import com.oracle.graal.lir.LIRFrameState;
+import com.oracle.graal.lir.LIRInstructionClass;
+import com.oracle.graal.lir.Opcode;
+import com.oracle.graal.lir.StandardOp;
+import com.oracle.graal.lir.StandardOp.LoadConstantOp;
+import com.oracle.graal.lir.StandardOp.NullCheck;
+import com.oracle.graal.lir.StandardOp.ValueMoveOp;
+import com.oracle.graal.lir.VirtualStackSlot;
+import com.oracle.graal.lir.asm.CompilationResultBuilder;
+
 import jdk.vm.ci.aarch64.AArch64Kind;
 import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.StackSlot;
-import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.AllocatableValue;
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.PlatformKind;
 import jdk.vm.ci.meta.Value;
 
-import com.oracle.graal.asm.Label;
-import com.oracle.graal.asm.aarch64.AArch64Address;
-import com.oracle.graal.asm.aarch64.AArch64Assembler;
-import com.oracle.graal.asm.aarch64.AArch64MacroAssembler;
-import com.oracle.graal.lir.LIRFrameState;
-import com.oracle.graal.lir.LIRInstructionClass;
-import com.oracle.graal.lir.Opcode;
-import com.oracle.graal.lir.StandardOp;
-import com.oracle.graal.lir.StandardOp.NullCheck;
-import com.oracle.graal.lir.StandardOp.ValueMoveOp;
-import com.oracle.graal.lir.VirtualStackSlot;
-import com.oracle.graal.lir.asm.CompilationResultBuilder;
-
 public class AArch64Move {
 
-    @Opcode("MOVE")
-    public static class MoveToRegOp extends AArch64LIRInstruction implements ValueMoveOp {
-        public static final LIRInstructionClass<MoveToRegOp> TYPE = LIRInstructionClass.create(MoveToRegOp.class);
+    public static class LoadInlineConstant extends AArch64LIRInstruction implements LoadConstantOp {
+        public static final LIRInstructionClass<LoadInlineConstant> TYPE = LIRInstructionClass.create(LoadInlineConstant.class);
 
-        @Def protected AllocatableValue result;
-        @Use({REG, STACK}) protected AllocatableValue input;
+        private JavaConstant constant;
+        @Def({REG, STACK}) AllocatableValue result;
 
-        public MoveToRegOp(AllocatableValue result, AllocatableValue input) {
+        public LoadInlineConstant(JavaConstant constant, AllocatableValue result) {
             super(TYPE);
+            this.constant = constant;
             this.result = result;
-            this.input = input;
         }
 
         @Override
         public void emitCode(CompilationResultBuilder crb, AArch64MacroAssembler masm) {
-            move(crb, masm, getResult(), getInput());
-        }
-
-        @Override
-        public AllocatableValue getInput() {
-            return input;
-        }
-
-        @Override
-        public AllocatableValue getResult() {
-            return result;
-        }
-    }
-
-    /**
-     * If the destination is a StackSlot we cannot have a StackSlot or Constant as the source, hence
-     * we have to special case this particular combination. Note: We allow a register as the
-     * destination too just to give the register allocator more freedom.
-     */
-    @Opcode("MOVE")
-    public static class MoveToStackOp extends AArch64LIRInstruction implements StandardOp.ValueMoveOp {
-        public static final LIRInstructionClass<MoveToStackOp> TYPE = LIRInstructionClass.create(MoveToStackOp.class);
-
-        @Def({STACK, REG}) protected AllocatableValue result;
-        @Use protected AllocatableValue input;
-
-        public MoveToStackOp(AllocatableValue result, AllocatableValue input) {
-            super(TYPE);
-            this.result = result;
-            this.input = input;
-        }
-
-        @Override
-        public void emitCode(CompilationResultBuilder crb, AArch64MacroAssembler masm) {
-            move(crb, masm, getResult(), getInput());
-        }
-
-        @Override
-        public AllocatableValue getInput() {
-            return input;
-        }
-
-        @Override
-        public AllocatableValue getResult() {
-            return result;
-        }
-    }
-
-    @Opcode("MOVE")
-    public static class MoveFromConstOp extends AArch64LIRInstruction implements StandardOp.LoadConstantOp {
-        public static final LIRInstructionClass<MoveFromConstOp> TYPE = LIRInstructionClass.create(MoveFromConstOp.class);
-
-        @Def protected AllocatableValue result;
-        private final JavaConstant input;
-
-        public MoveFromConstOp(AllocatableValue result, JavaConstant input) {
-            super(TYPE);
-            this.result = result;
-            this.input = input;
-        }
-
-        @Override
-        public void emitCode(CompilationResultBuilder crb, AArch64MacroAssembler masm) {
-            const2reg(crb, masm, result, input);
+            if (isRegister(result)) {
+                const2reg(crb, masm, result, constant);
+            } else if (isStackSlot(result)) {
+                StackSlot slot = asStackSlot(result);
+                const2stack(crb, masm, slot, constant);
+            }
         }
 
         @Override
         public Constant getConstant() {
+            return constant;
+        }
+
+        @Override
+        public AllocatableValue getResult() {
+            return result;
+        }
+    }
+
+    @Opcode("MOVE")
+    public static class Move extends AArch64LIRInstruction implements ValueMoveOp {
+        public static final LIRInstructionClass<Move> TYPE = LIRInstructionClass.create(Move.class);
+
+        @Def({REG, STACK, HINT}) protected AllocatableValue result;
+        @Use({REG, STACK}) protected AllocatableValue input;
+
+        public Move(AllocatableValue result, AllocatableValue input) {
+            super(TYPE);
+            this.result = result;
+            this.input = input;
+            assert !(isStackSlot(result) && isStackSlot(input));
+        }
+
+        @Override
+        public void emitCode(CompilationResultBuilder crb, AArch64MacroAssembler masm) {
+            move(crb, masm, getResult(), getInput());
+        }
+
+        @Override
+        public AllocatableValue getInput() {
             return input;
         }
 
@@ -176,9 +153,9 @@ public class AArch64Move {
         public static final LIRInstructionClass<LoadDataOp> TYPE = LIRInstructionClass.create(LoadDataOp.class);
 
         @Def protected AllocatableValue result;
-        private final byte[] data;
+        private final DataPointerConstant data;
 
-        public LoadDataOp(AllocatableValue result, byte[] data) {
+        public LoadDataOp(AllocatableValue result, DataPointerConstant data) {
             super(TYPE);
             this.result = result;
             this.data = data;
@@ -187,8 +164,7 @@ public class AArch64Move {
         @Override
         public void emitCode(CompilationResultBuilder crb, AArch64MacroAssembler masm) {
             Register dst = asRegister(result);
-            int alignment = 16;
-            masm.loadAddress(dst, (AArch64Address) crb.recordDataReferenceInCode(data, alignment), alignment);
+            masm.loadAddress(dst, (AArch64Address) crb.recordDataReferenceInCode(data), data.getAlignment());
         }
     }
 
@@ -207,9 +183,11 @@ public class AArch64Move {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, AArch64MacroAssembler masm) {
-            AArch64Address address = (AArch64Address) crb.asAddress(slot);
-            PlatformKind kind = AArch64Kind.QWORD;
-            masm.loadAddress(asRegister(result, kind), address, kind.getSizeInBytes());
+            try (ScratchRegister addrReg = masm.getScratchRegister()) {
+                AArch64Address address = loadStackSlotAddress(crb, masm, (StackSlot) slot, addrReg.getRegister());
+                PlatformKind kind = AArch64Kind.QWORD;
+                masm.loadAddress(asRegister(result, kind), address, kind.getSizeInBytes());
+            }
         }
     }
 
@@ -244,7 +222,7 @@ public class AArch64Move {
         @Use({COMPOSITE}) protected AArch64AddressValue addressValue;
         @State protected LIRFrameState state;
 
-        public MemOp(LIRInstructionClass<? extends MemOp> c, AArch64Kind kind, AArch64AddressValue address, LIRFrameState state) {
+        MemOp(LIRInstructionClass<? extends MemOp> c, AArch64Kind kind, AArch64AddressValue address, LIRFrameState state) {
             super(c);
             this.kind = kind;
             this.addressValue = address;
@@ -290,8 +268,7 @@ public class AArch64Move {
             int destSize = result.getPlatformKind().getSizeInBytes() * Byte.SIZE;
             int srcSize = kind.getSizeInBytes() * Byte.SIZE;
             if (kind.isInteger()) {
-                // TODO How to load unsigned chars without the necessary information?
-                masm.ldrs(destSize, srcSize, dst, address);
+                masm.ldr(srcSize, dst, address);
             } else {
                 assert srcSize == destSize;
                 masm.fldr(srcSize, dst, address);
@@ -310,7 +287,7 @@ public class AArch64Move {
 
         @Override
         protected void emitMemAccess(CompilationResultBuilder crb, AArch64MacroAssembler masm) {
-            emitStore(crb, masm, kind, addressValue.toAddress(), asRegister(input));
+            emitStore(crb, masm, kind, addressValue.toAddress(), input);
         }
     }
 
@@ -323,13 +300,13 @@ public class AArch64Move {
             super(TYPE, kind, address, state);
             this.input = input;
             if (!input.isDefaultForKind()) {
-                throw JVMCIError.shouldNotReachHere("Can only store null constants to memory");
+                throw GraalError.shouldNotReachHere("Can only store null constants to memory");
             }
         }
 
         @Override
         public void emitMemAccess(CompilationResultBuilder crb, AArch64MacroAssembler masm) {
-            emitStore(crb, masm, kind, addressValue.toAddress(), zr);
+            emitStore(crb, masm, kind, addressValue.toAddress(), zr.asValue(LIRKind.combine(addressValue)));
         }
     }
 
@@ -351,10 +328,12 @@ public class AArch64Move {
             masm.ldr(64, zr, address.toAddress());
         }
 
+        @Override
         public Value getCheckedValue() {
             return address.base;
         }
 
+        @Override
         public LIRFrameState getState() {
             return state;
         }
@@ -370,16 +349,16 @@ public class AArch64Move {
      * </code>
      */
     @Opcode("CAS")
-    public static class CompareAndSwap extends AArch64LIRInstruction {
-        public static final LIRInstructionClass<CompareAndSwap> TYPE = LIRInstructionClass.create(CompareAndSwap.class);
+    public static class CompareAndSwapOp extends AArch64LIRInstruction {
+        public static final LIRInstructionClass<CompareAndSwapOp> TYPE = LIRInstructionClass.create(CompareAndSwapOp.class);
 
         @Def protected AllocatableValue resultValue;
         @Alive protected Value expectedValue;
         @Alive protected AllocatableValue newValue;
-        @Alive(COMPOSITE) protected AArch64AddressValue addressValue;
+        @Alive protected AllocatableValue addressValue;
         @Temp protected AllocatableValue scratchValue;
 
-        public CompareAndSwap(AllocatableValue result, Value expectedValue, AllocatableValue newValue, AArch64AddressValue addressValue, AllocatableValue scratch) {
+        public CompareAndSwapOp(AllocatableValue result, Value expectedValue, AllocatableValue newValue, AllocatableValue addressValue, AllocatableValue scratch) {
             super(TYPE);
             this.resultValue = result;
             this.expectedValue = expectedValue;
@@ -392,15 +371,15 @@ public class AArch64Move {
         public void emitCode(CompilationResultBuilder crb, AArch64MacroAssembler masm) {
             AArch64Kind kind = (AArch64Kind) expectedValue.getPlatformKind();
             assert kind.isInteger();
-            int size = kind.getSizeInBytes() * Byte.SIZE;
+            final int size = kind.getSizeInBytes() * Byte.SIZE;
 
-            AArch64Address address = addressValue.toAddress();
+            Register address = asRegister(addressValue);
             Register result = asRegister(resultValue);
             Register newVal = asRegister(newValue);
             Register scratch = asRegister(scratchValue);
             // We could avoid using a scratch register here, by reusing resultValue for the stlxr
-            // success flag
-            // and issue a mov resultValue, expectedValue in case of success before returning.
+            // success flag and issue a mov resultValue, expectedValue in case of success before
+            // returning.
             Label retry = new Label();
             Label fail = new Label();
             masm.bind(retry);
@@ -414,12 +393,12 @@ public class AArch64Move {
         }
     }
 
-    public static void emitStore(@SuppressWarnings("unused") CompilationResultBuilder crb, AArch64MacroAssembler masm, AArch64Kind kind, AArch64Address dst, Register src) {
+    private static void emitStore(@SuppressWarnings("unused") CompilationResultBuilder crb, AArch64MacroAssembler masm, AArch64Kind kind, AArch64Address dst, Value src) {
         int destSize = kind.getSizeInBytes() * Byte.SIZE;
         if (kind.isInteger()) {
-            masm.str(destSize, src, dst);
+            masm.str(destSize, asRegister(src), dst);
         } else {
-            masm.fstr(destSize, src, dst);
+            masm.fstr(destSize, asRegister(src), dst);
         }
     }
 
@@ -430,28 +409,51 @@ public class AArch64Move {
             } else if (isStackSlot(result)) {
                 reg2stack(crb, masm, result, asAllocatableValue(input));
             } else {
-                throw JVMCIError.shouldNotReachHere();
+                throw GraalError.shouldNotReachHere();
             }
         } else if (isStackSlot(input)) {
             if (isRegister(result)) {
                 stack2reg(crb, masm, result, asAllocatableValue(input));
+            } else if (isStackSlot(result)) {
+                emitStackMove(crb, masm, result, input);
             } else {
-                throw JVMCIError.shouldNotReachHere();
+                throw GraalError.shouldNotReachHere();
             }
         } else if (isJavaConstant(input)) {
             if (isRegister(result)) {
                 const2reg(crb, masm, result, asJavaConstant(input));
             } else {
-                throw JVMCIError.shouldNotReachHere();
+                throw GraalError.shouldNotReachHere();
             }
         } else {
-            throw JVMCIError.shouldNotReachHere();
+            throw GraalError.shouldNotReachHere();
+        }
+    }
+
+    private static void emitStackMove(CompilationResultBuilder crb, AArch64MacroAssembler masm, AllocatableValue result, Value input) {
+        try (ScratchRegister r1 = masm.getScratchRegister()) {
+            try (ScratchRegister r2 = masm.getScratchRegister()) {
+                Register rscratch1 = r1.getRegister();
+                Register rscratch2 = r2.getRegister();
+                PlatformKind kind = input.getPlatformKind();
+                final int size = kind.getSizeInBytes() <= 4 ? 32 : 64;
+
+                // Always perform stack -> stack copies through integer registers
+                crb.blockComment("[stack -> stack copy]");
+                AArch64Address src = loadStackSlotAddress(crb, masm, asStackSlot(input), rscratch2);
+                masm.ldr(size, rscratch1, src);
+                AArch64Address dst = loadStackSlotAddress(crb, masm, asStackSlot(result), rscratch2);
+                masm.str(size, rscratch1, dst);
+            }
         }
     }
 
     private static void reg2reg(@SuppressWarnings("unused") CompilationResultBuilder crb, AArch64MacroAssembler masm, AllocatableValue result, AllocatableValue input) {
         Register dst = asRegister(result);
         Register src = asRegister(input);
+        if (src.equals(dst)) {
+            return;
+        }
         AArch64Kind kind = (AArch64Kind) input.getPlatformKind();
         int size = kind.getSizeInBytes() * Byte.SIZE;
         if (kind.isInteger()) {
@@ -474,35 +476,45 @@ public class AArch64Move {
     }
 
     private static void stack2reg(CompilationResultBuilder crb, AArch64MacroAssembler masm, AllocatableValue result, AllocatableValue input) {
-        AArch64Address src = loadStackSlotAddress(crb, masm, asStackSlot(input), result);
-        Register dest = asRegister(result);
         AArch64Kind kind = (AArch64Kind) input.getPlatformKind();
-        int size = kind.getSizeInBytes() * Byte.SIZE;
+        final int size = kind.getSizeInBytes() * Byte.SIZE;
         if (kind.isInteger()) {
-            masm.ldr(size, dest, src);
+            AArch64Address src = loadStackSlotAddress(crb, masm, asStackSlot(input), result);
+            masm.ldr(size, asRegister(result), src);
         } else {
-            masm.fldr(size, dest, src);
+            try (ScratchRegister sc = masm.getScratchRegister()) {
+                AllocatableValue scratchRegisterValue = sc.getRegister().asValue(LIRKind.combine(input));
+                AArch64Address src = loadStackSlotAddress(crb, masm, asStackSlot(input), scratchRegisterValue);
+                masm.fldr(size, asRegister(result), src);
+            }
         }
     }
 
-    private static void const2reg(CompilationResultBuilder crb, AArch64MacroAssembler masm, AllocatableValue result, JavaConstant input) {
+    private static void const2reg(CompilationResultBuilder crb, AArch64MacroAssembler masm, Value result, JavaConstant input) {
         Register dst = asRegister(result);
         switch (input.getJavaKind().getStackKind()) {
             case Int:
-                if (crb.codeCache.needsDataPatch(input)) {
-                    crb.recordInlineDataInCode(input);
-                    masm.forceMov(dst, input.asInt());
-                } else {
-                    masm.mov(dst, input.asInt());
+                final int value = input.asInt();
+                int maskedValue;
+                switch (input.getJavaKind()) {
+                    case Boolean:
+                    case Byte:
+                        maskedValue = value & 0xFF;
+                        break;
+                    case Char:
+                    case Short:
+                        maskedValue = value & 0xFFFF;
+                        break;
+                    case Int:
+                        maskedValue = value;
+                        break;
+                    default:
+                        throw GraalError.shouldNotReachHere();
                 }
+                masm.mov(dst, maskedValue);
                 break;
             case Long:
-                if (crb.codeCache.needsDataPatch(input)) {
-                    crb.recordInlineDataInCode(input);
-                    masm.forceMov(dst, input.asLong());
-                } else {
-                    masm.mov(dst, input.asLong());
-                }
+                masm.mov(dst, input.asLong());
                 break;
             case Float:
                 if (AArch64MacroAssembler.isFloatImmediate(input.asFloat())) {
@@ -523,13 +535,29 @@ public class AArch64Move {
                     masm.mov(dst, 0);
                 } else if (crb.target.inlineObjects) {
                     crb.recordInlineDataInCode(input);
-                    masm.forceMov(dst, 0xDEADDEADDEADDEADL);
+                    masm.movNativeAddress(dst, 0xDEADDEADDEADDEADL);
                 } else {
                     masm.ldr(64, dst, (AArch64Address) crb.recordDataReferenceInCode(input, 8));
                 }
                 break;
             default:
-                throw JVMCIError.shouldNotReachHere("kind=" + input.getJavaKind().getStackKind());
+                throw GraalError.shouldNotReachHere("kind=" + input.getJavaKind().getStackKind());
+        }
+    }
+
+    private static void const2stack(CompilationResultBuilder crb, AArch64MacroAssembler masm, Value result, JavaConstant constant) {
+        try (ScratchRegister addrReg = masm.getScratchRegister()) {
+            StackSlot slot = (StackSlot) result;
+            AArch64Address resultAddress = loadStackSlotAddress(crb, masm, slot, addrReg.getRegister());
+            if (constant.isDefaultForKind() || constant.isNull()) {
+                emitStore(crb, masm, (AArch64Kind) result.getPlatformKind(), resultAddress, zr.asValue(LIRKind.combine(result)));
+            } else {
+                try (ScratchRegister sc = masm.getScratchRegister()) {
+                    Value scratchRegisterValue = sc.getRegister().asValue(LIRKind.combine(result));
+                    const2reg(crb, masm, scratchRegisterValue, constant);
+                    emitStore(crb, masm, (AArch64Kind) result.getPlatformKind(), resultAddress, scratchRegisterValue);
+                }
+            }
         }
     }
 
@@ -548,11 +576,14 @@ public class AArch64Move {
      * @return AArch64Address of given StackSlot. Uses scratch register if necessary to do so.
      */
     private static AArch64Address loadStackSlotAddress(CompilationResultBuilder crb, AArch64MacroAssembler masm, StackSlot slot, AllocatableValue scratch) {
-        AArch64Kind kind = (AArch64Kind) scratch.getPlatformKind();
-        assert kind.isInteger();
+        Register scratchReg = Value.ILLEGAL.equals(scratch) ? zr : asRegister(scratch);
+        return loadStackSlotAddress(crb, masm, slot, scratchReg);
+    }
+
+    private static AArch64Address loadStackSlotAddress(CompilationResultBuilder crb, AArch64MacroAssembler masm, StackSlot slot, Register scratchReg) {
         int displacement = crb.frameMap.offsetForStackSlot(slot);
         int transferSize = slot.getPlatformKind().getSizeInBytes();
-        Register scratchReg = Value.ILLEGAL.equals(scratch) ? AArch64.zr : asRegister(scratch);
-        return masm.makeAddress(AArch64.sp, displacement, scratchReg, transferSize, /* allowOverwrite */false);
+        return masm.makeAddress(sp, displacement, scratchReg, transferSize, /* allowOverwrite */false);
     }
+
 }
