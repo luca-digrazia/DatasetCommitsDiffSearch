@@ -30,10 +30,10 @@ import com.oracle.truffle.api.nodes.Node;
 @SuppressWarnings("unused")
 public class NodeFactoryMissingChildTest {
 
-    abstract static class TestBase extends Node {
+    static abstract class TestBase extends Node {
     }
 
-    abstract static class TestChild extends Node {
+    static abstract class TestChild extends Node {
         public abstract Object execute();
     }
 
@@ -42,7 +42,7 @@ public class NodeFactoryMissingChildTest {
      * evaluated parameter.
      */
     @GenerateNodeFactory
-    abstract static class TestA extends TestBase {
+    static abstract class TestA extends TestBase {
 
         public abstract Object execute(Object v);
 
@@ -54,7 +54,7 @@ public class NodeFactoryMissingChildTest {
 
     @GenerateNodeFactory
     @NodeChild(value = "value", type = TestChild.class)
-    abstract static class TestB extends TestBase {
+    static abstract class TestB extends TestBase {
         public abstract Object execute();
 
         @Specialization
