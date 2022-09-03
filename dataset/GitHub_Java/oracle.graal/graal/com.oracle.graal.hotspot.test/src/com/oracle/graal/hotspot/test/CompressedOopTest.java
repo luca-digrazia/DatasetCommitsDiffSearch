@@ -33,7 +33,6 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.compiler.test.*;
 import com.oracle.graal.hotspot.meta.*;
-import com.oracle.graal.runtime.*;
 
 /**
  * The following tests perform object/array equality and assignments in various ways. The selected
@@ -44,7 +43,7 @@ public class CompressedOopTest extends GraalCompilerTest {
     private final MetaAccessProvider metaAccess;
 
     public CompressedOopTest() {
-        this.metaAccess = Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend().getProviders().getMetaAccess();
+        this.metaAccess = Graal.getRequiredCapability(MetaAccessProvider.class);
     }
 
     private HotSpotInstalledCode getInstalledCode(String name) throws Exception {

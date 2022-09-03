@@ -25,8 +25,8 @@ package com.oracle.graal.truffle.nodes.frame;
 import java.lang.reflect.*;
 import java.util.*;
 
-import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.java.*;
@@ -34,6 +34,7 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.truffle.*;
 import com.oracle.graal.truffle.nodes.*;
+import com.oracle.graal.truffle.substitutions.*;
 import com.oracle.truffle.api.frame.*;
 
 /**
@@ -70,7 +71,7 @@ public abstract class FrameAccessNode extends FixedWithNextNode implements Simpl
         return getConstantFrameSlot().getIndex();
     }
 
-    protected boolean isConstantFrameSlot() {
+    public boolean isConstantFrameSlot() {
         return slot.isConstant() && !slot.isNullConstant();
     }
 
@@ -88,17 +89,17 @@ public abstract class FrameAccessNode extends FixedWithNextNode implements Simpl
     @Override
     public String toString(Verbosity verbosity) {
         if (verbosity == Verbosity.Name) {
-            return super.toString(verbosity) + getSlotKind().name() + (isConstantFrameSlot() ? " " + getConstantFrameSlot() : "");
+            return super.toString(verbosity) + getSlotKind().name() + (slot != null && isConstantFrameSlot() ? " " + getConstantFrameSlot() : "");
         } else {
             return super.toString(verbosity);
         }
     }
 
-    protected final ValueNode getSlotOffset(int scale, MetaAccessProvider metaAccessProvider) {
+    protected final ValueNode getSlotOffset(int scale, MetaAccessProvider metaAccess) {
         if (isConstantFrameSlot()) {
             return ConstantNode.forInt(getSlotIndex() * scale, graph());
         } else {
-            LoadFieldNode loadFrameSlotIndex = graph().add(new LoadFieldNode(getSlot(), metaAccessProvider.lookupJavaField(getFrameSlotIndexField())));
+            LoadFieldNode loadFrameSlotIndex = graph().add(new LoadFieldNode(getSlot(), metaAccess.lookupJavaField(getFrameSlotIndexField())));
             graph().addBeforeFixed(this, loadFrameSlotIndex);
             return scale == 1 ? loadFrameSlotIndex : IntegerArithmeticNode.mul(loadFrameSlotIndex, ConstantNode.forInt(scale, graph()));
         }
@@ -113,12 +114,15 @@ public abstract class FrameAccessNode extends FixedWithNextNode implements Simpl
     }
 
     protected final boolean isValidAccessKind() {
-        if (getSlotKind() == Kind.Byte) {
-            // tag access
+        if (isTagAccess()) {
             return true;
         }
 
         return getSlotKind() == getGraalKind(getConstantFrameSlot().getKind());
+    }
+
+    protected final boolean isTagAccess() {
+        return field == FrameWithoutBoxingSubstitutions.TAGS_FIELD;
     }
 
     private static Kind getGraalKind(FrameSlotKind kind) {
@@ -129,6 +133,8 @@ public abstract class FrameAccessNode extends FixedWithNextNode implements Simpl
                 return Kind.Long;
             case Int:
                 return Kind.Int;
+            case Byte:
+                return Kind.Byte;
             case Double:
                 return Kind.Double;
             case Float:
@@ -156,6 +162,9 @@ public abstract class FrameAccessNode extends FixedWithNextNode implements Simpl
     @Override
     public Map<Object, Object> getDebugProperties(Map<Object, Object> map) {
         Map<Object, Object> properties = super.getDebugProperties(map);
+        if (isTagAccess()) {
+            properties.put("slotKind", "Tag");
+        }
         if (isConstantFrameSlot()) {
             properties.put("frameSlot", getConstantFrameSlot().toString());
         }

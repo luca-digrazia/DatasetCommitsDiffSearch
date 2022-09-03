@@ -37,11 +37,9 @@ import com.oracle.truffle.api.nodes.Node.Child;
 final class PartialEvaluatorCanonicalizer implements CanonicalizerPhase.CustomCanonicalizer {
 
     private final MetaAccessProvider metaAccess;
-    private final ConstantReflectionProvider constantReflection;
 
-    PartialEvaluatorCanonicalizer(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection) {
+    PartialEvaluatorCanonicalizer(MetaAccessProvider metaAccess) {
         this.metaAccess = metaAccess;
-        this.constantReflection = constantReflection;
     }
 
     @Override
@@ -64,7 +62,7 @@ final class PartialEvaluatorCanonicalizer implements CanonicalizerPhase.CustomCa
                 if (index >= 0 && index < Array.getLength(array)) {
                     int arrayBaseOffset = Unsafe.getUnsafe().arrayBaseOffset(array.getClass());
                     int arrayIndexScale = Unsafe.getUnsafe().arrayIndexScale(array.getClass());
-                    Constant constant = constantReflection.readUnsafeConstant(loadIndexedNode.elementKind(), array, arrayBaseOffset + index * arrayIndexScale,
+                    Constant constant = metaAccess.readUnsafeConstant(loadIndexedNode.elementKind(), array, arrayBaseOffset + index * arrayIndexScale,
                                     loadIndexedNode.elementKind() == Kind.Object);
                     return ConstantNode.forConstant(constant, metaAccess, loadIndexedNode.graph());
                 }

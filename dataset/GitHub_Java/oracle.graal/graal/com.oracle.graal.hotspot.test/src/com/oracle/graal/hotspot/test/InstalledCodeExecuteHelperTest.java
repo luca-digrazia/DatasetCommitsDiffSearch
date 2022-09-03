@@ -35,7 +35,6 @@ import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.compiler.test.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.runtime.*;
 
 public class InstalledCodeExecuteHelperTest extends GraalCompilerTest {
 
@@ -44,7 +43,7 @@ public class InstalledCodeExecuteHelperTest extends GraalCompilerTest {
     Object[] argsToBind;
 
     public InstalledCodeExecuteHelperTest() {
-        this.metaAccess = Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend().getProviders().getMetaAccess();
+        this.metaAccess = Graal.getRequiredCapability(MetaAccessProvider.class);
     }
 
     @Test
