@@ -198,7 +198,6 @@ public abstract class TruffleLanguage<C> {
      * asks all known languages for <code>onlyExplicit</code> symbols and only when none is found,
      * it does one more round with <code>onlyExplicit</code> set to <code>false</code>.
      *
-     * @param context context to locate the global symbol in
      * @param globalName the name of the global symbol to find
      * @param onlyExplicit should the language seek for implicitly exported object or only consider
      *            the explicitly exported ones?
@@ -214,7 +213,6 @@ public abstract class TruffleLanguage<C> {
      * language) but technically it can be one of Java primitive wrappers ({@link Integer},
      * {@link Double}, {@link Short}, etc.).
      *
-     * @param context context to find the language global in
      * @return the global object or <code>null</code> if the language does not support such concept
      */
     protected abstract Object getLanguageGlobal(C context);
@@ -388,21 +386,17 @@ public abstract class TruffleLanguage<C> {
 
         /**
          * Evaluates source of (potentially different) language. The {@link Source#getMimeType()
-         * MIME type} is used to identify the {@link TruffleLanguage} to use to perform the
+         * MIME type) is used to identify the {@link TruffleLanguage} to use to perform the
          * {@link #parse(com.oracle.truffle.api.source.Source, com.oracle.truffle.api.nodes.Node, java.lang.String...)}
-         * . The names of arguments are parameters for the resulting {#link CallTarget} that allow
-         * the <code>source</code> to reference the actual parameters passed to
-         * {@link CallTarget#call(java.lang.Object...)}.
+         * .
          * 
          * @param source the source to evaluate
-         * @param argumentNames the names of {@link CallTarget#call(java.lang.Object...)} arguments
-         *            that can be referenced from the source
          * @return the call target representing the parsed result
          * @throws IOException if the parsing or evaluation fails for some reason
          */
-        public CallTarget parse(Source source, String... argumentNames) throws IOException {
+        public CallTarget parse(Source source) throws IOException {
             TruffleLanguage<?> language = API.findLanguageImpl(vm, null, source.getMimeType());
-            return language.parse(source, null, argumentNames);
+            return language.parse(source, null);
         }
 
         /**

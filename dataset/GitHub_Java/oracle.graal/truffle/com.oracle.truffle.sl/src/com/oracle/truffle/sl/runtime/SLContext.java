@@ -44,7 +44,6 @@ import com.oracle.truffle.api.ExecutionContext;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.dsl.NodeFactory;
 import com.oracle.truffle.api.frame.FrameDescriptor;
-import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.object.DynamicObject;
 import com.oracle.truffle.api.object.Layout;
@@ -58,7 +57,6 @@ import com.oracle.truffle.sl.builtins.SLBuiltinNode;
 import com.oracle.truffle.sl.builtins.SLDefineFunctionBuiltinFactory;
 import com.oracle.truffle.sl.builtins.SLEvalBuiltinFactory;
 import com.oracle.truffle.sl.builtins.SLHelloEqualsWorldBuiltinFactory;
-import com.oracle.truffle.sl.builtins.SLImportBuiltinFactory;
 import com.oracle.truffle.sl.builtins.SLNanoTimeBuiltinFactory;
 import com.oracle.truffle.sl.builtins.SLNewObjectBuiltinFactory;
 import com.oracle.truffle.sl.builtins.SLPrintlnBuiltin;
@@ -158,7 +156,6 @@ public final class SLContext extends ExecutionContext {
         installBuiltin(SLAssertFalseBuiltinFactory.getInstance(), registerRootNodes);
         installBuiltin(SLNewObjectBuiltinFactory.getInstance(), registerRootNodes);
         installBuiltin(SLEvalBuiltinFactory.getInstance(), registerRootNodes);
-        installBuiltin(SLImportBuiltinFactory.getInstance(), registerRootNodes);
     }
 
     public void installBuiltin(NodeFactory<? extends SLBuiltinNode> factory, boolean registerRootNodes) {
@@ -220,8 +217,8 @@ public final class SLContext extends ExecutionContext {
         return LAYOUT.newInstance(emptyShape);
     }
 
-    public static boolean isSLObject(TruffleObject value) {
-        return value instanceof DynamicObject && ((DynamicObject) value).getShape().getObjectType() instanceof SLObjectType;
+    public static boolean isSLObject(Object value) {
+        return LAYOUT.getType().isInstance(value);
     }
 
     public static DynamicObject castSLObject(Object value) {
@@ -229,23 +226,15 @@ public final class SLContext extends ExecutionContext {
     }
 
     public static Object fromForeignValue(Object a) {
-        if (a instanceof Long || a instanceof BigInteger || a instanceof String) {
+        if (a instanceof Long || a instanceof BigInteger) {
             return a;
         } else if (a instanceof Number) {
             return ((Number) a).longValue();
-        } else if (a instanceof TruffleObject) {
-            return a;
         }
-        throw new IllegalStateException(a + " is not a Truffle value");
+        return a;
     }
 
     public Object evalAny(Source source) throws IOException {
         return env.parse(source).call();
-    }
-
-    public Object importSymbol(String name) {
-        Object object = env.importSymbol(name);
-        Object slValue = fromForeignValue(object);
-        return slValue;
     }
 }
