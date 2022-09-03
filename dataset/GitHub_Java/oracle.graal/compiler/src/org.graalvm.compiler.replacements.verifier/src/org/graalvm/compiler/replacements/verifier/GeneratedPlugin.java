@@ -246,7 +246,6 @@ public abstract class GeneratedPlugin {
             }
         }
         out.printf("            } else {\n");
-        out.printf("                assert b.canDeferPlugin(this) : b.getClass().toString();\n");
         out.printf("                return false;\n");
         out.printf("            }\n");
     }
