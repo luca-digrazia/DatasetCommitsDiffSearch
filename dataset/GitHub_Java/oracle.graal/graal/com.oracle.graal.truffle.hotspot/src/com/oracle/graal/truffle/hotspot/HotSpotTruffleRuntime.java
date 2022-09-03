@@ -95,9 +95,7 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
     }
 
     private static void installOptimizedCallTargetCallDirect() {
-        if (TruffleCompilerOptions.TruffleContextSensitiveInlining.getValue()) {
-            ((HotSpotResolvedJavaMethod) getGraalProviders().getMetaAccess().lookupJavaMethod(OptimizedCallTarget.getCallDirectMethod())).setNotInlineable();
-        }
+        ((HotSpotResolvedJavaMethod) getGraalProviders().getMetaAccess().lookupJavaMethod(OptimizedCallTarget.getCallDirectMethod())).setNotInlineable();
     }
 
     @Override
