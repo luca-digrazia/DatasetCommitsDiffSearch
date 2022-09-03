@@ -246,7 +246,7 @@ public abstract class LIRGenerator extends ValueVisitor {
                     }
                 }
             }
-            if (instr != instr.graph().start()) {
+            if (!(instr instanceof Merge) && instr != instr.graph().start()) {
                 walkState(instr, stateAfter);
                 doRoot((Value) instr);
             }
@@ -261,7 +261,18 @@ public abstract class LIRGenerator extends ValueVisitor {
             }
         }
         if (block.blockSuccessors().size() >= 1 && !jumpsToNextBlock(block.lastInstruction())) {
-            block.lir().jump(getLIRBlock((FixedNode) block.lastInstruction().successors().get(0)));
+            moveToPhi();
+            Node last = block.lastInstruction();
+            if (last instanceof EndNode) {
+                EndNode end = (EndNode) last;
+                block.lir().jump(getLIRBlock(end.merge()));
+            } else if (last instanceof LoopEnd) {
+                LoopEnd loopEnd = (LoopEnd) last;
+                block.lir().jump(getLIRBlock(loopEnd.loopBegin()));
+            } else {
+//                TTY.println("lastInstr: " + block.lastInstruction() + ", block=" + block.blockID());
+                block.lir().jump(getLIRBlock((FixedNode) block.lastInstruction().successors().get(0)));
+            }
         }
 
         if (GraalOptions.TraceLIRGeneratorLevel >= 1) {
@@ -273,13 +284,8 @@ public abstract class LIRGenerator extends ValueVisitor {
         blockDoEpilog();
     }
 
-    @Override
-    public void visitMerge(Merge x) {
-        // Nothing to do.
-    }
-
     private static boolean jumpsToNextBlock(Node node) {
-        return node instanceof BlockEnd || node instanceof EndNode || node instanceof LoopEnd;
+        return node instanceof BlockEnd || node instanceof Anchor;
     }
 
     @Override
@@ -459,6 +465,12 @@ public abstract class LIRGenerator extends ValueVisitor {
     @Override
     public void visitAnchor(Anchor x) {
         setNoResult(x);
+
+        // emit phi-instruction moves after safepoint since this simplifies
+        // describing the state at the safepoint.
+
+        moveToPhi();
+        lir.jump(getLIRBlock(x.next()));
     }
 
     @Override
@@ -1401,44 +1413,58 @@ public abstract class LIRGenerator extends ValueVisitor {
         return null;
     }
 
-    @Override
-    public void visitEndNode(EndNode end) {
-        setNoResult(end);
-        Merge merge = end.merge();
-        moveToPhi(merge, merge.endIndex(end));
-        lir.jump(getLIRBlock(end.merge()));
-    }
+    protected void moveToPhi() {
+        // Moves all stack values into their phi position
+        LIRBlock bb = currentBlock;
+        if (bb.numberOfSux() == 1) {
 
+            Node lastNode = bb.lastInstruction();
+            if (lastNode instanceof EndNode || lastNode instanceof LoopEnd || lastNode instanceof Anchor) {
+                Node nextInstr = null;
+                int nextSuccIndex;
 
-    @Override
-    public void visitLoopEnd(LoopEnd x) {
-        setNoResult(x);
-        moveToPhi(x.loopBegin(), x.loopBegin().endCount());
-        lir.jump(getLIRBlock(x.loopBegin()));
-    }
-
-    private void moveToPhi(Merge merge, int nextSuccIndex) {
-        PhiResolver resolver = new PhiResolver(this);
-        for (Node n : merge.usages()) {
-            if (n instanceof Phi) {
-                Phi phi = (Phi) n;
-                if (!phi.isDead()) {
-                    Value curVal = phi.valueAt(nextSuccIndex);
-                    if (curVal != null && curVal != phi) {
-                        if (curVal instanceof Phi) {
-                            operandForPhi((Phi) curVal);
-                        }
-                        CiValue operand = curVal.operand();
-                        if (operand.isIllegal()) {
-                            assert curVal instanceof Constant || curVal instanceof Local : "these can be produced lazily" + curVal + "/" + phi;
-                            operand = operandForInstruction(curVal);
-                        }
-                        resolver.move(operand, operandForPhi(phi));
-                    }
+                if (lastNode instanceof LoopEnd) {
+                    LoopEnd loopEnd = (LoopEnd) lastNode;
+                    nextInstr = loopEnd.loopBegin();
+                    nextSuccIndex = loopEnd.loopBegin().endCount();
+                } else if (lastNode instanceof Anchor) {
+                    assert false;
+                    nextSuccIndex = -1;
+                } else {
+                    assert lastNode instanceof EndNode;
+                    nextInstr = ((EndNode) lastNode).merge();
+                    nextSuccIndex = nextInstr.inputs().variablePart().indexOf(lastNode);
                 }
+
+                if (nextInstr instanceof Merge) {
+                    Merge merge = (Merge) nextInstr;
+                    assert nextSuccIndex >= 0 : "nextSuccIndex=" + nextSuccIndex + ", lastNode=" + lastNode + ", nextInstr=" + nextInstr + "; preds=" + nextInstr.predecessors() + ";";
+
+                    PhiResolver resolver = new PhiResolver(this);
+                    for (Node n : merge.usages()) {
+                        if (n instanceof Phi) {
+                            Phi phi = (Phi) n;
+                            if (!phi.isDead()) {
+                                Value curVal = phi.valueAt(nextSuccIndex);
+                                if (curVal != null && curVal != phi) {
+                                    if (curVal instanceof Phi) {
+                                        operandForPhi((Phi) curVal);
+                                    }
+                                    CiValue operand = curVal.operand();
+                                    if (operand.isIllegal()) {
+                                        assert curVal instanceof Constant || curVal instanceof Local : "these can be produced lazily" + curVal + "/" + phi;
+                                        operand = operandForInstruction(curVal);
+                                    }
+                                    resolver.move(operand, operandForPhi(phi));
+                                }
+                            }
+                        }
+                    }
+                    resolver.dispose();
+                }
+                return;
             }
         }
-        resolver.dispose();
     }
 
     /**
