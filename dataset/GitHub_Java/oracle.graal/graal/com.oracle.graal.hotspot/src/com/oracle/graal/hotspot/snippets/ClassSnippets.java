@@ -23,7 +23,6 @@
 package com.oracle.graal.hotspot.snippets;
 
 import static com.oracle.graal.hotspot.snippets.HotSpotSnippetUtils.*;
-import static com.oracle.graal.nodes.extended.UnsafeCastNode.*;
 
 import java.lang.reflect.*;
 
@@ -88,7 +87,7 @@ public class ClassSnippets implements SnippetsInterface {
                     if (superKlass == Word.zero()) {
                         return null;
                     } else {
-                        return unsafeCast(loadObjectFromWord(superKlass, classMirrorOffset()), Class.class, true, true);
+                        return (Class<?>) loadObjectFromWord(superKlass, classMirrorOffset());
                     }
                 }
             }
@@ -102,7 +101,7 @@ public class ClassSnippets implements SnippetsInterface {
         if (klass != Word.zero()) {
             int layoutHelper = loadIntFromWord(klass, klassLayoutHelperOffset());
             if ((layoutHelper & arrayKlassLayoutHelperIdentifier()) != 0) {
-                return unsafeCast(loadObjectFromWord(klass, arrayKlassComponentMirrorOffset()), Class.class, true, true);
+                return (Class<?>) loadObjectFromWord(klass, arrayKlassComponentMirrorOffset());
             }
         }
         return null;

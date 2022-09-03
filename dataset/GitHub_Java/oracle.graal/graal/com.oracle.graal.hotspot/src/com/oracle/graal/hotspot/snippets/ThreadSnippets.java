@@ -38,6 +38,7 @@ public class ThreadSnippets implements SnippetsInterface {
     }
 
     @MethodSubstitution(isStatic = false)
+    @SuppressWarnings("unused")
     private static boolean isInterrupted(final Thread thisObject, boolean clearInterrupted) {
         Word rawThread = HotSpotCurrentRawThreadNode.get();
         Thread thread = (Thread) loadObjectFromWord(rawThread, threadObjectOffset());

@@ -23,7 +23,6 @@
 package com.oracle.graal.hotspot.snippets;
 
 import static com.oracle.graal.hotspot.snippets.HotSpotSnippetUtils.*;
-import static com.oracle.graal.nodes.extended.UnsafeCastNode.*;
 
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.snippets.*;
@@ -37,7 +36,7 @@ public class ObjectSnippets implements SnippetsInterface {
     @MethodSubstitution(isStatic = false)
     public static Class<?> getClass(final Object thisObj) {
         Word hub = loadHub(thisObj);
-        return unsafeCast(readFinalObject(hub, classMirrorOffset()), Class.class, true, true);
+        return (Class<?>) readFinalObject(hub, classMirrorOffset());
     }
 
     @MethodSubstitution(isStatic = false)
