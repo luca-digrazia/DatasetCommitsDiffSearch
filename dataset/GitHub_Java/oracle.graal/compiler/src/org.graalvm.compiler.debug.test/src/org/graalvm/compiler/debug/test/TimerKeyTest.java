@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -30,16 +28,17 @@ import static org.graalvm.compiler.debug.DebugContext.NO_DESCRIPTION;
 import static org.graalvm.compiler.debug.DebugContext.NO_GLOBAL_METRIC_VALUES;
 import static org.junit.Assert.assertEquals;
 
-import org.graalvm.collections.EconomicMap;
+import java.lang.management.ThreadMXBean;
+
 import org.graalvm.compiler.debug.DebugCloseable;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.DebugOptions;
+import org.graalvm.compiler.debug.Management;
 import org.graalvm.compiler.debug.TimerKey;
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionValues;
-import org.graalvm.compiler.serviceprovider.GraalServices;
+import org.graalvm.util.EconomicMap;
 import org.junit.Assume;
-import org.junit.AssumptionViolatedException;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -48,16 +47,11 @@ public class TimerKeyTest {
 
     @Before
     public void checkCapabilities() {
-        assumeManagementLibraryIsLoadable();
-        Assume.assumeTrue("skipping management interface test", GraalServices.isCurrentThreadCpuTimeSupported());
-    }
-
-    /** @see <a href="https://bugs.openjdk.java.net/browse/JDK-8076557">JDK-8076557</a> */
-    static void assumeManagementLibraryIsLoadable() {
         try {
-            System.loadLibrary("management");
-        } catch (UnsatisfiedLinkError e) {
-            throw new AssumptionViolatedException("Management interface is unavailable: " + e);
+            ThreadMXBean threadMXBean = Management.getThreadMXBean();
+            Assume.assumeTrue("skipping management interface test", threadMXBean.isCurrentThreadCpuTimeSupported());
+        } catch (LinkageError err) {
+            Assume.assumeNoException("Cannot run without java.management JDK9 module", err);
         }
     }
 
@@ -69,9 +63,10 @@ public class TimerKeyTest {
      *         {@code ms}
      */
     private static long spin(long ms) {
-        long start = GraalServices.getCurrentThreadCpuTime();
+        ThreadMXBean threadMXBean = Management.getThreadMXBean();
+        long start = threadMXBean.getCurrentThreadCpuTime();
         do {
-            long durationMS = (GraalServices.getCurrentThreadCpuTime() - start) / 1000;
+            long durationMS = (threadMXBean.getCurrentThreadCpuTime() - start) / 1000;
             if (durationMS >= ms) {
                 return durationMS;
             }

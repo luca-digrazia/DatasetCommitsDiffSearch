@@ -24,13 +24,11 @@ package org.graalvm.compiler.hotspot.test;
 
 import java.lang.management.ManagementFactory;
 import java.lang.management.MonitorInfo;
-import java.lang.management.RuntimeMXBean;
 import java.lang.management.ThreadInfo;
 import java.lang.management.ThreadMXBean;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 
 import org.graalvm.compiler.api.directives.GraalDirectives;
 import org.graalvm.compiler.core.phases.HighTier;
@@ -46,7 +44,6 @@ import org.junit.Test;
 
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import org.junit.Assume;
-import org.junit.BeforeClass;
 
 /**
  * Test on-stack-replacement with locks.
@@ -54,30 +51,12 @@ import org.junit.BeforeClass;
 public class GraalOSRLockTest extends GraalOSRTestBase {
 
     private static boolean TestInSeparateThread = false;
-    private static final String COMPILE_ONLY_FLAG = "-Xcomp";
 
     public GraalOSRLockTest() {
         try {
             Class.forName("java.lang.management.ManagementFactory");
         } catch (ClassNotFoundException ex) {
             Assume.assumeNoException("cannot check for monitors without java.management JDK9 module", ex);
-        }
-    }
-
-    @BeforeClass
-    public static void checkVMArguments() {
-        /*
-         * Note: The -Xcomp execution mode of the VM will stop most of the OSR test cases from
-         * working as every method is compiled at level3 (followed by level4 on the second
-         * invocation). The tests in this class are written in a way that they expect a method to be
-         * executed at the invocation BCI with the interpreter and then perform an OSR to an
-         * installed nmethod at a given BCI.
-         *
-         */
-        RuntimeMXBean runtimeMxBean = ManagementFactory.getRuntimeMXBean();
-        List<String> arguments = runtimeMxBean.getInputArguments();
-        for (String arg : arguments) {
-            Assume.assumeFalse(arg.equals(COMPILE_ONLY_FLAG));
         }
     }
 
@@ -459,7 +438,7 @@ public class GraalOSRLockTest extends GraalOSRTestBase {
             }
             GraalDirectives.controlFlowAnchor();
             if (!GraalDirectives.inCompiledCode()) {
-                throw new Error("Must be part of compiled code");
+                throw new Error("Must part of compiled code");
             }
             return ret;
         }
@@ -470,11 +449,11 @@ public class GraalOSRLockTest extends GraalOSRTestBase {
         ReturnValue ret = ReturnValue.FAILURE;
         synchronized (lock) {
             synchronized (lock1) {
-                for (int i = 1; i < 10 * limit; i++) {
+                for (int i = 1; i < limit; i++) {
                     GraalDirectives.blackhole(i);
-                    if (i % 33 == 0) {
+                    if (i % 1001 == 0) {
                         ret = ReturnValue.SUCCESS;
-                        if (GraalDirectives.inCompiledCode() && i + 33 > (10 * limit)) {
+                        if (GraalDirectives.inCompiledCode() && i + 33 > (limit)) {
                             GraalDirectives.blackhole(ret);
                             System.gc();
                         }
@@ -483,7 +462,7 @@ public class GraalOSRLockTest extends GraalOSRTestBase {
             }
             GraalDirectives.controlFlowAnchor();
             if (!GraalDirectives.inCompiledCode()) {
-                throw new Error("Must be part of compiled code already hereeeeee");
+                throw new Error("Must part of compiled code");
             } else {
                 // lock 1 must be free
                 if (isMonitorLockHeld(lock1)) {
@@ -540,7 +519,7 @@ public class GraalOSRLockTest extends GraalOSRTestBase {
             }
             GraalDirectives.controlFlowAnchor();
             if (!GraalDirectives.inCompiledCode()) {
-                throw new Error("Must be part of compiled code");
+                throw new Error("Must part of compiled code");
             }
             return ret;
         }
@@ -564,7 +543,7 @@ public class GraalOSRLockTest extends GraalOSRTestBase {
             }
             GraalDirectives.controlFlowAnchor();
             if (!GraalDirectives.inCompiledCode()) {
-                throw new Error("Must be part of compiled code");
+                throw new Error("Must part of compiled code");
             }
             return ret;
         }
@@ -589,7 +568,7 @@ public class GraalOSRLockTest extends GraalOSRTestBase {
             }
             GraalDirectives.controlFlowAnchor();
             if (!GraalDirectives.inCompiledCode()) {
-                throw new Error("Must be part of compiled code");
+                throw new Error("Must part of compiled code");
             }
             return ret;
         }
@@ -667,7 +646,7 @@ public class GraalOSRLockTest extends GraalOSRTestBase {
         synchronized (monitor) {
             GraalDirectives.controlFlowAnchor();
             if (!GraalDirectives.inCompiledCode()) {
-                throw new Error("Must be part of compiled code");
+                throw new Error("Must part of compiled code");
             }
         }
         return ret;
@@ -691,7 +670,7 @@ public class GraalOSRLockTest extends GraalOSRTestBase {
             }
             GraalDirectives.controlFlowAnchor();
             if (!GraalDirectives.inCompiledCode()) {
-                throw new Error("Must be part of compiled code");
+                throw new Error("Must part of compiled code");
             }
             return ret;
         }

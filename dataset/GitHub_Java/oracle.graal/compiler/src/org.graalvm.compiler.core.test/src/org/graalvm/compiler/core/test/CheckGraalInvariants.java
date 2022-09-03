@@ -172,7 +172,7 @@ public class CheckGraalInvariants extends GraalCompilerTest {
 
         PhaseSuite<HighTierContext> graphBuilderSuite = new PhaseSuite<>();
         Plugins plugins = new Plugins(new InvocationPlugins());
-        GraphBuilderConfiguration config = GraphBuilderConfiguration.getDefault(plugins).withEagerResolving(true).withUnresolvedIsError(true);
+        GraphBuilderConfiguration config = GraphBuilderConfiguration.getDefault(plugins).withEagerResolving(true);
         graphBuilderSuite.appendPhase(new GraphBuilderPhase(config));
         HighTierContext context = new HighTierContext(providers, graphBuilderSuite, OptimisticOptimizations.NONE);
 
