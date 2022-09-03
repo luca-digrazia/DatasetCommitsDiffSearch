@@ -33,7 +33,6 @@ import java.util.Objects;
 import java.util.function.Predicate;
 
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractContextImpl;
-import org.graalvm.polyglot.proxy.Proxy;
 
 /**
  * Polyglot (multi-language) access to a Graal {@linkplain Engine engine} for evaluating code
@@ -176,46 +175,38 @@ public final class Context implements AutoCloseable {
      * The polyglot scope is used to exchange symbols between guest languages and also the host
      * language. Guest languages can put and get symbols through language specific APIs. For
      * example, in JavaScript symbols of the polyglot scope can be get using
-     * <code>Interop.import("name")</code> and set using <code>Interop.export("name", value)</code>.
+     * <code>Interop.get("key")</code> and set using <code>Interop.put("key", value)</code>.
      *
-     * @param name the name of the symbol to import.
-     * @return the symbol value or <code>null</code> if no symbol was registered with that name. The
-     *         returned instance is is never <code>null</code>, but the result might represent a
-     *         {@link Value#isNull() null} guest language value.
+     * @param the key of the symbol
      * @since 1.0
      */
-    public Value importSymbol(String name) {
-        return impl.importSymbol(name);
+    public Value importSymbol(String key) {
+        return impl.importSymbol(key);
     }
 
     /**
      * Exports a symbol into the polyglot scope. The polyglot scope is used to exchange symbols
      * between guest languages and the host language. Guest languages can put and get symbols
      * through language specific APIs. For example, in JavaScript symbols of the polyglot scope can
-     * be accessed using <code>Interop.import("name")</code> and set using
-     * <code>Interop.put("name", value)</code>. Any Java value or {@link Value} instance is allowed
+     * be accessed using <code>Interop.get("key")</code> and set using
+     * <code>Interop.put("key", value)</code>. Any Java value or {@link Value} instance is allowed
      * to be passed as value.
      *
-     * @param name the name of the symbol to export.
-     * @param value the value to export to the language, a Java value, polyglot {@link Proxy proxy}
-     *            or {@link Value} instance is expected to be passed.
+     * @param the key of the symbol
      * @since 1.0
      */
-    public void exportSymbol(String name, Object value) {
-        impl.exportSymbol(name, value);
+    public void exportSymbol(String key, Object value) {
+        impl.exportSymbol(key, value);
     }
 
     /**
-     * Forces the initialization of a language. It is not necessary to explicitly initialize a
-     * language, it will be initialized the first time it is used.
+     * Forces the initialization of a language.
      *
-     * @param languageId the identifier of the language to initialize.
-     * @throws IllegalArgumentException if the language does not exist.
-     * @return <code>true</code> if the language was initialized. Returns <code>false</code> if it
-     *         was already initialized.
+     * @param language
+     * @returns <code>true</code> if the language needed to be initialized.
      */
-    public boolean initialize(String languageId) {
-        return impl.initializeLanguage(getEngine().getLanguage(languageId).impl);
+    public boolean initialize(String language) {
+        return impl.initializeLanguage(getEngine().getLanguage(language).impl);
     }
 
     /**
@@ -237,8 +228,8 @@ public final class Context implements AutoCloseable {
      * @see Engine#close() To close an engine.
      * @since 1.0
      */
-    public void close(boolean cancelIfExecuting) {
-        impl.close(cancelIfExecuting);
+    public void close(boolean cancelIfRunning) {
+        impl.close(cancelIfRunning);
     }
 
     /**
@@ -267,7 +258,6 @@ public final class Context implements AutoCloseable {
      * @param onlyLanguages names of languages permitted in this context, {@code null} if all
      *            languages are permitted
      * @return a new context
-     * @since 1.0
      */
     public static Context create(String... onlyLanguages) {
         return newBuilder(onlyLanguages).build();
@@ -279,18 +269,11 @@ public final class Context implements AutoCloseable {
      * @param onlyLanguages names of languages permitted in this context, {@code null} if all
      *            languages are permitted
      * @return a builder that can create a context
-     * @since 1.0
      */
     public static Builder newBuilder(String... onlyLanguages) {
         return new Builder(onlyLanguages);
     }
 
-    /**
-     * Builder class to construct {@link Context} instances.
-     *
-     * @see Context
-     * @since 1.0
-     */
     @SuppressWarnings("hiding")
     public static final class Builder {
 
