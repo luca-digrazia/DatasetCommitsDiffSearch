@@ -22,18 +22,17 @@
  */
 package com.oracle.graal.hotspot.amd64.test;
 
-import jdk.internal.jvmci.meta.*;
-import jdk.internal.jvmci.options.*;
-import jdk.internal.jvmci.options.OptionValue.*;
-
 import org.junit.*;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.test.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.options.*;
+import com.oracle.graal.options.OptionValue.OverrideScope;
 
 /**
  * Ensures that frame omission works in cases where it is expected to.
@@ -48,7 +47,6 @@ public class CompressedNullCheckTest extends GraalCompilerTest {
         c.i.intValue();
     }
 
-    @SuppressWarnings("try")
     private void testImplicit(Integer i) {
         Assume.assumeTrue(HotSpotGraalRuntime.runtime().getConfig().useCompressedOops);
 
@@ -67,7 +65,6 @@ public class CompressedNullCheckTest extends GraalCompilerTest {
         }
     }
 
-    @SuppressWarnings("try")
     private void testExplicit(Integer i) {
         Assume.assumeTrue(HotSpotGraalRuntime.runtime().getConfig().useCompressedOops);
 
