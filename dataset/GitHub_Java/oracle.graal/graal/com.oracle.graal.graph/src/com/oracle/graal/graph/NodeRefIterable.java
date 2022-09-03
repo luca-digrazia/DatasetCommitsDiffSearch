@@ -56,7 +56,9 @@ public class NodeRefIterable implements NodeClassIterable {
         if (MODIFICATION_COUNTS_ENABLED) {
             return new NodeRefWithModCountIterator(node, nodeFields, nodeListFields, isInputs);
         } else {
-            return new NodeRefIterator(node, nodeFields, nodeListFields, isInputs);
+            NodeRefIterator iter = new NodeRefIterator(node, nodeFields, nodeListFields, isInputs);
+            iter.forward();
+            return iter;
         }
     }
 

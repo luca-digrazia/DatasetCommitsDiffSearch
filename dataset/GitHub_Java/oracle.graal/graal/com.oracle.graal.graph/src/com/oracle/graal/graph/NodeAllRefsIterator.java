@@ -33,16 +33,14 @@ public final class NodeAllRefsIterator extends NodeRefIterator {
 
     public NodeAllRefsIterator(Node node, int nodeFields, int nodeListFields, boolean isInputs) {
         super(node, nodeFields, nodeListFields, isInputs);
+        forward();
     }
 
     @Override
     protected void forward() {
-        assert needsForward;
-        needsForward = false;
         if (index < nodeFields) {
             index++;
             if (index < nodeFields) {
-                nextElement = getNode(index);
                 return;
             }
         } else {
@@ -54,7 +52,6 @@ public final class NodeAllRefsIterator extends NodeRefIterator {
                 list = getNodeList(index - nodeFields);
             }
             if (subIndex < list.size()) {
-                nextElement = list.get(subIndex);
                 return;
             }
             subIndex = 0;
