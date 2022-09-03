@@ -34,6 +34,8 @@ import com.oracle.truffle.api.impl.TVMCI;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.api.vm.PolyglotEngine;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
@@ -46,8 +48,6 @@ import org.junit.runners.model.Statement;
 import org.junit.runners.model.TestClass;
 import com.oracle.truffle.tck.TruffleRunner.Inject;
 import com.oracle.truffle.tck.TruffleRunner.RunWithPolyglotRule;
-import org.graalvm.polyglot.Engine;
-import org.graalvm.polyglot.PolyglotContext;
 
 final class TruffleTestInvoker<T extends CallTarget> extends TVMCI.TestAccessor<T> {
 
@@ -56,7 +56,7 @@ final class TruffleTestInvoker<T extends CallTarget> extends TVMCI.TestAccessor<
         return new TruffleTestInvoker<>(testTvmci);
     }
 
-    @TruffleLanguage.Registration(id = "truffletestinvoker", name = "truffletestinvoker", mimeType = "application/x-unittest", version = "")
+    @TruffleLanguage.Registration(name = "truffletestinvoker", mimeType = "application/x-unittest", version = "")
     public static class TruffleTestInvokerLanguage extends TruffleLanguage<Env> {
 
         @Override
@@ -66,7 +66,7 @@ final class TruffleTestInvoker<T extends CallTarget> extends TVMCI.TestAccessor<
 
         @Override
         protected Object getLanguageGlobal(Env context) {
-            return null;
+            return context;
         }
 
         @Override
@@ -111,18 +111,17 @@ final class TruffleTestInvoker<T extends CallTarget> extends TVMCI.TestAccessor<
 
         @Override
         public void evaluate() throws Throwable {
-            PolyglotContext prevContext = rule.context;
-            try (Engine engine = Engine.create()) {
-                try (PolyglotContext context = engine.createPolyglotContext()) {
-                    rule.context = context;
-                    context.exportSymbol("currentTestStatement", this);
-                    context.eval("truffletestinvoker", "");
-                    if (throwable != null) {
-                        throw throwable;
-                    }
-                } finally {
-                    rule.context = prevContext;
+            PolyglotEngine engine = PolyglotEngine.newBuilder().build();
+            try {
+                Env env = engine.getLanguages().get("application/x-unittest").getGlobalObject().as(Env.class);
+                env.exportSymbol("currentTestStatement", this);
+                Source dummy = Source.newBuilder("").name("TestStatement").mimeType("application/x-unittest").build();
+                engine.eval(dummy);
+                if (throwable != null) {
+                    throw throwable;
                 }
+            } finally {
+                engine.dispose();
             }
         }
 
