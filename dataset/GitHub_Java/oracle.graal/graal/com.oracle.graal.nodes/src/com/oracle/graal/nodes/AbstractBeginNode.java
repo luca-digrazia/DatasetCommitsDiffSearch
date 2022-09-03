@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.nodes;
 
+import static com.oracle.graal.graph.iterators.NodePredicates.*;
+
 import java.util.*;
 
 import com.oracle.graal.compiler.common.type.*;
@@ -124,24 +126,11 @@ public abstract class AbstractBeginNode extends FixedWithNextNode implements LIR
     }
 
     public NodeIterable<Node> anchored() {
-        return usages().filter(n -> {
-            if (n instanceof ProxyNode) {
-                ProxyNode proxyNode = (ProxyNode) n;
-                return proxyNode.proxyPoint() != this;
-            }
-            return true;
-        });
+        return usages().filter(isNotA(ProxyNode.class));
     }
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
     public NodeIterable<ProxyNode> proxies() {
-        return (NodeIterable) usages().filter(n -> {
-            if (n instanceof ProxyNode) {
-                ProxyNode proxyNode = (ProxyNode) n;
-                return proxyNode.proxyPoint() == this;
-            }
-            return false;
-        });
+        return usages().filter(ProxyNode.class);
     }
 
     public NodeIterable<FixedNode> getBlockNodes() {

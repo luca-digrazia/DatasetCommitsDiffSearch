@@ -847,19 +847,12 @@ public abstract class Node implements Cloneable, Formattable {
     protected void afterClone(@SuppressWarnings("unused") Node other) {
     }
 
-    public boolean verifyInputs() {
-        for (Node input : inputs()) {
-            assertFalse(input.isDeleted(), "input was deleted");
-            assertTrue(input.isAlive(), "input is not alive yet, i.e., it was not yet added to the graph");
-            assertTrue(input.usages().contains(this), "missing usage in input %s", input);
-        }
-        return true;
-    }
-
     public boolean verify() {
         assertTrue(isAlive(), "cannot verify inactive nodes (id=%d)", id);
         assertTrue(graph() != null, "null graph");
-        verifyInputs();
+        for (Node input : inputs()) {
+            assertTrue(input.usages().contains(this), "missing usage in input %s", input);
+        }
         for (Node successor : successors()) {
             assertTrue(successor.predecessor() == this, "missing predecessor in %s (actual: %s)", successor, successor.predecessor());
             assertTrue(successor.graph() == graph(), "mismatching graph in successor %s", successor);
@@ -871,7 +864,7 @@ public abstract class Node implements Cloneable, Formattable {
             while (iterator.hasNext()) {
                 Position pos = iterator.nextPosition();
                 if (pos.get(usage) == this && pos.getInputType() != InputType.Unchecked) {
-                    assertTrue(isAllowedUsageType(pos.getInputType()), "invalid input of type " + pos.getInputType() + " from " + usage + " to " + this + " (" + pos.getName() + ")");
+                    assert isAllowedUsageType(pos.getInputType()) : "invalid input of type " + pos.getInputType() + " from " + usage + " to " + this + " (" + pos.getName() + ")";
                 }
             }
         }
@@ -891,20 +884,16 @@ public abstract class Node implements Cloneable, Formattable {
         if (condition) {
             return true;
         } else {
-            throw fail(message, args);
+            throw new VerificationError(message, args).addContext(this);
         }
     }
 
     public boolean assertFalse(boolean condition, String message, Object... args) {
         if (condition) {
-            throw fail(message, args);
+            throw new VerificationError(message, args).addContext(this);
         } else {
             return true;
         }
-    }
-
-    protected VerificationError fail(String message, Object... args) throws GraalGraphInternalError {
-        throw new VerificationError(message, args).addContext(this);
     }
 
     public Iterable<? extends Node> cfgPredecessors() {
@@ -1080,9 +1069,5 @@ public abstract class Node implements Cloneable, Formattable {
      */
     public boolean valueEquals(Node other) {
         return getNodeClass().dataEquals(this, other);
-    }
-
-    public final void pushInputs(NodeStack stack) {
-        getNodeClass().getInputEdges().pushAll(this, stack);
     }
 }
