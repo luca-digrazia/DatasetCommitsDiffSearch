@@ -23,20 +23,14 @@
 package com.oracle.graal.nodes.extended;
 
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 
-@NodeInfo(allowedUsageTypes = {InputType.Guard})
-public class NullCheckNode extends DeoptimizingFixedWithNextNode implements LIRLowerable, GuardingNode {
+public class NullCheckNode extends DeoptimizingFixedWithNextNode implements LIRLowerable {
 
     @Input private ValueNode object;
 
-    public static NullCheckNode create(ValueNode object) {
-        return new NullCheckNodeGen(object);
-    }
-
-    NullCheckNode(ValueNode object) {
+    public NullCheckNode(ValueNode object) {
         super(StampFactory.forVoid());
         this.object = object;
     }

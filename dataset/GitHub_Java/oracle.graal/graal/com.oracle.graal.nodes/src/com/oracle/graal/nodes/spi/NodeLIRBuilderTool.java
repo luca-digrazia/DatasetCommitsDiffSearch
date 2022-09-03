@@ -27,7 +27,6 @@ import java.util.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.cfg.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.nodes.*;
@@ -61,15 +60,21 @@ public interface NodeLIRBuilderTool extends NodeMappableLIRBuilder {
 
     void visitBreakpointNode(BreakpointNode i);
 
-    void visitFullInfopointNode(FullInfopointNode i);
-
-    void visitSimpleInfopointNode(SimpleInfopointNode i);
+    void visitInfopointNode(InfopointNode i);
 
     LIRGeneratorTool getLIRGeneratorTool();
 
-    void emitOverflowCheckBranch(BeginNode overflowSuccessor, BeginNode next, Stamp compareStamp, double probability);
+    void emitOverflowCheckBranch(BeginNode overflowSuccessor, BeginNode next, double probability);
 
     Value[] visitInvokeArguments(CallingConvention cc, Collection<ValueNode> arguments);
+
+    Variable newVariable(Kind kind);
+
+    void emitArrayEquals(Kind kind, Variable result, Value array1, Value array2, Value length);
+
+    void emitBitCount(Variable result, Value operand);
+
+    void emitBitScanForward(Variable result, Value operand);
 
     void doBlock(Block block, StructuredGraph graph, BlockMap<List<ScheduledNode>> blockMap);
 }

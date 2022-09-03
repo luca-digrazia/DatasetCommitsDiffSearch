@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.lir.gen;
 
+import java.util.*;
+
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
@@ -29,6 +31,7 @@ import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.compiler.common.spi.*;
 import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.gen.LIRGenerator.*;
 
 public interface LIRGeneratorTool extends ArithmeticLIRGenerator {
 
@@ -51,6 +54,10 @@ public interface LIRGeneratorTool extends ArithmeticLIRGenerator {
     void doBlockStart(AbstractBlock<?> block);
 
     void doBlockEnd(AbstractBlock<?> block);
+
+    Map<Constant, LoadConstant> getConstantLoads();
+
+    void setConstantLoads(Map<Constant, LoadConstant> constantLoads);
 
     Value emitLoad(PlatformKind kind, Value address, LIRFrameState state);
 
@@ -94,15 +101,7 @@ public interface LIRGeneratorTool extends ArithmeticLIRGenerator {
      */
     boolean canInlineConstant(Constant c);
 
-    /**
-     * Checks whether the supplied constant can be used without loading it into a register for store
-     * operations, i.e., on the right hand side of a memory access.
-     *
-     * @param c The constant to check.
-     * @return True if the constant can be used directly, false if the constant needs to be in a
-     *         register.
-     */
-    boolean canStoreConstant(Constant c);
+    boolean canStoreConstant(Constant c, boolean isCompressed);
 
     RegisterAttributes attributes(Register register);
 
