@@ -29,6 +29,8 @@ import static com.oracle.graal.sparc.SPARC.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.sparc.*;
+import com.oracle.graal.asm.sparc.SPARCAssembler.Jmpl;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Jmp;
 import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Sethix;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.lir.*;
@@ -189,7 +191,7 @@ public class SPARCCall {
             // offset might not fit a 30-bit displacement, generate an
             // indirect call with a 64-bit immediate
             new Sethix(0L, scratch, true).emit(masm);
-            masm.jmpl(scratch, 0, o7);
+            new Jmpl(scratch, 0, o7).emit(masm);
         } else {
             masm.call(0);
         }
@@ -203,7 +205,7 @@ public class SPARCCall {
     public static void indirectJmp(CompilationResultBuilder crb, SPARCMacroAssembler masm, Register dst, InvokeTarget target) {
         int before = masm.position();
         new Sethix(0L, dst, true).emit(masm);
-        masm.jmp(new SPARCAddress(dst, 0));
+        new Jmp(new SPARCAddress(dst, 0)).emit(masm);
         masm.nop();  // delay slot
         int after = masm.position();
         crb.recordIndirectCall(before, after, target, null);
@@ -212,7 +214,7 @@ public class SPARCCall {
 
     public static void indirectCall(CompilationResultBuilder crb, SPARCMacroAssembler masm, Register dst, InvokeTarget callTarget, LIRFrameState info) {
         int before = masm.position();
-        masm.jmpl(dst, 0, o7);
+        new Jmpl(dst, 0, o7).emit(masm);
         masm.nop();  // delay slot
         int after = masm.position();
         crb.recordIndirectCall(before, after, callTarget, info);
