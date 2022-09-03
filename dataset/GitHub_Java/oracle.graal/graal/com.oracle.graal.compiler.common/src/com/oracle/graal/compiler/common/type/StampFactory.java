@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,7 +24,6 @@ package com.oracle.graal.compiler.common.type;
 
 import jdk.vm.ci.code.CodeUtil;
 import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
@@ -35,28 +34,6 @@ import jdk.vm.ci.meta.Signature;
 
 public class StampFactory {
 
-    /*
-     * The marker stamp for node intrinsics must be its own class, so that it is never equal() to a
-     * regular ObjectStamp.
-     */
-    static final class NodeIntrinsicStamp extends ObjectStamp {
-        protected static final Stamp SINGLETON = new NodeIntrinsicStamp();
-
-        private NodeIntrinsicStamp() {
-            super(null, false, false, false);
-        }
-
-        @Override
-        public int hashCode() {
-            return System.identityHashCode(this);
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            return this == obj;
-        }
-    }
-
     // JaCoCo Exclude
 
     private static final Stamp[] stampCache = new Stamp[JavaKind.values().length];
@@ -64,6 +41,7 @@ public class StampFactory {
     private static final Stamp objectStamp = new ObjectStamp(null, false, false, false);
     private static final Stamp objectNonNullStamp = new ObjectStamp(null, false, true, false);
     private static final Stamp objectAlwaysNullStamp = new ObjectStamp(null, false, false, true);
+    private static final Stamp nodeIntrinsicStamp = new ObjectStamp(null, false, false, false);
     private static final Stamp positiveInt = forInteger(JavaKind.Int, 0, Integer.MAX_VALUE, 0, Integer.MAX_VALUE);
     private static final Stamp booleanTrue = forInteger(JavaKind.Boolean, -1, -1, 1, 1);
     private static final Stamp booleanFalse = forInteger(JavaKind.Boolean, 0, 0, 0, 0);
@@ -139,7 +117,7 @@ public class StampFactory {
      * actual stamp when the intrinsic is used, i.e., when the snippet template is instantiated.
      */
     public static Stamp forNodeIntrinsic() {
-        return NodeIntrinsicStamp.SINGLETON;
+        return nodeIntrinsicStamp;
     }
 
     public static Stamp intValue() {
@@ -266,29 +244,111 @@ public class StampFactory {
         return objectAlwaysNullStamp;
     }
 
-    public static Stamp object(TypeReference type) {
-        return object(type, false);
+    /**
+     * Returns a {@link Stamp} for objects of type {@code type}, or one of its subtypes, or null.
+     */
+    public static Stamp declared(ResolvedJavaType type) {
+        return object(type, false, false, false);
     }
 
-    public static Stamp objectNonNull(TypeReference type) {
-        return object(type, true);
+    /**
+     * Returns a {@link Stamp} for objects of type {@code type}, or one of its subtypes, but not
+     * null.
+     */
+    public static Stamp declaredNonNull(ResolvedJavaType type) {
+        return object(type, false, true, false);
     }
 
-    public static Stamp object(TypeReference type, boolean nonNull) {
-        if (type == null) {
-            return new ObjectStamp(null, false, nonNull, false);
+    /**
+     * Returns a {@link Stamp} for objects of type {@code type}, or one of its subtypes, or null.
+     * Contrary to {@link #declared(ResolvedJavaType)}, interface types will be preserved in the
+     * stamp.
+     *
+     * In general interface types are not verified at class loading or run-time so this should be
+     * used with care.
+     */
+    public static Stamp declaredTrusted(ResolvedJavaType type) {
+        return object(type, false, false, true);
+    }
+
+    /**
+     * Returns a {@link Stamp} for objects of type {@code type}, or one of its subtypes, but not
+     * null. Contrary to {@link #declaredNonNull(ResolvedJavaType)}, interface types will be
+     * preserved in the stamp.
+     *
+     * In general interface types are not verified at class loading or run-time so this should be
+     * used with care.
+     */
+    public static Stamp declaredTrustedNonNull(ResolvedJavaType type) {
+        return declaredTrusted(type, true);
+    }
+
+    public static Stamp declaredTrusted(ResolvedJavaType type, boolean nonNull) {
+        return object(type, false, nonNull, true);
+    }
+
+    /**
+     * Returns a {@link Stamp} for objects of exactly type {@code type}, or null.
+     */
+    public static Stamp exact(ResolvedJavaType type) {
+        if (ObjectStamp.isConcreteType(type)) {
+            return new ObjectStamp(type, true, false, false);
         } else {
-            return new ObjectStamp(type.getType(), type.isExact(), nonNull, false);
+            return empty(JavaKind.Object);
         }
     }
 
-    public static Stamp[] createParameterStamps(Assumptions assumptions, ResolvedJavaMethod method) {
+    /**
+     * Returns a {@link Stamp} for non-null objects of exactly type {@code type}.
+     */
+    public static Stamp exactNonNull(ResolvedJavaType type) {
+        if (ObjectStamp.isConcreteType(type)) {
+            return new ObjectStamp(type, true, true, false);
+        } else {
+            return empty(JavaKind.Object);
+        }
+    }
+
+    private static ResolvedJavaType filterInterfaceTypesOut(ResolvedJavaType type) {
+        if (type.isArray()) {
+            ResolvedJavaType componentType = filterInterfaceTypesOut(type.getComponentType());
+            if (componentType != null) {
+                return componentType.getArrayClass();
+            }
+            return type.getSuperclass().getArrayClass(); // arrayType.getSuperClass() == Object type
+        }
+        if (type.isInterface() && !type.isTrustedInterfaceType()) {
+            return null;
+        }
+        return type;
+    }
+
+    public static Stamp object(ResolvedJavaType type, boolean exactType, boolean nonNull, boolean trustInterfaces) {
+        assert type != null;
+        assert type.getJavaKind() == JavaKind.Object;
+        ResolvedJavaType trustedtype;
+        if (!trustInterfaces) {
+            trustedtype = filterInterfaceTypesOut(type);
+            assert !exactType || trustedtype.equals(type);
+        } else {
+            trustedtype = type;
+        }
+        ResolvedJavaType exact = trustedtype != null ? trustedtype.asExactType() : null;
+        if (exact != null) {
+            assert !exactType || trustedtype.equals(exact);
+            return new ObjectStamp(exact, true, nonNull, false);
+        }
+        assert !exactType || AbstractObjectStamp.isConcreteType(trustedtype);
+        return new ObjectStamp(trustedtype, exactType, nonNull, false);
+    }
+
+    public static Stamp[] createParameterStamps(ResolvedJavaMethod method) {
         Signature sig = method.getSignature();
         Stamp[] result = new Stamp[sig.getParameterCount(!method.isStatic())];
         int index = 0;
 
         if (!method.isStatic()) {
-            result[index++] = StampFactory.objectNonNull(TypeReference.create(assumptions, method.getDeclaringClass()));
+            result[index++] = StampFactory.declaredNonNull(method.getDeclaringClass());
         }
 
         int max = sig.getParameterCount(false);
@@ -298,7 +358,7 @@ public class StampFactory {
             JavaKind kind = type.getJavaKind();
             Stamp stamp;
             if (kind == JavaKind.Object && type instanceof ResolvedJavaType) {
-                stamp = StampFactory.object(TypeReference.create(assumptions, (ResolvedJavaType) type));
+                stamp = StampFactory.declared((ResolvedJavaType) type);
             } else {
                 stamp = StampFactory.forKind(kind);
             }
@@ -310,21 +370,5 @@ public class StampFactory {
 
     public static Stamp pointer() {
         return rawPointer;
-    }
-
-    public static StampPair forDeclaredType(Assumptions assumptions, JavaType returnType, boolean nonNull) {
-        if (returnType.getJavaKind() == JavaKind.Object && returnType instanceof ResolvedJavaType) {
-            ResolvedJavaType resolvedJavaType = (ResolvedJavaType) returnType;
-            TypeReference reference = TypeReference.create(assumptions, resolvedJavaType);
-            if (resolvedJavaType.isInterface()) {
-                TypeReference uncheckedType = TypeReference.createUnchecked(assumptions, resolvedJavaType, reference);
-                if (uncheckedType != null) {
-                    return StampPair.create(StampFactory.object(reference, nonNull), StampFactory.object(uncheckedType, nonNull));
-                }
-            }
-            return StampPair.createSingle(StampFactory.object(reference, nonNull));
-        } else {
-            return StampPair.createSingle(StampFactory.forKind(returnType.getJavaKind()));
-        }
     }
 }
