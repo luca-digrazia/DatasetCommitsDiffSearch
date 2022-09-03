@@ -39,7 +39,7 @@ import com.sun.cri.ri.*;
  * about the basic block, including the successor and
  * predecessor blocks, exception handlers, liveness information, etc.
  */
-public final class BlockBegin extends StateSplit {
+public final class BlockBegin extends Instruction {
 
     private static final int INPUT_COUNT = 1;
     private static final int INPUT_STATE_BEFORE = 0;
@@ -58,15 +58,23 @@ public final class BlockBegin extends StateSplit {
     }
 
     /**
+     * The frame state before execution of the first instruction in this block.
+     */
+     @Override
+    public FrameState stateBefore() {
+        return (FrameState) inputs().get(super.inputCount() + INPUT_STATE_BEFORE);
+    }
+
+    public FrameState setStateBefore(FrameState n) {
+        assert stateBefore() == null;
+        return (FrameState) inputs().set(super.inputCount() + INPUT_STATE_BEFORE, n);
+    }
+
+    /**
      * The last node in the block (which contains the successors).
      */
     public BlockEnd end() {
         return (BlockEnd) successors().get(super.successorCount() + SUCCESSOR_END);
-    }
-
-    @Override
-    public boolean needsStateAfter() {
-        return false;
     }
 
     public void setEnd(BlockEnd end) {
@@ -390,8 +398,7 @@ public final class BlockBegin extends StateSplit {
             }
 
             // copy state because it is modified
-            FrameState duplicate = newState.duplicate(bci());
-            assert duplicate.bci == bci() : "duplicate.bci=" + duplicate.bci + " my bci=" + bci();
+            FrameState duplicate = newState.duplicate();
 
             if (C1XOptions.UseStackMapTableLiveness) {
                 // if a liveness map is available, use it to invalidate dead locals
