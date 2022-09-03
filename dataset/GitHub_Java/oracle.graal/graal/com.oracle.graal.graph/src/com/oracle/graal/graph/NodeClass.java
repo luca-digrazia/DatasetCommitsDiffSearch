@@ -51,15 +51,7 @@ public final class NodeClass extends FieldIntrospection {
 
     private static final Object GetNodeClassLock = new Object();
 
-    // Timers for creation of a NodeClass instance
-    private static final DebugTimer Init = Debug.timer("NodeClass.Init");
-    private static final DebugTimer Init_PositionFieldOrderLoad = Debug.timer("NodeClass.Init.PositionFieldOrderLoad");
-    private static final DebugTimer Init_PositionFieldOrderSort = Debug.timer("NodeClass.Init.PositionFieldOrderSort");
-    private static final DebugTimer Init_FieldScanning = Debug.timer("NodeClass.Init.FieldScanning");
-    private static final DebugTimer Init_Offsets = Debug.timer("NodeClass.Init.Offsets");
-    private static final DebugTimer Init_Naming = Debug.timer("NodeClass.Init.Naming");
-    private static final DebugTimer Init_AllowedUsages = Debug.timer("NodeClass.Init.AllowedUsages");
-    private static final DebugTimer Init_IterableIds = Debug.timer("NodeClass.Init.IterableIds");
+    private static final DebugTimer NodeClassCreation = Debug.timer("NodeClassCreation");
 
     /**
      * Gets the {@link NodeClass} associated with a given {@link Class}.
@@ -75,7 +67,7 @@ public final class NodeClass extends FieldIntrospection {
             // The creation of a NodeClass must be serialized as the NodeClass constructor accesses
             // both FieldIntrospection.allClasses and NodeClass.nextIterableId.
             synchronized (GetNodeClassLock) {
-                try (TimerCloseable t = Init.start()) {
+                try (TimerCloseable t = NodeClassCreation.start()) {
                     value = (NodeClass) allClasses.get(key);
                     if (value == null) {
                         GeneratedNode gen = c.getAnnotation(GeneratedNode.class);
@@ -152,10 +144,7 @@ public final class NodeClass extends FieldIntrospection {
     }
 
     /**
-     * Defines the order of fields in a node class accessed via {@link Position}s.
-     *
-     * This is required so that field positions are consistent in a configuration that mixes
-     * (runtime) field offsets with (annotation processing time) field iterators.
+     * Defines the order of fields in a node class that accessed via {@link Position}s.
      */
     public interface PositionFieldOrder {
         /**
@@ -173,19 +162,16 @@ public final class NodeClass extends FieldIntrospection {
             return new long[0];
         }
         if (pfo != null) {
-            try (TimerCloseable t = Init_PositionFieldOrderSort.start()) {
-
-                List<String> fields = Arrays.asList(pfo.getOrderedFieldNames(input));
-                long[] offsets = new long[fields.size()];
-                assert list1.size() + list2.size() == fields.size();
-                for (Map.Entry<Long, String> e : names.entrySet()) {
-                    int index = fields.indexOf(e.getValue());
-                    if (index != -1) {
-                        offsets[index] = e.getKey();
-                    }
+            List<String> fields = Arrays.asList(pfo.getOrderedFieldNames(input));
+            long[] offsets = new long[fields.size()];
+            assert list1.size() + list2.size() == fields.size();
+            for (Map.Entry<Long, String> e : names.entrySet()) {
+                int index = fields.indexOf(e.getValue());
+                if (index != -1) {
+                    offsets[index] = e.getKey();
                 }
-                return offsets;
             }
+            return offsets;
         }
         return sortedLongCopy(list1, list2);
     }
@@ -202,34 +188,30 @@ public final class NodeClass extends FieldIntrospection {
         this.isSimplifiable = Simplifiable.class.isAssignableFrom(clazz);
 
         FieldScanner scanner = new FieldScanner(calcOffset);
-        try (TimerCloseable t = Init_FieldScanning.start()) {
-            scanner.scan(clazz);
+        scanner.scan(clazz);
+
+        directInputCount = scanner.inputOffsets.size();
+
+        isLeafNode = scanner.inputOffsets.isEmpty() && scanner.inputListOffsets.isEmpty() && scanner.successorOffsets.isEmpty() && scanner.successorListOffsets.isEmpty();
+
+        PositionFieldOrder pfo = lookupPositionFieldOrder(clazz);
+
+        inputOffsets = sortedOffsets(true, pfo, scanner.fieldNames, scanner.inputOffsets, scanner.inputListOffsets);
+
+        inputTypes = new InputType[inputOffsets.length];
+        inputOptional = new boolean[inputOffsets.length];
+        for (int i = 0; i < inputOffsets.length; i++) {
+            inputTypes[i] = scanner.types.get(inputOffsets[i]);
+            assert inputTypes[i] != null;
+            inputOptional[i] = scanner.optionalInputs.contains(inputOffsets[i]);
         }
+        directSuccessorCount = scanner.successorOffsets.size();
+        successorOffsets = sortedOffsets(false, pfo, scanner.fieldNames, scanner.successorOffsets, scanner.successorListOffsets);
 
-        try (TimerCloseable t1 = Init_Offsets.start()) {
-            directInputCount = scanner.inputOffsets.size();
-
-            isLeafNode = scanner.inputOffsets.isEmpty() && scanner.inputListOffsets.isEmpty() && scanner.successorOffsets.isEmpty() && scanner.successorListOffsets.isEmpty();
-
-            PositionFieldOrder pfo = lookupPositionFieldOrder(clazz);
-
-            inputOffsets = sortedOffsets(true, pfo, scanner.fieldNames, scanner.inputOffsets, scanner.inputListOffsets);
-
-            inputTypes = new InputType[inputOffsets.length];
-            inputOptional = new boolean[inputOffsets.length];
-            for (int i = 0; i < inputOffsets.length; i++) {
-                inputTypes[i] = scanner.types.get(inputOffsets[i]);
-                assert inputTypes[i] != null;
-                inputOptional[i] = scanner.optionalInputs.contains(inputOffsets[i]);
-            }
-            directSuccessorCount = scanner.successorOffsets.size();
-            successorOffsets = sortedOffsets(false, pfo, scanner.fieldNames, scanner.successorOffsets, scanner.successorListOffsets);
-
-            dataOffsets = sortedLongCopy(scanner.dataOffsets);
-            dataTypes = new Class[dataOffsets.length];
-            for (int i = 0; i < dataOffsets.length; i++) {
-                dataTypes[i] = scanner.fieldTypes.get(dataOffsets[i]);
-            }
+        dataOffsets = sortedLongCopy(scanner.dataOffsets);
+        dataTypes = new Class[dataOffsets.length];
+        for (int i = 0; i < dataOffsets.length; i++) {
+            dataTypes[i] = scanner.fieldTypes.get(dataOffsets[i]);
         }
 
         fieldNames = scanner.fieldNames;
@@ -238,35 +220,30 @@ public final class NodeClass extends FieldIntrospection {
         canGVN = Node.ValueNumberable.class.isAssignableFrom(clazz);
         startGVNNumber = clazz.hashCode();
 
+        String newShortName = clazz.getSimpleName();
+        if (newShortName.endsWith("Node") && !newShortName.equals("StartNode") && !newShortName.equals("EndNode")) {
+            newShortName = newShortName.substring(0, newShortName.length() - 4);
+        }
         String newNameTemplate = null;
-        String newShortName;
-        try (TimerCloseable t1 = Init_Naming.start()) {
-            newShortName = clazz.getSimpleName();
-            if (newShortName.endsWith("Node") && !newShortName.equals("StartNode") && !newShortName.equals("EndNode")) {
-                newShortName = newShortName.substring(0, newShortName.length() - 4);
-            }
-            NodeInfo info = clazz.getAnnotation(NodeInfo.class);
-            assert info != null : "missing " + NodeInfo.class.getSimpleName() + " annotation on " + clazz;
-            if (!info.shortName().isEmpty()) {
-                newShortName = info.shortName();
-            }
-            if (!info.nameTemplate().isEmpty()) {
-                newNameTemplate = info.nameTemplate();
-            }
+        NodeInfo info = clazz.getAnnotation(NodeInfo.class);
+        assert info != null : "missing " + NodeInfo.class.getSimpleName() + " annotation on " + clazz;
+        if (!info.shortName().isEmpty()) {
+            newShortName = info.shortName();
+        }
+        if (!info.nameTemplate().isEmpty()) {
+            newNameTemplate = info.nameTemplate();
         }
         EnumSet<InputType> newAllowedUsageTypes = EnumSet.noneOf(InputType.class);
-        try (TimerCloseable t1 = Init_AllowedUsages.start()) {
-            Class<?> current = clazz;
-            do {
-                NodeInfo currentInfo = current.getAnnotation(NodeInfo.class);
-                if (currentInfo != null) {
-                    if (currentInfo.allowedUsageTypes().length > 0) {
-                        newAllowedUsageTypes.addAll(Arrays.asList(currentInfo.allowedUsageTypes()));
-                    }
+        Class<?> current = clazz;
+        do {
+            NodeInfo currentInfo = current.getAnnotation(NodeInfo.class);
+            if (currentInfo != null) {
+                if (currentInfo.allowedUsageTypes().length > 0) {
+                    newAllowedUsageTypes.addAll(Arrays.asList(currentInfo.allowedUsageTypes()));
                 }
-                current = current.getSuperclass();
-            } while (current != Node.class);
-        }
+            }
+            current = current.getSuperclass();
+        } while (current != Node.class);
         this.nameTemplate = newNameTemplate == null ? newShortName : newNameTemplate;
         this.allowedUsageTypes = newAllowedUsageTypes;
         this.shortName = newShortName;
@@ -275,22 +252,20 @@ public final class NodeClass extends FieldIntrospection {
             this.iterableId = presetIterableId;
         } else if (IterableNodeType.class.isAssignableFrom(clazz)) {
             ITERABLE_NODE_TYPES.increment();
-            try (TimerCloseable t1 = Init_IterableIds.start()) {
-                this.iterableId = nextIterableId++;
+            this.iterableId = nextIterableId++;
 
-                Class<?> superclass = clazz.getSuperclass();
-                while (superclass != NODE_CLASS) {
-                    if (IterableNodeType.class.isAssignableFrom(superclass)) {
-                        NodeClass superNodeClass = NodeClass.get(superclass);
-                        assert !containsId(this.iterableId, superNodeClass.iterableIds);
-                        superNodeClass.iterableIds = Arrays.copyOf(superNodeClass.iterableIds, superNodeClass.iterableIds.length + 1);
-                        superNodeClass.iterableIds[superNodeClass.iterableIds.length - 1] = this.iterableId;
-                    }
-                    superclass = superclass.getSuperclass();
+            Class<?> superclass = clazz.getSuperclass();
+            while (superclass != NODE_CLASS) {
+                if (IterableNodeType.class.isAssignableFrom(superclass)) {
+                    NodeClass superNodeClass = NodeClass.get(superclass);
+                    assert !containsId(this.iterableId, superNodeClass.iterableIds);
+                    superNodeClass.iterableIds = Arrays.copyOf(superNodeClass.iterableIds, superNodeClass.iterableIds.length + 1);
+                    superNodeClass.iterableIds[superNodeClass.iterableIds.length - 1] = this.iterableId;
                 }
-
-                this.iterableIds = new int[]{iterableId};
+                superclass = superclass.getSuperclass();
             }
+
+            this.iterableIds = new int[]{iterableId};
         } else {
             this.iterableId = Node.NOT_ITERABLE;
             this.iterableIds = null;
@@ -300,13 +275,11 @@ public final class NodeClass extends FieldIntrospection {
 
     private PositionFieldOrder lookupPositionFieldOrder(Class<?> clazz) throws GraalInternalError {
         if (USE_GENERATED_NODES && !isAbstract(clazz.getModifiers()) && !isLeafNode) {
-            try (TimerCloseable t = Init_PositionFieldOrderLoad.start()) {
-                String name = clazz.getName().replace('$', '_') + "Gen$FieldOrder";
-                try {
-                    return (PositionFieldOrder) Class.forName(name, true, getClazz().getClassLoader()).newInstance();
-                } catch (Exception e) {
-                    throw new GraalInternalError("Could not find generated class " + name + " for " + getClazz());
-                }
+            String name = clazz.getName().replace('$', '_') + "Gen$FieldOrder";
+            try {
+                return (PositionFieldOrder) Class.forName(name, true, getClazz().getClassLoader()).newInstance();
+            } catch (Exception e) {
+                throw new GraalInternalError("Could not find generated class " + name + " for " + getClazz());
             }
         }
         return null;
@@ -372,7 +345,7 @@ public final class NodeClass extends FieldIntrospection {
      *
      * <pre>
      *     if (node.getNodeClass().is(BeginNode.class)) { ... }
-     *
+     * 
      *     // Due to generated Node classes, the test below
      *     // is *not* the same as the test above:
      *     if (node.getClass() == BeginNode.class) { ... }
