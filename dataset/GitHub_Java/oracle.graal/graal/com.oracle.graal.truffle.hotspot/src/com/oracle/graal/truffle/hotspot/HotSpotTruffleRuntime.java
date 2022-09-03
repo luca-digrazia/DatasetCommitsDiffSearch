@@ -37,7 +37,6 @@ import com.oracle.graal.api.code.CallingConvention.Type;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.compiler.*;
-import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
@@ -45,6 +44,7 @@ import com.oracle.graal.graphbuilderconf.*;
 import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.java.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.phases.*;
@@ -58,6 +58,7 @@ import com.oracle.graal.phases.util.*;
 import com.oracle.graal.printer.*;
 import com.oracle.graal.runtime.*;
 import com.oracle.graal.truffle.*;
+import com.oracle.graal.word.*;
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.nodes.*;
 
@@ -79,7 +80,6 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
     private final ThreadPoolExecutor compileQueue;
 
     private final Map<RootCallTarget, Void> callTargets = Collections.synchronizedMap(new WeakHashMap<RootCallTarget, Void>());
-    private static final long THREAD_EETOP_OFFSET = eetopOffset();
 
     private HotSpotTruffleRuntime() {
         installOptimizedCallTargetCallMethod();
@@ -248,7 +248,7 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
             try {
                 future.get();
             } catch (ExecutionException e) {
-                if (TruffleCompilationExceptionsAreThrown.getValue() && !(e.getCause() instanceof BailoutException && !((BailoutException) e.getCause()).isPermanent())) {
+                if (TruffleCompilationExceptionsAreThrown.getValue() && !(e.getCause() instanceof BailoutException) && !((BailoutException) e.getCause()).isPermanent()) {
                     throw new RuntimeException(e.getCause());
                 } else {
                     // silently ignored
@@ -321,11 +321,10 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
     public void notifyTransferToInterpreter() {
         CompilerAsserts.neverPartOfCompilation();
         if (TraceTruffleTransferToInterpreter.getValue()) {
-            long thread = UnsafeAccess.unsafe.getLong(Thread.currentThread(), THREAD_EETOP_OFFSET);
-            long pendingTransferToInterpreterAddress = thread + HotSpotGraalRuntime.runtime().getConfig().pendingTransferToInterpreterOffset;
-            boolean deoptimized = UnsafeAccess.unsafe.getByte(pendingTransferToInterpreterAddress) != 0;
+            Word thread = CurrentJavaThreadNode.get();
+            boolean deoptimized = thread.readByte(HotSpotGraalRuntime.runtime().getConfig().pendingTransferToInterpreterOffset) != 0;
             if (deoptimized) {
-                UnsafeAccess.unsafe.putByte(pendingTransferToInterpreterAddress, (byte) 0);
+                thread.writeByte(HotSpotGraalRuntime.runtime().getConfig().pendingTransferToInterpreterOffset, (byte) 0);
 
                 logTransferToInterpreter();
             }
@@ -338,13 +337,5 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
         StackTraceElement[] stackTrace = new Throwable().getStackTrace();
         String suffix = stackTrace.length > skip + limit ? "\n  ..." : "";
         TTY.out().out().println(Arrays.stream(stackTrace).skip(skip).limit(limit).map(StackTraceElement::toString).collect(Collectors.joining("\n  ", "", suffix)));
-    }
-
-    private static long eetopOffset() {
-        try {
-            return UnsafeAccess.unsafe.objectFieldOffset(Thread.class.getDeclaredField("eetop"));
-        } catch (Exception e) {
-            throw new GraalInternalError(e);
-        }
     }
 }

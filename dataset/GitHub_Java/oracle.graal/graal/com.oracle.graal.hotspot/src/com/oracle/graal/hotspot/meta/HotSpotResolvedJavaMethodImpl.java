@@ -33,8 +33,8 @@ import java.util.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.meta.ProfilingInfo.TriState;
 import com.oracle.graal.debug.*;
+import com.oracle.graal.graphbuilderconf.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.debug.*;
 import com.oracle.graal.nodes.*;
@@ -42,7 +42,7 @@ import com.oracle.graal.nodes.*;
 /**
  * Implementation of {@link JavaMethod} for resolved HotSpot methods.
  */
-public final class HotSpotResolvedJavaMethodImpl extends HotSpotMethod implements HotSpotResolvedJavaMethod {
+public final class HotSpotResolvedJavaMethodImpl extends HotSpotMethod implements HotSpotResolvedJavaMethod, HotSpotProxified, InvocationPluginIdHolder {
 
     private static final long serialVersionUID = -5486975070147586588L;
 
@@ -51,7 +51,7 @@ public final class HotSpotResolvedJavaMethodImpl extends HotSpotMethod implement
      */
     private final long metaspaceMethod;
 
-    private final HotSpotResolvedObjectType holder;
+    private final HotSpotResolvedObjectTypeImpl holder;
     private final HotSpotConstantPool constantPool;
     private final HotSpotSignature signature;
     private HotSpotMethodData methodData;
@@ -65,12 +65,12 @@ public final class HotSpotResolvedJavaMethodImpl extends HotSpotMethod implement
      * @return the {@link ResolvedJavaType} corresponding to the holder of the
      *         {@code metaspaceMethod}
      */
-    public static HotSpotResolvedObjectType getHolder(long metaspaceMethod) {
+    public static HotSpotResolvedObjectTypeImpl getHolder(long metaspaceMethod) {
         HotSpotVMConfig config = runtime().getConfig();
         final long metaspaceConstMethod = unsafe.getAddress(metaspaceMethod + config.methodConstMethodOffset);
         final long metaspaceConstantPool = unsafe.getAddress(metaspaceConstMethod + config.constMethodConstantsOffset);
         final long metaspaceKlass = unsafe.getAddress(metaspaceConstantPool + config.constantPoolHolderOffset);
-        return HotSpotResolvedObjectType.fromMetaspaceKlass(metaspaceKlass);
+        return HotSpotResolvedObjectTypeImpl.fromMetaspaceKlass(metaspaceKlass);
     }
 
     /**
@@ -80,11 +80,11 @@ public final class HotSpotResolvedJavaMethodImpl extends HotSpotMethod implement
      * @return the {@link ResolvedJavaMethod} corresponding to {@code metaspaceMethod}
      */
     public static HotSpotResolvedJavaMethod fromMetaspace(long metaspaceMethod) {
-        HotSpotResolvedObjectType holder = getHolder(metaspaceMethod);
+        HotSpotResolvedObjectTypeImpl holder = getHolder(metaspaceMethod);
         return holder.createMethod(metaspaceMethod);
     }
 
-    public HotSpotResolvedJavaMethodImpl(HotSpotResolvedObjectType holder, long metaspaceMethod) {
+    public HotSpotResolvedJavaMethodImpl(HotSpotResolvedObjectTypeImpl holder, long metaspaceMethod) {
         // It would be too much work to get the method name here so we fill it in later.
         super(null);
         this.metaspaceMethod = metaspaceMethod;
@@ -121,7 +121,7 @@ public final class HotSpotResolvedJavaMethodImpl extends HotSpotMethod implement
 
     @Override
     public boolean equals(Object obj) {
-        if (obj instanceof HotSpotResolvedJavaMethod) {
+        if (obj instanceof HotSpotResolvedJavaMethodImpl) {
             HotSpotResolvedJavaMethodImpl that = (HotSpotResolvedJavaMethodImpl) obj;
             return that.metaspaceMethod == metaspaceMethod;
         }
@@ -152,7 +152,7 @@ public final class HotSpotResolvedJavaMethodImpl extends HotSpotMethod implement
     }
 
     @Override
-    public HotSpotResolvedObjectType getDeclaringClass() {
+    public HotSpotResolvedObjectTypeImpl getDeclaringClass() {
         return holder;
     }
 
@@ -160,7 +160,7 @@ public final class HotSpotResolvedJavaMethodImpl extends HotSpotMethod implement
      * Gets the address of the C++ Method object for this method.
      */
     public JavaConstant getMetaspaceMethodConstant() {
-        return HotSpotMetaspaceConstant.forMetaspaceObject(getHostWordKind(), metaspaceMethod, this, false);
+        return HotSpotMetaspaceConstantImpl.forMetaspaceObject(getHostWordKind(), metaspaceMethod, this, false);
     }
 
     public long getMetaspaceMethod() {
@@ -187,7 +187,7 @@ public final class HotSpotResolvedJavaMethodImpl extends HotSpotMethod implement
 
     @Override
     public boolean canBeStaticallyBound() {
-        return (isFinal() || isPrivate() || isStatic() || holder.isFinal()) && !isAbstract();
+        return (isFinal() || isPrivate() || isStatic() || holder.isFinal()) && isConcrete();
     }
 
     @Override
@@ -233,8 +233,8 @@ public final class HotSpotResolvedJavaMethodImpl extends HotSpotMethod implement
                 catchType = constantPool.lookupType(catchTypeIndex, opcode);
 
                 // Check for Throwable which catches everything.
-                if (catchType instanceof HotSpotResolvedObjectType) {
-                    HotSpotResolvedObjectType resolvedType = (HotSpotResolvedObjectType) catchType;
+                if (catchType instanceof HotSpotResolvedObjectTypeImpl) {
+                    HotSpotResolvedObjectTypeImpl resolvedType = (HotSpotResolvedObjectTypeImpl) catchType;
                     if (resolvedType.mirror() == Throwable.class) {
                         catchTypeIndex = 0;
                         catchType = null;
@@ -362,7 +362,8 @@ public final class HotSpotResolvedJavaMethodImpl extends HotSpotMethod implement
             // seeing A.foo().
             return null;
         }
-        final long uniqueConcreteMethod = runtime().getCompilerToVM().findUniqueConcreteMethod(receiver.getMetaspaceKlass(), metaspaceMethod);
+        long metaspaceKlass = ((HotSpotResolvedObjectTypeImpl) receiver).getMetaspaceKlass();
+        final long uniqueConcreteMethod = runtime().getCompilerToVM().findUniqueConcreteMethod(metaspaceKlass, metaspaceMethod);
         if (uniqueConcreteMethod == 0) {
             return null;
         }
@@ -420,7 +421,7 @@ public final class HotSpotResolvedJavaMethodImpl extends HotSpotMethod implement
         ProfilingInfo info;
 
         if (UseProfilingInformation.getValue() && methodData == null) {
-            long metaspaceMethodData = unsafeReadWord(metaspaceMethod + runtime().getConfig().methodDataOffset);
+            long metaspaceMethodData = unsafe.getAddress(metaspaceMethod + runtime().getConfig().methodDataOffset);
             if (metaspaceMethodData != 0) {
                 methodData = new HotSpotMethodData(metaspaceMethodData);
                 if (TraceMethodDataFilter != null && this.format("%H.%n").contains(TraceMethodDataFilter)) {
@@ -510,7 +511,9 @@ public final class HotSpotResolvedJavaMethodImpl extends HotSpotMethod implement
         int count = sig.getParameterCount(false);
         Class<?>[] result = new Class<?>[count];
         for (int i = 0; i < result.length; ++i) {
-            result[i] = ((HotSpotResolvedJavaType) sig.getParameterType(i, holder).resolve(holder)).mirror();
+            JavaType parameterType = sig.getParameterType(i, holder);
+            HotSpotResolvedJavaType resolvedParameterType = (HotSpotResolvedJavaType) parameterType.resolve(holder);
+            result[i] = resolvedParameterType.mirror();
         }
         return result;
     }
@@ -603,7 +606,7 @@ public final class HotSpotResolvedJavaMethodImpl extends HotSpotMethod implement
             String localName = getConstantPool().lookupUtf8(nameCpIndex);
             String localType = getConstantPool().lookupUtf8(typeCpIndex);
 
-            locals[i] = new LocalImpl(localName, localType, holder, startBci, endBci, slot);
+            locals[i] = new LocalImpl(localName, runtime().lookupType(localType, holder, false), startBci, endBci, slot);
 
             // Go to the next LocalVariableTableElement
             localVariableTableElement += config.localVariableTableElementSize;
@@ -622,21 +625,21 @@ public final class HotSpotResolvedJavaMethodImpl extends HotSpotMethod implement
     public int vtableEntryOffset(ResolvedJavaType resolved) {
         guarantee(isInVirtualMethodTable(resolved), "%s does not have a vtable entry", this);
         HotSpotVMConfig config = runtime().getConfig();
-        final int vtableIndex = getVtableIndex((HotSpotResolvedObjectType) resolved);
+        final int vtableIndex = getVtableIndex((HotSpotResolvedObjectTypeImpl) resolved);
         return config.instanceKlassVtableStartOffset + vtableIndex * config.vtableEntrySize + config.vtableEntryMethodOffset;
     }
 
     @Override
     public boolean isInVirtualMethodTable(ResolvedJavaType resolved) {
-        if (resolved instanceof HotSpotResolvedObjectType) {
-            HotSpotResolvedObjectType hotspotResolved = (HotSpotResolvedObjectType) resolved;
+        if (resolved instanceof HotSpotResolvedObjectTypeImpl) {
+            HotSpotResolvedObjectTypeImpl hotspotResolved = (HotSpotResolvedObjectTypeImpl) resolved;
             int vtableIndex = getVtableIndex(hotspotResolved);
             return vtableIndex >= 0 && vtableIndex < hotspotResolved.getVtableLength();
         }
         return false;
     }
 
-    private int getVtableIndex(HotSpotResolvedObjectType resolved) {
+    private int getVtableIndex(HotSpotResolvedObjectTypeImpl resolved) {
         if (!holder.isLinked()) {
             return runtime().getConfig().invalidVtableIndex;
         }
@@ -663,7 +666,7 @@ public final class HotSpotResolvedJavaMethodImpl extends HotSpotMethod implement
     }
 
     private int getVtableIndexForInterface(ResolvedJavaType resolved) {
-        HotSpotResolvedObjectType hotspotType = (HotSpotResolvedObjectType) resolved;
+        HotSpotResolvedObjectTypeImpl hotspotType = (HotSpotResolvedObjectTypeImpl) resolved;
         return runtime().getCompilerToVM().getVtableIndexForInterface(hotspotType.getMetaspaceKlass(), getMetaspaceMethod());
     }
 
@@ -709,36 +712,15 @@ public final class HotSpotResolvedJavaMethodImpl extends HotSpotMethod implement
 
         Object[] objArguments = new Object[arguments.length];
         for (int i = 0; i < arguments.length; i++) {
-            objArguments[i] = HotSpotObjectConstant.asBoxedValue(arguments[i]);
+            objArguments[i] = HotSpotObjectConstantImpl.asBoxedValue(arguments[i]);
         }
-        Object objReceiver = receiver != null ? HotSpotObjectConstant.asObject(receiver) : null;
+        Object objReceiver = receiver != null && !receiver.isNull() ? ((HotSpotObjectConstantImpl) receiver).object() : null;
 
         try {
             Object objResult = javaMethod.invoke(objReceiver, objArguments);
-            return javaMethod.getReturnType() == void.class ? null : HotSpotObjectConstant.forBoxedValue(getSignature().getReturnKind(), objResult);
+            return javaMethod.getReturnType() == void.class ? null : HotSpotObjectConstantImpl.forBoxedValue(getSignature().getReturnKind(), objResult);
 
         } catch (IllegalAccessException | InvocationTargetException ex) {
-            throw new IllegalArgumentException(ex);
-        }
-    }
-
-    @Override
-    public JavaConstant newInstance(JavaConstant[] arguments) {
-        assert isConstructor();
-        Constructor<?> javaConstructor = toJavaConstructor();
-        javaConstructor.setAccessible(true);
-
-        Object[] objArguments = new Object[arguments.length];
-        for (int i = 0; i < arguments.length; i++) {
-            objArguments[i] = HotSpotObjectConstant.asBoxedValue(arguments[i]);
-        }
-
-        try {
-            Object objResult = javaConstructor.newInstance(objArguments);
-            assert objResult != null;
-            return HotSpotObjectConstant.forObject(objResult);
-
-        } catch (IllegalAccessException | InvocationTargetException | InstantiationException ex) {
             throw new IllegalArgumentException(ex);
         }
     }
@@ -758,5 +740,16 @@ public final class HotSpotResolvedJavaMethodImpl extends HotSpotMethod implement
             return hasCompiledCodeAtLevel(level);
         }
         return runtime().getCompilerToVM().hasCompiledCodeForOSR(metaspaceMethod, entryBCI, level);
+    }
+
+    private int invocationPluginId;
+
+    public void setInvocationPluginId(int id) {
+        assert invocationPluginId == 0;
+        invocationPluginId = id;
+    }
+
+    public int getInvocationPluginId() {
+        return invocationPluginId;
     }
 }

@@ -220,10 +220,10 @@ public class InvocationPlugins {
      */
     private InvocationPlugins parent;
 
-    private InvocationPlugins(InvocationPlugins parent, MetaAccessProvider metaAccess) {
+    private InvocationPlugins(InvocationPlugins parent, MetaAccessProvider metaAccess, int estimatePluginCount) {
         this.registrationThread = Thread.currentThread();
         this.metaAccess = metaAccess;
-        this.registrations = new ArrayList<>(INITIAL_PLUGIN_CAPACITY);
+        this.registrations = new ArrayList<>(estimatePluginCount);
         InvocationPlugins p = parent;
         // Only adopt a non-empty parent
         while (p != null && p.size() == 0) {
@@ -232,17 +232,21 @@ public class InvocationPlugins {
         this.parent = p;
     }
 
-    private static final int INITIAL_PLUGIN_CAPACITY = 64;
+    private static final int DEFAULT_ESTIMATE_PLUGIN_COUNT = 16;
 
     /**
      * Creates a set of invocation plugins with a non-null {@linkplain #getParent() parent}.
      */
     public InvocationPlugins(InvocationPlugins parent) {
-        this(parent, parent.metaAccess);
+        this(parent, parent.metaAccess, DEFAULT_ESTIMATE_PLUGIN_COUNT);
     }
 
     public InvocationPlugins(MetaAccessProvider metaAccess) {
-        this(null, metaAccess);
+        this(metaAccess, DEFAULT_ESTIMATE_PLUGIN_COUNT);
+    }
+
+    public InvocationPlugins(MetaAccessProvider metaAccess, int estimatePluginCount) {
+        this(null, metaAccess, estimatePluginCount);
     }
 
     /**

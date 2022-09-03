@@ -24,35 +24,37 @@ package com.oracle.graal.truffle.test;
 
 import org.junit.*;
 
-import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.compiler.test.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.runtime.*;
+import com.oracle.graal.graphbuilderconf.*;
 import com.oracle.graal.truffle.substitutions.*;
 import com.oracle.truffle.api.*;
 
 public class ExactMathTest extends GraalCompilerTest {
 
-    private static boolean substitutionsInstalled;
-
-    public ExactMathTest() {
-        if (!substitutionsInstalled) {
-            Replacements replacements = Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend().getProviders().getReplacements();
-            replacements.registerSubstitutions(ExactMathSubstitutions.class);
-            substitutionsInstalled = true;
-        }
+    @Override
+    protected GraphBuilderConfiguration editGraphBuilderConfiguration(GraphBuilderConfiguration conf) {
+        TruffleGraphBuilderPlugins.registerExactMathPlugins(conf.getPlugins().getInvocationPlugins());
+        return super.editGraphBuilderConfiguration(conf);
     }
 
     @Test
     public void testAdd() {
         test("add", 1, 2);
         test("add", Integer.MAX_VALUE, 2);
+        test("add", Integer.MIN_VALUE, -1);
+        test("add", -1, 2);
     }
 
     @Test
     public void testMul() {
         test("mul", 1, 2);
+        test("mul", -1, 2);
+        test("mul", Integer.MIN_VALUE, 1);
+        test("mul", Integer.MIN_VALUE, 2);
+        test("mul", Integer.MIN_VALUE, Integer.MIN_VALUE);
+        test("mul", Integer.MAX_VALUE, 1);
         test("mul", Integer.MAX_VALUE, 2);
+        test("mul", Integer.MAX_VALUE, Integer.MAX_VALUE);
     }
 
     @Test
@@ -72,7 +74,11 @@ public class ExactMathTest extends GraalCompilerTest {
     public void testMulHighUnsigned() {
         test("mulHighUnsigned", 7, 15);
         test("mulHighUnsigned", Integer.MAX_VALUE, 15);
+        test("mulHighUnsigned", 15, Integer.MAX_VALUE);
+        test("mulHighUnsigned", Integer.MAX_VALUE, Integer.MAX_VALUE);
+        test("mulHighUnsigned", 15, Integer.MIN_VALUE);
         test("mulHighUnsigned", Integer.MIN_VALUE, 15);
+        test("mulHighUnsigned", Integer.MIN_VALUE, Integer.MIN_VALUE);
     }
 
     @Test
@@ -86,6 +92,10 @@ public class ExactMathTest extends GraalCompilerTest {
         test("longMul", (long) Integer.MAX_VALUE, 2L);
         test("longMul", (long) Integer.MIN_VALUE, 2L);
         test("longMul", Long.MAX_VALUE, 2L);
+        test("longMul", Long.MAX_VALUE, 1L);
+        test("longMul", Long.MAX_VALUE, Long.MAX_VALUE);
+        test("longMul", Long.MIN_VALUE, Long.MIN_VALUE);
+        test("longMul", Long.MIN_VALUE, Long.MAX_VALUE);
     }
 
     @Test
@@ -98,7 +108,11 @@ public class ExactMathTest extends GraalCompilerTest {
     public void testLongMulHigh() {
         test("longMulHigh", 7L, 15L);
         test("longMulHigh", Long.MAX_VALUE, 15L);
+        test("longMulHigh", 15L, Long.MAX_VALUE);
+        test("longMulHigh", Long.MAX_VALUE, Long.MAX_VALUE);
         test("longMulHigh", Long.MIN_VALUE, 15L);
+        test("longMulHigh", 15L, Long.MIN_VALUE);
+        test("longMulHigh", Long.MIN_VALUE, Long.MIN_VALUE);
     }
 
     @Test

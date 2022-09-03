@@ -27,7 +27,6 @@ import static com.oracle.graal.java.AbstractBytecodeParser.Options.*;
 import static java.lang.String.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.graphbuilderconf.*;
 import com.oracle.graal.graphbuilderconf.GraphBuilderContext.Replacement;
@@ -45,34 +44,23 @@ public final class HotSpotInlineInvokePlugin implements InlineInvokePlugin {
         this.replacements = replacements;
     }
 
-    private static final int MAX_GRAPH_INLINING_DEPTH = 100; // more than enough
-
     public InlineInfo getInlineInfo(GraphBuilderContext b, ResolvedJavaMethod method, ValueNode[] args, JavaType returnType) {
         ResolvedJavaMethod subst = replacements.getMethodSubstitutionMethod(method);
         if (subst != null) {
-            if (b.parsingReplacement() || InlineDuringParsing.getValue()) {
-                // Forced inlining of intrinsics
-                return new InlineInfo(subst, true, true);
-            }
+            // Forced inlining of intrinsics
+            return new InlineInfo(subst, true);
         }
         if (b.parsingReplacement()) {
             assert nodeIntrinsification.getIntrinsic(method) == null && method.getAnnotation(Word.Operation.class) == null && method.getAnnotation(HotSpotOperation.class) == null &&
                             !nodeIntrinsification.isFoldable(method) : format("%s should have been handled by %s", method.format("%H.%n(%p)"), DefaultGenericInvocationPlugin.class.getName());
 
-            assert b.getDepth() < MAX_GRAPH_INLINING_DEPTH : "inlining limit exceeded";
-
-            if (method.getName().startsWith("$jacoco")) {
-                throw new GraalInternalError("Found call to JaCoCo instrumentation method " + method.format("%H.%n(%p)") + ". Placing \"//JaCoCo Exclude\" anywhere in " +
-                                b.getMethod().getDeclaringClass().getSourceFileName() + " should fix this.");
-            }
-
             // Force inlining when parsing replacements
-            return new InlineInfo(method, true, true);
+            return new InlineInfo(method, true);
         } else {
             assert nodeIntrinsification.getIntrinsic(method) == null : String.format("@%s method %s must only be called from within a replacement%n%s", NodeIntrinsic.class.getSimpleName(),
                             method.format("%h.%n"), b);
             if (InlineDuringParsing.getValue() && method.hasBytecodes() && method.getCode().length <= TrivialInliningSize.getValue() && b.getDepth() < InlineDuringParsingMaxDepth.getValue()) {
-                return new InlineInfo(method, false, false);
+                return new InlineInfo(method, false);
             }
         }
         return null;
