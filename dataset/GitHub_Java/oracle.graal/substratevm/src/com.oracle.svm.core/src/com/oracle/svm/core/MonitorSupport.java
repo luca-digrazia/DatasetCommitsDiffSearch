@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -33,7 +31,6 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import org.graalvm.compiler.core.common.SuppressFBWarnings;
 import org.graalvm.compiler.word.BarrieredAccess;
-import org.graalvm.compiler.word.Word;
 import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
 
@@ -99,10 +96,8 @@ public class MonitorSupport {
             return;
         }
 
-        ReentrantLock lockObject = null;
         try {
-            lockObject = ImageSingletons.lookup(MonitorSupport.class).getOrCreateMonitor(obj, true);
-            lockObject.lock();
+            ImageSingletons.lookup(MonitorSupport.class).getOrCreateMonitor(obj, true).lock();
         } catch (Throwable ex) {
             /*
              * The foreign call from snippets to this method does not have an exception edge. So we
@@ -115,7 +110,7 @@ public class MonitorSupport {
              * Finally, it would not be clear whether the monitor is locked or unlocked in case of
              * an exception.
              */
-            throw shouldNotReachHere("monitorEnter", obj, lockObject, ex);
+            VMError.shouldNotReachHere(ex);
         }
     }
 
@@ -133,10 +128,8 @@ public class MonitorSupport {
             return;
         }
 
-        ReentrantLock lockObject = null;
         try {
-            lockObject = ImageSingletons.lookup(MonitorSupport.class).getOrCreateMonitor(obj, true);
-            lockObject.unlock();
+            ImageSingletons.lookup(MonitorSupport.class).getOrCreateMonitor(obj, true).unlock();
         } catch (Throwable ex) {
             /*
              * The foreign call from snippets to this method does not have an exception edge. So we
@@ -146,44 +139,8 @@ public class MonitorSupport {
              * the Java Virtual Machine Specification, but it ensures that we never need to throw an
              * IllegalMonitorStateException.
              */
-            throw shouldNotReachHere("monitorExit", obj, lockObject, ex);
+            VMError.shouldNotReachHere(ex);
         }
-    }
-
-    private static RuntimeException shouldNotReachHere(String label, Object obj, ReentrantLock lockObject, Throwable ex) {
-        StringBuilder msg = new StringBuilder();
-        msg.append("Unexpected exception in MonitorSupport.").append(label);
-
-        if (obj != null) {
-            msg.append("  object: ");
-            appendObject(msg, obj);
-        }
-        if (lockObject != null) {
-            msg.append("  lock: ");
-            appendObject(msg, lockObject);
-
-            Target_java_util_concurrent_locks_ReentrantLock lockObjectTarget = KnownIntrinsics.unsafeCast(lockObject, Target_java_util_concurrent_locks_ReentrantLock.class);
-            Target_java_util_concurrent_locks_AbstractOwnableSynchronizer sync = KnownIntrinsics.unsafeCast(lockObjectTarget.sync, Target_java_util_concurrent_locks_AbstractOwnableSynchronizer.class);
-
-            if (sync != null) {
-                msg.append("  sync: ");
-                appendObject(msg, sync);
-
-                Thread thread = sync.getExclusiveOwnerThread();
-                if (thread == null) {
-                    msg.append("  no exclusiveOwnerThread");
-                } else {
-                    msg.append("  exclusiveOwnerThread: ");
-                    appendObject(msg, thread);
-                }
-            }
-        }
-        msg.append("  raw exception: ");
-        throw VMError.shouldNotReachHere(msg.toString(), ex);
-    }
-
-    private static void appendObject(StringBuilder msg, Object obj) {
-        msg.append(obj.getClass().getName()).append("@").append(Long.toHexString(Word.objectToUntrackedPointer(obj).rawValue()));
     }
 
     /**
