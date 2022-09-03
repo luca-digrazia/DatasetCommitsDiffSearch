@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -59,20 +59,21 @@ public abstract class AbstractBeginNode extends FixedWithNextNode implements LIR
         Node next = from;
         while (next != null) {
             if (next instanceof AbstractBeginNode) {
-                return (AbstractBeginNode) next;
+                AbstractBeginNode begin = (AbstractBeginNode) next;
+                return begin;
             }
             next = next.predecessor();
         }
         return null;
     }
 
-    private void evacuateAnchored(FixedNode evacuateFrom) {
+    private void evacuateGuards(FixedNode evacuateFrom) {
         if (!hasNoUsages()) {
             AbstractBeginNode prevBegin = prevBegin(evacuateFrom);
             assert prevBegin != null;
-            replaceAtUsages(InputType.Anchor, prevBegin);
-            replaceAtUsages(InputType.Guard, prevBegin);
-            assert anchored().isEmpty() : anchored().snapshot();
+            for (Node anchored : anchored().snapshot()) {
+                anchored.replaceFirstInput(this, prevBegin);
+            }
         }
     }
 
@@ -81,7 +82,7 @@ public abstract class AbstractBeginNode extends FixedWithNextNode implements LIR
     }
 
     public void prepareDelete(FixedNode evacuateFrom) {
-        evacuateAnchored(evacuateFrom);
+        evacuateGuards(evacuateFrom);
     }
 
     @Override
