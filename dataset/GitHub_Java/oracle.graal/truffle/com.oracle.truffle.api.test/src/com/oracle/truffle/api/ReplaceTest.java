@@ -26,12 +26,15 @@ import static org.junit.Assert.assertEquals;
 
 import java.util.Iterator;
 
+import org.junit.After;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.api.utilities.InstrumentationTestMode;
 
 /**
  * <h3>Replacing Nodes at Run Time</h3>
@@ -53,6 +56,16 @@ import com.oracle.truffle.api.nodes.RootNode;
  * </p>
  */
 public class ReplaceTest {
+
+    @Before
+    public void before() {
+        InstrumentationTestMode.set(true);
+    }
+
+    @After
+    public void after() {
+        InstrumentationTestMode.set(false);
+    }
 
     @Test
     public void test() {
