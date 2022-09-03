@@ -24,10 +24,8 @@ package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
 
 @NodeInfo(shortName = "==")
 public final class ObjectEqualsNode extends CompareNode implements Virtualizable {
@@ -55,14 +53,14 @@ public final class ObjectEqualsNode extends CompareNode implements Virtualizable
     }
 
     @Override
-    public Node canonical(CanonicalizerTool tool) {
+    public LogicNode canonical(CanonicalizerTool tool) {
         if (x() == y()) {
             return LogicConstantNode.tautology(graph());
         }
 
-        if (ObjectStamp.isObjectAlwaysNull(x())) {
+        if (x().objectStamp().alwaysNull()) {
             return graph().unique(new IsNullNode(y()));
-        } else if (ObjectStamp.isObjectAlwaysNull(y())) {
+        } else if (y().objectStamp().alwaysNull()) {
             return graph().unique(new IsNullNode(x()));
         }
         if (x().stamp().alwaysDistinct(y().stamp())) {
@@ -118,7 +116,7 @@ public final class ObjectEqualsNode extends CompareNode implements Virtualizable
                 // both are virtual without identity: check contents
                 assert stateX.getVirtualObject().entryCount() == 1 && stateY.getVirtualObject().entryCount() == 1;
                 assert stateX.getVirtualObject().type() == stateY.getVirtualObject().type();
-                assert stateX.getVirtualObject().entryKind(0).getStackKind() == Kind.Int || stateX.getVirtualObject().entryKind(0) == Kind.Long;
+                assert stateX.getVirtualObject().entryKind(0) == Kind.Int || stateX.getVirtualObject().entryKind(0) == Kind.Long;
                 IntegerEqualsNode equals = new IntegerEqualsNode(stateX.getEntry(0), stateY.getEntry(0));
                 tool.addNode(equals);
                 tool.replaceWithValue(equals);
