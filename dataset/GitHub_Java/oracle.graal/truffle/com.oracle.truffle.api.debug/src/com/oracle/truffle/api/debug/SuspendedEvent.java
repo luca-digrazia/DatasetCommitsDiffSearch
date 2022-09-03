@@ -30,8 +30,10 @@ import java.util.Collections;
 import java.util.List;
 
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.KillException;
 import com.oracle.truffle.api.frame.FrameInstance;
 import com.oracle.truffle.api.frame.MaterializedFrame;
+import com.oracle.truffle.api.instrument.StandardSyntaxTag;
 import com.oracle.truffle.api.nodes.Node;
 
 /**
@@ -143,7 +145,8 @@ public final class SuspendedEvent {
      * <li>User breakpoints are disabled.</li>
      * <li>Execution will continue until either:
      * <ol>
-     * <li>execution arrives at a node with the tag {@link Debugger#HALT_TAG}, <strong>or:</strong></li>
+     * <li>execution arrives at a node with the tag {@linkplain StandardSyntaxTag#STATEMENT
+     * STATMENT}, <strong>or:</strong></li>
      * <li>execution completes.</li>
      * </ol>
      * <li>StepInto mode persists only through one resumption (i.e. {@code stepIntoCount} steps),
@@ -184,8 +187,8 @@ public final class SuspendedEvent {
      * <ul>
      * <li>Execution will continue until either:
      * <ol>
-     * <li>execution arrives at a node with the tag {@link Debugger#HALT_TAG} when not nested in one
-     * or more function/method calls, <strong>or:</strong></li>
+     * <li>execution arrives at a node with the tag {@linkplain StandardSyntaxTag#STATEMENT
+     * STATEMENT} when not nested in one or more function/method calls, <strong>or:</strong></li>
      * <li>execution arrives at a node to which a breakpoint is attached and when nested in one or
      * more function/method calls, <strong>or:</strong></li>
      * <li>execution completes.</li>
