@@ -24,7 +24,6 @@
  */
 package com.oracle.truffle.tck;
 
-import java.io.Closeable;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
@@ -50,14 +49,14 @@ import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.tck.TruffleRunner.Inject;
 import com.oracle.truffle.tck.TruffleRunner.RunWithPolyglotRule;
 
-final class TruffleTestInvoker<C extends Closeable, T extends CallTarget> extends TVMCI.TestAccessor<C, T> {
+final class TruffleTestInvoker<T extends CallTarget> extends TVMCI.TestAccessor<T> {
 
-    static TruffleTestInvoker<?, ?> create() {
-        TVMCI.Test<?, ?> testTvmci = Truffle.getRuntime().getCapability(TVMCI.Test.class);
+    static TruffleTestInvoker<?> create() {
+        TVMCI.Test<?> testTvmci = Truffle.getRuntime().getCapability(TVMCI.Test.class);
         return new TruffleTestInvoker<>(testTvmci);
     }
 
-    @TruffleLanguage.Registration(id = "truffletestinvoker", name = "truffletestinvoker", version = "")
+    @TruffleLanguage.Registration(id = "truffletestinvoker", name = "truffletestinvoker", mimeType = "application/x-unittest", version = "")
     public static class TruffleTestInvokerLanguage extends TruffleLanguage<Env> {
 
         @Override
@@ -112,7 +111,7 @@ final class TruffleTestInvoker<C extends Closeable, T extends CallTarget> extend
 
     }
 
-    private TruffleTestInvoker(TVMCI.Test<C, T> testTvmci) {
+    private TruffleTestInvoker(TVMCI.Test<T> testTvmci) {
         super(testTvmci);
     }
 
@@ -190,22 +189,20 @@ final class TruffleTestInvoker<C extends Closeable, T extends CallTarget> extend
 
             @Override
             public void evaluate() throws Throwable {
-                try (C testContext = createTestContext(testName)) {
-                    ArrayList<T> callTargets = new ArrayList<>(testNodes.length);
-                    for (RootNode testNode : testNodes) {
-                        callTargets.add(createTestCallTarget(testContext, testNode));
-                    }
+                ArrayList<T> callTargets = new ArrayList<>(testNodes.length);
+                for (RootNode testNode : testNodes) {
+                    callTargets.add(createTestCallTarget(testNode));
+                }
 
-                    Object[] args = callTargets.toArray();
-                    for (int i = 0; i < truffleMethod.warmupIterations; i++) {
-                        truffleMethod.invokeExplosively(test, args);
-                    }
-
-                    for (T callTarget : callTargets) {
-                        finishWarmup(testContext, callTarget);
-                    }
+                Object[] args = callTargets.toArray();
+                for (int i = 0; i < truffleMethod.warmupIterations; i++) {
                     truffleMethod.invokeExplosively(test, args);
                 }
+
+                for (T callTarget : callTargets) {
+                    finishWarmup(callTarget, testName);
+                }
+                truffleMethod.invokeExplosively(test, args);
             }
         };
     }
