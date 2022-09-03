@@ -121,7 +121,7 @@ public final class Debugger {
      * Starts a new {@link DebuggerSession session} provided with a callback that gets notified
      * whenever the execution is suspended.
      *
-     * @param callback the callback to notify
+     * @param callback the callback to notifiy
      * @see DebuggerSession
      * @see SuspendedEvent
      * @since 0.17
@@ -240,7 +240,7 @@ public final class Debugger {
     }
 
     private Breakpoint setLineBreakpointImpl(int ignoreCount, Object key, int line, boolean oneShot) throws IOException {
-        Breakpoint breakpoint = breakpointPerLocation.get(new BreakpointLocation(key, line, -1));
+        Breakpoint breakpoint = breakpointPerLocation.get(new BreakpointLocation(key, line));
         if (breakpoint != null) {
             if (ignoreCount == breakpoint.getIgnoreCount()) {
                 throw new IOException("Breakpoint already set for " + key + " line: " + line);
@@ -357,7 +357,7 @@ public final class Debugger {
          * embeddable into the current AST.
          */
         @SuppressWarnings("rawtypes")
-        protected CallTarget parse(Source code, Node context, String... argumentNames) {
+        protected CallTarget parse(Source code, Node context, String... argumentNames) throws IOException {
             RootNode rootNode = context.getRootNode();
             Class<? extends TruffleLanguage> languageClass = nodes().findLanguage(rootNode);
             if (languageClass == null) {
@@ -387,7 +387,7 @@ public final class Debugger {
          * TODO I initially moved this to TruffleInstrument.Env but decided against as a new API for
          * inline parsing might replace it.
          */
-        protected Object evalInContext(Object sourceVM, Node node, MaterializedFrame frame, String code) {
+        protected Object evalInContext(Object sourceVM, Node node, MaterializedFrame frame, String code) throws IOException {
             return languageSupport().evalInContext(sourceVM, code, node, frame);
         }
 
