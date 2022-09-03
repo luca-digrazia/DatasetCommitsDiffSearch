@@ -199,6 +199,9 @@ public class GraalCompiler {
         if (GraalOptions.OptCanonicalizer) {
             new CanonicalizerPhase(target, runtime, assumptions).apply(graph);
         }
+        if (GraalOptions.OptCanonicalizer) {
+            new CanonicalizerPhase(target, runtime, assumptions).apply(graph);
+        }
 
         if (GraalOptions.OptLoopTransform) {
             new LoopTransformLowPhase().apply(graph);
