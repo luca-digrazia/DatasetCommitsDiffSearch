@@ -104,11 +104,11 @@ public class HSAILControlFlow {
          * routines with keys of type Long or Object. Currently we only support the
          * IntegerSwitchNode so we throw an exception if the key isn't of type int.
          * 
-         * @param crb the CompilationResultBuilder
+         * @param tasm the TargetMethodAssembler
          * @param masm the HSAIL assembler
          */
         @Override
-        public void emitCode(CompilationResultBuilder crb, HSAILAssembler masm) {
+        public void emitCode(TargetMethodAssembler tasm, HSAILAssembler masm) {
             if (key.getKind() == Kind.Int) {
                 for (int i = 0; i < keyConstants.length; i++) {
                     // Generate cascading compare and branches for each case.
@@ -136,8 +136,10 @@ public class HSAILControlFlow {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, HSAILAssembler masm) {
-            crb.frameContext.leave(crb);
+        public void emitCode(TargetMethodAssembler tasm, HSAILAssembler masm) {
+            if (tasm.frameContext != null) {
+                tasm.frameContext.leave(tasm);
+            }
             masm.exit();
         }
     }
@@ -153,7 +155,7 @@ public class HSAILControlFlow {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, HSAILAssembler masm) {
+        public void emitCode(TargetMethodAssembler tasm, HSAILAssembler masm) {
             masm.emitComment("//ForeignCall to " + callName + " would have gone here");
         }
     }
@@ -211,8 +213,8 @@ public class HSAILControlFlow {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, HSAILAssembler masm) {
-            HSAILCompare.emit(crb, masm, condition, x, y, z, unordered);
+        public void emitCode(TargetMethodAssembler tasm, HSAILAssembler masm) {
+            HSAILCompare.emit(tasm, masm, condition, x, y, z, unordered);
             masm.cbr(masm.nameOf(destination.label()));
         }
     }
@@ -232,8 +234,8 @@ public class HSAILControlFlow {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, HSAILAssembler masm) {
-            HSAILCompare.emit(crb, masm, condition, x, y, z, unordered);
+        public void emitCode(TargetMethodAssembler tasm, HSAILAssembler masm) {
+            HSAILCompare.emit(tasm, masm, condition, x, y, z, unordered);
             masm.cbr(masm.nameOf(destination.label()));
         }
     }
@@ -253,8 +255,8 @@ public class HSAILControlFlow {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, HSAILAssembler masm) {
-            HSAILCompare.emit(crb, masm, condition, x, y, z, unordered);
+        public void emitCode(TargetMethodAssembler tasm, HSAILAssembler masm) {
+            HSAILCompare.emit(tasm, masm, condition, x, y, z, unordered);
             masm.cbr(masm.nameOf(destination.label()));
         }
     }
@@ -272,7 +274,7 @@ public class HSAILControlFlow {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, HSAILAssembler masm) {
+        public void emitCode(TargetMethodAssembler tasm, HSAILAssembler masm) {
             masm.cbr(masm.nameOf(destination.label()));
         }
 
@@ -295,7 +297,7 @@ public class HSAILControlFlow {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, HSAILAssembler masm) {
+        public void emitCode(TargetMethodAssembler tasm, HSAILAssembler masm) {
             masm.cbr(masm.nameOf(destination.label()));
         }
     }
@@ -321,9 +323,9 @@ public class HSAILControlFlow {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, HSAILAssembler masm) {
-            HSAILCompare.emit(crb, masm, condition, left, right, right, false);
-            cmove(crb, masm, result, false, trueValue, falseValue);
+        public void emitCode(TargetMethodAssembler tasm, HSAILAssembler masm) {
+            HSAILCompare.emit(tasm, masm, condition, left, right, right, false);
+            cmove(tasm, masm, result, false, trueValue, falseValue);
         }
     }
 
@@ -337,14 +339,14 @@ public class HSAILControlFlow {
         }
 
         @Override
-        public void emitCode(CompilationResultBuilder crb, HSAILAssembler masm) {
-            HSAILCompare.emit(crb, masm, condition, left, right, right, unorderedIsTrue);
-            cmove(crb, masm, result, false, trueValue, falseValue);
+        public void emitCode(TargetMethodAssembler tasm, HSAILAssembler masm) {
+            HSAILCompare.emit(tasm, masm, condition, left, right, right, unorderedIsTrue);
+            cmove(tasm, masm, result, false, trueValue, falseValue);
         }
     }
 
     @SuppressWarnings("unused")
-    private static void cmove(CompilationResultBuilder crb, HSAILAssembler masm, Value result, boolean unorderedIsTrue, Value trueValue, Value falseValue) {
+    private static void cmove(TargetMethodAssembler tasm, HSAILAssembler masm, Value result, boolean unorderedIsTrue, Value trueValue, Value falseValue) {
         // Check that we don't overwrite an input operand before it is used.
         assert (result.getKind() == trueValue.getKind() && result.getKind() == falseValue.getKind());
         int width;
