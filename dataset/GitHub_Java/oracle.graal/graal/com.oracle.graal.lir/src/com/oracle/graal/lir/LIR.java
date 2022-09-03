@@ -144,10 +144,13 @@ public class LIR {
      */
     public static LabelRef getExceptionEdge(LIRInstruction op) {
         final LabelRef[] exceptionEdge = {null};
-        op.forEachState(state -> {
-            if (state.exceptionEdge != null) {
-                assert exceptionEdge[0] == null;
-                exceptionEdge[0] = state.exceptionEdge;
+        op.forEachState(new StateProcedure() {
+            @Override
+            public void doState(LIRFrameState state) {
+                if (state.exceptionEdge != null) {
+                    assert exceptionEdge[0] == null;
+                    exceptionEdge[0] = state.exceptionEdge;
+                }
             }
         });
         return exceptionEdge[0];
