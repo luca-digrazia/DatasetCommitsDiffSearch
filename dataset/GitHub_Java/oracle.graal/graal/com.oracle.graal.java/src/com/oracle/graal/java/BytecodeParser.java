@@ -267,6 +267,7 @@ import jdk.vm.ci.code.BytecodePosition;
 import jdk.vm.ci.code.CodeUtil;
 import jdk.vm.ci.code.InfopointReason;
 import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.compiler.Compiler;
 import jdk.vm.ci.meta.ConstantPool;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.DeoptimizationAction;
@@ -287,7 +288,6 @@ import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.meta.TriState;
-import jdk.vm.ci.runtime.JVMCICompiler;
 
 import com.oracle.graal.bytecode.BytecodeLookupSwitch;
 import com.oracle.graal.bytecode.BytecodeStream;
@@ -635,10 +635,6 @@ public class BytecodeParser implements GraphBuilderContext {
             mergeExplosions = false;
             mergeExplosionsMap = null;
         }
-    }
-
-    protected GraphBuilderPhase.Instance getGraphBuilderInstance() {
-        return graphBuilderInstance;
     }
 
     public ValueNode getReturnValue() {
@@ -1224,6 +1220,16 @@ public class BytecodeParser implements GraphBuilderContext {
         assert bci == BytecodeFrame.BEFORE_BCI || bci == bci() : "invalid bci";
         Debug.log("Creating exception dispatch edges at %d, exception object=%s, exception seen=%s", bci, exceptionObject, (profilingInfo == null ? "" : profilingInfo.getExceptionSeen(bci)));
 
+        BciBlock dispatchBlock = currentBlock.exceptionDispatchBlock();
+        /*
+         * The exception dispatch block is always for the last bytecode of a block, so if we are not
+         * at the endBci yet, there is no exception handler for this bci and we can unwind
+         * immediately.
+         */
+        if (bci != currentBlock.endBci || dispatchBlock == null) {
+            dispatchBlock = blockMap.getUnwindBlock();
+        }
+
         FrameStateBuilder dispatchState = frameState.copy();
         dispatchState.clearStack();
 
@@ -1240,26 +1246,10 @@ public class BytecodeParser implements GraphBuilderContext {
             dispatchBegin.setStateAfter(dispatchState.create(bci, dispatchBegin));
         }
         this.controlFlowSplit = true;
-        FixedWithNextNode finishedDispatch = finishInstruction(dispatchBegin, dispatchState);
-
-        createHandleExceptionTarget(finishedDispatch, bci, dispatchState);
-
-        return dispatchBegin;
-    }
-
-    protected void createHandleExceptionTarget(FixedWithNextNode finishedDispatch, int bci, FrameStateBuilder dispatchState) {
-        BciBlock dispatchBlock = currentBlock.exceptionDispatchBlock();
-        /*
-         * The exception dispatch block is always for the last bytecode of a block, so if we are not
-         * at the endBci yet, there is no exception handler for this bci and we can unwind
-         * immediately.
-         */
-        if (bci != currentBlock.endBci || dispatchBlock == null) {
-            dispatchBlock = blockMap.getUnwindBlock();
-        }
-
         FixedNode target = createTarget(dispatchBlock, dispatchState);
+        FixedWithNextNode finishedDispatch = finishInstruction(dispatchBegin, dispatchState);
         finishedDispatch.setNext(target);
+        return dispatchBegin;
     }
 
     protected ValueNode genLoadIndexed(ValueNode array, ValueNode index, JavaKind kind) {
@@ -1863,7 +1853,7 @@ public class BytecodeParser implements GraphBuilderContext {
     protected void parseAndInlineCallee(ResolvedJavaMethod targetMethod, ValueNode[] args, IntrinsicContext calleeIntrinsicContext) {
         try (IntrinsicScope s = calleeIntrinsicContext != null && !parsingIntrinsic() ? new IntrinsicScope(this, targetMethod.getSignature().toParameterKinds(!targetMethod.isStatic()), args) : null) {
 
-            BytecodeParser parser = graphBuilderInstance.createBytecodeParser(graph, this, targetMethod, JVMCICompiler.INVOCATION_ENTRY_BCI, calleeIntrinsicContext);
+            BytecodeParser parser = graphBuilderInstance.createBytecodeParser(graph, this, targetMethod, Compiler.INVOCATION_ENTRY_BCI, calleeIntrinsicContext);
             FrameStateBuilder startFrameState = new FrameStateBuilder(parser, targetMethod, graph);
             if (!targetMethod.isStatic()) {
                 args[0] = nullCheckedValue(args[0]);
