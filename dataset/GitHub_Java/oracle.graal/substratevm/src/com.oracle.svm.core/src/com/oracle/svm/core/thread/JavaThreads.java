@@ -48,7 +48,6 @@ import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
-import org.graalvm.nativeimage.c.function.CEntryPointContext;
 
 import com.oracle.svm.core.MonitorSupport;
 import com.oracle.svm.core.SubstrateOptions;
@@ -240,7 +239,7 @@ public abstract class JavaThreads {
      */
     public boolean assignJavaThread(String name, ThreadGroup group, boolean asDaemon) {
         final Thread thread = JavaThreads.fromTarget(new Target_java_lang_Thread(name, group, asDaemon));
-        return assignJavaThread(CEntryPointContext.getCurrentIsolateThread(), thread, true);
+        return assignJavaThread(KnownIntrinsics.currentVMThread(), thread, true);
     }
 
     /**
@@ -254,7 +253,7 @@ public abstract class JavaThreads {
      * @return true if successful; false if a {@link Thread} object has already been assigned.
      */
     public boolean assignJavaThread(Thread thread, boolean manuallyStarted) {
-        return assignJavaThread(CEntryPointContext.getCurrentIsolateThread(), thread, manuallyStarted);
+        return assignJavaThread(KnownIntrinsics.currentVMThread(), thread, manuallyStarted);
     }
 
     @NeverInline("Truffle compilation must not inline this method")
@@ -266,7 +265,7 @@ public abstract class JavaThreads {
         toTarget(group).addUnstarted();
         toTarget(group).add(thread);
         if (!thread.isDaemon() && manuallyStarted) {
-            assert isolateThread.equal(CEntryPointContext.getCurrentIsolateThread()) : "Non-daemon threads must call this method themselves, or they can detach incompletely in a race";
+            assert isolateThread.equal(KnownIntrinsics.currentVMThread()) : "Non-daemon threads must call this method themselves, or they can detach incompletely in a race";
             singleton().nonDaemonThreads.incrementAndGet();
         }
         return true;
@@ -456,7 +455,7 @@ public abstract class JavaThreads {
 
     private static StackTraceElement[] getStackTrace(IsolateThread thread) {
         StackTraceBuilder stackTraceBuilder = new StackTraceBuilder();
-        if (thread == CEntryPointContext.getCurrentIsolateThread()) {
+        if (thread == KnownIntrinsics.currentVMThread()) {
             /*
              * Internal frames from the VMOperation handling show up in the stack traces, but we are
              * OK with that.
@@ -633,7 +632,7 @@ final class Target_java_lang_Thread {
         if (!SubstrateOptions.MultiThreaded.getValue()) {
             return JavaThreads.singleton().singleThread;
         }
-        IsolateThread vmThread = CEntryPointContext.getCurrentIsolateThread();
+        IsolateThread vmThread = KnownIntrinsics.currentVMThread();
         return JavaThreads.singleton().createIfNotExisting(vmThread);
     }
 
@@ -1024,7 +1023,7 @@ class ThreadListOperation extends VMOperation {
     public void operate() {
         final Log trace = Log.noopLog().string("[ThreadListOperation.operate:")
                         .string("  queuingVMThread: ").hex(getQueuingVMThread())
-                        .string("  currentVMThread: ").hex(CEntryPointContext.getCurrentIsolateThread())
+                        .string("  currentVMThread: ").hex(KnownIntrinsics.currentVMThread())
                         .flush();
         list.clear();
         for (IsolateThread isolateThread = VMThreads.firstThread(); VMThreads.isNonNullThread(isolateThread); isolateThread = VMThreads.nextThread(isolateThread)) {

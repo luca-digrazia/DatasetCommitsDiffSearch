@@ -79,6 +79,7 @@ import com.oracle.graal.pointsto.meta.AnalysisField;
 import com.oracle.graal.pointsto.meta.AnalysisMethod;
 import com.oracle.graal.pointsto.meta.HostedProviders;
 import com.oracle.svm.core.annotate.Alias;
+import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.annotate.Delete;
 import com.oracle.svm.core.annotate.NeverInline;
 import com.oracle.svm.core.annotate.RecomputeFieldValue;
@@ -124,6 +125,7 @@ import jdk.vm.ci.meta.ResolvedJavaType;
 
 // Checkstyle: allow reflection
 
+@AutomaticFeature
 public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeature {
 
     /**
@@ -141,13 +143,27 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
     public static final class HasTruffleOnClassPath implements BooleanSupplier {
         @Override
         public boolean getAsBoolean() {
-            return ImageSingletons.contains(TruffleFeature.class);
+            return hasTruffleOnBootClassPath();
         }
+    }
+
+    private static final String TRUFFLE_LOOKUP_CLASSNAME = "com.oracle.truffle.api.Truffle";
+
+    public static boolean hasTruffleOnBootClassPath() {
+        Class<?> truffleOnBootClassPath = null;
+        try {
+            truffleOnBootClassPath = new ClassLoader(null) {
+                /* Classloader for bootclasspath-only lookup */
+            }.loadClass(TRUFFLE_LOOKUP_CLASSNAME);
+        } catch (ClassNotFoundException e) {
+            /* To be expected when probing */
+        }
+        return truffleOnBootClassPath != null;
     }
 
     @Override
     public boolean isInConfiguration(IsInConfigurationAccess access) {
-        return NativeImageOptions.TruffleFeature.getValue();
+        return NativeImageOptions.TruffleFeature.getValue() && hasTruffleOnBootClassPath();
     }
 
     public static class Options {

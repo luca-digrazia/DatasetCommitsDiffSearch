@@ -31,6 +31,7 @@ import java.lang.reflect.Modifier;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -102,9 +103,9 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
     }
 
     private static URL[] verifyClassPathAndConvertToURLs(String[] classpath) {
-        return new HashSet<>(Arrays.asList(classpath)).stream().flatMap(ImageClassLoader::toClassPathEntries).map(v -> {
+        return new HashSet<>(Arrays.asList(classpath)).stream().map(v -> {
             try {
-                return v.toAbsolutePath().toUri().toURL();
+                return Paths.get(v).toAbsolutePath().toUri().toURL();
             } catch (MalformedURLException e) {
                 throw UserError.abort("Invalid classpath element '" + v + "'. Make sure that all paths provided with '" + IMAGE_CLASSPATH_PREFIX + "' are correct.");
             }

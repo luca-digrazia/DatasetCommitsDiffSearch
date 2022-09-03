@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -39,7 +37,6 @@ import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.EconomicSet;
 import org.graalvm.compiler.options.OptionDescriptor;
 import org.graalvm.compiler.options.OptionDescriptors;
-import org.graalvm.compiler.options.OptionDescriptorsMap;
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.nativeimage.Platforms;
@@ -59,28 +56,24 @@ public class HostedOptionParser implements HostedOptionProvider {
     private SortedMap<String, OptionDescriptor> allRuntimeOptions = new TreeMap<>();
 
     public HostedOptionParser(ImageClassLoader imageClassLoader) {
-        collectOptions(imageClassLoader.findSubclasses(OptionDescriptors.class, true), allHostedOptions, allRuntimeOptions);
-    }
-
-    public static void collectOptions(List<Class<? extends OptionDescriptors>> optionsClasses, SortedMap<String, OptionDescriptor> allHostedOptions,
-                    SortedMap<String, OptionDescriptor> allRuntimeOptions) {
+        List<Class<? extends OptionDescriptors>> optionsClasses = imageClassLoader.findSubclasses(OptionDescriptors.class);
         for (Class<? extends OptionDescriptors> optionsClass : optionsClasses) {
-            if (Modifier.isAbstract(optionsClass.getModifiers()) || OptionDescriptorsMap.class.isAssignableFrom(optionsClass)) {
+            if (Modifier.isAbstract(optionsClass.getModifiers())) {
                 continue;
             }
 
             OptionDescriptors descriptors;
             try {
-                descriptors = optionsClass.getDeclaredConstructor().newInstance();
-            } catch (Exception ex) {
+                descriptors = optionsClass.newInstance();
+            } catch (InstantiationException | IllegalAccessException ex) {
                 throw shouldNotReachHere(ex);
             }
             for (OptionDescriptor descriptor : descriptors) {
                 String name = descriptor.getName();
 
                 if (descriptor.getDeclaringClass().getAnnotation(Platforms.class) != null) {
-                    throw UserError.abort("Options must not be declared in a class that has a @%s annotation: option %s declared in %s",
-                                    Platforms.class.getSimpleName(), name, descriptor.getDeclaringClass().getTypeName());
+                    throw UserError.abort("Options must not be declared in a class that has a @" + Platforms.class.getSimpleName() + " annotation: option " + name + " declared in " +
+                                    descriptor.getDeclaringClass().getTypeName());
                 }
 
                 if (!(descriptor.getOptionKey() instanceof RuntimeOptionKey)) {
@@ -96,6 +89,7 @@ public class HostedOptionParser implements HostedOptionProvider {
                     }
                 }
             }
+
         }
     }
 
