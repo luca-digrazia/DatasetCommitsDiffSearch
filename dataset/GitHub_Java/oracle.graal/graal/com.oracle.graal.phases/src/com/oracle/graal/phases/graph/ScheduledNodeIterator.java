@@ -60,7 +60,6 @@ public abstract class ScheduledNodeIterator {
             }
             processNode(node);
         }
-        assert reconnect == null;
     }
 
     protected void insert(FixedNode start, FixedWithNextNode end) {
