@@ -22,14 +22,11 @@
  */
 package com.oracle.graal.debug.internal;
 
-import static com.oracle.graal.debug.GraalDebugConfig.Options.DebugValueFile;
 import static com.oracle.graal.debug.GraalDebugConfig.Options.DebugValueHumanReadable;
 import static com.oracle.graal.debug.GraalDebugConfig.Options.DebugValueSummary;
 import static com.oracle.graal.debug.GraalDebugConfig.Options.DebugValueThreadFilter;
 import static com.oracle.graal.debug.GraalDebugConfig.Options.SuppressZeroDebugValues;
 
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -38,7 +35,6 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import com.oracle.graal.debug.GraalError;
-import com.oracle.graal.debug.LogStream;
 import com.oracle.graal.debug.TTY;
 import com.oracle.graal.debug.internal.method.MethodMetricsImpl;
 import com.oracle.graal.debug.internal.method.MethodMetricsPrinter;
@@ -82,19 +78,16 @@ public class DebugValuesPrinter {
                     }
                 }
                 switch (summary) {
-                    case "Name": {
-                        LogStream log = getLogStream();
-                        printSummary(log, topLevelMaps, sortedValues);
+                    case "Name":
+                        printSummary(topLevelMaps, sortedValues);
                         break;
-                    }
                     case "Partial": {
                         DebugValueMap globalMap = new DebugValueMap("Global");
                         for (DebugValueMap map : topLevelMaps) {
                             flattenChildren(map, globalMap);
                         }
                         globalMap.normalize();
-                        LogStream log = getLogStream();
-                        printMap(log, new DebugValueScope(null, globalMap), sortedValues);
+                        printMap(new DebugValueScope(null, globalMap), sortedValues);
                         break;
                     }
                     case "Complete": {
@@ -104,8 +97,7 @@ public class DebugValuesPrinter {
                         }
                         globalMap.group();
                         globalMap.normalize();
-                        LogStream log = getLogStream();
-                        printMap(log, new DebugValueScope(null, globalMap), sortedValues);
+                        printMap(new DebugValueScope(null, globalMap), sortedValues);
                         break;
                     }
                     case "Thread":
@@ -113,8 +105,7 @@ public class DebugValuesPrinter {
                             TTY.println("Showing the results for thread: " + map.getName());
                             map.group();
                             map.normalize();
-                            LogStream log = getLogStream(map.getName().replace(' ', '_'));
-                            printMap(log, new DebugValueScope(null, map), sortedValues);
+                            printMap(new DebugValueScope(null, map), sortedValues);
                         }
                         break;
                     default:
@@ -136,30 +127,6 @@ public class DebugValuesPrinter {
         TTY.println("</DebugValues>");
     }
 
-    private static LogStream getLogStream() {
-        return getLogStream(null);
-    }
-
-    private static LogStream getLogStream(String prefix) {
-        String debugValueFile = DebugValueFile.getValue();
-        if (debugValueFile != null) {
-            try {
-                final String fileName;
-                if (prefix != null) {
-                    fileName = prefix + '-' + debugValueFile;
-                } else {
-                    fileName = debugValueFile;
-                }
-                LogStream logStream = new LogStream(new FileOutputStream(fileName));
-                TTY.println("Writing debug values to '%s'", fileName);
-                return logStream;
-            } catch (FileNotFoundException e) {
-                TTY.println("Warning: Could not open debug value log file: %s (defaulting to TTY)", e.getMessage());
-            }
-        }
-        return TTY.out();
-    }
-
     private void flattenChildren(DebugValueMap map, DebugValueMap globalMap) {
         globalMap.addChild(map);
         for (DebugValueMap child : map.getChildren()) {
@@ -168,7 +135,7 @@ public class DebugValuesPrinter {
         map.clearChildren();
     }
 
-    private void printSummary(LogStream log, List<DebugValueMap> topLevelMaps, List<DebugValue> debugValues) {
+    private void printSummary(List<DebugValueMap> topLevelMaps, List<DebugValue> debugValues) {
         DebugValueMap result = new DebugValueMap("Summary");
         for (int i = debugValues.size() - 1; i >= 0; i--) {
             DebugValue debugValue = debugValues.get(i);
@@ -176,7 +143,7 @@ public class DebugValuesPrinter {
             long total = collectTotal(topLevelMaps, index);
             result.setCurrentValue(index, total);
         }
-        printMap(log, new DebugValueScope(null, result), debugValues);
+        printMap(new DebugValueScope(null, result), debugValues);
     }
 
     private long collectTotal(List<DebugValueMap> maps, int index) {
@@ -206,14 +173,14 @@ public class DebugValuesPrinter {
             this.level = parent == null ? 0 : parent.level + 1;
         }
 
-        public void print(LogStream log) {
+        public void print() {
             if (!printed) {
                 printed = true;
                 if (parent != null) {
-                    parent.print(log);
+                    parent.print();
                 }
-                printIndent(log, level);
-                log.printf("%s%n", map.getName());
+                printIndent(level);
+                TTY.println("%s", map.getName());
             }
         }
 
@@ -228,49 +195,49 @@ public class DebugValuesPrinter {
 
     }
 
-    private void printMap(LogStream log, DebugValueScope scope, List<DebugValue> debugValues) {
+    private void printMap(DebugValueScope scope, List<DebugValue> debugValues) {
         if (DebugValueHumanReadable.getValue()) {
-            printMapHumanReadable(log, scope, debugValues);
+            printMapHumanReadable(scope, debugValues);
         } else {
-            printMapComputerReadable(log, scope, debugValues);
+            printMapComputerReadable(scope, debugValues);
         }
     }
 
-    private void printMapComputerReadable(LogStream log, DebugValueScope scope, List<DebugValue> debugValues) {
+    private void printMapComputerReadable(DebugValueScope scope, List<DebugValue> debugValues) {
 
         for (DebugValue value : debugValues) {
             long l = scope.map.getCurrentValue(value.getIndex());
             if (l != 0 || !SuppressZeroDebugValues.getValue()) {
-                log.printf(COMPUTER_READABLE_FMT + "%n", scope.toRawString(), value.getName(), value.toRawString(l), value.rawUnit());
+                TTY.println(COMPUTER_READABLE_FMT, scope.toRawString(), value.getName(), value.toRawString(l), value.rawUnit());
             }
         }
 
         for (DebugValueMap child : scope.map.getChildren()) {
-            printMapComputerReadable(log, new DebugValueScope(scope, child), debugValues);
+            printMapComputerReadable(new DebugValueScope(scope, child), debugValues);
         }
     }
 
-    private void printMapHumanReadable(LogStream log, DebugValueScope scope, List<DebugValue> debugValues) {
+    private void printMapHumanReadable(DebugValueScope scope, List<DebugValue> debugValues) {
 
         for (DebugValue value : debugValues) {
             long l = scope.map.getCurrentValue(value.getIndex());
             if (l != 0 || !SuppressZeroDebugValues.getValue()) {
-                scope.print(log);
-                printIndent(log, scope.level + 1);
-                log.println(value.getName() + "=" + value.toString(l));
+                scope.print();
+                printIndent(scope.level + 1);
+                TTY.println(value.getName() + "=" + value.toString(l));
             }
         }
 
         for (DebugValueMap child : scope.map.getChildren()) {
-            printMap(log, new DebugValueScope(scope, child), debugValues);
+            printMap(new DebugValueScope(scope, child), debugValues);
         }
     }
 
-    private static void printIndent(LogStream log, int level) {
+    private static void printIndent(int level) {
         for (int i = 0; i < level; ++i) {
-            log.print("    ");
+            TTY.print("    ");
         }
-        log.print("|-> ");
+        TTY.print("|-> ");
     }
 
     public void clearDebugValues() {
