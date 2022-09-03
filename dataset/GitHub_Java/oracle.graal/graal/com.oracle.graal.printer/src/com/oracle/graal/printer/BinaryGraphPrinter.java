@@ -140,7 +140,7 @@ public class BinaryGraphPrinter implements GraphPrinter {
             }
         }
         ControlFlowGraph cfg = schedule == null ? null : schedule.getCFG();
-        BlockMap<List<ValueNode>> blockToNodes = schedule == null ? null : schedule.getBlockToNodesMap();
+        BlockMap<List<ScheduledNode>> blockToNodes = schedule == null ? null : schedule.getBlockToNodesMap();
         List<Block> blocks = cfg == null ? null : cfg.getBlocks();
         writeNodes(graph);
         writeBlocks(blocks, blockToNodes);
@@ -294,7 +294,7 @@ public class BinaryGraphPrinter implements GraphPrinter {
             writeString(type.toJavaName());
             writeByte(KLASS);
         } else if (object instanceof NodeClass) {
-            NodeClass<?> nodeClass = (NodeClass<?>) object;
+            NodeClass nodeClass = (NodeClass) object;
             writeByte(POOL_NODE_CLASS);
             writeString(nodeClass.getJavaClass().getSimpleName());
             writeString(nodeClass.getNameTemplate());
@@ -330,7 +330,7 @@ public class BinaryGraphPrinter implements GraphPrinter {
         }
     }
 
-    private void writeEdgesInfo(NodeClass<?> nodeClass, Edges.Type type) throws IOException {
+    private void writeEdgesInfo(NodeClass nodeClass, Edges.Type type) throws IOException {
         Edges edges = nodeClass.getEdges(type);
         writeShort((char) edges.getCount());
         for (int i = 0; i < edges.getCount(); i++) {
@@ -412,7 +412,7 @@ public class BinaryGraphPrinter implements GraphPrinter {
         writeInt(graph.getNodeCount());
 
         for (Node node : graph.getNodes()) {
-            NodeClass<?> nodeClass = node.getNodeClass();
+            NodeClass nodeClass = node.getNodeClass();
             node.getDebugProperties(props);
             if (probabilities != null && node instanceof FixedNode) {
                 try {
@@ -439,14 +439,13 @@ public class BinaryGraphPrinter implements GraphPrinter {
     }
 
     private void writeEdges(Node node, Edges.Type type) throws IOException {
-        NodeClass<?> nodeClass = node.getNodeClass();
+        NodeClass nodeClass = node.getNodeClass();
         Edges edges = nodeClass.getEdges(type);
-        final long[] curOffsets = edges.getOffsets();
         for (int i = 0; i < edges.getDirectCount(); i++) {
-            writeNodeRef(Edges.getNode(node, curOffsets, i));
+            writeNodeRef(edges.getNode(node, i));
         }
         for (int i = edges.getDirectCount(); i < edges.getCount(); i++) {
-            NodeList<Node> list = Edges.getNodeList(node, curOffsets, i);
+            NodeList<Node> list = edges.getNodeList(node, i);
             if (list == null) {
                 writeShort((char) 0);
             } else {
@@ -468,11 +467,11 @@ public class BinaryGraphPrinter implements GraphPrinter {
         }
     }
 
-    private void writeBlocks(List<Block> blocks, BlockMap<List<ValueNode>> blockToNodes) throws IOException {
+    private void writeBlocks(List<Block> blocks, BlockMap<List<ScheduledNode>> blockToNodes) throws IOException {
         if (blocks != null) {
             writeInt(blocks.size());
             for (Block block : blocks) {
-                List<ValueNode> nodes = blockToNodes.get(block);
+                List<ScheduledNode> nodes = blockToNodes.get(block);
                 writeInt(block.getId());
                 writeInt(nodes.size());
                 for (Node node : nodes) {
