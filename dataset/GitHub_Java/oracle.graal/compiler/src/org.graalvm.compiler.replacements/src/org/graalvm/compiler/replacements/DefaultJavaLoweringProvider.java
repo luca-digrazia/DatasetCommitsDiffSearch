@@ -37,6 +37,7 @@ import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.List;
 
+import org.graalvm.api.word.LocationIdentity;
 import org.graalvm.compiler.api.directives.GraalDirectives;
 import org.graalvm.compiler.api.replacements.Snippet;
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
@@ -46,7 +47,6 @@ import org.graalvm.compiler.core.common.type.IntegerStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.core.common.type.TypeReference;
-import org.graalvm.compiler.debug.DebugHandlersFactory;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.nodeinfo.InputType;
@@ -59,10 +59,8 @@ import org.graalvm.compiler.nodes.PiNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.calc.AddNode;
-import org.graalvm.compiler.nodes.calc.ConditionalNode;
 import org.graalvm.compiler.nodes.calc.IntegerBelowNode;
 import org.graalvm.compiler.nodes.calc.IntegerConvertNode;
-import org.graalvm.compiler.nodes.calc.IntegerEqualsNode;
 import org.graalvm.compiler.nodes.calc.IsNullNode;
 import org.graalvm.compiler.nodes.calc.LeftShiftNode;
 import org.graalvm.compiler.nodes.calc.NarrowNode;
@@ -127,7 +125,6 @@ import org.graalvm.compiler.replacements.nodes.BinaryMathIntrinsicNode;
 import org.graalvm.compiler.replacements.nodes.BinaryMathIntrinsicNode.BinaryOperation;
 import org.graalvm.compiler.replacements.nodes.UnaryMathIntrinsicNode;
 import org.graalvm.compiler.replacements.nodes.UnaryMathIntrinsicNode.UnaryOperation;
-import org.graalvm.word.LocationIdentity;
 
 import jdk.vm.ci.code.CodeUtil;
 import jdk.vm.ci.code.MemoryBarriers;
@@ -160,10 +157,10 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         this.target = target;
     }
 
-    public void initialize(OptionValues options, Iterable<DebugHandlersFactory> factories, SnippetCounter.Group.Factory factory, Providers providers, SnippetReflectionProvider snippetReflection) {
-        boxingSnippets = new BoxingSnippets.Templates(options, factories, factory, providers, snippetReflection, target);
-        indexOfSnippets = new ConstantStringIndexOfSnippets.Templates(options, factories, providers, snippetReflection, target);
-        providers.getReplacements().registerSnippetTemplateCache(new SnippetCounterNode.SnippetCounterSnippets.Templates(options, factories, providers, snippetReflection, target));
+    public void initialize(OptionValues options, SnippetCounter.Group.Factory factory, Providers providers, SnippetReflectionProvider snippetReflection) {
+        boxingSnippets = new BoxingSnippets.Templates(options, factory, providers, snippetReflection, target);
+        indexOfSnippets = new ConstantStringIndexOfSnippets.Templates(options, providers, snippetReflection, target);
+        providers.getReplacements().registerSnippetTemplateCache(new SnippetCounterNode.SnippetCounterSnippets.Templates(options, providers, snippetReflection, target));
     }
 
     public final TargetDescription getTarget() {
@@ -579,7 +576,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         } else {
             memoryRead.setGuard(guard);
         }
-        ValueNode readValue = performBooleanCoercionIfNecessary(implicitLoadConvert(graph, readKind, memoryRead, compressible), readKind);
+        ValueNode readValue = implicitLoadConvert(graph, readKind, memoryRead, compressible);
         load.replaceAtUsages(readValue);
         return memoryRead;
     }
@@ -594,18 +591,9 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         // An unsafe read must not float otherwise it may float above
         // a test guaranteeing the read is safe.
         memoryRead.setForceFixed(true);
-        ValueNode readValue = performBooleanCoercionIfNecessary(implicitLoadConvert(graph, readKind, memoryRead, false), readKind);
+        ValueNode readValue = implicitLoadConvert(graph, readKind, memoryRead, false);
         load.replaceAtUsages(readValue);
         graph.replaceFixedWithFixed(load, memoryRead);
-    }
-
-    private static ValueNode performBooleanCoercionIfNecessary(ValueNode readValue, JavaKind readKind) {
-        if (readKind == JavaKind.Boolean) {
-            StructuredGraph graph = readValue.graph();
-            IntegerEqualsNode eq = graph.addOrUnique(new IntegerEqualsNode(readValue, ConstantNode.forInt(0, graph)));
-            return graph.addOrUnique(new ConditionalNode(eq, ConstantNode.forBoolean(false, graph), ConstantNode.forBoolean(true, graph)));
-        }
-        return readValue;
     }
 
     protected void lowerUnsafeStoreNode(RawStoreNode store) {
