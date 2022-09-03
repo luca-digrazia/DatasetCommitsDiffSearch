@@ -217,7 +217,7 @@ abstract class ToJavaNode extends Node {
             }
         } else {
             if (!TruffleOptions.AOT && targetType.isInterface()) {
-                obj = JavaInteropReflect.newProxyInstance(targetType, truffleObject, languageContext);
+                obj = JavaInteropReflect.newProxyInstance(targetType, truffleObject);
             } else {
                 throw newClassCastException(truffleObject, targetType, null);
             }
