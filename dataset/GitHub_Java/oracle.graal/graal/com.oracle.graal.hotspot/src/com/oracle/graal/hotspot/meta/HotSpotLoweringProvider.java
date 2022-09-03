@@ -246,7 +246,7 @@ public class HotSpotLoweringProvider implements LoweringProvider {
             if (checkcastNode != null) {
                 checkcastNode.lower(tool);
             } else if (checkcastDynamicNode != null) {
-                checkcastDynamicSnippets.lower(checkcastDynamicNode, tool);
+                checkcastDynamicSnippets.lower(checkcastDynamicNode);
             }
         } else if (n instanceof UnsafeLoadNode) {
             UnsafeLoadNode load = (UnsafeLoadNode) n;
@@ -281,14 +281,12 @@ public class HotSpotLoweringProvider implements LoweringProvider {
             write.setStateAfter(store.stateAfter());
             graph.replaceFixedWithFixed(store, write);
         } else if (n instanceof LoadHubNode) {
-            if (graph.getGuardsStage().ordinal() == StructuredGraph.GuardsStage.FIXED_DEOPTS.ordinal()) {
-                LoadHubNode loadHub = (LoadHubNode) n;
-                assert loadHub.kind() == wordKind;
-                ValueNode object = loadHub.object();
-                GuardingNode guard = loadHub.getGuard();
-                FloatingReadNode hub = createReadHub(graph, wordKind, object, guard);
-                graph.replaceFloating(loadHub, hub);
-            }
+            LoadHubNode loadHub = (LoadHubNode) n;
+            assert loadHub.kind() == wordKind;
+            ValueNode object = loadHub.object();
+            GuardingNode guard = loadHub.getGuard();
+            FloatingReadNode hub = createReadHub(graph, wordKind, object, guard);
+            graph.replaceFloating(loadHub, hub);
         } else if (n instanceof LoadMethodNode) {
             LoadMethodNode loadMethodNode = (LoadMethodNode) n;
             ResolvedJavaMethod method = loadMethodNode.getMethod();
@@ -465,7 +463,7 @@ public class HotSpotLoweringProvider implements LoweringProvider {
                 BenchmarkCounters.lower((DynamicCounterNode) n, registers, runtime.getConfig(), wordKind);
             }
         } else if (n instanceof CheckCastDynamicNode) {
-            checkcastDynamicSnippets.lower((CheckCastDynamicNode) n, tool);
+            checkcastDynamicSnippets.lower((CheckCastDynamicNode) n);
         } else if (n instanceof InstanceOfNode) {
             if (graph.getGuardsStage() == StructuredGraph.GuardsStage.FIXED_DEOPTS) {
                 instanceofSnippets.lower((InstanceOfNode) n, tool);
@@ -476,44 +474,44 @@ public class HotSpotLoweringProvider implements LoweringProvider {
             }
         } else if (n instanceof NewInstanceNode) {
             if (graph.getGuardsStage() == StructuredGraph.GuardsStage.AFTER_FSA) {
-                newObjectSnippets.lower((NewInstanceNode) n, registers, tool);
+                newObjectSnippets.lower((NewInstanceNode) n, registers);
             }
         } else if (n instanceof NewArrayNode) {
             if (graph.getGuardsStage() == StructuredGraph.GuardsStage.AFTER_FSA) {
-                newObjectSnippets.lower((NewArrayNode) n, registers, tool);
+                newObjectSnippets.lower((NewArrayNode) n, registers);
             }
         } else if (n instanceof DynamicNewArrayNode) {
             if (graph.getGuardsStage() == StructuredGraph.GuardsStage.AFTER_FSA) {
-                newObjectSnippets.lower((DynamicNewArrayNode) n, registers, tool);
+                newObjectSnippets.lower((DynamicNewArrayNode) n, registers);
             }
         } else if (n instanceof MonitorEnterNode) {
             if (graph.getGuardsStage() == StructuredGraph.GuardsStage.FIXED_DEOPTS) {
-                monitorSnippets.lower((MonitorEnterNode) n, registers, tool);
+                monitorSnippets.lower((MonitorEnterNode) n, registers);
             }
         } else if (n instanceof MonitorExitNode) {
             if (graph.getGuardsStage() == StructuredGraph.GuardsStage.FIXED_DEOPTS) {
                 monitorSnippets.lower((MonitorExitNode) n, tool);
             }
         } else if (n instanceof G1PreWriteBarrier) {
-            writeBarrierSnippets.lower((G1PreWriteBarrier) n, registers, tool);
+            writeBarrierSnippets.lower((G1PreWriteBarrier) n, registers);
         } else if (n instanceof G1PostWriteBarrier) {
-            writeBarrierSnippets.lower((G1PostWriteBarrier) n, registers, tool);
+            writeBarrierSnippets.lower((G1PostWriteBarrier) n, registers);
         } else if (n instanceof G1ReferentFieldReadBarrier) {
-            writeBarrierSnippets.lower((G1ReferentFieldReadBarrier) n, registers, tool);
+            writeBarrierSnippets.lower((G1ReferentFieldReadBarrier) n, registers);
         } else if (n instanceof SerialWriteBarrier) {
-            writeBarrierSnippets.lower((SerialWriteBarrier) n, tool);
+            writeBarrierSnippets.lower((SerialWriteBarrier) n);
         } else if (n instanceof SerialArrayRangeWriteBarrier) {
-            writeBarrierSnippets.lower((SerialArrayRangeWriteBarrier) n, tool);
+            writeBarrierSnippets.lower((SerialArrayRangeWriteBarrier) n);
         } else if (n instanceof G1ArrayRangePreWriteBarrier) {
-            writeBarrierSnippets.lower((G1ArrayRangePreWriteBarrier) n, registers, tool);
+            writeBarrierSnippets.lower((G1ArrayRangePreWriteBarrier) n, registers);
         } else if (n instanceof G1ArrayRangePostWriteBarrier) {
-            writeBarrierSnippets.lower((G1ArrayRangePostWriteBarrier) n, registers, tool);
+            writeBarrierSnippets.lower((G1ArrayRangePostWriteBarrier) n, registers);
         } else if (n instanceof NewMultiArrayNode) {
             if (graph.getGuardsStage() == StructuredGraph.GuardsStage.AFTER_FSA) {
-                newObjectSnippets.lower((NewMultiArrayNode) n, tool);
+                newObjectSnippets.lower((NewMultiArrayNode) n);
             }
         } else if (n instanceof LoadExceptionObjectNode) {
-            exceptionObjectSnippets.lower((LoadExceptionObjectNode) n, registers, tool);
+            exceptionObjectSnippets.lower((LoadExceptionObjectNode) n, registers);
         } else if (n instanceof IntegerDivNode || n instanceof IntegerRemNode || n instanceof UnsignedDivNode || n instanceof UnsignedRemNode) {
             // Nothing to do for division nodes. The HotSpot signal handler catches divisions by
             // zero and the MIN_VALUE / -1 cases.
