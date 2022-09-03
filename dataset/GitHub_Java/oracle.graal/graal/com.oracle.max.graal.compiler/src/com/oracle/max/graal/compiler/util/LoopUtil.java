@@ -27,7 +27,6 @@ import java.util.Map.Entry;
 
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.ir.*;
-import com.oracle.max.graal.compiler.ir.Phi.*;
 import com.oracle.max.graal.compiler.observer.*;
 import com.oracle.max.graal.compiler.schedule.*;
 import com.oracle.max.graal.compiler.util.GraphUtil.ColorSplitingLambda;
@@ -186,7 +185,7 @@ public class LoopUtil {
             for (Node usage : n.dataUsages()) {
                 if (usage instanceof Phi) { // filter out data graph cycles
                     Phi phi = (Phi) usage;
-                    if (phi.type() == PhiType.Value) {
+                    if (!phi.isDead()) {
                         Merge merge = phi.merge();
                         if (merge instanceof LoopBegin) {
                             LoopBegin phiLoop = (LoopBegin) merge;
@@ -206,7 +205,7 @@ public class LoopUtil {
             inOrBefore.mark(n);
             if (n instanceof Phi) { // filter out data graph cycles
                 Phi phi = (Phi) n;
-                if (phi.type() == PhiType.Value) {
+                if (!phi.isDead()) {
                     int backIndex = -1;
                     Merge merge = phi.merge();
                     if (!loopNodes.isMarked(merge) && merge instanceof LoopBegin) {
@@ -229,11 +228,6 @@ public class LoopUtil {
                     if (!(usage instanceof LoopEnd)) {
                         workData2.add(usage);
                     }
-                }
-            }
-            if (n instanceof AbstractVectorNode) {
-                for (Node usage : n.usages()) {
-                    workData2.add(usage);
                 }
             }
             if (n instanceof StateSplit) {
@@ -530,7 +524,7 @@ public class LoopUtil {
                     values.add(valueAt);
                 }
                 if (createPhi) {
-                    Phi phi = new Phi(kind, merge, PhiType.Value, merge.graph());
+                    Phi phi = new Phi(kind, merge, merge.graph());
                     valueMap.set(point, phi);
                     for (EndNode end : merge.cfgPredecessors()) {
                         phi.addInput(getValueAt(colors.get(end), valueMap, kind));
@@ -765,12 +759,14 @@ public class LoopUtil {
             for (Node usage : n.usages()) {
                 if (usage instanceof Phi) { // filter out data graph cycles
                     Phi phi = (Phi) usage;
-                    Merge merge = phi.merge();
-                    if (merge instanceof LoopBegin) {
-                        LoopBegin phiLoop = (LoopBegin) merge;
-                        int backIndex = phiLoop.phiPredecessorIndex(phiLoop.loopEnd());
-                        if (phi.valueAt(backIndex) == n) {
-                            continue;
+                    if (!phi.isDead()) {
+                        Merge merge = phi.merge();
+                        if (merge instanceof LoopBegin) {
+                            LoopBegin phiLoop = (LoopBegin) merge;
+                            int backIndex = phiLoop.phiPredecessorIndex(phiLoop.loopEnd());
+                            if (phi.valueAt(backIndex) == n) {
+                                continue;
+                            }
                         }
                     }
                 }
@@ -793,7 +789,7 @@ public class LoopUtil {
             }
             if (n instanceof Phi) { // filter out data graph cycles
                 Phi phi = (Phi) n;
-                if (phi.type() == PhiType.Value) {
+                if (!phi.isDead()) {
                     int backIndex = -1;
                     Merge merge = phi.merge();
                     if (!loopNodes.isNew(merge) && !loopNodes.isMarked(merge) && merge instanceof LoopBegin) {
@@ -822,11 +818,6 @@ public class LoopUtil {
                         if (!(usage instanceof LoopEnd)) {
                             work.add(usage);
                         }
-                    }
-                }
-                if (n instanceof AbstractVectorNode) {
-                    for (Node usage : n.usages()) {
-                        work.add(usage);
                     }
                 }
                 if (n instanceof LoopBegin && n != loop.loopBegin()) {

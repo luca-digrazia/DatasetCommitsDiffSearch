@@ -29,7 +29,6 @@ import java.util.*;
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.ir.*;
-import com.oracle.max.graal.compiler.ir.Phi.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
@@ -40,38 +39,41 @@ import com.sun.cri.ri.*;
  */
 public final class FrameState extends Value implements FrameStateAccess {
 
+    private static final int INPUT_COUNT = 1;
+
+    private static final int INPUT_OUTER_FRAME_STATE = 0;
+
     protected final int localsSize;
 
     protected final int stackSize;
 
     protected final int locksSize;
 
-    private boolean rethrowException;
+    private final boolean rethrowException;
 
-    public static final int BEFORE_BCI = -2;
-    public static final int AFTER_BCI = -3;
+    private static final int SUCCESSOR_COUNT = 0;
 
-    @NodeInput
-    private FrameState outerFrameState;
-
-    @NodeInput
-    private final NodeInputList<Value> values;
-
-    @NodeInput
-    private final NodeInputList<Node> virtualObjectMappings;
-
-    public FrameState outerFrameState() {
-        return outerFrameState;
+    @Override
+    protected int inputCount() {
+        return super.inputCount() + localsSize + stackSize + locksSize;
     }
 
-    public void setOuterFrameState(FrameState x) {
-        updateUsages(this.outerFrameState, x);
-        this.outerFrameState = x;
+    @Override
+    protected int successorCount() {
+        return super.successorCount() + SUCCESSOR_COUNT;
+    }
+
+    public FrameState outerFrameState() {
+        return (FrameState) inputs().get(super.inputCount() + INPUT_OUTER_FRAME_STATE);
+    }
+
+    public FrameState setOuterFrameState(FrameState n) {
+        return (FrameState) inputs().set(super.inputCount() + INPUT_OUTER_FRAME_STATE, n);
     }
 
     @Override
     public void setValueAt(int i, Value x) {
-        values.set(i, x);
+        inputs().set(INPUT_COUNT + i, x);
     }
 
     /**
@@ -91,14 +93,12 @@ public final class FrameState extends Value implements FrameStateAccess {
      * @param lockSize number of locks
      */
     public FrameState(RiMethod method, int bci, int localsSize, int stackSize, int locksSize, boolean rethrowException, Graph graph) {
-        super(CiKind.Illegal, graph);
+        super(CiKind.Illegal, localsSize + stackSize + locksSize + INPUT_COUNT, SUCCESSOR_COUNT, graph);
         this.method = method;
         this.bci = bci;
         this.localsSize = localsSize;
         this.stackSize = stackSize;
         this.locksSize = locksSize;
-        this.values = new NodeInputList<Value>(this, localsSize + stackSize + locksSize);
-        this.virtualObjectMappings = new NodeInputList<Node>(this);
         this.rethrowException = rethrowException;
         GraalMetrics.FrameStatesCreated++;
         GraalMetrics.FrameStateValuesCreated += localsSize + stackSize + locksSize;
@@ -125,23 +125,6 @@ public final class FrameState extends Value implements FrameStateAccess {
         return method;
     }
 
-    public void addVirtualObjectMapping(Node virtualObject) {
-        assert virtualObject instanceof VirtualObjectField || virtualObject instanceof Phi : virtualObject;
-        virtualObjectMappings.add(virtualObject);
-    }
-
-    public int virtualObjectMappingCount() {
-        return virtualObjectMappings.size();
-    }
-
-    public Node virtualObjectMappingAt(int i) {
-        return virtualObjectMappings.get(i);
-    }
-
-    public Iterable<Node> virtualObjectMappings() {
-        return virtualObjectMappings;
-    }
-
     /**
      * Gets a copy of this frame state.
      */
@@ -151,8 +134,7 @@ public final class FrameState extends Value implements FrameStateAccess {
 
     public FrameState duplicate(int bci, boolean duplicateOuter) {
         FrameState other = new FrameState(method, bci, localsSize, stackSize, locksSize, rethrowException, graph());
-        other.values.setAll(values);
-        other.virtualObjectMappings.setAll(virtualObjectMappings);
+        other.inputs().setAll(inputs());
         FrameState outerFrameState = outerFrameState();
         if (duplicateOuter && outerFrameState != null) {
             outerFrameState = outerFrameState.duplicate(outerFrameState.bci, duplicateOuter);
@@ -188,7 +170,6 @@ public final class FrameState extends Value implements FrameStateAccess {
         for (int i = 0; i < locksSize; i++) {
             other.setValueAt(localsSize + other.stackSize + i, lockAt(i));
         }
-        other.virtualObjectMappings.setAll(virtualObjectMappings);
         other.setOuterFrameState(outerFrameState());
         return other;
     }
@@ -341,7 +322,7 @@ public final class FrameState extends Value implements FrameStateAccess {
                     return phi;
                 }
             }
-            Phi phi = new Phi(p.kind, block, PhiType.Value, graph());
+            Phi phi = new Phi(p.kind, block, graph());
             setValueAt(localsSize + i, phi);
             return phi;
         }
@@ -361,7 +342,7 @@ public final class FrameState extends Value implements FrameStateAccess {
                 return phi;
             }
         }
-        Phi phi = new Phi(p.kind, block, PhiType.Value, graph());
+        Phi phi = new Phi(p.kind, block, graph());
         storeLocal(i, phi);
         return phi;
     }
@@ -378,7 +359,7 @@ public final class FrameState extends Value implements FrameStateAccess {
      */
     public Value valueAt(int i) {
         assert i < (localsSize + stackSize + locksSize);
-        return values.get(i);
+        return (Value) inputs().get(INPUT_COUNT + i);
     }
 
     /**
@@ -409,9 +390,11 @@ public final class FrameState extends Value implements FrameStateAccess {
                 Value y = other.valueAt(i);
                 if (x != y || ((x instanceof Phi) && ((Phi) x).merge() == block)) {
                     if (typeMismatch(x, y)) {
-                        if ((x instanceof Phi) && ((Phi) x).merge() == block) {
-                            x.replaceAtUsages(null);
-                            x.delete();
+                        if (x instanceof Phi) {
+                            Phi phi = (Phi) x;
+                            if (phi.merge() == block) {
+                                phi.makeDead();
+                            }
                         }
                         setValueAt(i, null);
                         continue;
@@ -529,83 +512,30 @@ public final class FrameState extends Value implements FrameStateAccess {
      * @param proc the call back called to process each live value traversed
      */
     public void forEachLiveStateValue(ValueProcedure proc) {
-        HashSet<VirtualObject> vobjs = null;
-        FrameState current = this;
-        do {
-            for (int i = 0; i < current.valuesSize(); i++) {
-                Value value = current.valueAt(i);
-                if (value instanceof VirtualObject) {
-                    if (vobjs == null) {
-                        vobjs = new HashSet<VirtualObject>();
-                    }
-                    vobjs.add((VirtualObject) value);
-                } else if (value != null) {
-                    proc.doValue(value);
-                }
-            }
-            current = current.outerFrameState();
-        } while (current != null);
+        for (int i = 0; i < valuesSize(); i++) {
+            Value value = valueAt(i);
+            visitLiveStateValue(value, proc);
+        }
+        if (outerFrameState() != null) {
+            outerFrameState().forEachLiveStateValue(proc);
+        }
+    }
 
-        if (vobjs != null) {
-            // collect all VirtualObjectField instances:
-            HashMap<VirtualObject, VirtualObjectField> objectStates = new HashMap<VirtualObject, VirtualObjectField>();
-            current = this;
-            do {
-                for (int i = 0; i < current.virtualObjectMappingCount(); i++) {
-                    VirtualObjectField field = (VirtualObjectField) current.virtualObjectMappingAt(i);
-                    // null states occur for objects with 0 fields
-                    if (field != null && !objectStates.containsKey(field.object())) {
-                        objectStates.put(field.object(), field);
+    private void visitLiveStateValue(Value value, ValueProcedure proc) {
+        if (value != null) {
+            if (value instanceof VirtualObject) {
+                HashSet<Object> fields = new HashSet<Object>();
+                VirtualObject obj = (VirtualObject) value;
+                do {
+                    if (!fields.contains(obj.field().representation())) {
+                        fields.add(obj.field().representation());
+                        visitLiveStateValue(obj.input(), proc);
                     }
-                }
-                current = current.outerFrameState();
-            } while (current != null);
-
-            do {
-                HashSet<VirtualObject> vobjsCopy = new HashSet<VirtualObject>(vobjs);
-                for (VirtualObject vobj : vobjsCopy) {
-                    if (vobj.fields().length > 0) {
-                        boolean[] fieldState = new boolean[vobj.fields().length];
-                        FloatingNode currentField = objectStates.get(vobj);
-                        assert currentField != null : this;
-                        do {
-                            if (currentField instanceof VirtualObjectField) {
-                                int index = ((VirtualObjectField) currentField).index();
-                                Value value = ((VirtualObjectField) currentField).input();
-                                if (!fieldState[index]) {
-                                    fieldState[index] = true;
-                                    if (value instanceof VirtualObject) {
-                                        vobjs.add((VirtualObject) value);
-                                    } else {
-                                        proc.doValue(value);
-                                    }
-                                }
-                                currentField = ((VirtualObjectField) currentField).lastState();
-                            } else {
-                                assert currentField instanceof Phi : currentField;
-                                currentField = (FloatingNode) ((Phi) currentField).valueAt(0);
-                            }
-                        } while (currentField != null);
-                    }
-                    vobjs.remove(vobj);
-                }
-            } while (!vobjs.isEmpty());
-            if (!vobjs.isEmpty()) {
-                for (VirtualObject obj : vobjs) {
-                    TTY.println("+" + obj);
-                }
-                for (Node vobj : virtualObjectMappings()) {
-                    if (vobj instanceof VirtualObjectField) {
-                        TTY.println("-" + ((VirtualObjectField) vobj).object());
-                    } else {
-                        TTY.println("-" + vobj);
-                    }
-                }
-                for (Node n : this.usages()) {
-                    TTY.println("usage: " + n);
-                }
+                    obj = obj.object();
+                } while (obj != null);
+            } else {
+                proc.doValue(value);
             }
-            assert vobjs.isEmpty() : "at FrameState " + this;
         }
     }
 
@@ -687,11 +617,6 @@ public final class FrameState extends Value implements FrameStateAccess {
         if (outerFrameState != null && outerFrameState.usages().isEmpty()) {
             outerFrameState.delete();
         }
-    }
-
-    @Override
-    public void setRethrowException(boolean b) {
-        rethrowException = b;
     }
 
     @Override
