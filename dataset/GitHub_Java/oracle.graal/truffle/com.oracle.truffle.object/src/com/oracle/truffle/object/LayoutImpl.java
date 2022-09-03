@@ -48,8 +48,8 @@ public abstract class LayoutImpl extends Layout {
     private static final int INT_TO_DOUBLE_FLAG = 1;
     private static final int INT_TO_LONG_FLAG = 2;
 
-    protected final LayoutStrategy strategy;
-    protected final Class<? extends DynamicObject> clazz;
+    private final LayoutStrategy strategy;
+    private final Class<? extends DynamicObject> clazz;
     private final int allowedImplicitCasts;
 
     protected LayoutImpl(EnumSet<ImplicitCast> allowedImplicitCasts, Class<? extends DynamicObjectImpl> clazz, LayoutStrategy strategy) {
@@ -68,13 +68,13 @@ public abstract class LayoutImpl extends Layout {
     }
 
     @Override
-    public final Shape createShape(ObjectType objectType, Object sharedData) {
-        return createShape(objectType, sharedData, 0);
+    public final Shape createShape(ObjectType operations, Object sharedData) {
+        return createShape(operations, sharedData, 0);
     }
 
     @Override
-    public final Shape createShape(ObjectType objectType) {
-        return createShape(objectType, null);
+    public final Shape createShape(ObjectType operations) {
+        return createShape(operations, null);
     }
 
     public boolean isAllowedIntToDouble() {
