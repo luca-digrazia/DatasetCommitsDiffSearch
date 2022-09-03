@@ -32,7 +32,6 @@ package com.oracle.truffle.llvm.nodes.impl.cast;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMAddressNode;
 import com.oracle.truffle.llvm.nodes.impl.base.vector.LLVMI16VectorNode;
 import com.oracle.truffle.llvm.nodes.impl.base.vector.LLVMI32VectorNode;
@@ -47,7 +46,6 @@ import com.oracle.truffle.llvm.types.vector.LLVMVector;
 
 public abstract class LLVMToI8VectorNode extends LLVMI8VectorNode {
 
-    @ExplodeLoop
     protected LLVMI8Vector executeI8VectorBody(LLVMAddress target, LLVMVector<? extends Number> from) {
         int length = from.getLength();
 
@@ -87,3 +85,4 @@ public abstract class LLVMToI8VectorNode extends LLVMI8VectorNode {
         }
     }
 }
+
