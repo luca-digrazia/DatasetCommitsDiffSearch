@@ -39,7 +39,8 @@ import com.oracle.truffle.api.dsl.internal.SlowPathEvent.SlowPathEvent5;
 import com.oracle.truffle.api.dsl.internal.SlowPathEvent.SlowPathEventN;
 import com.oracle.truffle.api.frame.*;
 import com.oracle.truffle.api.nodes.*;
-import com.oracle.truffle.api.nodes.NodeFieldAccessor;
+import com.oracle.truffle.api.nodes.NodeUtil.NodeClass;
+import com.oracle.truffle.api.nodes.NodeUtil.NodeField;
 
 /**
  * Internal implementation dependent base class for generated specialized nodes.
@@ -79,9 +80,9 @@ public abstract class SpecializationNode extends Node {
     }
 
     private static void updateRootImpl(SpecializationNode start, Node node) {
-        NodeFieldAccessor[] fields = NodeClass.get(start.getClass()).getFields();
+        NodeField[] fields = NodeClass.get(start.getClass()).getFields();
         for (int i = fields.length - 1; i >= 0; i--) {
-            NodeFieldAccessor f = fields[i];
+            NodeField f = fields[i];
             if (f.getName().equals("root")) {
                 f.putObject(start, node);
                 break;
