@@ -36,12 +36,7 @@ public final class LocationNode extends FloatingNode {
     private CiKind valueKind;
     private Object locationIdentity;
 
-    public static LocationNode create(Object identity, CiKind kind, int displacement, Graph graph) {
-        LocationNode result = new LocationNode(identity, kind, displacement, graph);
-        return graph.ideal(result);
-    }
-
-    private LocationNode(Object identity, CiKind kind, int displacement, Graph graph) {
+    public LocationNode(Object identity, CiKind kind, int displacement, Graph graph) {
         super(CiKind.Illegal, INPUT_COUNT, SUCCESSOR_COUNT, graph);
         this.displacement = displacement;
         this.valueKind = kind;
@@ -78,17 +73,7 @@ public final class LocationNode extends FloatingNode {
         return locationIdentity;
     }
 
-    @Override
-    public boolean valueEqual(Node i) {
-        if (i instanceof LocationNode) {
-            LocationNode locationNode = (LocationNode) i;
-            return locationNode.locationIdentity == locationIdentity && locationNode.displacement == displacement;
-        }
-        return false;
-    }
-
-    @Override
-    public int valueNumber() {
-        return locationIdentity.hashCode() + displacement;
+    public boolean same(LocationNode location) {
+        return valueKind == location.valueKind && displacement == location.displacement;
     }
 }
