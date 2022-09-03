@@ -58,10 +58,6 @@ public interface AbstractBlock<T extends AbstractBlock<T>> {
 
     T getDominator();
 
-    List<T> getDominated();
-
-    T getPostdominator();
-
     double probability();
 
     /**
