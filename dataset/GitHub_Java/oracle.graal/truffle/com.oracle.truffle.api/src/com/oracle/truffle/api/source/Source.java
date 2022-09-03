@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,20 +27,34 @@ package com.oracle.truffle.api.source;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.Reader;
+import java.io.StringReader;
+import java.io.UnsupportedEncodingException;
 import java.lang.ref.WeakReference;
 import java.net.URL;
+import java.net.URLConnection;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.CharacterCodingException;
 import java.nio.charset.Charset;
+import java.nio.charset.CharsetDecoder;
+import java.nio.file.Files;
 import java.nio.file.spi.FileTypeDetector;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.TruffleLanguage.Registration;
-import com.oracle.truffle.api.nodes.Node;
 
 /**
  * Representation of a guest language source code unit and its contents. Sources originate in
@@ -94,11 +108,9 @@ import com.oracle.truffle.api.nodes.Node;
  * reload.</li>
  * </ol>
  * <p>
- *
- * @since 0.8 or earlier
  */
 public abstract class Source {
-    static final Logger LOG = Logger.getLogger(Source.class.getName());
+    private static final Logger LOG = Logger.getLogger(Source.class.getName());
 
     // TODO (mlvdv) consider canonicalizing and reusing SourceSection instances
     // TODO (mlvdv) connect SourceSections into a spatial tree for fast geometric lookup
@@ -108,17 +120,12 @@ public abstract class Source {
      */
     private static final Map<String, WeakReference<Source>> nameToSource = new HashMap<>();
 
-    static boolean fileCacheEnabled = true;
+    private static boolean fileCacheEnabled = true;
 
     private static final String NO_FASTPATH_SUBSOURCE_CREATION_MESSAGE = "do not create sub sources from compiled code";
 
-    private String mimeType;
-    private TextMap textMap;
-
     /**
      * Locates an existing instance by the name under which it was indexed.
-     *
-     * @since 0.8 or earlier
      */
     public static Source find(String name) {
         final WeakReference<Source> nameRef = nameToSource.get(name);
@@ -133,7 +140,6 @@ public abstract class Source {
      * @param reset forces any existing {@link Source} cache to be cleared, forcing a re-read
      * @return canonical representation of the file's contents.
      * @throws IOException if the file can not be read
-     * @since 0.8 or earlier
      */
     public static Source fromFileName(String fileName, boolean reset) throws IOException {
 
@@ -148,7 +154,7 @@ public abstract class Source {
             final WeakReference<Source> pathRef = nameToSource.get(path);
             source = pathRef == null ? null : pathRef.get();
             if (source == null) {
-                source = new FileSourceImpl(file, fileName, path);
+                source = new FileSource(file, fileName, path);
                 nameToSource.put(path, new WeakReference<>(source));
             }
         }
@@ -165,7 +171,6 @@ public abstract class Source {
      * @param fileName name
      * @return canonical representation of the file's contents.
      * @throws IOException if the file can not be read
-     * @since 0.8 or earlier
      */
     public static Source fromFileName(String fileName) throws IOException {
         return fromFileName(fileName, false);
@@ -191,7 +196,6 @@ public abstract class Source {
      * @return canonical representation of the file's contents.
      * @throws IOException if the file cannot be found, or if an existing Source not created by this
      *             method matches the file name
-     * @since 0.8 or earlier
      */
     public static Source fromFileName(CharSequence chars, String fileName) throws IOException {
         CompilerAsserts.neverPartOfCompilation("do not call Source.fromFileName from compiled code");
@@ -206,13 +210,13 @@ public abstract class Source {
             final WeakReference<Source> pathRef = nameToSource.get(path);
             source = pathRef == null ? null : pathRef.get();
             if (source == null) {
-                source = new ClientManagedFileSourceImpl(file, fileName, path, chars);
+                source = new ClientManagedFileSource(file, fileName, path, chars);
                 nameToSource.put(path, new WeakReference<>(source));
                 return source;
             }
         }
-        if (source instanceof ClientManagedFileSourceImpl) {
-            final ClientManagedFileSourceImpl modifiableSource = (ClientManagedFileSourceImpl) source;
+        if (source instanceof ClientManagedFileSource) {
+            final ClientManagedFileSource modifiableSource = (ClientManagedFileSource) source;
             modifiableSource.setCode(chars);
             return modifiableSource;
         } else {
@@ -226,11 +230,10 @@ public abstract class Source {
      * @param chars textual source code
      * @param description a note about the origin, for error messages and debugging
      * @return a newly created, non-indexed source representation
-     * @since 0.8 or earlier
      */
     public static Source fromText(CharSequence chars, String description) {
         CompilerAsserts.neverPartOfCompilation("do not call Source.fromText from compiled code");
-        return new LiteralSourceImpl(description, chars.toString());
+        return new LiteralSource(description, chars.toString());
     }
 
     /**
@@ -239,11 +242,10 @@ public abstract class Source {
      *
      * @param description a note about the origin, for error messages and debugging
      * @return a newly created, non-indexed, initially empty, appendable source representation
-     * @since 0.8 or earlier
      */
     public static Source fromAppendableText(String description) {
         CompilerAsserts.neverPartOfCompilation("do not call Source.fromAppendableText from compiled code");
-        return new AppendableLiteralSourceImpl(description);
+        return new AppendableLiteralSource(description);
     }
 
     /**
@@ -254,11 +256,10 @@ public abstract class Source {
      * @param chars textual source code
      * @param name string to use for indexing/lookup
      * @return a newly created, source representation
-     * @since 0.8 or earlier
      */
     public static Source fromNamedText(CharSequence chars, String name) {
         CompilerAsserts.neverPartOfCompilation("do not call Source.fromNamedText from compiled code");
-        final Source source = new LiteralSourceImpl(name, chars.toString());
+        final Source source = new LiteralSource(name, chars.toString());
         nameToSource.put(name, new WeakReference<>(source));
         return source;
     }
@@ -271,11 +272,10 @@ public abstract class Source {
      *
      * @param name string to use for indexing/lookup
      * @return a newly created, indexed, initially empty, appendable source representation
-     * @since 0.8 or earlier
      */
     public static Source fromNamedAppendableText(String name) {
         CompilerAsserts.neverPartOfCompilation("do not call Source.fromNamedAppendable from compiled code");
-        final Source source = new AppendableLiteralSourceImpl(name);
+        final Source source = new AppendableLiteralSource(name);
         nameToSource.put(name, new WeakReference<>(source));
         return source;
     }
@@ -289,11 +289,10 @@ public abstract class Source {
      * @param length the number of characters in the sub-range
      * @return a new instance representing a sub-range of another Source
      * @throws IllegalArgumentException if the specified sub-range is not contained in the base
-     * @since 0.8 or earlier
      */
     public static Source subSource(Source base, int baseCharIndex, int length) {
         CompilerAsserts.neverPartOfCompilation(NO_FASTPATH_SUBSOURCE_CREATION_MESSAGE);
-        final SubSourceImpl subSource = SubSourceImpl.create(base, baseCharIndex, length);
+        final SubSource subSource = SubSource.create(base, baseCharIndex, length);
         return subSource;
     }
 
@@ -305,7 +304,6 @@ public abstract class Source {
      * @param baseCharIndex 0-based index of the first character of the sub-range
      * @return a new instance representing a sub-range at the end of another Source
      * @throws IllegalArgumentException if the index is out of range
-     * @since 0.8 or earlier
      */
     public static Source subSource(Source base, int baseCharIndex) {
         CompilerAsserts.neverPartOfCompilation(NO_FASTPATH_SUBSOURCE_CREATION_MESSAGE);
@@ -320,11 +318,10 @@ public abstract class Source {
      * @param description identifies the origin, possibly useful for debugging
      * @return a newly created, non-indexed source representation
      * @throws IOException if reading fails
-     * @since 0.8 or earlier
      */
     public static Source fromURL(URL url, String description) throws IOException {
         CompilerAsserts.neverPartOfCompilation("do not call Source.fromURL from compiled code");
-        return URLSourceImpl.get(url, description);
+        return URLSource.get(url, description);
     }
 
     /**
@@ -334,11 +331,10 @@ public abstract class Source {
      * @param description a note about the origin, possibly useful for debugging
      * @return a newly created, non-indexed source representation
      * @throws IOException if reading fails
-     * @since 0.8 or earlier
      */
     public static Source fromReader(Reader reader, String description) throws IOException {
         CompilerAsserts.neverPartOfCompilation("do not call Source.fromReader from compiled code");
-        return new LiteralSourceImpl(description, read(reader));
+        return new LiteralSource(description, read(reader));
     }
 
     /**
@@ -350,7 +346,6 @@ public abstract class Source {
      * @param description a note about the origin, possibly useful for debugging
      * @param charset how to decode the bytes into Java strings
      * @return a newly created, non-indexed source representation
-     * @since 0.8 or earlier
      */
     public static Source fromBytes(byte[] bytes, String description, Charset charset) {
         return fromBytes(bytes, 0, bytes.length, description, charset);
@@ -368,25 +363,22 @@ public abstract class Source {
      * @param description a note about the origin, possibly useful for debugging
      * @param charset how to decode the bytes into Java strings
      * @return a newly created, non-indexed source representation
-     * @since 0.8 or earlier
      */
     public static Source fromBytes(byte[] bytes, int byteIndex, int length, String description, Charset charset) {
         CompilerAsserts.neverPartOfCompilation("do not call Source.fromBytes from compiled code");
-        return new BytesSourceImpl(description, bytes, byteIndex, length, charset);
+        return new BytesSource(description, bytes, byteIndex, length, charset);
     }
 
     // TODO (mlvdv) enable per-file choice whether to cache?
     /**
      * Enables/disables caching of file contents, <em>disabled</em> by default. Caching of sources
      * created from literal text or readers is always enabled.
-     *
-     * @since 0.8 or earlier
      */
     public static void setFileCaching(boolean enabled) {
         fileCacheEnabled = enabled;
     }
 
-    static String read(Reader reader) throws IOException {
+    private static String read(Reader reader) throws IOException {
         final BufferedReader bufferedReader = new BufferedReader(reader);
         final StringBuilder builder = new StringBuilder();
         final char[] buffer = new char[1024];
@@ -405,12 +397,11 @@ public abstract class Source {
         return builder.toString();
     }
 
-    Source() {
+    private Source() {
     }
 
-    Source(String mimeType) {
-        this.mimeType = mimeType;
-    }
+    private String mimeType;
+    private TextMap textMap;
 
     abstract void reset();
 
@@ -419,7 +410,6 @@ public abstract class Source {
      * name of a guest language source code file.
      *
      * @return the name of the guest language program
-     * @since 0.8 or earlier
      */
     public abstract String getName();
 
@@ -429,14 +419,11 @@ public abstract class Source {
      * rather than a full path.
      *
      * @return the short name of the guest language program
-     * @since 0.8 or earlier
      */
     public abstract String getShortName();
 
     /**
      * The normalized, canonical name if the source is a file.
-     *
-     * @since 0.8 or earlier
      */
     public abstract String getPath();
 
@@ -444,21 +431,16 @@ public abstract class Source {
      * The URL if the source is retrieved via URL.
      *
      * @return URL or <code>null</code>
-     * @since 0.8 or earlier
      */
     public abstract URL getURL();
 
     /**
      * Access to the source contents.
-     *
-     * @since 0.8 or earlier
      */
     public abstract Reader getReader();
 
     /**
      * Access to the source contents.
-     *
-     * @since 0.8 or earlier
      */
     public final InputStream getInputStream() {
         return new ByteArrayInputStream(getCode().getBytes());
@@ -466,8 +448,6 @@ public abstract class Source {
 
     /**
      * Gets the number of characters in the source.
-     *
-     * @since 0.8 or earlier
      */
     public final int getLength() {
         return getTextMap().length();
@@ -475,15 +455,11 @@ public abstract class Source {
 
     /**
      * Returns the complete text of the code.
-     *
-     * @since 0.8 or earlier
      */
     public abstract String getCode();
 
     /**
      * Returns a subsection of the code test.
-     *
-     * @since 0.8 or earlier
      */
     public String getCode(int charIndex, int charLength) {
         return getCode().substring(charIndex, charIndex + charLength);
@@ -491,8 +467,6 @@ public abstract class Source {
 
     /**
      * Gets the text (not including a possible terminating newline) in a (1-based) numbered line.
-     *
-     * @since 0.8 or earlier
      */
     public final String getCode(int lineNumber) {
         final int offset = getTextMap().lineStartOffset(lineNumber);
@@ -503,8 +477,6 @@ public abstract class Source {
     /**
      * The number of text lines in the source, including empty lines; characters at the end of the
      * source without a terminating newline count as a line.
-     *
-     * @since 0.8 or earlier
      */
     public final int getLineCount() {
         return getTextMap().lineCount();
@@ -515,7 +487,6 @@ public abstract class Source {
      * position.
      *
      * @throws IllegalArgumentException if the offset is outside the text contents
-     * @since 0.8 or earlier
      */
     public final int getLineNumber(int offset) throws IllegalArgumentException {
         return getTextMap().offsetToLine(offset);
@@ -525,7 +496,6 @@ public abstract class Source {
      * Given a 0-based character offset, return the 1-based number of the column at the position.
      *
      * @throws IllegalArgumentException if the offset is outside the text contents
-     * @since 0.8 or earlier
      */
     public final int getColumnNumber(int offset) throws IllegalArgumentException {
         return getTextMap().offsetToCol(offset);
@@ -535,7 +505,6 @@ public abstract class Source {
      * Given a 1-based line number, return the 0-based offset of the first character in the line.
      *
      * @throws IllegalArgumentException if there is no such line in the text
-     * @since 0.8 or earlier
      */
     public final int getLineStartOffset(int lineNumber) throws IllegalArgumentException {
         return getTextMap().lineStartOffset(lineNumber);
@@ -546,7 +515,6 @@ public abstract class Source {
      * numbered line.
      *
      * @throws IllegalArgumentException if there is no such line in the text
-     * @since 0.8 or earlier
      */
     public final int getLineLength(int lineNumber) throws IllegalArgumentException {
         return getTextMap().lineLength(lineNumber);
@@ -557,7 +525,6 @@ public abstract class Source {
      *
      * @param chars the text to append
      * @throws UnsupportedOperationException by concrete subclasses that do not support appending
-     * @since 0.8 or earlier
      */
     public void appendCode(CharSequence chars) {
         throw new UnsupportedOperationException();
@@ -577,7 +544,6 @@ public abstract class Source {
      * @param charIndex the 0-based index of the first character of the section
      * @param length the number of characters in the section
      * @return newly created object representing the specified region
-     * @since 0.8 or earlier
      */
     public final SourceSection createSection(String identifier, int startLine, int startColumn, int charIndex, int length) {
         checkRange(charIndex, length);
@@ -585,11 +551,22 @@ public abstract class Source {
     }
 
     /**
-     * @deprecated tags are now determined by {@link Node#isTaggedWith(Class)}. Use
-     *             {@link #createSection(String, int, int, int, int)} instead.
-     * @since 0.12
+     * Creates a representation of a contiguous region of text in the source.
+     * <p>
+     * This method performs no checks on the validity of the arguments.
+     * <p>
+     * The resulting representation defines hash/equality around equivalent location, presuming that
+     * {@link Source} representations are canonical.
+     *
+     * @param identifier terse description of the region
+     * @param startLine 1-based line number of the first character in the section
+     * @param startColumn 1-based column number of the first character in the section
+     * @param charIndex the 0-based index of the first character of the section
+     * @param length the number of characters in the section
+     * @param tags the tags associated with this section. Tags must be non-null and
+     *            {@link String#intern() interned}.
+     * @return newly created object representing the specified region
      */
-    @Deprecated
     public final SourceSection createSection(String identifier, int startLine, int startColumn, int charIndex, int length, String... tags) {
         checkRange(charIndex, length);
         return createSectionImpl(identifier, startLine, startColumn, charIndex, length, tags);
@@ -615,7 +592,6 @@ public abstract class Source {
      * @return newly created object representing the specified region
      * @throws IllegalArgumentException if arguments are outside the text of the source
      * @throws IllegalStateException if the source is one of the "null" instances
-     * @since 0.8 or earlier
      */
     public final SourceSection createSection(String identifier, int startLine, int startColumn, int length) {
         final int lineStartOffset = getTextMap().lineStartOffset(startLine);
@@ -644,18 +620,32 @@ public abstract class Source {
      * @throws IllegalArgumentException if either of the arguments are outside the text of the
      *             source
      * @throws IllegalStateException if the source is one of the "null" instances
-     * @since 0.8 or earlier
      */
     public final SourceSection createSection(String identifier, int charIndex, int length) throws IllegalArgumentException {
         return createSection(identifier, charIndex, length, SourceSection.EMTPY_TAGS);
     }
 
     /**
-     * @deprecated tags are now determined by {@link Node#isTaggedWith(Class)}. Use
-     *             {@link #createSection(String, int, int)} instead.
-     * @since 0.12
+     * Creates a representation of a contiguous region of text in the source. Computes the
+     * {@code (startLine, startColumn)} values by building a {@code TextMap map} of lines in the
+     * source.
+     * <p>
+     * Checks the position arguments for consistency with the source.
+     * <p>
+     * The resulting representation defines hash/equality around equivalent location, presuming that
+     * {@link Source} representations are canonical.
+     *
+     *
+     * @param identifier terse description of the region
+     * @param charIndex 0-based position of the first character in the section
+     * @param length the number of characters in the section
+     * @param tags the tags associated with this section. Tags must be non-null and
+     *            {@link String#intern() interned}.
+     * @return newly created object representing the specified region
+     * @throws IllegalArgumentException if either of the arguments are outside the text of the
+     *             source
+     * @throws IllegalStateException if the source is one of the "null" instances
      */
-    @Deprecated
     public final SourceSection createSection(String identifier, int charIndex, int length, String... tags) throws IllegalArgumentException {
         checkRange(charIndex, length);
         final int startLine = getLineNumber(charIndex);
@@ -678,7 +668,6 @@ public abstract class Source {
      * @return newly created object representing the specified line
      * @throws IllegalArgumentException if the line does not exist the source
      * @throws IllegalStateException if the source is one of the "null" instances
-     * @since 0.8 or earlier
      */
     public final SourceSection createSection(String identifier, int lineNumber) {
         final int charIndex = getTextMap().lineStartOffset(lineNumber);
@@ -692,7 +681,6 @@ public abstract class Source {
      *
      * @param lineNumber a 1-based line number in this source
      * @return a representation of a line in this source
-     * @since 0.8 or earlier
      */
     public final LineLocation createLineLocation(int lineNumber) {
         return new LineLocation(this, lineNumber);
@@ -732,7 +720,6 @@ public abstract class Source {
      *
      * @param mime mime type to use
      * @return new (identical) source, just associated {@link #getMimeType()}
-     * @since 0.8 or earlier
      */
     public final Source withMimeType(String mime) {
         try {
@@ -750,7 +737,6 @@ public abstract class Source {
      * one can directly {@link #withMimeType(java.lang.String) provide a MIME type} to each source.
      *
      * @return MIME type of this source or <code>null</code>, if unknown
-     * @since 0.8 or earlier
      */
     public String getMimeType() {
         if (mimeType == null) {
@@ -768,6 +754,693 @@ public abstract class Source {
             return other.mimeType == null;
         }
         return mimeType.equals(other.mimeType);
+    }
+
+    private static final class LiteralSource extends Source implements Cloneable {
+
+        private final String description;
+        private final String code;
+
+        LiteralSource(String description, String code) {
+            this.description = description;
+            this.code = code;
+        }
+
+        @Override
+        public String getName() {
+            return description;
+        }
+
+        @Override
+        public String getShortName() {
+            return description;
+        }
+
+        @Override
+        public String getCode() {
+            return code;
+        }
+
+        @Override
+        public String getPath() {
+            return null;
+        }
+
+        @Override
+        public URL getURL() {
+            return null;
+        }
+
+        @Override
+        public Reader getReader() {
+            return new StringReader(code);
+        }
+
+        @Override
+        void reset() {
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(description, code);
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+            if (obj == null) {
+                return false;
+            }
+            if (obj instanceof LiteralSource) {
+                LiteralSource other = (LiteralSource) obj;
+                return Objects.equals(description, other.description) && code.equals(other.code) && equalMime(other);
+            }
+            return false;
+        }
+    }
+
+    private static final class AppendableLiteralSource extends Source implements Cloneable {
+        private final String description;
+        final List<CharSequence> codeList = new ArrayList<>();
+
+        AppendableLiteralSource(String description) {
+            this.description = description;
+        }
+
+        @Override
+        public String getName() {
+            return description;
+        }
+
+        @Override
+        public String getShortName() {
+            return description;
+        }
+
+        @Override
+        public String getCode() {
+            return getCodeFromIndex(0);
+        }
+
+        @Override
+        public String getPath() {
+            return description;
+        }
+
+        @Override
+        public URL getURL() {
+            return null;
+        }
+
+        @Override
+        public Reader getReader() {
+            return new StringReader(getCode());
+        }
+
+        @Override
+        void reset() {
+        }
+
+        private String getCodeFromIndex(int index) {
+            StringBuilder sb = new StringBuilder();
+            for (int i = index; i < codeList.size(); i++) {
+                CharSequence s = codeList.get(i);
+                sb.append(s);
+            }
+            return sb.toString();
+        }
+
+        @Override
+        public void appendCode(CharSequence chars) {
+            codeList.add(chars);
+            clearTextMap();
+        }
+
+    }
+
+    private static final class FileSource extends Source implements Cloneable {
+
+        private final File file;
+        private final String name; // Name used originally to describe the source
+        private final String path;  // Normalized path description of an actual file
+
+        private String code = null;  // A cache of the file's contents
+
+        FileSource(File file, String name, String path) {
+            this.file = file.getAbsoluteFile();
+            this.name = name;
+            this.path = path;
+        }
+
+        @Override
+        public String getName() {
+            return name;
+        }
+
+        @Override
+        public String getShortName() {
+            return file.getName();
+        }
+
+        @Override
+        Object getHashKey() {
+            return path;
+        }
+
+        @Override
+        public String getCode() {
+            if (fileCacheEnabled) {
+                if (code == null) {
+                    try {
+                        code = read(getReader());
+                    } catch (IOException e) {
+                    }
+                }
+                return code;
+            }
+            try {
+                return read(new InputStreamReader(new FileInputStream(file), "UTF-8"));
+            } catch (IOException e) {
+            }
+            return null;
+        }
+
+        @Override
+        public String getPath() {
+            return path;
+        }
+
+        @Override
+        public URL getURL() {
+            return null;
+        }
+
+        @Override
+        public Reader getReader() {
+            if (code != null) {
+                return new StringReader(code);
+            }
+            try {
+                return new InputStreamReader(new FileInputStream(file), "UTF-8");
+            } catch (FileNotFoundException e) {
+
+                throw new RuntimeException("Can't find file " + path, e);
+            } catch (UnsupportedEncodingException e) {
+                throw new RuntimeException("Unsupported encoding in file " + path, e);
+            }
+        }
+
+        @Override
+        public int hashCode() {
+            return path.hashCode();
+        }
+
+        @Override
+        String findMimeType() {
+            try {
+                return Files.probeContentType(file.toPath());
+            } catch (IOException ex) {
+                LOG.log(Level.SEVERE, null, ex);
+            }
+            return null;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+            if (obj instanceof FileSource) {
+                FileSource other = (FileSource) obj;
+                return path.equals(other.path) && equalMime(other);
+            }
+            return false;
+        }
+
+        @Override
+        void reset() {
+            this.code = null;
+        }
+    }
+
+    // TODO (mlvdv) if we keep this, hoist a superclass in common with FileSource.
+    private static final class ClientManagedFileSource extends Source implements Cloneable {
+
+        private final File file;
+        private final String name; // Name used originally to describe the source
+        private final String path;  // Normalized path description of an actual file
+        private String code;  // The file's contents, as provided by the client
+
+        ClientManagedFileSource(File file, String name, String path, CharSequence chars) {
+            this.file = file.getAbsoluteFile();
+            this.name = name;
+            this.path = path;
+            setCode(chars);
+        }
+
+        void setCode(CharSequence chars) {
+            clearTextMap();
+            this.code = chars.toString();
+        }
+
+        @Override
+        public String getName() {
+            return name;
+        }
+
+        @Override
+        public String getShortName() {
+            return file.getName();
+        }
+
+        @Override
+        Object getHashKey() {
+            return path;
+        }
+
+        @Override
+        public String getCode() {
+            return code;
+        }
+
+        @Override
+        public String getPath() {
+            return path;
+        }
+
+        @Override
+        public URL getURL() {
+            return null;
+        }
+
+        @Override
+        public Reader getReader() {
+            return new StringReader(code);
+        }
+
+        @Override
+        String findMimeType() {
+            try {
+                return Files.probeContentType(file.toPath());
+            } catch (IOException ex) {
+                LOG.log(Level.SEVERE, null, ex);
+            }
+            return null;
+        }
+
+        @Override
+        public int hashCode() {
+            return path.hashCode();
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+            if (obj instanceof ClientManagedFileSource) {
+                ClientManagedFileSource other = (ClientManagedFileSource) obj;
+                return path.equals(other.path) && equalMime(other);
+            }
+            return false;
+        }
+
+        @Override
+        void reset() {
+            this.code = null;
+        }
+    }
+
+    private static final class URLSource extends Source implements Cloneable {
+
+        private static final Map<URL, WeakReference<URLSource>> urlToSource = new HashMap<>();
+
+        public static URLSource get(URL url, String name) throws IOException {
+            WeakReference<URLSource> sourceRef = urlToSource.get(url);
+            URLSource source = sourceRef == null ? null : sourceRef.get();
+            if (source == null) {
+                source = new URLSource(url, name);
+                urlToSource.put(url, new WeakReference<>(source));
+            }
+            return source;
+        }
+
+        private final URL url;
+        private final String name;
+        private String code;  // A cache of the source contents
+
+        URLSource(URL url, String name) throws IOException {
+            this.url = url;
+            this.name = name;
+            URLConnection c = url.openConnection();
+            if (super.mimeType == null) {
+                super.mimeType = c.getContentType();
+            }
+            code = read(new InputStreamReader(c.getInputStream()));
+        }
+
+        @Override
+        public String getName() {
+            return name;
+        }
+
+        @Override
+        public String getShortName() {
+            return name;
+        }
+
+        @Override
+        public String getPath() {
+            return url.getPath();
+        }
+
+        @Override
+        public URL getURL() {
+            return url;
+        }
+
+        @Override
+        public Reader getReader() {
+            return new StringReader(code);
+        }
+
+        @Override
+        public String getCode() {
+            return code;
+        }
+
+        @Override
+        void reset() {
+        }
+    }
+
+    private static final class SubSource extends Source implements Cloneable {
+        private final Source base;
+        private final int baseIndex;
+        private final int subLength;
+
+        private static SubSource create(Source base, int baseIndex, int length) {
+            if (baseIndex < 0 || length < 0 || baseIndex + length > base.getLength()) {
+                throw new IllegalArgumentException("text positions out of range");
+            }
+            return new SubSource(base, baseIndex, length);
+        }
+
+        private SubSource(Source base, int baseIndex, int length) {
+            this.base = base;
+            this.baseIndex = baseIndex;
+            this.subLength = length;
+        }
+
+        @Override
+        void reset() {
+            assert false;
+        }
+
+        @Override
+        public String getName() {
+            return base.getName();
+        }
+
+        @Override
+        public String getShortName() {
+            return base.getShortName();
+        }
+
+        @Override
+        public String getPath() {
+            return base.getPath();
+        }
+
+        @Override
+        public URL getURL() {
+            return null;
+        }
+
+        @Override
+        public Reader getReader() {
+            assert false;
+            return null;
+        }
+
+        @Override
+        public String getCode() {
+            return base.getCode(baseIndex, subLength);
+        }
+    }
+
+    private static final class BytesSource extends Source implements Cloneable {
+
+        private final String name;
+        private final byte[] bytes;
+        private final int byteIndex;
+        private final int length;
+        private final CharsetDecoder decoder;
+
+        BytesSource(String name, byte[] bytes, int byteIndex, int length, Charset decoder) {
+            this.name = name;
+            this.bytes = bytes;
+            this.byteIndex = byteIndex;
+            this.length = length;
+            this.decoder = decoder.newDecoder();
+        }
+
+        @Override
+        void reset() {
+        }
+
+        @Override
+        public String getName() {
+            return name;
+        }
+
+        @Override
+        public String getShortName() {
+            return name;
+        }
+
+        @Override
+        public String getPath() {
+            return name;
+        }
+
+        @Override
+        public URL getURL() {
+            return null;
+        }
+
+        @Override
+        public Reader getReader() {
+            return null;
+        }
+
+        @Override
+        public String getCode() {
+            ByteBuffer bb = ByteBuffer.wrap(bytes, byteIndex, length);
+            CharBuffer chb;
+            try {
+                chb = decoder.decode(bb);
+            } catch (CharacterCodingException ex) {
+                return "";
+            }
+            return chb.toString();
+        }
+
+        @Override
+        public String getCode(int byteOffset, int codeLength) {
+            ByteBuffer bb = ByteBuffer.wrap(bytes, byteIndex + byteOffset, codeLength);
+            CharBuffer chb;
+            try {
+                chb = decoder.decode(bb);
+            } catch (CharacterCodingException ex) {
+                return "";
+            }
+            return chb.toString();
+        }
+
+        @Override
+        void checkRange(int charIndex, int rangeLength) {
+            if (!(charIndex >= 0 && rangeLength >= 0 && charIndex + rangeLength <= length)) {
+                throw new IllegalArgumentException("text positions out of range");
+            }
+        }
+
+        @Override
+        TextMap createTextMap() {
+            return TextMap.fromString(getCode());
+        }
+    }
+
+    /**
+     * A utility for converting between coordinate systems in a string of text interspersed with
+     * newline characters. The coordinate systems are:
+     * <ul>
+     * <li>0-based character offset from the beginning of the text, where newline characters count
+     * as a single character and the first character in the text occupies position 0.</li>
+     * <li>1-based position in the 2D space of lines and columns, in which the first position in the
+     * text is at (1,1).</li>
+     * </ul>
+     * <p>
+     * This utility is based on positions occupied by characters, not text stream positions as in a
+     * text editor. The distinction shows up in editors where you can put the cursor just past the
+     * last character in a buffer; this is necessary, among other reasons, so that you can put the
+     * edit cursor in a new (empty) buffer. For the purposes of this utility, however, there are no
+     * character positions in an empty text string and there are no lines in an empty text string.
+     * <p>
+     * A newline character designates the end of a line and occupies a column position.
+     * <p>
+     * If the text ends with a character other than a newline, then the characters following the
+     * final newline character count as a line, even though not newline-terminated.
+     * <p>
+     * <strong>Limitations:</strong>
+     * <ul>
+     * <li>Does not handle multiple character encodings correctly.</li>
+     * <li>Treats tabs as occupying 1 column.</li>
+     * <li>Does not handle multiple-character line termination sequences correctly.</li>
+     * </ul>
+     */
+    private static final class TextMap {
+
+        // 0-based offsets of newline characters in the text, with sentinel
+        private final int[] nlOffsets;
+
+        // The number of characters in the text, including newlines (which count as 1).
+        private final int textLength;
+
+        // Is the final text character a newline?
+        final boolean finalNL;
+
+        TextMap(int[] nlOffsets, int textLength, boolean finalNL) {
+            this.nlOffsets = nlOffsets;
+            this.textLength = textLength;
+            this.finalNL = finalNL;
+        }
+
+        /**
+         * Constructs map permitting translation between 0-based character offsets and 1-based
+         * lines/columns.
+         */
+        public static TextMap fromString(String text) {
+            final int textLength = text.length();
+            final ArrayList<Integer> lines = new ArrayList<>();
+            lines.add(0);
+            int offset = 0;
+
+            while (offset < text.length()) {
+                final int nlIndex = text.indexOf('\n', offset);
+                if (nlIndex >= 0) {
+                    offset = nlIndex + 1;
+                    lines.add(offset);
+                } else {
+                    break;
+                }
+            }
+            lines.add(Integer.MAX_VALUE);
+
+            final int[] nlOffsets = new int[lines.size()];
+            for (int line = 0; line < lines.size(); line++) {
+                nlOffsets[line] = lines.get(line);
+            }
+
+            final boolean finalNL = textLength > 0 && (textLength == nlOffsets[nlOffsets.length - 2]);
+
+            return new TextMap(nlOffsets, textLength, finalNL);
+        }
+
+        /**
+         * Converts 0-based character offset to 1-based number of the line containing the character.
+         *
+         * @throws IllegalArgumentException if the offset is outside the string.
+         */
+        public int offsetToLine(int offset) throws IllegalArgumentException {
+            if (offset < 0 || offset >= textLength) {
+                if (offset == 0 && textLength == 0) {
+                    return 1;
+                }
+                throw new IllegalArgumentException("offset out of bounds");
+            }
+            int line = 1;
+            while (offset >= nlOffsets[line]) {
+                line++;
+            }
+            return line;
+        }
+
+        /**
+         * Converts 0-based character offset to 1-based number of the column occupied by the
+         * character.
+         * <p>
+         * Tabs are not expanded; they occupy 1 column.
+         *
+         * @throws IllegalArgumentException if the offset is outside the string.
+         */
+        public int offsetToCol(int offset) throws IllegalArgumentException {
+            return 1 + offset - nlOffsets[offsetToLine(offset) - 1];
+        }
+
+        /**
+         * The number of characters in the mapped text.
+         */
+        public int length() {
+            return textLength;
+        }
+
+        /**
+         * The number of lines in the text; if characters appear after the final newline, then they
+         * also count as a line, even though not newline-terminated.
+         */
+        public int lineCount() {
+            if (textLength == 0) {
+                return 0;
+            }
+            return finalNL ? nlOffsets.length - 2 : nlOffsets.length - 1;
+        }
+
+        /**
+         * Converts 1-based line number to the 0-based offset of the line's first character; this
+         * would be the offset of a newline if the line is empty.
+         *
+         * @throws IllegalArgumentException if there is no such line in the text.
+         */
+        public int lineStartOffset(int line) throws IllegalArgumentException {
+            if (textLength == 0) {
+                return 0;
+            }
+            if (lineOutOfRange(line)) {
+                throw new IllegalArgumentException("line out of bounds");
+            }
+            return nlOffsets[line - 1];
+        }
+
+        /**
+         * Gets the number of characters in a line, identified by 1-based line number;
+         * <em>does not</em> include the final newline, if any.
+         *
+         * @throws IllegalArgumentException if there is no such line in the text.
+         */
+        public int lineLength(int line) throws IllegalArgumentException {
+            if (textLength == 0) {
+                return 0;
+            }
+            if (lineOutOfRange(line)) {
+                throw new IllegalArgumentException("line out of bounds");
+            }
+            if (line == nlOffsets.length - 1 && !finalNL) {
+                return textLength - nlOffsets[line - 1];
+            }
+            return (nlOffsets[line] - nlOffsets[line - 1]) - 1;
+
+        }
+
+        /**
+         * Is the line number out of range.
+         */
+        private boolean lineOutOfRange(int line) {
+            return line <= 0 || line >= nlOffsets.length || (line == nlOffsets.length - 1 && finalNL);
+        }
+
     }
 
 }
