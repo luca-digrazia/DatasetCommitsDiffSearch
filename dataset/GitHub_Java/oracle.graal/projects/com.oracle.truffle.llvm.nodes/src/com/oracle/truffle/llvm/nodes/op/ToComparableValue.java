@@ -34,6 +34,8 @@ import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.ImportStatic;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropException;
+import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.llvm.nodes.op.ToComparableValueNodeGen.ForeignToComparableValueNodeGen;
 import com.oracle.truffle.llvm.nodes.op.ToComparableValueNodeGen.ManagedToComparableValueNodeGen;
 import com.oracle.truffle.llvm.nodes.op.ToComparableValueNodeGen.NativeToComparableValueNodeGen;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
@@ -67,45 +69,48 @@ public abstract class ToComparableValue extends LLVMNode {
 
     @TruffleBoundary
     private static long getHashCode(Object obj) {
-        // if we ever switch to a more robust implementation, we can simplify the
-        // LLVMManagedCompareNode
         return (obj.hashCode() & 0xFFFFFFFFL) << 8;
     }
 
-    @ImportStatic(ForeignToLLVMType.class)
-    public abstract static class ManagedToComparableValue extends LLVMNode {
-        private final boolean includeOffset;
+    protected abstract static class ForeignToComparableValue extends LLVMNode {
 
-        public ManagedToComparableValue(boolean includeOffset) {
-            this.includeOffset = includeOffset;
+        abstract long executeWithTarget(TruffleObject obj);
+
+        public static ForeignToComparableValue create() {
+            return ForeignToComparableValueNodeGen.create();
         }
+
+        @Specialization
+        protected long doOther(TruffleObject obj) {
+            // TODO (chaeubl): this code path is also used for pointers to global variables and
+            // functions
+            return getHashCode(obj);
+        }
+    }
+
+    @ImportStatic(ForeignToLLVMType.class)
+    protected abstract static class ManagedToComparableValue extends LLVMNode {
 
         abstract long executeWithTarget(Object obj);
 
         @Specialization
-        protected long doManagedMalloc(LLVMVirtualAllocationAddress address) {
-            long result;
-            if (address.isNull()) {
-                result = 0L;
-            } else {
-                result = getHashCode(address.getObject());
-            }
-
-            if (includeOffset) {
-                result += address.getOffset();
-            }
-            return result;
+        protected long doAddress(long address) {
+            return address;
         }
 
         @Specialization
-        protected long doManaged(LLVMManagedPointer address) {
-            // TODO (chaeubl): this code path is also used for pointers to global variables and
-            // functions
-            long result = getHashCode(address.getObject());
-            if (includeOffset) {
-                result += address.getOffset();
+        protected long doManagedMalloc(LLVMVirtualAllocationAddress address) {
+            if (address.isNull()) {
+                return address.getOffset();
+            } else {
+                return getHashCode(address.getObject()) + address.getOffset();
             }
-            return result;
+        }
+
+        @Specialization
+        protected long doManaged(LLVMManagedPointer address,
+                        @Cached("create()") ForeignToComparableValue toComparable) {
+            return toComparable.executeWithTarget(address.getObject()) + address.getOffset();
         }
 
         @Specialization
@@ -114,12 +119,8 @@ public abstract class ToComparableValue extends LLVMNode {
             return (long) toLLVM.executeWithTarget(address.getValue());
         }
 
-        public static ManagedToComparableValue createIgnoreOffset() {
-            return ManagedToComparableValueNodeGen.create(false);
-        }
-
-        public static ManagedToComparableValue createUseOffset() {
-            return ManagedToComparableValueNodeGen.create(true);
+        public static ManagedToComparableValue create() {
+            return ManagedToComparableValueNodeGen.create();
         }
 
         @TruffleBoundary
@@ -144,7 +145,7 @@ public abstract class ToComparableValue extends LLVMNode {
         @Specialization(guards = "!lib.isPointer(obj)")
         @SuppressWarnings("unused")
         protected long doManaged(Object obj, LLVMObjectNativeLibrary lib,
-                        @Cached("createUseOffset()") ManagedToComparableValue toComparable) {
+                        @Cached("create()") ManagedToComparableValue toComparable) {
             return toComparable.executeWithTarget(obj);
         }
     }
