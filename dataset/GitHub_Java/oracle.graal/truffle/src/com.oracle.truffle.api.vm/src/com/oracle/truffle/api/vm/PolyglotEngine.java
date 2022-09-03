@@ -50,8 +50,6 @@ import java.util.concurrent.Executor;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import org.graalvm.options.OptionValues;
-
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
@@ -213,7 +211,7 @@ public class PolyglotEngine {
         ensureInitialized();
     }
 
-    static void ensureInitialized() {
+    private static void ensureInitialized() {
         if (VMAccessor.SPI == null || !(VMAccessor.SPI.engineSupport() instanceof LegacyEngineImpl)) {
             VMAccessor.initialize(new LegacyEngineImpl());
         }
@@ -1067,8 +1065,8 @@ public class PolyglotEngine {
          * language code. The general strategy is to {@linkplain PolyglotEngine#eval(Source)
          * evaluate} guest language code that produces the desired language element and then use
          * this method to create a Java object of the appropriate type for Java access to the
-         * result. The tutorial
-         * <a href= "{@docRoot}/com/oracle/truffle/tutorial/embedding/package-summary.html" >
+         * result. The tutorial <a href=
+         * "{@docRoot}/com/oracle/truffle/tutorial/embedding/package-summary.html" >
          * "Embedding Truffle Languages in Java"</a> contains examples.
          *
          * @param <T> the type of the requested view
@@ -1153,8 +1151,8 @@ public class PolyglotEngine {
          * language code. The general strategy is to {@linkplain PolyglotEngine#eval(Source)
          * evaluate} guest language code that produces the desired language element. If that element
          * is a guest language function, this method allows direct execution without giving the
-         * function a Java type. The tutorial
-         * <a href= "{@docRoot}/com/oracle/truffle/tutorial/embedding/package-summary.html" >
+         * function a Java type. The tutorial <a href=
+         * "{@docRoot}/com/oracle/truffle/tutorial/embedding/package-summary.html" >
          * "Embedding Truffle Languages in Java"</a> contains examples.
          *
          * @param args arguments to pass when executing the value
@@ -1521,17 +1519,6 @@ public class PolyglotEngine {
         @Override
         public Env getEnvForLanguage(Object vmObject, String mimeType) {
             return ((Language) vmObject).engine().findLanguage(mimeType, true).getEnv(true);
-        }
-
-        @Override
-        public OptionValues getCompilerOptionValues(RootNode rootNode) {
-            // not supported for PolyglotEngine
-            return null;
-        }
-
-        @Override
-        public Object getVMFromLanguageObject(Object engineObject) {
-            return ((LanguageShared) engineObject).runtime;
         }
 
         @Override
