@@ -27,21 +27,21 @@ import java.util.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.spi.types.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
 
 /**
  * The {@code NewArrayNode} class is the base of all instructions that allocate arrays.
  */
-public abstract class NewArrayNode extends FixedWithNextNode implements Lowerable, EscapeAnalyzable, ArrayLengthProvider {
+public abstract class NewArrayNode extends FixedWithNextNode implements EscapeAnalyzable, TypeFeedbackProvider {
 
     @Input private ValueNode length;
-    private final ResolvedJavaType elementType;
 
     public static final int MaximumEscapeAnalysisArrayLength = 32;
 
-    @Override
     public ValueNode length() {
         return length;
     }
@@ -50,10 +50,9 @@ public abstract class NewArrayNode extends FixedWithNextNode implements Lowerabl
      * Constructs a new NewArrayNode.
      * @param length the node that produces the length for this allocation
      */
-    protected NewArrayNode(ResolvedJavaType elementType, ValueNode length) {
-        super(StampFactory.exactNonNull(elementType.arrayOf()));
+    protected NewArrayNode(Stamp stamp, ValueNode length) {
+        super(stamp);
         this.length = length;
-        this.elementType = elementType;
     }
 
     /**
@@ -65,32 +64,26 @@ public abstract class NewArrayNode extends FixedWithNextNode implements Lowerabl
     }
 
     /**
-     * Gets the element type of the array.
-     * @return the element type of the array
-     */
-    public ResolvedJavaType elementType() {
-        return elementType;
-    }
-
-    /**
      * The rank of the array allocated by this node, i.e. how many array dimensions.
      */
     public int dimensionCount() {
         return 1;
     }
 
-    public EscapeOp getEscapeOp() {
-        Constant constantLength = length().asConstant();
-        if (constantLength != null && constantLength.asInt() >= 0 && constantLength.asInt() < MaximumEscapeAnalysisArrayLength) {
-            return ESCAPE;
-        } else {
-            return null;
-        }
-    }
+    /**
+     * Gets the element type of the array.
+     * @return the element type of the array
+     */
+    public abstract ResolvedJavaType elementType();
 
     @Override
-    public void lower(LoweringTool tool) {
-        tool.getRuntime().lower(this, tool);
+    public void typeFeedback(TypeFeedbackTool tool) {
+        assert length.kind() == Kind.Int;
+        tool.addScalar(length).constantBound(Condition.GE, Constant.INT_0);
+    }
+
+    public EscapeOp getEscapeOp() {
+        return ESCAPE;
     }
 
     private static final EscapeOp ESCAPE = new EscapeOp() {
@@ -112,12 +105,6 @@ public abstract class NewArrayNode extends FixedWithNextNode implements Lowerabl
                 fields[i] = new EscapeField(Integer.toString(i), representation, ((NewArrayNode) node).elementType());
             }
             return fields;
-        }
-
-        @Override
-        public ResolvedJavaType type(Node node) {
-            NewArrayNode x = (NewArrayNode) node;
-            return x.elementType.arrayOf();
         }
 
         @Override
