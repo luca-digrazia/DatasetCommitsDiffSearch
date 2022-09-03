@@ -25,43 +25,32 @@ package com.oracle.graal.nodes.extended;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
 
 /**
  * Location node that has a constant displacement. Can represent addresses of the form [base + disp]
  * where base is a node and disp is a constant.
  */
 @NodeInfo(nameTemplate = "Loc {p#locationIdentity/s}")
-public final class ConstantLocationNode extends LocationNode {
+public class ConstantLocationNode extends LocationNode {
 
-    private final Kind valueKind;
-    private final Object locationIdentity;
     private final long displacement;
+
+    public long displacement() {
+        return displacement;
+    }
 
     public static ConstantLocationNode create(Object identity, Kind kind, long displacement, Graph graph) {
         return graph.unique(new ConstantLocationNode(identity, kind, displacement));
     }
 
-    private ConstantLocationNode(Object identity, Kind kind, long displacement) {
-        super(StampFactory.extension());
-        assert kind != Kind.Illegal && kind != Kind.Void;
-        this.valueKind = kind;
-        this.locationIdentity = identity;
+    protected ConstantLocationNode(Object identity, Kind kind, long displacement) {
+        super(identity, kind);
         this.displacement = displacement;
     }
 
     @Override
-    public Kind getValueKind() {
-        return valueKind;
-    }
-
-    @Override
-    public Object locationIdentity() {
-        return locationIdentity;
-    }
-
-    public long displacement() {
-        return displacement;
+    protected ConstantLocationNode addDisplacement(long x) {
+        return create(locationIdentity(), getValueKind(), displacement + x, graph());
     }
 
     @Override

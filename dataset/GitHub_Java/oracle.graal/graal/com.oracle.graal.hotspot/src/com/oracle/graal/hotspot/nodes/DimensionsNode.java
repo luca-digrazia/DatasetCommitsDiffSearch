@@ -27,6 +27,7 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.word.*;
 
 /**
@@ -37,8 +38,8 @@ public final class DimensionsNode extends FixedWithNextNode implements LIRGenLow
 
     private final int rank;
 
-    private DimensionsNode(int rank) {
-        super(null);
+    public DimensionsNode(int rank) {
+        super(StampFactory.forWord());
         this.rank = rank;
     }
 
@@ -50,6 +51,6 @@ public final class DimensionsNode extends FixedWithNextNode implements LIRGenLow
         gen.setResult(this, result);
     }
 
-    @NodeIntrinsic(setStampFromReturnType = true)
+    @NodeIntrinsic
     public static native Word allocaDimsArray(@ConstantNodeParameter int rank);
 }

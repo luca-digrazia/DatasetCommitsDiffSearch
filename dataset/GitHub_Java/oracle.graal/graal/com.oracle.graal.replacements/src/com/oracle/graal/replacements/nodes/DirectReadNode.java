@@ -22,13 +22,13 @@
  */
 package com.oracle.graal.replacements.nodes;
 
-import static com.oracle.graal.compiler.common.UnsafeAccess.*;
+import static com.oracle.graal.graph.UnsafeAccess.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
 /**
  * A special purpose store node that differs from {@link UnsafeStoreNode} in that it is not a
@@ -45,13 +45,9 @@ public class DirectReadNode extends FixedWithNextNode implements LIRLowerable {
         this.readKind = readKind;
     }
 
-    protected ValueNode getAddress() {
-        return address;
-    }
-
     @Override
-    public void generate(NodeLIRBuilderTool gen) {
-        gen.setResult(this, gen.getLIRGeneratorTool().emitLoad(readKind, gen.operand(address), null));
+    public void generate(LIRGeneratorTool gen) {
+        gen.setResult(this, gen.emitLoad(readKind, gen.operand(address), null));
     }
 
     @SuppressWarnings("unchecked")

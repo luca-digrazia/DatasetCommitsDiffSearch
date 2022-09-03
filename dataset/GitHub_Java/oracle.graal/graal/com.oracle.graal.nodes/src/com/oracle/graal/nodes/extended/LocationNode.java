@@ -35,6 +35,9 @@ import com.oracle.graal.nodes.type.*;
  */
 public abstract class LocationNode extends FloatingNode implements LIRLowerable, ValueNumberable {
 
+    private Kind valueKind;
+    private Object locationIdentity;
+
     /**
      * Creates a new unique location identity for read and write operations.
      * 
@@ -73,24 +76,25 @@ public abstract class LocationNode extends FloatingNode implements LIRLowerable,
         return elementKind;
     }
 
-    protected LocationNode(Stamp stamp) {
-        super(stamp);
+    protected LocationNode(Object identity, Kind kind) {
+        super(StampFactory.extension());
+        assert kind != Kind.Illegal && kind != Kind.Void;
+        this.valueKind = kind;
+        this.locationIdentity = identity;
     }
 
-    /**
-     * Returns the kind of the accessed memory value.
-     */
-    public abstract Kind getValueKind();
+    public Kind getValueKind() {
+        return valueKind;
+    }
 
-    /**
-     * Returns the identity of the accessed memory location. Apart from the special values
-     * {@link #ANY_LOCATION} and {@link #FINAL_LOCATION}, a different location identity of two
-     * memory accesses guarantees that the two accesses do not interfere.
-     */
-    public abstract Object locationIdentity();
+    public Object locationIdentity() {
+        return locationIdentity;
+    }
+
+    protected abstract LocationNode addDisplacement(long displacement);
 
     @Override
-    public final void generate(LIRGeneratorTool generator) {
+    public void generate(LIRGeneratorTool generator) {
         // nothing to do...
     }
 
