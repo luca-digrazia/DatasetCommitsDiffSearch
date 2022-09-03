@@ -65,7 +65,6 @@ import org.junit.Assert;
 import org.junit.Test;
 
 import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleContext;
 import com.oracle.truffle.api.TruffleLanguage;
@@ -637,7 +636,6 @@ public class LoggingTest {
     private static void testLogToStream(Context.Builder contextBuilder, CloseableByteArrayOutputStream stream, boolean expectStreamClosed) {
         AbstractLoggingLanguage.action = new BiPredicate<LoggingContext, Collection<TruffleLogger>>() {
             @Override
-            @CompilerDirectives.TruffleBoundary
             public boolean test(final LoggingContext context, final Collection<TruffleLogger> loggers) {
                 TruffleLogger.getLogger(LoggingLanguageFirst.ID).warning(LoggingLanguageFirst.ID);
                 TruffleLogger.getLogger(LoggingLanguageFirst.ID, "package.class").warning(LoggingLanguageFirst.ID + "::package.class");
