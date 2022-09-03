@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -30,9 +30,15 @@
 package com.oracle.truffle.llvm.runtime.vector;
 
 import com.oracle.truffle.api.CompilerDirectives.ValueType;
+import com.oracle.truffle.llvm.runtime.LLVMAddress;
+import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
+
+import java.util.Arrays;
 
 @ValueType
-public final class LLVMI8Vector extends LLVMVector {
+public final class LLVMI8Vector {
+
+    private static final int I8_SIZE = 1;
     private final byte[] vector;
 
     public static LLVMI8Vector create(byte[] vector) {
@@ -43,6 +49,162 @@ public final class LLVMI8Vector extends LLVMVector {
         this.vector = vector;
     }
 
+    public static LLVMI8Vector readVectorFromMemory(LLVMAddress address, int size) {
+        byte[] vector = new byte[size];
+        long currentPtr = address.getVal();
+        for (int i = 0; i < size; i++) {
+            vector[i] = LLVMMemory.getI8(currentPtr);
+            currentPtr += I8_SIZE;
+        }
+        return create(vector);
+    }
+
+    public static void writeVectorToMemory(LLVMAddress address, LLVMI8Vector vector) {
+        long currentPtr = address.getVal();
+        for (int i = 0; i < vector.getLength(); i++) {
+            LLVMMemory.putI8(currentPtr, vector.getValue(i));
+            currentPtr += I8_SIZE;
+        }
+    }
+
+    // We do not want to use lambdas because of bad startup
+    private interface Operation {
+        byte eval(byte a, byte b);
+    }
+
+    private static LLVMI8Vector doOperation(LLVMI8Vector lhs, LLVMI8Vector rhs, Operation op) {
+        byte[] left = lhs.vector;
+        byte[] right = rhs.vector;
+
+        // not sure if this assert is true for llvm ir in general
+        // this implementation however assumes it
+        assert left.length == right.length;
+
+        byte[] result = new byte[left.length];
+
+        for (int i = 0; i < left.length; i++) {
+            result[i] = op.eval(left[i], right[i]);
+        }
+        return create(result);
+    }
+
+    public LLVMI8Vector add(LLVMI8Vector rightValue) {
+        return doOperation(this, rightValue, new Operation() {
+            @Override
+            public byte eval(byte a, byte b) {
+                return (byte) (a + b);
+            }
+        });
+    }
+
+    public LLVMI8Vector mul(LLVMI8Vector rightValue) {
+        return doOperation(this, rightValue, new Operation() {
+            @Override
+            public byte eval(byte a, byte b) {
+                return (byte) (a * b);
+            }
+        });
+    }
+
+    public LLVMI8Vector sub(LLVMI8Vector rightValue) {
+        return doOperation(this, rightValue, new Operation() {
+            @Override
+            public byte eval(byte a, byte b) {
+                return (byte) (a - b);
+            }
+        });
+    }
+
+    public LLVMI8Vector div(LLVMI8Vector rightValue) {
+        return doOperation(this, rightValue, new Operation() {
+            @Override
+            public byte eval(byte a, byte b) {
+                return (byte) (a / b);
+            }
+        });
+    }
+
+    public LLVMI8Vector divUnsigned(LLVMI8Vector rightValue) {
+        return doOperation(this, rightValue, new Operation() {
+            @Override
+            public byte eval(byte a, byte b) {
+                return (byte) (Byte.toUnsignedInt(a) / Byte.toUnsignedInt(b));
+            }
+        });
+    }
+
+    public LLVMI8Vector rem(LLVMI8Vector rightValue) {
+        return doOperation(this, rightValue, new Operation() {
+            @Override
+            public byte eval(byte a, byte b) {
+                return (byte) (a % b);
+            }
+        });
+    }
+
+    public LLVMI8Vector remUnsigned(LLVMI8Vector rightValue) {
+        return doOperation(this, rightValue, new Operation() {
+            @Override
+            public byte eval(byte a, byte b) {
+                return (byte) (Byte.toUnsignedInt(a) % Byte.toUnsignedInt(b));
+            }
+        });
+    }
+
+    public LLVMI8Vector and(LLVMI8Vector rightValue) {
+        return doOperation(this, rightValue, new Operation() {
+            @Override
+            public byte eval(byte a, byte b) {
+                return (byte) (a & b);
+            }
+        });
+    }
+
+    public LLVMI8Vector or(LLVMI8Vector rightValue) {
+        return doOperation(this, rightValue, new Operation() {
+            @Override
+            public byte eval(byte a, byte b) {
+                return (byte) (a | b);
+            }
+        });
+    }
+
+    public LLVMI8Vector leftShift(LLVMI8Vector rightValue) {
+        return doOperation(this, rightValue, new Operation() {
+            @Override
+            public byte eval(byte a, byte b) {
+                return (byte) (a << b);
+            }
+        });
+    }
+
+    public LLVMI8Vector logicalRightShift(LLVMI8Vector rightValue) {
+        return doOperation(this, rightValue, new Operation() {
+            @Override
+            public byte eval(byte a, byte b) {
+                return (byte) (a >>> b);
+            }
+        });
+    }
+
+    public LLVMI8Vector arithmeticRightShift(LLVMI8Vector rightValue) {
+        return doOperation(this, rightValue, new Operation() {
+            @Override
+            public byte eval(byte a, byte b) {
+                return (byte) (a >> b);
+            }
+        });
+    }
+
+    public LLVMI8Vector xor(LLVMI8Vector rightValue) {
+        return doOperation(this, rightValue, new Operation() {
+            @Override
+            public byte eval(byte a, byte b) {
+                return (byte) (a ^ b);
+            }
+        });
+    }
+
     public byte[] getValues() {
         return vector;
     }
@@ -51,8 +213,14 @@ public final class LLVMI8Vector extends LLVMVector {
         return vector[index];
     }
 
-    @Override
+    public LLVMI8Vector insert(byte element, int index) {
+        byte[] copyOf = Arrays.copyOf(vector, vector.length);
+        copyOf[index] = element;
+        return create(copyOf);
+    }
+
     public int getLength() {
         return vector.length;
     }
+
 }

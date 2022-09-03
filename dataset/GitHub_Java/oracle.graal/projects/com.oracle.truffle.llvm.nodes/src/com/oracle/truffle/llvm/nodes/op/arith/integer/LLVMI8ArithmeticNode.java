@@ -32,10 +32,10 @@ package com.oracle.truffle.llvm.nodes.op.arith.integer;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI8Node;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
 @NodeChildren({@NodeChild("leftNode"), @NodeChild("rightNode")})
-public abstract class LLVMI8ArithmeticNode extends LLVMI8Node {
+public abstract class LLVMI8ArithmeticNode extends LLVMExpressionNode {
 
     public abstract static class LLVMI8AddNode extends LLVMI8ArithmeticNode {
         @Specialization
@@ -47,7 +47,7 @@ public abstract class LLVMI8ArithmeticNode extends LLVMI8Node {
     public abstract static class LLVMI8MulNode extends LLVMI8ArithmeticNode {
 
         @Specialization
-        public byte executeDouble(byte left, byte right) {
+        public byte mul(byte left, byte right) {
             return (byte) (left * right);
         }
     }
@@ -55,7 +55,7 @@ public abstract class LLVMI8ArithmeticNode extends LLVMI8Node {
     public abstract static class LLVMI8SubNode extends LLVMI8ArithmeticNode {
 
         @Specialization
-        protected byte add(byte left, byte right) {
+        protected byte sub(byte left, byte right) {
             return (byte) (left - right);
         }
     }
@@ -63,7 +63,7 @@ public abstract class LLVMI8ArithmeticNode extends LLVMI8Node {
     public abstract static class LLVMI8DivNode extends LLVMI8ArithmeticNode {
 
         @Specialization
-        protected byte add(byte left, byte right) {
+        protected byte div(byte left, byte right) {
             return (byte) (left / right);
         }
     }
@@ -71,7 +71,7 @@ public abstract class LLVMI8ArithmeticNode extends LLVMI8Node {
     public abstract static class LLVMI8UDivNode extends LLVMI8ArithmeticNode {
 
         @Specialization
-        protected byte add(byte left, byte right) {
+        protected byte udiv(byte left, byte right) {
             return (byte) (Byte.toUnsignedInt(left) / Byte.toUnsignedInt(right));
         }
     }
@@ -79,7 +79,7 @@ public abstract class LLVMI8ArithmeticNode extends LLVMI8Node {
     public abstract static class LLVMI8RemNode extends LLVMI8ArithmeticNode {
 
         @Specialization
-        protected byte add(byte left, byte right) {
+        protected byte rem(byte left, byte right) {
             return (byte) (left % right);
         }
     }
@@ -87,7 +87,7 @@ public abstract class LLVMI8ArithmeticNode extends LLVMI8Node {
     public abstract static class LLVMI8URemNode extends LLVMI8ArithmeticNode {
 
         @Specialization
-        protected byte add(byte left, byte right) {
+        protected byte urem(byte left, byte right) {
             return (byte) (Byte.toUnsignedInt(left) % Byte.toUnsignedInt(right));
         }
     }
