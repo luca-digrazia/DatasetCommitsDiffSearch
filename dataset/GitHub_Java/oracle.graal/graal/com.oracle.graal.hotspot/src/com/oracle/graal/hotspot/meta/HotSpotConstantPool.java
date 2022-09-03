@@ -65,53 +65,23 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
         InvokeDynamic(config().jvmConstantInvokeDynamic);
         // @formatter:on
 
-        private final int tag;
+        private final int value;
 
-        private static final int ExternalMax = config().jvmConstantExternalMax;
-        private static final int InternalMin = config().jvmConstantInternalMin;
-        private static final int InternalMax = config().jvmConstantInternalMax;
-
-        private JVM_CONSTANT(int tag) {
-            this.tag = tag;
+        private JVM_CONSTANT(int value) {
+            this.value = value;
         }
 
         private static HotSpotVMConfig config() {
             return runtime().getConfig();
         }
 
-        /**
-         * Maps JVM_CONSTANT tags to {@link JVM_CONSTANT} values. Using a separate class for lazy
-         * initialization.
-         */
-        static class TagValueMap {
-            private static final JVM_CONSTANT[] table = new JVM_CONSTANT[ExternalMax + 1 + (InternalMax - InternalMin) + 1];
-            static {
-                assert InternalMin > ExternalMax;
-                for (JVM_CONSTANT e : values()) {
-                    table[indexOf(e.tag)] = e;
+        public static JVM_CONSTANT getEnum(int value) {
+            for (JVM_CONSTANT e : values()) {
+                if (e.value == value) {
+                    return e;
                 }
             }
-
-            private static int indexOf(int tag) {
-                if (tag >= InternalMin) {
-                    return tag - InternalMin + ExternalMax + 1;
-                } else {
-                    assert tag <= ExternalMax;
-                }
-                return tag;
-            }
-
-            static JVM_CONSTANT get(int tag) {
-                JVM_CONSTANT res = table[indexOf(tag)];
-                if (res != null) {
-                    return res;
-                }
-                throw GraalInternalError.shouldNotReachHere("unknown JVM_CONSTANT tag " + tag);
-            }
-        }
-
-        public static JVM_CONSTANT getEnum(int tag) {
-            return TagValueMap.get(tag);
+            throw GraalInternalError.shouldNotReachHere("unknown enum value " + value);
         }
     }
 
@@ -286,7 +256,9 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
      * @return name as {@link String}
      */
     private String getNameRefAt(int index) {
-        return runtime().getCompilerToVM().lookupNameRefInPool(metaspaceConstantPool, index);
+        final long name = runtime().getCompilerToVM().lookupNameRefInPool(metaspaceConstantPool, index);
+        HotSpotSymbol symbol = new HotSpotSymbol(name);
+        return symbol.asString();
     }
 
     /**
@@ -310,7 +282,9 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
      * @return signature as {@link String}
      */
     private String getSignatureRefAt(int index) {
-        return runtime().getCompilerToVM().lookupSignatureRefInPool(metaspaceConstantPool, index);
+        final long name = runtime().getCompilerToVM().lookupSignatureRefInPool(metaspaceConstantPool, index);
+        HotSpotSymbol symbol = new HotSpotSymbol(name);
+        return symbol.asString();
     }
 
     /**
@@ -409,7 +383,9 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
     @Override
     public String lookupUtf8(int cpi) {
         assertTag(cpi, JVM_CONSTANT.Utf8);
-        return runtime().getCompilerToVM().getSymbol(getEntryAt(cpi));
+        final long metaspaceSymbol = getEntryAt(cpi);
+        HotSpotSymbol symbol = new HotSpotSymbol(metaspaceSymbol);
+        return symbol.asString();
     }
 
     @Override
@@ -436,11 +412,10 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
      * @param metaspacePointer either a metaspace Klass or a metaspace Symbol
      */
     private static JavaType getJavaType(final long metaspacePointer) {
-        HotSpotGraalRuntime runtime = runtime();
-        HotSpotVMConfig config = runtime.getConfig();
+        HotSpotVMConfig config = runtime().getConfig();
         if ((metaspacePointer & config.compilerToVMSymbolTag) != 0) {
             final long metaspaceSymbol = metaspacePointer & ~config.compilerToVMSymbolTag;
-            String name = runtime.getCompilerToVM().getSymbol(metaspaceSymbol);
+            String name = new HotSpotSymbol(metaspaceSymbol).asString();
             return HotSpotUnresolvedJavaType.create("L" + name + ";");
         } else {
             assert (metaspacePointer & config.compilerToVMKlassTag) == 0;
