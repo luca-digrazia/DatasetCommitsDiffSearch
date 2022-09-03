@@ -22,37 +22,9 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+public final class SerialArrayRangeWriteBarrier extends ArrayRangeWriteBarrier {
 
-public final class SerialArrayRangeWriteBarrier extends FixedWithNextNode implements Lowerable {
-
-    @Input private ValueNode destinationObject;
-    @Input private ValueNode destinationStartingIndex;
-    @Input private ValueNode length;
-
-    public ValueNode getDestinationObject() {
-        return destinationObject;
+    public SerialArrayRangeWriteBarrier(ValueNode object, ValueNode startIndex, ValueNode length) {
+        super(object, startIndex, length);
     }
-
-    public ValueNode getDestinationStartingIndex() {
-        return destinationStartingIndex;
-    }
-
-    public ValueNode getLength() {
-        return length;
-    }
-
-    public SerialArrayRangeWriteBarrier(ValueNode destinationObject, ValueNode destinationStartingIndex, ValueNode length) {
-        super(StampFactory.forVoid());
-        this.destinationObject = destinationObject;
-        this.destinationStartingIndex = destinationStartingIndex;
-        this.length = length;
-
-    }
-
-    public void lower(LoweringTool generator) {
-        generator.getRuntime().lower(this, generator);
-    }
-
 }
