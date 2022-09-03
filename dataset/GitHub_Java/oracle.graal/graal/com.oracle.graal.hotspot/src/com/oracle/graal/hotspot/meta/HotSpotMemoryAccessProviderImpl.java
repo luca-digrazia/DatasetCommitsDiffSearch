@@ -26,13 +26,14 @@ import static com.oracle.graal.compiler.common.UnsafeAccess.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.HotSpotVMConfig.CompressEncoding;
 
 /**
  * HotSpot implementation of {@link MemoryAccessProvider}.
  */
-public class HotSpotMemoryAccessProviderImpl implements HotSpotMemoryAccessProvider, HotSpotProxified {
+public class HotSpotMemoryAccessProviderImpl implements HotSpotMemoryAccessProvider, Remote {
 
     protected final HotSpotGraalRuntimeProvider runtime;
 
@@ -46,24 +47,6 @@ public class HotSpotMemoryAccessProviderImpl implements HotSpotMemoryAccessProvi
         } else {
             return null;
         }
-    }
-
-    private boolean isValidObjectFieldDisplacement(Constant base, long displacement) {
-        if (base instanceof HotSpotMetaspaceConstant) {
-            Object metaspaceObject = HotSpotMetaspaceConstantImpl.getMetaspaceObject(base);
-            if (metaspaceObject instanceof HotSpotResolvedObjectTypeImpl) {
-                if (displacement == runtime.getConfig().classMirrorOffset) {
-                    // Klass::_java_mirror is valid for all Klass* values
-                    return true;
-                } else if (displacement == runtime.getConfig().arrayKlassComponentMirrorOffset) {
-                    // ArrayKlass::_component_mirror is only valid for all ArrayKlass* values
-                    return ((HotSpotResolvedObjectTypeImpl) metaspaceObject).mirror().isArray();
-                }
-            } else {
-                throw GraalInternalError.shouldNotReachHere();
-            }
-        }
-        return false;
     }
 
     private static long asRawPointer(Constant base) {
@@ -124,6 +107,8 @@ public class HotSpotMemoryAccessProviderImpl implements HotSpotMemoryAccessProvi
                     assert expected == ((HotSpotResolvedObjectTypeImpl) metaspaceObject).mirror();
                 } else if (displacement == runtime.getConfig().arrayKlassComponentMirrorOffset) {
                     assert expected == ((HotSpotResolvedObjectTypeImpl) metaspaceObject).mirror().getComponentType();
+                } else if (displacement == runtime.getConfig().instanceKlassNodeClassOffset) {
+                    assert expected == NodeClass.get(((HotSpotResolvedObjectTypeImpl) metaspaceObject).mirror());
                 }
             }
         }
@@ -137,6 +122,7 @@ public class HotSpotMemoryAccessProviderImpl implements HotSpotMemoryAccessProvi
         if (base == null) {
             displacement += asRawPointer(baseConstant);
         }
+
         Object ret = runtime.getCompilerToVM().readUnsafeOop(base, displacement, compressed);
         assert verifyReadRawObject(ret, baseConstant, initialDisplacement, compressed);
 
@@ -184,9 +170,6 @@ public class HotSpotMemoryAccessProviderImpl implements HotSpotMemoryAccessProvi
 
     @Override
     public JavaConstant readObjectConstant(Constant base, long displacement) {
-        if (!isValidObjectFieldDisplacement(base, displacement)) {
-            return null;
-        }
         return HotSpotObjectConstantImpl.forObject(readRawObject(base, displacement, false));
     }
 
