@@ -39,7 +39,6 @@ import com.oracle.graal.nodes.*;
 public abstract class BasePhase<C> {
 
     public static final int PHASE_DUMP_LEVEL = 1;
-    public static final int BEFORE_PHASE_DUMP_LEVEL = 3;
 
     private CharSequence name;
 
@@ -97,9 +96,6 @@ public abstract class BasePhase<C> {
 
     public final void apply(final StructuredGraph graph, final C context, final boolean dumpGraph) {
         try (TimerCloseable a = timer.start(); Scope s = Debug.scope(getClass(), this); Closeable c = memUseTracker.start()) {
-            if (dumpGraph && Debug.isDumpEnabled(BEFORE_PHASE_DUMP_LEVEL)) {
-                Debug.dump(BEFORE_PHASE_DUMP_LEVEL, graph, "Before phase %s", getName());
-            }
             this.run(graph, context);
             executionCount.increment();
             inputNodesCount.add(graph.getNodeCount());
@@ -116,8 +112,7 @@ public abstract class BasePhase<C> {
     }
 
     protected CharSequence createName() {
-        String className = BasePhase.this.getClass().getName();
-        String s = className.substring(className.lastIndexOf(".") + 1); // strip the package name
+        String s = BasePhase.this.getClass().getSimpleName();
         if (s.endsWith("Phase")) {
             s = s.substring(0, s.length() - "Phase".length());
         }

@@ -30,7 +30,6 @@ import com.oracle.graal.graph.Node;
 import com.oracle.graal.nodes.calc.ObjectEqualsNode;
 import com.oracle.graal.nodes.util.GraphUtil;
 import com.oracle.graal.phases.common.cfs.FlowSensitiveReductionPhase;
-
 import org.junit.*;
 
 import com.oracle.graal.nodes.*;
@@ -376,7 +375,7 @@ public class FlowSenReduTest extends GraalCompilerTest {
     }
 
     public StructuredGraph afterFlowSensitiveReduce(String snippet) {
-        StructuredGraph before = canonicalize(parseEager(snippet));
+        StructuredGraph before = canonicalize(parse(snippet));
         // visualize(before, snippet + "-before");
         StructuredGraph result = flowSensitiveReduce(before);
         // visualize(result, snippet + "-after");

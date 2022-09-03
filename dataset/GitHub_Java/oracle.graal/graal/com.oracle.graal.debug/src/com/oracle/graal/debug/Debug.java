@@ -1082,37 +1082,17 @@ public class Debug {
     static {
         Set<String> metrics = new HashSet<>();
         Set<String> timers = new HashSet<>();
-        parseMetricAndTimerSystemProperties(metrics, timers);
+        for (Map.Entry<Object, Object> e : System.getProperties().entrySet()) {
+            String name = e.getKey().toString();
+            if (name.startsWith(ENABLE_METRIC_PROPERTY_NAME_PREFIX) && Boolean.parseBoolean(e.getValue().toString())) {
+                metrics.add(name.substring(ENABLE_METRIC_PROPERTY_NAME_PREFIX.length()));
+            }
+            if (name.startsWith(ENABLE_TIMER_PROPERTY_NAME_PREFIX) && Boolean.parseBoolean(e.getValue().toString())) {
+                timers.add(name.substring(ENABLE_TIMER_PROPERTY_NAME_PREFIX.length()));
+            }
+        }
         enabledMetrics = metrics.isEmpty() ? null : metrics;
         enabledTimers = timers.isEmpty() ? null : timers;
-    }
-
-    public static boolean areUnconditionalTimersEnabled() {
-        return enabledTimers != null && !enabledTimers.isEmpty();
-    }
-
-    public static boolean areUnconditionalMetricsEnabled() {
-        return enabledMetrics != null && !enabledMetrics.isEmpty();
-    }
-
-    protected static void parseMetricAndTimerSystemProperties(Set<String> metrics, Set<String> timers) {
-        do {
-            try {
-                for (Map.Entry<Object, Object> e : System.getProperties().entrySet()) {
-                    String name = e.getKey().toString();
-                    if (name.startsWith(ENABLE_METRIC_PROPERTY_NAME_PREFIX) && Boolean.parseBoolean(e.getValue().toString())) {
-                        metrics.add(name.substring(ENABLE_METRIC_PROPERTY_NAME_PREFIX.length()));
-                    }
-                    if (name.startsWith(ENABLE_TIMER_PROPERTY_NAME_PREFIX) && Boolean.parseBoolean(e.getValue().toString())) {
-                        timers.add(name.substring(ENABLE_TIMER_PROPERTY_NAME_PREFIX.length()));
-                    }
-                }
-                return;
-            } catch (ConcurrentModificationException e) {
-                // Iterating over the system properties may race with another thread that is
-                // updating the system properties. Simply try again in this case.
-            }
-        } while (true);
     }
 
     /**
