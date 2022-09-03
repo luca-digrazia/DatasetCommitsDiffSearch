@@ -34,6 +34,7 @@ import static org.junit.Assert.fail;
 
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
+import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -52,13 +53,16 @@ import com.oracle.truffle.api.debug.Debugger;
 import com.oracle.truffle.api.debug.DebuggerSession;
 import com.oracle.truffle.api.debug.SuspendedCallback;
 import com.oracle.truffle.api.debug.SuspendedEvent;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrumentation.SourceSectionFilter;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
+import com.oracle.truffle.api.instrumentation.TruffleInstrument.Env;
 import com.oracle.truffle.api.interop.ForeignAccess.Factory18;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.java.JavaInterop;
 import com.oracle.truffle.api.interop.java.MethodMessage;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
@@ -66,13 +70,11 @@ import com.oracle.truffle.api.vm.PolyglotEngine;
 import com.oracle.truffle.api.vm.PolyglotEngine.Builder;
 import com.oracle.truffle.api.vm.PolyglotEngine.Language;
 import com.oracle.truffle.api.vm.PolyglotEngine.Value;
-import com.oracle.truffle.api.vm.PolyglotRuntime;
 import com.oracle.truffle.tck.Schema.Type;
 import com.oracle.truffle.tck.impl.LongBinaryOperation;
 import com.oracle.truffle.tck.impl.ObjectBinaryOperation;
 import com.oracle.truffle.tck.impl.TckInstrument;
 import com.oracle.truffle.tck.impl.TestObject;
-import java.lang.reflect.Field;
 
 /**
  * Test compatibility kit (the <em>TCK</em>) is a collection of tests to certify your
@@ -150,7 +152,6 @@ public abstract class TruffleTCK {
     @AfterClass
     public static void disposePreviousVM() {
         replacePreviousVM(null);
-
     }
 
     private static void replacePreviousVM(PolyglotEngine newVM) {
@@ -361,7 +362,8 @@ public abstract class TruffleTCK {
     /**
      * Code snippet to multiply two variables. The test uses the snippet as a parameter to your
      * language' s
-     * {@link TruffleLanguage#parse(com.oracle.truffle.api.TruffleLanguage.ParsingRequest)} method.
+     * {@link TruffleLanguage#parse(com.oracle.truffle.api.source.Source, com.oracle.truffle.api.nodes.Node, java.lang.String...)}
+     * method.
      *
      * @param firstName name of the first variable to multiplyCode
      * @param secondName name of the second variable to multiplyCode
@@ -2124,11 +2126,16 @@ public abstract class TruffleTCK {
         for (int i = 0; i < ids.length; i += 2) {
             PolyglotEngine.Value valueFunction = findGlobalSymbol(ids[i]);
             String metaObjectStr;
-            PolyglotRuntime.Instrument instr = vm().getRuntime().getInstruments().get(TckInstrument.ID);
+            PolyglotEngine.Instrument instr = vm().getInstruments().get(TckInstrument.ID);
             instr.setEnabled(true);
             try {
                 Value value = valueFunction.execute();
-                metaObjectStr = value.getMetaObject().as(String.class);
+                TckInstrument tckInstrument = instr.lookup(TckInstrument.class);
+                assertNotNull(tckInstrument);
+                TruffleInstrument.Env env = tckInstrument.getEnvironment();
+                assertNotNull(env);
+                Object metaObject = findMetaObject(env, value);
+                metaObjectStr = env.toString(createDummyNode(findTruffleLanguage(value)), metaObject);
             } finally {
                 instr.setEnabled(false);
             }
@@ -2137,6 +2144,27 @@ public abstract class TruffleTCK {
 
             assertEquals(mo, metaObjectStr);
         }
+    }
+
+    @SuppressWarnings("rawtypes")
+    private static Class<? extends TruffleLanguage> findTruffleLanguage(Value value) throws Exception {
+        Field targetField = PolyglotEngine.Value.class.getDeclaredField("language");
+        targetField.setAccessible(true);
+        return ((TruffleLanguage<?>[]) targetField.get(value))[0].getClass();
+    }
+
+    private static Object findMetaObject(Env env, Value value) throws Exception {
+        return env.findMetaObject(createDummyNode(findTruffleLanguage(value)), value.get());
+    }
+
+    private static Node createDummyNode(@SuppressWarnings("rawtypes") Class<? extends TruffleLanguage> lang) {
+        return new RootNode(lang, null, null) {
+
+            @Override
+            public Object execute(VirtualFrame frame) {
+                return null;
+            }
+        };
     }
 
     /** @since 0.22 */
@@ -2148,7 +2176,7 @@ public abstract class TruffleTCK {
         }
         PolyglotEngine.Value valueFunction = findGlobalSymbol(id);
         SourceSection sourceLocation;
-        PolyglotRuntime.Instrument instr = vm().getRuntime().getInstruments().get(TckInstrument.ID);
+        PolyglotEngine.Instrument instr = vm().getInstruments().get(TckInstrument.ID);
         instr.setEnabled(true);
         try {
             Value value = valueFunction.execute();
@@ -2156,7 +2184,7 @@ public abstract class TruffleTCK {
             assertNotNull(tckInstrument);
             TruffleInstrument.Env env = tckInstrument.getEnvironment();
             assertNotNull(env);
-            sourceLocation = value.getSourceLocation();
+            sourceLocation = env.findSourceLocation(createDummyNode(findTruffleLanguage(value)), value.get());
             assertNotNull(sourceLocation);
             List<SourceSection> lss = env.getInstrumenter().querySourceSections(SourceSectionFilter.ANY);
             assertTrue("Source section not among loaded sections", lss.contains(sourceLocation));
@@ -2204,19 +2232,7 @@ public abstract class TruffleTCK {
     }
 
     private static Object unwrapTruffleObject(Object obj) {
-        try {
-            if (obj instanceof TruffleObject) {
-                Class<?> eto = Class.forName("com.oracle.truffle.api.vm.EngineTruffleObject");
-                if (eto.isInstance(obj)) {
-                    final Field field = eto.getDeclaredField("delegate");
-                    field.setAccessible(true);
-                    return field.get(obj);
-                }
-            }
-            return obj;
-        } catch (Exception ex) {
-            throw new IllegalStateException(ex);
-        }
+        return obj;
     }
 
     interface CompoundObject {
