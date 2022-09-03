@@ -47,7 +47,6 @@ import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.java.BciBlockMapping.BciBlock;
 import com.oracle.graal.java.BciBlockMapping.ExceptionDispatchBlock;
 import com.oracle.graal.java.BciBlockMapping.LocalLiveness;
-import com.oracle.graal.java.GraphBuilderPlugin.AnnotatedInvocationPlugin;
 import com.oracle.graal.java.GraphBuilderPlugin.InlineInvokePlugin;
 import com.oracle.graal.java.GraphBuilderPlugin.InvocationPlugin;
 import com.oracle.graal.java.GraphBuilderPlugin.LoopExplosionPlugin;
@@ -861,15 +860,11 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 }
 
                 if (tryInvocationPlugin(args, targetMethod, resultType)) {
-                    if (GraalOptions.TraceInlineDuringParsing.getValue()) {
-                        TTY.println(format("%sUsed invocation plugin for %s", nSpaces(currentDepth), targetMethod));
-                    }
-                    return;
-                }
-
-                if (tryAnnotatedInvocationPlugin(args, targetMethod)) {
-                    if (GraalOptions.TraceInlineDuringParsing.getValue()) {
-                        TTY.println(format("%sUsed annotated invocation plugin for %s", nSpaces(currentDepth), targetMethod));
+                    if (TraceInlineDuringParsing.getValue()) {
+                        for (int i = 0; i < this.currentDepth; ++i) {
+                            TTY.print(' ');
+                        }
+                        TTY.println("Used invocation plugin for " + targetMethod);
                     }
                     return;
                 }
@@ -908,11 +903,6 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                     assert beforeStackSize == frameState.stackSize : "plugin that returns false must modify the stack";
                 }
                 return false;
-            }
-
-            private boolean tryAnnotatedInvocationPlugin(ValueNode[] args, ResolvedJavaMethod targetMethod) {
-                AnnotatedInvocationPlugin plugin = graphBuilderConfig.getAnnotatedInvocationPlugin();
-                return plugin != null && plugin.apply(this, targetMethod, args);
             }
 
             private boolean containsNullCheckOf(NodeIterable<Node> nodes, Node value) {
