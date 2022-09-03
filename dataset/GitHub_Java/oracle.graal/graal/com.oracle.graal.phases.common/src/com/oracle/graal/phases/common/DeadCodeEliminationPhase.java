@@ -22,111 +22,111 @@
  */
 package com.oracle.graal.phases.common;
 
-import com.oracle.graal.debug.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.phases.*;
-
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.DebugMetric;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeFlood;
+import com.oracle.graal.nodes.AbstractEndNode;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.options.Option;
+import com.oracle.graal.options.OptionType;
+import com.oracle.graal.options.OptionValue;
+import com.oracle.graal.phases.Phase;
 
 public class DeadCodeEliminationPhase extends Phase {
+
+    public static class Options {
+        // @formatter:off
+        @Option(help = "Disable optional dead code eliminations", type = OptionType.Debug)
+        public static final OptionValue<Boolean> ReduceDCE = new OptionValue<>(true);
+        // @formatter:on
+    }
 
     // Metrics
     private static final DebugMetric metricNodesRemoved = Debug.metric("NodesRemoved");
 
-    private NodeFlood flood;
+    public enum Optionality {
+        Optional,
+        Required;
+    }
+
+    /**
+     * Creates a dead code elimination phase that will be run irrespective of
+     * {@link Options#ReduceDCE}.
+     */
+    public DeadCodeEliminationPhase() {
+        this(Optionality.Required);
+    }
+
+    /**
+     * Creates a dead code elimination phase that will be run only if it is
+     * {@linkplain Optionality#Required non-optional} or {@link Options#ReduceDCE} is false.
+     */
+    public DeadCodeEliminationPhase(Optionality optionality) {
+        this.optional = optionality == Optionality.Optional;
+    }
+
+    private final boolean optional;
 
     @Override
-    protected void run(StructuredGraph graph) {
-        this.flood = graph.createNodeFlood();
-
-        flood.add(graph.start());
-        iterateSuccessors();
-        disconnectCFGNodes(graph);
-        iterateInputs(graph);
-        deleteNodes(graph);
-
-        // remove chained Merges
-        for (MergeNode merge : graph.getNodes(MergeNode.class)) {
-            if (merge.forwardEndCount() == 1 && !(merge instanceof LoopBeginNode)) {
-                graph.reduceTrivialMerge(merge);
-            }
+    public void run(StructuredGraph graph) {
+        if (optional && Options.ReduceDCE.getValue()) {
+            return;
         }
+
+        NodeFlood flood = graph.createNodeFlood();
+        int totalNodeCount = graph.getNodeCount();
+        flood.add(graph.start());
+        iterateSuccessorsAndInputs(flood);
+        int totalMarkedCount = flood.getTotalMarkedCount();
+        if (totalNodeCount == totalMarkedCount) {
+            // All nodes are live => nothing more to do.
+            return;
+        } else {
+            // Some nodes are not marked alive and therefore dead => proceed.
+            assert totalNodeCount > totalMarkedCount;
+        }
+
+        deleteNodes(flood, graph);
     }
 
-    private void iterateSuccessors() {
+    private static void iterateSuccessorsAndInputs(NodeFlood flood) {
+        Node.EdgeVisitor consumer = new Node.EdgeVisitor() {
+            @Override
+            public Node apply(Node n, Node succOrInput) {
+                assert succOrInput.isAlive() : "dead successor or input " + succOrInput + " in " + n;
+                flood.add(succOrInput);
+                return succOrInput;
+            }
+        };
         for (Node current : flood) {
-            if (current instanceof EndNode) {
-                EndNode end = (EndNode) current;
+            if (current instanceof AbstractEndNode) {
+                AbstractEndNode end = (AbstractEndNode) current;
                 flood.add(end.merge());
             } else {
-                for (Node successor : current.successors()) {
-                    flood.add(successor);
-                }
+                current.applySuccessors(consumer);
+                current.applyInputs(consumer);
             }
         }
     }
 
-    private void disconnectCFGNodes(StructuredGraph graph) {
-        for (EndNode node : graph.getNodes(EndNode.class)) {
-            if (!flood.isMarked(node)) {
-                MergeNode merge = node.merge();
-                if (merge != null && flood.isMarked(merge)) {
-                    // We are a dead end node leading to a live merge.
-                    merge.removeEnd(node);
+    private static void deleteNodes(NodeFlood flood, StructuredGraph graph) {
+        Node.EdgeVisitor consumer = new Node.EdgeVisitor() {
+            @Override
+            public Node apply(Node n, Node input) {
+                if (input.isAlive() && flood.isMarked(input)) {
+                    input.removeUsage(n);
                 }
+                return input;
             }
-        }
-        for (LoopBeginNode loop : graph.getNodes(LoopBeginNode.class)) {
-            if (flood.isMarked(loop)) {
-                boolean reachable = false;
-                for (LoopEndNode end : loop.loopEnds()) {
-                    if (flood.isMarked(end)) {
-                        reachable = true;
-                        break;
-                    }
-                }
-                if (!reachable) {
-                    Debug.log("Removing loop with unreachable end: %s", loop);
-                    for (LoopEndNode end : loop.loopEnds().snapshot()) {
-                        loop.removeEnd(end);
-                    }
-                    graph.reduceDegenerateLoopBegin(loop);
-                }
-            }
-        }
-    }
+        };
 
-    private void deleteNodes(StructuredGraph graph) {
         for (Node node : graph.getNodes()) {
             if (!flood.isMarked(node)) {
-                node.clearInputs();
-                node.clearSuccessors();
-            }
-        }
-        for (Node node : graph.getNodes()) {
-            if (!flood.isMarked(node)) {
+                node.markDeleted();
+                node.applyInputs(consumer);
                 metricNodesRemoved.increment();
-                node.safeDelete();
             }
         }
     }
-
-    private void iterateInputs(StructuredGraph graph) {
-        for (Node node : graph.getNodes()) {
-            if (node instanceof LocalNode) {
-                flood.add(node);
-            }
-            if (flood.isMarked(node)) {
-                for (Node input : node.inputs()) {
-                    flood.add(input);
-                }
-            }
-        }
-        for (Node current : flood) {
-            for (Node input : current.inputs()) {
-                flood.add(input);
-            }
-        }
-    }
-
 }

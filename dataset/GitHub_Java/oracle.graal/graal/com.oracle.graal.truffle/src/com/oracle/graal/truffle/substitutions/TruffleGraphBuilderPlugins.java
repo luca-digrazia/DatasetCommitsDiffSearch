@@ -317,7 +317,7 @@ public class TruffleGraphBuilderPlugins {
                         }
                         sb.append(")");
                     }
-                    Debug.dump(Debug.BASIC_LOG_LEVEL, value.graph(), "Graph before bailout at node %s", sb);
+                    Debug.dump(value.graph(), "Graph before bailout at node %s", sb);
                     throw b.bailout("Partial evaluation did not reduce value to a constant, is a regular compiler node: " + sb);
                 }
             }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,76 +22,108 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import jdk.vm.ci.code.CodeUtil;
+
+import com.oracle.graal.compiler.common.type.IntegerStamp;
+import com.oracle.graal.compiler.common.type.PrimitiveStamp;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.Lowerable;
+import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
 @NodeInfo(shortName = "/")
-public final class IntegerDivNode extends IntegerArithmeticNode implements Canonicalizable, LIRLowerable {
+public class IntegerDivNode extends FixedBinaryNode implements Lowerable, LIRLowerable {
+    public static final NodeClass<IntegerDivNode> TYPE = NodeClass.create(IntegerDivNode.class);
 
-    public IntegerDivNode(Kind kind, ValueNode x, ValueNode y) {
-        super(kind, x, y);
+    public IntegerDivNode(ValueNode x, ValueNode y) {
+        this(TYPE, x, y);
+    }
+
+    protected IntegerDivNode(NodeClass<? extends IntegerDivNode> c, ValueNode x, ValueNode y) {
+        super(c, IntegerStamp.OPS.getDiv().foldStamp(x.stamp(), y.stamp()), x, y);
     }
 
     @Override
     public boolean inferStamp() {
-        return updateStamp(StampTool.div(x().integerStamp(), y().integerStamp()));
+        return updateStamp(IntegerStamp.OPS.getDiv().foldStamp(getX().stamp(), getY().stamp()));
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
-        if (x().isConstant() && y().isConstant()) {
-            long yConst = y().asConstant().asLong();
-            if (yConst == 0) {
+    public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
+        if (forX.isConstant() && forY.isConstant()) {
+            @SuppressWarnings("hiding")
+            long y = forY.asJavaConstant().asLong();
+            if (y == 0) {
                 return this; // this will trap, can not canonicalize
             }
-            if (kind() == Kind.Int) {
-                return ConstantNode.forInt(x().asConstant().asInt() / (int) yConst, graph());
-            } else {
-                assert kind() == Kind.Long;
-                return ConstantNode.forLong(x().asConstant().asLong() / yConst, graph());
-            }
-        } else if (y().isConstant()) {
-            long c = y().asConstant().asLong();
+            return ConstantNode.forIntegerStamp(stamp(), forX.asJavaConstant().asLong() / y);
+        } else if (forY.isConstant()) {
+            long c = forY.asJavaConstant().asLong();
             if (c == 1) {
-                return x();
+                return forX;
             }
             if (c == -1) {
-                return graph().unique(new NegateNode(x()));
+                return new NegateNode(forX);
             }
             long abs = Math.abs(c);
-            if (CodeUtil.isPowerOf2(abs)) {
-                ValueNode dividend = x();
-                IntegerStamp stampX = x().integerStamp();
+            if (CodeUtil.isPowerOf2(abs) && forX.stamp() instanceof IntegerStamp) {
+                ValueNode dividend = forX;
+                IntegerStamp stampX = (IntegerStamp) forX.stamp();
                 int log2 = CodeUtil.log2(abs);
-                // no rounding if dividend is negative or if its low bits are always 0
-                if (stampX.lowerBound() < 0 || (stampX.mask() & (abs - 1)) != 0) {
-                    int bits;
-                    if (kind().isInt()) {
-                        bits = 32;
-                    } else {
-                        assert kind().isLong();
-                        bits = 64;
-                    }
-                    RightShiftNode sign = graph().unique(new RightShiftNode(kind(), x(), ConstantNode.forInt(bits - 1, graph())));
-                    UnsignedRightShiftNode round = graph().unique(new UnsignedRightShiftNode(kind(), sign, ConstantNode.forInt(bits - log2, graph())));
-                    dividend = IntegerArithmeticNode.add(dividend, round);
+                // no rounding if dividend is positive or if its low bits are always 0
+                if (stampX.canBeNegative() || (stampX.upMask() & (abs - 1)) != 0) {
+                    int bits = PrimitiveStamp.getBits(stamp());
+                    RightShiftNode sign = new RightShiftNode(forX, ConstantNode.forInt(bits - 1));
+                    UnsignedRightShiftNode round = new UnsignedRightShiftNode(sign, ConstantNode.forInt(bits - log2));
+                    dividend = BinaryArithmeticNode.add(dividend, round);
                 }
-                RightShiftNode shift = graph().unique(new RightShiftNode(kind(), dividend, ConstantNode.forInt(log2, graph())));
+                RightShiftNode shift = new RightShiftNode(dividend, ConstantNode.forInt(log2));
                 if (c < 0) {
-                    return graph().unique(new NegateNode(shift));
+                    return new NegateNode(shift);
                 }
                 return shift;
             }
         }
+
+        // Convert the expression ((a - a % b) / b) into (a / b).
+        if (forX instanceof SubNode) {
+            SubNode integerSubNode = (SubNode) forX;
+            if (integerSubNode.getY() instanceof IntegerRemNode) {
+                IntegerRemNode integerRemNode = (IntegerRemNode) integerSubNode.getY();
+                if (integerSubNode.stamp().isCompatible(this.stamp()) && integerRemNode.stamp().isCompatible(this.stamp()) && integerSubNode.getX() == integerRemNode.getX() &&
+                                forY == integerRemNode.getY()) {
+                    return new IntegerDivNode(integerSubNode.getX(), forY);
+                }
+            }
+        }
+
+        if (next() instanceof IntegerDivNode) {
+            NodeClass<?> nodeClass = getNodeClass();
+            if (next().getClass() == this.getClass() && nodeClass.equalInputs(this, next()) && valueEquals(next())) {
+                return next();
+            }
+        }
+
         return this;
     }
 
     @Override
-    public void generate(LIRGeneratorTool gen) {
-        gen.setResult(this, gen.emitDiv(gen.operand(x()), gen.operand(y())));
+    public void lower(LoweringTool tool) {
+        tool.getLowerer().lower(this, tool);
+    }
+
+    @Override
+    public void generate(NodeLIRBuilderTool gen) {
+        gen.setResult(this, gen.getLIRGeneratorTool().getArithmetic().emitDiv(gen.operand(getX()), gen.operand(getY()), gen.state(this)));
+    }
+
+    @Override
+    public boolean canDeoptimize() {
+        return !(getY().stamp() instanceof IntegerStamp) || ((IntegerStamp) getY().stamp()).contains(0);
     }
 }

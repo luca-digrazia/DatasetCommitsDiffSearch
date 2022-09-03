@@ -22,10 +22,20 @@
  */
 package com.oracle.graal.phases.graph;
 
-import java.util.*;
+import java.util.ArrayDeque;
+import java.util.Deque;
 
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.NodeBitMap;
+import com.oracle.graal.nodes.AbstractBeginNode;
+import com.oracle.graal.nodes.AbstractMergeNode;
+import com.oracle.graal.nodes.ControlSinkNode;
+import com.oracle.graal.nodes.ControlSplitNode;
+import com.oracle.graal.nodes.EndNode;
+import com.oracle.graal.nodes.FixedNode;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.LoopBeginNode;
+import com.oracle.graal.nodes.LoopEndNode;
 
 /**
  * This iterator implements a reverse post order iteration over the fixed nodes in the graph,
@@ -58,9 +68,9 @@ public abstract class StatelessPostOrderNodeIterator {
                 assert !visitedEnds.isMarked(current);
                 visitedEnds.mark(current);
                 current = nodeQueue.pollFirst();
-            } else if (current instanceof MergeNode) {
-                merge((MergeNode) current);
-                current = ((MergeNode) current).next();
+            } else if (current instanceof AbstractMergeNode) {
+                merge((AbstractMergeNode) current);
+                current = ((AbstractMergeNode) current).next();
                 assert current != null;
             } else if (current instanceof FixedWithNextNode) {
                 node(current);
@@ -75,9 +85,7 @@ public abstract class StatelessPostOrderNodeIterator {
             } else if (current instanceof ControlSplitNode) {
                 controlSplit((ControlSplitNode) current);
                 for (Node node : current.successors()) {
-                    if (node != null) {
-                        nodeQueue.addFirst((AbstractBeginNode) node);
-                    }
+                    nodeQueue.addFirst((AbstractBeginNode) node);
                 }
                 current = nodeQueue.pollFirst();
             } else {
@@ -90,7 +98,7 @@ public abstract class StatelessPostOrderNodeIterator {
     private void queueMerge(EndNode end) {
         assert !visitedEnds.isMarked(end);
         visitedEnds.mark(end);
-        MergeNode merge = end.merge();
+        AbstractMergeNode merge = end.merge();
         boolean endsVisited = true;
         for (int i = 0; i < merge.forwardEndCount(); i++) {
             if (!visitedEnds.isMarked(merge.forwardEndAt(i))) {
@@ -111,7 +119,7 @@ public abstract class StatelessPostOrderNodeIterator {
         node(endNode);
     }
 
-    protected void merge(MergeNode merge) {
+    protected void merge(AbstractMergeNode merge) {
         node(merge);
     }
 

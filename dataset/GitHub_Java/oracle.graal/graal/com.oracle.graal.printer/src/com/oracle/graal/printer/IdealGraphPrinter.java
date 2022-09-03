@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.printer;
 
+import static com.oracle.graal.compiler.common.GraalOptions.PrintIdealGraphSchedule;
+
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -32,11 +34,9 @@ import java.util.Set;
 
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 
-import com.oracle.graal.debug.GraalDebugConfig.Options;
 import com.oracle.graal.graph.Graph;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeMap;
-import com.oracle.graal.graph.NodePosIterator;
 import com.oracle.graal.graph.Position;
 import com.oracle.graal.java.BytecodeDisassembler;
 import com.oracle.graal.nodeinfo.Verbosity;
@@ -77,15 +77,10 @@ public class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPr
      * as properties.
      */
     @Override
-    public void beginGroup(String name, String shortName, ResolvedJavaMethod method, int bci, Map<Object, Object> properties) {
+    public void beginGroup(String name, String shortName, ResolvedJavaMethod method, int bci) {
         beginGroup();
         beginProperties();
         printProperty("name", name);
-        if (properties != null) {
-            for (Entry<Object, Object> entry : properties.entrySet()) {
-                printProperty(entry.getKey().toString(), entry.getValue().toString());
-            }
-        }
         endProperties();
         beginMethod(name, shortName, bci);
         if (method != null && method.getCode() != null) {
@@ -99,7 +94,7 @@ public class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPr
      * nodes.
      */
     @Override
-    public void print(Graph graph, String title, Map<Object, Object> properties) {
+    public void print(Graph graph, String title) {
         beginGraph(title);
         Set<Node> noBlockNodes = Node.newSet();
         ScheduleResult schedule = null;
@@ -107,7 +102,7 @@ public class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPr
             StructuredGraph structuredGraph = (StructuredGraph) graph;
             schedule = structuredGraph.getLastSchedule();
             if (schedule == null && tryToSchedule) {
-                if (Options.PrintIdealGraphSchedule.getValue()) {
+                if (PrintIdealGraphSchedule.getValue()) {
                     try {
                         SchedulePhase schedulePhase = new SchedulePhase();
                         schedulePhase.apply(structuredGraph);
@@ -118,14 +113,6 @@ public class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPr
             }
         }
         ControlFlowGraph cfg = schedule == null ? null : schedule.getCFG();
-
-        if (properties != null) {
-            beginProperties();
-            for (Entry<Object, Object> entry : properties.entrySet()) {
-                printProperty(entry.getKey().toString(), entry.getValue().toString());
-            }
-            endProperties();
-        }
 
         beginNodes();
         List<Edge> edges = printNodes(graph, cfg == null ? null : cfg.getNodeToBlock(), noBlockNodes);
@@ -243,9 +230,7 @@ public class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPr
 
             // successors
             int fromIndex = 0;
-            NodePosIterator succIter = node.successors().iterator();
-            while (succIter.hasNext()) {
-                Position position = succIter.nextPosition();
+            for (Position position : node.successorPositions()) {
                 Node successor = position.get(node);
                 if (successor != null) {
                     edges.add(new Edge(node.toString(Verbosity.Id), fromIndex, successor.toString(Verbosity.Id), 0, position.getName()));
@@ -255,9 +240,7 @@ public class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPr
 
             // inputs
             int toIndex = 1;
-            NodePosIterator inputIter = node.inputs().iterator();
-            while (inputIter.hasNext()) {
-                Position position = inputIter.nextPosition();
+            for (Position position : node.inputPositions()) {
                 Node input = position.get(node);
                 if (input != null) {
                     edges.add(new Edge(input.toString(Verbosity.Id), input.successors().count(), node.toString(Verbosity.Id), toIndex, position.getName()));

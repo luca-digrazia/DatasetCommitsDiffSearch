@@ -588,8 +588,7 @@ public class Graph {
         assert node.graph() == this || node.graph() == null;
         assert node.getNodeClass().valueNumberable();
         assert node.getNodeClass().isLeafNode() : node.getClass();
-        CacheEntry entry = new CacheEntry(node);
-        cachedLeafNodes.put(entry, node);
+        cachedLeafNodes.put(new CacheEntry(node), node);
     }
 
     Node findNodeInCache(Node node) {

@@ -46,7 +46,6 @@ import com.oracle.graal.compiler.gen.NodeLIRBuilder;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeBitMap;
 import com.oracle.graal.graph.NodeMap;
-import com.oracle.graal.graph.NodePosIterator;
 import com.oracle.graal.graph.Position;
 import com.oracle.graal.java.BciBlockMapping;
 import com.oracle.graal.java.BytecodeDisassembler;
@@ -361,9 +360,9 @@ class CFGPrinter extends CompilationPrinter {
             out.print(entry.getKey().toString()).print(": ").print(entry.getValue() == null ? "[null]" : entry.getValue().toString()).println();
         }
         out.println("=== Inputs ===");
-        printNamedNodes(node, node.inputs().iterator(), "", "\n", null);
+        printNamedNodes(node, node.inputPositions().iterator(), "", "\n", null);
         out.println("=== Succesors ===");
-        printNamedNodes(node, node.successors().iterator(), "", "\n", null);
+        printNamedNodes(node, node.successorPositions().iterator(), "", "\n", null);
         out.println("=== Usages ===");
         if (!node.hasNoUsages()) {
             for (Node usage : node.usages()) {
@@ -377,8 +376,8 @@ class CFGPrinter extends CompilationPrinter {
 
         out.print("instruction ");
         out.print(HOVER_START).print(node.getNodeClass().shortName()).print(HOVER_SEP).print(node.getClass().getName()).print(HOVER_END).print(" ");
-        printNamedNodes(node, node.inputs().iterator(), "", "", "#NDF");
-        printNamedNodes(node, node.successors().iterator(), "#", "", "#NDF");
+        printNamedNodes(node, node.inputPositions().iterator(), "", "", "#NDF");
+        printNamedNodes(node, node.successorPositions().iterator(), "#", "", "#NDF");
         for (Map.Entry<Object, Object> entry : props.entrySet()) {
             String key = entry.getKey().toString();
             if (key.startsWith("data.") && !key.equals("data.stamp")) {
@@ -388,10 +387,10 @@ class CFGPrinter extends CompilationPrinter {
         out.print(COLUMN_END).print(' ').println(COLUMN_END);
     }
 
-    private void printNamedNodes(Node node, NodePosIterator iter, String prefix, String suffix, String hideSuffix) {
+    private void printNamedNodes(Node node, Iterator<Position> iter, String prefix, String suffix, String hideSuffix) {
         int lastIndex = -1;
         while (iter.hasNext()) {
-            Position pos = iter.nextPosition();
+            Position pos = iter.next();
             if (hideSuffix != null && pos.getName().endsWith(hideSuffix)) {
                 continue;
             }
@@ -540,7 +539,6 @@ class CFGPrinter extends CompilationPrinter {
 
     IntervalVisitor intervalVisitor = new IntervalVisitor() {
 
-        @Override
         public void visitIntervalStart(Object parentOperand, Object splitOperand, Object location, Object hint, String typeName, char typeChar) {
             out.printf("%s %s ", splitOperand, typeName);
             if (location != null) {
@@ -551,17 +549,14 @@ class CFGPrinter extends CompilationPrinter {
             out.printf("%s %s ", parentOperand, hint != null ? hint : -1);
         }
 
-        @Override
         public void visitRange(int from, int to) {
             out.printf("[%d, %d[", from, to);
         }
 
-        @Override
         public void visitUsePos(int usePos, Object registerPriority) {
             out.printf("%d %s ", usePos, registerPriority);
         }
 
-        @Override
         public void visitIntervalEnd(Object spillState) {
             out.printf(" \"%s\"", spillState);
             out.println();
@@ -717,7 +712,7 @@ class CFGPrinter extends CompilationPrinter {
 
     private void printBlockWithTrace(AbstractBlockBase<?> block, TraceBuilderResult<?> traceBuilderResult) {
         out.print(block.toString());
-        out.print("[T").print(traceBuilderResult.getTraceForBlock(block).getId()).print("]");
+        out.print("[T").print(traceBuilderResult.getTraceForBlock(block)).print("]");
     }
 
     private void printTraceEpilog() {
@@ -732,8 +727,7 @@ class CFGPrinter extends CompilationPrinter {
         BitSet bs = new BitSet(traceBuilderResult.getTraces().size());
         for (AbstractBlockBase<?> block : trace.getBlocks()) {
             for (AbstractBlockBase<?> s : block.getSuccessors()) {
-                Trace<?> otherTrace = traceBuilderResult.getTraceForBlock(s);
-                int otherTraceId = otherTrace.getId();
+                int otherTraceId = traceBuilderResult.getTraceForBlock(s);
                 if (trace.getId() != otherTraceId || isLoopBackEdge(block, s)) {
                     bs.set(otherTraceId);
                 }
@@ -750,10 +744,9 @@ class CFGPrinter extends CompilationPrinter {
         BitSet bs = new BitSet(traceBuilderResult.getTraces().size());
         for (AbstractBlockBase<?> block : trace.getBlocks()) {
             for (AbstractBlockBase<?> p : block.getPredecessors()) {
-                Trace<?> otherTrace = traceBuilderResult.getTraceForBlock(p);
-                int otherTraceId = otherTrace.getId();
+                int otherTraceId = traceBuilderResult.getTraceForBlock(p);
                 if (trace.getId() != otherTraceId || isLoopBackEdge(p, block)) {
-                    bs.set(traceBuilderResult.getTraceForBlock(p).getId());
+                    bs.set(traceBuilderResult.getTraceForBlock(p));
                 }
             }
         }

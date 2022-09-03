@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,14 +22,16 @@
  */
 package com.oracle.graal.graph;
 
-import com.oracle.graal.graph.NodeClass.NodeClassIterator;
-import com.oracle.graal.graph.NodeClass.Position;
-import com.oracle.graal.graph.iterators.*;
+import com.oracle.graal.graph.iterators.NodeIterable;
 
 /**
- * The iterator returned by this iterable can be used to access {@link Position Positions} during iteration using {@link NodeClassIterator#nextPosition()}.
+ *
  */
-public abstract class NodeClassIterable extends AbstractNodeIterable<Node> {
+public interface NodeClassIterable extends NodeIterable<Node> {
+
+    /**
+     * Returns an iterator that can also produce null values.
+     */
     @Override
-    public abstract NodeClassIterator iterator();
+    NodePosIterator iterator();
 }
