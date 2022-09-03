@@ -1856,11 +1856,7 @@ public final class LinearScan {
         }
     }
 
-    public static void allocate(TargetDescription target, LIR lir, FrameMap frameMap) {
-        new LinearScan(target, lir, frameMap).allocate();
-    }
-
-    private void allocate() {
+    public void allocate() {
 
         /*
          * This is the point to enable debug logging for the whole register allocation.
