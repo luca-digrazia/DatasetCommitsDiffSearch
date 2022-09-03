@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -30,7 +28,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 
-import org.graalvm.compiler.debug.DebugContext;
+import org.graalvm.compiler.debug.Debug;
 import org.graalvm.compiler.debug.TTY;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.nodeinfo.Verbosity;
@@ -44,6 +42,7 @@ import org.graalvm.compiler.nodes.java.InstanceOfNode;
 import org.graalvm.compiler.phases.common.CanonicalizerPhase;
 import org.graalvm.compiler.phases.common.ConditionalEliminationPhase;
 import org.graalvm.compiler.phases.schedule.SchedulePhase;
+import org.graalvm.compiler.phases.tiers.PhaseContext;
 import org.junit.Assert;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -180,30 +179,28 @@ public class TypeSystemTest extends GraalCompilerTest {
 
     private void test(String snippet, String referenceSnippet) {
         StructuredGraph graph = parseEager(snippet, AllowAssumptions.NO);
-        DebugContext debug = graph.getDebug();
-        debug.dump(DebugContext.BASIC_LEVEL, graph, "Graph");
+        Debug.dump(Debug.BASIC_LEVEL, graph, "Graph");
         /*
          * When using FlowSensitiveReductionPhase instead of ConditionalEliminationPhase,
          * tail-duplication gets activated thus resulting in a graph with more nodes than the
          * reference graph.
          */
-        new ConditionalEliminationPhase(false).apply(graph, getProviders());
-        new CanonicalizerPhase().apply(graph, getProviders());
+        new ConditionalEliminationPhase(false).apply(graph, new PhaseContext(getProviders()));
+        new CanonicalizerPhase().apply(graph, new PhaseContext(getProviders()));
         // a second canonicalizer is needed to process nested MaterializeNodes
-        new CanonicalizerPhase().apply(graph, getProviders());
+        new CanonicalizerPhase().apply(graph, new PhaseContext(getProviders()));
         StructuredGraph referenceGraph = parseEager(referenceSnippet, AllowAssumptions.NO);
-        new ConditionalEliminationPhase(false).apply(referenceGraph, getProviders());
-        new CanonicalizerPhase().apply(referenceGraph, getProviders());
-        new CanonicalizerPhase().apply(referenceGraph, getProviders());
+        new ConditionalEliminationPhase(false).apply(referenceGraph, new PhaseContext(getProviders()));
+        new CanonicalizerPhase().apply(referenceGraph, new PhaseContext(getProviders()));
+        new CanonicalizerPhase().apply(referenceGraph, new PhaseContext(getProviders()));
         assertEquals(referenceGraph, graph);
     }
 
     @Override
     protected void assertEquals(StructuredGraph expected, StructuredGraph graph) {
-        DebugContext debug = graph.getDebug();
         if (getNodeCountExcludingUnusedConstants(expected) != getNodeCountExcludingUnusedConstants(graph)) {
-            debug.dump(DebugContext.BASIC_LEVEL, expected, "expected (node count)");
-            debug.dump(DebugContext.BASIC_LEVEL, graph, "graph (node count)");
+            Debug.dump(Debug.BASIC_LEVEL, expected, "expected (node count)");
+            Debug.dump(Debug.BASIC_LEVEL, graph, "graph (node count)");
             Assert.fail("Graphs do not have the same number of nodes: " + expected.getNodeCount() + " vs. " + graph.getNodeCount());
         }
     }
@@ -244,10 +241,9 @@ public class TypeSystemTest extends GraalCompilerTest {
 
     private <T extends Node> void testHelper(String snippet, Class<T> clazz) {
         StructuredGraph graph = parseEager(snippet, AllowAssumptions.NO);
-        new CanonicalizerPhase().apply(graph, getProviders());
-        new CanonicalizerPhase().apply(graph, getProviders());
-        DebugContext debug = graph.getDebug();
-        debug.dump(DebugContext.BASIC_LEVEL, graph, "Graph " + snippet);
+        new CanonicalizerPhase().apply(graph, new PhaseContext(getProviders()));
+        new CanonicalizerPhase().apply(graph, new PhaseContext(getProviders()));
+        Debug.dump(Debug.BASIC_LEVEL, graph, "Graph " + snippet);
         Assert.assertFalse("shouldn't have nodes of type " + clazz, graph.getNodes().filter(clazz).iterator().hasNext());
     }
 }

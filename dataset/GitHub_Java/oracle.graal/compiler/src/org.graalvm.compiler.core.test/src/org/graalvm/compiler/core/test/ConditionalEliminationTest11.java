@@ -123,19 +123,19 @@ public class ConditionalEliminationTest11 extends ConditionalEliminationTestBase
 
     public static int test6Snippet(int a) {
         if ((a & 8) != 0) {
-            GraalDirectives.deoptimize();
+            GraalDirectives.deoptimizeAndInvalidate();
         }
         if ((a & 15) != 15) {
-            GraalDirectives.deoptimize();
+            GraalDirectives.deoptimizeAndInvalidate();
         }
         return 0;
     }
 
     public static int reference6Snippet(int a) {
         if ((a & 8) != 0) {
-            GraalDirectives.deoptimize();
+            GraalDirectives.deoptimizeAndInvalidate();
         }
-        GraalDirectives.deoptimize();
+        GraalDirectives.deoptimizeAndInvalidate();
         return 0;
     }
 
