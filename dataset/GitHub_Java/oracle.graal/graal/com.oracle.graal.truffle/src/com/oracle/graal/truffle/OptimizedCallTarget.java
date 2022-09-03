@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -49,6 +49,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
 
     protected final GraalTruffleRuntime runtime;
     private SpeculationLog speculationLog;
+    protected boolean inliningPerformed;
     protected final CompilationProfile compilationProfile;
     protected final CompilationPolicy compilationPolicy;
     private OptimizedCallTarget splitSource;
@@ -64,13 +65,14 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     private final Map<TruffleStamp, OptimizedCallTarget> splitVersions = new HashMap<>();
     private TruffleStamp argumentStamp = DefaultTruffleStamp.getInstance();
 
+    /* Experimental field for context sensitive inlining. */
     private TruffleInlining inlining;
 
     public final RootNode getRootNode() {
         return rootNode;
     }
 
-    public OptimizedCallTarget(RootNode rootNode, GraalTruffleRuntime runtime, CompilationPolicy compilationPolicy, SpeculationLog speculationLog) {
+    public OptimizedCallTarget(RootNode rootNode, GraalTruffleRuntime runtime, int invokeCounter, int compilationThreshold, CompilationPolicy compilationPolicy, SpeculationLog speculationLog) {
         super(rootNode.toString());
         this.runtime = runtime;
         this.speculationLog = speculationLog;
@@ -79,9 +81,9 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         this.rootNode.setCallTarget(this);
         this.compilationPolicy = compilationPolicy;
         if (TruffleCallTargetProfiling.getValue()) {
-            this.compilationProfile = new TraceCompilationProfile();
+            this.compilationProfile = new TraceCompilationProfile(compilationThreshold, invokeCounter);
         } else {
-            this.compilationProfile = new CompilationProfile();
+            this.compilationProfile = new CompilationProfile(compilationThreshold, invokeCounter);
         }
     }
 
