@@ -255,24 +255,19 @@ public abstract class LIRGenerator extends ValueVisitor {
                 }
             }
             lastState = fs;
-        } else if (block.blockPredecessors().size() > 0) {
-            FrameState fs = null;
-            for (LIRBlock pred : block.blockPredecessors()) {
-                if (fs == null) {
-                    fs = pred.lastState();
-                } else if (fs != pred.lastState()) {
-                    fs = null;
-                    break;
-                }
-            }
+        } else if (block.blockPredecessors().size() > 1) {
             if (GraalOptions.TraceLIRGeneratorLevel >= 2) {
-                if (fs == null) {
-                    TTY.println("STATE RESET");
-                } else {
-                    TTY.println("STATE CHANGE (singlePred)");
-                    if (GraalOptions.TraceLIRGeneratorLevel >= 3) {
-                        TTY.println(fs.toString());
-                    }
+                TTY.println("STATE RESET");
+            }
+            lastState = null;
+        }  else if (block.blockPredecessors().size() == 1) {
+            LIRBlock pred = block.blockPredecessors().get(0);
+            FrameState fs = pred.lastState();
+            assert fs != null : "block B" + block.blockID() + " pred block B" + pred.blockID();
+            if (GraalOptions.TraceLIRGeneratorLevel >= 2) {
+                TTY.println("STATE CHANGE (singlePred)");
+                if (GraalOptions.TraceLIRGeneratorLevel >= 3) {
+                    TTY.println(fs.toString());
                 }
             }
             lastState = fs;
@@ -301,9 +296,9 @@ public abstract class LIRGenerator extends ValueVisitor {
             }
         }
         if (block.blockSuccessors().size() >= 1 && !block.endsWithJump()) {
-            NodeSuccessorsIterable successors = block.lastInstruction().successors();
-            assert successors.explicitCount() >= 1 : "should have at least one successor : " + block.lastInstruction();
-            block.lir().jump(getLIRBlock((FixedNode) successors.first()));
+            NodeArray successors = block.lastInstruction().successors();
+            assert successors.size() >= 1 : "should have at least one successor : " + block.lastInstruction();
+            block.lir().jump(getLIRBlock((FixedNode) successors.get(0)));
         }
 
         if (GraalOptions.TraceLIRGeneratorLevel >= 1) {

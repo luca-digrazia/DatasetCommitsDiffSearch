@@ -22,7 +22,6 @@
  */
 package com.oracle.max.graal.compiler.ir;
 
-import com.sun.cri.bytecode.Bytecodes.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
 
@@ -80,6 +79,16 @@ public enum Condition {
      */
     BT("|<|"),
 
+    /**
+     * Operation produced an overflow.
+     */
+    OF("overflow"),
+
+    /**
+     * Operation did not produce an overflow.
+     */
+    NOF("noOverflow"),
+
     TRUE("TRUE");
 
     public final String operator;
@@ -120,8 +129,10 @@ public enum Condition {
             case BE: return AT;
             case AT: return BE;
             case AE: return BT;
+            case OF: return NOF;
+            case NOF: return OF;
         }
-        throw new IllegalArgumentException();
+        throw new IllegalArgumentException(this.toString());
     }
 
     /**
@@ -160,8 +171,9 @@ public enum Condition {
      * @return {@link Boolean#TRUE} if the comparison is known to be true,
      * {@link Boolean#FALSE} if the comparison is known to be false, {@code null} otherwise.
      */
-    public Boolean foldCondition(CiConstant lt, CiConstant rt, RiRuntime runtime) {
+    public Boolean foldCondition(CiConstant lt, CiConstant rt, RiRuntime runtime, boolean unorderedIsTrue) {
         switch (lt.kind) {
+            case Boolean:
             case Int: {
                 int x = lt.asInt();
                 int y = rt.asInt();
@@ -172,10 +184,10 @@ public enum Condition {
                     case LE: return x <= y;
                     case GT: return x > y;
                     case GE: return x >= y;
-                    case AE: return UnsignedComparisons.aboveOrEqual(x, y);
-                    case BE: return UnsignedComparisons.belowOrEqual(x, y);
-                    case AT: return UnsignedComparisons.aboveThan(x, y);
-                    case BT: return UnsignedComparisons.belowThan(x, y);
+                    case AE: return toUnsigned(x) >= toUnsigned(y);
+                    case BE: return toUnsigned(x) <= toUnsigned(y);
+                    case AT: return toUnsigned(x) > toUnsigned(y);
+                    case BT: return toUnsigned(x) < toUnsigned(y);
                 }
                 break;
             }
@@ -199,8 +211,52 @@ public enum Condition {
                 }
                 break;
             }
-            // XXX: folding of floating comparisons should be possible
+            case Float: {
+                float x = lt.asFloat();
+                float y = rt.asFloat();
+                if (Float.isNaN(x) || Float.isNaN(y)) {
+                    return unorderedIsTrue;
+                }
+                switch (this) {
+                    case EQ: return x == y;
+                    case NE: return x != y;
+                    case BT:
+                    case LT: return x < y;
+                    case BE:
+                    case LE: return x <= y;
+                    case AT:
+                    case GT: return x > y;
+                    case AE:
+                    case GE: return x >= y;
+                }
+            }
+            case Double: {
+                double x = lt.asDouble();
+                double y = rt.asDouble();
+                if (Double.isNaN(x) || Double.isNaN(y)) {
+                    return unorderedIsTrue;
+                }
+                switch (this) {
+                    case EQ: return x == y;
+                    case NE: return x != y;
+                    case BT:
+                    case LT: return x < y;
+                    case BE:
+                    case LE: return x <= y;
+                    case AT:
+                    case GT: return x > y;
+                    case AE:
+                    case GE: return x >= y;
+                }
+            }
         }
         return null;
+    }
+
+    private long toUnsigned(int x) {
+        if (x < 0) {
+            return ((long) (x & 0x7FFFFFFF)) + ((long) Integer.MAX_VALUE) + 1;
+        }
+        return x;
     }
 }

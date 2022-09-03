@@ -136,6 +136,8 @@ public class IR {
             graph.stopRecordModifications();
         }
 
+        new ConvertConditionalPhase().apply(graph);
+
         new LoweringPhase(compilation.runtime).apply(graph);
         if (GraalOptions.Lower) {
             new MemoryPhase().apply(graph);
@@ -290,6 +292,6 @@ public class IR {
     }
 
     public FixedNodeWithNext getHIRStartBlock() {
-        return (FixedNodeWithNext) compilation.graph.start().successors().first();
+        return (FixedNodeWithNext) compilation.graph.start().successors().get(0);
     }
 }

@@ -41,6 +41,12 @@ public final class UnsignedRightShift extends Shift {
         return ">>>";
     }
 
+    @Override
+    public Node copy(Graph into) {
+        UnsignedRightShift x = new UnsignedRightShift(kind, null, null, into);
+        return x;
+    }
+
     @SuppressWarnings("unchecked")
     @Override
     public <T extends Op> T lookup(Class<T> clazz) {

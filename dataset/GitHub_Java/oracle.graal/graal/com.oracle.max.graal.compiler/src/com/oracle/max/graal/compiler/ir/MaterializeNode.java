@@ -27,9 +27,17 @@ import com.oracle.max.graal.graph.*;
 
 public final class MaterializeNode extends Conditional {
 
+    private static final int INPUT_COUNT = 0;
+    private static final int SUCCESSOR_COUNT = 0;
+
 
     public MaterializeNode(BooleanNode value, Graph graph) {
         super(value, Constant.forInt(1, graph), Constant.forInt(0, graph), graph);
+    }
+
+    @Override
+    public boolean valueEqual(Node i) {
+        return (i instanceof MaterializeNode);
     }
 
     @Override

@@ -37,6 +37,9 @@ import com.sun.cri.ri.*;
 public final class LoadField extends AccessField {
     private static final LoadFieldCanonicalizerOp CANONICALIZER = new LoadFieldCanonicalizerOp();
 
+    private static final int INPUT_COUNT = 0;
+    private static final int SUCCESSOR_COUNT = 0;
+
     /**
      * Creates a new LoadField instance.
      * @param object the receiver object
@@ -47,7 +50,7 @@ public final class LoadField extends AccessField {
      * @param isLoaded indicates if the class is loaded
      */
     public LoadField(Value object, RiField field, Graph graph) {
-        super(field.kind().stackKind(), object, field, graph);
+        super(field.kind().stackKind(), object, field, INPUT_COUNT, SUCCESSOR_COUNT, graph);
     }
 
     /**
@@ -103,6 +106,13 @@ public final class LoadField extends AccessField {
             return field.constantValue(object().asConstant());
         }
         return null;
+    }
+
+    @Override
+    public Node copy(Graph into) {
+        LoadField x = new LoadField(null, field, into);
+        super.copyInto(x);
+        return x;
     }
 
     @SuppressWarnings("unchecked")

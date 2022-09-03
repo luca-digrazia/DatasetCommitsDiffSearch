@@ -49,17 +49,17 @@ public final class LIRList {
     private final LIROpcode runtimeCallOp;
 
     private LIROpcode directCallOp(RiMethod method) {
-        return C1XOptions.UseConstDirectCall && method.hasCompiledCode() ? LIROpcode.ConstDirectCall : LIROpcode.DirectCall;
+        return GraalOptions.UseConstDirectCall && method.hasCompiledCode() ? LIROpcode.ConstDirectCall : LIROpcode.DirectCall;
     }
 
     public LIRList(LIRGenerator generator) {
         this.generator = generator;
         this.operations = new ArrayList<LIRInstruction>(8);
-        runtimeCallOp = C1XOptions.UseConstDirectCall ? LIROpcode.ConstDirectCall : LIROpcode.DirectCall;
+        runtimeCallOp = GraalOptions.UseConstDirectCall ? LIROpcode.ConstDirectCall : LIROpcode.DirectCall;
     }
 
     private void append(LIRInstruction op) {
-        if (C1XOptions.PrintIRWithLIR && !TTY.isSuppressed()) {
+        if (GraalOptions.PrintIRWithLIR && !TTY.isSuppressed()) {
             generator.maybePrintCurrentInstruction();
             TTY.println(op.toStringWithIdPrefix());
             TTY.println();
@@ -104,9 +104,8 @@ public final class LIRList {
         append(new LIRLabel(lbl));
     }
 
-    public void negate(CiValue src, CiValue dst, GlobalStub globalStub) {
+    public void negate(CiValue src, CiValue dst) {
         LIRNegate op = new LIRNegate(src, dst);
-        op.globalStub = globalStub;
         append(op);
     }
 
@@ -196,6 +195,10 @@ public final class LIRList {
         append(new LIROp2(LIROpcode.Cmove, condition, src1, src2, dst));
     }
 
+    public void fcmove(Condition condition, CiValue src1, CiValue src2, CiValue dst, boolean unorderedIsSecond) {
+        append(new LIROp2(unorderedIsSecond ? LIROpcode.FCmove : LIROpcode.UFCmove, condition, src1, src2, dst));
+    }
+
     public void abs(CiValue from, CiValue to, CiValue tmp) {
         append(new LIROp2(LIROpcode.Abs, from, tmp, to));
     }
@@ -245,7 +248,8 @@ public final class LIRList {
     }
 
     public void jump(LIRBlock block) {
-        append(new LIRBranch(Condition.TRUE, CiKind.Illegal, block));
+        assert block != null;
+        append(new LIRBranch(Condition.TRUE, block));
     }
 
     public void branch(Condition cond, Label lbl) {
@@ -256,14 +260,12 @@ public final class LIRList {
         append(new LIRBranch(cond, lbl, info));
     }
 
-    public void branch(Condition cond, CiKind kind, LIRBlock block) {
-        assert kind != CiKind.Float && kind != CiKind.Double : "no fp comparisons";
-        append(new LIRBranch(cond, kind, block));
+    public void branch(Condition cond, LIRBlock block) {
+        append(new LIRBranch(cond, block));
     }
 
-    public void branch(Condition cond, CiKind kind, LIRBlock block, LIRBlock unordered) {
-        assert kind == CiKind.Float || kind == CiKind.Double : "fp comparisons only";
-        append(new LIRBranch(cond, kind, block, unordered));
+    public void branch(Condition cond, LIRBlock block, LIRBlock unordered) {
+        append(new LIRBranch(cond, block, unordered));
     }
 
     public void tableswitch(CiValue index, int lowKey, LIRBlock defaultTargets, LIRBlock[] targets) {

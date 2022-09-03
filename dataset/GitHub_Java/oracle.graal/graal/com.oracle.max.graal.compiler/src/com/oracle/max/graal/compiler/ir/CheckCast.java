@@ -35,6 +35,9 @@ import com.sun.cri.ri.*;
  */
 public final class CheckCast extends TypeCheck {
 
+    private static final int INPUT_COUNT = 0;
+    private static final int SUCCESSOR_COUNT = 0;
+
     /**
      * Creates a new CheckCast instruction.
      * @param targetClass the class being cast to
@@ -42,7 +45,7 @@ public final class CheckCast extends TypeCheck {
      * @param graph
      */
     public CheckCast(Value targetClassInstruction, Value object, Graph graph) {
-        super(targetClassInstruction, object, CiKind.Object, graph);
+        super(targetClassInstruction, object, CiKind.Object, INPUT_COUNT, SUCCESSOR_COUNT, graph);
     }
 
     /**
@@ -67,6 +70,16 @@ public final class CheckCast extends TypeCheck {
     public void accept(ValueVisitor v) {
         v.visitCheckCast(this);
     }
+
+//    @Override
+//    public int valueNumber() {
+//        return targetClass().isResolved() ? Util.hash1(Bytecodes.CHECKCAST, object()) : 0;
+//    }
+//
+//    @Override
+//    public boolean valueEqual(Node i) {
+//        return i instanceof CheckCast;
+//    }
 
     @Override
     public void print(LogStream out) {

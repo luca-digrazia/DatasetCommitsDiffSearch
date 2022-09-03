@@ -41,6 +41,12 @@ public final class RightShift extends Shift {
         return ">>";
     }
 
+    @Override
+    public Node copy(Graph into) {
+        RightShift rs = new RightShift(kind, null, null, into);
+        return rs;
+    }
+
     @SuppressWarnings("unchecked")
     @Override
     public <T extends Op> T lookup(Class<T> clazz) {

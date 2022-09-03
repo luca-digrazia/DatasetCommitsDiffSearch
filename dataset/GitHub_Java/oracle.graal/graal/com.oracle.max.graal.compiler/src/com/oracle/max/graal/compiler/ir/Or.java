@@ -51,6 +51,11 @@ public final class Or extends Logic {
         return "|";
     }
 
+    @Override
+    public Node copy(Graph into) {
+        return new Or(kind, null, null, into);
+    }
+
     @SuppressWarnings("unchecked")
     @Override
     public <T extends Op> T lookup(Class<T> clazz) {

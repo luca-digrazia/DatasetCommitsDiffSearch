@@ -40,25 +40,37 @@ import com.sun.cri.ci.*;
  * by conditional expression elimination.
  */
 public class Conditional extends Binary {
-    @Input private BooleanNode condition;
-    @Input private FrameState stateDuring;
+
+    private static final int INPUT_COUNT = 2;
+    private static final int INPUT_CONDITION = 0;
+    private static final int INPUT_STATE = 1;
+
+    private static final int SUCCESSOR_COUNT = 0;
+
+    @Override
+    protected int inputCount() {
+        return super.inputCount() + INPUT_COUNT;
+    }
+
+    @Override
+    protected int successorCount() {
+        return super.successorCount() + SUCCESSOR_COUNT;
+    }
 
     public BooleanNode condition() {
-        return condition;
+        return (BooleanNode) inputs().get(super.inputCount() + INPUT_CONDITION);
     }
 
     public void setCondition(BooleanNode n) {
-        updateUsages(condition, n);
-        condition = n;
+        inputs().set(super.inputCount() + INPUT_CONDITION, n);
     }
 
     public FrameState stateDuring() {
-        return stateDuring;
+        return (FrameState) inputs().get(super.inputCount() + INPUT_STATE);
     }
 
     public void setStateDuring(FrameState n) {
-        updateUsages(stateDuring, n);
-        stateDuring = n;
+        inputs().set(super.inputCount() + INPUT_STATE, n);
     }
 
     /**
@@ -71,13 +83,13 @@ public class Conditional extends Binary {
      */
     public Conditional(BooleanNode condition, Value trueValue, Value falseValue, Graph graph) {
         // TODO: return the appropriate bytecode IF_ICMPEQ, etc
-        super(trueValue.kind.meet(falseValue.kind), Bytecodes.ILLEGAL, trueValue, falseValue, graph);
+        super(trueValue.kind.meet(falseValue.kind), Bytecodes.ILLEGAL, trueValue, falseValue, INPUT_COUNT, SUCCESSOR_COUNT, graph);
         setCondition(condition);
     }
 
     // for copying
     private Conditional(CiKind kind, Graph graph) {
-        super(kind, Bytecodes.ILLEGAL, null, null, graph);
+        super(kind, Bytecodes.ILLEGAL, null, null, INPUT_COUNT, SUCCESSOR_COUNT, graph);
     }
 
     public Value trueValue() {
@@ -88,12 +100,12 @@ public class Conditional extends Binary {
         return y();
     }
 
-    public void setTrueValue(Value value) {
-        setX(value);
+    public Value setTrueValue(Value value) {
+        return setX(value);
     }
 
-    public void setFalseValue(Value value) {
-        setY(value);
+    public Value setFalseValue(Value value) {
+        return setY(value);
     }
 
     @Override

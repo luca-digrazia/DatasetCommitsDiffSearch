@@ -36,15 +36,30 @@ import com.sun.cri.ci.*;
 public final class Negate extends FloatingNode {
     private static final NegateCanonicalizerOp CANONICALIZER = new NegateCanonicalizerOp();
 
-    @Input    private Value x;
+    private static final int INPUT_COUNT = 1;
+    private static final int INPUT_X = 0;
 
-    public Value x() {
-        return x;
+    private static final int SUCCESSOR_COUNT = 0;
+
+    @Override
+    protected int inputCount() {
+        return super.inputCount() + INPUT_COUNT;
     }
 
-    public void setX(Value x) {
-        updateUsages(this.x, x);
-        this.x = x;
+    @Override
+    protected int successorCount() {
+        return super.successorCount() + SUCCESSOR_COUNT;
+    }
+
+    /**
+     * The instruction producing input to this instruction.
+     */
+     public Value x() {
+        return (Value) inputs().get(super.inputCount() + INPUT_X);
+    }
+
+    public Value setX(Value n) {
+        return (Value) inputs().set(super.inputCount() + INPUT_X, n);
     }
 
     /**
@@ -52,13 +67,13 @@ public final class Negate extends FloatingNode {
      * @param x the instruction producing the value that is input to this instruction
      */
     public Negate(Value x, Graph graph) {
-        super(x.kind, graph);
+        super(x.kind, INPUT_COUNT, SUCCESSOR_COUNT, graph);
         setX(x);
     }
 
     // for copying
     private Negate(CiKind kind, Graph graph) {
-        super(kind, graph);
+        super(kind, INPUT_COUNT, SUCCESSOR_COUNT, graph);
     }
 
     @Override

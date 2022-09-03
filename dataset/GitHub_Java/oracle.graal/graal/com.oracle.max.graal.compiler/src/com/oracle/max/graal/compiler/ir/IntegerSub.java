@@ -37,6 +37,11 @@ public final class IntegerSub extends IntegerArithmeticNode {
     }
 
     @Override
+    public Node copy(Graph into) {
+        return new IntegerSub(kind, null, null, into);
+    }
+
+    @Override
     public String shortName() {
         return "-";
     }

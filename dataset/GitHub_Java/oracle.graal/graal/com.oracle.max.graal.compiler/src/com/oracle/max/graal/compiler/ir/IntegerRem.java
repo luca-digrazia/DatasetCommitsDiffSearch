@@ -41,6 +41,11 @@ public final class IntegerRem extends IntegerArithmeticNode {
         return "%";
     }
 
+    @Override
+    public Node copy(Graph into) {
+        return new IntegerRem(kind, null, null, into);
+    }
+
     @SuppressWarnings("unchecked")
     @Override
     public <T extends Op> T lookup(Class<T> clazz) {

@@ -40,25 +40,43 @@ import com.sun.cri.ci.*;
  *
  */
 public final class Compare extends BooleanNode {
-    @Input private Value x;
-    @Input private Value y;
 
-    public Value x() {
-        return x;
+    private static final int INPUT_COUNT = 2;
+    private static final int INPUT_X = 0;
+    private static final int INPUT_Y = 1;
+
+    private static final int SUCCESSOR_COUNT = 0;
+
+    @Override
+    protected int inputCount() {
+        return super.inputCount() + INPUT_COUNT;
     }
 
-    public void setX(Value x) {
-        updateUsages(this.x, x);
-        this.x = x;
+    @Override
+    protected int successorCount() {
+        return super.successorCount() + SUCCESSOR_COUNT;
     }
 
+    /**
+     * The instruction that produces the first input to this comparison.
+     */
+     public Value x() {
+        return (Value) inputs().get(super.inputCount() + INPUT_X);
+    }
+
+    public Value setX(Value n) {
+        return (Value) inputs().set(super.inputCount() + INPUT_X, n);
+    }
+
+    /**
+     * The instruction that produces the second input to this comparison.
+     */
     public Value y() {
-        return y;
+        return (Value) inputs().get(super.inputCount() + INPUT_Y);
     }
 
-    public void setY(Value x) {
-        updateUsages(y, x);
-        this.y = x;
+    public Value setY(Value n) {
+        return (Value) inputs().set(super.inputCount() + INPUT_Y, n);
     }
 
     private Condition condition;
@@ -72,7 +90,7 @@ public final class Compare extends BooleanNode {
      * @param graph
      */
     public Compare(Value x, Condition condition, Value y, Graph graph) {
-        super(CiKind.Illegal, graph);
+        super(CiKind.Illegal, INPUT_COUNT, SUCCESSOR_COUNT, graph);
         assert (x == null && y == null) || Util.archKindsEqual(x, y);
         this.condition = condition;
         setX(x);
@@ -213,7 +231,8 @@ public final class Compare extends BooleanNode {
                 }
             }
             boolean allUsagesNegate = true;
-            for (Node usage : compare.usages()) {
+            List<Node> usages = new ArrayList<Node>(compare.usages());
+            for (Node usage : usages) {
                 if (!(usage instanceof NegateBooleanNode)) {
                     allUsagesNegate = false;
                     break;
@@ -221,7 +240,7 @@ public final class Compare extends BooleanNode {
             }
             if (allUsagesNegate) {
                 compare.negate();
-                for (Node usage : compare.usages().snapshot()) {
+                for (Node usage : usages) {
                     usage.replaceAtUsages(compare);
                 }
             }

@@ -35,19 +35,34 @@ import com.sun.cri.ci.*;
  */
 public final class If extends ControlSplit {
 
-    @Input    private BooleanNode compare;
+    private static final int INPUT_COUNT = 1;
+    private static final int INPUT_COMPARE = 0;
 
-    public BooleanNode compare() {
-        return compare;
+    private static final int SUCCESSOR_COUNT = 0;
+
+    @Override
+    protected int inputCount() {
+        return super.inputCount() + INPUT_COUNT;
     }
 
-    public void setCompare(BooleanNode x) {
-        updateUsages(compare, x);
-        compare = x;
+    @Override
+    protected int successorCount() {
+        return super.successorCount() + SUCCESSOR_COUNT;
+    }
+
+    /**
+     * The instruction that produces the first input to this comparison.
+     */
+    public BooleanNode compare() {
+        return (BooleanNode) inputs().get(super.inputCount() + INPUT_COMPARE);
+    }
+
+    public void setCompare(BooleanNode n) {
+        inputs().set(super.inputCount() + INPUT_COMPARE, n);
     }
 
     public If(BooleanNode condition, double probability, Graph graph) {
-        super(CiKind.Illegal, 2, new double[] {probability, 1 - probability}, graph);
+        super(CiKind.Illegal, 2, new double[] {probability, 1 - probability}, INPUT_COUNT, SUCCESSOR_COUNT, graph);
         setCompare(condition);
     }
 

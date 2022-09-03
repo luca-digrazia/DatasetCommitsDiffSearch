@@ -40,6 +40,12 @@ public final class FloatDiv extends FloatArithmetic {
         return "/";
     }
 
+    @Override
+    public Node copy(Graph into) {
+        FloatDiv x = new FloatDiv(kind, null, null, isStrictFP(), into);
+        return x;
+    }
+
     @SuppressWarnings("unchecked")
     @Override
     public <T extends Op> T lookup(Class<T> clazz) {

@@ -30,26 +30,25 @@ import com.oracle.max.graal.compiler.asm.*;
 import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.gen.*;
 import com.oracle.max.graal.compiler.ir.*;
-import com.oracle.max.graal.compiler.lir.FrameMap.*;
+import com.oracle.max.graal.compiler.lir.FrameMap.StackBlock;
 import com.oracle.max.graal.compiler.util.*;
 import com.sun.cri.ci.*;
-import com.sun.cri.ci.CiTargetMethod.*;
+import com.sun.cri.ci.CiTargetMethod.Mark;
 import com.sun.cri.ri.*;
-import com.sun.cri.xir.CiXirAssembler.*;
+import com.sun.cri.xir.CiXirAssembler.XirMark;
 
 /**
  * The {@code LIRAssembler} class definition.
  */
 public abstract class LIRAssembler {
 
-    public final C1XCompilation compilation;
+    public final GraalCompilation compilation;
     public final TargetMethodAssembler tasm;
     public final AbstractAssembler asm;
     public final FrameMap frameMap;
     public int registerRestoreEpilogueOffset = -1;
 
     protected final List<SlowPath> xirSlowPath;
-    protected final List<LIRBlock> branchTargetBlocks;
 
     private int lastDecodeStart;
 
@@ -65,12 +64,11 @@ public abstract class LIRAssembler {
         }
     }
 
-    public LIRAssembler(C1XCompilation compilation) {
+    public LIRAssembler(GraalCompilation compilation) {
         this.compilation = compilation;
         this.tasm = compilation.assembler();
         this.asm = tasm.asm;
         this.frameMap = compilation.frameMap();
-        this.branchTargetBlocks = new ArrayList<LIRBlock>();
         this.xirSlowPath = new ArrayList<SlowPath>();
     }
 
@@ -97,7 +95,7 @@ public abstract class LIRAssembler {
     public abstract void emitTraps();
 
     public void emitCode(List<LIRBlock> hir) {
-        if (C1XOptions.PrintLIR && !TTY.isSuppressed()) {
+        if (GraalOptions.PrintLIR && !TTY.isSuppressed()) {
             LIRList.printLIR(hir);
         }
 
@@ -110,14 +108,18 @@ public abstract class LIRAssembler {
 
     void emitBlock(LIRBlock block) {
 
+        if (block.align()) {
+            emitAlignment();
+        }
+
         block.setBlockEntryPco(codePos());
 
-        if (C1XOptions.PrintLIRWithAssembly) {
+        if (GraalOptions.PrintLIRWithAssembly) {
             block.printWithoutPhis(TTY.out());
         }
 
         assert block.lir() != null : "must have LIR";
-        if (C1XOptions.CommentedAssembly) {
+        if (GraalOptions.CommentedAssembly) {
             String st = String.format(" block B%d", block.blockID());
             tasm.blockComment(st);
         }
@@ -129,13 +131,13 @@ public abstract class LIRAssembler {
         doPeephole(list);
 
         for (LIRInstruction op : list.instructionsList()) {
-            if (C1XOptions.CommentedAssembly) {
+            if (GraalOptions.CommentedAssembly) {
                 // Only print out branches
                 if (op.code == LIROpcode.Branch) {
                     tasm.blockComment(op.toStringWithIdPrefix());
                 }
             }
-            if (C1XOptions.PrintLIRWithAssembly && !TTY.isSuppressed()) {
+            if (GraalOptions.PrintLIRWithAssembly && !TTY.isSuppressed()) {
                 // print out the LIR operation followed by the resulting assembly
                 TTY.println(op.toStringWithIdPrefix());
                 TTY.println();
@@ -143,7 +145,7 @@ public abstract class LIRAssembler {
 
             op.emitCode(this);
 
-            if (C1XOptions.PrintLIRWithAssembly) {
+            if (GraalOptions.PrintLIRWithAssembly) {
                 printAssembly(asm);
             }
         }
@@ -157,19 +159,19 @@ public abstract class LIRAssembler {
                 TTY.println(disasm);
             } else {
                 TTY.println("Code [+%d]: %d bytes", lastDecodeStart, currentBytes.length);
-                Util.printBytes(lastDecodeStart, currentBytes, C1XOptions.PrintAssemblyBytesPerLine);
+                Util.printBytes(lastDecodeStart, currentBytes, GraalOptions.PrintAssemblyBytesPerLine);
             }
         }
         lastDecodeStart = asm.codeBuffer.position();
     }
 
     boolean checkNoUnboundLabels() {
-        for (int i = 0; i < branchTargetBlocks.size() - 1; i++) {
-            if (!branchTargetBlocks.get(i).label().isBound()) {
-                TTY.println(String.format("label of block B%d is not bound", branchTargetBlocks.get(i).blockID()));
-                assert false : "unbound label";
-            }
-        }
+//        for (int i = 0; i < branchTargetBlocks.size() - 1; i++) {
+//            if (!branchTargetBlocks.get(i).label().isBound()) {
+//                TTY.println(String.format("label of block B%d is not bound", branchTargetBlocks.get(i).blockID()));
+//                assert false : "unbound label";
+//            }
+//        }
 
         return true;
     }
@@ -214,6 +216,7 @@ public abstract class LIRAssembler {
     void emitOp1(LIROp1 op) {
         switch (op.code) {
             case Move:
+                assert !op.operand().isIllegal();
                 if (op.moveKind() == LIROp1.LIRMoveKind.Volatile) {
                     emitVolatileMove(op.operand(), op.result(), op.kind, op.info);
                 } else {
@@ -273,8 +276,14 @@ public abstract class LIRAssembler {
                 emitCompare2Int(op.code, op.operand1(), op.operand2(), op.result(), op);
                 break;
 
+            case FCmove:
+                emitConditionalMove(op.condition(), op.operand1(), op.operand2(), op.result(), true, false);
+                break;
+            case UFCmove:
+                emitConditionalMove(op.condition(), op.operand1(), op.operand2(), op.result(), true, true);
+                break;
             case Cmove:
-                emitConditionalMove(op.condition(), op.operand1(), op.operand2(), op.result());
+                emitConditionalMove(op.condition(), op.operand1(), op.operand2(), op.result(), false, false);
                 break;
 
             case Shl:
@@ -369,7 +378,7 @@ public abstract class LIRAssembler {
     }
 
     public void verifyOopMap(LIRDebugInfo info) {
-        if (C1XOptions.VerifyPointerMaps) {
+        if (GraalOptions.VerifyPointerMaps) {
             // TODO: verify oops
             Util.shouldNotReachHere();
         }
@@ -415,7 +424,7 @@ public abstract class LIRAssembler {
 
     protected abstract void emitSignificantBitOp(boolean most, CiValue inOpr1, CiValue dst);
 
-    protected abstract void emitConditionalMove(Condition condition, CiValue inOpr1, CiValue inOpr2, CiValue dst);
+    protected abstract void emitConditionalMove(Condition condition, CiValue inOpr1, CiValue inOpr2, CiValue dst, boolean mayBeUnordered, boolean unorderedcmovOpr1);
 
     protected abstract void emitCompare2Int(LIROpcode code, CiValue inOpr1, CiValue inOpr2, CiValue dst, LIROp2 op);
 
@@ -467,4 +476,15 @@ public abstract class LIRAssembler {
 
     protected abstract void reg2reg(CiValue src, CiValue dest);
 
+    protected abstract boolean trueOnUnordered(Condition condition);
+
+    protected abstract boolean falseOnUnordered(Condition condition);
+
+    protected boolean mayBeTrueOnUnordered(Condition condition) {
+        return trueOnUnordered(condition) || !falseOnUnordered(condition);
+    }
+
+    protected boolean mayBeFalseOnUnordered(Condition condition) {
+        return falseOnUnordered(condition) || !trueOnUnordered(condition);
+    }
 }
