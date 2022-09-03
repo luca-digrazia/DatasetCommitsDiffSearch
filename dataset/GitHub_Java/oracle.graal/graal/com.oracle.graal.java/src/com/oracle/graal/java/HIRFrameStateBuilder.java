@@ -25,16 +25,14 @@ package com.oracle.graal.java;
 import static com.oracle.graal.graph.iterators.NodePredicates.*;
 
 import java.util.*;
+import java.util.function.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.debug.*;
-import com.oracle.graal.graphbuilderconf.*;
-import com.oracle.graal.java.AbstractBytecodeParser.IntrinsicContext;
-import com.oracle.graal.java.BciBlockMapping.BciBlock;
-import com.oracle.graal.java.GraphBuilderPhase.Instance.BytecodeParser;
+import com.oracle.graal.java.BciBlockMapping.*;
+import com.oracle.graal.java.GraphBuilderPlugin.ParameterPlugin;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
@@ -43,15 +41,19 @@ import com.oracle.graal.nodes.util.*;
 
 public final class HIRFrameStateBuilder {
 
-    static final ValueNode[] EMPTY_ARRAY = new ValueNode[0];
-    static final MonitorIdNode[] EMPTY_MONITOR_ARRAY = new MonitorIdNode[0];
+    private static final ValueNode[] EMPTY_ARRAY = new ValueNode[0];
+    private static final MonitorIdNode[] EMPTY_MONITOR_ARRAY = new MonitorIdNode[0];
 
-    protected final BytecodeParser parser;
     protected final ResolvedJavaMethod method;
     protected int stackSize;
     protected final ValueNode[] locals;
     protected final ValueNode[] stack;
     protected ValueNode[] lockedObjects;
+
+    /**
+     * Specifies if asserting type checks are enabled.
+     */
+    protected final boolean checkTypes;
 
     /**
      * @see BytecodeFrame#rethrowException
@@ -60,7 +62,7 @@ public final class HIRFrameStateBuilder {
 
     private MonitorIdNode[] monitorIds;
     private final StructuredGraph graph;
-    private FrameState outerFrameState;
+    private final Supplier<FrameState> outerFrameStateSupplier;
 
     /**
      * Creates a new frame state builder for the given method and the given target graph.
@@ -68,17 +70,18 @@ public final class HIRFrameStateBuilder {
      * @param method the method whose frame is simulated
      * @param graph the target graph of Graal nodes created by the builder
      */
-    public HIRFrameStateBuilder(BytecodeParser parser, ResolvedJavaMethod method, StructuredGraph graph) {
-        this.parser = parser;
+    public HIRFrameStateBuilder(ResolvedJavaMethod method, StructuredGraph graph, boolean checkTypes, Supplier<FrameState> outerFrameStateSupplier) {
         this.method = method;
         this.locals = allocateArray(method.getMaxLocals());
         this.stack = allocateArray(Math.max(1, method.getMaxStackSize()));
         this.lockedObjects = allocateArray(0);
+        this.checkTypes = checkTypes;
 
         assert graph != null;
 
         this.monitorIds = EMPTY_MONITOR_ARRAY;
         this.graph = graph;
+        this.outerFrameStateSupplier = outerFrameStateSupplier;
     }
 
     public void initializeFromArgumentsArray(ValueNode[] arguments) {
@@ -94,9 +97,8 @@ public final class HIRFrameStateBuilder {
         Signature sig = method.getSignature();
         int max = sig.getParameterCount(false);
         for (int i = 0; i < max; i++) {
-            Kind kind = sig.getParameterKind(i);
             locals[javaIndex] = arguments[index];
-            javaIndex += kind.getSlotCount();
+            javaIndex += arguments[index].getKind().getSlotCount();
             index++;
         }
     }
@@ -108,12 +110,11 @@ public final class HIRFrameStateBuilder {
         if (!method.isStatic()) {
             // add the receiver
             FloatingNode receiver = null;
-            Stamp receiverStamp = StampFactory.declaredNonNull(method.getDeclaringClass());
             if (parameterPlugin != null) {
-                receiver = parameterPlugin.interceptParameter(parser, index, receiverStamp);
+                receiver = parameterPlugin.interceptParameter(index);
             }
             if (receiver == null) {
-                receiver = new ParameterNode(javaIndex, receiverStamp);
+                receiver = new ParameterNode(javaIndex, StampFactory.declaredNonNull(method.getDeclaringClass()));
             }
             locals[javaIndex] = graph.unique(receiver);
             javaIndex = 1;
@@ -136,7 +137,7 @@ public final class HIRFrameStateBuilder {
             }
             FloatingNode param = null;
             if (parameterPlugin != null) {
-                param = parameterPlugin.interceptParameter(parser, index, stamp);
+                param = parameterPlugin.interceptParameter(index);
             }
             if (param == null) {
                 param = new ParameterNode(index, stamp);
@@ -145,24 +146,16 @@ public final class HIRFrameStateBuilder {
             javaIndex += kind.getSlotCount();
             index++;
         }
-
-        if (parser.replacementContext instanceof IntrinsicContext) {
-            IntrinsicContext intrinsic = (IntrinsicContext) parser.replacementContext;
-            if (intrinsic.isCompilationRoot()) {
-                // Records the parameters to an root compiled intrinsic
-                intrinsic.args = locals.clone();
-            }
-        }
     }
 
     private HIRFrameStateBuilder(HIRFrameStateBuilder other) {
-        this.parser = other.parser;
         this.method = other.method;
         this.stackSize = other.stackSize;
         this.locals = other.locals.clone();
         this.stack = other.stack.clone();
         this.lockedObjects = other.lockedObjects.length == 0 ? other.lockedObjects : other.lockedObjects.clone();
         this.rethrowException = other.rethrowException;
+        this.checkTypes = other.checkTypes;
 
         assert locals.length == method.getMaxLocals();
         assert stack.length == Math.max(1, method.getMaxStackSize());
@@ -170,6 +163,7 @@ public final class HIRFrameStateBuilder {
         assert other.graph != null;
         graph = other.graph;
         monitorIds = other.monitorIds.length == 0 ? other.monitorIds : other.monitorIds.clone();
+        this.outerFrameStateSupplier = other.outerFrameStateSupplier;
 
         assert locals.length == method.getMaxLocals();
         assert stack.length == Math.max(1, method.getMaxStackSize());
@@ -204,34 +198,15 @@ public final class HIRFrameStateBuilder {
     }
 
     public FrameState create(int bci) {
-        BytecodeParser parent = parser.getParent();
-        if (parser.parsingReplacement()) {
-            IntrinsicContext intrinsic = parser.replacementContext.asIntrinsic();
-            if (intrinsic != null) {
-                return intrinsic.getInvokeStateBefore(parser.getGraph(), parent);
+        FrameState outerFrameState = null;
+        if (outerFrameStateSupplier != null) {
+            outerFrameState = outerFrameStateSupplier.get();
+            if (bci == BytecodeFrame.AFTER_EXCEPTION_BCI) {
+                FrameState newFrameState = outerFrameState.duplicateModified(outerFrameState.bci, true, Kind.Void, this.peek(0));
+                return newFrameState;
             }
         }
-        // If this is the recursive call in a partial intrinsification
-        // the frame(s) of the intrinsic method are omitted
-        while (parent != null && parent.parsingReplacement() && parent.replacementContext.asIntrinsic() != null) {
-            parent = parent.getParent();
-        }
-        return create(bci, parent, false);
-    }
-
-    public FrameState create(int bci, BytecodeParser parent, boolean duringCall) {
-        if (outerFrameState == null && parent != null) {
-            outerFrameState = parent.getFrameState().create(parent.bci());
-        }
-        if (bci == BytecodeFrame.AFTER_EXCEPTION_BCI && parent != null) {
-            FrameState newFrameState = outerFrameState.duplicateModified(outerFrameState.bci, true, Kind.Void, this.peek(0));
-            return newFrameState;
-        }
-        if (bci == BytecodeFrame.INVALID_FRAMESTATE_BCI) {
-            throw GraalInternalError.shouldNotReachHere();
-            // return graph.add(new FrameState(bci));
-        }
-        return graph.add(new FrameState(outerFrameState, method, bci, locals, stack, stackSize, lockedObjects, Arrays.asList(monitorIds), rethrowException, duringCall));
+        return graph.add(new FrameState(outerFrameState, method, bci, locals, stack, stackSize, lockedObjects, Arrays.asList(monitorIds), rethrowException, false));
     }
 
     public HIRFrameStateBuilder copy() {
@@ -297,7 +272,7 @@ public final class HIRFrameStateBuilder {
             ((PhiNode) currentValue).addInput(otherValue);
             return currentValue;
         } else if (currentValue != otherValue) {
-            assert !(block instanceof LoopBeginNode) : String.format("Phi functions for loop headers are create eagerly for changed locals and all stack slots: %s != %s", currentValue, otherValue);
+            assert !(block instanceof LoopBeginNode) : "Phi functions for loop headers are create eagerly for changed locals and all stack slots";
             if (otherValue == null || otherValue.isDeleted() || currentValue.getKind() != otherValue.getKind()) {
                 return null;
             }
@@ -574,13 +549,9 @@ public final class HIRFrameStateBuilder {
 
     private boolean assertLoadLocal(int i, ValueNode x) {
         assert x != null : i;
-        assert parser.parsingReplacement() || (x.getKind().getSlotCount() == 1 || locals[i + 1] == null);
-        assert parser.parsingReplacement() || (i == 0 || locals[i - 1] == null || locals[i - 1].getKind().getSlotCount() == 1);
+        assert !checkTypes || (x.getKind().getSlotCount() == 1 || locals[i + 1] == null);
+        assert !checkTypes || (i == 0 || locals[i - 1] == null || locals[i - 1].getKind().getSlotCount() == 1);
         return true;
-    }
-
-    public void storeLocal(int i, ValueNode x) {
-        storeLocal(i, x, x == null ? null : x.getKind());
     }
 
     /**
@@ -590,26 +561,24 @@ public final class HIRFrameStateBuilder {
      * @param i the index at which to store
      * @param x the instruction which produces the value for the local
      */
-    public void storeLocal(int i, ValueNode x, Kind kind) {
+    public void storeLocal(int i, ValueNode x) {
         assert assertStoreLocal(x);
         locals[i] = x;
-        if (x != null) {
-            if (kind.needsTwoSlots() && !parser.parsingReplacement()) {
-                // if this is a double word, then kill i+1
-                locals[i + 1] = null;
-            }
-            if (i > 0 && !parser.parsingReplacement()) {
-                ValueNode p = locals[i - 1];
-                if (p != null && p.getKind().needsTwoSlots()) {
-                    // if there was a double word at i - 1, then kill it
-                    locals[i - 1] = null;
-                }
+        if (x != null && x.getKind().needsTwoSlots()) {
+            // if this is a double word, then kill i+1
+            locals[i + 1] = null;
+        }
+        if (x != null && i > 0) {
+            ValueNode p = locals[i - 1];
+            if (p != null && p.getKind().needsTwoSlots()) {
+                // if there was a double word at i - 1, then kill it
+                locals[i - 1] = null;
             }
         }
     }
 
     private boolean assertStoreLocal(ValueNode x) {
-        assert x == null || parser.parsingReplacement() || (x.getKind() != Kind.Void && x.getKind() != Kind.Illegal) : "unexpected value: " + x;
+        assert x == null || !checkTypes || (x.getKind() != Kind.Void && x.getKind() != Kind.Illegal) : "unexpected value: " + x;
         return true;
     }
 
@@ -638,8 +607,8 @@ public final class HIRFrameStateBuilder {
     }
 
     private boolean assertPush(Kind kind, ValueNode x) {
-        assert parser.parsingReplacement() || (x.getKind() != Kind.Void && x.getKind() != Kind.Illegal);
-        assert x != null && (parser.parsingReplacement() || x.getKind() == kind);
+        assert !checkTypes || (x.getKind() != Kind.Void && x.getKind() != Kind.Illegal);
+        assert x != null && (!checkTypes || x.getKind() == kind);
         return true;
     }
 
@@ -654,7 +623,7 @@ public final class HIRFrameStateBuilder {
     }
 
     private boolean assertXpush(ValueNode x) {
-        assert parser.parsingReplacement() || (x == null || (x.getKind() != Kind.Void && x.getKind() != Kind.Illegal));
+        assert !checkTypes || (x == null || (x.getKind() != Kind.Void && x.getKind() != Kind.Illegal));
         return true;
     }
 
@@ -733,7 +702,7 @@ public final class HIRFrameStateBuilder {
     private boolean assertPop(Kind kind) {
         assert kind != Kind.Void;
         ValueNode x = xpeek();
-        assert x != null && (parser.parsingReplacement() || x.getKind() == kind);
+        assert x != null && (!checkTypes || x.getKind() == kind);
         return true;
     }
 
@@ -820,7 +789,7 @@ public final class HIRFrameStateBuilder {
                 newStackSize--;
                 assert stack[newStackSize].getKind().needsTwoSlots();
             } else {
-                assert parser.parsingReplacement() || (stack[newStackSize].getKind().getSlotCount() == 1);
+                assert !checkTypes || (stack[newStackSize].getKind().getSlotCount() == 1);
             }
             result[i] = stack[newStackSize];
         }
@@ -887,7 +856,7 @@ public final class HIRFrameStateBuilder {
     }
 
     private boolean assertObject(ValueNode x) {
-        assert x != null && (parser.parsingReplacement() || (x.getKind() == Kind.Object));
+        assert x != null && (!checkTypes || (x.getKind() == Kind.Object));
         return true;
     }
 
@@ -941,13 +910,16 @@ public final class HIRFrameStateBuilder {
             if (other.stackSize != stackSize) {
                 return false;
             }
-            if (other.parser != parser) {
+            if (other.checkTypes != checkTypes) {
                 return false;
             }
             if (other.rethrowException != rethrowException) {
                 return false;
             }
             if (other.graph != graph) {
+                return false;
+            }
+            if (other.outerFrameStateSupplier != outerFrameStateSupplier) {
                 return false;
             }
             if (other.locals.length != locals.length) {
@@ -957,18 +929,5 @@ public final class HIRFrameStateBuilder {
                             equals(other.monitorIds, monitorIds, monitorIds.length);
         }
         return false;
-    }
-
-    public void replace(ValueNode oldValue, ValueNode newValue) {
-        for (int i = 0; i < locals.length; i++) {
-            if (locals[i] == oldValue) {
-                locals[i] = newValue;
-            }
-        }
-        for (int i = 0; i < stackSize; i++) {
-            if (stack[i] == oldValue) {
-                stack[i] = newValue;
-            }
-        }
     }
 }
