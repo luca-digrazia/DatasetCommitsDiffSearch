@@ -68,17 +68,10 @@ public class CanonicalStringGraphPrinter implements GraphPrinter {
     private static final Pattern IDENTITY_PATTERN = Pattern.compile("([A-Za-z0-9$_]+)@[0-9a-f]+");
     private Path currentDirectory;
     private Path root;
-    private final SnippetReflectionProvider snippetReflection;
 
-    public CanonicalStringGraphPrinter(Path directory, SnippetReflectionProvider snippetReflection) {
+    public CanonicalStringGraphPrinter(Path directory) {
         this.currentDirectory = directory;
         this.root = directory;
-        this.snippetReflection = snippetReflection;
-    }
-
-    @Override
-    public SnippetReflectionProvider getSnippetReflectionProvider() {
-        return snippetReflection;
     }
 
     protected static String escapeFileName(String name) {
@@ -248,12 +241,12 @@ public class CanonicalStringGraphPrinter implements GraphPrinter {
     }
 
     @Override
-    public void beginGroup(String name, String shortName, ResolvedJavaMethod method, int bci, Map<Object, Object> properties) throws IOException {
+    public void beginGroup(String name, String shortName, ResolvedJavaMethod method, int bci, Map<Object, Object> properties, SnippetReflectionProvider snippetReflection) throws IOException {
         currentDirectory = currentDirectory.resolve(escapeFileName(name));
     }
 
     @Override
-    public void print(Graph graph, String title, Map<Object, Object> properties) throws IOException {
+    public void print(Graph graph, String title, Map<Object, Object> properties, SnippetReflectionProvider snippetReflection) throws IOException {
         if (graph instanceof StructuredGraph) {
             StructuredGraph structuredGraph = (StructuredGraph) graph;
             currentDirectory.toFile().mkdirs();

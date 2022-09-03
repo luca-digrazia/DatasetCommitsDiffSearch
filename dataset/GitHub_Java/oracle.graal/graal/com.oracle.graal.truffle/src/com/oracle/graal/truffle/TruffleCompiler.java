@@ -106,7 +106,7 @@ public abstract class TruffleCompiler {
         this.partialEvaluator = createPartialEvaluator();
 
         if (Debug.isEnabled()) {
-            DebugEnvironment.initialize(System.out, graalTruffleRuntime.getRequiredGraalCapability(SnippetReflectionProvider.class));
+            DebugEnvironment.initialize(System.out);
         }
 
         graalTruffleRuntime.reinstallStubs();
@@ -179,7 +179,7 @@ public abstract class TruffleCompiler {
 
     @SuppressWarnings("try")
     public CompilationResult compileMethodHelper(StructuredGraph graph, String name, PhaseSuite<HighTierContext> graphBuilderSuite, InstalledCode predefinedInstalledCode) {
-        try (Scope s = Debug.scope("TruffleFinal")) {
+        try (Scope s = Debug.scope("TruffleFinal", snippetReflection)) {
             Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "After TruffleTier");
         } catch (Throwable e) {
             throw Debug.handle(e);
@@ -190,7 +190,7 @@ public abstract class TruffleCompiler {
 
         TruffleCompilationResultBuilderFactory factory = new TruffleCompilationResultBuilderFactory(graph, validAssumptions);
         try (DebugCloseable a = CompilationTime.start();
-                        Scope s = Debug.scope("TruffleGraal.GraalCompiler", graph, providers.getCodeCache());
+                        Scope s = Debug.scope("TruffleGraal.GraalCompiler", graph, providers.getCodeCache(), snippetReflection);
                         DebugCloseable c = CompilationMemUse.start()) {
             SpeculationLog speculationLog = graph.getSpeculationLog();
             if (speculationLog != null) {
