@@ -59,6 +59,11 @@ public abstract class LLVMTruffleUnbox extends LLVMIntrinsic {
         return doUnbox(value.getObject());
     }
 
+    @Specialization
+    public Object executeIntrinsic(TruffleObject value) {
+        return doUnbox(value);
+    }
+
     private static void checkLLVMTruffleObject(LLVMTruffleObject value) {
         if (value.getOffset() != 0) {
             CompilerDirectives.transferToInterpreterAndInvalidate();

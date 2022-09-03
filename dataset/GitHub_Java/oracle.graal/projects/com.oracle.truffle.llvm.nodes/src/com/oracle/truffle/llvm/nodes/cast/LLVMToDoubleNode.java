@@ -37,23 +37,16 @@ import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.llvm.nodes.cast.LLVMToI64Node.LLVMToI64BitNode;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
-import com.oracle.truffle.llvm.runtime.interop.ToLLVMNode;
+import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
+import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.vector.LLVMDoubleVector;
-import com.oracle.truffle.llvm.runtime.vector.LLVMFloatVector;
-import com.oracle.truffle.llvm.runtime.vector.LLVMI16Vector;
-import com.oracle.truffle.llvm.runtime.vector.LLVMI1Vector;
-import com.oracle.truffle.llvm.runtime.vector.LLVMI32Vector;
-import com.oracle.truffle.llvm.runtime.vector.LLVMI64Vector;
-import com.oracle.truffle.llvm.runtime.vector.LLVMI8Vector;
 
 @NodeChild(value = "fromNode", type = LLVMExpressionNode.class)
 public abstract class LLVMToDoubleNode extends LLVMExpressionNode {
 
-    @Child private ToLLVMNode toDouble = ToLLVMNode.createNode(double.class);
+    @Child private ForeignToLLVM toDouble = ForeignToLLVM.create(ForeignToLLVMType.DOUBLE);
 
     @Specialization
     public double executeLLVMBoxedPrimitive(LLVMBoxedPrimitive from) {
@@ -67,7 +60,7 @@ public abstract class LLVMToDoubleNode extends LLVMExpressionNode {
     @Specialization(guards = "notLLVM(from)")
     public double executeTruffleObject(TruffleObject from) {
         if (ForeignAccess.sendIsNull(isNull, from)) {
-            return 0;
+            return 0.0;
         } else if (ForeignAccess.sendIsBoxed(isBoxed, from)) {
             try {
                 return (double) toDouble.executeWithTarget(ForeignAccess.sendUnbox(unbox, from));
@@ -84,7 +77,7 @@ public abstract class LLVMToDoubleNode extends LLVMExpressionNode {
 
         @Specialization
         public double executeDouble(boolean from) {
-            return from ? 1 : 0;
+            return from ? 1.0 : 0.0;
         }
 
         @Specialization
@@ -191,54 +184,6 @@ public abstract class LLVMToDoubleNode extends LLVMExpressionNode {
         @Specialization
         public double executeDouble(double from) {
             return from;
-        }
-
-        @Specialization
-        public double executeI1Vector(LLVMI1Vector from) {
-            long raw = LLVMToI64BitNode.castI1Vector(from, Long.SIZE);
-            return Double.longBitsToDouble(raw);
-        }
-
-        @Specialization
-        public double executeI8Vector(LLVMI8Vector from) {
-            long raw = LLVMToI64BitNode.castI8Vector(from, Long.SIZE / Byte.SIZE);
-            return Double.longBitsToDouble(raw);
-        }
-
-        @Specialization
-        public double executeI16Vector(LLVMI16Vector from) {
-            long raw = LLVMToI64BitNode.castI16Vector(from, Long.SIZE / Short.SIZE);
-            return Double.longBitsToDouble(raw);
-        }
-
-        @Specialization
-        public double executeI32Vector(LLVMI32Vector from) {
-            long raw = LLVMToI64BitNode.castI32Vector(from, Long.SIZE / Integer.SIZE);
-            return Double.longBitsToDouble(raw);
-        }
-
-        @Specialization
-        public double executeFloatVector(LLVMFloatVector from) {
-            long raw = LLVMToI64BitNode.castFloatVector(from, Long.SIZE / Float.SIZE);
-            return Double.longBitsToDouble(raw);
-        }
-
-        @Specialization
-        public double executeI64Vector(LLVMI64Vector from) {
-            if (from.getLength() != 1) {
-                CompilerDirectives.transferToInterpreter();
-                throw new AssertionError("invalid vector size!");
-            }
-            return Double.longBitsToDouble(from.getValue(0));
-        }
-
-        @Specialization
-        public double executeDoubleVector(LLVMDoubleVector from) {
-            if (from.getLength() != 1) {
-                CompilerDirectives.transferToInterpreter();
-                throw new AssertionError("invalid vector size!");
-            }
-            return from.getValue(0);
         }
     }
 

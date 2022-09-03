@@ -72,4 +72,10 @@ public abstract class LLVMTruffleGetSize extends LLVMIntrinsic {
         checkLLVMTruffleObject(value);
         return getSize(value.getObject());
     }
+
+    @Specialization
+    public int executeIntrinsic(TruffleObject value) {
+        return getSize(value);
+    }
+
 }

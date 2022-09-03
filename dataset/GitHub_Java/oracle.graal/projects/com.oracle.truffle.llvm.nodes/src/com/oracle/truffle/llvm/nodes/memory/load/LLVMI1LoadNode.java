@@ -35,12 +35,12 @@ import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
+import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
-import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
@@ -48,6 +48,7 @@ import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
 
 // Truffle has no branch profiles for boolean
 @NodeChild(type = LLVMExpressionNode.class)
@@ -73,11 +74,6 @@ public abstract class LLVMI1LoadNode extends LLVMExpressionNode {
     }
 
     @Specialization
-    public boolean executeI1(LLVMVirtualAllocationAddress address) {
-        return address.getI1();
-    }
-
-    @Specialization
     public boolean executeShort(LLVMAddress addr) {
         return LLVMMemory.getI1(addr);
     }
@@ -96,4 +92,10 @@ public abstract class LLVMI1LoadNode extends LLVMExpressionNode {
             throw new IllegalAccessError("Cannot access address: " + addr.getValue());
         }
     }
+
+    @Specialization(guards = "notLLVM(addr)")
+    public boolean executeShort(TruffleObject addr) {
+        return executeShort(new LLVMTruffleObject(addr, PrimitiveType.I1));
+    }
+
 }

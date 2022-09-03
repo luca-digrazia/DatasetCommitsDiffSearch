@@ -46,12 +46,10 @@ import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
-import com.oracle.truffle.llvm.runtime.LLVMGetStackNode;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.interop.LLVMDataEscapeNode;
 import com.oracle.truffle.llvm.runtime.interop.LLVMDataEscapeNodeGen;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
-import com.oracle.truffle.llvm.runtime.memory.LLVMStack;
 import com.oracle.truffle.llvm.runtime.memory.LLVMStack.NeedsStack;
 import com.oracle.truffle.llvm.runtime.memory.LLVMThreadingStack;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
@@ -96,16 +94,15 @@ public abstract class LLVMTruffleExecute extends LLVMIntrinsic {
     }
 
     @ExplodeLoop
-    private Object doExecute(VirtualFrame frame, TruffleObject value, LLVMContext context, LLVMGetStackNode getStack) {
+    private Object doExecute(VirtualFrame frame, TruffleObject value, LLVMContext context) {
         Object[] evaluatedArgs = new Object[args.length];
         for (int i = 0; i < args.length; i++) {
             evaluatedArgs[i] = prepareValuesForEscape[i].executeWithTarget(args[i].executeGeneric(frame), context);
         }
         try {
-            LLVMStack stack = getStack.executeWithTarget(getThreadingStack(context), Thread.currentThread());
-            stack.setStackPointer(stackPointer.executeI64(frame));
+            getThreadingStack(context).getStack().setStackPointer(stackPointer.executeI64(frame));
             Object rawValue = ForeignAccess.sendExecute(foreignExecute, value, evaluatedArgs);
-            stack.setStackPointer(stackPointer.executeI64(frame));
+            getThreadingStack(context).getStack().setStackPointer(stackPointer.executeI64(frame));
             return toLLVM.executeWithTarget(rawValue);
         } catch (UnsupportedMessageException | UnsupportedTypeException | ArityException e) {
             CompilerDirectives.transferToInterpreter();
@@ -115,29 +112,25 @@ public abstract class LLVMTruffleExecute extends LLVMIntrinsic {
 
     @SuppressWarnings("unused")
     @Specialization(guards = "value == cachedValue", limit = "2")
-    public Object doIntrinsicCachedTruffleObject(VirtualFrame frame, TruffleObject value, @Cached("value") TruffleObject cachedValue, @Cached("getContext()") LLVMContext context,
-                    @Cached("create()") LLVMGetStackNode getStack) {
-        return doExecute(frame, cachedValue, context, getStack);
+    public Object doIntrinsicCachedTruffleObject(VirtualFrame frame, TruffleObject value, @Cached("value") TruffleObject cachedValue, @Cached("getContext()") LLVMContext context) {
+        return doExecute(frame, cachedValue, context);
     }
 
     @Specialization(replaces = "doIntrinsicCachedTruffleObject")
-    public Object doIntrinsicTruffleObject(VirtualFrame frame, TruffleObject value, @Cached("getContext()") LLVMContext context,
-                    @Cached("create()") LLVMGetStackNode getStack) {
-        return doExecute(frame, value, context, getStack);
+    public Object doIntrinsicTruffleObject(VirtualFrame frame, TruffleObject value, @Cached("getContext()") LLVMContext context) {
+        return doExecute(frame, value, context);
     }
 
     @SuppressWarnings("unused")
     @Specialization(guards = "value == cachedValue")
-    public Object doIntrinsicCachedLLVMTruffleObject(VirtualFrame frame, LLVMTruffleObject value, @Cached("value") LLVMTruffleObject cachedValue, @Cached("getContext()") LLVMContext context,
-                    @Cached("create()") LLVMGetStackNode getStack) {
+    public Object doIntrinsicCachedLLVMTruffleObject(VirtualFrame frame, LLVMTruffleObject value, @Cached("value") LLVMTruffleObject cachedValue, @Cached("getContext()") LLVMContext context) {
         checkLLVMTruffleObject(cachedValue);
-        return doExecute(frame, cachedValue.getObject(), context, getStack);
+        return doExecute(frame, cachedValue.getObject(), context);
     }
 
     @Specialization(replaces = "doIntrinsicCachedLLVMTruffleObject")
-    public Object doIntrinsicLLVMTruffleObject(VirtualFrame frame, LLVMTruffleObject value, @Cached("getContext()") LLVMContext context,
-                    @Cached("create()") LLVMGetStackNode getStack) {
+    public Object doIntrinsicLLVMTruffleObject(VirtualFrame frame, LLVMTruffleObject value, @Cached("getContext()") LLVMContext context) {
         checkLLVMTruffleObject(value);
-        return doExecute(frame, value.getObject(), context, getStack);
+        return doExecute(frame, value.getObject(), context);
     }
 }

@@ -35,13 +35,13 @@ import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
+import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.profiles.LongValueProfile;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
-import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
@@ -49,6 +49,7 @@ import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
 
 @NodeChild(type = LLVMExpressionNode.class)
 public abstract class LLVMI64LoadNode extends LLVMExpressionNode {
@@ -76,11 +77,6 @@ public abstract class LLVMI64LoadNode extends LLVMExpressionNode {
     }
 
     @Specialization
-    public long executeI64(LLVMVirtualAllocationAddress address) {
-        return address.getI64();
-    }
-
-    @Specialization
     public long executeI64(LLVMGlobalVariable addr, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
         return profile.profile(globalAccess.getI64(addr));
     }
@@ -99,4 +95,10 @@ public abstract class LLVMI64LoadNode extends LLVMExpressionNode {
             throw new IllegalAccessError("Cannot access address: " + addr.getValue());
         }
     }
+
+    @Specialization(guards = "notLLVM(addr)")
+    public long executeI64(TruffleObject addr) {
+        return executeI64(new LLVMTruffleObject(addr, PrimitiveType.I64));
+    }
+
 }

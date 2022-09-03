@@ -38,17 +38,52 @@ import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
-import com.oracle.truffle.llvm.runtime.interop.ToLLVMNode;
+import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
+import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.vector.LLVMI1Vector;
 
 @NodeChild(value = "fromNode", type = LLVMExpressionNode.class)
 public abstract class LLVMToI1Node extends LLVMExpressionNode {
 
+    @Specialization
+    public boolean executeI1(byte from) {
+        return (from & 1) != 0;
+    }
+
+    @Specialization
+    public boolean executeI1(short from) {
+        return (from & 1) != 0;
+    }
+
+    @Specialization
+    public boolean executeI1(int from) {
+        return (from & 1) != 0;
+    }
+
+    @Specialization
+    public boolean executeI1(long from) {
+        return (from & 1) != 0;
+    }
+
+    @Specialization
+    public boolean executeI1(float from) {
+        return from != 0;
+    }
+
+    @Specialization
+    public boolean executeI1(double from) {
+        return from != 0;
+    }
+
+    @Specialization
+    public boolean executeLLVMFunction(boolean from) {
+        return from;
+    }
+
     @Child private Node isNull = Message.IS_NULL.createNode();
     @Child private Node isBoxed = Message.IS_BOXED.createNode();
     @Child private Node unbox = Message.UNBOX.createNode();
-    @Child private ToLLVMNode toBool = ToLLVMNode.createNode(boolean.class);
+    @Child private ForeignToLLVM toBool = ForeignToLLVM.create(ForeignToLLVMType.I1);
 
     @Specialization(guards = "notLLVM(from)")
     public boolean executeTruffleObject(TruffleObject from) {
@@ -69,60 +104,6 @@ public abstract class LLVMToI1Node extends LLVMExpressionNode {
     @Specialization
     public boolean executeLLVMBoxedPrimitive(LLVMBoxedPrimitive from) {
         return (boolean) toBool.executeWithTarget(from.getValue());
-    }
-
-    public abstract static class LLVMToI1NoZeroExtNode extends LLVMToI1Node {
-        @Specialization
-        public boolean executeI1(byte from) {
-            return (from & 1) != 0;
-        }
-
-        @Specialization
-        public boolean executeI1(short from) {
-            return (from & 1) != 0;
-        }
-
-        @Specialization
-        public boolean executeI1(int from) {
-            return (from & 1) != 0;
-        }
-
-        @Specialization
-        public boolean executeI1(long from) {
-            return (from & 1) != 0;
-        }
-
-        @Specialization
-        public boolean executeI1(float from) {
-            return from != 0;
-        }
-
-        @Specialization
-        public boolean executeI1(double from) {
-            return from != 0;
-        }
-
-        @Specialization
-        public boolean executeLLVMFunction(boolean from) {
-            return from;
-        }
-    }
-
-    public abstract static class LLVMToI1BitNode extends LLVMToI1Node {
-
-        @Specialization
-        public boolean executeI1(boolean from) {
-            return from;
-        }
-
-        @Specialization
-        public boolean executeI1Vector(LLVMI1Vector from) {
-            if (from.getLength() != 1) {
-                CompilerDirectives.transferToInterpreter();
-                throw new AssertionError("invalid vector size!");
-            }
-            return from.getValue(0);
-        }
     }
 
 }

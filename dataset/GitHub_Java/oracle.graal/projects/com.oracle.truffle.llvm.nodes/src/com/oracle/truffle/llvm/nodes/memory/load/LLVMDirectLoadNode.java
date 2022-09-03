@@ -37,13 +37,13 @@ import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
+import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMTruffleManagedMalloc.ManagedMallocObject;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
-import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionHandle;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
@@ -114,11 +114,6 @@ public abstract class LLVMDirectLoadNode {
         }
 
         @Specialization
-        public LLVMAddress executeLLVMByteArrayAddress(LLVMVirtualAllocationAddress address) {
-            return LLVMAddress.fromLong(address.getI64());
-        }
-
-        @Specialization
         public Object executeAddress(LLVMGlobalVariable addr, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
             return globalAccess.get(addr);
         }
@@ -153,8 +148,22 @@ public abstract class LLVMDirectLoadNode {
             }
         }
 
+        @Specialization(guards = {"!isManagedMalloc(addr)", "notLLVM(addr)"})
+        public Object executeForeign(TruffleObject addr, @Cached("createForeignReadNode()") Node foreignRead) {
+            try {
+                return toLLVM.executeWithTarget(ForeignAccess.sendRead(foreignRead, addr, 0));
+            } catch (UnknownIdentifierException | UnsupportedMessageException e) {
+                CompilerDirectives.transferToInterpreter();
+                throw new UnsupportedOperationException(e);
+            }
+        }
+
         protected boolean objectIsManagedMalloc(LLVMTruffleObject addr) {
             return addr.getObject() instanceof ManagedMallocObject;
+        }
+
+        protected boolean isManagedMalloc(TruffleObject addr) {
+            return addr instanceof ManagedMallocObject;
         }
 
         protected Node createForeignReadNode() {
