@@ -56,12 +56,12 @@ import java.util.Map;
 import java.util.SortedMap;
 import java.util.TreeMap;
 
-import org.graalvm.collections.EconomicMap;
-import org.graalvm.collections.EconomicSet;
-import org.graalvm.collections.Pair;
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.graphio.GraphOutput;
+import org.graalvm.util.EconomicMap;
+import org.graalvm.util.EconomicSet;
+import org.graalvm.util.Pair;
 
 import jdk.vm.ci.meta.JavaMethod;
 
@@ -1937,7 +1937,7 @@ public final class DebugContext implements AutoCloseable {
         if (description != null) {
             printMetrics(description);
         }
-        if (metricsEnabled && metricValues != null && globalMetrics != null) {
+        if (metricsEnabled && globalMetrics != null && metricValues != null) {
             globalMetrics.add(this);
         }
         metricValues = null;
@@ -2029,6 +2029,7 @@ public final class DebugContext implements AutoCloseable {
                 }
             }
         }
+
     }
 
     /**
