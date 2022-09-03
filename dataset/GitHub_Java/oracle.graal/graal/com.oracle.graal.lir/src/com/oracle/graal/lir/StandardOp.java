@@ -33,6 +33,8 @@ import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
  */
 public class StandardOp {
 
+    private static Value[] EMPTY = new Value[0];
+
     /**
      * Marker interface for LIR ops that can fall through to the next operation, like a switch
      * statement. setFallThroughTarget(null) can be used to make the operation fall through to the
@@ -94,6 +96,24 @@ public class StandardOp {
 
         public LabelRef destination() {
             return destination;
+        }
+    }
+
+    public static class PhiJumpOp extends JumpOp {
+
+        @Alive({REG, STACK, CONST}) protected Value[] phiInputs;
+
+        public PhiJumpOp(LabelRef destination, Value[] phiInputs) {
+            super(destination, null);
+            this.phiInputs = phiInputs;
+        }
+
+        public void markResolved() {
+            phiInputs = EMPTY;
+        }
+
+        public Value[] getPhiInputs() {
+            return phiInputs;
         }
     }
 
