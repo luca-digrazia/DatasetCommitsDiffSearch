@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,64 +22,135 @@
  */
 package com.oracle.graal.replacements.nodes;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.nodes.virtual.*;
+import static com.oracle.graal.compiler.common.LocationIdentity.any;
+import static com.oracle.graal.nodeinfo.InputType.Memory;
+import static com.oracle.graal.nodeinfo.InputType.State;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_200;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_100;
 
-@NodeInfo
-public class BasicArrayCopyNode extends MacroStateSplitNode implements Virtualizable {
+import com.oracle.graal.compiler.common.LocationIdentity;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.NodeInputList;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.DeoptimizingNode;
+import com.oracle.graal.nodes.FrameState;
+import com.oracle.graal.nodes.NamedLocationIdentity;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.java.LoadIndexedNode;
+import com.oracle.graal.nodes.memory.AbstractMemoryCheckpoint;
+import com.oracle.graal.nodes.memory.MemoryAccess;
+import com.oracle.graal.nodes.memory.MemoryCheckpoint;
+import com.oracle.graal.nodes.memory.MemoryNode;
+import com.oracle.graal.nodes.spi.Lowerable;
+import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.nodes.spi.Virtualizable;
+import com.oracle.graal.nodes.spi.VirtualizerTool;
+import com.oracle.graal.nodes.type.StampTool;
+import com.oracle.graal.nodes.virtual.VirtualArrayNode;
+import com.oracle.graal.nodes.virtual.VirtualObjectNode;
 
-    public static BasicArrayCopyNode create(Invoke invoke) {
-        return new BasicArrayCopyNode(invoke);
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.ResolvedJavaType;
+
+@NodeInfo(cycles = CYCLES_200, size = SIZE_100)
+public class BasicArrayCopyNode extends AbstractMemoryCheckpoint implements Virtualizable, MemoryCheckpoint.Single, MemoryAccess, Lowerable, DeoptimizingNode.DeoptDuring {
+
+    public static final NodeClass<BasicArrayCopyNode> TYPE = NodeClass.create(BasicArrayCopyNode.class);
+
+    static final int SRC_ARG = 0;
+    static final int SRC_POS_ARG = 1;
+    static final int DEST_ARG = 2;
+    static final int DEST_POS_ARG = 3;
+    static final int LENGTH_ARG = 4;
+
+    @Input NodeInputList<ValueNode> args;
+
+    @OptionalInput(State) FrameState stateDuring;
+
+    @OptionalInput(Memory) protected MemoryNode lastLocationAccess;
+
+    protected JavaKind elementKind;
+
+    protected int bci;
+
+    public BasicArrayCopyNode(NodeClass<? extends AbstractMemoryCheckpoint> type, ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, JavaKind elementKind, int bci) {
+        super(type, StampFactory.forKind(JavaKind.Void));
+        this.bci = bci;
+        args = new NodeInputList<>(this, new ValueNode[]{src, srcPos, dest, destPos, length});
+        this.elementKind = elementKind != JavaKind.Illegal ? elementKind : null;
     }
 
-    protected BasicArrayCopyNode(Invoke invoke) {
-        super(invoke);
+    public BasicArrayCopyNode(NodeClass<? extends AbstractMemoryCheckpoint> type, ValueNode src, ValueNode srcPos, ValueNode dest, ValueNode destPos, ValueNode length, JavaKind elementKind) {
+        super(type, StampFactory.forKind(JavaKind.Void));
+        this.bci = -6;
+        args = new NodeInputList<>(this, new ValueNode[]{src, srcPos, dest, destPos, length});
+        this.elementKind = elementKind != JavaKind.Illegal ? elementKind : null;
     }
 
-    protected ValueNode getSource() {
-        return arguments.get(0);
+    public ValueNode getSource() {
+        return args.get(SRC_ARG);
     }
 
-    protected ValueNode getSourcePosition() {
-        return arguments.get(1);
+    public ValueNode getSourcePosition() {
+        return args.get(SRC_POS_ARG);
     }
 
-    protected ValueNode getDestination() {
-        return arguments.get(2);
+    public ValueNode getDestination() {
+        return args.get(DEST_ARG);
     }
 
-    protected ValueNode getDestinationPosition() {
-        return arguments.get(3);
+    public ValueNode getDestinationPosition() {
+        return args.get(DEST_POS_ARG);
     }
 
-    protected ValueNode getLength() {
-        return arguments.get(4);
+    public ValueNode getLength() {
+        return args.get(LENGTH_ARG);
+    }
+
+    public int getBci() {
+        return bci;
+    }
+
+    public JavaKind getElementKind() {
+        return elementKind;
+    }
+
+    @Override
+    public LocationIdentity getLocationIdentity() {
+        if (elementKind != null) {
+            return NamedLocationIdentity.getArrayLocation(elementKind);
+        }
+        return any();
+    }
+
+    @Override
+    public MemoryNode getLastLocationAccess() {
+        return lastLocationAccess;
+    }
+
+    @Override
+    public void setLastLocationAccess(MemoryNode lla) {
+        updateUsagesInterface(lastLocationAccess, lla);
+        lastLocationAccess = lla;
+    }
+
+    @Override
+    public void lower(LoweringTool tool) {
+        tool.getLowerer().lower(this, tool);
     }
 
     private static boolean checkBounds(int position, int length, VirtualObjectNode virtualObject) {
         return position >= 0 && position + length <= virtualObject.entryCount();
     }
 
-    private static boolean checkEntryTypes(int srcPos, int length, State srcState, ResolvedJavaType destComponentType, VirtualizerTool tool) {
-        if (destComponentType.getKind() == Kind.Object) {
+    private static boolean checkEntryTypes(int srcPos, int length, VirtualObjectNode src, ResolvedJavaType destComponentType, VirtualizerTool tool) {
+        if (destComponentType.getJavaKind() == JavaKind.Object && !destComponentType.isJavaLangObject()) {
             for (int i = 0; i < length; i++) {
-                ValueNode entry = srcState.getEntry(srcPos + i);
-                State state = tool.getObjectState(entry);
-                ResolvedJavaType type;
-                if (state != null) {
-                    if (state.getState() == EscapeState.Virtual) {
-                        type = state.getVirtualObject().type();
-                    } else {
-                        type = StampTool.typeOrNull(state.getMaterializedValue());
-                    }
-                } else {
-                    type = StampTool.typeOrNull(entry);
-                }
+                ValueNode entry = tool.getEntry(src, srcPos + i);
+                ResolvedJavaType type = StampTool.typeOrNull(entry);
                 if (type == null || !destComponentType.isAssignableFrom(type)) {
                     return false;
                 }
@@ -88,39 +159,110 @@ public class BasicArrayCopyNode extends MacroStateSplitNode implements Virtualiz
         return true;
     }
 
+    /*
+     * Returns true if this copy doesn't require store checks. Trivially true for primitive arrays.
+     */
+    public boolean isExact() {
+        ResolvedJavaType srcType = StampTool.typeOrNull(getSource().stamp());
+        ResolvedJavaType destType = StampTool.typeOrNull(getDestination().stamp());
+        if (srcType == null || !srcType.isArray() || destType == null || !destType.isArray()) {
+            return false;
+        }
+        if ((srcType.getComponentType().getJavaKind().isPrimitive() && destType.getComponentType().equals(srcType.getComponentType())) || getSource() == getDestination()) {
+            return true;
+        }
+
+        if (StampTool.isExactType(getDestination().stamp())) {
+            if (destType != null && destType.isAssignableFrom(srcType)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     @Override
     public void virtualize(VirtualizerTool tool) {
-        if (getSourcePosition().isConstant() && getDestinationPosition().isConstant() && getLength().isConstant()) {
-            int srcPos = getSourcePosition().asJavaConstant().asInt();
-            int destPos = getDestinationPosition().asJavaConstant().asInt();
-            int length = getLength().asJavaConstant().asInt();
-            State srcState = tool.getObjectState(getSource());
-            State destState = tool.getObjectState(getDestination());
+        ValueNode sourcePosition = tool.getAlias(getSourcePosition());
+        ValueNode destinationPosition = tool.getAlias(getDestinationPosition());
+        ValueNode replacedLength = tool.getAlias(getLength());
 
-            if (srcState != null && srcState.getState() == EscapeState.Virtual && destState != null && destState.getState() == EscapeState.Virtual) {
-                VirtualObjectNode srcVirtual = srcState.getVirtualObject();
-                VirtualObjectNode destVirtual = destState.getVirtualObject();
-                if (!(srcVirtual instanceof VirtualArrayNode) || !(destVirtual instanceof VirtualArrayNode)) {
+        if (sourcePosition.isConstant() && destinationPosition.isConstant() && replacedLength.isConstant()) {
+            int srcPosInt = sourcePosition.asJavaConstant().asInt();
+            int destPosInt = destinationPosition.asJavaConstant().asInt();
+            int len = replacedLength.asJavaConstant().asInt();
+            ValueNode destAlias = tool.getAlias(getDestination());
+
+            if (destAlias instanceof VirtualArrayNode) {
+                VirtualArrayNode destVirtual = (VirtualArrayNode) destAlias;
+                if (len < 0 || !checkBounds(destPosInt, len, destVirtual)) {
                     return;
                 }
-                if (((VirtualArrayNode) srcVirtual).componentType().getKind() != Kind.Object || ((VirtualArrayNode) destVirtual).componentType().getKind() != Kind.Object) {
-                    return;
-                }
-                if (length < 0 || !checkBounds(srcPos, length, srcVirtual) || !checkBounds(destPos, length, destVirtual)) {
-                    return;
-                }
-                if (!checkEntryTypes(srcPos, length, srcState, destVirtual.type().getComponentType(), tool)) {
-                    return;
-                }
-                for (int i = 0; i < length; i++) {
-                    tool.setVirtualEntry(destState, destPos + i, srcState.getEntry(srcPos + i), false);
-                }
-                tool.delete();
-                if (Debug.isLogEnabled()) {
-                    Debug.log("virtualized arraycopyf(%s, %d, %s, %d, %d)", getSource(), srcPos, getDestination(), destPos, length);
+                ValueNode srcAlias = tool.getAlias(getSource());
+
+                if (srcAlias instanceof VirtualObjectNode) {
+                    if (!(srcAlias instanceof VirtualArrayNode)) {
+                        return;
+                    }
+                    VirtualArrayNode srcVirtual = (VirtualArrayNode) srcAlias;
+                    if (destVirtual.componentType().getJavaKind() != JavaKind.Object) {
+                        return;
+                    }
+                    if (srcVirtual.componentType().getJavaKind() != JavaKind.Object) {
+                        return;
+                    }
+                    if (!checkBounds(srcPosInt, len, srcVirtual)) {
+                        return;
+                    }
+                    if (!checkEntryTypes(srcPosInt, len, srcVirtual, destVirtual.type().getComponentType(), tool)) {
+                        return;
+                    }
+                    for (int i = 0; i < len; i++) {
+                        tool.setVirtualEntry(destVirtual, destPosInt + i, tool.getEntry(srcVirtual, srcPosInt + i), false);
+                    }
+                    tool.delete();
+                    if (Debug.isLogEnabled()) {
+                        Debug.log("virtualized arraycopyf(%s, %d, %s, %d, %d)", getSource(), srcPosInt, getDestination(), destPosInt, len);
+                    }
+                } else {
+                    ResolvedJavaType sourceType = StampTool.typeOrNull(srcAlias);
+                    if (sourceType == null || !sourceType.isArray()) {
+                        return;
+                    }
+                    ResolvedJavaType sourceComponentType = sourceType.getComponentType();
+                    ResolvedJavaType destComponentType = destVirtual.type().getComponentType();
+                    if (!sourceComponentType.equals(destComponentType)) {
+                        return;
+                    }
+                    for (int i = 0; i < len; i++) {
+                        LoadIndexedNode load = new LoadIndexedNode(graph().getAssumptions(), srcAlias, ConstantNode.forInt(i + srcPosInt, graph()), destComponentType.getJavaKind());
+                        tool.addNode(load);
+                        tool.setVirtualEntry(destVirtual, destPosInt + i, load, false);
+                    }
+                    tool.delete();
                 }
             }
         }
     }
 
+    @Override
+    public boolean canDeoptimize() {
+        return true;
+    }
+
+    @Override
+    public FrameState stateDuring() {
+        return stateDuring;
+    }
+
+    @Override
+    public void setStateDuring(FrameState stateDuring) {
+        updateUsages(this.stateDuring, stateDuring);
+        this.stateDuring = stateDuring;
+    }
+
+    @Override
+    public void computeStateDuring(FrameState currentStateAfter) {
+        FrameState newStateDuring = currentStateAfter.duplicateModifiedDuringCall(getBci(), asNode().getStackKind());
+        setStateDuring(newStateDuring);
+    }
 }

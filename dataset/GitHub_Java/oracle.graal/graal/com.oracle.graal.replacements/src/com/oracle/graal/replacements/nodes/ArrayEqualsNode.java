@@ -47,8 +47,6 @@ import com.oracle.graal.nodes.spi.VirtualizerTool;
 import com.oracle.graal.nodes.util.GraphUtil;
 import com.oracle.graal.nodes.virtual.VirtualObjectNode;
 
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.Value;
 
@@ -95,34 +93,13 @@ public final class ArrayEqualsNode extends FixedWithNextNode implements LIRLower
         return length;
     }
 
-    private static boolean arrayEquals(ConstantReflectionProvider constantReflection, JavaConstant a, JavaConstant b, int len) {
-        for (int i = 0; i < len; i++) {
-            JavaConstant aElem = constantReflection.readArrayElement(a, i);
-            JavaConstant bElem = constantReflection.readArrayElement(b, i);
-            if (!constantReflection.constantEquals(aElem, bElem)) {
-                return false;
-            }
-        }
-        return true;
-    }
-
     @Override
     public Node canonical(CanonicalizerTool tool) {
         if (tool.allUsagesAvailable() && hasNoUsages()) {
             return null;
         }
-        ValueNode a1 = GraphUtil.unproxify(array1);
-        ValueNode a2 = GraphUtil.unproxify(array2);
-        if (a1 == a2) {
+        if (GraphUtil.unproxify(array1) == GraphUtil.unproxify(array2)) {
             return ConstantNode.forBoolean(true);
-        }
-        if (a1.isConstant() && a2.isConstant() && length.isConstant()) {
-            ConstantNode c1 = (ConstantNode) a1;
-            ConstantNode c2 = (ConstantNode) a2;
-            if (c1.getStableDimension() >= 1 && c2.getStableDimension() >= 1) {
-                boolean ret = arrayEquals(tool.getConstantReflection(), c1.asJavaConstant(), c2.asJavaConstant(), length.asJavaConstant().asInt());
-                return ConstantNode.forBoolean(ret);
-            }
         }
         return this;
     }
