@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -43,28 +43,28 @@ public final class PTXAddressValue extends CompositeValue {
 
     /**
      * Creates an {@link PTXAddressValue} with given base register and no displacement.
-     *
+     * 
      * @param kind the kind of the value being addressed
      * @param base the base register
      */
-    public PTXAddressValue(LIRKind kind, AllocatableValue base) {
+    public PTXAddressValue(PlatformKind kind, AllocatableValue base) {
         this(kind, base, 0);
     }
 
     /**
      * Creates an {@link PTXAddressValue} with given base register and a displacement. This is the
      * most general constructor.
-     *
+     * 
      * @param kind the kind of the value being addressed
      * @param base the base register
      * @param displacement the displacement
      */
-    public PTXAddressValue(LIRKind kind, AllocatableValue base, long displacement) {
+    public PTXAddressValue(PlatformKind kind, AllocatableValue base, long displacement) {
         super(kind);
         this.base = base;
         this.displacement = displacement;
 
-        assert !isStackSlotValue(base);
+        assert !isStackSlot(base);
     }
 
     public PTXAddress toAddress() {
@@ -94,13 +94,13 @@ public final class PTXAddressValue extends CompositeValue {
     public boolean equals(Object obj) {
         if (obj instanceof PTXAddressValue) {
             PTXAddressValue addr = (PTXAddressValue) obj;
-            return getLIRKind().equals(addr.getLIRKind()) && displacement == addr.displacement && base.equals(addr.base);
+            return getPlatformKind() == addr.getPlatformKind() && displacement == addr.displacement && base.equals(addr.base);
         }
         return false;
     }
 
     @Override
     public int hashCode() {
-        return base.hashCode() ^ ((int) displacement << 4) ^ getLIRKind().hashCode();
+        return base.hashCode() ^ ((int) displacement << 4) ^ getPlatformKind().hashCode();
     }
 }

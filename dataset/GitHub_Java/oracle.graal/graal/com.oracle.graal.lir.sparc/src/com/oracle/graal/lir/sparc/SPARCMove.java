@@ -39,16 +39,6 @@ import com.oracle.graal.lir.asm.*;
 
 public class SPARCMove {
 
-    public static SPARCLIRInstruction createMove(AllocatableValue dst, Value src) {
-        if (src instanceof SPARCAddressValue) {
-            return new LoadAddressOp(dst, (SPARCAddressValue) src);
-        } else if (isRegister(src) || isStackSlot(dst)) {
-            return new MoveFromRegOp(dst, src);
-        } else {
-            return new MoveToRegOp(dst, src);
-        }
-    }
-
     @Opcode("MOVE")
     public static class MoveToRegOp extends SPARCLIRInstruction implements MoveOp {
 
@@ -442,7 +432,7 @@ public class SPARCMove {
         switch (input.getKind().getStackKind()) {
             case Int:
                 if (crb.codeCache.needsDataPatch(input)) {
-                    crb.recordInlineDataInCode(input);
+                    crb.recordDataReferenceInCode(input, 0, true);
                     new Setuw(input.asInt(), asRegister(result)).emit(masm);
                 } else {
                     if (input.isDefaultForKind()) {
@@ -454,7 +444,7 @@ public class SPARCMove {
                 break;
             case Long: {
                 if (crb.codeCache.needsDataPatch(input)) {
-                    crb.recordInlineDataInCode(input);
+                    crb.recordDataReferenceInCode(input, 0, true);
                     new Setx(input.asLong(), asRegister(result), true).emit(masm);
                 } else {
                     if (input.isDefaultForKind()) {
@@ -469,7 +459,7 @@ public class SPARCMove {
                 if (input.isNull()) {
                     new Clr(asRegister(result)).emit(masm);
                 } else if (crb.target.inlineObjects) {
-                    crb.recordInlineDataInCode(input);
+                    crb.recordDataReferenceInCode(input, 0, true);
                     new Setx(0xDEADDEADDEADDEADL, asRegister(result), true).emit(masm);
                 } else {
                     Register dst = asRegister(result);
