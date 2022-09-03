@@ -22,34 +22,21 @@
  */
 package com.oracle.graal.debug;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-import java.util.stream.Collectors;
-
-import com.oracle.graal.options.Option;
-import com.oracle.graal.options.OptionValue;
+import java.util.*;
+import java.util.stream.*;
 
 /**
  * Facility for fingerprinting execution.
  */
 public class Fingerprint implements AutoCloseable {
 
-    public static class Options {
-        @Option(help = "Enables execution fingerprinting.")//
-        public static final OptionValue<Boolean> UseFingerprinting = new OptionValue<>(false);
-
-        @Option(help = "Fingerprinting event at which to execute breakpointable code.")//
-        public static final OptionValue<Integer> FingerprintingBreakpointEvent = new OptionValue<>(-1);
-    }
-
-    // public static final String ENABLED_PROPERTY_NAME = "jvmci.fingerprint";
+    public static final String ENABLED_PROPERTY_NAME = "graal.fingerprint";
 
     /**
-     * Determines whether fingerprinting is enabled.
+     * Determines whether fingerprinting is enabled. This is set by the
+     * {@value #ENABLED_PROPERTY_NAME} system property when this class is initialized.
      */
-    public static final boolean ENABLED = Options.UseFingerprinting.getValue();
+    public static final boolean ENABLED = Boolean.getBoolean(ENABLED_PROPERTY_NAME);
 
     private static final ThreadLocal<Fingerprint> current = ENABLED ? new ThreadLocal<>() : null;
 
@@ -110,14 +97,14 @@ public class Fingerprint implements AutoCloseable {
         }
     }
 
-    private static final int BREAKPOINT_EVENT = Options.FingerprintingBreakpointEvent.getValue();
+    private static final int BREAKPOINT_EVENT = Integer.getInteger(ENABLED_PROPERTY_NAME + ".breakpointEvent", -1);
 
     /**
      * Submits an execution event for the purpose of recording or verifying a fingerprint. This must
      * only be called if {@link #ENABLED} is {@code true}.
      */
     public static void submit(String format, Object... args) {
-        assert ENABLED : "fingerprinting must be enabled (-G:+" + Options.UseFingerprinting.getName() + ")";
+        assert ENABLED : "fingerprinting must be enabled (-D" + ENABLED_PROPERTY_NAME + "=true)";
         Fingerprint fingerprint = current.get();
         if (fingerprint != null) {
             int eventId = fingerprint.nextEventId();
@@ -134,7 +121,7 @@ public class Fingerprint implements AutoCloseable {
         return index == -1 ? events.size() : index;
     }
 
-    private static final int MAX_EVENT_TAIL_IN_ERROR_MESSAGE = Integer.getInteger("jvmci.fingerprint.errorEventTailLength", 50);
+    private static final int MAX_EVENT_TAIL_IN_ERROR_MESSAGE = Integer.getInteger("graal.fingerprint.errorEventTailLength", 50);
 
     private String tail() {
         int start = Math.max(index - MAX_EVENT_TAIL_IN_ERROR_MESSAGE, 0);
