@@ -94,7 +94,6 @@ public class NodeParser extends TemplateParser<NodeData> {
         if (rootNode != null) {
             rootNode.setDeclaredChildren(children);
         }
-
         return rootNode;
     }
 
@@ -117,10 +116,6 @@ public class NodeParser extends TemplateParser<NodeData> {
         }
         if (!Utils.isAssignable(type.asType(), context.getTruffleTypes().getNode())) {
             return null; // not a node
-        }
-
-        if (type.getModifiers().contains(Modifier.PRIVATE)) {
-            return null; // not visible
         }
 
         List<Element> elements = new ArrayList<>(context.getEnvironment().getElementUtils().getAllMembers(type));
