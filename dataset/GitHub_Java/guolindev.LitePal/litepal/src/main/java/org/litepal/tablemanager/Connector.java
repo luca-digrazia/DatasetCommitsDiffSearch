@@ -1,5 +1,5 @@
 /*
- * Copyright (C)  Tony Green, Litepal Framework Open Source Project
+ * Copyright (C)  Tony Green, LitePal Framework Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,20 @@
 
 package org.litepal.tablemanager;
 
-import org.litepal.exceptions.InvalidAttributesException;
-import org.litepal.parser.LitePalAttr;
-import org.litepal.parser.LitePalParser;
-
+import android.Manifest;
+import android.content.pm.PackageManager;
 import android.database.sqlite.SQLiteDatabase;
+import android.os.Environment;
+import android.support.v4.content.ContextCompat;
+import android.text.TextUtils;
+
+import org.litepal.LitePal;
+import org.litepal.LitePalApplication;
+import org.litepal.exceptions.DatabaseGenerateException;
+import org.litepal.parser.LitePalAttr;
+import org.litepal.util.BaseUtility;
+
+import java.io.File;
 
 /**
  * The connector to connect database provided by LitePal. Users can use this
@@ -32,11 +41,6 @@ import android.database.sqlite.SQLiteDatabase;
  * @since 1.0
  */
 public class Connector {
-
-	/**
-	 * LitePalAttr model.
-	 */
-	private static LitePalAttr mLitePalAttr;
 
 	/**
 	 * The quote of LitePalHelper.
@@ -54,9 +58,6 @@ public class Connector {
 	 * operation. It will be improved in the future.
 	 * 
 	 * @return A writable SQLiteDatabase instance
-	 * 
-	 * @throws org.litepal.exceptions.InvalidAttributesException
-	 * @throws ParseConfigurationFileException
 	 */
 	public synchronized static SQLiteDatabase getWritableDatabase() {
 		LitePalOpenHelper litePalHelper = buildConnection();
@@ -64,19 +65,11 @@ public class Connector {
 	}
 
 	/**
-	 * Get a readable SQLiteDatabase.
-	 * 
-	 * There're a lot of ways to operate database in android. But LitePal
-	 * doesn't support using ContentProvider currently. The best way to use
-	 * LitePal well is get the SQLiteDatabase instance and use the methods like
-	 * SQLiteDatabase#query in the SQLiteDatabase class to do the database
-	 * query. It will be improved in the future.
+	 * Deprecated. Using {@link LitePal#getDatabase()} instead.
 	 * 
 	 * @return A readable SQLiteDatabase instance.
-	 * 
-	 * @throws org.litepal.exceptions.InvalidAttributesException
-	 * @throws ParseConfigurationFileException
 	 */
+    @Deprecated
 	public synchronized static SQLiteDatabase getReadableDatabase() {
 		LitePalOpenHelper litePalHelper = buildConnection();
 		return litePalHelper.getReadableDatabase();
@@ -89,9 +82,6 @@ public class Connector {
 	 * This is method is alias of getWritableDatabase.
 	 * 
 	 * @return A writable SQLiteDatabase instance
-	 * 
-	 * @throws org.litepal.exceptions.InvalidAttributesException
-	 * @throws ParseConfigurationFileException
 	 */
 	public static SQLiteDatabase getDatabase() {
 		return getWritableDatabase();
@@ -109,22 +99,41 @@ public class Connector {
 	 * @return LitePalHelper object.
 	 * 
 	 * @throws org.litepal.exceptions.InvalidAttributesException
-	 * @throws ParseConfigurationFileException
 	 */
 	private static LitePalOpenHelper buildConnection() {
-		if (mLitePalAttr == null) {
-			LitePalParser.parseLitePalConfiguration();
-			mLitePalAttr = LitePalAttr.getInstance();
+		LitePalAttr litePalAttr = LitePalAttr.getInstance();
+		litePalAttr.checkSelfValid();
+		if (mLitePalHelper == null) {
+			String dbName = litePalAttr.getDbName();
+			if ("external".equalsIgnoreCase(litePalAttr.getStorage())) {
+				dbName = LitePalApplication.getContext().getExternalFilesDir("") + "/databases/" + dbName;
+			} else if (!"internal".equalsIgnoreCase(litePalAttr.getStorage()) && !TextUtils.isEmpty(litePalAttr.getStorage())) {
+                // internal or empty means internal storage, neither or them means sdcard storage
+                String dbPath = Environment.getExternalStorageDirectory().getPath() + "/" + litePalAttr.getStorage();
+                dbPath = dbPath.replace("//", "/");
+                if (BaseUtility.isClassAndMethodExist("android.support.v4.content.ContextCompat", "checkSelfPermission") &&
+                        ContextCompat.checkSelfPermission(LitePalApplication.getContext(), Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                    throw new DatabaseGenerateException(String.format(DatabaseGenerateException.EXTERNAL_STORAGE_PERMISSION_DENIED, dbPath));
+                }
+                File path = new File(dbPath);
+                if (!path.exists()) {
+                    path.mkdirs();
+                }
+                dbName = dbPath + "/" + dbName;
+            }
+			mLitePalHelper = new LitePalOpenHelper(dbName, litePalAttr.getVersion());
 		}
-		if (mLitePalAttr.checkSelfValid()) {
-			if (mLitePalHelper == null) {
-				mLitePalHelper = new LitePalOpenHelper(mLitePalAttr.getDbName(),
-						mLitePalAttr.getVersion());
-			}
-			return mLitePalHelper;
-		} else {
-			throw new InvalidAttributesException("Uncaught invalid attributes exception happened");
-		}
+		return mLitePalHelper;
+	}
+
+	/**
+	 * Never call this method. This is only used by internal.
+	 */
+	public static void clearLitePalOpenHelperInstance() {
+        if (mLitePalHelper != null) {
+            mLitePalHelper.getWritableDatabase().close();
+            mLitePalHelper = null;
+        }
 	}
 
 }

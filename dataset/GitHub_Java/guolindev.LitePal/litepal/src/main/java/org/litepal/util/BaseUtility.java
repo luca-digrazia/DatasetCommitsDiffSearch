@@ -1,5 +1,5 @@
 /*
- * Copyright (C)  Tony Green, Litepal Framework Open Source Project
+ * Copyright (C)  Tony Green, LitePal Framework Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,13 +16,17 @@
 
 package org.litepal.util;
 
-import java.util.Collection;
-import java.util.Locale;
+import android.content.res.AssetManager;
+import android.text.TextUtils;
 
+import org.litepal.LitePalApplication;
 import org.litepal.exceptions.DataSupportException;
 import org.litepal.parser.LitePalAttr;
 
-import android.text.TextUtils;
+import java.io.IOException;
+import java.lang.reflect.Method;
+import java.util.Collection;
+import java.util.Locale;
 
 /**
  * A utility class to help LitePal with some base actions that might through any
@@ -53,9 +57,9 @@ public class BaseUtility {
 		if (string != null) {
 			LitePalAttr litePalAttr = LitePalAttr.getInstance();
 			String cases = litePalAttr.getCases();
-			if (Const.LitePal.CASES_KEEP.equals(cases)) {
+			if (Const.Config.CASES_KEEP.equals(cases)) {
 				return string;
-			} else if (Const.LitePal.CASES_UPPER.equals(cases)) {
+			} else if (Const.Config.CASES_UPPER.equals(cases)) {
 				return string.toUpperCase(Locale.US);
 			}
 			return string.toLowerCase(Locale.US);
@@ -159,7 +163,7 @@ public class BaseUtility {
 	 * and String are supported.
 	 * 
 	 * @param fieldType
-	 *            Text field type.
+	 *           Type of the field.
 	 * @return Supported return true, not supported return false.
 	 */
 	public static boolean isFieldTypeSupported(String fieldType) {
@@ -184,10 +188,86 @@ public class BaseUtility {
 		if ("char".equals(fieldType) || "java.lang.Character".equals(fieldType)) {
 			return true;
 		}
+		if ("[B".equals(fieldType) || "[Ljava.lang.Byte;".equals(fieldType)) {
+			return true;
+		}
 		if ("java.lang.String".equals(fieldType) || "java.util.Date".equals(fieldType)) {
 			return true;
 		}
 		return false;
 	}
+
+    /**
+     * Judge a generic type is supported or not. Currently only basic data types
+     * and String are supported.
+     *
+     * @param genericType
+     *            Type of the generic field.
+     * @return Supported return true, not supported return false.
+     */
+    public static boolean isGenericTypeSupported(String genericType) {
+        if ("java.lang.String".equals(genericType)) {
+            return true;
+        } else if ("java.lang.Integer".equals(genericType)) {
+            return true;
+        } else if ("java.lang.Float".equals(genericType)) {
+            return true;
+        } else if ("java.lang.Double".equals(genericType)) {
+            return true;
+        } else if ("java.lang.Long".equals(genericType)) {
+            return true;
+        } else if ("java.lang.Short".equals(genericType)) {
+            return true;
+        } else if ("java.lang.Boolean".equals(genericType)) {
+            return true;
+        } else if ("java.lang.Character".equals(genericType)) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * If the litepal.xml configuration file exists.
+     * @return True if exists, false otherwise.
+     */
+    public static boolean isLitePalXMLExists() {
+        try {
+            AssetManager assetManager = LitePalApplication.getContext().getAssets();
+            String[] fileNames = assetManager.list("");
+            if (fileNames != null && fileNames.length > 0) {
+                for (String fileName : fileNames) {
+                    if (Const.Config.CONFIGURATION_FILE_NAME.equalsIgnoreCase(fileName)) {
+                        return true;
+                    }
+                }
+            }
+        } catch (IOException e) {
+        }
+        return false;
+    }
+
+    /**
+     * Check the existence of the specific class and method.
+     *
+     * @param className
+     * 			Class name with full package name.
+     * @param methodName
+     * 			Method name.
+     * @return Return true if both of class and method are exist. Otherwise return false.
+     */
+    public static boolean isClassAndMethodExist(String className, String methodName) {
+        try {
+            Class<?> clazz = Class.forName(className);
+            Method[] methods = clazz.getMethods();
+            for (Method method : methods) {
+                if (methodName.equals(method.getName())) {
+                    return true;
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
 
 }

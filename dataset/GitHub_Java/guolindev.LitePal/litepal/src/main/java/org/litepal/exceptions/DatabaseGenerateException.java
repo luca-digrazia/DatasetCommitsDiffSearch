@@ -1,5 +1,5 @@
 /*
- * Copyright (C)  Tony Green, Litepal Framework Open Source Project
+ * Copyright (C)  Tony Green, LitePal Framework Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,6 +50,11 @@ public class DatabaseGenerateException extends RuntimeException {
 	 * Can not find a table with the passing table name.
 	 */
 	public static final String TABLE_DOES_NOT_EXIST = "Table doesn't exist with the name of ";
+
+    /**
+     * Don't have permission to create database on sdcard.
+     */
+    public static final String EXTERNAL_STORAGE_PERMISSION_DENIED = "You don't have permission to access database at %1$s. Make sure you handled WRITE_EXTERNAL_STORAGE runtime permission correctly.";
 
 	/**
 	 * Constructor of DatabaseGenerateException.
