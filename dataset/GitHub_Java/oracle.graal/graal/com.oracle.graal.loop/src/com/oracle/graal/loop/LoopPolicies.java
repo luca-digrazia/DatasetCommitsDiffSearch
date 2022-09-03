@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,52 +22,18 @@
  */
 package com.oracle.graal.loop;
 
-import com.oracle.graal.compiler.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.lir.cfg.*;
-import com.oracle.graal.nodes.*;
+import java.util.List;
 
+import com.oracle.graal.nodes.ControlSplitNode;
+import com.oracle.graal.nodes.cfg.ControlFlowGraph;
+import jdk.vm.ci.meta.MetaAccessProvider;
 
-public abstract class LoopPolicies {
-    private LoopPolicies() {
-        // does not need to be instantiated
-    }
+public interface LoopPolicies {
+    boolean shouldPeel(LoopEx loop, ControlFlowGraph cfg, MetaAccessProvider metaAccess);
 
-    // TODO (gd) change when inversion is available
-    public static boolean shouldPeel(LoopEx loop) {
-        LoopBeginNode loopBegin = loop.loopBegin();
-        double entryProbability = loopBegin.forwardEnd().probability();
-        return entryProbability > GraalOptions.MinimumPeelProbability && loop.size() + loopBegin.graph().getNodeCount() < GraalOptions.MaximumDesiredSize;
-    }
+    boolean shouldFullUnroll(LoopEx loop);
 
-    public static boolean shouldFullUnroll(LoopEx loop) {
-        if (!loop.isCounted() || !loop.counted().isConstantMaxTripCount()) {
-            return false;
-        }
-        CountedLoopInfo counted = loop.counted();
-        long exactTrips = counted.constantMaxTripCount();
-        int maxNodes = (counted.isExactTripCount() && counted.isConstantExactTripCount()) ? GraalOptions.ExactFullUnrollMaxNodes : GraalOptions.FullUnrollMaxNodes;
-        maxNodes = Math.min(maxNodes, GraalOptions.MaximumDesiredSize - loop.loopBegin().graph().getNodeCount());
-        int size = Math.max(1, loop.size() - 1 - loop.loopBegin().phis().count());
-        return size * exactTrips <= maxNodes;
-    }
+    boolean shouldTryUnswitch(LoopEx loop);
 
-    public static boolean shouldTryUnswitch(LoopEx loop) {
-        return loop.loopBegin().unswitches() <= GraalOptions.LoopMaxUnswitch;
-    }
-
-    public static boolean shouldUnswitch(LoopEx loop, IfNode ifNode) {
-        Block postDomBlock = loop.loopsData().controlFlowGraph().blockFor(ifNode).getPostdominator();
-        BeginNode postDom = postDomBlock != null ? postDomBlock.getBeginNode() : null;
-        int inTrueBranch = loop.nodesInLoopFrom(ifNode.trueSuccessor(), postDom).cardinality();
-        int inFalseBranch = loop.nodesInLoopFrom(ifNode.falseSuccessor(), postDom).cardinality();
-        int loopTotal = loop.size();
-        int netDiff = loopTotal - (inTrueBranch + inFalseBranch);
-        double uncertainty = (0.5 - Math.abs(ifNode.probability(IfNode.TRUE_EDGE) - 0.5)) * 2;
-        int maxDiff = GraalOptions.LoopUnswitchMaxIncrease + (int) (GraalOptions.LoopUnswitchUncertaintyBoost * loop.loopBegin().loopFrequency() * uncertainty);
-        Debug.log("shouldUnswitch(%s, %s) : delta=%d, max=%d, %.2f%% inside of if", loop, ifNode, netDiff, maxDiff, (double) (inTrueBranch + inFalseBranch) / loopTotal * 100);
-        return netDiff <= maxDiff;
-    }
-
-
+    boolean shouldUnswitch(LoopEx loop, List<ControlSplitNode> controlSplits);
 }

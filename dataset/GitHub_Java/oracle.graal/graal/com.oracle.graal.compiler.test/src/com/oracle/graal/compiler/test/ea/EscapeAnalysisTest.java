@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,70 +22,67 @@
  */
 package com.oracle.graal.compiler.test.ea;
 
-import junit.framework.Assert;
+import jdk.vm.ci.meta.JavaConstant;
 
+import org.junit.Assert;
 import org.junit.Test;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.*;
-import com.oracle.graal.compiler.phases.*;
-import com.oracle.graal.compiler.phases.ea.*;
-import com.oracle.graal.compiler.test.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.loop.DefaultLoopPolicies;
+import com.oracle.graal.loop.phases.LoopFullUnrollPhase;
+import com.oracle.graal.loop.phases.LoopPeelingPhase;
+import com.oracle.graal.nodes.extended.ValueAnchorNode;
+import com.oracle.graal.nodes.virtual.AllocatedObjectNode;
+import com.oracle.graal.nodes.virtual.CommitAllocationNode;
+import com.oracle.graal.phases.common.CanonicalizerPhase;
+import com.oracle.graal.phases.schedule.SchedulePhase;
+import com.oracle.graal.virtual.phases.ea.PartialEscapePhase;
 
 /**
- * In these test cases the probability of all invokes is set to a high value, such that an InliningPhase should inline them all.
- * After that, the EscapeAnalysisPhase is expected to remove all allocations and return the correct values.
+ * The PartialEscapeAnalysisPhase is expected to remove all allocations and return the correct
+ * values.
  */
-public class EscapeAnalysisTest extends GraalCompilerTest {
+public class EscapeAnalysisTest extends EATestBase {
 
     @Test
     public void test1() {
-        test("test1Snippet", Constant.forInt(101));
+        testEscapeAnalysis("test1Snippet", JavaConstant.forInt(101), false);
     }
 
-    @SuppressWarnings("all")
-    public static int test1Snippet(int a) {
+    public static int test1Snippet() {
         Integer x = new Integer(101);
         return x.intValue();
     }
 
     @Test
     public void test2() {
-        test("test2Snippet", Constant.forInt(0));
+        testEscapeAnalysis("test2Snippet", JavaConstant.forInt(0), false);
     }
 
-    @SuppressWarnings("all")
-    public static int test2Snippet(int a) {
+    public static int test2Snippet() {
         Integer[] x = new Integer[0];
         return x.length;
     }
 
     @Test
     public void test3() {
-        test("test3Snippet", Constant.forObject(null));
+        testEscapeAnalysis("test3Snippet", JavaConstant.NULL_POINTER, false);
     }
 
-    @SuppressWarnings("all")
-    public static Object test3Snippet(int a) {
+    public static Object test3Snippet() {
         Integer[] x = new Integer[1];
         return x[0];
     }
 
     @Test
     public void testMonitor() {
-        test("testMonitorSnippet", Constant.forInt(0));
+        testEscapeAnalysis("testMonitorSnippet", JavaConstant.forInt(0), false);
     }
 
-    private static native void notInlineable();
-
-    @SuppressWarnings("all")
-    public static int testMonitorSnippet(int a) {
+    public static int testMonitorSnippet() {
         Integer x = new Integer(0);
-        Integer[] y = new Integer[0];
-        Integer[] z = new Integer[1];
+        Double y = new Double(0);
+        Object z = new Object();
         synchronized (x) {
             synchronized (y) {
                 synchronized (z) {
@@ -98,17 +95,17 @@ public class EscapeAnalysisTest extends GraalCompilerTest {
 
     @Test
     public void testMonitor2() {
-        test("testMonitor2Snippet", Constant.forInt(0));
+        testEscapeAnalysis("testMonitor2Snippet", JavaConstant.forInt(0), false);
     }
 
     /**
-     * This test case differs from the last one in that it requires inlining within a synchronized region.
+     * This test case differs from the last one in that it requires inlining within a synchronized
+     * region.
      */
-    @SuppressWarnings("all")
-    public static int testMonitor2Snippet(int a) {
+    public static int testMonitor2Snippet() {
         Integer x = new Integer(0);
-        Integer[] y = new Integer[0];
-        Integer[] z = new Integer[1];
+        Double y = new Double(0);
+        Object z = new Object();
         synchronized (x) {
             synchronized (y) {
                 synchronized (z) {
@@ -121,20 +118,11 @@ public class EscapeAnalysisTest extends GraalCompilerTest {
 
     @Test
     public void testMerge() {
-        test("testMerge1Snippet", Constant.forInt(0));
-    }
-
-    public static class TestObject {
-        int x;
-        int y;
-        public TestObject(int x, int y) {
-            this.x = x;
-            this.y = y;
-        }
+        testEscapeAnalysis("testMerge1Snippet", JavaConstant.forInt(0), true);
     }
 
     public static int testMerge1Snippet(int a) {
-        TestObject obj = new TestObject(1, 0);
+        TestClassInt obj = new TestClassInt(1, 0);
         if (a < 0) {
             obj.x = obj.x + 1;
         } else {
@@ -149,48 +137,237 @@ public class EscapeAnalysisTest extends GraalCompilerTest {
 
     @Test
     public void testSimpleLoop() {
-        test("testSimpleLoopSnippet", Constant.forInt(1));
+        testEscapeAnalysis("testSimpleLoopSnippet", JavaConstant.forInt(1), false);
     }
 
     public int testSimpleLoopSnippet(int a) {
-        TestObject obj = new TestObject(1, 2);
+        TestClassInt obj = new TestClassInt(1, 2);
         for (int i = 0; i < a; i++) {
             notInlineable();
         }
         return obj.x;
     }
 
-    private void test(final String snippet, final Constant expectedResult) {
-        Debug.scope("EscapeAnalysisTest", new DebugDumpScope(snippet), new Runnable() {
-            public void run() {
-                StructuredGraph graph = parse(snippet);
-                for (Invoke n : graph.getInvokes()) {
-                    n.node().setProbability(100000);
-                }
+    @Test
+    public void testModifyingLoop() {
+        testEscapeAnalysis("testModifyingLoopSnippet", JavaConstant.forInt(1), false);
+    }
 
-                new InliningPhase(null, runtime(), null, null, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL).apply(graph);
-                new DeadCodeEliminationPhase().apply(graph);
-                Debug.dump(graph, "Graph");
-                new PartialEscapeAnalysisPhase(null, runtime(), null).apply(graph);
-                new CullFrameStatesPhase().apply(graph);
-                new CanonicalizerPhase(null, runtime(), null).apply(graph);
-                Debug.dump(graph, "Graph");
-                int retCount = 0;
-                for (ReturnNode ret : graph.getNodes(ReturnNode.class)) {
-                    Assert.assertTrue(ret.result().isConstant());
-                    Assert.assertEquals(ret.result().asConstant(), expectedResult);
-                    retCount++;
-                }
-                Assert.assertEquals(1, retCount);
-                int newInstanceCount = 0;
-                for (@SuppressWarnings("unused") NewInstanceNode n : graph.getNodes(NewInstanceNode.class)) {
-                    newInstanceCount++;
-                }
-                for (@SuppressWarnings("unused") NewObjectArrayNode n : graph.getNodes(NewObjectArrayNode.class)) {
-                    newInstanceCount++;
-                }
-                Assert.assertEquals(0, newInstanceCount);
-            }
-        });
+    public int testModifyingLoopSnippet(int a) {
+        TestClassInt obj = new TestClassInt(1, 2);
+        for (int i = 0; i < a; i++) {
+            obj.x = 3;
+            notInlineable();
+        }
+        return obj.x <= 3 ? 1 : 0;
+    }
+
+    @Test
+    public void testMergeAllocationsInt() {
+        testEscapeAnalysis("testMergeAllocationsIntSnippet", JavaConstant.forInt(1), false);
+    }
+
+    public int testMergeAllocationsIntSnippet(int a) {
+        TestClassInt obj;
+        if (a < 0) {
+            obj = new TestClassInt(1, 2);
+            notInlineable();
+        } else {
+            obj = new TestClassInt(1, 2);
+            notInlineable();
+        }
+        return obj.x <= 3 ? 1 : 0;
+    }
+
+    @Test
+    public void testMergeAllocationsObj() {
+        testEscapeAnalysis("testMergeAllocationsObjSnippet", JavaConstant.forInt(1), false);
+    }
+
+    public int testMergeAllocationsObjSnippet(int a) {
+        TestClassObject obj;
+        Integer one = 1;
+        Integer two = 2;
+        Integer three = 3;
+        if (a < 0) {
+            obj = new TestClassObject(one, two);
+            notInlineable();
+        } else {
+            obj = new TestClassObject(one, three);
+            notInlineable();
+        }
+        return ((Integer) obj.x).intValue() <= 3 ? 1 : 0;
+    }
+
+    @Test
+    public void testMergeAllocationsObjCirc() {
+        testEscapeAnalysis("testMergeAllocationsObjCircSnippet", JavaConstant.forInt(1), false);
+    }
+
+    public int testMergeAllocationsObjCircSnippet(int a) {
+        TestClassObject obj;
+        Integer one = 1;
+        Integer two = 2;
+        Integer three = 3;
+        if (a < 0) {
+            obj = new TestClassObject(one);
+            obj.y = obj;
+            obj.y = two;
+            notInlineable();
+        } else {
+            obj = new TestClassObject(one);
+            obj.y = obj;
+            obj.y = three;
+            notInlineable();
+        }
+        return ((Integer) obj.x).intValue() <= 3 ? 1 : 0;
+    }
+
+    static class MyException extends RuntimeException {
+
+        private static final long serialVersionUID = 0L;
+
+        protected Integer value;
+
+        MyException(Integer value) {
+            super((Throwable) null);
+            this.value = value;
+        }
+
+        @SuppressWarnings("sync-override")
+        @Override
+        public final Throwable fillInStackTrace() {
+            return null;
+        }
+    }
+
+    @Test
+    public void testMergeAllocationsException() {
+        testEscapeAnalysis("testMergeAllocationsExceptionSnippet", JavaConstant.forInt(1), false);
+    }
+
+    public int testMergeAllocationsExceptionSnippet(int a) {
+        MyException obj;
+        Integer one = 1;
+        if (a < 0) {
+            obj = new MyException(one);
+            notInlineable();
+        } else {
+            obj = new MyException(one);
+            notInlineable();
+        }
+        return obj.value <= 3 ? 1 : 0;
+    }
+
+    @Test
+    public void testCheckCast() {
+        testEscapeAnalysis("testCheckCastSnippet", getSnippetReflection().forObject(TestClassObject.class), false);
+    }
+
+    public Object testCheckCastSnippet() {
+        TestClassObject obj = new TestClassObject(TestClassObject.class);
+        TestClassObject obj2 = new TestClassObject(obj);
+        return ((TestClassObject) obj2.x).x;
+    }
+
+    @Test
+    public void testInstanceOf() {
+        testEscapeAnalysis("testInstanceOfSnippet", JavaConstant.forInt(1), false);
+    }
+
+    public boolean testInstanceOfSnippet() {
+        TestClassObject obj = new TestClassObject(TestClassObject.class);
+        TestClassObject obj2 = new TestClassObject(obj);
+        return obj2.x instanceof TestClassObject;
+    }
+
+    @SuppressWarnings("unused")
+    public static void testNewNodeSnippet() {
+        new ValueAnchorNode(null);
+    }
+
+    /**
+     * This test makes sure that the allocation of a {@link Node} can be removed. It therefore also
+     * tests the intrinsification of {@link Object#getClass()}.
+     */
+    @Test
+    public void testNewNode() {
+        testEscapeAnalysis("testNewNodeSnippet", null, false);
+    }
+
+    private static final TestClassObject staticObj = new TestClassObject();
+
+    public static Object testFullyUnrolledLoopSnippet() {
+        /*
+         * This tests a case that can appear if PEA is performed both before and after loop
+         * unrolling/peeling: If the VirtualInstanceNode is not duplicated correctly with the loop,
+         * the resulting object will reference itself, and not a second (different) object.
+         */
+        TestClassObject obj = staticObj;
+        for (int i = 0; i < 2; i++) {
+            obj = new TestClassObject(obj);
+        }
+        return obj.x;
+    }
+
+    @Test
+    public void testFullyUnrolledLoop() {
+        prepareGraph("testFullyUnrolledLoopSnippet", false);
+        new LoopFullUnrollPhase(new CanonicalizerPhase(), new DefaultLoopPolicies()).apply(graph, context);
+        new PartialEscapePhase(false, new CanonicalizerPhase()).apply(graph, context);
+        Assert.assertEquals(1, returnNodes.size());
+        Assert.assertTrue(returnNodes.get(0).result() instanceof AllocatedObjectNode);
+        CommitAllocationNode commit = ((AllocatedObjectNode) returnNodes.get(0).result()).getCommit();
+        Assert.assertEquals(2, commit.getValues().size());
+        Assert.assertEquals(1, commit.getVirtualObjects().size());
+        Assert.assertTrue("non-cyclic data structure expected", commit.getVirtualObjects().get(0) != commit.getValues().get(0));
+    }
+
+    @SuppressWarnings("unused") private static Object staticField;
+
+    private static TestClassObject inlinedPart(TestClassObject obj) {
+        TestClassObject ret = new TestClassObject(obj);
+        staticField = null;
+        return ret;
+    }
+
+    public static Object testPeeledLoopSnippet() {
+        TestClassObject obj = staticObj;
+        int i = 0;
+        do {
+            obj = inlinedPart(obj);
+        } while (i++ < 10);
+        staticField = obj;
+        return obj.x;
+    }
+
+    @Test
+    public void testPeeledLoop() {
+        prepareGraph("testPeeledLoopSnippet", false);
+        new LoopPeelingPhase(new DefaultLoopPolicies()).apply(graph, getDefaultHighTierContext());
+        new SchedulePhase().apply(graph);
+    }
+
+    public static void testDeoptMonitorSnippetInner(Object o2, Object t, int i) {
+        staticField = null;
+        if (i == 0) {
+            staticField = o2;
+            Number n = (Number) t;
+            n.toString();
+        }
+    }
+
+    public static void testDeoptMonitorSnippet(Object t, int i) {
+        TestClassObject o = new TestClassObject();
+        TestClassObject o2 = new TestClassObject(o);
+
+        synchronized (o) {
+            testDeoptMonitorSnippetInner(o2, t, i);
+        }
+    }
+
+    @Test
+    public void testDeoptMonitor() {
+        test("testDeoptMonitorSnippet", new Object(), 0);
     }
 }
