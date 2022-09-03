@@ -24,9 +24,7 @@
  */
 package com.oracle.truffle.regex;
 
-import java.util.Map;
-
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
@@ -35,6 +33,10 @@ import com.oracle.truffle.regex.runtime.RegexObjectExecMethod;
 import com.oracle.truffle.regex.runtime.RegexObjectMessageResolutionForeign;
 import com.oracle.truffle.regex.util.TruffleNull;
 import com.oracle.truffle.regex.util.TruffleReadOnlyMap;
+
+import java.util.Map;
+
+import static com.oracle.truffle.api.CompilerDirectives.*;
 
 /**
  * {@link RegexObject} represents a compiled regular expression that can be used to match against
@@ -66,7 +68,8 @@ public class RegexObject implements RegexLanguageObject {
     private final RegexCompiler compiler;
     private final RegexSource source;
     private final TruffleObject namedCaptureGroups;
-    private TruffleObject compiledRegexObject;
+    private @CompilationFinal TruffleObject compiledRegexObject;
+    private TruffleObject volatileCompiledRegexObject;
 
     public RegexObject(RegexCompiler compiler, RegexSource source, Map<String, Integer> namedCaptureGroups) {
         this.compiler = compiler;
@@ -84,9 +87,17 @@ public class RegexObject implements RegexLanguageObject {
 
     public TruffleObject getCompiledRegexObject() {
         if (compiledRegexObject == null) {
-            compiledRegexObject = compileRegex();
+            transferToInterpreterAndInvalidate();
+            compiledRegexObject = volatileCompiledRegexObject != null ? volatileCompiledRegexObject : compileRegex();
         }
         return compiledRegexObject;
+    }
+
+    public TruffleObject getVolatileCompiledRegexObject() {
+        if (volatileCompiledRegexObject == null) {
+            volatileCompiledRegexObject = compileRegex();
+        }
+        return  volatileCompiledRegexObject;
     }
 
     @TruffleBoundary
