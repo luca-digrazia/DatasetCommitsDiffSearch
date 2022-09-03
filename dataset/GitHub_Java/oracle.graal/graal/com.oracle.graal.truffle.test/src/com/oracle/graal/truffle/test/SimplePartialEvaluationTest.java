@@ -22,51 +22,20 @@
  */
 package com.oracle.graal.truffle.test;
 
-import jdk.vm.ci.code.BailoutException;
-import jdk.vm.ci.code.SourceStackTrace;
+import jdk.internal.jvmci.code.*;
 
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.*;
 
-import com.oracle.graal.replacements.PEGraphDecoder;
-import com.oracle.graal.truffle.OptimizedCallTarget;
-import com.oracle.graal.truffle.test.nodes.AbstractTestNode;
-import com.oracle.graal.truffle.test.nodes.AddTestNode;
-import com.oracle.graal.truffle.test.nodes.BlockTestNode;
-import com.oracle.graal.truffle.test.nodes.ConstantTestNode;
-import com.oracle.graal.truffle.test.nodes.LambdaTestNode;
-import com.oracle.graal.truffle.test.nodes.LoadLocalTestNode;
-import com.oracle.graal.truffle.test.nodes.LoopTestNode;
-import com.oracle.graal.truffle.test.nodes.NestedExplodedLoopTestNode;
-import com.oracle.graal.truffle.test.nodes.NeverPartOfCompilationTestNode;
-import com.oracle.graal.truffle.test.nodes.ObjectEqualsNode;
-import com.oracle.graal.truffle.test.nodes.ObjectHashCodeNode;
-import com.oracle.graal.truffle.test.nodes.RecursionTestNode;
-import com.oracle.graal.truffle.test.nodes.RootTestNode;
-import com.oracle.graal.truffle.test.nodes.StoreLocalTestNode;
-import com.oracle.graal.truffle.test.nodes.StringEqualsNode;
-import com.oracle.graal.truffle.test.nodes.TwoMergesExplodedLoopTestNode;
-import com.oracle.truffle.api.frame.FrameDescriptor;
-import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.graal.replacements.*;
+import com.oracle.graal.truffle.*;
+import com.oracle.graal.truffle.test.nodes.*;
+import com.oracle.truffle.api.frame.*;
+import com.oracle.truffle.api.nodes.*;
 
 public class SimplePartialEvaluationTest extends PartialEvaluationTest {
 
     public static Object constant42() {
         return 42;
-    }
-
-    @Before
-    public void before() {
-        InstrumentationTestMode.set(true);
-    }
-
-    @Override
-    @After
-    public void after() {
-        super.after();
-        InstrumentationTestMode.set(false);
     }
 
     @Test
@@ -228,23 +197,5 @@ public class SimplePartialEvaluationTest extends PartialEvaluationTest {
         OptimizedCallTarget compilable = compileHelper("intrinsicVirtual", rootNode, new Object[0]);
 
         Assert.assertEquals(42, compilable.call(new Object[0]));
-    }
-
-    @Test
-    public void intrinsicHashCode() {
-        /*
-         * The intrinsic for Object.hashCode() is inlined late during Truffle partial evaluation,
-         * because we call hashCode() on a value whose exact type Object is only known during
-         * partial evaluation.
-         */
-        FrameDescriptor fd = new FrameDescriptor();
-        Object testObject = new Object();
-        AbstractTestNode result = new ObjectHashCodeNode(testObject);
-        RootNode rootNode = new RootTestNode(fd, "intrinsicHashCode", result);
-        OptimizedCallTarget compilable = compileHelper("intrinsicHashCode", rootNode, new Object[0]);
-
-        int actual = (Integer) compilable.call(new Object[0]);
-        int expected = testObject.hashCode();
-        Assert.assertEquals(expected, actual);
     }
 }
