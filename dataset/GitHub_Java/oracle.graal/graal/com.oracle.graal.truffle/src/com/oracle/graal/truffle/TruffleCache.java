@@ -110,7 +110,7 @@ public final class TruffleCache {
 
                     optimizeGraph(newGraph, tmpAssumptions);
 
-                    PhaseContext context = new PhaseContext(metaAccessProvider, tmpAssumptions, replacements);
+                    HighTierContext context = new HighTierContext(metaAccessProvider, tmpAssumptions, replacements);
                     PartialEscapePhase partialEscapePhase = new PartialEscapePhase(false, new CanonicalizerPhase(true));
                     partialEscapePhase.apply(newGraph, context);
 
@@ -155,7 +155,7 @@ public final class TruffleCache {
         CanonicalizerPhase.Instance canonicalizerPhase = new CanonicalizerPhase.Instance(metaAccessProvider, assumptions, !AOTCompilation.getValue(), null, null);
 
         EarlyReadEliminationPhase earlyRead = new EarlyReadEliminationPhase(new CanonicalizerPhase(true));
-        PhaseContext context = new PhaseContext(metaAccessProvider, assumptions, replacements);
+        HighTierContext context = new HighTierContext(metaAccessProvider, assumptions, replacements);
         Integer maxNodes = TruffleCompilerOptions.TruffleOperationCacheMaxNodes.getValue();
 
         contractGraph(newGraph, eliminate, convertDeoptimizeToGuardPhase, canonicalizerPhase, earlyRead, context);
@@ -180,7 +180,7 @@ public final class TruffleCache {
     }
 
     private static void contractGraph(StructuredGraph newGraph, ConditionalEliminationPhase eliminate, ConvertDeoptimizeToGuardPhase convertDeoptimizeToGuardPhase,
-                    CanonicalizerPhase.Instance canonicalizerPhase, EarlyReadEliminationPhase earlyRead, PhaseContext context) {
+                    CanonicalizerPhase.Instance canonicalizerPhase, EarlyReadEliminationPhase earlyRead, HighTierContext context) {
         // Canonicalize / constant propagate.
         canonicalizerPhase.apply(newGraph);
 
