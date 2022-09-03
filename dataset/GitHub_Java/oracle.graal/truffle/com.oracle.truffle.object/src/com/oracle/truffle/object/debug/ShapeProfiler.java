@@ -79,9 +79,8 @@ public class ShapeProfiler {
                 }
             });
 
-            int top = Math.min(topResults, allStats.size());
-            ShapeStats avgStats = new ShapeStats("Cumulative results for top " + top + " shapes");
-            for (int i = 0; i < top; i++) {
+            ShapeStats avgStats = new ShapeStats("Cumulative results for top " + topResults + " shapes");
+            for (int i = 0; i < topResults; i++) {
                 ShapeStats stats = allStats.get(i);
                 stats.setLabel("Shape " + (i + 1) + ": " + stats.getLabel());
                 stats.dump(out);
