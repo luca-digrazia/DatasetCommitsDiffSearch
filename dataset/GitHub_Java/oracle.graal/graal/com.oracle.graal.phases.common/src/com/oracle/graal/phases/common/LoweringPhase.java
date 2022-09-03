@@ -64,6 +64,11 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
         }
 
         @Override
+        public CodeCacheProvider getCodeCache() {
+            return context.getCodeCache();
+        }
+
+        @Override
         public ConstantReflectionProvider getConstantReflection() {
             return context.getConstantReflection();
         }
@@ -71,6 +76,11 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
         @Override
         public MetaAccessProvider getMetaAccess() {
             return context.getMetaAccess();
+        }
+
+        @Override
+        public ForeignCallsProvider getForeignCalls() {
+            return context.getForeignCalls();
         }
 
         @Override
