@@ -27,6 +27,7 @@ import static jdk.vm.ci.code.ValueUtil.asRegister;
 import static jdk.vm.ci.code.ValueUtil.isIllegal;
 import static jdk.vm.ci.code.ValueUtil.isLegal;
 import static jdk.vm.ci.code.ValueUtil.isRegister;
+import static org.graalvm.compiler.core.common.GraalOptions.DetailedAsserts;
 import static org.graalvm.compiler.lir.LIRValueUtil.isVariable;
 
 import java.util.ArrayList;
@@ -38,8 +39,8 @@ import org.graalvm.compiler.core.common.alloc.RegisterAllocationConfig;
 import org.graalvm.compiler.core.common.alloc.Trace;
 import org.graalvm.compiler.core.common.alloc.TraceBuilderResult;
 import org.graalvm.compiler.core.common.cfg.AbstractBlockBase;
-import org.graalvm.compiler.debug.Assertions;
-import org.graalvm.compiler.debug.DebugContext;
+import org.graalvm.compiler.debug.Debug;
+import org.graalvm.compiler.debug.Debug.Scope;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.debug.Indent;
 import org.graalvm.compiler.lir.LIR;
@@ -133,10 +134,6 @@ public final class TraceLinearScanPhase extends TraceAllocationPhase<TraceAlloca
         this.cachedStackSlots = cachedStackSlots;
         this.livenessInfo = livenessInfo;
         assert livenessInfo != null;
-    }
-
-    protected DebugContext getDebug() {
-        return res.getLIR().getDebug();
     }
 
     public static boolean isVariableOrRegister(Value value) {
@@ -259,10 +256,6 @@ public final class TraceLinearScanPhase extends TraceAllocationPhase<TraceAlloca
             return getLIR().getOptions();
         }
 
-        DebugContext getDebug() {
-            return getLIR().getDebug();
-        }
-
         /**
          * Gets the number of operands. This value will increase by 1 for new variable.
          */
@@ -333,13 +326,12 @@ public final class TraceLinearScanPhase extends TraceAllocationPhase<TraceAlloca
          * {@linkplain TraceInterval variable}.
          */
         private AllocatableValue allocateSpillSlot(TraceInterval interval) {
-            DebugContext debug = res.getLIR().getDebug();
             int variableIndex = interval.splitParent().operandNumber;
             OptionValues options = getOptions();
             if (TraceRegisterAllocationPhase.Options.TraceRACacheStackSlots.getValue(options)) {
                 AllocatableValue cachedStackSlot = cachedStackSlots[variableIndex];
                 if (cachedStackSlot != null) {
-                    TraceRegisterAllocationPhase.globalStackSlots.increment(debug);
+                    TraceRegisterAllocationPhase.globalStackSlots.increment();
                     assert cachedStackSlot.getValueKind().equals(getKind(interval)) : "CachedStackSlot: kind mismatch? " + getKind(interval) + " vs. " + cachedStackSlot.getValueKind();
                     return cachedStackSlot;
                 }
@@ -348,7 +340,7 @@ public final class TraceLinearScanPhase extends TraceAllocationPhase<TraceAlloca
             if (TraceRegisterAllocationPhase.Options.TraceRACacheStackSlots.getValue(options)) {
                 cachedStackSlots[variableIndex] = slot;
             }
-            TraceRegisterAllocationPhase.allocatedStackSlots.increment(debug);
+            TraceRegisterAllocationPhase.allocatedStackSlots.increment();
             return slot;
         }
 
@@ -539,8 +531,8 @@ public final class TraceLinearScanPhase extends TraceAllocationPhase<TraceAlloca
             TraceInterval result = interval.getSplitChildAtOpId(opId, mode);
 
             if (result != null) {
-                if (getDebug().isLogEnabled()) {
-                    getDebug().log("Split child at pos %d of interval %s is %s", opId, interval, result);
+                if (Debug.isLogEnabled()) {
+                    Debug.log("Split child at pos %d of interval %s is %s", opId, interval, result);
                 }
                 return result;
             }
@@ -578,11 +570,10 @@ public final class TraceLinearScanPhase extends TraceAllocationPhase<TraceAlloca
             /*
              * This is the point to enable debug logging for the whole register allocation.
              */
-            DebugContext debug = res.getLIR().getDebug();
-            try (Indent indent = debug.logAndIndent("LinearScan allocate")) {
+            try (Indent indent = Debug.logAndIndent("LinearScan allocate")) {
                 TRACE_LINEAR_SCAN_LIFETIME_ANALYSIS_PHASE.apply(target, lirGenRes, trace, spillMoveFactory, registerAllocationConfig, traceBuilderResult, this, false);
 
-                try (DebugContext.Scope s = debug.scope("AfterLifetimeAnalysis", this)) {
+                try (Scope s = Debug.scope("AfterLifetimeAnalysis", this)) {
 
                     printLir("After instruction numbering");
                     printIntervals("Before register allocation");
@@ -603,18 +594,18 @@ public final class TraceLinearScanPhase extends TraceAllocationPhase<TraceAlloca
 
                     TRACE_LINEAR_SCAN_ASSIGN_LOCATIONS_PHASE.apply(target, lirGenRes, trace, spillMoveFactory, registerAllocationConfig, traceBuilderResult, this, false);
 
-                    if (Assertions.detailedAssertionsEnabled(options)) {
+                    if (DetailedAsserts.getValue(options)) {
                         verifyIntervals();
                     }
                 } catch (Throwable e) {
-                    throw debug.handle(e);
+                    throw Debug.handle(e);
                 }
             }
         }
 
         public void printLir(String label) {
-            if (getDebug().isDumpEnabled(DebugContext.DETAILED_LEVEL)) {
-                getDebug().dump(DebugContext.DETAILED_LEVEL, sortedBlocks(), "%s (Trace%d)", label, trace.getId());
+            if (Debug.isDumpEnabled(Debug.DETAILED_LEVEL)) {
+                Debug.dump(Debug.DETAILED_LEVEL, sortedBlocks(), "%s (Trace%d)", label, trace.getId());
             }
         }
 
@@ -625,7 +616,7 @@ public final class TraceLinearScanPhase extends TraceAllocationPhase<TraceAlloca
 
             verifyRegisters();
 
-            getDebug().log("no errors found");
+            Debug.log("no errors found");
 
             return true;
         }
@@ -633,7 +624,7 @@ public final class TraceLinearScanPhase extends TraceAllocationPhase<TraceAlloca
         @SuppressWarnings("try")
         private void verifyRegisters() {
             // Enable this logging to get output for the verification process.
-            try (Indent indent = getDebug().logAndIndent("verifying register allocation")) {
+            try (Indent indent = Debug.logAndIndent("verifying register allocation")) {
                 RegisterVerifier verifier = new RegisterVerifier(this);
                 verifier.verify(blockAt(0));
             }
@@ -641,8 +632,7 @@ public final class TraceLinearScanPhase extends TraceAllocationPhase<TraceAlloca
 
         @SuppressWarnings("try")
         protected void verifyIntervals() {
-            DebugContext debug = getDebug();
-            try (Indent indent = debug.logAndIndent("verifying intervals")) {
+            try (Indent indent = Debug.logAndIndent("verifying intervals")) {
                 int len = intervalsSize();
 
                 for (int i = 0; i < len; i++) {
@@ -654,32 +644,32 @@ public final class TraceLinearScanPhase extends TraceAllocationPhase<TraceAlloca
                     i1.checkSplitChildren();
 
                     if (i1.operandNumber != i) {
-                        debug.log("Interval %d is on position %d in list", i1.operandNumber, i);
-                        debug.log(i1.logString());
+                        Debug.log("Interval %d is on position %d in list", i1.operandNumber, i);
+                        Debug.log(i1.logString());
                         throw new GraalError("");
                     }
 
                     if (getKind(i1).equals(LIRKind.Illegal)) {
-                        debug.log("Interval %d has no type assigned", i1.operandNumber);
-                        debug.log(i1.logString());
+                        Debug.log("Interval %d has no type assigned", i1.operandNumber);
+                        Debug.log(i1.logString());
                         throw new GraalError("");
                     }
 
                     if (i1.location() == null) {
-                        debug.log("Interval %d has no register assigned", i1.operandNumber);
-                        debug.log(i1.logString());
+                        Debug.log("Interval %d has no register assigned", i1.operandNumber);
+                        Debug.log(i1.logString());
                         throw new GraalError("");
                     }
 
                     if (i1.isEmpty()) {
-                        debug.log("Interval %d has no Range", i1.operandNumber);
-                        debug.log(i1.logString());
+                        Debug.log("Interval %d has no Range", i1.operandNumber);
+                        Debug.log(i1.logString());
                         throw new GraalError("");
                     }
 
                     if (i1.from() >= i1.to()) {
-                        debug.log("Interval %d has zero length range", i1.operandNumber);
-                        debug.log(i1.logString());
+                        Debug.log("Interval %d has zero length range", i1.operandNumber);
+                        Debug.log(i1.logString());
                         throw new GraalError("");
                     }
 
@@ -968,30 +958,29 @@ public final class TraceLinearScanPhase extends TraceAllocationPhase<TraceAlloca
 
         @SuppressWarnings("try")
         public void printIntervals(String label) {
-            DebugContext debug = getDebug();
-            if (debug.isDumpEnabled(DebugContext.DETAILED_LEVEL)) {
-                if (debug.isLogEnabled()) {
-                    try (Indent indent = debug.logAndIndent("intervals %s", label)) {
+            if (Debug.isDumpEnabled(Debug.DETAILED_LEVEL)) {
+                if (Debug.isLogEnabled()) {
+                    try (Indent indent = Debug.logAndIndent("intervals %s", label)) {
                         for (FixedInterval interval : fixedIntervals) {
                             if (interval != null) {
-                                debug.log("%s", interval.logString());
+                                Debug.log("%s", interval.logString());
                             }
                         }
 
                         for (TraceInterval interval : intervals) {
                             if (interval != null) {
-                                debug.log("%s", interval.logString());
+                                Debug.log("%s", interval.logString());
                             }
                         }
 
-                        try (Indent indent2 = debug.logAndIndent("Basic Blocks")) {
+                        try (Indent indent2 = Debug.logAndIndent("Basic Blocks")) {
                             for (AbstractBlockBase<?> block : trace.getBlocks()) {
-                                debug.log("B%d [%d, %d, %s] ", block.getId(), getFirstLirInstructionId(block), getLastLirInstructionId(block), block.getLoop());
+                                Debug.log("B%d [%d, %d, %s] ", block.getId(), getFirstLirInstructionId(block), getLastLirInstructionId(block), block.getLoop());
                             }
                         }
                     }
                 }
-                debug.dump(DebugContext.DETAILED_LEVEL, this, "%s (Trace%d)", label, trace.getId());
+                Debug.dump(Debug.DETAILED_LEVEL, this, "%s (Trace%d)", label, trace.getId());
             }
         }
 
