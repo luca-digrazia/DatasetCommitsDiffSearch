@@ -49,12 +49,9 @@ public final class LLVMThreadingStack {
 
     private final ReferenceQueue<Thread> threadsQueue = new ReferenceQueue<>();
 
-    private final int stackSize;
-
-    public LLVMThreadingStack(int stackSize) {
-        this.stackSize = stackSize;
+    public LLVMThreadingStack() {
         this.defaultThread = Thread.currentThread();
-        this.defaultStack = new LLVMStack(stackSize);
+        this.defaultStack = new LLVMStack();
     }
 
     private class ReferenceWithCleanup extends WeakReference<Thread> {
@@ -86,20 +83,21 @@ public final class LLVMThreadingStack {
         }
     }
 
-    public Thread getDefaultThread() {
-        return defaultThread;
-    }
+    public void checkThread() {
+        if (singleThreading.isValid()) {
+            Thread currentThread = Thread.currentThread();
+            if (currentThread != defaultThread) {
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                synchronized (this) {
+                    // recheck under lock as a race condition can still happen
+                    if (singleThreading.isValid()) {
+                        singleThreading.invalidate();
 
-    public void initializeThread() {
-        CompilerDirectives.transferToInterpreterAndInvalidate();
-        synchronized (this) {
-            // recheck under lock as a race condition can still happen
-            if (singleThreading.isValid()) {
-                singleThreading.invalidate();
-
-                Thread stackGC = new Thread(new StackGCThread(), "sulongStackGC");
-                stackGC.setDaemon(true);
-                stackGC.start();
+                        Thread stackGC = new Thread(new StackGCThread(), "sulongStackGC");
+                        stackGC.setDaemon(true);
+                        stackGC.start();
+                    }
+                }
             }
         }
     }
@@ -127,7 +125,7 @@ public final class LLVMThreadingStack {
     @SuppressWarnings("unused")
     @TruffleBoundary
     private LLVMStack addNewThread(Thread currentThread) {
-        LLVMStack newStack = new LLVMStack(stackSize);
+        LLVMStack newStack = new LLVMStack();
         threadToStack.put(currentThread.getId(), newStack);
         new ReferenceWithCleanup(currentThread);
         return newStack;
