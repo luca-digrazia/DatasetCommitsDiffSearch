@@ -141,6 +141,7 @@ public abstract class Source {
     private String mimeType;
     private final boolean internal;
     private TextMap textMap;
+    private final SourceSection unavailableSourceSection = new SourceSection(this, -1, -1);
 
     /**
      * Locates an existing instance of a {@link Source} with given {@link #getName() name}.
@@ -675,8 +676,7 @@ public abstract class Source {
     }
 
     /**
-     * Access to the source contents. Causes the contents of this source to be loaded if they are
-     * loaded lazily.
+     * Access to the source contents.
      *
      * @since 0.8 or earlier
      */
@@ -685,8 +685,7 @@ public abstract class Source {
     }
 
     /**
-     * Gets the number of characters in the source. Causes the contents of this source to be loaded
-     * if they are loaded lazily.
+     * Gets the number of characters in the source.
      *
      * @since 0.8 or earlier
      */
@@ -695,8 +694,7 @@ public abstract class Source {
     }
 
     /**
-     * Returns the complete text of the code. Causes the contents of this source to be loaded if
-     * they are loaded lazily.
+     * Returns the complete text of the code.
      *
      * @since 0.8 or earlier
      */
@@ -705,8 +703,7 @@ public abstract class Source {
     }
 
     /**
-     * Returns a subsection of the code test. Causes the contents of this source to be loaded if
-     * they are loaded lazily.
+     * Returns a subsection of the code test.
      *
      * @since 0.8 or earlier
      */
@@ -716,7 +713,6 @@ public abstract class Source {
 
     /**
      * Gets the text (not including a possible terminating newline) in a (1-based) numbered line.
-     * Causes the contents of this source to be loaded if they are loaded lazily.
      *
      * @since 0.8 or earlier
      */
@@ -728,8 +724,7 @@ public abstract class Source {
 
     /**
      * The number of text lines in the source, including empty lines; characters at the end of the
-     * source without a terminating newline count as a line. Causes the contents of this source to
-     * be loaded if they are loaded lazily.
+     * source without a terminating newline count as a line.
      *
      * @since 0.8 or earlier
      */
@@ -739,7 +734,7 @@ public abstract class Source {
 
     /**
      * Given a 0-based character offset, return the 1-based number of the line that includes the
-     * position. Causes the contents of this source to be loaded if they are loaded lazily.
+     * position.
      *
      * @throws IllegalArgumentException if the offset is outside the text contents
      * @since 0.8 or earlier
@@ -750,7 +745,6 @@ public abstract class Source {
 
     /**
      * Given a 0-based character offset, return the 1-based number of the column at the position.
-     * Causes the contents of this source to be loaded if they are loaded lazily.
      *
      * @throws IllegalArgumentException if the offset is outside the text contents
      * @since 0.8 or earlier
@@ -771,7 +765,7 @@ public abstract class Source {
 
     /**
      * The number of characters (not counting a possible terminating newline) in a (1-based)
-     * numbered line. Causes the contents of this source to be loaded if they are loaded lazily.
+     * numbered line.
      *
      * @throws IllegalArgumentException if there is no such line in the text
      * @since 0.8 or earlier
@@ -796,21 +790,20 @@ public abstract class Source {
 
     /**
      * Returns an unavailable source section indicating that the source location is not available.
-     * Unavailable source sections have the same characteristics as empty source sections with
-     * character index <code>0</code>, but returns <code>false</code> for
-     * {@link SourceSection#isAvailable()}.
+     * Unavailable source sections return <code>-1</code> for all indices and lengths. They also
+     * return <code>null</code> for the {@link #getCode() code}. Multiple unavailable source
+     * sections for a source are equal but not necessarily identical with each other.
      *
-     * @see SourceSection#isAvailable()
+     * @see SourceSection#isUnavailable()
      * @since 0.18
      */
     public final SourceSection createUnavailableSection() {
-        return new SourceSection(this);
+        return unavailableSourceSection;
     }
 
     /**
      * Creates a representation of a line of text in the source identified only by line number, from
-     * which the character information will be computed. Please note that calling this method does
-     * cause the {@link Source#getCode() code} of this source to be loaded.
+     * which the character information will be computed.
      *
      * @param lineNumber 1-based line number of the first character in the section
      * @return newly created object representing the specified line
@@ -823,23 +816,21 @@ public abstract class Source {
         }
         final int charIndex = getTextMap().lineStartOffset(lineNumber);
         final int length = getTextMap().lineLength(lineNumber);
-        SourceSection section = new SourceSection(this, charIndex, length);
-        assert assertValid(section);
-        return section;
+        return new SourceSection(this, charIndex, length);
     }
 
     /**
-     * Creates a representation of a contiguous region of text in the source. Please note that
-     * calling this method does only cause the {@link Source#getCode() code} of this source to be
-     * loaded if assertions enabled. The bounds of the source section are only verified if
-     * assertions (-ea) are enabled in the host system. An {@link IllegalArgumentException} is
-     * thrown if the given indices are out of bounds of the source bounds.
+     * Creates a representation of a contiguous region of text in the source. This is the most
+     * efficient way to create a new source section because it does not check the consistency of the
+     * locations with the source.
+     * <p>
+     * The resulting representation defines hash/equality around equivalent location, presuming that
+     * {@link Source} representations are canonical.
      *
      * @param charIndex 0-based position of the first character in the section
      * @param length the number of characters in the section
      * @return newly created object representing the specified region
-     * @throws IllegalArgumentException if charIndex < 0 or length < 0; in case assertions are
-     *             enabled also if the given bounds are out of the source bounds.
+     * @throws IllegalArgumentException if charIndex < 0 or length < 0.
      * @since 0.17
      */
     public final SourceSection createSection(int charIndex, int length) {
@@ -848,15 +839,15 @@ public abstract class Source {
         } else if (length < 0) {
             throw new IllegalArgumentException("length < 0");
         }
-        SourceSection section = new SourceSection(this, charIndex, length);
-        assert assertValid(section);
-        return section;
+        return new SourceSection(this, charIndex, length);
     }
 
     /**
      * Creates a representation of a contiguous region of text in the source. Computes the
-     * {@code charIndex} value by building a text map of lines in the source. Please note that
-     * calling this method does cause the {@link Source#getCode() code} of this source to be loaded.
+     * {@code charIndex} value by building a {@code TextMap map} of lines in the source.
+     * <p>
+     * The resulting representation defines hash/equality around equivalent location, presuming that
+     * {@link Source} representations are canonical.
      *
      * @param startLine 1-based line number of the first character in the section
      * @param startColumn 1-based column number of the first character in the section
@@ -883,22 +874,16 @@ public abstract class Source {
         if (charIndex + length > getCode().length()) {
             throw new IllegalArgumentException("charIndex out of range");
         }
-        SourceSection section = new SourceSection(this, charIndex, length);
-        assert assertValid(section);
-        return section;
-    }
-
-    private static boolean assertValid(SourceSection section) {
-        if (!section.isValid()) {
-            throw new IllegalArgumentException("Invalid source section bounds.");
-        }
-        return true;
+        return new SourceSection(this, charIndex, length);
     }
 
     /**
      * Creates a representation of a contiguous region of text in the source.
      * <p>
      * This method performs no checks on the validity of the arguments.
+     * <p>
+     * The resulting representation defines hash/equality around equivalent location, presuming that
+     * {@link Source} representations are canonical.
      *
      * @param identifier terse description of the region
      * @param startLine 1-based line number of the first character in the section
@@ -920,6 +905,9 @@ public abstract class Source {
      * Creates a representation of a contiguous region of text in the source.
      * <p>
      * This method performs no checks on the validity of the arguments.
+     * <p>
+     * The resulting representation defines hash/equality around equivalent location, presuming that
+     * {@link Source} representations are canonical.
      *
      * @param startLine 1-based line number of the first character in the section
      * @param startColumn 1-based column number of the first character in the section
@@ -948,6 +936,9 @@ public abstract class Source {
      * {@code charIndex} value by building a {@code TextMap map} of lines in the source.
      * <p>
      * Checks the position arguments for consistency with the source.
+     * <p>
+     * The resulting representation defines hash/equality around equivalent location, presuming that
+     * {@link Source} representations are canonical.
      *
      * @param identifier terse description of the region
      * @param startLine 1-based line number of the first character in the section
@@ -976,6 +967,10 @@ public abstract class Source {
      * source.
      * <p>
      * Checks the position arguments for consistency with the source.
+     * <p>
+     * The resulting representation defines hash/equality around equivalent location, presuming that
+     * {@link Source} representations are canonical.
+     *
      *
      * @param identifier terse description of the region
      * @param charIndex 0-based position of the first character in the section
