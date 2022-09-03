@@ -192,8 +192,6 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
             throw ((EngineException) e).e;
         } else if (e instanceof PolyglotUnsupportedException) {
             throw (PolyglotUnsupportedException) e;
-        } else if (e instanceof PolyglotClassCastException) {
-            throw (PolyglotClassCastException) e;
         } else if (e instanceof PolyglotIllegalStateException) {
             throw (PolyglotIllegalStateException) e;
         } else {
@@ -710,16 +708,6 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
         @Override
         public RuntimeException wrapHostException(Throwable exception) {
             return PolyglotImpl.wrapHostException(exception);
-        }
-
-        @Override
-        public boolean isHostException(Throwable exception) {
-            return exception instanceof HostException;
-        }
-
-        @Override
-        public Throwable asHostException(Throwable exception) {
-            return ((HostException) exception).getOriginal();
         }
 
         @Override
