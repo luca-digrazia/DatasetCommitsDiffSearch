@@ -52,7 +52,7 @@ public class MemoryTracerTest extends AbstractProfilerTest {
         Assert.assertTrue(tracer.isCollecting());
         Assert.assertFalse(tracer.hasData());
 
-        eval(defaultSource);
+        execute(defaultSource);
 
         Assert.assertTrue(tracer.isCollecting());
         Assert.assertFalse(tracer.hasData());
@@ -70,7 +70,7 @@ public class MemoryTracerTest extends AbstractProfilerTest {
         Assert.assertTrue(tracer.isCollecting());
         Assert.assertFalse(tracer.hasData());
 
-        eval(defaultRecursiveSource);
+        execute(defaultRecursiveSource);
 
         Assert.assertTrue(tracer.isCollecting());
         Assert.assertFalse(tracer.hasData());
@@ -91,7 +91,7 @@ public class MemoryTracerTest extends AbstractProfilerTest {
         Assert.assertTrue(tracer.isCollecting());
         Assert.assertFalse(tracer.hasData());
 
-        eval(makeSource(oneAllocationSource));
+        execute(makeSource(oneAllocationSource));
 
         Assert.assertTrue(tracer.isCollecting());
         Assert.assertTrue(tracer.hasData());
@@ -123,7 +123,7 @@ public class MemoryTracerTest extends AbstractProfilerTest {
         Assert.assertTrue(tracer.isCollecting());
         Assert.assertFalse(tracer.hasData());
 
-        eval(makeSource(oneAllocationSource));
+        execute(makeSource(oneAllocationSource));
 
         Assert.assertTrue(tracer.isCollecting());
         Assert.assertTrue(tracer.hasData());
@@ -154,7 +154,7 @@ public class MemoryTracerTest extends AbstractProfilerTest {
         Assert.assertTrue(tracer.isCollecting());
         Assert.assertFalse(tracer.hasData());
 
-        eval(makeSource(oneAllocationSource));
+        execute(makeSource(oneAllocationSource));
 
         Assert.assertTrue(tracer.isCollecting());
         Assert.assertTrue(tracer.hasData());
@@ -200,7 +200,7 @@ public class MemoryTracerTest extends AbstractProfilerTest {
         Assert.assertTrue(tracer.isCollecting());
         Assert.assertFalse(tracer.hasData());
 
-        eval(makeSource(oneAllocationSource));
+        execute(makeSource(oneAllocationSource));
 
         Assert.assertTrue(tracer.isCollecting());
         Assert.assertTrue(tracer.hasData());
