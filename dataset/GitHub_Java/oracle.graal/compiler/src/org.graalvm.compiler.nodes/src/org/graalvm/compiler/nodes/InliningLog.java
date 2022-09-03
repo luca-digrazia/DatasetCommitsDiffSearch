@@ -117,23 +117,9 @@ public class InliningLog {
 
         public String positionString() {
             if (parent == null) {
-                if (target != null) {
-                    return "compilation of " + target.format("%H.%n(%p)");
-                } else if (invoke != null && invoke.getTargetMethod() != null) {
-                    return "compilation of " + invoke.getTargetMethod().getName() + "(bci: " + getBci() + ")";
-                } else {
-                    return "unknown method (bci: " + getBci() + ")";
-                }
+                return "compilation of " + target.format("%H.%n(%p)");
             }
-            String position;
-            if (parent.target != null) {
-                position = MetaUtil.appendLocation(new StringBuilder(100), parent.target, getBci()).toString();
-            } else if (invoke != null && invoke.getTargetMethod() != null) {
-                position = invoke.getTargetMethod().getName() + "(bci: " + getBci() + ")";
-            } else {
-                position = "unknown method (bci: " + getBci() + ")";
-            }
-            return "at " + position;
+            return "at " + MetaUtil.appendLocation(new StringBuilder(100), parent.target, getBci()).toString();
         }
 
         public int getBci() {
