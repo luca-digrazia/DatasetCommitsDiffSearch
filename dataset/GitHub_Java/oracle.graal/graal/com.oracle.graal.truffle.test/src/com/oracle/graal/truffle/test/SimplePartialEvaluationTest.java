@@ -22,11 +22,9 @@
  */
 package com.oracle.graal.truffle.test;
 
-import com.oracle.jvmci.code.*;
-
 import org.junit.*;
 
-import com.oracle.graal.replacements.*;
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.truffle.test.nodes.*;
 import com.oracle.truffle.api.frame.*;
 
@@ -63,9 +61,9 @@ public class SimplePartialEvaluationTest extends PartialEvaluationTest {
         } catch (SourceStackTrace t) {
             // Expected verification error occurred.
             StackTraceElement[] trace = t.getStackTrace();
-            Assert.assertTrue(trace[0].toString().startsWith("com.oracle.truffle.api.CompilerAsserts.neverPartOfCompilation(CompilerAsserts.java:"));
-            Assert.assertTrue(trace[1].toString().startsWith("com.oracle.graal.truffle.test.nodes.NeverPartOfCompilationTestNode.execute(NeverPartOfCompilationTestNode.java:"));
-            Assert.assertTrue(trace[2].toString().startsWith("com.oracle.graal.truffle.test.nodes.RootTestNode.execute(RootTestNode.java:"));
+            Assert.assertEquals("com.oracle.truffle.api.nodes.RootNode.getFrameDescriptor(RootNode.java)", trace[0].toString());
+            String secondString = trace[1].toString();
+            Assert.assertEquals("com.oracle.graal.truffle.OptimizedCallTarget.callRoot(OptimizedCallTarget.java:" /* "259)" */, secondString.substring(0, secondString.length() - 4));
         }
     }
 
@@ -73,13 +71,6 @@ public class SimplePartialEvaluationTest extends PartialEvaluationTest {
     public void nestedLoopExplosion() {
         FrameDescriptor fd = new FrameDescriptor();
         AbstractTestNode result = new AddTestNode(new NestedExplodedLoopTestNode(5), new ConstantTestNode(17));
-        assertPartialEvalEquals("constant42", new RootTestNode(fd, "nestedLoopExplosion", result));
-    }
-
-    @Test
-    public void twoMergesLoopExplosion() {
-        FrameDescriptor fd = new FrameDescriptor();
-        AbstractTestNode result = new AddTestNode(new TwoMergesExplodedLoopTestNode(5), new ConstantTestNode(37));
         assertPartialEvalEquals("constant42", new RootTestNode(fd, "nestedLoopExplosion", result));
     }
 
@@ -151,21 +142,5 @@ public class SimplePartialEvaluationTest extends PartialEvaluationTest {
         FrameDescriptor fd = new FrameDescriptor();
         AbstractTestNode result = new LambdaTestNode();
         assertPartialEvalEquals("constant42", new RootTestNode(fd, "constantValue", result));
-    }
-
-    @Test
-    public void allowedRecursion() {
-        /* Recursion depth just below the threshold that reports it as too deep recursion. */
-        FrameDescriptor fd = new FrameDescriptor();
-        AbstractTestNode result = new RecursionTestNode(PEGraphDecoder.Options.InliningDepthError.getValue() - 5);
-        assertPartialEvalEquals("constant42", new RootTestNode(fd, "allowedRecursion", result));
-    }
-
-    @Test(expected = BailoutException.class)
-    public void tooDeepRecursion() {
-        /* Recursion depth just above the threshold that reports it as too deep recursion. */
-        FrameDescriptor fd = new FrameDescriptor();
-        AbstractTestNode result = new RecursionTestNode(PEGraphDecoder.Options.InliningDepthError.getValue());
-        assertPartialEvalEquals("constant42", new RootTestNode(fd, "tooDeepRecursion", result));
     }
 }
