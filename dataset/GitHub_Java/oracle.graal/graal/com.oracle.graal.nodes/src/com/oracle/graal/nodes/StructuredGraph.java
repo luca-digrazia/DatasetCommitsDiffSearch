@@ -41,7 +41,7 @@ public class StructuredGraph extends Graph {
      * The different stages of the compilation of a {@link Graph} regarding the status of
      * {@link GuardNode guards}, {@link DeoptimizingNode deoptimizations} and {@link FrameState
      * framestates}. The stage of a graph progresses monotonously.
-     *
+     * 
      */
     public static enum GuardsStage {
         /**
@@ -71,6 +71,8 @@ public class StructuredGraph extends Graph {
 
     private static final AtomicLong uniqueGraphIds = new AtomicLong();
 
+    private final Set<Long> leafGraphIds = new HashSet<>(4);
+
     private StartNode start;
     private final ResolvedJavaMethod method;
     private final long graphId;
@@ -79,14 +81,16 @@ public class StructuredGraph extends Graph {
     private boolean isAfterFloatingReadPhase = false;
 
     /**
-     * Creates a new Graph containing a single {@link BeginNode} as the {@link #start() start} node.
+     * Creates a new Graph containing a single {@link AbstractBeginNode} as the {@link #start()
+     * start} node.
      */
     public StructuredGraph() {
         this(null, null);
     }
 
     /**
-     * Creates a new Graph containing a single {@link BeginNode} as the {@link #start() start} node.
+     * Creates a new Graph containing a single {@link AbstractBeginNode} as the {@link #start()
+     * start} node.
      */
     public StructuredGraph(String name, ResolvedJavaMethod method) {
         this(name, method, uniqueGraphIds.incrementAndGet(), INVOCATION_ENTRY_BCI);
@@ -135,7 +139,7 @@ public class StructuredGraph extends Graph {
 
     /**
      * Gets the method from which this graph was built.
-     *
+     * 
      * @return null if this method was not built from a method or the method is not available
      */
     public ResolvedJavaMethod method() {
@@ -158,6 +162,14 @@ public class StructuredGraph extends Graph {
         this.start = start;
     }
 
+    /**
+     * @return the {@link Set} that contains the {@link #graphId()} of all graphs that were
+     *         incorporated into this one (e.g. by inlining).
+     */
+    public Set<Long> getLeafGraphIds() {
+        return leafGraphIds;
+    }
+
     @Override
     public StructuredGraph copy() {
         return copy(name);
@@ -177,10 +189,10 @@ public class StructuredGraph extends Graph {
         return copy(newName, method);
     }
 
-    public ParameterNode getParameter(int index) {
-        for (ParameterNode param : getNodes(ParameterNode.class)) {
-            if (param.index() == index) {
-                return param;
+    public LocalNode getLocal(int index) {
+        for (LocalNode local : getNodes(LocalNode.class)) {
+            if (local.index() == index) {
+                return local;
             }
         }
         return null;
@@ -231,7 +243,7 @@ public class StructuredGraph extends Graph {
     }
 
     public boolean hasLoops() {
-        return hasNode(LoopBeginNode.class);
+        return getNodes(LoopBeginNode.class).isNotEmpty();
     }
 
     public void removeFloating(FloatingNode node) {
@@ -248,13 +260,13 @@ public class StructuredGraph extends Graph {
     /**
      * Unlinks a node from all its control flow neighbors and then removes it from its graph. The
      * node must have no {@linkplain Node#usages() usages}.
-     *
+     * 
      * @param node the node to be unlinked and removed
      */
     public void removeFixed(FixedWithNextNode node) {
         assert node != null;
-        if (node instanceof BeginNode) {
-            ((BeginNode) node).prepareDelete();
+        if (node instanceof AbstractBeginNode) {
+            ((AbstractBeginNode) node).prepareDelete();
         }
         assert node.usages().isEmpty() : node + " " + node.usages();
         FixedNode next = node.next();
@@ -293,7 +305,7 @@ public class StructuredGraph extends Graph {
         node.safeDelete();
     }
 
-    public void removeSplit(ControlSplitNode node, BeginNode survivingSuccessor) {
+    public void removeSplit(ControlSplitNode node, AbstractBeginNode survivingSuccessor) {
         assert node != null;
         assert node.usages().isEmpty();
         assert survivingSuccessor != null;
@@ -302,7 +314,7 @@ public class StructuredGraph extends Graph {
         node.safeDelete();
     }
 
-    public void removeSplitPropagate(ControlSplitNode node, BeginNode survivingSuccessor) {
+    public void removeSplitPropagate(ControlSplitNode node, AbstractBeginNode survivingSuccessor) {
         assert node != null;
         assert node.usages().isEmpty();
         assert survivingSuccessor != null;
@@ -319,7 +331,7 @@ public class StructuredGraph extends Graph {
         }
     }
 
-    public void replaceSplit(ControlSplitNode node, Node replacement, BeginNode survivingSuccessor) {
+    public void replaceSplit(ControlSplitNode node, Node replacement, AbstractBeginNode survivingSuccessor) {
         if (replacement instanceof FixedWithNextNode) {
             replaceSplitWithFixed(node, (FixedWithNextNode) replacement, survivingSuccessor);
         } else {
@@ -329,7 +341,7 @@ public class StructuredGraph extends Graph {
         }
     }
 
-    public void replaceSplitWithFixed(ControlSplitNode node, FixedWithNextNode replacement, BeginNode survivingSuccessor) {
+    public void replaceSplitWithFixed(ControlSplitNode node, FixedWithNextNode replacement, AbstractBeginNode survivingSuccessor) {
         assert node != null && replacement != null && node.isAlive() && replacement.isAlive() : "cannot replace " + node + " with " + replacement;
         assert survivingSuccessor != null;
         node.clearSuccessors();
@@ -337,7 +349,7 @@ public class StructuredGraph extends Graph {
         node.replaceAndDelete(replacement);
     }
 
-    public void replaceSplitWithFloating(ControlSplitNode node, FloatingNode replacement, BeginNode survivingSuccessor) {
+    public void replaceSplitWithFloating(ControlSplitNode node, FloatingNode replacement, AbstractBeginNode survivingSuccessor) {
         assert node != null && replacement != null && node.isAlive() && replacement.isAlive() : "cannot replace " + node + " with " + replacement;
         assert survivingSuccessor != null;
         node.clearSuccessors();
