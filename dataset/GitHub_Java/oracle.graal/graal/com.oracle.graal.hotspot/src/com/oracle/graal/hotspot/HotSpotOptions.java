@@ -103,22 +103,6 @@ public class HotSpotOptions {
 
     // Called from VM code
     public static boolean setOption(String option) {
-        return parseOption(option, null);
-    }
-
-    interface OptionConsumer {
-        void set(OptionDescriptor desc, Object value);
-    }
-
-    /**
-     * Parses a given option value specification.
-     * 
-     * @param option the specification of an option and its value
-     * @param setter the object to notify of the parsed option and value. If null, the
-     *            {@link OptionValue#setValue(Object)} method of the specified option is called
-     *            instead.
-     */
-    public static boolean parseOption(String option, OptionConsumer setter) {
         if (option.length() == 0) {
             return false;
         }
@@ -191,13 +175,9 @@ public class HotSpotOptions {
         }
 
         if (value != null) {
-            if (setter != null) {
-                setter.set(desc, value);
-            } else {
-                OptionValue<?> optionValue = desc.getOptionValue();
-                optionValue.setValue(value);
-                // Logger.info("Set option " + desc.getName() + " to " + value);
-            }
+            OptionValue<?> optionValue = desc.getOptionValue();
+            optionValue.setValue(value);
+            // Logger.info("Set option " + desc.getName() + " to " + value);
         } else {
             Logger.info("Wrong value \"" + valueString + "\" for option " + optionName);
             return false;
