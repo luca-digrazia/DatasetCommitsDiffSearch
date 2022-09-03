@@ -51,12 +51,4 @@ public final class LLVMParserAsserts {
         }
     }
 
-    public static <T> void assertNoNullElement(Iterable<T> it) {
-        for (T obj : it) {
-            if (obj == null) {
-                throw new AssertionError(it);
-            }
-        }
-    }
-
 }
