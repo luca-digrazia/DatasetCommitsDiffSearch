@@ -27,6 +27,7 @@ import static com.oracle.graal.asm.amd64.AMD64AsmOptions.*;
 import com.oracle.graal.amd64.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.asm.*;
 
 /**
  * This class implements commonly used X86 code patterns.
@@ -37,11 +38,25 @@ public class AMD64MacroAssembler extends AMD64Assembler {
         super(target, registerConfig);
     }
 
-    public final void xorptr(Register dst, Register src) {
+    public void pushptr(Address src) {
+        pushq(src);
+    }
+
+    public void popptr(Address src) {
+        popq(src);
+    }
+
+    public void xorptr(Register dst, Register src) {
         xorq(dst, src);
     }
 
-    public final void decrementq(Register reg, int value) {
+    public void xorptr(Register dst, Address src) {
+        xorq(dst, src);
+    }
+
+    // 64 bit versions
+
+    public void decrementq(Register reg, int value) {
         if (value == Integer.MIN_VALUE) {
             subq(reg, value);
             return;
@@ -79,19 +94,83 @@ public class AMD64MacroAssembler extends AMD64Assembler {
         }
     }
 
-    public final void movptr(Address dst, int src) {
+    // These are mostly for initializing null
+    public void movptr(Address dst, int src) {
         movslq(dst, src);
     }
 
-    public final void cmpptr(Register src1, Register src2) {
+    public final void cmp32(Register src1, int imm) {
+        cmpl(src1, imm);
+    }
+
+    public final void cmp32(Register src1, Address src2) {
+        cmpl(src1, src2);
+    }
+
+    public void cmpsd2int(Register opr1, Register opr2, Register dst, boolean unorderedIsLess) {
+        assert opr1.isFpu() && opr2.isFpu();
+        ucomisd(opr1, opr2);
+
+        Label l = new Label();
+        if (unorderedIsLess) {
+            movl(dst, -1);
+            jcc(AMD64Assembler.ConditionFlag.parity, l);
+            jcc(AMD64Assembler.ConditionFlag.below, l);
+            movl(dst, 0);
+            jcc(AMD64Assembler.ConditionFlag.equal, l);
+            incrementl(dst, 1);
+        } else { // unordered is greater
+            movl(dst, 1);
+            jcc(AMD64Assembler.ConditionFlag.parity, l);
+            jcc(AMD64Assembler.ConditionFlag.above, l);
+            movl(dst, 0);
+            jcc(AMD64Assembler.ConditionFlag.equal, l);
+            decrementl(dst, 1);
+        }
+        bind(l);
+    }
+
+    public void cmpss2int(Register opr1, Register opr2, Register dst, boolean unorderedIsLess) {
+        assert opr1.isFpu();
+        assert opr2.isFpu();
+        ucomiss(opr1, opr2);
+
+        Label l = new Label();
+        if (unorderedIsLess) {
+            movl(dst, -1);
+            jcc(AMD64Assembler.ConditionFlag.parity, l);
+            jcc(AMD64Assembler.ConditionFlag.below, l);
+            movl(dst, 0);
+            jcc(AMD64Assembler.ConditionFlag.equal, l);
+            incrementl(dst, 1);
+        } else { // unordered is greater
+            movl(dst, 1);
+            jcc(AMD64Assembler.ConditionFlag.parity, l);
+            jcc(AMD64Assembler.ConditionFlag.above, l);
+            movl(dst, 0);
+            jcc(AMD64Assembler.ConditionFlag.equal, l);
+            decrementl(dst, 1);
+        }
+        bind(l);
+    }
+
+    public void cmpptr(Register src1, Register src2) {
         cmpq(src1, src2);
     }
 
-    public final void cmpptr(Register src1, Address src2) {
+    public void cmpptr(Register src1, Address src2) {
         cmpq(src1, src2);
     }
 
-    public final void decrementl(Register reg, int value) {
+    public void cmpptr(Register src1, int src2) {
+        cmpq(src1, src2);
+    }
+
+    public void cmpptr(Address src1, int src2) {
+        cmpq(src1, src2);
+    }
+
+    public void decrementl(Register reg, int value) {
         if (value == Integer.MIN_VALUE) {
             subl(reg, value);
             return;
@@ -110,7 +189,7 @@ public class AMD64MacroAssembler extends AMD64Assembler {
         }
     }
 
-    public final void decrementl(Address dst, int value) {
+    public void decrementl(Address dst, int value) {
         if (value == Integer.MIN_VALUE) {
             subl(dst, value);
             return;
@@ -129,7 +208,7 @@ public class AMD64MacroAssembler extends AMD64Assembler {
         }
     }
 
-    public final void incrementl(Register reg, int value) {
+    public void incrementl(Register reg, int value) {
         if (value == Integer.MIN_VALUE) {
             addl(reg, value);
             return;
@@ -148,7 +227,7 @@ public class AMD64MacroAssembler extends AMD64Assembler {
         }
     }
 
-    public final void incrementl(Address dst, int value) {
+    public void incrementl(Address dst, int value) {
         if (value == Integer.MIN_VALUE) {
             addl(dst, value);
             return;
@@ -167,20 +246,21 @@ public class AMD64MacroAssembler extends AMD64Assembler {
         }
     }
 
-    public final void signExtendByte(Register reg) {
+    public void signExtendByte(Register reg) {
         if (reg.isByte()) {
-            movsxb(reg, reg);
+            movsxb(reg, reg); // movsxb
         } else {
             shll(reg, 24);
             sarl(reg, 24);
         }
     }
 
-    public final void signExtendShort(Register reg) {
-        movsxw(reg, reg);
+    public void signExtendShort(Register reg) {
+        movsxw(reg, reg); // movsxw
     }
 
-    public final void movflt(Register dst, Register src) {
+    // Support optimal SSE move instructions.
+    public void movflt(Register dst, Register src) {
         assert dst.isFpu() && src.isFpu();
         if (UseXmmRegToRegMoveAll) {
             movaps(dst, src);
@@ -189,17 +269,17 @@ public class AMD64MacroAssembler extends AMD64Assembler {
         }
     }
 
-    public final void movflt(Register dst, Address src) {
+    public void movflt(Register dst, Address src) {
         assert dst.isFpu();
         movss(dst, src);
     }
 
-    public final void movflt(Address dst, Register src) {
+    public void movflt(Address dst, Register src) {
         assert src.isFpu();
         movss(dst, src);
     }
 
-    public final void movdbl(Register dst, Register src) {
+    public void movdbl(Register dst, Register src) {
         assert dst.isFpu() && src.isFpu();
         if (UseXmmRegToRegMoveAll) {
             movapd(dst, src);
@@ -208,7 +288,7 @@ public class AMD64MacroAssembler extends AMD64Assembler {
         }
     }
 
-    public final void movdbl(Register dst, Address src) {
+    public void movdbl(Register dst, Address src) {
         assert dst.isFpu();
         if (UseXmmLoadAndClearUpper) {
             movsd(dst, src);
@@ -217,17 +297,26 @@ public class AMD64MacroAssembler extends AMD64Assembler {
         }
     }
 
+    public void movdbl(Address dst, Register src) {
+        assert src.isFpu();
+        movsd(dst, src);
+    }
+
     /**
      * Non-atomic write of a 64-bit constant to memory. Do not use if the address might be a
      * volatile field!
      */
-    public final void movlong(Address dst, long src) {
+    public void movlong(Address dst, long src) {
         Address high = new Address(dst.getKind(), dst.getBase(), dst.getIndex(), dst.getScale(), dst.getDisplacement() + 4);
         movl(dst, (int) (src & 0xFFFFFFFF));
         movl(high, (int) (src >> 32));
     }
 
-    public final void flog(Register dest, Register value, boolean base10) {
+    public void xchgptr(Register src1, Register src2) {
+        xchgq(src1, src2);
+    }
+
+    public void flog(Register dest, Register value, boolean base10) {
         assert dest.isFpu() && value.isFpu();
 
         Address tmp = new Address(Kind.Double, AMD64.RSP);
@@ -240,39 +329,40 @@ public class AMD64MacroAssembler extends AMD64Assembler {
         movsd(tmp, value);
         fld(tmp);
         fyl2x();
-        trigEpilogue(dest, tmp);
+        fstp(tmp);
+        movsd(dest, tmp);
+        addq(AMD64.rsp, 8);
     }
 
-    public final void fsin(Register dest, Register value) {
-        Address tmp = trigPrologue(value);
-        fsin();
-        trigEpilogue(dest, tmp);
+    public void fsin(Register dest, Register value) {
+        ftrig(dest, value, 's');
     }
 
-    public final void fcos(Register dest, Register value) {
-        Address tmp = trigPrologue(value);
-        fcos();
-        trigEpilogue(dest, tmp);
+    public void fcos(Register dest, Register value) {
+        ftrig(dest, value, 'c');
     }
 
-    public final void ftan(Register dest, Register value) {
-        Address tmp = trigPrologue(value);
-        fptan();
-        fstp(0); // ftan pushes 1.0 in addition to the actual result, pop
-        trigEpilogue(dest, tmp);
+    public void ftan(Register dest, Register value) {
+        ftrig(dest, value, 't');
     }
 
-    private Address trigPrologue(Register value) {
-        assert value.isFpu();
+    private void ftrig(Register dest, Register value, char op) {
+        assert dest.isFpu() && value.isFpu();
+
         Address tmp = new Address(Kind.Double, AMD64.RSP);
         subq(AMD64.rsp, 8);
         movsd(tmp, value);
         fld(tmp);
-        return tmp;
-    }
-
-    private void trigEpilogue(Register dest, Address tmp) {
-        assert dest.isFpu();
+        if (op == 's') {
+            fsin();
+        } else if (op == 'c') {
+            fcos();
+        } else if (op == 't') {
+            fptan();
+            fstp(0); // ftan pushes 1.0 in addition to the actual result, pop
+        } else {
+            throw new InternalError("should not reach here");
+        }
         fstp(tmp);
         movsd(dest, tmp);
         addq(AMD64.rsp, 8);
@@ -285,7 +375,7 @@ public class AMD64MacroAssembler extends AMD64Assembler {
      * @param csl the description of the CSA
      * @param frameToCSA offset from the frame pointer to the CSA
      */
-    public final void save(CalleeSaveLayout csl, int frameToCSA) {
+    public void save(CalleeSaveLayout csl, int frameToCSA) {
         RegisterValue frame = frameRegister.asValue();
         for (Register r : csl.registers) {
             int offset = csl.offsetOf(r);
@@ -293,7 +383,7 @@ public class AMD64MacroAssembler extends AMD64Assembler {
         }
     }
 
-    public final void restore(CalleeSaveLayout csl, int frameToCSA) {
+    public void restore(CalleeSaveLayout csl, int frameToCSA) {
         RegisterValue frame = frameRegister.asValue();
         for (Register r : csl.registers) {
             int offset = csl.offsetOf(r);
