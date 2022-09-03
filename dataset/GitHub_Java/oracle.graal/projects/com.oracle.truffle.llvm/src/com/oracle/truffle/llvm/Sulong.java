@@ -54,12 +54,11 @@ import com.oracle.truffle.llvm.runtime.ContextExtension;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.LLVMSymbol;
-import com.oracle.truffle.llvm.runtime.debug.value.LLVMDebugObject;
-import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceType;
+import com.oracle.truffle.llvm.runtime.debug.LLVMDebugObject;
+import com.oracle.truffle.llvm.runtime.debug.LLVMSourceType;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
-import com.oracle.truffle.llvm.runtime.debug.scope.LLVMDebuggerScopeFactory;
+import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceScope;
 import com.oracle.truffle.llvm.runtime.interop.LLVMInternalTruffleObject;
-import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
@@ -152,7 +151,7 @@ public final class Sulong extends LLVMLanguage {
     @Override
     protected boolean isObjectOfLanguage(Object object) {
         return LLVMPointer.isInstance(object) || object instanceof LLVMInternalTruffleObject || object instanceof SulongLibrary ||
-                        object instanceof LLVMDebugObject || object instanceof LLVMSourceType || object instanceof LLVMInteropType;
+                        object instanceof LLVMDebugObject || object instanceof LLVMSourceType;
     }
 
     @Override
@@ -208,9 +207,6 @@ public final class Sulong extends LLVMLanguage {
     protected Object findMetaObject(LLVMContext context, Object value) {
         if (value instanceof LLVMDebugObject) {
             return ((LLVMDebugObject) value).getType();
-        } else if (LLVMPointer.isInstance(value)) {
-            LLVMPointer ptr = LLVMPointer.cast(value);
-            return ptr.getExportType();
         }
 
         return super.findMetaObject(context, value);
@@ -246,7 +242,7 @@ public final class Sulong extends LLVMLanguage {
         if (!context.getEnv().getOptions().get(SulongEngineOption.ENABLE_LVI)) {
             return super.findLocalScopes(context, node, frame);
         } else {
-            return LLVMDebuggerScopeFactory.create(node, frame, context);
+            return LLVMSourceScope.create(node, frame, context);
         }
     }
 }
