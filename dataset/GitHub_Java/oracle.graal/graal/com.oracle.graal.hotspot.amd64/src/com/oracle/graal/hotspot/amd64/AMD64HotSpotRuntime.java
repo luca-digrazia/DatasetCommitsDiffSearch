@@ -54,8 +54,6 @@ public class AMD64HotSpotRuntime extends HotSpotRuntime {
 
         Kind word = graalRuntime.getTarget().wordKind;
 
-        // @formatter:off
-
         addRuntimeCall(DEOPTIMIZE, config.deoptimizeStub,
                 /*           temps */ null,
                 /*             ret */ ret(Kind.Void));
@@ -176,9 +174,6 @@ public class AMD64HotSpotRuntime extends HotSpotRuntime {
                 /* arg2:    key */                         word,
                 /* arg3:      r */                         word,
               /* arg4: inLength */                         Kind.Int));
-
-        // @formatter:on
-
     }
 
     @Override
