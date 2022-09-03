@@ -2187,9 +2187,9 @@ public class BytecodeParser implements GraphBuilderContext {
         TTY.println(s);
     }
 
-    protected RuntimeException throwParserError(Throwable e) {
+    protected BytecodeParserError asParserError(Throwable e) {
         if (e instanceof BytecodeParserError) {
-            throw (BytecodeParserError) e;
+            return (BytecodeParserError) e;
         }
         BytecodeParser bp = this;
         BytecodeParserError res = new BytecodeParserError(e);
@@ -2197,7 +2197,7 @@ public class BytecodeParser implements GraphBuilderContext {
             res.addContext("parsing " + bp.code.asStackTraceElement(bp.bci()));
             bp = bp.parent;
         }
-        throw res;
+        return res;
     }
 
     protected void parseAndInlineCallee(ResolvedJavaMethod targetMethod, ValueNode[] args, IntrinsicContext calleeIntrinsicContext) {
@@ -2875,7 +2875,7 @@ public class BytecodeParser implements GraphBuilderContext {
                 // Don't wrap bailouts as parser errors
                 throw e;
             } catch (Throwable e) {
-                throw throwParserError(e);
+                throw asParserError(e);
             }
 
             if (lastInstr == null || lastInstr.next() != null) {
