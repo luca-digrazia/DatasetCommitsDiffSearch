@@ -42,18 +42,12 @@ import com.oracle.graal.phases.schedule.*;
  */
 public class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPrinter {
 
-    private final boolean tryToSchedule;
-
     /**
      * Creates a new {@link IdealGraphPrinter} that writes to the specified output stream.
-     * 
-     * @param tryToSchedule If false, no scheduling is done, which avoids exceptions for
-     *            non-schedulable graphs.
      */
-    public IdealGraphPrinter(OutputStream stream, boolean tryToSchedule) {
+    public IdealGraphPrinter(OutputStream stream) {
         super(stream);
         this.begin();
-        this.tryToSchedule = tryToSchedule;
     }
 
     /**
@@ -86,7 +80,7 @@ public class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPr
         beginGraph(title);
         Set<Node> noBlockNodes = new HashSet<>();
         SchedulePhase schedule = predefinedSchedule;
-        if (schedule == null && tryToSchedule) {
+        if (schedule == null) {
             try {
                 schedule = new SchedulePhase();
                 schedule.apply((StructuredGraph) graph);
@@ -141,7 +135,7 @@ public class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPr
             if (block != null) {
                 printProperty("block", Integer.toString(block.getId()));
                 // if (!(node instanceof PhiNode || node instanceof FrameState || node instanceof
-                // ParameterNode) && !block.nodes().contains(node)) {
+                // LocalNode) && !block.nodes().contains(node)) {
                 // printProperty("notInOwnBlock", "true");
                 // }
             } else {
@@ -262,7 +256,7 @@ public class IdealGraphPrinter extends BasicIdealGraphPrinter implements GraphPr
             // if this is the first block: add all locals to this block
             if (block.getBeginNode() == ((StructuredGraph) graph).start()) {
                 for (Node node : graph.getNodes()) {
-                    if (node instanceof ParameterNode) {
+                    if (node instanceof LocalNode) {
                         nodes.add(node);
                     }
                 }
