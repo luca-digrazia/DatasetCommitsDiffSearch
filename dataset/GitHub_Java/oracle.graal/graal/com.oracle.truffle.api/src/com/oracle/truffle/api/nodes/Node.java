@@ -40,7 +40,6 @@ import com.oracle.truffle.api.utilities.*;
  */
 public abstract class Node implements NodeInterface, Cloneable {
 
-    private final NodeClass nodeClass;
     @CompilationFinal private Node parent;
     @CompilationFinal private SourceSection sourceSection;
 
@@ -67,7 +66,6 @@ public abstract class Node implements NodeInterface, Cloneable {
     protected Node(SourceSection sourceSection) {
         CompilerAsserts.neverPartOfCompilation();
         this.sourceSection = sourceSection;
-        this.nodeClass = NodeClass.get(getClass());
         if (TruffleOptions.TraceASTJSON) {
             JSONHelper.dumpNewNode(this);
         }
@@ -88,10 +86,6 @@ public abstract class Node implements NodeInterface, Cloneable {
             }
         }
         this.sourceSection = section;
-    }
-
-    NodeClass getNodeClass() {
-        return nodeClass;
     }
 
     /**
@@ -350,7 +344,7 @@ public abstract class Node implements NodeInterface, Cloneable {
     public final Iterable<Node> getChildren() {
         return new Iterable<Node>() {
             public Iterator<Node> iterator() {
-                return nodeClass.makeIterator(Node.this);
+                return NodeUtil.makeIterator(Node.this);
             }
         };
     }
