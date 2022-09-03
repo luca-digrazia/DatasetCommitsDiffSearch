@@ -42,8 +42,10 @@ public class ModuleV32 extends Module {
 
     @Override
     protected void createFunction(long[] args) {
-        FunctionType type = (FunctionType) ((PointerType) types.get(args[0])).getPointeeType();
-        boolean isPrototype = args[2] != 0;
+        int i = 0;
+        FunctionType type = (FunctionType) ((PointerType) types.get(args[i++])).getPointeeType();
+        i++; // Unused parameter
+        boolean isPrototype = args[i++] != 0;
 
         generator.createFunction(type, isPrototype);
         symbols.add(type);

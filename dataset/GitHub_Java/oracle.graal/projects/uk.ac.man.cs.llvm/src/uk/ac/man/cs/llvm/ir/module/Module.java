@@ -27,27 +27,6 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-/*
- * Copyright (c) 2016 University of Manchester
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
 package uk.ac.man.cs.llvm.ir.module;
 
 import java.util.ArrayList;
@@ -74,7 +53,7 @@ public class Module implements ParserListener {
 
     protected final List<TargetInformation> info = new ArrayList<>();
 
-    protected final List<FunctionType> methods = new ArrayList<>();
+    protected final List<FunctionType> functions = new ArrayList<>();
 
     protected final List<Type> symbols = new ArrayList<>();
 
@@ -94,18 +73,18 @@ public class Module implements ParserListener {
                 return version.createConstants(types, symbols, generator);
 
             case FUNCTION: {
-                FunctionType method = methods.remove(0);
+                FunctionType function = functions.remove(0);
 
                 FunctionGenerator gen = generator.generateFunction();
 
                 List<Type> sym = new ArrayList<>(symbols);
 
-                for (Type arg : method.getArgumentTypes()) {
+                for (Type arg : function.getArgumentTypes()) {
                     gen.createParameter(arg);
                     sym.add(arg);
                 }
 
-                return version.createMethod(types, sym, gen, mode);
+                return version.createFunction(types, sym, gen, mode);
             }
             case IDENTIFICATION:
                 return new Identification();
@@ -115,6 +94,9 @@ public class Module implements ParserListener {
 
             case VALUE_SYMTAB:
                 return new ValueSymbolTable(generator);
+
+            case METADATA:
+                return version.createMetadata(types, symbols, generator);
 
             default:
                 return ParserListener.DEFAULT;
@@ -140,7 +122,9 @@ public class Module implements ParserListener {
                 break;
 
             case TARGET_DATALAYOUT:
-                info.add(new TargetDataLayout(Records.toString(args)));
+                final TargetDataLayout layout = TargetDataLayout.fromString(Records.toString(args));
+                info.add(layout);
+                generator.createTargetDataLayout(layout);
                 break;
 
             case GLOBAL_VARIABLE:
@@ -151,9 +135,22 @@ public class Module implements ParserListener {
                 createFunction(args);
                 break;
 
+            case ALIAS_OLD:
+                createAliasOld(args);
+                break;
+
             default:
                 break;
         }
+    }
+
+    protected void createAliasOld(long[] args) {
+        Type type = types.get(args[0]);
+        int value = (int) args[1];
+        long linkage = args[2];
+
+        generator.createAlias(type, value, linkage);
+        symbols.add(type);
     }
 
     protected void createFunction(long[] args) {
@@ -163,7 +160,7 @@ public class Module implements ParserListener {
         generator.createFunction(type, isPrototype);
         symbols.add(type);
         if (!isPrototype) {
-            methods.add(type);
+            functions.add(type);
         }
     }
 
@@ -172,10 +169,10 @@ public class Module implements ParserListener {
         Type type = new PointerType(types.get(args[i++]));
         boolean isConstant = (args[i++] & 1) == 1;
         int initialiser = (int) args[i++];
-        i++; // Unused parameter
+        long linkage = args[i++];
         int align = (int) args[i++];
 
-        generator.createVariable(type, isConstant, initialiser, align);
+        generator.createGlobal(type, isConstant, initialiser, align, linkage);
         symbols.add(type);
     }
 }

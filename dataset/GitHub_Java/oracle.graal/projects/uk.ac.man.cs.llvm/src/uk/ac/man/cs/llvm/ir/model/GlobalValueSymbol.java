@@ -27,29 +27,9 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-/*
- * Copyright (c) 2016 University of Manchester
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
 package uk.ac.man.cs.llvm.ir.model;
 
+import uk.ac.man.cs.llvm.ir.model.enums.Linkage;
 import uk.ac.man.cs.llvm.ir.types.Type;
 
 public abstract class GlobalValueSymbol implements ValueSymbol {
@@ -64,10 +44,13 @@ public abstract class GlobalValueSymbol implements ValueSymbol {
 
     private Symbol value = null;
 
-    protected GlobalValueSymbol(Type type, int initialiser, int align) {
+    private final Linkage linkage;
+
+    protected GlobalValueSymbol(Type type, int initialiser, int align, long linkage) {
         this.type = type;
         this.initialiser = initialiser;
         this.align = align;
+        this.linkage = Linkage.decode((int) linkage);
     }
 
     protected abstract void accept(ModelVisitor visitor);
@@ -75,6 +58,10 @@ public abstract class GlobalValueSymbol implements ValueSymbol {
     @Override
     public int getAlign() {
         return align;
+    }
+
+    public int getInitialiser() {
+        return initialiser;
     }
 
     @Override
@@ -87,13 +74,25 @@ public abstract class GlobalValueSymbol implements ValueSymbol {
         return type;
     }
 
+    public Linkage getLinkage() {
+        return linkage;
+    }
+
+    public boolean isStatic() {
+        return linkage == Linkage.INTERNAL || linkage == Linkage.PRIVATE;
+    }
+
+    public boolean isExtern() {
+        return linkage == Linkage.EXTERNAL || linkage == Linkage.EXTERN_WEAK;
+    }
+
     public Symbol getValue() {
         return value;
     }
 
     public void initialise(Symbols symbols) {
-        if (initialiser > 0) {
-            value = symbols.getSymbol(initialiser - 1);
+        if (getInitialiser() > 0) {
+            value = symbols.getSymbol(getInitialiser() - 1);
         }
     }
 
