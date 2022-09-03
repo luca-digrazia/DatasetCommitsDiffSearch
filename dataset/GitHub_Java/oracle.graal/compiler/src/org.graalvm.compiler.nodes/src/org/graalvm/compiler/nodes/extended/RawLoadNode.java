@@ -25,15 +25,13 @@ package org.graalvm.compiler.nodes.extended;
 import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_2;
 import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_1;
 
+import org.graalvm.api.word.LocationIdentity;
 import org.graalvm.compiler.core.common.type.PrimitiveStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeClass;
-import org.graalvm.compiler.graph.spi.Canonicalizable;
-import org.graalvm.compiler.graph.spi.CanonicalizerTool;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
-import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.calc.ReinterpretNode;
 import org.graalvm.compiler.nodes.java.LoadFieldNode;
@@ -41,24 +39,18 @@ import org.graalvm.compiler.nodes.spi.Lowerable;
 import org.graalvm.compiler.nodes.spi.LoweringTool;
 import org.graalvm.compiler.nodes.spi.Virtualizable;
 import org.graalvm.compiler.nodes.spi.VirtualizerTool;
-import org.graalvm.compiler.nodes.type.StampTool;
 import org.graalvm.compiler.nodes.virtual.VirtualObjectNode;
-import org.graalvm.word.LocationIdentity;
 
 import jdk.vm.ci.meta.Assumptions;
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaField;
-import jdk.vm.ci.meta.ResolvedJavaType;
-
 
 /**
  * Load of a value from a location specified as an offset relative to an object. No null check is
  * performed before the load.
  */
 @NodeInfo(cycles = CYCLES_2, size = SIZE_1)
-public class RawLoadNode extends UnsafeAccessNode implements Lowerable, Virtualizable, Canonicalizable {
+public class RawLoadNode extends UnsafeAccessNode implements Lowerable, Virtualizable {
     public static final NodeClass<RawLoadNode> TYPE = NodeClass.create(RawLoadNode.class);
 
     /**
@@ -128,32 +120,6 @@ public class RawLoadNode extends UnsafeAccessNode implements Lowerable, Virtuali
                 }
             }
         }
-    }
-
-    @Override
-    public Node canonical(CanonicalizerTool tool) {
-        if (!isAnyLocationForced() && getLocationIdentity().isAny()) {
-            ValueNode object = object();
-            if (offset().isConstant() && object.isConstant() && !object.isNullConstant() ) {
-                ConstantNode objectConstant = (ConstantNode) object;
-                ResolvedJavaType type = StampTool.typeOrNull(objectConstant);
-                if (type != null && type.isArray()) {
-                    JavaConstant arrayConstant = objectConstant.asJavaConstant();
-                    if (arrayConstant != null) {
-                        int stableDimension = objectConstant.getStableDimension();
-                        if (stableDimension > 0) {
-                            long offsetConstant = offset().asJavaConstant().asLong();
-                            Constant constant = stamp().readConstant(tool.getConstantReflection().getMemoryAccessProvider(), arrayConstant, offsetConstant);
-                            boolean isDefaultStable = objectConstant.isDefaultStable();
-                            if (constant != null && (isDefaultStable || !constant.isDefaultForKind())) {
-                                return ConstantNode.forConstant(stamp(), constant, stableDimension - 1, isDefaultStable, tool.getMetaAccess());
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        return super.canonical(tool);
     }
 
     @Override
