@@ -155,6 +155,11 @@ public class GraalCompiler {
         plan.runPhases(PhasePosition.HIGH_LEVEL, graph);
 
         if (GraalOptions.OptLoops) {
+            graph.mark();
+            new FindInductionVariablesPhase().apply(graph);
+            if (GraalOptions.OptCanonicalizer) {
+                new CanonicalizerPhase(target, runtime, true, assumptions).apply(graph);
+            }
             new SafepointPollingEliminationPhase().apply(graph);
         }
 
@@ -171,6 +176,14 @@ public class GraalCompiler {
         graph.mark();
         new LoweringPhase(runtime).apply(graph);
         new CanonicalizerPhase(target, runtime, true, assumptions).apply(graph);
+
+        if (GraalOptions.OptLoops) {
+            graph.mark();
+            new RemoveInductionVariablesPhase().apply(graph);
+            if (GraalOptions.OptCanonicalizer) {
+                new CanonicalizerPhase(target, runtime, true, assumptions).apply(graph);
+            }
+        }
 
         if (GraalOptions.Lower) {
             new FloatingReadPhase().apply(graph);

@@ -41,22 +41,6 @@ public class Debug {
         return ENABLED;
     }
 
-    public static boolean isDumpEnabled() {
-        return ENABLED && DebugScope.getInstance().isDumpEnabled();
-    }
-
-    public static boolean isMeterEnabled() {
-        return ENABLED && DebugScope.getInstance().isMeterEnabled();
-    }
-
-    public static boolean isTimeEnabled() {
-        return ENABLED && DebugScope.getInstance().isTimeEnabled();
-    }
-
-    public static boolean isLogEnabled() {
-        return ENABLED && DebugScope.getInstance().isLogEnabled();
-    }
-
     public static void sandbox(String name, Runnable runnable) {
         if (ENABLED) {
             DebugScope.getInstance().scope(name, runnable, null, true, new Object[0]);
@@ -165,7 +149,7 @@ public class Debug {
             }
 
             @Override
-            public boolean isTimeEnabled() {
+            public boolean isTimerEnabled() {
                 return isTimerEnabled;
             }
 
@@ -187,7 +171,7 @@ public class Debug {
     };
 
     public static DebugTimer timer(String name) {
-        if (ENABLED && DebugScope.getInstance().isTimeEnabled()) {
+        if (ENABLED && DebugScope.getInstance().isTimerEnabled()) {
             return new TimerImpl(name);
         } else {
             return VOID_TIMER;

@@ -26,7 +26,6 @@ import java.util.*;
 import java.util.regex.*;
 
 import com.oracle.max.cri.ri.*;
-import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.debug.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.printer.*;
@@ -47,7 +46,7 @@ public class HotSpotDebugConfig implements DebugConfig {
         this.timerFilter = timerFilter;
         this.dumpFilter = dumpFilter;
         this.methodFilter = methodFilter;
-        dumpHandlers.add(new IdealGraphPrinterDumpHandler(GraalOptions.PrintIdealGraphAddress, GraalOptions.PrintIdealGraphPort));
+        dumpHandlers.add(new IdealGraphPrinterDumpHandler());
     }
 
     public boolean isLogEnabled() {
