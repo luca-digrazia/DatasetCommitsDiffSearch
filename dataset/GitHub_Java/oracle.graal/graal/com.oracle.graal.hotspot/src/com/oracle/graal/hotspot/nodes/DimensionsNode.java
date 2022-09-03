@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,30 +22,25 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import static com.oracle.graal.asm.NumUtil.roundUp;
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_2;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
+import static com.oracle.graal.asm.NumUtil.*;
 
-import java.util.BitSet;
+import java.util.*;
 
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.lir.VirtualStackSlot;
-import com.oracle.graal.lir.gen.LIRGeneratorTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.spi.LIRLowerable;
-import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
-import com.oracle.graal.word.Word;
-import com.oracle.graal.word.WordTypes;
-
-import jdk.vm.ci.meta.Value;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.word.*;
 
 /**
  * Intrinsic for allocating an on-stack array of integers to hold the dimensions of a multianewarray
  * instruction.
  */
-@NodeInfo(cycles = CYCLES_2, size = SIZE_1)
+@NodeInfo
 public final class DimensionsNode extends FixedWithNextNode implements LIRLowerable {
 
     public static final NodeClass<DimensionsNode> TYPE = NodeClass.create(DimensionsNode.class);

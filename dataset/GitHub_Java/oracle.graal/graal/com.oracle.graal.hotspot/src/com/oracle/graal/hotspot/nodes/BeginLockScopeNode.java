@@ -57,7 +57,7 @@ public final class BeginLockScopeNode extends AbstractMemoryCheckpoint implement
 
     @Override
     public LocationIdentity getLocationIdentity() {
-        return LocationIdentity.any();
+        return LocationIdentity.ANY_LOCATION;
     }
 
     @Override

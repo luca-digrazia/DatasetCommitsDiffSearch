@@ -31,7 +31,8 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
-import com.oracle.graal.graphbuilderconf.*;
+import com.oracle.graal.java.*;
+import com.oracle.graal.java.GraphBuilderPlugin.GenericInvocationPlugin;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.word.*;
@@ -79,7 +80,7 @@ public class DefaultGenericInvocationPlugin implements GenericInvocationPlugin {
                     if (constant != null) {
                         // Replace the invoke with the result of the call
                         ConstantNode res = b.append(ConstantNode.forConstant(constant, b.getMetaAccess()));
-                        b.addPush(res.getKind().getStackKind(), res);
+                        b.push(res.getKind().getStackKind(), b.append(res));
                     } else {
                         // This must be a void invoke
                         assert method.getSignature().getReturnKind() == Kind.Void;
@@ -99,7 +100,7 @@ public class DefaultGenericInvocationPlugin implements GenericInvocationPlugin {
         if (res instanceof UnsafeCopyNode) {
             UnsafeCopyNode copy = (UnsafeCopyNode) res;
             UnsafeLoadNode value = b.append(new UnsafeLoadNode(copy.sourceObject(), copy.sourceOffset(), copy.accessKind(), copy.getLocationIdentity()));
-            b.add(new UnsafeStoreNode(copy.destinationObject(), copy.destinationOffset(), value, copy.accessKind(), copy.getLocationIdentity()));
+            b.append(new UnsafeStoreNode(copy.destinationObject(), copy.destinationOffset(), value, copy.accessKind(), copy.getLocationIdentity()));
             return true;
         } else if (res instanceof ForeignCallNode) {
             ForeignCallNode foreign = (ForeignCallNode) res;
@@ -112,13 +113,6 @@ public class DefaultGenericInvocationPlugin implements GenericInvocationPlugin {
             b.push(returnKind.getStackKind(), res);
         } else {
             assert res.getKind().getStackKind() == Kind.Void;
-        }
-
-        if (res instanceof StateSplit) {
-            StateSplit stateSplit = (StateSplit) res;
-            if (stateSplit.stateAfter() == null) {
-                stateSplit.setStateAfter(b.createStateAfter());
-            }
         }
 
         return true;

@@ -34,6 +34,7 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.virtual.*;
+import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.common.inlining.*;
 import com.oracle.graal.phases.tiers.*;
@@ -51,7 +52,6 @@ public class EATestBase extends GraalCompilerTest {
     public static class TestClassInt {
         public int x;
         public int y;
-        public int z;
 
         public TestClassInt() {
             this(0, 0);
@@ -69,7 +69,7 @@ public class EATestBase extends GraalCompilerTest {
         @Override
         public boolean equals(Object obj) {
             TestClassInt other = (TestClassInt) obj;
-            return x == other.x && y == other.y && z == other.z;
+            return x == other.x && y == other.y;
         }
 
         @Override
@@ -133,7 +133,7 @@ public class EATestBase extends GraalCompilerTest {
      * @param iterativeEscapeAnalysis true if escape analysis should be run for more than one
      *            iteration
      */
-    protected void testEscapeAnalysis(String snippet, JavaConstant expectedConstantResult, boolean iterativeEscapeAnalysis) {
+    protected void testEscapeAnalysis(String snippet, final JavaConstant expectedConstantResult, final boolean iterativeEscapeAnalysis) {
         prepareGraph(snippet, iterativeEscapeAnalysis);
         if (expectedConstantResult != null) {
             for (ReturnNode returnNode : returnNodes) {
@@ -146,11 +146,11 @@ public class EATestBase extends GraalCompilerTest {
         Assert.assertEquals(0, newInstanceCount);
     }
 
-    protected void prepareGraph(String snippet, boolean iterativeEscapeAnalysis) {
+    protected void prepareGraph(String snippet, final boolean iterativeEscapeAnalysis) {
         ResolvedJavaMethod method = getResolvedJavaMethod(snippet);
         try (Scope s = Debug.scope(getClass(), method, getCodeCache())) {
             graph = parseEager(method, AllowAssumptions.YES);
-            context = getDefaultHighTierContext();
+            context = new HighTierContext(getProviders(), null, getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL);
             new InliningPhase(new CanonicalizerPhase()).apply(graph, context);
             new DeadCodeEliminationPhase().apply(graph);
             new CanonicalizerPhase().apply(graph, context);

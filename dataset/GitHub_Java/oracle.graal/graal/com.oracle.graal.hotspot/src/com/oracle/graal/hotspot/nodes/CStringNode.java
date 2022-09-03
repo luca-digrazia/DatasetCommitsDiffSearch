@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,38 +22,51 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import static com.oracle.graal.graph.UnsafeAccess.*;
-
-import com.oracle.graal.nodes.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.word.*;
 
 /**
- * Converts a compile-time constant Java string into a malloc'ed C string. The malloc'ed string is
- * never reclaimed so this should only be used for strings in permanent code such as compiled stubs.
+ * Converts a compile-time constant Java string into a C string installed with the generated code.
  */
-public final class CStringNode extends FloatingNode implements Lowerable {
+@NodeInfo
+public final class CStringNode extends FloatingNode implements LIRLowerable {
 
-    private final String string;
+    public static final NodeClass<CStringNode> TYPE = NodeClass.create(CStringNode.class);
+    protected final String string;
 
-    public CStringNode(String string) {
-        super(StampFactory.forWord());
+    public CStringNode(@InjectedNodeParameter WordTypes wordTypes, String string) {
+        super(TYPE, StampFactory.forKind(wordTypes.getWordKind()));
         this.string = string;
     }
 
-    @Override
-    public void lower(LoweringTool tool) {
-        byte[] formatBytes = string.getBytes();
-        long cstring = unsafe.allocateMemory(formatBytes.length + 1);
-        for (int i = 0; i < formatBytes.length; i++) {
-            unsafe.putByte(cstring + i, formatBytes[i]);
+    public void generate(NodeLIRBuilderTool gen) {
+        gen.setResult(this, emitCString(gen, string));
+    }
+
+    public static AllocatableValue emitCString(NodeLIRBuilderTool gen, String value) {
+        AllocatableValue dst = gen.getLIRGeneratorTool().newVariable(LIRKind.value(gen.getLIRGeneratorTool().target().wordKind));
+        gen.getLIRGeneratorTool().emitData(dst, toCString(value));
+        return dst;
+    }
+
+    /**
+     * Converts a string to a null terminated byte array of ASCII characters.
+     *
+     * @param s a String that must only contain ASCII characters
+     */
+    public static byte[] toCString(String s) {
+        byte[] bytes = new byte[s.length() + 1];
+        for (int i = 0; i < s.length(); i++) {
+            assert s.charAt(i) < 128 : "non-ascii string: " + s;
+            bytes[i] = (byte) s.charAt(i);
         }
-        unsafe.putByte(cstring + formatBytes.length, (byte) 0);
-        StructuredGraph graph = (StructuredGraph) graph();
-        ConstantNode replacement = ConstantNode.forLong(cstring, graph);
-        graph.replaceFloating(this, replacement);
+        bytes[s.length()] = 0;
+        return bytes;
     }
 
     @NodeIntrinsic

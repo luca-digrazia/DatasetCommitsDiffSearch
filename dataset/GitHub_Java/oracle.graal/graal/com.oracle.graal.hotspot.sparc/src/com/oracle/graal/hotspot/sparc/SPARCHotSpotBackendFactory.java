@@ -27,10 +27,8 @@ import java.util.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.runtime.*;
-import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
-import com.oracle.graal.hotspot.word.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.util.*;
 import com.oracle.graal.sparc.*;
@@ -38,8 +36,6 @@ import com.oracle.graal.sparc.SPARC.CPUFeature;
 
 @ServiceProvider(HotSpotBackendFactory.class)
 public class SPARCHotSpotBackendFactory implements HotSpotBackendFactory {
-
-    private static final int PLUGIN_COUNT_ESTIMATE = 155;
 
     protected Architecture createArchitecture(HotSpotVMConfig config) {
         return new SPARC(computeFeatures(config));
@@ -64,24 +60,18 @@ public class SPARCHotSpotBackendFactory implements HotSpotBackendFactory {
         Value[] nativeABICallerSaveRegisters = createNativeABICallerSaveRegisters(runtime.getConfig(), codeCache.getRegisterConfig());
         HotSpotForeignCallsProvider foreignCalls = new SPARCHotSpotForeignCallsProvider(runtime, metaAccess, codeCache, nativeABICallerSaveRegisters);
         LoweringProvider lowerer = createLowerer(runtime, metaAccess, foreignCalls, registers, target);
-        HotSpotStampProvider stampProvider = new HotSpotStampProvider();
-        Providers p = new Providers(metaAccess, codeCache, constantReflection, foreignCalls, lowerer, null, stampProvider);
+        Providers p = new Providers(metaAccess, codeCache, constantReflection, foreignCalls, lowerer, null, new HotSpotStampProvider());
         HotSpotSnippetReflectionProvider snippetReflection = new HotSpotSnippetReflectionProvider(runtime);
         HotSpotReplacementsImpl replacements = new HotSpotReplacementsImpl(p, snippetReflection, runtime.getConfig(), target);
         HotSpotDisassemblerProvider disassembler = new HotSpotDisassemblerProvider(runtime);
-        HotSpotWordTypes wordTypes = new HotSpotWordTypes(metaAccess, target.wordKind);
-        Plugins plugins = HotSpotGraphBuilderPlugins.create(runtime.getConfig(), wordTypes, metaAccess, constantReflection, snippetReflection, foreignCalls, stampProvider, replacements, target.arch,
-                        PLUGIN_COUNT_ESTIMATE);
-        replacements.setGraphBuilderPlugins(plugins);
-        HotSpotSuitesProvider suites = createSuites(runtime, plugins);
-        HotSpotProviders providers = new HotSpotProviders(metaAccess, codeCache, constantReflection, foreignCalls, lowerer, replacements, disassembler, suites, registers, snippetReflection,
-                        wordTypes, plugins);
+        HotSpotSuitesProvider suites = createSuites(runtime);
+        HotSpotProviders providers = new HotSpotProviders(metaAccess, codeCache, constantReflection, foreignCalls, lowerer, replacements, disassembler, suites, registers, snippetReflection);
 
         return createBackend(runtime, providers);
     }
 
-    protected HotSpotSuitesProvider createSuites(HotSpotGraalRuntimeProvider runtime, Plugins plugins) {
-        return new HotSpotSuitesProvider(runtime, plugins);
+    protected HotSpotSuitesProvider createSuites(HotSpotGraalRuntimeProvider runtime) {
+        return new HotSpotSuitesProvider(runtime);
     }
 
     protected HotSpotCodeCacheProvider createCodeCache(HotSpotGraalRuntimeProvider runtime, TargetDescription target, RegisterConfig regConfig) {

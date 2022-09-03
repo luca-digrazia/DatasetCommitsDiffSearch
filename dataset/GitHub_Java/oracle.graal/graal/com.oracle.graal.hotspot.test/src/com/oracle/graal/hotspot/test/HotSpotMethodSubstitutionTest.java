@@ -22,11 +22,8 @@
  */
 package com.oracle.graal.hotspot.test;
 
-import java.lang.invoke.*;
-
 import org.junit.*;
 
-import com.oracle.graal.api.directives.*;
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.replacements.test.*;
 
@@ -65,7 +62,7 @@ public class HotSpotMethodSubstitutionTest extends MethodSubstitutionTest {
         testGraph("getSuperClass");
         testGraph("getComponentType");
 
-        for (Class<?> c : new Class<?>[]{getClass(), Cloneable.class, int[].class, String[][].class}) {
+        for (Class<?> c : new Class[]{getClass(), Cloneable.class, int[].class, String[][].class}) {
             test("getModifiers", c);
             test("isInterface", c);
             test("isArray", c);
@@ -152,68 +149,5 @@ public class HotSpotMethodSubstitutionTest extends MethodSubstitutionTest {
     }
 
     private static class TestClassA {
-    }
-
-    public static String testCallSiteGetTargetSnippet(int i) throws Exception {
-        ConstantCallSite site;
-        MethodHandles.Lookup lookup = MethodHandles.lookup();
-        switch (i) {
-            case 1:
-                site = GraalDirectives.opaque(new ConstantCallSite(lookup.findVirtual(String.class, "replace", MethodType.methodType(String.class, char.class, char.class))));
-                break;
-            default:
-                site = GraalDirectives.opaque(new ConstantCallSite(lookup.findStatic(java.util.Arrays.class, "asList", MethodType.methodType(java.util.List.class, Object[].class))));
-        }
-        return site.getTarget().toString();
-    }
-
-    public static String testCastSnippet(int i, Object obj) throws Exception {
-        Class<?> c;
-        switch (i) {
-            case 1:
-                c = GraalDirectives.opaque(Number.class);
-                break;
-            default:
-                c = GraalDirectives.opaque(Integer.class);
-                break;
-        }
-        return c.cast(obj).toString();
-    }
-
-    public static String testGetClassSnippet(int i) {
-        Object c;
-        switch (i) {
-            case 1:
-                c = GraalDirectives.opaque(new Object());
-                break;
-            default:
-                c = GraalDirectives.opaque("TEST");
-                break;
-        }
-        return c.getClass().toString();
-    }
-
-    /**
-     * Tests ambiguous receiver of CallSite.getTarget.
-     */
-    @Test
-    public void testCallSiteGetTarget() {
-        test("testCallSiteGetTargetSnippet", 1);
-    }
-
-    /**
-     * Tests ambiguous receiver of Class.cast.
-     */
-    @Test
-    public void testCast() {
-        test("testCastSnippet", 1, new Integer(1));
-    }
-
-    /**
-     * Tests ambiguous receiver of Object.getClass.
-     */
-    @Test
-    public void testGetClass() {
-        test("testGetClassSnippet", 1);
     }
 }
