@@ -36,7 +36,6 @@ import com.oracle.graal.java.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
-import com.oracle.graal.phases.schedule.*;
 
 /**
  * Observes compilation events and uses {@link CFGPrinter} to produce a control flow graph for the
@@ -131,18 +130,15 @@ public class CFGPrinterObserver implements DebugDumpHandler {
         if (!checkMethodScope()) {
             return;
         }
-        if (curMethod instanceof ResolvedJavaMethod) {
-            cfgPrinter.method = (ResolvedJavaMethod) curMethod;
-        }
 
         if (object instanceof LIR) {
             cfgPrinter.lir = (LIR) object;
         } else {
             cfgPrinter.lir = Debug.contextLookup(LIR.class);
         }
-        cfgPrinter.nodeLirGenerator = Debug.contextLookup(NodeLIRBuilder.class);
-        if (cfgPrinter.nodeLirGenerator != null) {
-            cfgPrinter.target = cfgPrinter.nodeLirGenerator.getLIRGeneratorTool().target();
+        cfgPrinter.lirGenerator = Debug.contextLookup(LIRGenerator.class);
+        if (cfgPrinter.lirGenerator != null) {
+            cfgPrinter.target = cfgPrinter.lirGenerator.target();
         }
         if (cfgPrinter.lir != null && cfgPrinter.lir.getControlFlowGraph() instanceof ControlFlowGraph) {
             cfgPrinter.cfg = (ControlFlowGraph) cfgPrinter.lir.getControlFlowGraph();
@@ -166,8 +162,6 @@ public class CFGPrinterObserver implements DebugDumpHandler {
             boolean printNodes = previousObject != object && cfgPrinter.cfg != null;
             cfgPrinter.printCFG(message, cfgPrinter.lir.codeEmittingOrder(), printNodes);
 
-        } else if (object instanceof SchedulePhase) {
-            cfgPrinter.printSchedule(message, (SchedulePhase) object);
         } else if (object instanceof StructuredGraph) {
             if (cfgPrinter.cfg == null) {
                 StructuredGraph graph = (StructuredGraph) object;
@@ -188,7 +182,7 @@ public class CFGPrinterObserver implements DebugDumpHandler {
 
         cfgPrinter.target = null;
         cfgPrinter.lir = null;
-        cfgPrinter.nodeLirGenerator = null;
+        cfgPrinter.lirGenerator = null;
         cfgPrinter.cfg = null;
         cfgPrinter.flush();
 
