@@ -22,6 +22,9 @@
  */
 package com.oracle.graal.test;
 
+import java.io.*;
+import java.lang.reflect.Modifier;
+import java.nio.file.*;
 import java.util.*;
 
 import junit.runner.*;
@@ -29,14 +32,17 @@ import junit.runner.*;
 import org.junit.internal.*;
 import org.junit.runner.*;
 import org.junit.runner.notification.*;
+import org.junit.runners.*;
+import org.junit.runners.model.*;
 
 public class GraalJUnitCore {
 
     /**
-     * Run the tests contained in the classes named in the <code>args</code>. If all tests run
-     * successfully, exit with a status of 0. Otherwise exit with a status of 1. Write feedback
-     * while tests are running and write stack traces for all failed tests after the tests all
-     * complete.
+     * Run the tests contained in the classes named in the <code>args</code>. A single test method
+     * can be specified by adding #method after the class name. Only a single test can be run in
+     * this way. If all tests run successfully, exit with a status of 0. Otherwise exit with a
+     * status of 1. Write feedback while tests are running and write stack traces for all failed
+     * tests after the tests all complete.
      *
      * @param args names of classes in which to find tests to run
      */
@@ -46,20 +52,63 @@ public class GraalJUnitCore {
         system.out().println("GraalJUnitCore");
         system.out().println("JUnit version " + Version.id());
         List<Class<?>> classes = new ArrayList<>();
+        String methodName = null;
         List<Failure> missingClasses = new ArrayList<>();
         boolean verbose = false;
-        for (String each : args) {
+        boolean enableTiming = false;
+        boolean failFast = false;
+        boolean color = false;
+        boolean eagerStackTrace = false;
+        boolean gcAfterTest = false;
+
+        String[] expandedArgs = expandArgs(args);
+        for (int i = 0; i < expandedArgs.length; i++) {
+            String each = expandedArgs[i];
             if (each.charAt(0) == '-') {
                 // command line arguments
                 if (each.contentEquals("-JUnitVerbose")) {
                     verbose = true;
+                } else if (each.contentEquals("-JUnitFailFast")) {
+                    failFast = true;
+                } else if (each.contentEquals("-JUnitEnableTiming")) {
+                    enableTiming = true;
+                } else if (each.contentEquals("-JUnitColor")) {
+                    color = true;
+                } else if (each.contentEquals("-JUnitEagerStackTrace")) {
+                    eagerStackTrace = true;
+                } else if (each.contentEquals("-JUnitGCAfterTest")) {
+                    gcAfterTest = true;
                 } else {
                     system.out().println("Unknown command line argument: " + each);
                 }
 
             } else {
+                /*
+                 * Entries of the form class#method are handled specially. Only one can be specified
+                 * on the command line as there's no obvious way to build a runner for multiple
+                 * ones.
+                 */
+                if (methodName != null) {
+                    system.out().println("Only a single class and method can be specified: " + each);
+                    System.exit(1);
+                } else if (each.contains("#")) {
+                    String[] pair = each.split("#");
+                    if (pair.length != 2) {
+                        system.out().println("Malformed class and method request: " + each);
+                        System.exit(1);
+                    } else if (classes.size() != 0) {
+                        system.out().println("Only a single class and method can be specified: " + each);
+                        System.exit(1);
+                    } else {
+                        methodName = pair[1];
+                        each = pair[0];
+                    }
+                }
                 try {
-                    classes.add(Class.forName(each));
+                    Class<?> cls = Class.forName(each);
+                    if ((cls.getModifiers() & Modifier.ABSTRACT) == 0) {
+                        classes.add(cls);
+                    }
                 } catch (ClassNotFoundException e) {
                     system.out().println("Could not find class: " + each);
                     Description description = Description.createSuiteDescription(each);
@@ -68,17 +117,130 @@ public class GraalJUnitCore {
                 }
             }
         }
-        GraalJUnitRunListener graalListener;
+        final GraalTextListener textListener;
         if (!verbose) {
-            graalListener = new GraalTextListener(system);
+            textListener = new GraalTextListener(system);
         } else {
-            graalListener = new GraalVerboseTextListener(system);
+            textListener = new GraalVerboseTextListener(system);
+        }
+        GraalJUnitRunListener graalListener = textListener;
+        if (enableTiming) {
+            graalListener = new TimingDecorator(graalListener);
+        }
+        if (color) {
+            graalListener = new AnsiTerminalDecorator(graalListener);
+        }
+        if (eagerStackTrace) {
+            graalListener = new EagerStackTraceDecorator(graalListener);
+        }
+        if (gcAfterTest) {
+            graalListener = new GCAfterTestDecorator(graalListener);
         }
         junitCore.addListener(GraalTextListener.createRunListener(graalListener));
-        Result result = junitCore.run(classes.toArray(new Class[0]));
+        Request request;
+        if (methodName == null) {
+            request = Request.classes(classes.toArray(new Class[0]));
+            if (failFast) {
+                Runner runner = request.getRunner();
+                if (runner instanceof ParentRunner) {
+                    ParentRunner<?> parentRunner = (ParentRunner<?>) runner;
+                    parentRunner.setScheduler(new RunnerScheduler() {
+                        public void schedule(Runnable childStatement) {
+                            if (textListener.getLastFailure() == null) {
+                                childStatement.run();
+                            }
+                        }
+
+                        public void finished() {
+                        }
+                    });
+                } else {
+                    system.out().println("Unexpected Runner subclass " + runner.getClass().getName() + " - fail fast not supported");
+                }
+            }
+        } else {
+            if (failFast) {
+                system.out().println("Single method selected - fail fast not supported");
+            }
+            request = Request.method(classes.get(0), methodName);
+        }
+        Result result = junitCore.run(request);
         for (Failure each : missingClasses) {
             result.getFailures().add(each);
         }
         System.exit(result.wasSuccessful() ? 0 : 1);
+    }
+
+    /**
+     * Gets the command line for the current process.
+     *
+     * @return the command line arguments for the current process or {@code null} if they are not
+     *         available
+     */
+    public static List<String> getProcessCommandLine() {
+        String processArgsFile = System.getenv().get("MX_SUBPROCESS_COMMAND_FILE");
+        if (processArgsFile != null) {
+            try {
+                return Files.readAllLines(new File(processArgsFile).toPath());
+            } catch (IOException e) {
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Expand any arguments starting with @ and return the resulting argument array.
+     *
+     * @param args
+     * @return the expanded argument array
+     */
+    private static String[] expandArgs(String[] args) {
+        List<String> result = null;
+        for (int i = 0; i < args.length; i++) {
+            String arg = args[i];
+            if (arg.length() > 0 && arg.charAt(0) == '@') {
+                if (result == null) {
+                    result = new ArrayList<>();
+                    for (int j = 0; j < i; j++) {
+                        result.add(args[j]);
+                    }
+                    expandArg(arg.substring(1), result);
+                }
+            } else if (result != null) {
+                result.add(arg);
+            }
+        }
+        return result != null ? result.toArray(new String[0]) : args;
+    }
+
+    /**
+     * Add each line from {@code filename} to the list {@code args}.
+     *
+     * @param filename
+     * @param args
+     */
+    private static void expandArg(String filename, List<String> args) {
+        BufferedReader br = null;
+        try {
+            br = new BufferedReader(new FileReader(filename));
+
+            String buf;
+            while ((buf = br.readLine()) != null) {
+                args.add(buf);
+            }
+            br.close();
+        } catch (IOException ioe) {
+            ioe.printStackTrace();
+            System.exit(2);
+        } finally {
+            try {
+                if (br != null) {
+                    br.close();
+                }
+            } catch (IOException ioe) {
+                ioe.printStackTrace();
+                System.exit(3);
+            }
+        }
     }
 }
