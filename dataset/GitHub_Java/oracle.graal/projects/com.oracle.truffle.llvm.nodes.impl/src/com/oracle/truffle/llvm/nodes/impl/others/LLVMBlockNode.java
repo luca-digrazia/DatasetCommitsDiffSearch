@@ -32,28 +32,36 @@ package com.oracle.truffle.llvm.nodes.impl.others;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.LoopNode;
+import com.oracle.truffle.api.nodes.ExplodeLoop.LoopExplosionKind;
+import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
+import com.oracle.truffle.llvm.nodes.base.LLVMStackFrameNuller;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMBasicBlockNode;
 import com.oracle.truffle.llvm.nodes.impl.control.LLVMRetNode;
+import com.oracle.truffle.llvm.runtime.options.LLVMBaseOptionFacade;
 
-public abstract class LLVMBlockNode extends LLVMNode {
+public abstract class LLVMBlockNode extends LLVMExpressionNode {
 
     public static class LLVMBlockControlFlowNode extends LLVMBlockNode {
 
         @Children private final LLVMBasicBlockNode[] bodyNodes;
         @CompilationFinal private final LLVMStackFrameNuller[][] indexToSlotNuller;
+        private final FrameSlot returnSlot;
+        private final boolean injectBranchProbabilities = LLVMBaseOptionFacade.injectBranchProbabilities();
 
-        public LLVMBlockControlFlowNode(LLVMBasicBlockNode[] bodyNodes, LLVMStackFrameNuller[][] indexToSlotNuller) {
+        public LLVMBlockControlFlowNode(LLVMBasicBlockNode[] bodyNodes, LLVMStackFrameNuller[][] indexToSlotNuller, FrameSlot returnSlot) {
             this.bodyNodes = bodyNodes;
             this.indexToSlotNuller = indexToSlotNuller;
+            this.returnSlot = returnSlot;
         }
 
         @Override
-        @ExplodeLoop(merge = true)
-        public void executeVoid(VirtualFrame frame) {
+        @ExplodeLoop(kind = LoopExplosionKind.MERGE_EXPLODE)
+        public Object executeGeneric(VirtualFrame frame) {
             CompilerAsserts.compilationConstant(bodyNodes.length);
             int bci = 0;
             int loopCount = 0;
@@ -72,9 +80,17 @@ public abstract class LLVMBlockNode extends LLVMNode {
                 }
                 int[] successors = bb.getSuccessors();
                 for (int i = 0; i < successors.length; i++) {
-                    if (i == successorSelection) {
-                        bci = successors[i];
-                        continue outer;
+                    if (injectBranchProbabilities) {
+                        if (CompilerDirectives.injectBranchProbability(bb.getBranchProbability(i), i == successorSelection)) {
+                            bb.increaseBranchProbabilityDeoptIfZero(i);
+                            bci = successors[i];
+                            continue outer;
+                        }
+                    } else {
+                        if (i == successorSelection) {
+                            bci = successors[i];
+                            continue outer;
+                        }
                     }
                 }
                 /*
@@ -86,24 +102,28 @@ public abstract class LLVMBlockNode extends LLVMNode {
                 throw new Error("No matching successor found");
             }
             LoopNode.reportLoopCount(this, loopCount);
+            return frame.getValue(returnSlot);
         }
     }
 
     public static class LLVMBlockNoControlFlowNode extends LLVMBlockNode {
 
         @Children private final LLVMNode[] bodyNodes;
+        private final FrameSlot returnSlot;
 
-        public LLVMBlockNoControlFlowNode(LLVMNode[] bodyNodes) {
+        public LLVMBlockNoControlFlowNode(LLVMNode[] bodyNodes, FrameSlot returnSlot) {
             this.bodyNodes = bodyNodes;
+            this.returnSlot = returnSlot;
         }
 
         @Override
         @ExplodeLoop
-        public void executeVoid(VirtualFrame frame) {
+        public Object executeGeneric(VirtualFrame frame) {
             CompilerAsserts.compilationConstant(bodyNodes.length);
             for (int i = 0; i < bodyNodes.length; i++) {
                 bodyNodes[i].executeVoid(frame);
             }
+            return frame.getValue(returnSlot);
         }
     }
 
