@@ -156,16 +156,10 @@ public class OptionValue<T> {
     private OptionValue<?> next;
     private static OptionValue<?> head;
 
-    /**
-     * Name of the boolean system property governing whether to profile the number of times
-     * {@link #getValue()} is called for each {@link OptionValue}.
-     */
-    public static final String PROFILE_OPTIONVALUE_PROPERTY_NAME = "graal.profileOptionValue";
-
-    private static final boolean ProfileOptionValue = Boolean.getBoolean(PROFILE_OPTIONVALUE_PROPERTY_NAME);
+    private static final boolean ShowReadsHistogram = Boolean.getBoolean("graal.showOptionValueReadsHistogram");
 
     private static void addToHistogram(OptionValue<?> option) {
-        if (ProfileOptionValue) {
+        if (ShowReadsHistogram) {
             synchronized (OptionValue.class) {
                 option.next = head;
                 head = option;
@@ -223,12 +217,7 @@ public class OptionValue<T> {
      * {@link Object#toString()}.
      */
     public String getName() {
-        if (descriptor == null) {
-            // Trigger initialization of OptionsLoader to ensure all option values have
-            // a descriptor which is required for them to have meaningful names.
-            OptionsLoader.options.hashCode();
-        }
-        return descriptor == null ? super.toString() : descriptor.getName();
+        return descriptor == null ? super.toString() : (descriptor.getDeclaringClass().getName() + "." + descriptor.getName());
     }
 
     @Override
@@ -262,7 +251,7 @@ public class OptionValue<T> {
      * Gets the value of this option.
      */
     public T getValue() {
-        if (ProfileOptionValue) {
+        if (ShowReadsHistogram) {
             reads++;
         }
         if (!(this instanceof StableOptionValue)) {
@@ -348,7 +337,7 @@ public class OptionValue<T> {
         private final OptionValue<?> option;
         private final Object value;
 
-        SingleOverrideScope(OptionValue<?> option, Object value) {
+        public SingleOverrideScope(OptionValue<?> option, Object value) {
             if (option instanceof StableOptionValue) {
                 throw new IllegalArgumentException("Cannot override stable option " + option);
             }
@@ -388,7 +377,7 @@ public class OptionValue<T> {
         final OverrideScope parent;
         final Map<OptionValue<?>, Object> overrides;
 
-        MultipleOverridesScope(OverrideScope parent, OptionValue<?> option, Object value) {
+        public MultipleOverridesScope(OverrideScope parent, OptionValue<?> option, Object value) {
             this.parent = parent;
             this.overrides = new HashMap<>();
             if (parent != null) {
@@ -463,7 +452,11 @@ public class OptionValue<T> {
     }
 
     static {
-        if (ProfileOptionValue) {
+        if (ShowReadsHistogram) {
+            // Trigger initialization of OptionsLoader to ensure all option values have
+            // a descriptor which is required for them to have meaningful names.
+            OptionsLoader.options.hashCode();
+
             Runtime.getRuntime().addShutdownHook(new Thread() {
                 @Override
                 public void run() {
