@@ -29,8 +29,8 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.Node.Verbosity;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.options.*;
@@ -60,6 +60,8 @@ public class GraalDebugConfig implements DebugConfig {
     public static final OptionValue<String> DebugValueSummary = new OptionValue<>("Name");
     @Option(help = "Omit reporting 0-value metrics")
     public static final OptionValue<Boolean> SuppressZeroDebugValues = new OptionValue<>(false);
+    @Option(help = "Report and reset metrics after bootstrapping")
+    public static final OptionValue<Boolean> ResetDebugValuesAfterBootstrap = new OptionValue<>(true);
     @Option(help = "Send Graal IR to dump handlers on error")
     public static final OptionValue<Boolean> DumpOnError = new OptionValue<>(false);
     @Option(help = "Enable expensive assertions")
@@ -257,14 +259,14 @@ public class GraalDebugConfig implements DebugConfig {
             if (o instanceof Graph) {
                 Debug.log("Context obj %s", o);
                 if (DumpOnError.getValue()) {
-                    Debug.dump(o, "Exception graph: " + e);
+                    Debug.dump(o, "Exception graph");
                 } else {
                     Debug.log("Use -G:+DumpOnError to enable dumping of graphs on this error");
                 }
             } else if (o instanceof LIR) {
                 Debug.log("Context obj %s", o);
                 if (DumpOnError.getValue()) {
-                    Debug.dump(o, "Exception LIR: " + e);
+                    Debug.dump(o, "LIR");
                 } else {
                     Debug.log("Use -G:+DumpOnError to enable dumping of graphs on this error");
                 }
