@@ -23,9 +23,9 @@
 package com.oracle.graal.hotspot;
 
 import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.debug.internal.MemUseTrackerImpl.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 import static com.oracle.graal.nodes.StructuredGraph.*;
-import static com.oracle.jvmci.debug.internal.MemUseTrackerImpl.*;
 
 import java.io.*;
 import java.lang.reflect.*;
@@ -36,18 +36,19 @@ import java.util.concurrent.atomic.*;
 import java.util.jar.*;
 import java.util.stream.*;
 
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.bytecode.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.CompilerThreadFactory.DebugConfigAccess;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.internal.*;
+import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.options.*;
+import com.oracle.graal.options.OptionUtils.OptionConsumer;
+import com.oracle.graal.options.OptionValue.OverrideScope;
 import com.oracle.graal.printer.*;
 import com.oracle.graal.replacements.*;
-import com.oracle.jvmci.bytecode.*;
-import com.oracle.jvmci.debug.*;
-import com.oracle.jvmci.debug.internal.*;
-import com.oracle.jvmci.hotspot.*;
-import com.oracle.jvmci.meta.*;
-import com.oracle.jvmci.options.*;
-import com.oracle.jvmci.options.OptionUtils.OptionConsumer;
-import com.oracle.jvmci.options.OptionValue.OverrideScope;
 
 /**
  * This class implements compile-the-world functionality in Graal.
@@ -119,12 +120,14 @@ public final class CompileTheWorld {
          *
          * @param options a space separated set of option value settings with each option setting in
          *            a format compatible with
-         *            {@link OptionUtils#parseOption(String, OptionConsumer)}. Ignored if null.
+         *            {@link HotSpotOptions#parseOption(String, OptionConsumer)}. Ignored if null.
          */
         public Config(String options) {
             if (options != null) {
                 for (String option : options.split("\\s+")) {
-                    OptionUtils.parseOption(option, this);
+                    if (!HotSpotOptions.parseOption(option, this)) {
+                        throw new GraalInternalError("Invalid option specified: %s", option);
+                    }
                 }
             }
         }
@@ -210,7 +213,7 @@ public final class CompileTheWorld {
      */
     public void compile() throws Throwable {
         // By default only report statistics for the CTW threads themselves
-        if (GraalDebugConfig.DebugValueThreadFilter.hasDefaultValue()) {
+        if (GraalDebugConfig.DebugValueThreadFilter.hasInitialValue()) {
             GraalDebugConfig.DebugValueThreadFilter.setValue("^CompileTheWorld");
         }
 
@@ -302,7 +305,7 @@ public final class CompileTheWorld {
                 }
                 if (excludeMethodFilters != null && excludeMethodFilters.length > 0) {
                     String exclude = Arrays.asList(excludeMethodFilters).stream().map(MethodFilter::toString).collect(Collectors.joining(", "));
-                    println("CompileTheWorld : Excluding all methods matching one of the following filters: " + exclude);
+                    println("CompileTheWorld : Excluding all methods matching one of the follwing filters: " + exclude);
                 }
                 println();
 
