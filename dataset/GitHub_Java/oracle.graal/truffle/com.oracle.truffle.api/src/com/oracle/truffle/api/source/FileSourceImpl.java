@@ -63,20 +63,16 @@ final class FileSourceImpl extends Content implements Content.CreateURI {
         return path;
     }
 
-    String readCode() throws IOException {
-        if (code == null) {
-            code = Source.read(file);
-        }
-        return code;
-    }
-
     @Override
     public String getCode() {
         if (Source.fileCacheEnabled) {
-            try {
-                return readCode();
-            } catch (IOException e) {
+            if (code == null) {
+                try {
+                    code = Source.read(file);
+                } catch (IOException e) {
+                }
             }
+            return code;
         }
         try {
             return Source.read(file);
