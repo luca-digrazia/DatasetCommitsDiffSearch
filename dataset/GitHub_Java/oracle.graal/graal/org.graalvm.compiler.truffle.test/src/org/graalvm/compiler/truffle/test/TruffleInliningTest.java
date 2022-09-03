@@ -22,14 +22,13 @@
  */
 package org.graalvm.compiler.truffle.test;
 
-import static org.graalvm.compiler.truffle.TruffleCompilerOptions.overrideOptions;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
+import org.graalvm.compiler.options.OptionValue;
 import org.graalvm.compiler.truffle.DefaultInliningPolicy;
 import org.graalvm.compiler.truffle.GraalTruffleRuntime;
 import org.graalvm.compiler.truffle.OptimizedCallTarget;
@@ -38,9 +37,9 @@ import org.graalvm.compiler.truffle.TruffleCompilerOptions;
 import org.graalvm.compiler.truffle.TruffleInlining;
 import org.graalvm.compiler.truffle.TruffleInliningDecision;
 import org.graalvm.compiler.truffle.TruffleInliningPolicy;
-import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Assert;
-import org.junit.Before;
+import org.junit.BeforeClass;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
@@ -263,15 +262,15 @@ public abstract class TruffleInliningTest {
         return count[0];
     }
 
-    private TruffleCompilerOptions.TruffleOptionsOverrideScope scope = null;
+    private static OptionValue.OverrideScope scope = null;
 
-    @Before
-    public void before() {
-        scope = overrideOptions(TruffleCompilerOptions.TruffleCompilationThreshold, Integer.MAX_VALUE);
+    @BeforeClass
+    public static void before() {
+        scope = OptionValue.override(TruffleCompilerOptions.TruffleCompilationThreshold, Integer.MAX_VALUE);
     }
 
-    @After
-    public void after() {
+    @AfterClass
+    public static void after() {
         scope.close();
     }
 }
