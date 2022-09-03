@@ -179,11 +179,6 @@ public final class HotSpotVMConfig extends CompilerObject {
     public int uninitializedIdentityHashCodeValue;
 
     /**
-     * Offset of the pending exception field.
-     */
-    public int pendingExceptionOffset;
-
-    /**
      * Offset of the pending deoptimization field.
      */
     public int pendingDeoptimizationOffset;
@@ -307,10 +302,6 @@ public final class HotSpotVMConfig extends CompilerObject {
     public int threadTlabStartOffset;
     public int threadTlabSizeOffset;
     public int threadAllocatedBytesOffset;
-    public int threadLastJavaSpOffset;
-    public int threadLastJavaFpOffset;
-    public int threadLastJavaPcOffset;
-    public int threadObjectResultOffset;
     public int tlabRefillWasteLimitOffset;
     public int tlabRefillWasteIncrement;
     public int tlabAlignmentReserve;
@@ -380,8 +371,6 @@ public final class HotSpotVMConfig extends CompilerObject {
     public long aescryptDecryptBlockStub;
     public long cipherBlockChainingEncryptAESCryptStub;
     public long cipherBlockChainingDecryptAESCryptStub;
-
-    public long newArrayAddress;
 
     public int deoptReasonNullCheck;
     public int deoptReasonRangeCheck;
