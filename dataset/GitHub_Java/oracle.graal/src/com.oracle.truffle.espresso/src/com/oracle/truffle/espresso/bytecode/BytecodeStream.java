@@ -23,7 +23,6 @@
 package com.oracle.truffle.espresso.bytecode;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.espresso.meta.EspressoError;
 
 /**
@@ -33,8 +32,7 @@ import com.oracle.truffle.espresso.meta.EspressoError;
  */
 public final class BytecodeStream {
 
-    @CompilationFinal(dimensions = 1) //
-    private final byte[] code;
+    @CompilerDirectives.CompilationFinal(dimensions = 1) private final byte[] code;
 
     private final BytecodeLookupSwitch bytecodeLookupSwitch;
     private final BytecodeTableSwitch bytecodeTableSwitch;
@@ -200,8 +198,9 @@ public final class BytecodeStream {
 
     public int opcode(int curBCI) {
         if (curBCI < code.length) {
-            // assert opcode <= Bytecodes.QUICK : "illegal bytecode";
-            return Bytes.beU1(code, curBCI);
+            int opcode = Bytes.beU1(code, curBCI);
+            assert opcode <= Bytecodes.QUICK_INSTANCEOF : "illegal bytecode";
+            return opcode;
         } else {
             return Bytecodes.END;
         }
@@ -215,7 +214,7 @@ public final class BytecodeStream {
         if (length == 0) {
             switch (opcode(curBCI)) {
                 case Bytecodes.TABLESWITCH: {
-                    return getBytecodeTableSwitch().size(curBCI);
+                    return getBytecodeLookupSwitch().size(curBCI);
                 }
                 case Bytecodes.LOOKUPSWITCH: {
                     return getBytecodeLookupSwitch().size(curBCI);
