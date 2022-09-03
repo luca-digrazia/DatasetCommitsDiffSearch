@@ -24,10 +24,9 @@
  */
 package com.oracle.truffle.api.interop.java;
 
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
-
 import com.oracle.truffle.api.CompilerDirectives;
+import java.lang.reflect.Method;
+
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleOptions;
@@ -38,6 +37,7 @@ import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.RootNode;
+import java.lang.reflect.Modifier;
 
 /**
  * Helper methods to simplify access to objects of {@link TruffleLanguage Truffle languages} from
@@ -164,7 +164,7 @@ public final class JavaInterop {
     @CompilerDirectives.TruffleBoundary
     @SuppressWarnings("unchecked")
     private static <T> T convertToJavaObject(Class<T> type, TruffleObject foreignObject) {
-        RootNode root = new TemporaryConvertRoot(ToJavaNodeGen.create(), foreignObject, type);
+        RootNode root = new TemporaryConvertRoot(TruffleLanguage.class, ToJavaNodeGen.create(), foreignObject, type);
         Object convertedValue = Truffle.getRuntime().createCallTarget(root).call();
         return (T) convertedValue;
     }
@@ -219,15 +219,6 @@ public final class JavaInterop {
      * obj.y;
      * obj.name();
      * </pre>
-     * <p>
-     * One can also enumerate the properties of the object and see all three of them:
-     *
-     * <pre>
-     * <b>for</b> (<b>var</b> p <b>in</b> obj) {
-     *   print(p); <em>// yields x, y, name</em>
-     * }
-     * </pre>
-     * <p>
      *
      * When the <code>obj</code> represents a {@link Class}, then the created {@link TruffleObject}
      * will allow access to <b>public</b> and <b>static</b> fields and methods from the class.
@@ -251,9 +242,6 @@ public final class JavaInterop {
         }
         if (obj == null) {
             return JavaObject.NULL;
-        }
-        if (obj.getClass().isArray()) {
-            return new JavaObject(obj, obj.getClass());
         }
         if (TruffleOptions.AOT) {
             throw new IllegalArgumentException();
@@ -311,7 +299,7 @@ public final class JavaInterop {
      * @since 0.9
      */
     public static <T> T asJavaFunction(Class<T> functionalType, TruffleObject function) {
-        RootNode root = new TemporaryConvertRoot(ToJavaNodeGen.create(), function, functionalType);
+        RootNode root = new TemporaryConvertRoot(TruffleLanguage.class, ToJavaNodeGen.create(), function, functionalType);
         return functionalType.cast(Truffle.getRuntime().createCallTarget(root).call());
     }
 
@@ -454,8 +442,9 @@ public final class JavaInterop {
         private final Object value;
         private final Class<?> type;
 
-        TemporaryConvertRoot(ToJavaNode node, Object value, Class<?> type) {
-            super(null);
+        @SuppressWarnings("rawtypes")
+        TemporaryConvertRoot(Class<? extends TruffleLanguage> lang, ToJavaNode node, Object value, Class<?> type) {
+            super(lang, null, null);
             this.node = node;
             this.value = value;
             this.type = type;

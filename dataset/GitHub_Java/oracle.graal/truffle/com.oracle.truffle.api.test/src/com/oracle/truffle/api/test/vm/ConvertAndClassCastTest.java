@@ -59,14 +59,15 @@ public class ConvertAndClassCastTest {
         fail("No value, but exception: " + v);
     }
 
-    public void convertObjToStringUsesObjectsToString() {
+    @Test(expected = ClassCastException.class)
+    public void convertObjToStringThrowsClassCastException() {
         Object obj = new Object();
         TruffleObject truffleObj = JavaInterop.asTruffleObject(obj);
 
         PolyglotEngine eng = PolyglotEngine.newBuilder().globalSymbol("value", truffleObj).build();
 
         String v = eng.findGlobalSymbol("value").as(String.class);
-        assertEquals(obj.toString(), v);
+        fail("No value, but exception: " + v);
     }
 
     public void convertUnboxableIntToCharWorks() {
@@ -88,12 +89,13 @@ public class ConvertAndClassCastTest {
         fail("No value, but exception: " + v);
     }
 
-    public void convertUnboxableObjToStringUsesObjectToString() {
+    @Test(expected = ClassCastException.class)
+    public void convertUnboxableObjToStringThrowsClassCastException() {
         TruffleObject truffleObj = new UnboxToIntObject(42);
 
         PolyglotEngine eng = PolyglotEngine.newBuilder().globalSymbol("value", truffleObj).build();
 
         String v = eng.findGlobalSymbol("value").as(String.class);
-        assertEquals(truffleObj.toString(), v);
+        fail("No value, but exception: " + v);
     }
 }
