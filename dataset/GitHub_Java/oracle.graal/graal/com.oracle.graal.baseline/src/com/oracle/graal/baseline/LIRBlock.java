@@ -24,6 +24,8 @@ package com.oracle.graal.baseline;
 
 import java.util.*;
 
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
 
 public class LIRBlock extends AbstractBlockBase<LIRBlock> {
