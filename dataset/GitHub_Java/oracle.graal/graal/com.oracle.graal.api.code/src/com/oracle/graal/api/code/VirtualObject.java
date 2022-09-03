@@ -31,7 +31,7 @@ import com.oracle.graal.api.meta.*;
  * The information stored in the {@link VirtualObject} is used during deoptimization to recreate the
  * object.
  */
-public final class VirtualObject extends AbstractValue {
+public final class VirtualObject extends Value {
 
     private static final long serialVersionUID = -2907197776426346021L;
 
@@ -160,8 +160,7 @@ public final class VirtualObject extends AbstractValue {
                     }
                 } else {
                     for (int i = 0; i < values.length; i++) {
-                        assert values[i].getKind() == componentKind || componentKind.getBitCount() >= values[i].getKind().getBitCount() ||
-                                        (componentKind == Kind.Int && values[i].getKind().getBitCount() >= Kind.Int.getBitCount()) : values[i].getKind() + " != " + componentKind;
+                        assert values[i].getKind() == componentKind || componentKind.getBitCount() >= values[i].getKind().getBitCount() : values[i].getKind() + " != " + componentKind;
                     }
                 }
             }
