@@ -34,7 +34,7 @@ import com.oracle.graal.lir.LIRInstructionClass;
 import com.oracle.graal.lir.Opcode;
 import com.oracle.graal.lir.asm.CompilationResultBuilder;
 
-public class SPARCFloatCompareOp extends SPARCLIRInstruction implements SPARCTailDelayedLIRInstruction {
+public class SPARCFloatCompareOp extends SPARCLIRInstruction {
     public static final LIRInstructionClass<SPARCFloatCompareOp> TYPE = LIRInstructionClass.create(SPARCFloatCompareOp.class);
     public static final SizeEstimate SIZE = SizeEstimate.create(1);
 
@@ -53,7 +53,6 @@ public class SPARCFloatCompareOp extends SPARCLIRInstruction implements SPARCTai
 
     @Override
     protected void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-        getDelayedControlTransfer().emitControlTransfer(crb, masm);
         SPARCAssembler.OpfOp.emitFcmp(masm, opf, cc, asRegister(a), asRegister(b));
     }
 

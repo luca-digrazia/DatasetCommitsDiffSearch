@@ -22,14 +22,15 @@
  */
 package com.oracle.graal.lir.sparc;
 
-import com.oracle.graal.lir.framemap.FrameMap;
+import jdk.internal.jvmci.code.CodeCacheProvider;
+import jdk.internal.jvmci.code.RegisterConfig;
+import jdk.internal.jvmci.code.StackSlot;
+import jdk.internal.jvmci.meta.LIRKind;
+import jdk.internal.jvmci.sparc.SPARC;
+import jdk.internal.jvmci.sparc.SPARCKind;
 
-import jdk.vm.ci.code.CodeCacheProvider;
-import jdk.vm.ci.code.RegisterConfig;
-import jdk.vm.ci.code.StackSlot;
-import jdk.vm.ci.meta.LIRKind;
-import jdk.vm.ci.sparc.SPARC;
-import jdk.vm.ci.sparc.SPARCKind;
+import com.oracle.graal.asm.NumUtil;
+import com.oracle.graal.lir.framemap.FrameMap;
 
 /**
  * SPARC specific frame map.
@@ -94,12 +95,22 @@ public final class SPARCFrameMap extends FrameMap {
         return alignFrameSize(SPARC.REGISTER_SAFE_AREA_SIZE + outgoingSize + spillSize);
     }
 
+    @Override
+    protected int alignFrameSize(int size) {
+        return NumUtil.roundUp(size, getTarget().stackAlignment);
+    }
+
+    @Override
+    protected StackSlot allocateNewSpillSlot(LIRKind kind, int additionalOffset) {
+        return StackSlot.get(kind, -spillSize + additionalOffset, true);
+    }
+
     /**
      * In SPARC we have spill slots word aligned.
      */
     @Override
     public int spillSlotSize(LIRKind kind) {
-        return kind.getPlatformKind().getSizeInBytes();
+        return Math.max(kind.getPlatformKind().getSizeInBytes(), SPARC.MEMORY_ACCESS_ALIGN);
     }
 
     @Override
@@ -120,6 +131,6 @@ public final class SPARCFrameMap extends FrameMap {
 
     public StackSlot allocateDeoptimizationRescueSlot() {
         assert spillSize == initialSpillSize : "Deoptimization rescue slot must be the first stack slot";
-        return allocateSpillSlot(LIRKind.value(SPARCKind.XWORD));
+        return allocateSpillSlot(LIRKind.value(SPARCKind.DWORD));
     }
 }

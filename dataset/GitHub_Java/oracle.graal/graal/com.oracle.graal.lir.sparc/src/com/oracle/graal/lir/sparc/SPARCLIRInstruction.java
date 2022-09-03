@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,28 +22,48 @@
  */
 package com.oracle.graal.lir.sparc;
 
-import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.asm.*;
+import jdk.internal.jvmci.meta.JavaConstant;
+
+import com.oracle.graal.asm.NumUtil;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler;
+import com.oracle.graal.lir.LIRInstruction;
+import com.oracle.graal.lir.LIRInstructionClass;
+import com.oracle.graal.lir.asm.CompilationResultBuilder;
 
 /**
  * Convenience class to provide SPARCMacroAssembler for the {@link #emitCode} method.
  */
-public abstract class SPARCLIRInstruction extends LIRInstruction {
-    protected SPARCDelayedControlTransfer delayedControlTransfer = SPARCDelayedControlTransfer.DUMMY;
+public abstract class SPARCLIRInstruction extends LIRInstruction implements SPARCLIRInstructionMixin {
+    public static final LIRInstructionClass<SPARCLIRInstruction> TYPE = LIRInstructionClass.create(SPARCLIRInstruction.class);
+    private final SPARCLIRInstructionMixinStore store;
+
+    protected SPARCLIRInstruction(LIRInstructionClass<? extends LIRInstruction> c) {
+        this(c, null);
+    }
+
+    protected SPARCLIRInstruction(LIRInstructionClass<? extends LIRInstruction> c, SizeEstimate size) {
+        super(c);
+        store = new SPARCLIRInstructionMixinStore(size);
+    }
 
     @Override
-    public final void emitCode(CompilationResultBuilder crb) {
+    public void emitCode(CompilationResultBuilder crb) {
         emitCode(crb, (SPARCMacroAssembler) crb.asm);
     }
 
-    public abstract void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm);
+    protected abstract void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm);
 
-    public boolean leavesRegisterWindow() {
-        return false;
+    public SPARCLIRInstructionMixinStore getSPARCLIRInstructionStore() {
+        return store;
     }
 
-    public void setDelayedControlTransfer(SPARCDelayedControlTransfer holder) {
-        this.delayedControlTransfer = holder;
+    protected static int asImmediate(JavaConstant value) {
+        if (value.isNull()) {
+            return 0;
+        } else {
+            long val = value.asLong();
+            assert NumUtil.isInt(val);
+            return (int) val;
+        }
     }
 }

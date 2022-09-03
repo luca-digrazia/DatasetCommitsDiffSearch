@@ -22,15 +22,17 @@
  */
 package com.oracle.graal.hotspot.sparc;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
-import static jdk.internal.jvmci.code.ValueUtil.*;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
+import static jdk.internal.jvmci.code.ValueUtil.asRegister;
+import jdk.internal.jvmci.code.Register;
+import jdk.internal.jvmci.meta.AllocatableValue;
+import jdk.internal.jvmci.sparc.SPARCKind;
 
-import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.asm.*;
-import com.oracle.graal.lir.sparc.*;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler;
+import com.oracle.graal.lir.LIRInstructionClass;
+import com.oracle.graal.lir.Opcode;
+import com.oracle.graal.lir.asm.CompilationResultBuilder;
+import com.oracle.graal.lir.sparc.SPARCLIRInstruction;
 
 /**
  * Jumps to the exception handler specified by {@link #address} and leaves the current window. It
@@ -43,17 +45,18 @@ import com.oracle.graal.lir.sparc.*;
 @Opcode("JUMP_TO_EXCEPTION_HANDLER")
 final class SPARCHotSpotJumpToExceptionHandlerOp extends SPARCLIRInstruction {
     public static final LIRInstructionClass<SPARCHotSpotJumpToExceptionHandlerOp> TYPE = LIRInstructionClass.create(SPARCHotSpotJumpToExceptionHandlerOp.class);
+    public static final SizeEstimate SIZE = SizeEstimate.create(2);
 
     @Use(REG) AllocatableValue address;
 
     SPARCHotSpotJumpToExceptionHandlerOp(AllocatableValue address) {
-        super(TYPE);
+        super(TYPE, SIZE);
         this.address = address;
     }
 
     @Override
     public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-        Register addrRegister = asLongReg(address);
+        Register addrRegister = asRegister(address, SPARCKind.DWORD);
         masm.jmp(addrRegister);
         masm.restoreWindow();
     }

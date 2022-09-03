@@ -26,10 +26,9 @@ import static com.oracle.graal.compiler.common.GraalOptions.DetailedAsserts;
 import static com.oracle.graal.lir.LIRValueUtil.asVariable;
 import static com.oracle.graal.lir.LIRValueUtil.isVariable;
 import static com.oracle.graal.lir.debug.LIRGenerationDebugContext.getSourceForOperandFromDebugContext;
-import static jdk.vm.ci.code.ValueUtil.asRegister;
-import static jdk.vm.ci.code.ValueUtil.asStackSlot;
-import static jdk.vm.ci.code.ValueUtil.isRegister;
-import static jdk.vm.ci.code.ValueUtil.isStackSlot;
+import static jdk.internal.jvmci.code.ValueUtil.asStackSlot;
+import static jdk.internal.jvmci.code.ValueUtil.isRegister;
+import static jdk.internal.jvmci.code.ValueUtil.isStackSlot;
 
 import java.util.ArrayDeque;
 import java.util.BitSet;
@@ -38,15 +37,19 @@ import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 
-import jdk.vm.ci.code.BailoutException;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.StackSlot;
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.LIRKind;
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.code.BailoutException;
+import jdk.internal.jvmci.code.Register;
+import jdk.internal.jvmci.code.StackSlot;
+import jdk.internal.jvmci.code.TargetDescription;
+import jdk.internal.jvmci.common.JVMCIError;
+import jdk.internal.jvmci.meta.AllocatableValue;
+import jdk.internal.jvmci.meta.JavaConstant;
+import jdk.internal.jvmci.meta.LIRKind;
+import jdk.internal.jvmci.meta.Value;
+import jdk.internal.jvmci.options.Option;
+import jdk.internal.jvmci.options.OptionType;
+import jdk.internal.jvmci.options.OptionValue;
+import jdk.internal.jvmci.options.StableOptionValue;
 
 import com.oracle.graal.compiler.common.alloc.ComputeBlockOrder;
 import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig;
@@ -272,7 +275,7 @@ public class LinearScanLifetimeAnalysisPhase extends AllocationPhase {
          */
         if (isRegister(operand) && block != allocator.getLIR().getControlFlowGraph().getStartBlock()) {
             if (allocator.isProcessed(operand)) {
-                assert liveKill.get(allocator.operandNumber(operand)) : "using fixed register " + asRegister(operand) + " that is not defined in this block " + block;
+                assert liveKill.get(allocator.operandNumber(operand)) : "using fixed register that is not defined in this block";
             }
         }
     }
@@ -825,6 +828,12 @@ public class LinearScanLifetimeAnalysisPhase extends AllocationPhase {
         }
     }
 
+    public static class Options {
+        @Option(help = "Enable temporary workaround for LIR constant optimization (see GRAAL-1272).", type = OptionType.Debug)//
+        public static final OptionValue<Boolean> NeverSpillConstants = new StableOptionValue<>(false);
+
+    }
+
     /**
      * Returns a value for a interval definition, which can be used for re-materialization.
      *
@@ -835,25 +844,28 @@ public class LinearScanLifetimeAnalysisPhase extends AllocationPhase {
      *         reload-locations in case the interval of this instruction is spilled. Currently this
      *         can only be a {@link JavaConstant}.
      */
-    protected JavaConstant getMaterializedValue(LIRInstruction op, Value operand, Interval interval) {
+    protected static JavaConstant getMaterializedValue(LIRInstruction op, Value operand, Interval interval) {
         if (op instanceof LoadConstantOp) {
             LoadConstantOp move = (LoadConstantOp) op;
             if (move.getConstant() instanceof JavaConstant) {
 
-                if (!allocator.neverSpillConstants()) {
-                    /*
-                     * Check if the interval has any uses which would accept an stack location
-                     * (priority == ShouldHaveRegister). Rematerialization of such intervals can
-                     * result in a degradation, because rematerialization always inserts a constant
-                     * load, even if the value is not needed in a register.
-                     */
-                    Interval.UsePosList usePosList = interval.usePosList();
-                    int numUsePos = usePosList.size();
-                    for (int useIdx = 0; useIdx < numUsePos; useIdx++) {
-                        Interval.RegisterPriority priority = usePosList.registerPriority(useIdx);
-                        if (priority == Interval.RegisterPriority.ShouldHaveRegister) {
-                            return null;
-                        }
+                /* Temporary workaround until GRAAL-1272 is fixed. */
+                if (Options.NeverSpillConstants.getValue()) {
+                    return (JavaConstant) move.getConstant();
+                }
+
+                /*
+                 * Check if the interval has any uses which would accept an stack location (priority
+                 * == ShouldHaveRegister). Rematerialization of such intervals can result in a
+                 * degradation, because rematerialization always inserts a constant load, even if
+                 * the value is not needed in a register.
+                 */
+                Interval.UsePosList usePosList = interval.usePosList();
+                int numUsePos = usePosList.size();
+                for (int useIdx = 0; useIdx < numUsePos; useIdx++) {
+                    Interval.RegisterPriority priority = usePosList.registerPriority(useIdx);
+                    if (priority == Interval.RegisterPriority.ShouldHaveRegister) {
+                        return null;
                     }
                 }
                 return (JavaConstant) move.getConstant();

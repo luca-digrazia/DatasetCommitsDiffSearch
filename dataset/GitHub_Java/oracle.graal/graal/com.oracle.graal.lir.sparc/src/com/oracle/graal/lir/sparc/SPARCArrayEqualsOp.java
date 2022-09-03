@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,32 +22,34 @@
  */
 package com.oracle.graal.lir.sparc;
 
-import static com.oracle.graal.asm.sparc.SPARCAssembler.BPCC;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.Annul.ANNUL;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.Annul.NOT_ANNUL;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.BranchPredict.PREDICT_NOT_TAKEN;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.BranchPredict.PREDICT_TAKEN;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.CC.Xcc;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.Always;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.Equal;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.Less;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.NotEqual;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
-import static jdk.vm.ci.code.ValueUtil.asRegister;
-import static jdk.vm.ci.sparc.SPARC.g0;
-import static jdk.vm.ci.sparc.SPARCKind.WORD;
+import static jdk.internal.jvmci.code.ValueUtil.asRegister;
+import static jdk.internal.jvmci.sparc.SPARC.g0;
+import static jdk.internal.jvmci.sparc.SPARCKind.WORD;
 
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.LIRKind;
-import jdk.vm.ci.meta.Value;
-import jdk.vm.ci.sparc.SPARCKind;
+import jdk.internal.jvmci.code.Register;
+import jdk.internal.jvmci.meta.JavaKind;
+import jdk.internal.jvmci.meta.LIRKind;
+import jdk.internal.jvmci.meta.Value;
+import jdk.internal.jvmci.sparc.SPARCKind;
 import sun.misc.Unsafe;
 
 import com.oracle.graal.asm.Label;
 import com.oracle.graal.asm.sparc.SPARCAddress;
+import com.oracle.graal.asm.sparc.SPARCAssembler.CC;
+import com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag;
 import com.oracle.graal.asm.sparc.SPARCMacroAssembler;
 import com.oracle.graal.lir.LIRInstructionClass;
 import com.oracle.graal.lir.Opcode;
@@ -122,7 +124,8 @@ public final class SPARCArrayEqualsOp extends SPARCLIRInstruction {
         // Return true
         masm.bind(trueLabel);
         masm.mov(1, result);
-        masm.jmp(done);
+        masm.bicc(Always, ANNUL, done);
+        masm.nop();
 
         // Return false
         masm.bind(falseLabel);
@@ -152,7 +155,7 @@ public final class SPARCArrayEqualsOp extends SPARCLIRInstruction {
         masm.sra(length, 0, length);
         masm.and(result, VECTOR_SIZE - 1, result); // tail count (in bytes)
         masm.andcc(length, ~(VECTOR_SIZE - 1), length);  // vector count (in bytes)
-        BPCC.emit(masm, Xcc, Equal, NOT_ANNUL, PREDICT_NOT_TAKEN, compareTail);
+        masm.bpcc(ConditionFlag.Equal, NOT_ANNUL, compareTail, CC.Xcc, PREDICT_NOT_TAKEN);
 
         masm.sub(length, VECTOR_SIZE, length); // Delay slot
         masm.add(array1, length, array1);
@@ -170,12 +173,11 @@ public final class SPARCArrayEqualsOp extends SPARCLIRInstruction {
         masm.bind(loop);
         masm.ldx(new SPARCAddress(array2, length), tempReg2);
         masm.cmp(tempReg1, tempReg2);
-
-        BPCC.emit(masm, Xcc, NotEqual, NOT_ANNUL, PREDICT_NOT_TAKEN, falseLabel);
+        masm.bpcc(NotEqual, NOT_ANNUL, falseLabel, Xcc, PREDICT_NOT_TAKEN);
         // Delay slot, not annul, add for next iteration
         masm.addcc(length, VECTOR_SIZE, length);
         // Annul, to prevent access past the array
-        BPCC.emit(masm, Xcc, NotEqual, ANNUL, PREDICT_TAKEN, loop);
+        masm.bpcc(NotEqual, ANNUL, loop, Xcc, PREDICT_TAKEN);
         masm.ldx(new SPARCAddress(array1, length), tempReg1); // Load in delay slot
 
         // Tail count zero, therefore we can go to the end
