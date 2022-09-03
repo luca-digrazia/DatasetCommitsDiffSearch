@@ -276,9 +276,8 @@ public class OptimizedOSRLoopNodeTest extends TestWithSynchronousCompiling {
     public void testInternalInvalidations(OSRLoopFactory factory) {
         TestRepeatingNode repeating = new TestRepeatingNode();
         TestRootNode rootNode = new TestRootNode(factory, repeating);
-        OptimizedCallTarget target = (OptimizedCallTarget) runtime.createCallTarget(rootNode);
+        CallTarget target = runtime.createCallTarget(rootNode);
         target.call(OSR_THRESHOLD + 1);
-        target.resetCompilationProfile();
         assertCompiled(rootNode.getOSRTarget());
 
         repeating.invalidationCounter = 5;
