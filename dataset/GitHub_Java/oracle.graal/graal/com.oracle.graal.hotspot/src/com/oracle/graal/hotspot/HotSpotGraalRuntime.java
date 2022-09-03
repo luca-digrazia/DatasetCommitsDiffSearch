@@ -60,7 +60,7 @@ import com.oracle.graal.runtime.*;
 /**
  * Singleton class holding the instance of the {@link GraalRuntime}.
  */
-public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider, Remote {
+public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
 
     private static final HotSpotGraalRuntime instance;
 

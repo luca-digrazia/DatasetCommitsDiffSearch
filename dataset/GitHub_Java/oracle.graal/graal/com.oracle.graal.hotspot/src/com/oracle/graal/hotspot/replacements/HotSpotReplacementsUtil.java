@@ -48,6 +48,8 @@ import com.oracle.graal.word.*;
  */
 public class HotSpotReplacementsUtil {
 
+    // Must be @Fold as the security checks in HotSpotGraalRuntime.runtime()
+    // don't work well inside snippets
     @Fold
     public static HotSpotVMConfig config() {
         return runtime().getConfig();
