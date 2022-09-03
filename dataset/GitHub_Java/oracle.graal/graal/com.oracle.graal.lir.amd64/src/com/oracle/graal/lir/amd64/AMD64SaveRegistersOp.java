@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -29,14 +29,13 @@ import java.util.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.asm.amd64.*;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.StandardOp.SaveRegistersOp;
 import com.oracle.graal.lir.asm.*;
 
 /**
  * Saves registers to stack slots.
  */
 @Opcode("SAVE_REGISTER")
-public class AMD64SaveRegistersOp extends AMD64LIRInstruction implements SaveRegistersOp {
+public class AMD64SaveRegistersOp extends AMD64RegistersPreservationOp {
 
     /**
      * The registers (potentially) saved by this operation.
@@ -48,34 +47,21 @@ public class AMD64SaveRegistersOp extends AMD64LIRInstruction implements SaveReg
      */
     @Def(STACK) protected final StackSlot[] slots;
 
-    /**
-     * Specifies if {@link #remove(Set)} should have an effect.
-     */
-    protected final boolean supportsRemove;
-
-    /**
-     *
-     * @param savedRegisters the registers saved by this operation which may be subject to
-     *            {@linkplain #remove(Set) pruning}
-     * @param slots the slots to which the registers are saved
-     * @param supportsRemove determines if registers can be {@linkplain #remove(Set) pruned}
-     */
-    public AMD64SaveRegistersOp(Register[] savedRegisters, StackSlot[] slots, boolean supportsRemove) {
+    public AMD64SaveRegistersOp(Register[] savedRegisters, StackSlot[] slots) {
         this.savedRegisters = savedRegisters;
         this.slots = slots;
-        this.supportsRemove = supportsRemove;
     }
 
-    protected void saveRegister(CompilationResultBuilder crb, AMD64MacroAssembler masm, StackSlot result, Register register) {
-        RegisterValue input = register.asValue(result.getLIRKind());
-        AMD64Move.move(crb, masm, result, input);
+    protected void saveRegister(TargetMethodAssembler tasm, AMD64MacroAssembler masm, StackSlot result, Register register) {
+        RegisterValue input = register.asValue(result.getKind());
+        AMD64Move.move(tasm, masm, result, input);
     }
 
     @Override
-    public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
+    public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
         for (int i = 0; i < savedRegisters.length; i++) {
             if (savedRegisters[i] != null) {
-                saveRegister(crb, masm, slots[i], savedRegisters[i]);
+                saveRegister(tasm, masm, slots[i], savedRegisters[i]);
             }
         }
     }
@@ -84,64 +70,38 @@ public class AMD64SaveRegistersOp extends AMD64LIRInstruction implements SaveReg
         return slots;
     }
 
-    public boolean supportsRemove() {
-        return supportsRemove;
-    }
-
-    public int remove(Set<Register> doNotSave) {
-        if (!supportsRemove) {
-            throw new UnsupportedOperationException();
-        }
-        return prune(doNotSave, savedRegisters);
-    }
-
-    static int prune(Set<Register> toRemove, Register[] registers) {
-        int pruned = 0;
-        for (int i = 0; i < registers.length; i++) {
-            if (registers[i] != null) {
-                if (toRemove.contains(registers[i])) {
-                    registers[i] = null;
-                    pruned++;
+    /**
+     * Prunes the set of registers saved by this operation to exclude those in {@code ignored} and
+     * updates {@code debugInfo} with a {@linkplain DebugInfo#getCalleeSaveInfo() description} of
+     * where each preserved register is saved.
+     */
+    @Override
+    public void update(Set<Register> ignored, DebugInfo debugInfo, FrameMap frameMap) {
+        int preserved = 0;
+        for (int i = 0; i < savedRegisters.length; i++) {
+            if (savedRegisters[i] != null) {
+                if (ignored.contains(savedRegisters[i])) {
+                    savedRegisters[i] = null;
+                } else {
+                    preserved++;
                 }
             }
         }
-        return pruned;
-    }
-
-    public RegisterSaveLayout getMap(FrameMap frameMap) {
-        int total = 0;
-        for (int i = 0; i < savedRegisters.length; i++) {
-            if (savedRegisters[i] != null) {
-                total++;
-            }
-        }
-        Register[] keys = new Register[total];
-        int[] values = new int[total];
-        if (total != 0) {
+        if (preserved != 0) {
+            Register[] keys = new Register[preserved];
+            int[] values = new int[keys.length];
             int mapIndex = 0;
             for (int i = 0; i < savedRegisters.length; i++) {
                 if (savedRegisters[i] != null) {
                     keys[mapIndex] = savedRegisters[i];
-                    StackSlot slot = slots[i];
-                    values[mapIndex] = indexForStackSlot(frameMap, slot);
+                    values[mapIndex] = frameMap.indexForStackSlot(slots[i]);
                     mapIndex++;
                 }
             }
-            assert mapIndex == total;
+            assert mapIndex == preserved;
+            if (debugInfo != null) {
+                debugInfo.setCalleeSaveInfo(new RegisterSaveLayout(keys, values));
+            }
         }
-        return new RegisterSaveLayout(keys, values);
-    }
-
-    /**
-     * Computes the index of a stack slot relative to slot 0. This is also the bit index of stack
-     * slots in the reference map.
-     *
-     * @param slot a stack slot
-     * @return the index of the stack slot
-     */
-    private static int indexForStackSlot(FrameMap frameMap, StackSlot slot) {
-        assert frameMap.offsetForStackSlot(slot) % frameMap.getTarget().wordSize == 0;
-        int value = frameMap.offsetForStackSlot(slot) / frameMap.getTarget().wordSize;
-        return value;
     }
 }
