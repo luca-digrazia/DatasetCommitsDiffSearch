@@ -53,13 +53,11 @@ import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
-import com.oracle.svm.core.graal.code.amd64.SubstrateAMD64AddressLowering;
-import com.oracle.svm.core.graal.code.amd64.SubstrateAMD64RegisterConfig;
-import org.graalvm.collections.EconomicSet;
 import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.bytecode.BytecodeProvider;
 import org.graalvm.compiler.bytecode.ResolvedJavaMethodBytecodeProvider;
+import org.graalvm.compiler.core.amd64.AMD64AddressLowering;
 import org.graalvm.compiler.core.common.CompressEncoding;
 import org.graalvm.compiler.core.common.GraalOptions;
 import org.graalvm.compiler.core.common.spi.ForeignCallsProvider;
@@ -111,6 +109,7 @@ import org.graalvm.nativeimage.c.function.CLibrary;
 import org.graalvm.nativeimage.c.struct.CPointerTo;
 import org.graalvm.nativeimage.c.struct.CStruct;
 import org.graalvm.nativeimage.c.struct.RawStructure;
+import org.graalvm.util.EconomicSet;
 import org.graalvm.word.PointerBase;
 
 import com.oracle.graal.pointsto.AnalysisPolicy;
@@ -725,7 +724,7 @@ public class NativeImageGenerator {
                                 bigbang.getUnsupportedFeatures()).build(debug);
 
                 runtime = new HostedRuntimeConfigurationBuilder(options, svmHost, hUniverse, hMetaAccess, aProviders).build();
-                registerGraphBuilderPlugins(featureHandler, runtime.getRuntimeConfig(), (HostedProviders) runtime.getRuntimeConfig().getProviders(), aMetaAccess, aUniverse,
+                NativeImageGenerator.registerGraphBuilderPlugins(featureHandler, runtime.getRuntimeConfig(), (HostedProviders) runtime.getRuntimeConfig().getProviders(), aMetaAccess, aUniverse,
                                 hMetaAccess, hUniverse,
                                 nativeLibs, loader, false, true);
 
@@ -927,7 +926,7 @@ public class NativeImageGenerator {
 
         HostedSnippetReflectionProvider hostedSnippetReflection = new HostedSnippetReflectionProvider((SVMHost) aUniverse.getHostVM());
         NodeIntrinsificationProvider nodeIntrinsificationProvider = new NodeIntrinsificationProvider(providers.getMetaAccess(), hostedSnippetReflection,
-                        providers.getForeignCalls(), providers.getLowerer(), providers.getWordTypes());
+                        providers.getForeignCalls(), providers.getWordTypes());
         for (Class<? extends NodeIntrinsicPluginFactory> factoryClass : loader.findSubclasses(NodeIntrinsicPluginFactory.class)) {
             if (!Modifier.isAbstract(factoryClass.getModifiers()) && !factoryClass.getName().contains("hotspot")) {
                 NodeIntrinsicPluginFactory factory;
@@ -1066,10 +1065,7 @@ public class NativeImageGenerator {
 
         lowTier.addBeforeLast(new OptimizeExceptionCallsPhase());
 
-        CompressEncoding compressEncoding = ImageSingletons.lookup(CompressEncoding.class);
-        SubstrateAMD64RegisterConfig registerConfig = (SubstrateAMD64RegisterConfig) runtimeCallProviders.getCodeCache().getRegisterConfig();
-        SubstrateAMD64AddressLowering addressLowering = new SubstrateAMD64AddressLowering(compressEncoding, registerConfig);
-        lowTier.findPhase(FixReadsPhase.class).add(new AddressLoweringPhase(addressLowering));
+        lowTier.findPhase(FixReadsPhase.class).add(new AddressLoweringPhase(new AMD64AddressLowering()));
 
         if (SubstrateOptions.MultiThreaded.getValue()) {
             /*
