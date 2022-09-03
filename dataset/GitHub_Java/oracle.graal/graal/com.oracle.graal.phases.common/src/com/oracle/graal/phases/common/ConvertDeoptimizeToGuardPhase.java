@@ -51,7 +51,6 @@ public class ConvertDeoptimizeToGuardPhase extends Phase {
         }
 
         for (DeoptimizeNode d : graph.getNodes(DeoptimizeNode.class)) {
-            assert d.isAlive();
             visitDeoptBegin(findBeginNode(d), d, graph);
         }
 
@@ -62,15 +61,21 @@ public class ConvertDeoptimizeToGuardPhase extends Phase {
         if (deoptBegin instanceof MergeNode) {
             MergeNode mergeNode = (MergeNode) deoptBegin;
             Debug.log("Visiting %s followed by %s", mergeNode, deopt);
-            List<BeginNode> begins = new ArrayList<>();
-            for (EndNode end : mergeNode.forwardEnds()) {
-                begins.add(findBeginNode(end));
+            List<EndNode> ends = mergeNode.forwardEnds().snapshot();
+            for (EndNode end : ends) {
+                if (!end.isDeleted()) {
+                    BeginNode beginNode = findBeginNode(end);
+                    if (!(beginNode instanceof MergeNode)) {
+                        visitDeoptBegin(beginNode, deopt, graph);
+                    }
+                }
             }
-            for (BeginNode begin : begins) {
-                assert !begin.isDeleted();
-                visitDeoptBegin(begin, deopt, graph);
+            if (mergeNode.isDeleted()) {
+                if (!deopt.isDeleted()) {
+                    Debug.log("Merge deleted, deopt moved to %s", findBeginNode(deopt));
+                    visitDeoptBegin(findBeginNode(deopt), deopt, graph);
+                }
             }
-            assert mergeNode.isDeleted();
             return;
         } else if (deoptBegin.predecessor() instanceof IfNode) {
             IfNode ifNode = (IfNode) deoptBegin.predecessor();
@@ -99,9 +104,7 @@ public class ConvertDeoptimizeToGuardPhase extends Phase {
         if (next != deopt) {
             FixedWithNextNode pred = (FixedWithNextNode) deopt.predecessor();
             pred.setNext(null);
-            DeoptimizeNode newDeoptNode = (DeoptimizeNode) deopt.clone(graph);
-            deoptBegin.setNext(newDeoptNode);
-            assert deoptBegin == newDeoptNode.predecessor();
+            deoptBegin.setNext(deopt);
             GraphUtil.killCFG(next);
         }
     }
