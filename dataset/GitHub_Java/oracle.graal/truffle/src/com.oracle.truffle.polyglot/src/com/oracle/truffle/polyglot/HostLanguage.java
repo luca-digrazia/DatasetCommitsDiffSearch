@@ -42,6 +42,7 @@ package com.oracle.truffle.polyglot;
 
 import java.io.IOException;
 import java.lang.reflect.Array;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
