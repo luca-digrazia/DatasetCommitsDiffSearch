@@ -41,7 +41,7 @@ public class NativeLibrary {
         // On SVM no need to use dlmopen backend.
         // Prepend "with dlmopen " in HotSpot.
         StringBuilder sb = new StringBuilder();
-        if (!ImageInfo.inImageCode()) {
+        if (!ImageInfo.inImageRuntimeCode()) {
             sb.append("with dlmopen ");
         }
         sb.append("load(RTLD_LAZY) '").append(lib).append('\'');
