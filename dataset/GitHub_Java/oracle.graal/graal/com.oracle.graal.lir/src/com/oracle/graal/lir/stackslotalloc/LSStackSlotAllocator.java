@@ -102,10 +102,9 @@ public final class LSStackSlotAllocator implements StackSlotAllocator {
             Debug.dump(lir, "After StackSlot numbering");
 
             long currentFrameSize = Debug.isMeterEnabled() ? frameMapBuilder.getFrameMap().currentFrameSize() : 0;
-            Set<Integer> usePos;
             // step 2: build intervals
             try (Scope s = Debug.scope("StackSlotAllocationBuildIntervals"); Indent indent = Debug.logAndIndent("BuildIntervals"); TimerCloseable t = BuildIntervalsTimer.start()) {
-                usePos = buildIntervals();
+                buildIntervals();
             }
             // step 3: verify intervals
             if (Debug.isEnabled()) {
@@ -126,7 +125,7 @@ public final class LSStackSlotAllocator implements StackSlotAllocator {
 
             // step 5: assign stack slots
             try (TimerCloseable t = AssignSlotsTimer.start()) {
-                assignStackSlots(usePos);
+                assignStackSlots();
             }
             Debug.dump(lir, "After StackSlot assignment");
             if (Debug.isMeterEnabled()) {
@@ -138,8 +137,8 @@ public final class LSStackSlotAllocator implements StackSlotAllocator {
         // step 2: build intervals
         // ====================
 
-        private Set<Integer> buildIntervals() {
-            return new FixPointIntervalBuilder(lir, stackSlotMap, maxOpId()).build();
+        private void buildIntervals() {
+            new FixPointIntervalBuilder(lir, stackSlotMap, maxOpId()).build();
         }
 
         // ====================
@@ -325,15 +324,16 @@ public final class LSStackSlotAllocator implements StackSlotAllocator {
         // step 5: assign stack slots
         // ====================
 
-        private void assignStackSlots(Set<Integer> usePos) {
-            for (int opId : usePos) {
-                LIRInstruction op = instructionForId(opId);
-                op.forEachInput(this::assignSlot);
-                op.forEachAlive(this::assignSlot);
-                op.forEachState(this::assignSlot);
+        private void assignStackSlots() {
+            for (AbstractBlock<?> block : sortedBlocks) {
+                lir.getLIRforBlock(block).forEach(op -> {
+                    op.forEachInput(this::assignSlot);
+                    op.forEachAlive(this::assignSlot);
+                    op.forEachState(this::assignSlot);
 
-                op.forEachTemp(this::assignSlot);
-                op.forEachOutput(this::assignSlot);
+                    op.forEachTemp(this::assignSlot);
+                    op.forEachOutput(this::assignSlot);
+                });
             }
         }
 
