@@ -89,11 +89,8 @@ public class ReadEliminationClosure extends EffectsClosure<ReadEliminationBlockS
                 ReadCacheEntry identifier = new ReadCacheEntry(object, read.location());
                 ValueNode cachedValue = state.getCacheEntry(identifier);
                 if (cachedValue != null && read.stamp().isCompatible(cachedValue.stamp())) {
-                    // Anchor guard if it is not fixed and different from cachedValue's guard
                     if (read.getGuard() != null && !(read.getGuard() instanceof FixedNode)) {
-                        if (!(cachedValue instanceof GuardedNode) || ((GuardedNode) cachedValue).getGuard() != read.getGuard()) {
-                            effects.addFixedNodeBefore(new ValueAnchorNode((ValueNode) read.getGuard()), read);
-                        }
+                        effects.addFixedNodeBefore(new ValueAnchorNode((ValueNode) read.getGuard()), read);
                     }
                     effects.replaceAtUsages(read, cachedValue);
                     addScalarAlias(read, cachedValue);
@@ -206,7 +203,7 @@ public class ReadEliminationClosure extends EffectsClosure<ReadEliminationBlockS
         protected <T> PhiNode getCachedPhi(T virtual, Stamp stamp) {
             ValuePhiNode result = materializedPhis.get(virtual);
             if (result == null) {
-                result = createValuePhi(stamp);
+                result = new ValuePhiNode(stamp, merge);
                 materializedPhis.put(virtual, result);
             }
             return result;
@@ -239,17 +236,17 @@ public class ReadEliminationClosure extends EffectsClosure<ReadEliminationBlockS
                     PhiNode phiNode = getCachedPhi(entry, value.stamp().unrestricted());
                     mergeEffects.addFloatingNode(phiNode, "mergeReadCache");
                     for (int i = 0; i < states.size(); i++) {
-                        setPhiInput(phiNode, i, states.get(i).getCacheEntry(key));
+                        afterMergeEffects.addPhiInput(phiNode, states.get(i).getCacheEntry(key));
                     }
                     newState.addCacheEntry(key, phiNode);
                 } else if (value != null) {
                     newState.addCacheEntry(key, value);
                 }
             }
-            for (PhiNode phi : getPhis()) {
+            for (PhiNode phi : merge.phis()) {
                 if (phi.getKind() == Kind.Object) {
                     for (Map.Entry<CacheEntry<?>, ValueNode> entry : states.get(0).readCache.entrySet()) {
-                        if (entry.getKey().object == getPhiValueAt(phi, 0)) {
+                        if (entry.getKey().object == phi.valueAt(0)) {
                             mergeReadCachePhi(phi, entry.getKey(), states);
                         }
                     }
@@ -259,9 +256,9 @@ public class ReadEliminationClosure extends EffectsClosure<ReadEliminationBlockS
         }
 
         private void mergeReadCachePhi(PhiNode phi, CacheEntry<?> identifier, List<ReadEliminationBlockState> states) {
-            ValueNode[] values = new ValueNode[states.size()];
-            for (int i = 0; i < states.size(); i++) {
-                ValueNode value = states.get(i).getCacheEntry(identifier.duplicateWithObject(getPhiValueAt(phi, i)));
+            ValueNode[] values = new ValueNode[phi.valueCount()];
+            for (int i = 0; i < phi.valueCount(); i++) {
+                ValueNode value = states.get(i).getCacheEntry(identifier.duplicateWithObject(phi.valueAt(i)));
                 if (value == null) {
                     return;
                 }
@@ -272,7 +269,7 @@ public class ReadEliminationClosure extends EffectsClosure<ReadEliminationBlockS
             PhiNode phiNode = getCachedPhi(newIdentifier, values[0].stamp().unrestricted());
             mergeEffects.addFloatingNode(phiNode, "mergeReadCachePhi");
             for (int i = 0; i < values.length; i++) {
-                setPhiInput(phiNode, i, values[i]);
+                afterMergeEffects.addPhiInput(phiNode, values[i]);
             }
             newState.addCacheEntry(newIdentifier, phiNode);
         }

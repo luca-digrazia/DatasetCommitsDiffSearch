@@ -237,21 +237,15 @@ public final class Block extends AbstractBlockBase<Block> {
         if (this.killLocationsBetweenThisAndDominator == null) {
             LocationSet dominatorResult = new LocationSet();
             Block stopBlock = getDominator();
-            if (this.isLoopHeader()) {
-                assert stopBlock.getLoopDepth() < this.getLoopDepth();
-                dominatorResult.addAll(((HIRLoop) this.getLoop()).getKillLocations());
-            } else {
-                for (Block b : this.getPredecessors()) {
-                    assert !this.isLoopHeader();
-                    if (b != stopBlock) {
-                        dominatorResult.addAll(b.getKillLocations());
-                        if (dominatorResult.isAny()) {
-                            break;
-                        }
-                        b.calcKillLocationsBetweenThisAndTarget(dominatorResult, stopBlock);
-                        if (dominatorResult.isAny()) {
-                            break;
-                        }
+            for (Block b : this.getPredecessors()) {
+                if (b != stopBlock && (!this.isLoopHeader() || b.getLoopDepth() < this.getLoopDepth())) {
+                    dominatorResult.addAll(b.getKillLocations());
+                    if (dominatorResult.isAny()) {
+                        break;
+                    }
+                    b.calcKillLocationsBetweenThisAndTarget(dominatorResult, stopBlock);
+                    if (dominatorResult.isAny()) {
+                        break;
                     }
                 }
             }

@@ -22,19 +22,18 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.hotspot.*;
-import jdk.internal.jvmci.meta.*;
+import static com.oracle.graal.compiler.common.UnsafeAccess.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 import static com.oracle.graal.hotspot.meta.HotSpotForeignCallsProviderImpl.*;
 import static com.oracle.graal.nodes.extended.BranchProbabilityNode.*;
-import static jdk.internal.jvmci.common.UnsafeAccess.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
+import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.hotspot.word.*;
 import com.oracle.graal.nodes.extended.*;
@@ -430,12 +429,12 @@ public class HotSpotReplacementsUtil {
 
     @Fold
     public static int arrayBaseOffset(Kind elementKind) {
-        return runtime().getJVMCIRuntime().getArrayBaseOffset(elementKind);
+        return runtime().getArrayBaseOffset(elementKind);
     }
 
     @Fold
     public static int arrayIndexScale(Kind elementKind) {
-        return runtime().getJVMCIRuntime().getArrayIndexScale(elementKind);
+        return runtime().getArrayIndexScale(elementKind);
     }
 
     @Fold
@@ -578,11 +577,6 @@ public class HotSpotReplacementsUtil {
         return loadWordFromObjectIntrinsic(object, offset, getWordKind(), identity);
     }
 
-    public static KlassPointer loadKlassFromObject(Object object, int offset, LocationIdentity identity) {
-        ReplacementsUtil.staticAssert(offset != hubOffset(), "Use loadHubIntrinsic instead of loadWordFromObject");
-        return loadKlassFromObjectIntrinsic(object, offset, getWordKind(), identity);
-    }
-
     /**
      * Reads the value of a given register.
      *
@@ -601,9 +595,6 @@ public class HotSpotReplacementsUtil {
 
     @NodeIntrinsic(value = UnsafeLoadNode.class, setStampFromReturnType = true)
     private static native Word loadWordFromObjectIntrinsic(Object object, long offset, @ConstantNodeParameter Kind wordKind, @ConstantNodeParameter LocationIdentity locationIdentity);
-
-    @NodeIntrinsic(value = UnsafeLoadNode.class, setStampFromReturnType = true)
-    private static native KlassPointer loadKlassFromObjectIntrinsic(Object object, long offset, @ConstantNodeParameter Kind wordKind, @ConstantNodeParameter LocationIdentity locationIdentity);
 
     @NodeIntrinsic(value = LoadHubNode.class)
     public static native KlassPointer loadHubIntrinsic(Object object, GuardingNode anchor);
@@ -626,13 +617,6 @@ public class HotSpotReplacementsUtil {
     @Fold
     public static int instanceKlassStateFullyInitialized() {
         return config().instanceKlassStateFullyInitialized;
-    }
-
-    public static final LocationIdentity INSTANCE_KLASS_CONSTANTS = NamedLocationIdentity.immutable("InstanceKlass::_constants");
-
-    @Fold
-    public static int instanceKlassConstantsOffset() {
-        return config().instanceKlassConstantsOffset;
     }
 
     /**
@@ -674,21 +658,6 @@ public class HotSpotReplacementsUtil {
     @Fold
     public static int classMirrorOffset() {
         return config().classMirrorOffset;
-    }
-
-    @Fold
-    public static int constantPoolSize() {
-        return config().constantPoolSize;
-    }
-
-    @Fold
-    public static int constantPoolHolderOffset() {
-        return config().constantPoolHolderOffset;
-    }
-
-    @Fold
-    public static int constantPoolLengthOffset() {
-        return config().constantPoolLengthOffset;
     }
 
     public static final LocationIdentity HEAP_TOP_LOCATION = NamedLocationIdentity.mutable("HeapTop");
@@ -850,16 +819,11 @@ public class HotSpotReplacementsUtil {
         try {
             return unsafe.objectFieldOffset(java.lang.ref.Reference.class.getDeclaredField("referent"));
         } catch (Exception e) {
-            throw new JVMCIError(e);
+            throw new GraalInternalError(e);
         }
     }
 
     public static final LocationIdentity OBJ_ARRAY_KLASS_ELEMENT_KLASS_LOCATION = NamedLocationIdentity.immutable("ObjArrayKlass::_element_klass");
-
-    @Fold
-    public static int arrayClassElementOffset() {
-        return config().arrayClassElementOffset;
-    }
 
     public static final LocationIdentity PRIMARY_SUPERS_LOCATION = NamedLocationIdentity.immutable("PrimarySupers");
 

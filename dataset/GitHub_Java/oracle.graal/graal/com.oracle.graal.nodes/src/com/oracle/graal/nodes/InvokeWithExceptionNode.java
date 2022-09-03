@@ -81,11 +81,6 @@ public final class InvokeWithExceptionNode extends ControlSplitNode implements I
         return callTarget;
     }
 
-    void setCallTarget(CallTargetNode callTarget) {
-        updateUsages(this.callTarget, callTarget);
-        this.callTarget = callTarget;
-    }
-
     public MethodCallTargetNode methodCallTarget() {
         return (MethodCallTargetNode) callTarget;
     }
@@ -165,9 +160,7 @@ public final class InvokeWithExceptionNode extends ControlSplitNode implements I
     @Override
     public Map<Object, Object> getDebugProperties(Map<Object, Object> map) {
         Map<Object, Object> debugProperties = super.getDebugProperties(map);
-        if (callTarget != null) {
-            debugProperties.put("targetMethod", callTarget.targetName());
-        }
+        debugProperties.put("targetMethod", callTarget.targetName());
         return debugProperties;
     }
 

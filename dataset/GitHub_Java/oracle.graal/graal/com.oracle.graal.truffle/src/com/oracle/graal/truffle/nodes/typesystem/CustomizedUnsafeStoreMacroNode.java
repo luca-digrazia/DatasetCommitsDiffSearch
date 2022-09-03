@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,16 +25,18 @@ package com.oracle.graal.truffle.nodes.typesystem;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.truffle.nodes.asserts.*;
-import com.oracle.truffle.api.*;
+import com.oracle.graal.replacements.nodes.*;
+import com.oracle.graal.truffle.nodes.*;
 
 /**
- * Macro node for method {@link CompilerDirectives#unsafeCast(Object, Class, boolean)}.
+ * Macro node for method CompilerDirectives#unsafePut*.
  */
-public class CustomizedUnsafeStoreMacroNode extends NeverPartOfCompilationNode implements Canonicalizable {
-
+@NodeInfo
+public final class CustomizedUnsafeStoreMacroNode extends MacroStateSplitNode implements Canonicalizable, StateSplit {
+    public static final NodeClass<CustomizedUnsafeStoreMacroNode> TYPE = NodeClass.create(CustomizedUnsafeStoreMacroNode.class);
     private static final int ARGUMENT_COUNT = 4;
     private static final int OBJECT_ARGUMENT_INDEX = 0;
     private static final int OFFSET_ARGUMENT_INDEX = 1;
@@ -42,7 +44,7 @@ public class CustomizedUnsafeStoreMacroNode extends NeverPartOfCompilationNode i
     private static final int LOCATION_ARGUMENT_INDEX = 3;
 
     public CustomizedUnsafeStoreMacroNode(Invoke invoke) {
-        super(invoke, "The location argument could not be resolved to a constant.");
+        super(TYPE, invoke);
         assert arguments.size() == ARGUMENT_COUNT;
     }
 
@@ -53,14 +55,14 @@ public class CustomizedUnsafeStoreMacroNode extends NeverPartOfCompilationNode i
             ValueNode objectArgument = arguments.get(OBJECT_ARGUMENT_INDEX);
             ValueNode offsetArgument = arguments.get(OFFSET_ARGUMENT_INDEX);
             ValueNode valueArgument = arguments.get(VALUE_ARGUMENT_INDEX);
-            Object locationIdentityObject = locationArgument.asConstant().asObject();
             LocationIdentity locationIdentity;
-            if (locationIdentityObject == null) {
-                locationIdentity = LocationIdentity.ANY_LOCATION;
+            if (locationArgument.isNullConstant()) {
+                locationIdentity = LocationIdentity.any();
             } else {
-                locationIdentity = ObjectLocationIdentity.create(locationIdentityObject);
+                locationIdentity = ObjectLocationIdentity.create(locationArgument.asJavaConstant());
             }
-            return graph().add(new UnsafeStoreNode(objectArgument, offsetArgument, valueArgument, valueArgument.stamp().kind(), locationIdentity));
+
+            return new UnsafeStoreNode(objectArgument, offsetArgument, valueArgument, this.getTargetMethod().getSignature().getParameterKind(VALUE_ARGUMENT_INDEX), locationIdentity, stateAfter());
         }
         return this;
     }

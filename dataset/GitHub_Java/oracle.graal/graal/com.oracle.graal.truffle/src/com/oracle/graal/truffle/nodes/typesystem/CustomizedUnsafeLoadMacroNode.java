@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,17 +23,22 @@
 package com.oracle.graal.truffle.nodes.typesystem;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.truffle.nodes.asserts.*;
-import com.oracle.truffle.api.*;
+import com.oracle.graal.replacements.nodes.*;
+import com.oracle.graal.truffle.nodes.*;
 
 /**
- * Macro node for method {@link CompilerDirectives#unsafeCast(Object, Class, boolean)}.
+ * Macro node for CompilerDirectives#unsafeGetInt*.
  */
-public class CustomizedUnsafeLoadMacroNode extends NeverPartOfCompilationNode implements Canonicalizable {
+@NodeInfo
+public final class CustomizedUnsafeLoadMacroNode extends MacroStateSplitNode implements Canonicalizable {
+    public static final NodeClass<CustomizedUnsafeLoadMacroNode> TYPE = NodeClass.create(CustomizedUnsafeLoadMacroNode.class);
 
     private static final int ARGUMENT_COUNT = 4;
     private static final int OBJECT_ARGUMENT_INDEX = 0;
@@ -42,11 +47,10 @@ public class CustomizedUnsafeLoadMacroNode extends NeverPartOfCompilationNode im
     private static final int LOCATION_ARGUMENT_INDEX = 3;
 
     public CustomizedUnsafeLoadMacroNode(Invoke invoke) {
-        super(invoke, "The location argument could not be resolved to a constant.");
+        super(TYPE, invoke);
         assert arguments.size() == ARGUMENT_COUNT;
     }
 
-    @SuppressWarnings("unused")
     @Override
     public Node canonical(CanonicalizerTool tool) {
         ValueNode locationArgument = arguments.get(LOCATION_ARGUMENT_INDEX);
@@ -54,14 +58,15 @@ public class CustomizedUnsafeLoadMacroNode extends NeverPartOfCompilationNode im
             ValueNode objectArgument = arguments.get(OBJECT_ARGUMENT_INDEX);
             ValueNode offsetArgument = arguments.get(OFFSET_ARGUMENT_INDEX);
             ValueNode conditionArgument = arguments.get(CONDITION_ARGUMENT_INDEX);
-            Object locationIdentityObject = locationArgument.asConstant().asObject();
             LocationIdentity locationIdentity;
-            if (locationIdentityObject == null) {
-                locationIdentity = LocationIdentity.ANY_LOCATION;
+            if (locationArgument.isNullConstant()) {
+                locationIdentity = LocationIdentity.any();
             } else {
-                locationIdentity = ObjectLocationIdentity.create(locationIdentityObject);
+                locationIdentity = ObjectLocationIdentity.create(locationArgument.asJavaConstant());
             }
-            return graph().add(new UnsafeLoadNode(objectArgument, offsetArgument, this.stamp().kind(), locationIdentity));
+            LogicNode compare = CompareNode.createCompareNode(Condition.EQ, conditionArgument, ConstantNode.forBoolean(true), tool.getConstantReflection());
+            Kind returnKind = this.getTargetMethod().getSignature().getReturnKind();
+            return new UnsafeLoadNode(objectArgument, offsetArgument, returnKind, locationIdentity, compare);
         }
         return this;
     }

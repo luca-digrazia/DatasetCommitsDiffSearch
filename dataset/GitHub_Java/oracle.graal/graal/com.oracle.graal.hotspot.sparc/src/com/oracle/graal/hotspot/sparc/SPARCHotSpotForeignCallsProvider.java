@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,62 +22,41 @@
  */
 package com.oracle.graal.hotspot.sparc;
 
-import static com.oracle.graal.hotspot.HotSpotBackend.EXCEPTION_HANDLER;
-import static com.oracle.graal.hotspot.HotSpotBackend.EXCEPTION_HANDLER_IN_CALLER;
-import static com.oracle.graal.hotspot.HotSpotBackend.Options.PreferGraalStubs;
-import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.JUMP_ADDRESS;
-import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.RegisterEffect.PRESERVES_REGISTERS;
-import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.Transition.LEAF;
-import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.Transition.LEAF_NOFP;
-import static com.oracle.graal.hotspot.HotSpotHostBackend.DEOPTIMIZATION_HANDLER;
-import static com.oracle.graal.hotspot.HotSpotHostBackend.UNCOMMON_TRAP_HANDLER;
-import static com.oracle.graal.hotspot.replacements.CRC32Substitutions.UPDATE_BYTES_CRC32;
-import static jdk.vm.ci.code.CallingConvention.Type.NativeCall;
-import static jdk.vm.ci.meta.LocationIdentity.any;
-import static jdk.vm.ci.meta.Value.ILLEGAL;
-import static jdk.vm.ci.sparc.SPARC.i0;
-import static jdk.vm.ci.sparc.SPARC.i1;
-import static jdk.vm.ci.sparc.SPARC.o0;
-import static jdk.vm.ci.sparc.SPARC.o1;
-import jdk.vm.ci.code.CallingConvention;
-import jdk.vm.ci.code.CodeCacheProvider;
-import jdk.vm.ci.code.RegisterValue;
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider;
-import jdk.vm.ci.hotspot.HotSpotVMConfig;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.LIRKind;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.PlatformKind;
-import jdk.vm.ci.meta.Value;
+import static com.oracle.graal.api.meta.LocationIdentity.*;
+import static com.oracle.graal.api.meta.Value.*;
+import static com.oracle.graal.hotspot.HotSpotBackend.*;
+import static com.oracle.graal.hotspot.HotSpotBackend.Options.*;
+import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.*;
+import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.RegisterEffect.*;
+import static com.oracle.graal.hotspot.HotSpotForeignCallLinkage.Transition.*;
+import static com.oracle.graal.hotspot.HotSpotHostBackend.*;
+import static com.oracle.graal.sparc.SPARC.*;
 
-import com.oracle.graal.hotspot.HotSpotForeignCallLinkageImpl;
-import com.oracle.graal.hotspot.HotSpotGraalRuntimeProvider;
-import com.oracle.graal.hotspot.meta.HotSpotHostForeignCallsProvider;
-import com.oracle.graal.hotspot.meta.HotSpotProviders;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.hotspot.*;
+import com.oracle.graal.hotspot.meta.*;
 
 public class SPARCHotSpotForeignCallsProvider extends HotSpotHostForeignCallsProvider {
 
     private final Value[] nativeABICallerSaveRegisters;
 
-    public SPARCHotSpotForeignCallsProvider(HotSpotJVMCIRuntimeProvider jvmciRuntime, HotSpotGraalRuntimeProvider runtime, MetaAccessProvider metaAccess, CodeCacheProvider codeCache,
-                    Value[] nativeABICallerSaveRegisters) {
-        super(jvmciRuntime, runtime, metaAccess, codeCache);
+    public SPARCHotSpotForeignCallsProvider(HotSpotGraalRuntimeProvider runtime, MetaAccessProvider metaAccess, CodeCacheProvider codeCache, Value[] nativeABICallerSaveRegisters) {
+        super(runtime, metaAccess, codeCache);
         this.nativeABICallerSaveRegisters = nativeABICallerSaveRegisters;
     }
 
     @Override
-    public void initialize(HotSpotProviders providers) {
-        HotSpotVMConfig config = jvmciRuntime.getConfig();
+    public void initialize(HotSpotProviders providers, HotSpotVMConfig config) {
         TargetDescription target = providers.getCodeCache().getTarget();
-        PlatformKind word = target.arch.getWordKind();
+        Kind word = target.wordKind;
 
         // The calling convention for the exception handler stub is (only?) defined in
         // TemplateInterpreterGenerator::generate_throw_exception()
         // in templateInterpreter_sparc.cpp around line 1925
-        RegisterValue outgoingException = o0.asValue(target.getLIRKind(JavaKind.Object));
-        RegisterValue outgoingExceptionPc = o1.asValue(LIRKind.value(word));
-        RegisterValue incomingException = i0.asValue(target.getLIRKind(JavaKind.Object));
+        RegisterValue outgoingException = o0.asValue(target.getLIRKind(Kind.Object));
+        RegisterValue outgoingExceptionPc = o1.asValue(target.getLIRKind(word));
+        RegisterValue incomingException = i0.asValue(target.getLIRKind(Kind.Object));
         RegisterValue incomingExceptionPc = i1.asValue(LIRKind.value(word));
         CallingConvention outgoingExceptionCc = new CallingConvention(0, ILLEGAL, outgoingException, outgoingExceptionPc);
         CallingConvention incomingExceptionCc = new CallingConvention(0, ILLEGAL, incomingException, incomingExceptionPc);
@@ -85,16 +64,11 @@ public class SPARCHotSpotForeignCallsProvider extends HotSpotHostForeignCallsPro
         register(new HotSpotForeignCallLinkageImpl(EXCEPTION_HANDLER_IN_CALLER, JUMP_ADDRESS, PRESERVES_REGISTERS, LEAF_NOFP, outgoingExceptionCc, incomingExceptionCc, NOT_REEXECUTABLE, any()));
 
         if (PreferGraalStubs.getValue()) {
-            link(new SPARCDeoptimizationStub(providers, target, registerStubCall(DEOPTIMIZATION_HANDLER, REEXECUTABLE, LEAF, NO_LOCATIONS), config));
-            link(new SPARCUncommonTrapStub(providers, target, registerStubCall(UNCOMMON_TRAP_HANDLER, REEXECUTABLE, LEAF, NO_LOCATIONS), config));
+            link(new SPARCDeoptimizationStub(providers, target, registerStubCall(DEOPTIMIZATION_HANDLER, REEXECUTABLE, LEAF, NO_LOCATIONS)));
+            link(new SPARCUncommonTrapStub(providers, target, registerStubCall(UNCOMMON_TRAP_HANDLER, REEXECUTABLE, LEAF, NO_LOCATIONS)));
         }
 
-        if (config.useCRC32Intrinsics) {
-            // This stub does callee saving
-            registerForeignCall(UPDATE_BYTES_CRC32, config.updateBytesCRC32Stub, NativeCall, PRESERVES_REGISTERS, LEAF_NOFP, NOT_REEXECUTABLE, any());
-        }
-
-        super.initialize(providers);
+        super.initialize(providers, config);
     }
 
     @Override

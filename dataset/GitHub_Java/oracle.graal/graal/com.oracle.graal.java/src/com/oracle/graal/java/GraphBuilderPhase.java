@@ -25,7 +25,6 @@ package com.oracle.graal.java;
 import static com.oracle.graal.api.meta.DeoptimizationAction.*;
 import static com.oracle.graal.api.meta.DeoptimizationReason.*;
 import static com.oracle.graal.bytecode.Bytecodes.*;
-import static com.oracle.graal.compiler.common.GraalInternalError.*;
 import static com.oracle.graal.compiler.common.GraalOptions.*;
 import static com.oracle.graal.graph.iterators.NodePredicates.*;
 import static com.oracle.graal.java.AbstractBytecodeParser.Options.*;
@@ -47,11 +46,14 @@ import com.oracle.graal.graph.Graph.Mark;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node.ValueNumberable;
 import com.oracle.graal.graph.iterators.*;
-import com.oracle.graal.graphbuilderconf.*;
-import com.oracle.graal.graphbuilderconf.InlineInvokePlugin.InlineInfo;
 import com.oracle.graal.java.AbstractBytecodeParser.ReplacementContext;
 import com.oracle.graal.java.BciBlockMapping.BciBlock;
 import com.oracle.graal.java.BciBlockMapping.ExceptionDispatchBlock;
+import com.oracle.graal.java.GraphBuilderPlugin.GenericInvocationPlugin;
+import com.oracle.graal.java.GraphBuilderPlugin.InlineInvokePlugin;
+import com.oracle.graal.java.GraphBuilderPlugin.InlineInvokePlugin.InlineInfo;
+import com.oracle.graal.java.GraphBuilderPlugin.InvocationPlugin;
+import com.oracle.graal.java.GraphBuilderPlugin.LoopExplosionPlugin;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
@@ -350,9 +352,10 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                     if (method.isSynchronized()) {
                         // add a monitor enter to the start block
                         methodSynchronizedObject = synchronizedObject(frameState, method);
+                        MonitorEnterNode monitorEnter = genMonitorEnter(methodSynchronizedObject);
                         frameState.clearNonLiveLocals(startBlock, liveness, true);
                         assert bci() == 0;
-                        genMonitorEnter(methodSynchronizedObject, bci());
+                        monitorEnter.setStateAfter(createFrameState(bci()));
                     }
 
                     if (graphBuilderConfig.insertNonSafepointDebugInfo()) {
@@ -758,10 +761,8 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             }
 
             @Override
-            protected void genStoreIndexed(ValueNode array, ValueNode index, Kind kind, ValueNode value) {
-                StoreIndexedNode storeIndexed = new StoreIndexedNode(array, index, kind, value);
-                append(storeIndexed);
-                storeIndexed.setStateAfter(this.createStateAfter());
+            protected ValueNode genStoreIndexed(ValueNode array, ValueNode index, Kind kind, ValueNode value) {
+                return new StoreIndexedNode(array, index, kind, value);
             }
 
             @Override
@@ -977,10 +978,8 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             }
 
             @Override
-            protected void genStoreField(ValueNode receiver, ResolvedJavaField field, ValueNode value) {
-                StoreFieldNode storeFieldNode = new StoreFieldNode(receiver, field, value);
-                append(storeFieldNode);
-                storeFieldNode.setStateAfter(this.createFrameState(stream.nextBCI()));
+            protected ValueNode genStoreField(ValueNode receiver, ResolvedJavaField field, ValueNode value) {
+                return new StoreFieldNode(receiver, field, value);
             }
 
             /**
@@ -1150,63 +1149,22 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 }
             }
 
-            /**
-             * Contains all the assertion checking logic around the application of an
-             * {@link InvocationPlugin}. This class is only loaded when assertions are enabled.
-             */
-            class InvocationPluginAssertions {
-                final InvocationPlugin plugin;
-                final ValueNode[] args;
-                final ResolvedJavaMethod targetMethod;
-                final Kind resultType;
-                final int beforeStackSize;
-                final boolean needsNullCheck;
-                final int nodeCount;
-                final Mark mark;
-
-                public InvocationPluginAssertions(InvocationPlugin plugin, ValueNode[] args, ResolvedJavaMethod targetMethod, Kind resultType) {
-                    guarantee(assertionsEnabled(), "%s should only be loaded and instantiated if assertions are enabled", getClass().getSimpleName());
-                    this.plugin = plugin;
-                    this.targetMethod = targetMethod;
-                    this.args = args;
-                    this.resultType = resultType;
-                    this.beforeStackSize = frameState.stackSize;
-                    this.needsNullCheck = !targetMethod.isStatic() && args[0].getKind() == Kind.Object && !StampTool.isPointerNonNull(args[0].stamp());
-                    this.nodeCount = currentGraph.getNodeCount();
-                    this.mark = currentGraph.getMark();
-                }
-
-                boolean check(boolean pluginResult) {
-                    if (pluginResult == true) {
-                        assert beforeStackSize + resultType.getSlotCount() == frameState.stackSize : "plugin manipulated the stack incorrectly " + targetMethod;
-                        NodeIterable<Node> newNodes = currentGraph.getNewNodes(mark);
-                        assert !needsNullCheck || args[0].usages().filter(isNotA(FrameState.class)).isEmpty() || containsNullCheckOf(newNodes, args[0]) : format(
-                                        "plugin needs to null check the receiver of %s: receiver=%s%n\tplugin at %s", targetMethod.format("%H.%n(%p)"), args[0],
-                                        plugin.getApplySourceLocation(metaAccess));
-                        for (Node n : newNodes) {
-                            if (n instanceof StateSplit) {
-                                StateSplit stateSplit = (StateSplit) n;
-                                assert stateSplit.stateAfter() != null : format("%s node added by plugin for %s need to have a non-null frame state: %s%n\tplugin at %s",
-                                                StateSplit.class.getSimpleName(), targetMethod.format("%H.%n(%p)"), stateSplit, plugin.getApplySourceLocation(metaAccess));
-                            }
-                        }
-                    } else {
-                        assert nodeCount == currentGraph.getNodeCount() : "plugin that returns false must not create new nodes";
-                        assert beforeStackSize == frameState.stackSize : "plugin that returns false must modify the stack";
-                    }
-                    return true;
-                }
-            }
-
             private boolean tryInvocationPlugin(ValueNode[] args, ResolvedJavaMethod targetMethod, Kind resultType) {
                 InvocationPlugin plugin = graphBuilderConfig.getPlugins().getInvocationPlugins().lookupInvocation(targetMethod);
                 if (plugin != null) {
-                    InvocationPluginAssertions assertions = assertionsEnabled() ? new InvocationPluginAssertions(plugin, args, targetMethod, resultType) : null;
+                    int beforeStackSize = frameState.stackSize;
+                    boolean needsNullCheck = !targetMethod.isStatic() && args[0].getKind() == Kind.Object && !StampTool.isPointerNonNull(args[0].stamp());
+                    int nodeCount = currentGraph.getNodeCount();
+                    Mark mark = needsNullCheck ? currentGraph.getMark() : null;
                     if (InvocationPlugin.execute(this, targetMethod, plugin, args)) {
-                        assert assertions.check(true);
+                        assert beforeStackSize + resultType.getSlotCount() == frameState.stackSize : "plugin manipulated the stack incorrectly " + targetMethod;
+                        assert !needsNullCheck || args[0].usages().filter(isNotA(FrameState.class)).isEmpty() || containsNullCheckOf(currentGraph.getNewNodes(mark), args[0]) : format(
+                                        "plugin needs to null check the receiver of %s: receiver=%s%n\tplugin at %s", targetMethod.format("%H.%n(%p)"), args[0],
+                                        plugin.getApplySourceLocation(metaAccess));
                         return true;
                     }
-                    assert assertions.check(false);
+                    assert nodeCount == currentGraph.getNodeCount() : "plugin that returns false must not create new nodes";
+                    assert beforeStackSize == frameState.stackSize : "plugin that returns false must modify the stack";
                 }
                 return false;
             }
@@ -1261,9 +1219,8 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                         return false;
                     }
                 } else {
-                    if (context == null && inlineInfo.isReplacement) {
-                        assert !inlinedMethod.equals(targetMethod);
-                        if (inlineInfo.isIntrinsic) {
+                    if (context == null && !inlinedMethod.equals(targetMethod)) {
+                        if (inlineInfo.adoptBeforeCallFrameState) {
                             context = new IntrinsicContext(targetMethod, inlinedMethod, args, bci);
                         } else {
                             context = new ReplacementContext(targetMethod, inlinedMethod);
@@ -1349,7 +1306,6 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             protected InvokeNode createInvoke(CallTargetNode callTarget, Kind resultType) {
                 InvokeNode invoke = append(new InvokeNode(callTarget, bci()));
                 frameState.pushReturn(resultType, invoke);
-                invoke.setStateAfter(createFrameState(stream.nextBCI()));
                 return invoke;
             }
 
@@ -1400,22 +1356,22 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             }
 
             @Override
-            protected void genMonitorEnter(ValueNode x, int bci) {
+            protected MonitorEnterNode genMonitorEnter(ValueNode x) {
                 MonitorIdNode monitorId = currentGraph.add(new MonitorIdNode(frameState.lockDepth()));
                 MonitorEnterNode monitorEnter = append(new MonitorEnterNode(x, monitorId));
                 frameState.pushLock(x, monitorId);
-                monitorEnter.setStateAfter(createFrameState(bci));
+                return monitorEnter;
             }
 
             @Override
-            protected void genMonitorExit(ValueNode x, ValueNode escapedReturnValue, int bci) {
+            protected MonitorExitNode genMonitorExit(ValueNode x, ValueNode escapedReturnValue) {
                 MonitorIdNode monitorId = frameState.peekMonitorId();
                 ValueNode lockedObject = frameState.popLock();
                 if (GraphUtil.originalValue(lockedObject) != GraphUtil.originalValue(x)) {
                     throw bailout(String.format("unbalanced monitors: mismatch at monitorexit, %s != %s", GraphUtil.originalValue(x), GraphUtil.originalValue(lockedObject)));
                 }
                 MonitorExitNode monitorExit = append(new MonitorExitNode(x, monitorId, escapedReturnValue));
-                monitorExit.setStateAfter(createFrameState(bci));
+                return monitorExit;
             }
 
             @Override
@@ -1970,10 +1926,11 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
             private void synchronizedEpilogue(int bci, ValueNode currentReturnValue, Kind currentReturnValueKind) {
                 if (method.isSynchronized()) {
+                    MonitorExitNode monitorExit = genMonitorExit(methodSynchronizedObject, currentReturnValue);
                     if (currentReturnValue != null) {
                         frameState.push(currentReturnValueKind, currentReturnValue);
                     }
-                    genMonitorExit(methodSynchronizedObject, currentReturnValue, bci);
+                    monitorExit.setStateAfter(createFrameState(bci));
                     assert !frameState.rethrowException();
                 }
             }
@@ -2027,6 +1984,10 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 if (lastInstr != null && lastInstr != targetInstr) {
                     lastInstr.setNext(targetInstr);
                 }
+            }
+
+            private boolean isBlockEnd(Node n) {
+                return n instanceof ControlSplitNode || n instanceof ControlSinkNode;
             }
 
             @Override
@@ -2097,15 +2058,26 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                         throw asParserError(e);
                     }
 
-                    if (lastInstr == null || lastInstr.next() != null) {
+                    if (lastInstr == null || isBlockEnd(lastInstr) || lastInstr.next() != null) {
                         break;
                     }
 
                     stream.next();
                     bci = stream.currentBCI();
 
-                    assert block == currentBlock;
-                    assert !(lastInstr instanceof StateSplit) || lastInstr instanceof BeginNode || ((StateSplit) lastInstr).stateAfter() != null : lastInstr;
+                    if (bci > block.endBci) {
+                        frameState.clearNonLiveLocals(currentBlock, liveness, false);
+                    }
+                    if (lastInstr instanceof StateSplit) {
+                        if (lastInstr instanceof BeginNode) {
+                            // BeginNodes do not need a frame state
+                        } else {
+                            StateSplit stateSplit = (StateSplit) lastInstr;
+                            if (stateSplit.stateAfter() == null) {
+                                stateSplit.setStateAfter(createFrameState(bci));
+                            }
+                        }
+                    }
                     lastInstr = finishInstruction(lastInstr, frameState);
                     if (bci < endBCI) {
                         if (bci > block.endBci) {
@@ -2419,26 +2391,12 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             }
 
             private FrameState createFrameState(int bci) {
-                if (currentBlock != null && bci > currentBlock.endBci) {
-                    frameState.clearNonLiveLocals(currentBlock, liveness, false);
-                }
                 return frameState.create(bci);
-            }
-
-            public FrameState createStateAfter() {
-                return createFrameState(stream.nextBCI());
             }
         }
     }
 
     static String nSpaces(int n) {
         return n == 0 ? "" : format("%" + n + "s", "");
-    }
-
-    @SuppressWarnings("all")
-    private static boolean assertionsEnabled() {
-        boolean assertionsEnabled = false;
-        assert assertionsEnabled = true;
-        return assertionsEnabled;
     }
 }

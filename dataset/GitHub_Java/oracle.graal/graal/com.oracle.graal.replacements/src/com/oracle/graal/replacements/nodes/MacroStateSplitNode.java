@@ -22,24 +22,14 @@
  */
 package com.oracle.graal.replacements.nodes;
 
-import jdk.vm.ci.code.BytecodeFrame;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.LocationIdentity;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-
-import com.oracle.graal.compiler.common.type.StampPair;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
-import com.oracle.graal.nodes.FrameState;
-import com.oracle.graal.nodes.Invoke;
-import com.oracle.graal.nodes.InvokeNode;
-import com.oracle.graal.nodes.StateSplit;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.java.MethodCallTargetNode;
-import com.oracle.graal.nodes.memory.MemoryCheckpoint;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.java.*;
 
 /**
  * This is an extension of {@link MacroNode} that is a {@link StateSplit} and a
@@ -51,8 +41,9 @@ public abstract class MacroStateSplitNode extends MacroNode implements StateSpli
     public static final NodeClass<MacroStateSplitNode> TYPE = NodeClass.create(MacroStateSplitNode.class);
     @OptionalInput(InputType.State) protected FrameState stateAfter;
 
-    protected MacroStateSplitNode(NodeClass<? extends MacroNode> c, InvokeKind invokeKind, ResolvedJavaMethod targetMethod, int bci, StampPair returnStamp, ValueNode... arguments) {
-        super(c, invokeKind, targetMethod, bci, returnStamp, arguments);
+    public MacroStateSplitNode(NodeClass<? extends MacroStateSplitNode> c, Invoke invoke) {
+        super(c, invoke);
+        this.stateAfter = invoke.stateAfter();
     }
 
     @Override
@@ -78,7 +69,7 @@ public abstract class MacroStateSplitNode extends MacroNode implements StateSpli
         for (MethodCallTargetNode call : snippetGraph.getNodes(MethodCallTargetNode.TYPE)) {
             Invoke invoke = call.invoke();
             if (!call.targetMethod().equals(getTargetMethod())) {
-                throw new JVMCIError("unexpected invoke %s in snippet", getClass().getSimpleName());
+                throw new GraalInternalError("unexpected invoke %s in snippet", getClass().getSimpleName());
             }
             assert invoke.stateAfter().bci == BytecodeFrame.AFTER_BCI;
             // Here we need to fix the bci of the invoke

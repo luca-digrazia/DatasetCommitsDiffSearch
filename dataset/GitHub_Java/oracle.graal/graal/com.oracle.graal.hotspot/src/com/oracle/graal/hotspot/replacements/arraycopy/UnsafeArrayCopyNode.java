@@ -30,12 +30,11 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.memory.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.replacements.SnippetTemplate.Arguments;
 
 @NodeInfo(allowedUsageTypes = {InputType.Memory})
-public final class UnsafeArrayCopyNode extends ArrayRangeWriteNode implements Lowerable, MemoryCheckpoint.Single, MemoryAccess {
+public final class UnsafeArrayCopyNode extends ArrayRangeWriteNode implements Lowerable, MemoryCheckpoint.Single {
 
     public static final NodeClass<UnsafeArrayCopyNode> TYPE = NodeClass.create(UnsafeArrayCopyNode.class);
     @Input ValueNode src;
@@ -44,8 +43,6 @@ public final class UnsafeArrayCopyNode extends ArrayRangeWriteNode implements Lo
     @Input ValueNode destPos;
     @Input ValueNode length;
     @OptionalInput ValueNode layoutHelper;
-
-    @OptionalInput(InputType.Memory) MemoryNode lastLocationAccess;
 
     protected Kind elementKind;
 
@@ -123,15 +120,6 @@ public final class UnsafeArrayCopyNode extends ArrayRangeWriteNode implements Lo
             return NamedLocationIdentity.getArrayLocation(elementKind);
         }
         return any();
-    }
-
-    public MemoryNode getLastLocationAccess() {
-        return lastLocationAccess;
-    }
-
-    public void setLastLocationAccess(MemoryNode lla) {
-        updateUsagesInterface(lastLocationAccess, lla);
-        lastLocationAccess = lla;
     }
 
     @NodeIntrinsic

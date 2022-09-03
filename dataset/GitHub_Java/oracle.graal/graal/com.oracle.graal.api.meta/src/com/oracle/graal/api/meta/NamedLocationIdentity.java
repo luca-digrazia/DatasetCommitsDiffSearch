@@ -87,8 +87,27 @@ public final class NamedLocationIdentity extends LocationIdentity implements For
     }
 
     @Override
+    public int hashCode() {
+        return name.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == this) {
+            return true;
+        }
+        if (obj instanceof NamedLocationIdentity) {
+            NamedLocationIdentity that = (NamedLocationIdentity) obj;
+            boolean res = this.name.equals(that.name);
+            assert !res || this.immutable == that.immutable;
+            return res;
+        }
+        return false;
+    }
+
+    @Override
     public String toString() {
-        return name + (isImmutable() ? ":final" : "");
+        return name + (isImmutable() ? ":immutable" : ":mutable");
     }
 
     /**

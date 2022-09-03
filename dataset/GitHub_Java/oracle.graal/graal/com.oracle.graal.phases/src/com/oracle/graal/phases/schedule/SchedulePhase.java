@@ -165,7 +165,7 @@ public final class SchedulePhase extends Phase {
                                     // We are not constraint within currentBlock. Check if
                                     // we are contraint while walking down the dominator
                                     // line.
-                                    Block newLatestBlock = adjustLatestForRead(floatingReadNode, currentBlock, latestBlock, location);
+                                    Block newLatestBlock = adjustLatestForRead(currentBlock, latestBlock, location);
                                     assert dominates(newLatestBlock, latestBlock);
                                     assert dominates(currentBlock, newLatestBlock);
                                     latestBlock = newLatestBlock;
@@ -203,7 +203,7 @@ public final class SchedulePhase extends Phase {
         return true;
     }
 
-    private static Block adjustLatestForRead(FloatingReadNode floatingReadNode, Block earliestBlock, Block latestBlock, LocationIdentity location) {
+    private static Block adjustLatestForRead(Block earliestBlock, Block latestBlock, LocationIdentity location) {
         assert strictlyDominates(earliestBlock, latestBlock);
         Block current = latestBlock.getDominator();
 
@@ -218,7 +218,6 @@ public final class SchedulePhase extends Phase {
             }
             dominatorChain.add(current);
             current = current.getDominator();
-            assert current != null : floatingReadNode;
         }
 
         // The first element of dominatorChain now contains the latest possible block.
@@ -548,9 +547,8 @@ public final class SchedulePhase extends Phase {
             if (n instanceof FloatingReadNode) {
                 FloatingReadNode floatingReadNode = (FloatingReadNode) n;
                 LocationIdentity locationIdentity = floatingReadNode.getLocationIdentity();
-                MemoryNode lastLocationAccess = floatingReadNode.getLastLocationAccess();
-                if (locationIdentity.isMutable() && lastLocationAccess != null) {
-                    ValueNode lastAccessLocation = lastLocationAccess.asNode();
+                if (locationIdentity.isMutable()) {
+                    ValueNode lastAccessLocation = floatingReadNode.getLastLocationAccess().asNode();
                     if (nodeToBlock.get(lastAccessLocation) == b && lastAccessLocation != beginNode) {
                         // This node's last access location is within this block. Add to watch list
                         // when processing the last access location.
@@ -590,7 +588,7 @@ public final class SchedulePhase extends Phase {
                 newList.add(n);
             } else {
                 // This node was pulled up.
-                assert !(n instanceof FixedNode) : n;
+                assert !(n instanceof FixedNode);
             }
         }
 
@@ -629,16 +627,12 @@ public final class SchedulePhase extends Phase {
                         }
                     }
                 } else {
-                    if (current instanceof FrameState) {
-                        for (Node input : current.inputs()) {
-                            if (input instanceof StateSplit && ((StateSplit) input).stateAfter() == current) {
-                                // Ignore the cycle.
-                            } else {
-                                stack.push(input);
-                            }
+                    for (Node input : current.inputs()) {
+                        if (current instanceof FrameState && input instanceof StateSplit && ((StateSplit) input).stateAfter() == current) {
+                            // Ignore the cycle.
+                        } else {
+                            stack.push(input);
                         }
-                    } else {
-                        current.pushInputs(stack);
                     }
                 }
             } else {
@@ -651,22 +645,16 @@ public final class SchedulePhase extends Phase {
                         assert current.predecessor() == null && !(current instanceof FixedNode) : "The assignment of blocks to fixed nodes is already done when constructing the cfg.";
                         Block earliest = startBlock;
                         for (Node input : current.inputs()) {
-                            Block inputEarliest = nodeToBlock.get(input);
+                            Block inputEarliest;
+                            if (input instanceof ControlSplitNode) {
+                                inputEarliest = nodeToBlock.get(((ControlSplitNode) input).getPrimarySuccessor());
+                            } else {
+                                inputEarliest = nodeToBlock.get(input);
+                            }
                             if (inputEarliest == null) {
                                 assert current instanceof FrameState && input instanceof StateSplit && ((StateSplit) input).stateAfter() == current;
                             } else {
                                 assert inputEarliest != null;
-                                if (inputEarliest.getEndNode() == input) {
-                                    // This is the last node of the block.
-                                    if (current instanceof FrameState && input instanceof StateSplit && ((StateSplit) input).stateAfter() == current) {
-                                        // Keep regular inputEarliest.
-                                    } else if (input instanceof ControlSplitNode) {
-                                        inputEarliest = nodeToBlock.get(((ControlSplitNode) input).getPrimarySuccessor());
-                                    } else {
-                                        assert inputEarliest.getSuccessorCount() == 1;
-                                        inputEarliest = inputEarliest.getSuccessors().get(0);
-                                    }
-                                }
                                 if (earliest.getDominatorDepth() < inputEarliest.getDominatorDepth()) {
                                     earliest = inputEarliest;
                                 }

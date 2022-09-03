@@ -267,7 +267,7 @@ public class TruffleGraphBuilderPlugins {
     private static void registerMaterialize(Registration r) {
         r.register1("materialize", Receiver.class, new InvocationPlugin() {
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, ValueNode frame) {
-                b.push(Kind.Object, b.append(new MaterializeFrameNode(GraphBuilderContext.nullCheckedValue(b, frame))));
+                b.push(Kind.Object, b.append(new MaterializeFrameNode(frame)));
                 return true;
             }
         });
@@ -368,9 +368,7 @@ public class TruffleGraphBuilderPlugins {
                     locationIdentity = ObjectLocationIdentity.create(locationArgument.asJavaConstant());
                 }
 
-                UnsafeStoreNode unsafeStore = new UnsafeStoreNode(object, offset, value, kind, locationIdentity, null);
-                b.append(unsafeStore);
-                unsafeStore.setStateAfter(b.createStateAfter());
+                b.append(new UnsafeStoreNode(object, offset, value, kind, locationIdentity, null));
                 return true;
             }
             // TODO: should we throw GraalInternalError.shouldNotReachHere() here?

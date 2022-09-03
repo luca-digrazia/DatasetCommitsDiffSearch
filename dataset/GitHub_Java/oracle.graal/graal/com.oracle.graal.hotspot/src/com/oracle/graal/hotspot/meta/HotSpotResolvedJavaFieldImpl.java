@@ -75,11 +75,6 @@ public class HotSpotResolvedJavaFieldImpl extends CompilerObject implements HotS
         public int hashCode() {
             return inner.hashCode();
         }
-
-        @Override
-        public String toString() {
-            return inner.name;
-        }
     }
 
     public HotSpotResolvedJavaFieldImpl(HotSpotResolvedObjectTypeImpl holder, String name, JavaType type, long offset, int modifiers) {
@@ -149,9 +144,9 @@ public class HotSpotResolvedJavaFieldImpl extends CompilerObject implements HotS
 
     @Override
     public JavaType getType() {
-        if (type instanceof HotSpotUnresolvedJavaType) {
+        if (!(type instanceof ResolvedJavaType)) {
             // Don't allow unresolved types to hang around forever
-            ResolvedJavaType resolved = ((HotSpotUnresolvedJavaType) type).reresolve(holder);
+            ResolvedJavaType resolved = type.resolve(holder);
             if (resolved != null) {
                 type = resolved;
             }
@@ -204,7 +199,7 @@ public class HotSpotResolvedJavaFieldImpl extends CompilerObject implements HotS
         }
         try {
             return holder.mirror().getDeclaredField(name);
-        } catch (NoSuchFieldException | NoClassDefFoundError e) {
+        } catch (NoSuchFieldException e) {
             return null;
         }
     }
