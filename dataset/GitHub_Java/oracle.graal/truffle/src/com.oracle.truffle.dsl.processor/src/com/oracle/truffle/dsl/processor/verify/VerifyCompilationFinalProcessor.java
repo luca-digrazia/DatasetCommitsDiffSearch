@@ -30,6 +30,7 @@ import javax.annotation.processing.RoundEnvironment;
 import javax.annotation.processing.SupportedAnnotationTypes;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
+import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.ArrayType;
@@ -51,7 +52,7 @@ public class VerifyCompilationFinalProcessor extends AbstractProcessor {
             return false;
         }
         for (Element element : roundEnv.getElementsAnnotatedWith(CompilerDirectives.CompilationFinal.class)) {
-            if (!element.getKind().isField()) {
+            if (element.getKind() != ElementKind.FIELD) {
                 emitError(element, String.format("Only fields can be annotated with %s.", CompilerDirectives.CompilationFinal.class.getSimpleName()));
                 continue;
             }
