@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -334,6 +334,7 @@ final class HostClassLoader extends ClassLoader implements Closeable {
 
     private static final class JarLoader implements Loader {
         private final TruffleFile root;
+        private volatile SeekableByteChannel channel;
         /**
          * Cache for fast resource lookup. Map of folder to files in the folder.
          */
@@ -393,11 +394,24 @@ final class HostClassLoader extends ClassLoader implements Closeable {
         }
 
         @Override
-        public void close() throws IOException {
+        public synchronized void close() throws IOException {
+            if (channel != null) {
+                channel.close();
+            }
         }
 
         private SeekableByteChannel getChannel() throws IOException {
-            return root.newByteChannel(EnumSet.of(StandardOpenOption.READ));
+            SeekableByteChannel res = channel;
+            if (res == null) {
+                synchronized (this) {
+                    res = channel;
+                    if (res == null) {
+                        res = root.newByteChannel(EnumSet.of(StandardOpenOption.READ));
+                        channel = res;
+                    }
+                }
+            }
+            return res;
         }
 
         private Map<String, Map<String, ZipUtils.Info>> getResourceMap() throws IOException {
@@ -406,9 +420,7 @@ final class HostClassLoader extends ClassLoader implements Closeable {
                 synchronized (this) {
                     res = content;
                     if (res == null) {
-                        try (SeekableByteChannel channel = getChannel()) {
-                            res = ZipUtils.readEntries(channel);
-                        }
+                        res = ZipUtils.readEntries(getChannel());
                         content = res;
                     }
                 }
@@ -493,11 +505,6 @@ final class HostClassLoader extends ClassLoader implements Closeable {
                 @Override
                 public int available() throws IOException {
                     return (int) (len - this.channel.position());
-                }
-
-                @Override
-                public void close() throws IOException {
-                    channel.close();
                 }
             }
 
