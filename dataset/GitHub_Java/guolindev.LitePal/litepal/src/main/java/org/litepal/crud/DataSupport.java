@@ -72,16 +72,6 @@ import java.util.Set;
  */
 public class DataSupport {
 
-    /**
-     * Constant for MD5 encryption.
-     */
-    protected static final String MD5 = "MD5";
-
-    /**
-     * Constant for AES encryption.
-     */
-    protected static final String AES = "AES";
-
 	/**
 	 * The identify of each model. LitePal will generate the value
 	 * automatically. Do not try to assign or modify it.
@@ -106,7 +96,7 @@ public class DataSupport {
 	/**
 	 * A map contains all the associated models' id with M2M association.
 	 */
-	private Map<String, List<Long>> associatedModelsMapForJoinTable;
+	private Map<String, Set<Long>> associatedModelsMapForJoinTable;
 
 	/**
 	 * When updating a model and the associations breaks between current model
@@ -2142,10 +2132,10 @@ public class DataSupport {
 	 *            The id of associated model.
 	 */
 	void addAssociatedModelForJoinTable(String associatedModelName, long associatedId) {
-		List<Long> associatedIdsM2MSet = getAssociatedModelsMapForJoinTable().get(
+		Set<Long> associatedIdsM2MSet = getAssociatedModelsMapForJoinTable().get(
 				associatedModelName);
 		if (associatedIdsM2MSet == null) {
-			associatedIdsM2MSet = new ArrayList<Long>();
+			associatedIdsM2MSet = new HashSet<Long>();
 			associatedIdsM2MSet.add(associatedId);
 			associatedModelsMapForJoinTable.put(associatedModelName, associatedIdsM2MSet);
 		} else {
@@ -2162,10 +2152,10 @@ public class DataSupport {
 	 *            The name of associated model.
 	 */
 	void addEmptyModelForJoinTable(String associatedModelName) {
-		List<Long> associatedIdsM2MSet = getAssociatedModelsMapForJoinTable().get(
+		Set<Long> associatedIdsM2MSet = getAssociatedModelsMapForJoinTable().get(
 				associatedModelName);
 		if (associatedIdsM2MSet == null) {
-			associatedIdsM2MSet = new ArrayList<Long>();
+			associatedIdsM2MSet = new HashSet<Long>();
 			associatedModelsMapForJoinTable.put(associatedModelName, associatedIdsM2MSet);
 		}
 	}
@@ -2178,9 +2168,9 @@ public class DataSupport {
 	 * @return An associated model's map to save values into intermediate join
 	 *         table
 	 */
-	Map<String, List<Long>> getAssociatedModelsMapForJoinTable() {
+	Map<String, Set<Long>> getAssociatedModelsMapForJoinTable() {
 		if (associatedModelsMapForJoinTable == null) {
-			associatedModelsMapForJoinTable = new HashMap<String, List<Long>>();
+			associatedModelsMapForJoinTable = new HashMap<String, Set<Long>>();
 		}
 		return associatedModelsMapForJoinTable;
 	}
