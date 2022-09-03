@@ -24,6 +24,8 @@ package com.oracle.graal.replacements;
 
 import static com.oracle.graal.debug.GraalError.unimplemented;
 import static com.oracle.graal.java.BytecodeParserOptions.DumpDuringGraphBuilding;
+import static com.oracle.graal.java.BytecodeParserOptions.FailedLoopExplosionIsFatal;
+import static com.oracle.graal.java.BytecodeParserOptions.MaximumLoopExplosionCount;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -82,7 +84,6 @@ import com.oracle.graal.nodes.java.MonitorIdNode;
 import com.oracle.graal.nodes.spi.StampProvider;
 import com.oracle.graal.nodes.util.GraphUtil;
 import com.oracle.graal.options.Option;
-import com.oracle.graal.options.OptionType;
 import com.oracle.graal.options.OptionValue;
 import com.oracle.graal.phases.common.inlining.InliningUtil;
 
@@ -115,12 +116,6 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
     public static class Options {
         @Option(help = "Maximum inlining depth during partial evaluation before reporting an infinite recursion")//
         public static final OptionValue<Integer> InliningDepthError = new OptionValue<>(1000);
-
-        @Option(help = "Max number of loop explosions per method.", type = OptionType.Debug)//
-        public static final OptionValue<Integer> MaximumLoopExplosionCount = new OptionValue<>(10000);
-
-        @Option(help = "Do not bail out but throw an exception on failed loop explosion.", type = OptionType.Debug) //
-        public static final OptionValue<Boolean> FailedLoopExplosionIsFatal = new OptionValue<>(false);
     }
 
     protected class PEMethodScope extends MethodScope {
@@ -419,14 +414,14 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
     protected void checkLoopExplosionIteration(MethodScope s, LoopScope loopScope) {
         PEMethodScope methodScope = (PEMethodScope) s;
 
-        if (loopScope.loopIteration > Options.MaximumLoopExplosionCount.getValue()) {
+        if (loopScope.loopIteration > MaximumLoopExplosionCount.getValue()) {
             throw tooManyLoopExplosionIterations(methodScope);
         }
     }
 
     private static RuntimeException tooManyLoopExplosionIterations(PEMethodScope methodScope) {
         String message = "too many loop explosion iterations - does the explosion not terminate for method " + methodScope.method + "?";
-        RuntimeException bailout = Options.FailedLoopExplosionIsFatal.getValue() ? new RuntimeException(message) : new BailoutException(message);
+        RuntimeException bailout = FailedLoopExplosionIsFatal.getValue() ? new RuntimeException(message) : new BailoutException(message);
         throw GraphUtil.createBailoutException(message, bailout, GraphUtil.approxSourceStackTraceElement(methodScope.getBytecodePosition()));
     }
 

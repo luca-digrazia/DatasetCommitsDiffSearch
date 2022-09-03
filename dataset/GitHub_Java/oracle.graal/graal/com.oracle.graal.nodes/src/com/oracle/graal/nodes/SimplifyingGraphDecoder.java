@@ -22,9 +22,6 @@
  */
 package com.oracle.graal.nodes;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_IGNORED;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_IGNORED;
-
 import java.util.List;
 
 import com.oracle.graal.compiler.common.spi.ConstantFieldProvider;
@@ -98,7 +95,7 @@ public class SimplifyingGraphDecoder extends GraphDecoder {
         }
     }
 
-    @NodeInfo(cycles = CYCLES_IGNORED, size = SIZE_IGNORED)
+    @NodeInfo
     static class CanonicalizeToNullNode extends FloatingNode implements Canonicalizable, GuardingNode {
         public static final NodeClass<CanonicalizeToNullNode> TYPE = NodeClass.create(CanonicalizeToNullNode.class);
 
