@@ -22,22 +22,22 @@
  */
 package com.oracle.graal.replacements;
 
+import static com.oracle.graal.api.meta.MetaUtil.*;
+
 import java.lang.reflect.*;
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.*;
-import com.oracle.graal.replacements.Snippet.Fold;
+import com.oracle.graal.replacements.Snippet.*;
 
 /**
  * Replaces calls to {@link NodeIntrinsic}s with nodes and calls to methods annotated with
@@ -46,77 +46,82 @@ import com.oracle.graal.replacements.Snippet.Fold;
 public class NodeIntrinsificationPhase extends Phase {
 
     private final MetaAccessProvider runtime;
+    private final BoxingMethodPool pool;
 
-    public NodeIntrinsificationPhase(MetaAccessProvider runtime) {
+    public NodeIntrinsificationPhase(MetaAccessProvider runtime, BoxingMethodPool pool) {
         this.runtime = runtime;
+        this.pool = pool;
     }
 
     @Override
     protected void run(StructuredGraph graph) {
-        ArrayList<Node> cleanUpReturnList = new ArrayList<>();
         for (Invoke i : graph.getInvokes()) {
             if (i.callTarget() instanceof MethodCallTargetNode) {
-                tryIntrinsify(i, cleanUpReturnList);
+                tryIntrinsify(i);
             }
-        }
-
-        for (Node node : cleanUpReturnList) {
-            cleanUpReturnCheckCast(node);
         }
     }
 
-    private boolean tryIntrinsify(Invoke invoke, List<Node> cleanUpReturnList) {
+    public static Class<?>[] signatureToTypes(Signature signature, ResolvedJavaType accessingClass) {
+        int count = signature.getParameterCount(false);
+        Class<?>[] result = new Class<?>[count];
+        for (int i = 0; i < result.length; ++i) {
+            result[i] = getMirrorOrFail(signature.getParameterType(i, accessingClass).resolve(accessingClass), Thread.currentThread().getContextClassLoader());
+        }
+        return result;
+    }
+
+    private boolean tryIntrinsify(Invoke invoke) {
         ResolvedJavaMethod target = invoke.methodCallTarget().targetMethod();
         NodeIntrinsic intrinsic = target.getAnnotation(Node.NodeIntrinsic.class);
         ResolvedJavaType declaringClass = target.getDeclaringClass();
         if (intrinsic != null) {
             assert target.getAnnotation(Fold.class) == null;
-            assert Modifier.isStatic(target.getModifiers()) : "node intrinsic must be static: " + target;
 
-            ResolvedJavaType[] parameterTypes = MetaUtil.resolveJavaTypes(MetaUtil.signatureToTypes(target), declaringClass);
+            Class<?>[] parameterTypes = signatureToTypes(target.getSignature(), declaringClass);
             ResolvedJavaType returnType = target.getSignature().getReturnType(declaringClass).resolve(declaringClass);
 
             // Prepare the arguments for the reflective constructor call on the node class.
-            Constant[] nodeConstructorArguments = prepareArguments(invoke, parameterTypes, target, false);
+            Object[] nodeConstructorArguments = prepareArguments(invoke, parameterTypes, target, false);
             if (nodeConstructorArguments == null) {
                 return false;
             }
 
             // Create the new node instance.
-            ResolvedJavaType c = getNodeClass(target, intrinsic);
-            Node newInstance = createNodeInstance(c, parameterTypes, returnType, intrinsic.setStampFromReturnType(), nodeConstructorArguments);
+            Class<?> c = getNodeClass(target, intrinsic);
+            Node newInstance = createNodeInstance(runtime, c, parameterTypes, returnType, intrinsic.setStampFromReturnType(), nodeConstructorArguments);
 
             // Replace the invoke with the new node.
-            invoke.asNode().graph().add(newInstance);
+            invoke.node().graph().add(newInstance);
             invoke.intrinsify(newInstance);
 
             // Clean up checkcast instructions inserted by javac if the return type is generic.
-            cleanUpReturnList.add(newInstance);
+            cleanUpReturnCheckCast(newInstance);
         } else if (target.getAnnotation(Fold.class) != null) {
-            ResolvedJavaType[] parameterTypes = MetaUtil.resolveJavaTypes(MetaUtil.signatureToTypes(target), declaringClass);
+            Class<?>[] parameterTypes = signatureToTypes(target.getSignature(), declaringClass);
 
             // Prepare the arguments for the reflective method call
-            Constant[] arguments = prepareArguments(invoke, parameterTypes, target, true);
+            Object[] arguments = prepareArguments(invoke, parameterTypes, target, true);
             if (arguments == null) {
                 return false;
             }
-            Constant receiver = null;
+            Object receiver = null;
             if (!invoke.methodCallTarget().isStatic()) {
                 receiver = arguments[0];
-                arguments = Arrays.copyOfRange(arguments, 1, arguments.length);
-                parameterTypes = Arrays.copyOfRange(parameterTypes, 1, parameterTypes.length);
+                arguments = Arrays.asList(arguments).subList(1, arguments.length).toArray();
             }
 
             // Call the method
-            Constant constant = target.invoke(receiver, arguments);
+            Constant constant = callMethod(target.getSignature().getReturnKind(), getMirrorOrFail(declaringClass, Thread.currentThread().getContextClassLoader()), target.getName(), parameterTypes,
+                            receiver, arguments);
 
             if (constant != null) {
                 // Replace the invoke with the result of the call
-                ConstantNode node = ConstantNode.forConstant(constant, runtime, invoke.asNode().graph());
+                ConstantNode node = ConstantNode.forConstant(constant, runtime, invoke.node().graph());
                 invoke.intrinsify(node);
 
                 // Clean up checkcast instructions inserted by javac if the return type is generic.
-                cleanUpReturnList.add(node);
+                cleanUpReturnCheckCast(node);
             } else {
                 // Remove the invoke
                 invoke.intrinsify(null);
@@ -133,15 +138,15 @@ public class NodeIntrinsificationPhase extends Phase {
      * @return the arguments for the reflective invocation or null if an argument of {@code invoke}
      *         that is expected to be constant isn't
      */
-    private Constant[] prepareArguments(Invoke invoke, ResolvedJavaType[] parameterTypes, ResolvedJavaMethod target, boolean folding) {
+    private Object[] prepareArguments(Invoke invoke, Class<?>[] parameterTypes, ResolvedJavaMethod target, boolean folding) {
         NodeInputList<ValueNode> arguments = invoke.callTarget().arguments();
-        Constant[] reflectionCallArguments = new Constant[arguments.size()];
+        Object[] reflectionCallArguments = new Object[arguments.size()];
         for (int i = 0; i < reflectionCallArguments.length; ++i) {
             int parameterIndex = i;
             if (!invoke.methodCallTarget().isStatic()) {
                 parameterIndex--;
             }
-            ValueNode argument = arguments.get(i);
+            ValueNode argument = tryBoxingElimination(parameterIndex, target, arguments.get(i));
             if (folding || MetaUtil.getParameterAnnotation(ConstantNodeParameter.class, parameterIndex, target) != null) {
                 if (!(argument instanceof ConstantNode)) {
                     return null;
@@ -150,70 +155,171 @@ public class NodeIntrinsificationPhase extends Phase {
                 Constant constant = constantNode.asConstant();
                 Object o = constant.asBoxedValue();
                 if (o instanceof Class<?>) {
-                    reflectionCallArguments[i] = Constant.forObject(runtime.lookupJavaType((Class<?>) o));
-                    parameterTypes[i] = runtime.lookupJavaType(ResolvedJavaType.class);
+                    reflectionCallArguments[i] = runtime.lookupJavaType((Class<?>) o);
+                    parameterTypes[i] = ResolvedJavaType.class;
                 } else {
-                    if (parameterTypes[i].getKind() == Kind.Boolean) {
-                        reflectionCallArguments[i] = Constant.forObject(Boolean.valueOf(constant.asInt() != 0));
-                    } else if (parameterTypes[i].getKind() == Kind.Byte) {
-                        reflectionCallArguments[i] = Constant.forObject(Byte.valueOf((byte) constant.asInt()));
-                    } else if (parameterTypes[i].getKind() == Kind.Short) {
-                        reflectionCallArguments[i] = Constant.forObject(Short.valueOf((short) constant.asInt()));
-                    } else if (parameterTypes[i].getKind() == Kind.Char) {
-                        reflectionCallArguments[i] = Constant.forObject(Character.valueOf((char) constant.asInt()));
+                    if (parameterTypes[i] == boolean.class) {
+                        reflectionCallArguments[i] = Boolean.valueOf(constant.asInt() != 0);
+                    } else if (parameterTypes[i] == byte.class) {
+                        reflectionCallArguments[i] = Byte.valueOf((byte) constant.asInt());
+                    } else if (parameterTypes[i] == short.class) {
+                        reflectionCallArguments[i] = Short.valueOf((short) constant.asInt());
+                    } else if (parameterTypes[i] == char.class) {
+                        reflectionCallArguments[i] = Character.valueOf((char) constant.asInt());
                     } else {
-                        reflectionCallArguments[i] = constant;
+                        reflectionCallArguments[i] = o;
                     }
                 }
             } else {
-                reflectionCallArguments[i] = Constant.forObject(argument);
-                parameterTypes[i] = runtime.lookupJavaType(ValueNode.class);
+                reflectionCallArguments[i] = argument;
+                parameterTypes[i] = ValueNode.class;
             }
         }
         return reflectionCallArguments;
     }
 
-    private ResolvedJavaType getNodeClass(ResolvedJavaMethod target, NodeIntrinsic intrinsic) {
-        ResolvedJavaType result;
-        if (intrinsic.value() == NodeIntrinsic.class) {
-            result = target.getDeclaringClass();
-        } else {
-            result = runtime.lookupJavaType(intrinsic.value());
+    private static Class<?> getNodeClass(ResolvedJavaMethod target, NodeIntrinsic intrinsic) {
+        Class<?> result = intrinsic.value();
+        if (result == NodeIntrinsic.class) {
+            return getMirrorOrFail(target.getDeclaringClass(), Thread.currentThread().getContextClassLoader());
         }
-        assert runtime.lookupJavaType(ValueNode.class).isAssignableFrom(result);
+        assert Node.class.isAssignableFrom(result);
         return result;
     }
 
-    private ResolvedJavaType asBoxedType(ResolvedJavaType type) {
+    private ValueNode tryBoxingElimination(int parameterIndex, ResolvedJavaMethod target, ValueNode node) {
+        if (parameterIndex >= 0) {
+            Type type = target.getGenericParameterTypes()[parameterIndex];
+            if (type instanceof TypeVariable) {
+                TypeVariable typeVariable = (TypeVariable) type;
+                if (typeVariable.getBounds().length == 1) {
+                    Type boundType = typeVariable.getBounds()[0];
+                    if (boundType instanceof Class && ((Class) boundType).getSuperclass() == null) {
+                        // Unbound generic => try boxing elimination
+                        if (node.usages().count() == 2) {
+                            if (node instanceof Invoke) {
+                                Invoke invokeNode = (Invoke) node;
+                                MethodCallTargetNode callTarget = invokeNode.methodCallTarget();
+                                if (pool.isBoxingMethod(callTarget.targetMethod())) {
+                                    FrameState stateAfter = invokeNode.stateAfter();
+                                    assert stateAfter.usages().count() == 1;
+                                    invokeNode.node().replaceAtUsages(null);
+                                    ValueNode result = callTarget.arguments().get(0);
+                                    StructuredGraph graph = (StructuredGraph) node.graph();
+                                    if (invokeNode instanceof InvokeWithExceptionNode) {
+                                        // Destroy exception edge & clear stateAfter.
+                                        InvokeWithExceptionNode invokeWithExceptionNode = (InvokeWithExceptionNode) invokeNode;
+
+                                        invokeWithExceptionNode.killExceptionEdge();
+                                        graph.removeSplit(invokeWithExceptionNode, invokeWithExceptionNode.next());
+                                    } else {
+                                        graph.removeFixed((InvokeNode) invokeNode);
+                                    }
+                                    stateAfter.safeDelete();
+                                    GraphUtil.propagateKill(callTarget);
+                                    return result;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return node;
+    }
+
+    private static Class asBoxedType(Class type) {
         if (!type.isPrimitive()) {
             return type;
         }
-        return runtime.lookupJavaType(type.getKind().toBoxedJavaClass());
+
+        if (Boolean.TYPE == type) {
+            return Boolean.class;
+        }
+        if (Character.TYPE == type) {
+            return Character.class;
+        }
+        if (Byte.TYPE == type) {
+            return Byte.class;
+        }
+        if (Short.TYPE == type) {
+            return Short.class;
+        }
+        if (Integer.TYPE == type) {
+            return Integer.class;
+        }
+        if (Long.TYPE == type) {
+            return Long.class;
+        }
+        if (Float.TYPE == type) {
+            return Float.class;
+        }
+        assert Double.TYPE == type;
+        return Double.class;
     }
 
-    private Node createNodeInstance(ResolvedJavaType nodeClass, ResolvedJavaType[] parameterTypes, ResolvedJavaType returnType, boolean setStampFromReturnType, Constant[] nodeConstructorArguments) {
-        ResolvedJavaMethod constructor = null;
-        Constant[] arguments = null;
+    static final int VARARGS = 0x00000080;
 
-        for (ResolvedJavaMethod c : nodeClass.getDeclaredConstructors()) {
-            Constant[] match = match(c, parameterTypes, nodeConstructorArguments);
-
-            if (match != null) {
-                if (constructor == null) {
-                    constructor = c;
-                    arguments = match;
-                } else {
-                    throw new GraalInternalError("Found multiple constructors in " + nodeClass + " compatible with signature " + Arrays.toString(parameterTypes) + ": " + constructor + ", " + c);
+    private static Node createNodeInstance(MetaAccessProvider runtime, Class<?> nodeClass, Class<?>[] parameterTypes, ResolvedJavaType returnType, boolean setStampFromReturnType,
+                    Object[] nodeConstructorArguments) {
+        Object[] arguments = null;
+        Constructor<?> constructor = null;
+        boolean needsMetaAccessProviderArgument = false;
+        nextConstructor: for (Constructor c : nodeClass.getDeclaredConstructors()) {
+            needsMetaAccessProviderArgument = false;
+            Class[] signature = c.getParameterTypes();
+            if (signature.length != 0 && signature[0] == MetaAccessProvider.class) {
+                // Chop off the MetaAccessProvider first parameter
+                signature = Arrays.copyOfRange(signature, 1, signature.length);
+                needsMetaAccessProviderArgument = true;
+            }
+            if ((c.getModifiers() & VARARGS) != 0) {
+                int fixedArgs = signature.length - 1;
+                if (parameterTypes.length < fixedArgs) {
+                    continue nextConstructor;
                 }
+
+                for (int i = 0; i < fixedArgs; i++) {
+                    if (!parameterTypes[i].equals(signature[i])) {
+                        continue nextConstructor;
+                    }
+                }
+
+                Class componentType = signature[fixedArgs].getComponentType();
+                assert componentType != null : "expected last parameter of varargs constructor " + c + " to be an array type";
+                Class boxedType = asBoxedType(componentType);
+                for (int i = fixedArgs; i < nodeConstructorArguments.length; i++) {
+                    if (!boxedType.isInstance(nodeConstructorArguments[i])) {
+                        continue nextConstructor;
+                    }
+                }
+                arguments = Arrays.copyOf(nodeConstructorArguments, fixedArgs + 1);
+                int varargsLength = nodeConstructorArguments.length - fixedArgs;
+                Object varargs = Array.newInstance(componentType, varargsLength);
+                for (int i = fixedArgs; i < nodeConstructorArguments.length; i++) {
+                    Array.set(varargs, i - fixedArgs, nodeConstructorArguments[i]);
+                }
+                arguments[fixedArgs] = varargs;
+                constructor = c;
+                break;
+            } else if (Arrays.equals(parameterTypes, signature)) {
+                arguments = nodeConstructorArguments;
+                constructor = c;
+                break;
             }
         }
         if (constructor == null) {
             throw new GraalInternalError("Could not find constructor in " + nodeClass + " compatible with signature " + Arrays.toString(parameterTypes));
         }
-
+        if (needsMetaAccessProviderArgument) {
+            Object[] copy = new Object[arguments.length + 1];
+            System.arraycopy(arguments, 0, copy, 1, arguments.length);
+            copy[0] = runtime;
+            arguments = copy;
+        }
+        constructor.setAccessible(true);
         try {
-            ValueNode intrinsicNode = (ValueNode) constructor.newInstance(arguments).asObject();
-
+            ValueNode intrinsicNode = (ValueNode) constructor.newInstance(arguments);
             if (setStampFromReturnType) {
                 if (returnType.getKind() == Kind.Object) {
                     intrinsicNode.setStamp(StampFactory.declared(returnType));
@@ -227,59 +333,26 @@ public class NodeIntrinsificationPhase extends Phase {
         }
     }
 
-    private Constant[] match(ResolvedJavaMethod c, ResolvedJavaType[] parameterTypes, Constant[] nodeConstructorArguments) {
-        Constant[] arguments = null;
-        boolean needsMetaAccessProviderArgument = false;
-
-        ResolvedJavaType[] signature = MetaUtil.resolveJavaTypes(MetaUtil.signatureToTypes(c.getSignature(), null), c.getDeclaringClass());
-        if (signature.length != 0 && signature[0].equals(runtime.lookupJavaType(MetaAccessProvider.class))) {
-            // Chop off the MetaAccessProvider first parameter
-            signature = Arrays.copyOfRange(signature, 1, signature.length);
-            needsMetaAccessProviderArgument = true;
+    /**
+     * Calls a Java method via reflection.
+     */
+    private static Constant callMethod(Kind returnKind, Class<?> holder, String name, Class<?>[] parameterTypes, Object receiver, Object[] arguments) {
+        Method method;
+        try {
+            method = holder.getDeclaredMethod(name, parameterTypes);
+            method.setAccessible(true);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
-
-        if (Arrays.equals(parameterTypes, signature)) {
-            // Exact match
-            arguments = nodeConstructorArguments;
-
-        } else if (signature.length > 0 && signature[signature.length - 1].isArray()) {
-            // Last constructor parameter is an array, so check if we have a vararg match
-            int fixedArgs = signature.length - 1;
-            if (parameterTypes.length < fixedArgs) {
+        try {
+            Object result = method.invoke(receiver, arguments);
+            if (result == null) {
                 return null;
             }
-            for (int i = 0; i < fixedArgs; i++) {
-                if (!parameterTypes[i].equals(signature[i])) {
-                    return null;
-                }
-            }
-
-            ResolvedJavaType componentType = signature[fixedArgs].getComponentType();
-            assert componentType != null;
-            ResolvedJavaType boxedType = asBoxedType(componentType);
-            for (int i = fixedArgs; i < nodeConstructorArguments.length; i++) {
-                if (!boxedType.isAssignableFrom(runtime.lookupJavaType(nodeConstructorArguments[i]))) {
-                    return null;
-                }
-            }
-            arguments = Arrays.copyOf(nodeConstructorArguments, fixedArgs + 1);
-            arguments[fixedArgs] = componentType.newArray(nodeConstructorArguments.length - fixedArgs);
-
-            Object varargs = arguments[fixedArgs].asObject();
-            for (int i = fixedArgs; i < nodeConstructorArguments.length; i++) {
-                Array.set(varargs, i - fixedArgs, nodeConstructorArguments[i].asBoxedValue());
-            }
-        } else {
-            return null;
+            return Constant.forBoxed(returnKind, result);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
-
-        if (needsMetaAccessProviderArgument) {
-            Constant[] copy = new Constant[arguments.length + 1];
-            System.arraycopy(arguments, 0, copy, 1, arguments.length);
-            copy[0] = Constant.forObject(runtime);
-            arguments = copy;
-        }
-        return arguments;
     }
 
     private static String sourceLocation(Node n) {
@@ -298,25 +371,32 @@ public class NodeIntrinsificationPhase extends Phase {
                     if (checkCastUsage instanceof ValueAnchorNode) {
                         ValueAnchorNode valueAnchorNode = (ValueAnchorNode) checkCastUsage;
                         graph.removeFixed(valueAnchorNode);
-                    } else if (checkCastUsage instanceof UnboxNode) {
-                        UnboxNode unbox = (UnboxNode) checkCastUsage;
-                        unbox.replaceAtUsages(newInstance);
-                        graph.removeFixed(unbox);
                     } else if (checkCastUsage instanceof MethodCallTargetNode) {
                         MethodCallTargetNode checkCastCallTarget = (MethodCallTargetNode) checkCastUsage;
-                        assert checkCastCallTarget.targetMethod().getAnnotation(NodeIntrinsic.class) != null : "checkcast at " + sourceLocation(checkCastNode) +
-                                        " not used by an unboxing method or node intrinsic, but by a call at " + sourceLocation(checkCastCallTarget.usages().first()) + " to " +
-                                        checkCastCallTarget.targetMethod();
-                        checkCastUsage.replaceFirstInput(checkCastNode, checkCastNode.object());
+                        if (pool.isUnboxingMethod(checkCastCallTarget.targetMethod())) {
+                            Invoke invokeNode = checkCastCallTarget.invoke();
+                            invokeNode.node().replaceAtUsages(newInstance);
+                            if (invokeNode instanceof InvokeWithExceptionNode) {
+                                // Destroy exception edge & clear stateAfter.
+                                InvokeWithExceptionNode invokeWithExceptionNode = (InvokeWithExceptionNode) invokeNode;
+
+                                invokeWithExceptionNode.killExceptionEdge();
+                                graph.removeSplit(invokeWithExceptionNode, invokeWithExceptionNode.next());
+                            } else {
+                                graph.removeFixed((InvokeNode) invokeNode);
+                            }
+                            checkCastCallTarget.safeDelete();
+                        } else {
+                            assert checkCastCallTarget.targetMethod().getAnnotation(NodeIntrinsic.class) != null : "checkcast at " + sourceLocation(checkCastNode) +
+                                            " not used by an unboxing method or node intrinsic, but by a call at " + sourceLocation(checkCastCallTarget.usages().first()) + " to " +
+                                            checkCastCallTarget.targetMethod();
+                            checkCastUsage.replaceFirstInput(checkCastNode, checkCastNode.object());
+                        }
                     } else if (checkCastUsage instanceof FrameState) {
                         checkCastUsage.replaceFirstInput(checkCastNode, null);
                     } else if (checkCastUsage instanceof ReturnNode && checkCastNode.object().stamp() == StampFactory.forNodeIntrinsic()) {
                         checkCastUsage.replaceFirstInput(checkCastNode, checkCastNode.object());
-                    } else if (checkCastUsage instanceof IsNullNode) {
-                        assert checkCastUsage.usages().count() == 1 && checkCastUsage.usages().first().predecessor() == checkCastNode;
-                        graph.replaceFloating((FloatingNode) checkCastUsage, LogicConstantNode.contradiction(graph));
                     } else {
-                        Debug.dump(graph, "exception");
                         assert false : sourceLocation(checkCastUsage) + " has unexpected usage " + checkCastUsage + " of checkcast at " + sourceLocation(checkCastNode);
                     }
                 }
