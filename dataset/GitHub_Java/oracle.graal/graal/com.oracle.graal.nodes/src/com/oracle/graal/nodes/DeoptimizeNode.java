@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,52 +22,83 @@
  */
 package com.oracle.graal.nodes;
 
+import jdk.internal.jvmci.meta.*;
+
+import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
 
-@NodeInfo(shortName = "Deopt")
-public class DeoptimizeNode extends FixedNode implements Node.IterableNodeType, LIRLowerable {
+@NodeInfo(shortName = "Deopt", nameTemplate = "Deopt {p#reason/s}")
+public final class DeoptimizeNode extends AbstractDeoptimizeNode implements Lowerable, LIRLowerable {
+    public static final int DEFAULT_DEBUG_ID = 0;
 
-    public static enum DeoptAction {
-        None,                           // just interpret, do not invalidate nmethod
-        Recompile,                      // recompile the nmethod; need not invalidate
-        InvalidateReprofile,            // invalidate the nmethod, reset IC, maybe recompile
-        InvalidateRecompile,            // invalidate the nmethod, recompile (probably)
-        InvalidateStopCompiling,        // invalidate the nmethod and do not compile
+    public static final NodeClass<DeoptimizeNode> TYPE = NodeClass.create(DeoptimizeNode.class);
+    protected final DeoptimizationAction action;
+    protected final DeoptimizationReason reason;
+    protected final int debugId;
+    protected final JavaConstant speculation;
+
+    public DeoptimizeNode(DeoptimizationAction action, DeoptimizationReason reason) {
+        this(action, reason, DEFAULT_DEBUG_ID, JavaConstant.NULL_POINTER, null);
     }
 
-    @Data private String message;
-    @Data private final DeoptAction action;
-
-    public DeoptimizeNode() {
-        this(DeoptAction.InvalidateReprofile);
+    public DeoptimizeNode(DeoptimizationAction action, DeoptimizationReason reason, JavaConstant speculation) {
+        this(action, reason, DEFAULT_DEBUG_ID, speculation, null);
     }
 
-    public DeoptimizeNode(DeoptAction action) {
-        super(StampFactory.illegal());
+    public DeoptimizeNode(DeoptimizationAction action, DeoptimizationReason reason, int debugId, JavaConstant speculation, FrameState stateBefore) {
+        super(TYPE, stateBefore);
+        assert action != null;
+        assert reason != null;
+        assert speculation.getKind() == Kind.Object;
         this.action = action;
+        this.reason = reason;
+        this.debugId = debugId;
+        this.speculation = speculation;
     }
 
-    public void setMessage(String message) {
-        this.message = message;
-    }
-
-    public String message() {
-        return message;
-    }
-
-    public DeoptAction action() {
+    public DeoptimizationAction action() {
         return action;
     }
 
+    public DeoptimizationReason reason() {
+        return reason;
+    }
+
     @Override
-    public void generate(LIRGeneratorTool gen) {
-        gen.emitDeoptimizeOn(null, action, message);
+    public void lower(LoweringTool tool) {
+        tool.getLowerer().lower(this, tool);
+    }
+
+    @SuppressWarnings("deprecation")
+    public int getDebugId() {
+        int deoptDebugId = debugId;
+        if (deoptDebugId == DEFAULT_DEBUG_ID && (Debug.isDumpEnabledForMethod() || Debug.isLogEnabledForMethod())) {
+            deoptDebugId = this.getId();
+        }
+        return deoptDebugId;
+    }
+
+    @Override
+    public void generate(NodeLIRBuilderTool gen) {
+        gen.getLIRGeneratorTool().emitDeoptimize(gen.getLIRGeneratorTool().getMetaAccess().encodeDeoptActionAndReason(action, reason, getDebugId()), speculation, gen.state(this));
+    }
+
+    @Override
+    public ValueNode getActionAndReason(MetaAccessProvider metaAccess) {
+        return ConstantNode.forConstant(metaAccess.encodeDeoptActionAndReason(action, reason, getDebugId()), metaAccess, graph());
+    }
+
+    @Override
+    public ValueNode getSpeculation(MetaAccessProvider metaAccess) {
+        return ConstantNode.forConstant(speculation, metaAccess, graph());
+    }
+
+    public JavaConstant getSpeculation() {
+        return speculation;
     }
 
     @NodeIntrinsic
-    public static void deopt() {
-        throw new UnsupportedOperationException();
-    }
+    public static native void deopt(@ConstantNodeParameter DeoptimizationAction action, @ConstantNodeParameter DeoptimizationReason reason);
 }
