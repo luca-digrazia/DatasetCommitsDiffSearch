@@ -22,18 +22,14 @@
  */
 package com.oracle.graal.java;
 
-import static com.oracle.graal.bytecode.Bytecodes.*;
 import static com.oracle.graal.graph.iterators.NodePredicates.*;
 import static com.oracle.graal.java.BytecodeParser.Options.*;
 import static com.oracle.graal.nodes.FrameState.*;
-import static jdk.internal.jvmci.common.JVMCIError.*;
+import static com.oracle.jvmci.bytecode.Bytecodes.*;
+import static com.oracle.jvmci.common.JVMCIError.*;
 
 import java.util.*;
 import java.util.function.*;
-
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.debug.*;
-import jdk.internal.jvmci.meta.*;
 
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graphbuilderconf.IntrinsicContext.SideEffectsState;
@@ -44,6 +40,9 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.util.*;
+import com.oracle.jvmci.code.*;
+import com.oracle.jvmci.debug.*;
+import com.oracle.jvmci.meta.*;
 
 public final class FrameStateBuilder implements SideEffectsState {
 
@@ -426,16 +425,16 @@ public final class FrameStateBuilder implements SideEffectsState {
 
     public void insertLoopPhis(LocalLiveness liveness, int loopId, LoopBeginNode loopBegin, boolean forcePhis) {
         for (int i = 0; i < localsSize(); i++) {
-            boolean needPhi = forcePhis || liveness.localIsChangedInLoop(loopId, i);
-            if (needPhi) {
-                locals[i] = createLoopPhi(loopBegin, locals[i]);
+            boolean changedInLoop = liveness.localIsChangedInLoop(loopId, i);
+            if (changedInLoop || forcePhis) {
+                locals[i] = createLoopPhi(loopBegin, locals[i], !changedInLoop);
             }
         }
         for (int i = 0; i < stackSize(); i++) {
-            stack[i] = createLoopPhi(loopBegin, stack[i]);
+            stack[i] = createLoopPhi(loopBegin, stack[i], false);
         }
         for (int i = 0; i < lockedObjects.length; i++) {
-            lockedObjects[i] = createLoopPhi(loopBegin, lockedObjects[i]);
+            lockedObjects[i] = createLoopPhi(loopBegin, lockedObjects[i], false);
         }
     }
 
@@ -487,13 +486,13 @@ public final class FrameStateBuilder implements SideEffectsState {
         }
     }
 
-    private ValueNode createLoopPhi(AbstractMergeNode block, ValueNode value) {
+    private ValueNode createLoopPhi(AbstractMergeNode block, ValueNode value, boolean stampFromValue) {
         if (value == null || value == TWO_SLOT_MARKER) {
             return value;
         }
         assert !block.isPhiAtMerge(value) : "phi function for this block already created";
 
-        ValuePhiNode phi = graph.addWithoutUnique(new ValuePhiNode(value.stamp().unrestricted(), block));
+        ValuePhiNode phi = graph.addWithoutUnique(new ValuePhiNode(stampFromValue ? value.stamp() : value.stamp().unrestricted(), block));
         phi.addInput(value);
         return phi;
     }
@@ -534,13 +533,9 @@ public final class FrameStateBuilder implements SideEffectsState {
     /**
      * @return the current lock depth
      */
-    public int lockDepth(boolean includeParents) {
-        int depth = lockedObjects.length;
-        assert depth == monitorIds.length;
-        if (includeParents && parser.getParent() != null) {
-            depth += parser.getParent().frameState.lockDepth(true);
-        }
-        return depth;
+    public int lockDepth() {
+        assert lockedObjects.length == monitorIds.length;
+        return lockedObjects.length;
     }
 
     public boolean contains(ValueNode value) {

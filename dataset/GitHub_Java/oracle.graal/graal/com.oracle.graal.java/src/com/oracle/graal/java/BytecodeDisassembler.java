@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,15 +22,21 @@
  */
 package com.oracle.graal.java;
 
-import static com.oracle.graal.bytecode.Bytecodes.*;
+import com.oracle.jvmci.meta.JavaField;
+import com.oracle.jvmci.meta.ResolvedJavaMethod;
+import com.oracle.jvmci.meta.BytecodeDisassemblerProvider;
+import com.oracle.jvmci.meta.JavaConstant;
+import com.oracle.jvmci.meta.JavaType;
+import com.oracle.jvmci.meta.JavaMethod;
+import com.oracle.jvmci.meta.ConstantPool;
+import static com.oracle.jvmci.bytecode.Bytecodes.*;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.bytecode.*;
+import com.oracle.jvmci.bytecode.*;
 
 /**
  * Utility for producing a {@code javap}-like disassembly of bytecode.
  */
-public class BytecodeDisassembler {
+public class BytecodeDisassembler implements BytecodeDisassemblerProvider {
 
     /**
      * Specifies if the disassembly for a single instruction can span multiple lines.
@@ -51,18 +57,29 @@ public class BytecodeDisassembler {
      * @return {@code null} if {@code method} has no bytecode (e.g., it is native or abstract)
      */
     public String disassemble(ResolvedJavaMethod method) {
-        if (method.code() == null) {
+        return disassemble(method, 0, Integer.MAX_VALUE);
+    }
+
+    /**
+     * Disassembles the bytecode of a given method in a {@code javap}-like format.
+     *
+     * @return {@code null} if {@code method} has no bytecode (e.g., it is native or abstract)
+     */
+    public String disassemble(ResolvedJavaMethod method, int startBci, int endBci) {
+        if (method.getCode() == null) {
             return null;
         }
         ConstantPool cp = method.getConstantPool();
-        BytecodeStream stream = new BytecodeStream(method.code());
+        BytecodeStream stream = new BytecodeStream(method.getCode());
         StringBuilder buf = new StringBuilder();
         int opcode = stream.currentBC();
         while (opcode != Bytecodes.END) {
             int bci = stream.currentBCI();
-            String mnemonic = Bytecodes.nameOf(opcode);
-            buf.append(String.format("%4d: %-14s", bci, mnemonic));
-            if (stream.nextBCI() > bci + 1) {
+            if (bci >= startBci && bci <= endBci) {
+                String mnemonic = Bytecodes.nameOf(opcode);
+                buf.append(String.format("%4d: %-14s", bci, mnemonic));
+                if (stream.nextBCI() > bci + 1) {
+                    // @formatter:off
                 switch (opcode) {
                     case BIPUSH         : buf.append(stream.readByte()); break;
                     case SIPUSH         : buf.append(stream.readShort()); break;
@@ -72,7 +89,7 @@ public class BytecodeDisassembler {
                     case ANEWARRAY      : {
                         int cpi = stream.readCPI();
                         JavaType type = cp.lookupType(cpi, opcode);
-                        buf.append(String.format("#%-10d // %s", cpi, MetaUtil.toJavaName(type)));
+                        buf.append(String.format("#%-10d // %s", cpi, type.toJavaName()));
                         break;
                     }
                     case GETSTATIC      :
@@ -81,7 +98,7 @@ public class BytecodeDisassembler {
                     case PUTFIELD       : {
                         int cpi = stream.readCPI();
                         JavaField field = cp.lookupField(cpi, opcode);
-                        String fieldDesc = field.holder().name().equals(method.holder().name()) ? MetaUtil.format("%n:%T", field) : MetaUtil.format("%H.%n:%T", field);
+                        String fieldDesc = field.getDeclaringClass().getName().equals(method.getDeclaringClass().getName()) ? field.format("%n:%T") : field.format("%H.%n:%T");
                         buf.append(String.format("#%-10d // %s", cpi, fieldDesc));
                         break;
                     }
@@ -90,15 +107,22 @@ public class BytecodeDisassembler {
                     case INVOKESTATIC   : {
                         int cpi = stream.readCPI();
                         JavaMethod callee = cp.lookupMethod(cpi, opcode);
-                        String calleeDesc = callee.holder().name().equals(method.holder().name()) ? MetaUtil.format("%n:(%P)%R", callee) : MetaUtil.format("%H.%n:(%P)%R", callee);
+                        String calleeDesc = callee.getDeclaringClass().getName().equals(method.getDeclaringClass().getName()) ? callee.format("%n:(%P)%R") : callee.format("%H.%n:(%P)%R");
                         buf.append(String.format("#%-10d // %s", cpi, calleeDesc));
                         break;
                     }
                     case INVOKEINTERFACE: {
                         int cpi = stream.readCPI();
                         JavaMethod callee = cp.lookupMethod(cpi, opcode);
-                        String calleeDesc = callee.holder().name().equals(method.holder().name()) ? MetaUtil.format("%n:(%P)%R", callee) : MetaUtil.format("%H.%n:(%P)%R", callee);
+                        String calleeDesc = callee.getDeclaringClass().getName().equals(method.getDeclaringClass().getName()) ? callee.format("%n:(%P)%R") : callee.format("%H.%n:(%P)%R");
                         buf.append(String.format("#%-10s // %s", cpi + ", " + stream.readUByte(bci + 3), calleeDesc));
+                        break;
+                    }
+                    case INVOKEDYNAMIC: {
+                        int cpi = stream.readCPI4();
+                        JavaMethod callee = cp.lookupMethod(cpi, opcode);
+                        String calleeDesc = callee.getDeclaringClass().getName().equals(method.getDeclaringClass().getName()) ? callee.format("%n:(%P)%R") : callee.format("%H.%n:(%P)%R");
+                        buf.append(String.format("#%-10d // %s", cpi, calleeDesc));
                         break;
                     }
                     case LDC            :
@@ -107,33 +131,14 @@ public class BytecodeDisassembler {
                         int cpi = stream.readCPI();
                         Object constant = cp.lookupConstant(cpi);
                         String desc = null;
-                        if (constant instanceof Constant) {
-                            Constant c = ((Constant) constant);
-                            switch (c.kind) {
-                                case Int :
-                                    desc = String.valueOf(c.asInt());
-                                    break;
-                                case Float:
-                                    desc = String.valueOf(c.asFloat());
-                                    break;
-                                case Object:
-                                    desc = Kind.Object.format(c.asObject());
-                                    break;
-                                case Double :
-                                    desc = String.valueOf(c.asDouble());
-                                    break;
-                                case Long :
-                                    desc = String.valueOf(c.asLong());
-                                    break;
-                                default:
-                                    desc = c.toString();
-                                    break;
-                            }
+                        if (constant instanceof JavaConstant) {
+                            JavaConstant c = ((JavaConstant) constant);
+                            desc = c.toValueString();
                         } else {
                             desc = constant.toString();
                         }
                         if (!multiline) {
-                            desc.replaceAll("\\n", "");
+                            desc = desc.replaceAll("\\n", "");
                         }
                         buf.append(String.format("#%-10d // %s", cpi, desc));
                         break;
@@ -217,12 +222,14 @@ public class BytecodeDisassembler {
                     case MULTIANEWARRAY : {
                         int cpi = stream.readCPI();
                         JavaType type = cp.lookupType(cpi, opcode);
-                        buf.append(String.format("#%-10s // %s", cpi + ", " + stream.readUByte(bci + 3), MetaUtil.toJavaName(type)));
+                        buf.append(String.format("#%-10s // %s", cpi + ", " + stream.readUByte(bci + 3), type.toJavaName()));
                         break;
                     }
                 }
+                // @formatter:on
+                }
+                buf.append(String.format("%n"));
             }
-            buf.append(String.format("%n"));
             stream.next();
             opcode = stream.currentBC();
         }

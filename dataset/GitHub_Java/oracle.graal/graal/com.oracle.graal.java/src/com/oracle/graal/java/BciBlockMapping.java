@@ -22,83 +22,16 @@
  */
 package com.oracle.graal.java;
 
-import static com.oracle.graal.bytecode.Bytecodes.AALOAD;
-import static com.oracle.graal.bytecode.Bytecodes.AASTORE;
-import static com.oracle.graal.bytecode.Bytecodes.ARETURN;
-import static com.oracle.graal.bytecode.Bytecodes.ARRAYLENGTH;
-import static com.oracle.graal.bytecode.Bytecodes.ATHROW;
-import static com.oracle.graal.bytecode.Bytecodes.BALOAD;
-import static com.oracle.graal.bytecode.Bytecodes.BASTORE;
-import static com.oracle.graal.bytecode.Bytecodes.CALOAD;
-import static com.oracle.graal.bytecode.Bytecodes.CASTORE;
-import static com.oracle.graal.bytecode.Bytecodes.DALOAD;
-import static com.oracle.graal.bytecode.Bytecodes.DASTORE;
-import static com.oracle.graal.bytecode.Bytecodes.DRETURN;
-import static com.oracle.graal.bytecode.Bytecodes.FALOAD;
-import static com.oracle.graal.bytecode.Bytecodes.FASTORE;
-import static com.oracle.graal.bytecode.Bytecodes.FRETURN;
-import static com.oracle.graal.bytecode.Bytecodes.GETFIELD;
-import static com.oracle.graal.bytecode.Bytecodes.GOTO;
-import static com.oracle.graal.bytecode.Bytecodes.GOTO_W;
-import static com.oracle.graal.bytecode.Bytecodes.IALOAD;
-import static com.oracle.graal.bytecode.Bytecodes.IASTORE;
-import static com.oracle.graal.bytecode.Bytecodes.IFEQ;
-import static com.oracle.graal.bytecode.Bytecodes.IFGE;
-import static com.oracle.graal.bytecode.Bytecodes.IFGT;
-import static com.oracle.graal.bytecode.Bytecodes.IFLE;
-import static com.oracle.graal.bytecode.Bytecodes.IFLT;
-import static com.oracle.graal.bytecode.Bytecodes.IFNE;
-import static com.oracle.graal.bytecode.Bytecodes.IFNONNULL;
-import static com.oracle.graal.bytecode.Bytecodes.IFNULL;
-import static com.oracle.graal.bytecode.Bytecodes.IF_ACMPEQ;
-import static com.oracle.graal.bytecode.Bytecodes.IF_ACMPNE;
-import static com.oracle.graal.bytecode.Bytecodes.IF_ICMPEQ;
-import static com.oracle.graal.bytecode.Bytecodes.IF_ICMPGE;
-import static com.oracle.graal.bytecode.Bytecodes.IF_ICMPGT;
-import static com.oracle.graal.bytecode.Bytecodes.IF_ICMPLE;
-import static com.oracle.graal.bytecode.Bytecodes.IF_ICMPLT;
-import static com.oracle.graal.bytecode.Bytecodes.IF_ICMPNE;
-import static com.oracle.graal.bytecode.Bytecodes.INVOKEDYNAMIC;
-import static com.oracle.graal.bytecode.Bytecodes.INVOKEINTERFACE;
-import static com.oracle.graal.bytecode.Bytecodes.INVOKESPECIAL;
-import static com.oracle.graal.bytecode.Bytecodes.INVOKESTATIC;
-import static com.oracle.graal.bytecode.Bytecodes.INVOKEVIRTUAL;
-import static com.oracle.graal.bytecode.Bytecodes.IRETURN;
-import static com.oracle.graal.bytecode.Bytecodes.JSR;
-import static com.oracle.graal.bytecode.Bytecodes.JSR_W;
-import static com.oracle.graal.bytecode.Bytecodes.LALOAD;
-import static com.oracle.graal.bytecode.Bytecodes.LASTORE;
-import static com.oracle.graal.bytecode.Bytecodes.LOOKUPSWITCH;
-import static com.oracle.graal.bytecode.Bytecodes.LRETURN;
-import static com.oracle.graal.bytecode.Bytecodes.PUTFIELD;
-import static com.oracle.graal.bytecode.Bytecodes.RET;
-import static com.oracle.graal.bytecode.Bytecodes.RETURN;
-import static com.oracle.graal.bytecode.Bytecodes.SALOAD;
-import static com.oracle.graal.bytecode.Bytecodes.SASTORE;
-import static com.oracle.graal.bytecode.Bytecodes.TABLESWITCH;
-import static com.oracle.graal.compiler.common.GraalOptions.SupportJsrBytecodes;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.jvmci.bytecode.Bytecodes.*;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.TreeSet;
+import java.util.*;
 
-import jdk.vm.ci.code.BailoutException;
-import jdk.vm.ci.code.BytecodeFrame;
-import jdk.vm.ci.meta.ExceptionHandler;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-
-import com.oracle.graal.bytecode.BytecodeLookupSwitch;
-import com.oracle.graal.bytecode.BytecodeStream;
-import com.oracle.graal.bytecode.BytecodeSwitch;
-import com.oracle.graal.bytecode.BytecodeTableSwitch;
-import com.oracle.graal.bytecode.Bytecodes;
-import com.oracle.graal.compiler.common.CollectionsFactory;
-import com.oracle.graal.debug.Debug;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.jvmci.bytecode.*;
+import com.oracle.jvmci.code.*;
+import com.oracle.jvmci.debug.*;
+import com.oracle.jvmci.meta.*;
 
 /**
  * Builds a mapping between bytecodes and basic blocks and builds a conservative control flow graph
@@ -629,7 +562,6 @@ public final class BciBlockMapping {
                 case BALOAD:
                 case CALOAD:
                 case SALOAD:
-                case ARRAYLENGTH:
                 case PUTFIELD:
                 case GETFIELD: {
                     ExceptionDispatchBlock handler = handleExceptions(blockMap, bci);
@@ -848,7 +780,7 @@ public final class BciBlockMapping {
         ExceptionDispatchBlock unwindBlock = new ExceptionDispatchBlock();
         unwindBlock.startBci = -1;
         unwindBlock.endBci = -1;
-        unwindBlock.deoptBci = BytecodeFrame.UNWIND_BCI;
+        unwindBlock.deoptBci = method.isSynchronized() ? BytecodeFrame.UNWIND_BCI : BytecodeFrame.AFTER_EXCEPTION_BCI;
         unwindBlock.setId(newBlocks.length - 1);
         newBlocks[newBlocks.length - 1] = unwindBlock;
 

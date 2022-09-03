@@ -22,21 +22,20 @@
  */
 package com.oracle.graal.nodes;
 
-import static jdk.internal.jvmci.code.BytecodeFrame.*;
+import static com.oracle.jvmci.code.BytecodeFrame.*;
 
 import java.util.*;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.debug.*;
-import jdk.internal.jvmci.meta.*;
-
-import com.oracle.graal.bytecode.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.virtual.*;
+import com.oracle.jvmci.bytecode.*;
+import com.oracle.jvmci.code.*;
+import com.oracle.jvmci.debug.*;
+import com.oracle.jvmci.meta.*;
 
 /**
  * The {@code FrameState} class encapsulates the frame state (i.e. local variables and operand
@@ -523,11 +522,6 @@ public final class FrameState extends VirtualState implements IterableNodeType {
 
     @Override
     public boolean verify() {
-        if (virtualObjectMappingCount() > 0) {
-            for (EscapeObjectState state : virtualObjectMappings()) {
-                assertTrue(state != null, "must be non-null");
-            }
-        }
         assertTrue(locksSize() == monitorIdCount(), "mismatch in number of locks");
         for (ValueNode value : values) {
             assertTrue(value == null || !value.isDeleted(), "frame state must not contain deleted nodes");
