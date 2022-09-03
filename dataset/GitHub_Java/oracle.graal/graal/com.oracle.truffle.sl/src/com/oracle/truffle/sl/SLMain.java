@@ -24,8 +24,6 @@ package com.oracle.truffle.sl;
 
 import java.io.*;
 import java.math.*;
-import java.net.*;
-import java.util.*;
 import java.util.Scanner;
 
 import com.oracle.truffle.api.*;
@@ -33,10 +31,11 @@ import com.oracle.truffle.api.dsl.*;
 import com.oracle.truffle.api.instrument.*;
 import com.oracle.truffle.api.nodes.*;
 import com.oracle.truffle.api.source.*;
-import com.oracle.truffle.api.vm.*;
+import com.oracle.truffle.api.tools.*;
+import com.oracle.truffle.api.vm.TruffleVM;
 import com.oracle.truffle.api.vm.TruffleVM.Symbol;
 import com.oracle.truffle.sl.builtins.*;
-import com.oracle.truffle.sl.factory.*;
+import com.oracle.truffle.sl.factory.SLContextFactory;
 import com.oracle.truffle.sl.nodes.*;
 import com.oracle.truffle.sl.nodes.call.*;
 import com.oracle.truffle.sl.nodes.controlflow.*;
@@ -45,7 +44,9 @@ import com.oracle.truffle.sl.nodes.instrument.*;
 import com.oracle.truffle.sl.nodes.local.*;
 import com.oracle.truffle.sl.parser.*;
 import com.oracle.truffle.sl.runtime.*;
-import com.oracle.truffle.tools.*;
+import java.net.URI;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * SL is a simple language to demonstrate and showcase features of Truffle. The implementation is as
@@ -179,17 +180,6 @@ public class SLMain extends TruffleLanguage {
         while (repeats-- > 0) {
             main.invoke(null);
         }
-    }
-
-    public static void run(Source source) throws IOException {
-        TruffleVM vm = TruffleVM.newVM().build();
-        assert vm.getLanguages().containsKey("application/x-sl");
-        vm.eval(new File(source.getPath()).toURI());
-        Symbol main = vm.findGlobalSymbol("main");
-        if (main == null) {
-            throw new SLException("No function main() defined in SL source file.");
-        }
-        main.invoke(null);
     }
 
     /**
@@ -382,7 +372,11 @@ public class SLMain extends TruffleLanguage {
 
     @Override
     protected Object eval(Source code) throws IOException {
-        context.executeMain(code);
+        try {
+            context.executeMain(code);
+        } catch (Exception e) {
+            throw new IOException(e);
+        }
         return null;
     }
 

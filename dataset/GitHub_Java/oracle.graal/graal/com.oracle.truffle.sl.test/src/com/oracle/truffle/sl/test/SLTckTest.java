@@ -44,16 +44,19 @@ public class SLTckTest extends TruffleTCK {
         // @formatter:off
         vm.eval("application/x-sl",
             "function fourtyTwo() {\n" +
-            "  return 42;\n" + //
+            "  return 42;\n" +
             "}\n" +
             "function plus(a, b) {\n" +
             "  return a + b;\n" +
-            "}\n" +
-            "function null() {\n" +
             "}\n"
         );
         // @formatter:on
         return vm;
+    }
+
+    @Override
+    protected String mimeType() {
+        return "application/x-sl";
     }
 
     @Override
@@ -67,7 +70,13 @@ public class SLTckTest extends TruffleTCK {
     }
 
     @Override
-    protected String returnsNull() {
-        return "null";
+    protected String invalidCode() {
+        // @formatter:off
+        return
+            "f unction main() {\n" +
+            "  retu rn 42;\n" +
+            "}\n";
+        // @formatter:on
     }
+
 }
