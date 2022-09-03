@@ -45,14 +45,14 @@ import java.io.Writer;
 import java.util.List;
 
 import javax.annotation.processing.ProcessingEnvironment;
-import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.TypeKind;
 
-import com.oracle.truffle.dsl.processor.ProcessorContext;
-import com.oracle.truffle.dsl.processor.TruffleTypes;
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.interop.MessageResolution;
+import com.oracle.truffle.api.interop.Resolve;
 import com.oracle.truffle.dsl.processor.java.ElementUtils;
 
 class KeysGenerator extends MessageGenerator {
@@ -60,8 +60,7 @@ class KeysGenerator extends MessageGenerator {
     private static final String TARGETABLE_KEYS_NODE = "TargetableKeysNode";
     private int parameterCount = 1;
 
-    KeysGenerator(ProcessingEnvironment processingEnv, AnnotationMirror resolveAnnotation, AnnotationMirror messageResolutionAnnotation,
-                    TypeElement element,
+    KeysGenerator(ProcessingEnvironment processingEnv, Resolve resolveAnnotation, MessageResolution messageResolutionAnnotation, TypeElement element,
                     ForeignAccessFactoryGenerator containingForeignAccessFactory) {
         super(processingEnv, resolveAnnotation, messageResolutionAnnotation, element, containingForeignAccessFactory);
     }
@@ -83,7 +82,7 @@ class KeysGenerator extends MessageGenerator {
         appendGetName(w);
         w.append(indent).append("        @Override\n");
         w.append(indent).append("        public Object execute(VirtualFrame frame) {\n");
-        w.append(indent).append("            Object receiver = com.oracle.truffle.api.interop.ForeignAccess.getReceiver(frame);\n");
+        w.append(indent).append("            Object receiver = ForeignAccess.getReceiver(frame);\n");
         if (parameterCount == 2) {
             w.append(indent).append("            Object[] arguments = frame.getArguments();\n");
             w.append(indent).append("            Object internal = (arguments.length < 2) ? false : arguments[1];\n");
@@ -113,8 +112,7 @@ class KeysGenerator extends MessageGenerator {
         boolean hasFrameArgument = false;
         boolean hasInternalArgument = false;
         if (params.size() >= 1) {
-            TruffleTypes types = ProcessorContext.getInstance().getTypes();
-            hasFrameArgument = ElementUtils.areTypesCompatible(params.get(0).asType(), types.VirtualFrame);
+            hasFrameArgument = ElementUtils.areTypesCompatible(params.get(0).asType(), Utils.getTypeMirror(processingEnv, VirtualFrame.class));
             int lastIndex = params.size() - 1;
             hasInternalArgument = ElementUtils.areTypesCompatible(params.get(lastIndex).asType(), processingEnv.getTypeUtils().getPrimitiveType(TypeKind.BOOLEAN));
         }

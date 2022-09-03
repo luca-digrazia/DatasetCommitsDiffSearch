@@ -45,13 +45,14 @@ import java.io.Writer;
 import java.util.List;
 
 import javax.annotation.processing.ProcessingEnvironment;
-import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
 
-import com.oracle.truffle.dsl.processor.ProcessorContext;
-import com.oracle.truffle.dsl.processor.TruffleTypes;
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.interop.Message;
+import com.oracle.truffle.api.interop.MessageResolution;
+import com.oracle.truffle.api.interop.Resolve;
 import com.oracle.truffle.dsl.processor.java.ElementUtils;
 
 final class ExecuteGenerator extends MessageGenerator {
@@ -62,16 +63,15 @@ final class ExecuteGenerator extends MessageGenerator {
     // New: TruffleObject receiver, Object[] args
     private final String targetableExecuteNode;
 
-    ExecuteGenerator(ProcessingEnvironment processingEnv, AnnotationMirror resolveAnnotation, AnnotationMirror messageResolutionAnnotation,
-                    TypeElement element,
+    ExecuteGenerator(ProcessingEnvironment processingEnv, Resolve resolveAnnotation, MessageResolution messageResolutionAnnotation, TypeElement element,
                     ForeignAccessFactoryGenerator containingForeignAccessFactory) {
         super(processingEnv, resolveAnnotation, messageResolutionAnnotation, element, containingForeignAccessFactory);
         this.targetableExecuteNode = (new StringBuilder(messageName)).replace(0, 1, messageName.substring(0, 1).toUpperCase()).append("Node").insert(0, "Targetable").toString();
-        if ("EXECUTE".toString().equalsIgnoreCase(messageName)) {
+        if (Message.EXECUTE.toString().equalsIgnoreCase(messageName)) {
             numberOfArguments = 2;
-        } else if ("INVOKE".toString().equalsIgnoreCase(messageName)) {
+        } else if (Message.INVOKE.toString().equalsIgnoreCase(messageName)) {
             numberOfArguments = 3;
-        } else if ("NEW".toString().equalsIgnoreCase(messageName)) {
+        } else if (Message.NEW.toString().equalsIgnoreCase(messageName)) {
             numberOfArguments = 2;
         } else {
             throw new AssertionError();
@@ -100,9 +100,9 @@ final class ExecuteGenerator extends MessageGenerator {
         appendGetName(w);
         w.append(indent).append("        @Override\n");
         w.append(indent).append("        public Object execute(VirtualFrame frame) {\n");
-        w.append(indent).append("            Object receiver = com.oracle.truffle.api.interop.ForeignAccess.getReceiver(frame);\n");
+        w.append(indent).append("            Object receiver = ForeignAccess.getReceiver(frame);\n");
         w.append(indent).append("            Object[] arguments = frame.getArguments();\n");
-        boolean isInvoke = "INVOKE".toString().equalsIgnoreCase(messageName);
+        boolean isInvoke = Message.INVOKE.toString().equalsIgnoreCase(messageName);
         if (isInvoke) {
             w.append(indent).append("            Object identifier = arguments[1];\n");
             w.append(indent).append("            Object[] args = new Object[arguments.length - 2];\n");
@@ -134,23 +134,22 @@ final class ExecuteGenerator extends MessageGenerator {
         final List<? extends VariableElement> params = method.getParameters();
         boolean hasFrameArgument = false;
         if (params.size() >= 1) {
-            TruffleTypes types = ProcessorContext.getInstance().getTypes();
-            hasFrameArgument = ElementUtils.typeEquals(params.get(0).asType(), types.VirtualFrame);
+            hasFrameArgument = ElementUtils.typeEquals(params.get(0).asType(), Utils.getTypeMirror(processingEnv, VirtualFrame.class));
         }
         int expectedNumberOfArguments = hasFrameArgument ? getParameterCount() + 1 : getParameterCount();
 
         if (params.size() != expectedNumberOfArguments) {
-            if ("INVOKE".toString().equalsIgnoreCase(messageName)) {
+            if (Message.INVOKE.toString().equalsIgnoreCase(messageName)) {
                 return "Wrong number of arguments. Expected signature: ([frame: VirtualFrame], receiverObject: TruffleObject, identifier: String, arguments: Object[])";
-            } else if ("EXECUTE".toString().equalsIgnoreCase(messageName)) {
+            } else if (Message.EXECUTE.toString().equalsIgnoreCase(messageName)) {
                 return "Wrong number of arguments. Expected signature: ([frame: VirtualFrame], receiverObject: TruffleObject, arguments: Object[])";
             } else {
                 throw new IllegalStateException();
             }
         }
 
-        if ("INVOKE".toString().equalsIgnoreCase(messageName)) {
-            if (!ElementUtils.typeEquals(params.get(hasFrameArgument ? 2 : 1).asType(), ProcessorContext.getInstance().getType(String.class))) {
+        if (Message.INVOKE.toString().equalsIgnoreCase(messageName)) {
+            if (!ElementUtils.typeEquals(params.get(hasFrameArgument ? 2 : 1).asType(), Utils.getTypeMirror(processingEnv, String.class))) {
                 int i = hasFrameArgument ? 3 : 2;
                 return "The " + i + " argument must be a " + String.class.getName() + "- but is " + ElementUtils.getQualifiedName(params.get(hasFrameArgument ? 2 : 1).asType());
             }

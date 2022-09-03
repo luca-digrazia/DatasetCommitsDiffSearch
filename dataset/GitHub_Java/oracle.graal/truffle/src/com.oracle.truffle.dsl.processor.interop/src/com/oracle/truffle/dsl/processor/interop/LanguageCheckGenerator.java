@@ -47,7 +47,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import javax.annotation.processing.ProcessingEnvironment;
-import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
@@ -55,8 +54,9 @@ import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.TypeKind;
 
-import com.oracle.truffle.dsl.processor.ProcessorContext;
-import com.oracle.truffle.dsl.processor.RefectiveTypes;
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.interop.MessageResolution;
+import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.dsl.processor.java.ElementUtils;
 
 final class LanguageCheckGenerator extends InteropNodeGenerator {
@@ -64,8 +64,7 @@ final class LanguageCheckGenerator extends InteropNodeGenerator {
 
     protected String receiverClassName;
 
-    LanguageCheckGenerator(ProcessingEnvironment processingEnv, AnnotationMirror messageResolutionAnnotation, TypeElement element,
-                    ForeignAccessFactoryGenerator containingForeignAccessFactory) {
+    LanguageCheckGenerator(ProcessingEnvironment processingEnv, MessageResolution messageResolutionAnnotation, TypeElement element, ForeignAccessFactoryGenerator containingForeignAccessFactory) {
         super(processingEnv, element, containingForeignAccessFactory);
         this.receiverClassName = Utils.getReceiverTypeFullClassName(messageResolutionAnnotation);
     }
@@ -100,17 +99,15 @@ final class LanguageCheckGenerator extends InteropNodeGenerator {
         return methods;
     }
 
-    @SuppressWarnings("static-method")
     public String checkSignature(ExecutableElement method) {
         final List<? extends VariableElement> params = method.getParameters();
-        RefectiveTypes types = ProcessorContext.getInstance().getTypes();
         boolean hasFrameArgument = false;
         if (params.size() >= 1) {
-            hasFrameArgument = ElementUtils.typeEquals(params.get(0).asType(), types.VirtualFrame);
+            hasFrameArgument = ElementUtils.typeEquals(params.get(0).asType(), Utils.getTypeMirror(processingEnv, VirtualFrame.class));
         }
         int expectedNumberOfArguments = hasFrameArgument ? 2 : 1;
 
-        if (!ElementUtils.typeEquals(params.get(hasFrameArgument ? 1 : 0).asType(), types.TruffleObject)) {
+        if (!ElementUtils.typeEquals(params.get(hasFrameArgument ? 1 : 0).asType(), Utils.getTypeMirror(processingEnv, TruffleObject.class))) {
             return "The receiver type must be TruffleObject";
         }
 
@@ -169,7 +166,7 @@ final class LanguageCheckGenerator extends InteropNodeGenerator {
         w.append("\n");
         w.append(indent).append("        @Override\n");
         w.append(indent).append("        public Object execute(VirtualFrame frame) {\n");
-        w.append(indent).append("            Object receiver = com.oracle.truffle.api.interop.ForeignAccess.getReceiver(frame);\n");
+        w.append(indent).append("            Object receiver = ForeignAccess.getReceiver(frame);\n");
         w.append(indent).append("            try {\n");
         w.append(indent).append("                return node.executeWithTarget(frame, receiver);\n");
         w.append(indent).append("            } catch (UnsupportedSpecializationException e) {\n");
