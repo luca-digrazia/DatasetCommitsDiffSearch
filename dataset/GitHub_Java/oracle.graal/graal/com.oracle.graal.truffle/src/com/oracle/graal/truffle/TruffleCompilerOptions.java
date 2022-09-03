@@ -73,7 +73,7 @@ public class TruffleCompilerOptions {
     public static final OptionValue<Integer> TruffleCompilationDecisionTime = new OptionValue<>(100);
     @Option(help = "")
     public static final OptionValue<Boolean> TruffleBackgroundCompilation = new OptionValue<>(true);
-
+    
     // tracing
     @Option(help = "")
     public static final OptionValue<Boolean> TraceTruffleCompilation = new OptionValue<>(true);
@@ -87,8 +87,6 @@ public class TruffleCompilerOptions {
     public static final OptionValue<Boolean> TruffleCompilationExceptionsAreFatal = new OptionValue<>(true);
     @Option(help = "")
     public static final OptionValue<Boolean> TraceTruffleInlining = new OptionValue<>(true);
-    @Option(help = "")
-    public static final OptionValue<Boolean> TraceTruffleInliningTree = new OptionValue<>(false);
     @Option(help = "")
     public static final OptionValue<Boolean> TraceTruffleInliningDetails = new OptionValue<>(false);
     @Option(help = "")
