@@ -22,30 +22,6 @@
  */
 package org.graalvm.compiler.truffle;
 
-import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TraceTruffleAssumptions;
-import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleBackgroundCompilation;
-import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleCallTargetProfiling;
-import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleCompilationExceptionsAreFatal;
-import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleCompilationExceptionsArePrinted;
-import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleCompilationExceptionsAreThrown;
-
-import java.io.PrintWriter;
-import java.io.StringWriter;
-import java.lang.reflect.Method;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Objects;
-import java.util.concurrent.Future;
-import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
-import java.util.function.UnaryOperator;
-
-import org.graalvm.compiler.core.common.SuppressFBWarnings;
-import org.graalvm.compiler.debug.GraalError;
-import org.graalvm.compiler.truffle.GraalTruffleRuntime.LazyFrameBoxingQuery;
-import org.graalvm.compiler.truffle.debug.AbstractDebugCompilationListener;
-import org.graalvm.compiler.truffle.substitutions.TruffleGraphBuilderPlugins;
-
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
@@ -58,14 +34,39 @@ import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.impl.DefaultCompilerOptions;
+import com.oracle.truffle.api.nodes.ControlFlowException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeUtil;
 import com.oracle.truffle.api.nodes.NodeVisitor;
 import com.oracle.truffle.api.nodes.RootNode;
-
 import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.code.InstalledCode;
 import jdk.vm.ci.meta.SpeculationLog;
+import org.graalvm.compiler.core.common.SuppressFBWarnings;
+import org.graalvm.compiler.debug.GraalError;
+import org.graalvm.compiler.truffle.GraalTruffleRuntime.LazyFrameBoxingQuery;
+import org.graalvm.compiler.truffle.debug.AbstractDebugCompilationListener;
+import org.graalvm.compiler.truffle.substitutions.TruffleGraphBuilderPlugins;
+import org.graalvm.options.OptionKey;
+import org.graalvm.options.OptionValues;
+
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.lang.reflect.Method;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
+import java.util.function.UnaryOperator;
+
+import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TraceTruffleAssumptions;
+import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleBackgroundCompilation;
+import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleCompilationExceptionsAreFatal;
+import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleCompilationExceptionsArePrinted;
+import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleCompilationExceptionsAreThrown;
+import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TrufflePerformanceWarningsAreFatal;
 
 /**
  * Call target that is optimized by Graal upon surpassing a specific invocation threshold.
@@ -74,6 +75,7 @@ import jdk.vm.ci.meta.SpeculationLog;
 public class OptimizedCallTarget extends InstalledCode implements RootCallTarget, ReplaceObserver, com.oracle.truffle.api.LoopCountReceiver {
 
     private static final String NODE_REWRITING_ASSUMPTION_NAME = "nodeRewritingAssumption";
+    static final String CALL_BOUNDARY_METHOD_NAME = "callProxy";
 
     /** The AST to be executed when this call target is called. */
     private final RootNode rootNode;
@@ -98,9 +100,11 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     private volatile Assumption nodeRewritingAssumption;
     private static final AtomicReferenceFieldUpdater<OptimizedCallTarget, Assumption> NODE_REWRITING_ASSUMPTION_UPDATER = AtomicReferenceFieldUpdater.newUpdater(OptimizedCallTarget.class,
                     Assumption.class, "nodeRewritingAssumption");
+    private volatile OptimizedDirectCallNode callSiteForSplit;
+    @CompilationFinal private volatile String nameCache;
 
     public OptimizedCallTarget(OptimizedCallTarget sourceCallTarget, RootNode rootNode) {
-        super(rootNode.toString());
+        super(null);
         assert sourceCallTarget == null || sourceCallTarget.sourceCallTarget == null : "Cannot create a clone of a cloned CallTarget";
         this.sourceCallTarget = sourceCallTarget;
         this.speculationLog = sourceCallTarget != null ? sourceCallTarget.getSpeculationLog() : null;
@@ -171,13 +175,16 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
 
     @Override
     public final Object call(Object... args) {
-        getCompilationProfile().profileIndirectCall();
+        OptimizedCompilationProfile profile = compilationProfile;
+        if (profile != null) {
+            profile.profileIndirectCall();
+        }
         return doInvoke(args);
     }
 
     public final Object callDirect(Object... args) {
+        getCompilationProfile().profileDirectCall(args);
         try {
-            getCompilationProfile().profileDirectCall(args);
             Object result = doInvoke(args);
             if (CompilerDirectives.inCompiledCode()) {
                 result = compilationProfile.injectReturnValueProfile(result);
@@ -201,7 +208,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     protected final Object callBoundary(Object[] args) {
         if (CompilerDirectives.inInterpreter()) {
             // We are called and we are still in Truffle interpreter mode.
-            compilationProfile.interpreterCall(this);
+            getCompilationProfile().interpreterCall(this);
             if (isValid()) {
                 // Stubs were deoptimized => reinstall.
                 runtime().reinstallStubs();
@@ -209,7 +216,6 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         } else {
             // We come here from compiled code
         }
-
         return callRoot(args);
     }
 
@@ -221,6 +227,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
             args = profile.injectArgumentProfile(originalArguments);
         }
         Object result = callProxy(createFrame(getRootNode().getFrameDescriptor(), args));
+
         if (profile != null) {
             profile.profileReturnValue(result);
         }
@@ -231,6 +238,12 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         final boolean inCompiled = CompilerDirectives.inCompiledCode();
         try {
             return getRootNode().execute(frame);
+        } catch (ControlFlowException t) {
+            throw rethrow(compilationProfile.profileExceptionType(t));
+        } catch (Throwable t) {
+            Throwable profiledT = compilationProfile.profileExceptionType(t);
+            runtime().getTvmci().onThrowable(rootNode, profiledT);
+            throw rethrow(profiledT);
         } finally {
             // this assertion is needed to keep the values from being cleared as non-live locals
             assert frame != null && this != null;
@@ -244,7 +257,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         runtime().getCompilationNotify().notifyCompilationDeoptimized(this, frame);
     }
 
-    private static GraalTruffleRuntime runtime() {
+    static GraalTruffleRuntime runtime() {
         return (GraalTruffleRuntime) Truffle.getRuntime();
     }
 
@@ -260,12 +273,12 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         }
     }
 
-    private static OptimizedCompilationProfile createCompilationProfile() {
-        if (TruffleCompilerOptions.getValue(TruffleCallTargetProfiling)) {
-            return TraceCompilationProfile.create();
-        } else {
-            return OptimizedCompilationProfile.create();
-        }
+    public final OptionValues getOptionValues() {
+        return runtime().getTvmci().getCompilerOptionValues(rootNode);
+    }
+
+    private OptimizedCompilationProfile createCompilationProfile() {
+        return OptimizedCompilationProfile.create(PolyglotCompilerOptions.getPolyglotValues(rootNode));
     }
 
     public final void compile() {
@@ -289,7 +302,9 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
             if (task != null) {
                 Future<?> submitted = task.getFuture();
                 if (submitted != null) {
-                    boolean mayBeAsynchronous = TruffleCompilerOptions.getValue(TruffleBackgroundCompilation) && !TruffleCompilerOptions.getValue(TruffleCompilationExceptionsAreThrown);
+                    boolean allowBackgroundCompilation = !TruffleCompilerOptions.getValue(TrufflePerformanceWarningsAreFatal) &&
+                                    !TruffleCompilerOptions.getValue(TruffleCompilationExceptionsAreThrown);
+                    boolean mayBeAsynchronous = TruffleCompilerOptions.getValue(TruffleBackgroundCompilation) && allowBackgroundCompilation;
                     runtime().finishCompilation(this, submitted, mayBeAsynchronous);
                 }
             }
@@ -374,10 +389,13 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
              */
             boolean truffleCompilationExceptionsAreFatal = TruffleCompilerOptions.getValue(TruffleCompilationExceptionsAreFatal);
             assert TruffleCompilationExceptionsAreFatal.hasBeenSet(TruffleCompilerOptions.getOptions()) || (truffleCompilationExceptionsAreFatal = true) == true;
+            truffleCompilationExceptionsAreFatal = truffleCompilationExceptionsAreFatal || TruffleCompilerOptions.getValue(TrufflePerformanceWarningsAreFatal);
 
             if (TruffleCompilerOptions.getValue(TruffleCompilationExceptionsArePrinted) || truffleCompilationExceptionsAreFatal) {
                 printException(t);
                 if (truffleCompilationExceptionsAreFatal) {
+                    log("Exiting VM due to " + (TruffleCompilerOptions.getValue(TruffleCompilationExceptionsAreFatal) ? TruffleCompilationExceptionsAreFatal.getName()
+                                    : TrufflePerformanceWarningsAreFatal.getName()) + "=true");
                     System.exit(-1);
                 }
             }
@@ -410,6 +428,17 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
 
     public final OptimizedCallTarget getSourceCallTarget() {
         return sourceCallTarget;
+    }
+
+    @Override
+    public String getName() {
+        String result = nameCache;
+        if (result == null) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            result = rootNode.toString();
+            nameCache = result;
+        }
+        return result;
     }
 
     @Override
@@ -553,6 +582,17 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         return DefaultCompilerOptions.INSTANCE;
     }
 
+    public void setCallSiteForSplit(OptimizedDirectCallNode callSiteForSplit) {
+        if (sourceCallTarget == null) {
+            throw new IllegalStateException("Attempting to set a split call site on a target that is not a split!");
+        }
+        this.callSiteForSplit = callSiteForSplit;
+    }
+
+    public OptimizedDirectCallNode getCallSiteForSplit() {
+        return callSiteForSplit;
+    }
+
     private static final class NonTrivialNodeCountVisitor implements NodeVisitor {
         public int nodeCount;
 
@@ -582,4 +622,9 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     void resetCompilationTask() {
         this.compilationTask = null;
     }
+
+    public <T> T getOptionValue(OptionKey<T> key) {
+        return PolyglotCompilerOptions.getValue(rootNode, key);
+    }
+
 }
