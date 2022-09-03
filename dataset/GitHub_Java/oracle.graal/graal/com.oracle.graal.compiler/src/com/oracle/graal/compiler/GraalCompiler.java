@@ -48,7 +48,7 @@ import com.oracle.graal.virtual.phases.ea.*;
 public class GraalCompiler {
 
     public static CompilationResult compileMethod(final GraalCodeCacheProvider runtime, final Backend backend, final TargetDescription target, final ResolvedJavaMethod method,
-                    final StructuredGraph graph, final GraphCache cache, final PhasePlan plan, final OptimisticOptimizations optimisticOpts, final SpeculationLog speculationLog) {
+                    final StructuredGraph graph, final GraphCache cache, final PhasePlan plan, final OptimisticOptimizations optimisticOpts) {
         assert (method.getModifiers() & Modifier.NATIVE) == 0 : "compiling native methods is not supported";
 
         return Debug.scope("GraalCompiler", new Object[]{graph, method, runtime}, new Callable<CompilationResult>() {
@@ -58,7 +58,7 @@ public class GraalCompiler {
                 final LIR lir = Debug.scope("FrontEnd", new Callable<LIR>() {
 
                     public LIR call() {
-                        return emitHIR(runtime, target, graph, assumptions, cache, plan, optimisticOpts, speculationLog);
+                        return emitHIR(runtime, target, graph, assumptions, cache, plan, optimisticOpts);
                     }
                 });
                 final FrameMap frameMap = Debug.scope("BackEnd", lir, new Callable<FrameMap>() {
@@ -96,11 +96,7 @@ public class GraalCompiler {
      * @param target
      */
     public static LIR emitHIR(GraalCodeCacheProvider runtime, TargetDescription target, StructuredGraph graph, Assumptions assumptions, GraphCache cache, PhasePlan plan,
-                    OptimisticOptimizations optimisticOpts, final SpeculationLog speculationLog) {
-
-        if (speculationLog != null) {
-            speculationLog.snapshot();
-        }
+                    OptimisticOptimizations optimisticOpts) {
 
         if (graph.start().next() == null) {
             plan.runPhases(PhasePosition.AFTER_PARSING, graph);
@@ -220,7 +216,7 @@ public class GraalCompiler {
                 List<Block> codeEmittingOrder = ComputeBlockOrder.computeCodeEmittingOrder(blocks.length, startBlock);
                 List<Block> linearScanOrder = ComputeBlockOrder.computeLinearScanOrder(blocks.length, startBlock);
 
-                LIR lir = new LIR(schedule.getCFG(), schedule.getBlockToNodesMap(), linearScanOrder, codeEmittingOrder, speculationLog);
+                LIR lir = new LIR(schedule.getCFG(), schedule.getBlockToNodesMap(), linearScanOrder, codeEmittingOrder);
                 Debug.dump(lir, "After linear scan order");
                 return lir;
 
