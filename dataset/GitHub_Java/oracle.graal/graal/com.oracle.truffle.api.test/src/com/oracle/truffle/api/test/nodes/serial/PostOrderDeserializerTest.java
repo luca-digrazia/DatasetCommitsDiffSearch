@@ -151,8 +151,6 @@ public class PostOrderDeserializerTest {
             return;
         }
 
-        expectedAst.adoptChildren();
-
         Assert.assertNotNull(actualAst);
         // fields are asserted using the corresponding equals implementation
         Assert.assertEquals(expectedAst, actualAst);

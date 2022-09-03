@@ -29,9 +29,11 @@ import java.nio.*;
 
 import sun.misc.*;
 
+import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.nodes.*;
-import com.oracle.truffle.api.nodes.NodeFieldAccessor.NodeFieldKind;
-import com.oracle.truffle.api.source.*;
+import com.oracle.truffle.api.nodes.NodeUtil.NodeClass;
+import com.oracle.truffle.api.nodes.NodeUtil.NodeField;
+import com.oracle.truffle.api.nodes.NodeUtil.NodeFieldKind;
 
 /**
  * Experimental API. May change without notice.
@@ -57,10 +59,10 @@ public final class PostOrderSerializer {
 
     /**
      * Serializes the node AST and returns the serialized data as byte array.
-     *
+     * 
      * @param node the root node that represents the Truffle AST that should be serialized.
      * @return a trimmed byte array that contains the serialized data.
-     *
+     * 
      * @throws UnsupportedConstantPoolTypeException thrown if a type is encountered that is not
      *             supported by the constant pool implementation.
      */
@@ -77,16 +79,16 @@ public final class PostOrderSerializer {
         }
         Class<? extends Node> nodeClass = node.getClass();
 
-        NodeFieldAccessor[] nodeFields = NodeClass.get(nodeClass).getFields();
+        NodeField[] nodeFields = NodeClass.get(nodeClass).getFields();
         serializeChildFields(buffer, node, nodeFields);
         serializeChildrenFields(buffer, node, nodeFields);
         buffer.put(cp.putClass(node.getClass()));
         serializeDataFields(buffer, node, nodeFields);
     }
 
-    private void serializeDataFields(VariableLengthIntBuffer buffer, Node node, NodeFieldAccessor[] nodeFields) throws UnsupportedConstantPoolTypeException {
+    private void serializeDataFields(VariableLengthIntBuffer buffer, Node node, NodeField[] nodeFields) throws UnsupportedConstantPoolTypeException {
         for (int i = 0; i < nodeFields.length; i++) {
-            NodeFieldAccessor field = nodeFields[i];
+            NodeField field = nodeFields[i];
             if (field.getKind() == NodeFieldKind.DATA) {
                 Class<?> fieldClass = field.getType();
                 long offset = field.getOffset();
@@ -113,7 +115,28 @@ public final class PostOrderSerializer {
                 } else if (fieldClass == boolean.class) {
                     cpi = cp.putInt(unsafe.getBoolean(node, offset) ? 1 : 0);
                 } else {
-                    cpi = serializeDataFieldsObject(node, fieldClass, offset);
+                    Object value = unsafe.getObject(node, offset);
+                    if (value == null) {
+                        cpi = VariableLengthIntBuffer.NULL;
+                    } else if (fieldClass == Integer.class) {
+                        cpi = cp.putInt((Integer) value);
+                    } else if (fieldClass == Long.class) {
+                        cpi = cp.putLong((Long) value);
+                    } else if (fieldClass == Float.class) {
+                        cpi = cp.putFloat((Float) value);
+                    } else if (fieldClass == Double.class) {
+                        cpi = cp.putDouble((Double) value);
+                    } else if (fieldClass == Byte.class) {
+                        cpi = cp.putInt((Byte) value);
+                    } else if (fieldClass == Short.class) {
+                        cpi = cp.putInt((Short) value);
+                    } else if (fieldClass == Character.class) {
+                        cpi = cp.putInt((Character) value);
+                    } else if (fieldClass == Boolean.class) {
+                        cpi = cp.putInt((Boolean) value ? 1 : 0);
+                    } else {
+                        cpi = cp.putObject(fieldClass, value);
+                    }
                 }
 
                 buffer.put(cpi);
@@ -121,34 +144,9 @@ public final class PostOrderSerializer {
         }
     }
 
-    private int serializeDataFieldsObject(Node node, Class<?> fieldClass, long offset) {
-        Object value = unsafe.getObject(node, offset);
-        if (value == null) {
-            return VariableLengthIntBuffer.NULL;
-        } else if (fieldClass == Integer.class) {
-            return cp.putInt((Integer) value);
-        } else if (fieldClass == Long.class) {
-            return cp.putLong((Long) value);
-        } else if (fieldClass == Float.class) {
-            return cp.putFloat((Float) value);
-        } else if (fieldClass == Double.class) {
-            return cp.putDouble((Double) value);
-        } else if (fieldClass == Byte.class) {
-            return cp.putInt((Byte) value);
-        } else if (fieldClass == Short.class) {
-            return cp.putInt((Short) value);
-        } else if (fieldClass == Character.class) {
-            return cp.putInt((Character) value);
-        } else if (fieldClass == Boolean.class) {
-            return cp.putInt((Boolean) value ? 1 : 0);
-        } else {
-            return cp.putObject(fieldClass, value);
-        }
-    }
-
-    private void serializeChildrenFields(VariableLengthIntBuffer buffer, Node nodeInstance, NodeFieldAccessor[] nodeFields) throws UnsupportedConstantPoolTypeException {
+    private void serializeChildrenFields(VariableLengthIntBuffer buffer, Node nodeInstance, NodeField[] nodeFields) throws UnsupportedConstantPoolTypeException {
         for (int i = 0; i < nodeFields.length; i++) {
-            NodeFieldAccessor field = nodeFields[i];
+            NodeField field = nodeFields[i];
             if (field.getKind() == NodeFieldKind.CHILDREN) {
                 Object childArrayObject = unsafe.getObject(nodeInstance, field.getOffset());
                 if (childArrayObject != null && !(childArrayObject instanceof Node[])) {
@@ -171,9 +169,9 @@ public final class PostOrderSerializer {
         }
     }
 
-    private void serializeChildFields(VariableLengthIntBuffer buffer, Node nodeInstance, NodeFieldAccessor[] nodeFields) throws UnsupportedConstantPoolTypeException {
+    private void serializeChildFields(VariableLengthIntBuffer buffer, Node nodeInstance, NodeField[] nodeFields) throws UnsupportedConstantPoolTypeException {
         for (int i = 0; i < nodeFields.length; i++) {
-            NodeFieldAccessor field = nodeFields[i];
+            NodeField field = nodeFields[i];
             if (field.getKind() == NodeFieldKind.CHILD) {
                 Object childObject = unsafe.getObject(nodeInstance, field.getOffset());
                 if (childObject != null && !(childObject instanceof Node)) {
