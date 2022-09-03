@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -35,6 +35,7 @@ import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameUtil;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.vector.LLVMAddressVector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMDoubleVector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMFloatVector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI16Vector;
@@ -42,7 +43,6 @@ import com.oracle.truffle.llvm.runtime.vector.LLVMI1Vector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI32Vector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI64Vector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI8Vector;
-import com.oracle.truffle.llvm.runtime.vector.LLVMPointerVector;
 
 public class LLVMReadVectorNode {
 
@@ -96,10 +96,8 @@ public class LLVMReadVectorNode {
         protected abstract FrameSlot getSlot();
 
         @Specialization
-        protected Object readVector(VirtualFrame frame) {
-            Object result = FrameUtil.getObjectSafe(frame, getSlot());
-            assert result instanceof LLVMI64Vector || result instanceof LLVMPointerVector;
-            return result;
+        protected LLVMI64Vector readI64Vector(VirtualFrame frame) {
+            return (LLVMI64Vector) FrameUtil.getObjectSafe(frame, getSlot());
         }
     }
 
@@ -124,4 +122,16 @@ public class LLVMReadVectorNode {
             return (LLVMDoubleVector) FrameUtil.getObjectSafe(frame, getSlot());
         }
     }
+
+    @NodeField(name = "slot", type = FrameSlot.class)
+    public abstract static class LLVMAddressVectorReadNode extends LLVMExpressionNode {
+
+        protected abstract FrameSlot getSlot();
+
+        @Specialization
+        protected LLVMAddressVector readAddressVector(VirtualFrame frame) {
+            return (LLVMAddressVector) FrameUtil.getObjectSafe(frame, getSlot());
+        }
+    }
+
 }

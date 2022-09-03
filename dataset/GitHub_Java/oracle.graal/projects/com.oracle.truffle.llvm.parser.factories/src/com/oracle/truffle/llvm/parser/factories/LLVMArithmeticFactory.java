@@ -29,23 +29,6 @@
  */
 package com.oracle.truffle.llvm.parser.factories;
 
-import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.nodes.base.LLVMAddressNode;
-import com.oracle.truffle.llvm.nodes.base.floating.LLVM80BitFloatNode;
-import com.oracle.truffle.llvm.nodes.base.floating.LLVMDoubleNode;
-import com.oracle.truffle.llvm.nodes.base.floating.LLVMFloatNode;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI16Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI1Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI32Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI64Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI8Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMIVarBitNode;
-import com.oracle.truffle.llvm.nodes.base.vector.LLVMDoubleVectorNode;
-import com.oracle.truffle.llvm.nodes.base.vector.LLVMFloatVectorNode;
-import com.oracle.truffle.llvm.nodes.base.vector.LLVMI16VectorNode;
-import com.oracle.truffle.llvm.nodes.base.vector.LLVMI32VectorNode;
-import com.oracle.truffle.llvm.nodes.base.vector.LLVMI64VectorNode;
-import com.oracle.truffle.llvm.nodes.base.vector.LLVMI8VectorNode;
 import com.oracle.truffle.llvm.nodes.op.arith.floating.LLVM80BitFloatArithmeticNodeFactory.LLVM80BitFloatAddNodeGen;
 import com.oracle.truffle.llvm.nodes.op.arith.floating.LLVM80BitFloatArithmeticNodeFactory.LLVM80BitFloatDivNodeGen;
 import com.oracle.truffle.llvm.nodes.op.arith.floating.LLVM80BitFloatArithmeticNodeFactory.LLVM80BitFloatMulNodeGen;
@@ -69,6 +52,12 @@ import com.oracle.truffle.llvm.nodes.op.arith.integer.LLVMI16ArithmeticNodeFacto
 import com.oracle.truffle.llvm.nodes.op.arith.integer.LLVMI16ArithmeticNodeFactory.LLVMI16UDivNodeGen;
 import com.oracle.truffle.llvm.nodes.op.arith.integer.LLVMI16ArithmeticNodeFactory.LLVMI16URemNodeGen;
 import com.oracle.truffle.llvm.nodes.op.arith.integer.LLVMI1ArithmeticNodeFactory.LLVMI1AddNodeGen;
+import com.oracle.truffle.llvm.nodes.op.arith.integer.LLVMI1ArithmeticNodeFactory.LLVMI1DivNodeGen;
+import com.oracle.truffle.llvm.nodes.op.arith.integer.LLVMI1ArithmeticNodeFactory.LLVMI1MulNodeGen;
+import com.oracle.truffle.llvm.nodes.op.arith.integer.LLVMI1ArithmeticNodeFactory.LLVMI1RemNodeGen;
+import com.oracle.truffle.llvm.nodes.op.arith.integer.LLVMI1ArithmeticNodeFactory.LLVMI1SubNodeGen;
+import com.oracle.truffle.llvm.nodes.op.arith.integer.LLVMI1ArithmeticNodeFactory.LLVMI1UDivNodeGen;
+import com.oracle.truffle.llvm.nodes.op.arith.integer.LLVMI1ArithmeticNodeFactory.LLVMI1URemNodeGen;
 import com.oracle.truffle.llvm.nodes.op.arith.integer.LLVMI32ArithmeticNodeFactory.LLVMI32AddNodeGen;
 import com.oracle.truffle.llvm.nodes.op.arith.integer.LLVMI32ArithmeticNodeFactory.LLVMI32DivNodeGen;
 import com.oracle.truffle.llvm.nodes.op.arith.integer.LLVMI32ArithmeticNodeFactory.LLVMI32MulNodeGen;
@@ -114,6 +103,13 @@ import com.oracle.truffle.llvm.nodes.op.arith.vector.LLVMI16VectorArithmeticNode
 import com.oracle.truffle.llvm.nodes.op.arith.vector.LLVMI16VectorArithmeticNodeFactory.LLVMI16VectorSubNodeGen;
 import com.oracle.truffle.llvm.nodes.op.arith.vector.LLVMI16VectorArithmeticNodeFactory.LLVMI16VectorUDivNodeGen;
 import com.oracle.truffle.llvm.nodes.op.arith.vector.LLVMI16VectorArithmeticNodeFactory.LLVMI16VectorURemNodeGen;
+import com.oracle.truffle.llvm.nodes.op.arith.vector.LLVMI1VectorArithmeticNodeFactory.LLVMI1VectorAddNodeGen;
+import com.oracle.truffle.llvm.nodes.op.arith.vector.LLVMI1VectorArithmeticNodeFactory.LLVMI1VectorDivNodeGen;
+import com.oracle.truffle.llvm.nodes.op.arith.vector.LLVMI1VectorArithmeticNodeFactory.LLVMI1VectorMulNodeGen;
+import com.oracle.truffle.llvm.nodes.op.arith.vector.LLVMI1VectorArithmeticNodeFactory.LLVMI1VectorRemNodeGen;
+import com.oracle.truffle.llvm.nodes.op.arith.vector.LLVMI1VectorArithmeticNodeFactory.LLVMI1VectorSubNodeGen;
+import com.oracle.truffle.llvm.nodes.op.arith.vector.LLVMI1VectorArithmeticNodeFactory.LLVMI1VectorUDivNodeGen;
+import com.oracle.truffle.llvm.nodes.op.arith.vector.LLVMI1VectorArithmeticNodeFactory.LLVMI1VectorURemNodeGen;
 import com.oracle.truffle.llvm.nodes.op.arith.vector.LLVMI32VectorArithmeticNodeFactory.LLVMI32VectorAddNodeGen;
 import com.oracle.truffle.llvm.nodes.op.arith.vector.LLVMI32VectorArithmeticNodeFactory.LLVMI32VectorDivNodeGen;
 import com.oracle.truffle.llvm.nodes.op.arith.vector.LLVMI32VectorArithmeticNodeFactory.LLVMI32VectorMulNodeGen;
@@ -133,60 +129,81 @@ import com.oracle.truffle.llvm.nodes.op.arith.vector.LLVMI8VectorArithmeticNodeF
 import com.oracle.truffle.llvm.nodes.op.arith.vector.LLVMI8VectorArithmeticNodeFactory.LLVMI8VectorMulNodeGen;
 import com.oracle.truffle.llvm.nodes.op.arith.vector.LLVMI8VectorArithmeticNodeFactory.LLVMI8VectorRemNodeGen;
 import com.oracle.truffle.llvm.nodes.op.arith.vector.LLVMI8VectorArithmeticNodeFactory.LLVMI8VectorSubNodeGen;
-import com.oracle.truffle.llvm.parser.api.LLVMBaseType;
-import com.oracle.truffle.llvm.parser.api.instructions.LLVMArithmeticInstructionType;
+import com.oracle.truffle.llvm.nodes.op.arith.vector.LLVMI8VectorArithmeticNodeFactory.LLVMI8VectorUDivNodeGen;
+import com.oracle.truffle.llvm.nodes.op.arith.vector.LLVMI8VectorArithmeticNodeFactory.LLVMI8VectorURemNodeGen;
+import com.oracle.truffle.llvm.parser.instructions.LLVMArithmeticInstructionType;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
+import com.oracle.truffle.llvm.runtime.types.Type;
+import com.oracle.truffle.llvm.runtime.types.VariableBitWidthType;
+import com.oracle.truffle.llvm.runtime.types.VectorType;
 
-public final class LLVMArithmeticFactory {
+final class LLVMArithmeticFactory {
 
     private LLVMArithmeticFactory() {
     }
 
-    public static LLVMExpressionNode createArithmeticOperation(LLVMExpressionNode left, LLVMExpressionNode right, LLVMArithmeticInstructionType type, LLVMBaseType llvmType, LLVMAddressNode target) {
+    static LLVMExpressionNode createArithmeticOperation(LLVMExpressionNode left, LLVMExpressionNode right, LLVMArithmeticInstructionType type, Type llvmType) {
         if (left == null || right == null) {
             throw new AssertionError();
         }
-        return createNode(left, right, llvmType, type, target);
+        return createNode(left, right, llvmType, type);
     }
 
-    private static LLVMExpressionNode createNode(LLVMExpressionNode left, LLVMExpressionNode right, LLVMBaseType llvmType, LLVMArithmeticInstructionType type, LLVMAddressNode target)
+    private static LLVMExpressionNode createNode(LLVMExpressionNode left, LLVMExpressionNode right, Type llvmType, LLVMArithmeticInstructionType type)
                     throws AssertionError {
-        switch (llvmType) {
+        if (llvmType instanceof PrimitiveType) {
+            return handlePrimitive(left, right, llvmType, type);
+        } else if (llvmType instanceof VariableBitWidthType) {
+            return visitBinaryIVarInstruction(type, left, right);
+        } else if (llvmType instanceof VectorType && ((VectorType) llvmType).getElementType() instanceof PrimitiveType) {
+            switch (((PrimitiveType) ((VectorType) llvmType).getElementType()).getPrimitiveKind()) {
+                case I1:
+                    return visitBinaryI1VectorInstruction(type, left, right);
+                case I8:
+                    return visitBinaryI8VectorInstruction(type, left, right);
+                case I16:
+                    return visitBinaryI16VectorInstruction(type, left, right);
+                case I32:
+                    return visitBinaryI32VectorInstruction(type, left, right);
+                case I64:
+                    return visitBinaryI64VectorInstruction(type, left, right);
+                case FLOAT:
+                    return visitBinaryFloatVectorInstruction(type, left, right);
+                case DOUBLE:
+                    return visitBinaryDoubleVectorInstruction(type, left, right);
+                default:
+                    throw new AssertionError(llvmType);
+            }
+        } else {
+            throw new AssertionError(llvmType);
+        }
+    }
+
+    private static LLVMExpressionNode handlePrimitive(LLVMExpressionNode left, LLVMExpressionNode right, Type llvmType, LLVMArithmeticInstructionType type) throws AssertionError {
+        switch (((PrimitiveType) llvmType).getPrimitiveKind()) {
             case I1:
-                return visitBinaryI1Instruction(type, (LLVMI1Node) left, (LLVMI1Node) right);
+                return visitBinaryI1Instruction(type, left, right);
             case I8:
-                return visitBinaryI8Instruction(type, (LLVMI8Node) left, (LLVMI8Node) right);
+                return visitBinaryI8Instruction(type, left, right);
             case I16:
-                return visitBinaryI16Instruction(type, (LLVMI16Node) left, (LLVMI16Node) right);
+                return visitBinaryI16Instruction(type, left, right);
             case I32:
-                return visitBinaryI32Instruction(type, (LLVMI32Node) left, (LLVMI32Node) right);
+                return visitBinaryI32Instruction(type, left, right);
             case I64:
-                return visitBinaryI64Instruction(type, (LLVMI64Node) left, (LLVMI64Node) right);
-            case I_VAR_BITWIDTH:
-                return visitBinaryIVarInstruction(type, (LLVMIVarBitNode) left, (LLVMIVarBitNode) right);
+                return visitBinaryI64Instruction(type, left, right);
             case FLOAT:
-                return visitBinaryFloatInstruction(type, (LLVMFloatNode) left, (LLVMFloatNode) right);
+                return visitBinaryFloatInstruction(type, left, right);
             case DOUBLE:
-                return visitBinaryDoubleInstruction(type, (LLVMDoubleNode) left, (LLVMDoubleNode) right);
+                return visitBinaryDoubleInstruction(type, left, right);
             case X86_FP80:
-                return visitBinary80BitFloatInstruction(type, (LLVM80BitFloatNode) left, (LLVM80BitFloatNode) right);
-            case I8_VECTOR:
-                return visitBinaryI8VectorInstruction(type, (LLVMI8VectorNode) left, (LLVMI8VectorNode) right, target);
-            case I16_VECTOR:
-                return visitBinaryI16VectorInstruction(type, (LLVMI16VectorNode) left, (LLVMI16VectorNode) right, target);
-            case I32_VECTOR:
-                return visitBinaryI32VectorInstruction(type, (LLVMI32VectorNode) left, (LLVMI32VectorNode) right, target);
-            case I64_VECTOR:
-                return visitBinaryI64VectorInstruction(type, (LLVMI64VectorNode) left, (LLVMI64VectorNode) right, target);
-            case FLOAT_VECTOR:
-                return visitBinaryFloatVectorInstruction(type, (LLVMFloatVectorNode) left, (LLVMFloatVectorNode) right, target);
-            case DOUBLE_VECTOR:
-                return visitBinaryDoubleVectorInstruction(type, (LLVMDoubleVectorNode) left, (LLVMDoubleVectorNode) right, target);
+                return visitBinary80BitFloatInstruction(type, left, right);
             default:
                 throw new AssertionError(llvmType);
         }
     }
 
-    private static LLVMExpressionNode visitBinaryIVarInstruction(LLVMArithmeticInstructionType type, LLVMIVarBitNode left, LLVMIVarBitNode right) {
+    private static LLVMExpressionNode visitBinaryIVarInstruction(LLVMArithmeticInstructionType type, LLVMExpressionNode left, LLVMExpressionNode right) {
         switch (type) {
             case ADDITION:
                 return LLVMIVarAddNodeGen.create(left, right);
@@ -207,130 +224,167 @@ public final class LLVMArithmeticFactory {
         }
     }
 
-    private static LLVMExpressionNode visitBinaryI8VectorInstruction(LLVMArithmeticInstructionType type, LLVMI8VectorNode left, LLVMI8VectorNode right, LLVMAddressNode target) {
+    private static LLVMExpressionNode visitBinaryI1VectorInstruction(LLVMArithmeticInstructionType type, LLVMExpressionNode left, LLVMExpressionNode right) {
         switch (type) {
             case ADDITION:
-                return LLVMI8VectorAddNodeGen.create(target, left, right);
+                return LLVMI1VectorAddNodeGen.create(left, right);
             case SUBTRACTION:
-                return LLVMI8VectorSubNodeGen.create(target, left, right);
+                return LLVMI1VectorSubNodeGen.create(left, right);
             case MULTIPLICATION:
-                return LLVMI8VectorMulNodeGen.create(target, left, right);
+                return LLVMI1VectorMulNodeGen.create(left, right);
             case DIVISION:
-                return LLVMI8VectorDivNodeGen.create(target, left, right);
+                return LLVMI1VectorDivNodeGen.create(left, right);
             case REMAINDER:
-                return LLVMI8VectorRemNodeGen.create(target, left, right);
-            default:
-                throw new AssertionError(type);
-        }
-    }
-
-    private static LLVMExpressionNode visitBinaryI16VectorInstruction(LLVMArithmeticInstructionType type, LLVMI16VectorNode left, LLVMI16VectorNode right, LLVMAddressNode target) {
-        switch (type) {
-            case ADDITION:
-                return LLVMI16VectorAddNodeGen.create(target, left, right);
-            case SUBTRACTION:
-                return LLVMI16VectorSubNodeGen.create(target, left, right);
-            case MULTIPLICATION:
-                return LLVMI16VectorMulNodeGen.create(target, left, right);
-            case DIVISION:
-                return LLVMI16VectorDivNodeGen.create(target, left, right);
-            case REMAINDER:
-                return LLVMI16VectorRemNodeGen.create(target, left, right);
+                return LLVMI1VectorRemNodeGen.create(left, right);
             case UNSIGNED_DIVISION:
-                return LLVMI16VectorUDivNodeGen.create(target, left, right);
+                return LLVMI1VectorUDivNodeGen.create(left, right);
             case UNSIGNED_REMAINDER:
-                return LLVMI16VectorURemNodeGen.create(target, left, right);
+                return LLVMI1VectorURemNodeGen.create(left, right);
             default:
                 throw new AssertionError(type);
         }
     }
 
-    private static LLVMExpressionNode visitBinaryDoubleVectorInstruction(LLVMArithmeticInstructionType type, LLVMDoubleVectorNode left, LLVMDoubleVectorNode right, LLVMAddressNode target) {
+    private static LLVMExpressionNode visitBinaryI8VectorInstruction(LLVMArithmeticInstructionType type, LLVMExpressionNode left, LLVMExpressionNode right) {
         switch (type) {
             case ADDITION:
-                return LLVMDoubleVectorAddNodeGen.create(target, left, right);
+                return LLVMI8VectorAddNodeGen.create(left, right);
             case SUBTRACTION:
-                return LLVMDoubleVectorSubNodeGen.create(target, left, right);
+                return LLVMI8VectorSubNodeGen.create(left, right);
             case MULTIPLICATION:
-                return LLVMDoubleVectorMulNodeGen.create(target, left, right);
+                return LLVMI8VectorMulNodeGen.create(left, right);
             case DIVISION:
-                return LLVMDoubleVectorDivNodeGen.create(target, left, right);
+                return LLVMI8VectorDivNodeGen.create(left, right);
             case REMAINDER:
-                return LLVMDoubleVectorRemNodeGen.create(target, left, right);
-            default:
-                throw new AssertionError(type);
-        }
-    }
-
-    private static LLVMExpressionNode visitBinaryFloatVectorInstruction(LLVMArithmeticInstructionType type, LLVMFloatVectorNode left, LLVMFloatVectorNode right, LLVMAddressNode target) {
-        switch (type) {
-            case ADDITION:
-                return LLVMFloatVectorAddNodeGen.create(target, left, right);
-            case SUBTRACTION:
-                return LLVMFloatVectorSubNodeGen.create(target, left, right);
-            case MULTIPLICATION:
-                return LLVMFloatVectorMulNodeGen.create(target, left, right);
-            case DIVISION:
-                return LLVMFloatVectorDivNodeGen.create(target, left, right);
-            case REMAINDER:
-                return LLVMFloatVectorRemNodeGen.create(target, left, right);
-            default:
-                throw new AssertionError(type);
-        }
-    }
-
-    private static LLVMExpressionNode visitBinaryI64VectorInstruction(LLVMArithmeticInstructionType type, LLVMI64VectorNode left, LLVMI64VectorNode right, LLVMAddressNode target) {
-        switch (type) {
-            case ADDITION:
-                return LLVMI64VectorAddNodeGen.create(target, left, right);
-            case SUBTRACTION:
-                return LLVMI64VectorSubNodeGen.create(target, left, right);
-            case MULTIPLICATION:
-                return LLVMI64VectorMulNodeGen.create(target, left, right);
+                return LLVMI8VectorRemNodeGen.create(left, right);
             case UNSIGNED_DIVISION:
-                return LLVMI64VectorUDivNodeGen.create(target, left, right);
-            case DIVISION:
-                return LLVMI64VectorDivNodeGen.create(target, left, right);
+                return LLVMI8VectorUDivNodeGen.create(left, right);
             case UNSIGNED_REMAINDER:
-                return LLVMI64VectorURemNodeGen.create(target, left, right);
-            case REMAINDER:
-                return LLVMI64VectorRemNodeGen.create(target, left, right);
+                return LLVMI8VectorURemNodeGen.create(left, right);
             default:
                 throw new AssertionError(type);
         }
     }
 
-    private static LLVMExpressionNode visitBinaryI32VectorInstruction(LLVMArithmeticInstructionType type, LLVMI32VectorNode left, LLVMI32VectorNode right, LLVMAddressNode target) {
+    private static LLVMExpressionNode visitBinaryI16VectorInstruction(LLVMArithmeticInstructionType type, LLVMExpressionNode left, LLVMExpressionNode right) {
         switch (type) {
             case ADDITION:
-                return LLVMI32VectorAddNodeGen.create(target, left, right);
+                return LLVMI16VectorAddNodeGen.create(left, right);
             case SUBTRACTION:
-                return LLVMI32VectorSubNodeGen.create(target, left, right);
+                return LLVMI16VectorSubNodeGen.create(left, right);
             case MULTIPLICATION:
-                return LLVMI32VectorMulNodeGen.create(target, left, right);
-            case UNSIGNED_DIVISION:
-                return LLVMI32VectorUDivNodeGen.create(target, left, right);
+                return LLVMI16VectorMulNodeGen.create(left, right);
             case DIVISION:
-                return LLVMI32VectorDivNodeGen.create(target, left, right);
-            case UNSIGNED_REMAINDER:
-                return LLVMI32VectorURemNodeGen.create(target, left, right);
+                return LLVMI16VectorDivNodeGen.create(left, right);
             case REMAINDER:
-                return LLVMI32VectorRemNodeGen.create(target, left, right);
+                return LLVMI16VectorRemNodeGen.create(left, right);
+            case UNSIGNED_DIVISION:
+                return LLVMI16VectorUDivNodeGen.create(left, right);
+            case UNSIGNED_REMAINDER:
+                return LLVMI16VectorURemNodeGen.create(left, right);
             default:
                 throw new AssertionError(type);
         }
     }
 
-    private static LLVMExpressionNode visitBinaryI1Instruction(LLVMArithmeticInstructionType type, LLVMI1Node left, LLVMI1Node right) {
+    private static LLVMExpressionNode visitBinaryDoubleVectorInstruction(LLVMArithmeticInstructionType type, LLVMExpressionNode left, LLVMExpressionNode right) {
+        switch (type) {
+            case ADDITION:
+                return LLVMDoubleVectorAddNodeGen.create(left, right);
+            case SUBTRACTION:
+                return LLVMDoubleVectorSubNodeGen.create(left, right);
+            case MULTIPLICATION:
+                return LLVMDoubleVectorMulNodeGen.create(left, right);
+            case DIVISION:
+                return LLVMDoubleVectorDivNodeGen.create(left, right);
+            case REMAINDER:
+                return LLVMDoubleVectorRemNodeGen.create(left, right);
+            default:
+                throw new AssertionError(type);
+        }
+    }
+
+    private static LLVMExpressionNode visitBinaryFloatVectorInstruction(LLVMArithmeticInstructionType type, LLVMExpressionNode left, LLVMExpressionNode right) {
+        switch (type) {
+            case ADDITION:
+                return LLVMFloatVectorAddNodeGen.create(left, right);
+            case SUBTRACTION:
+                return LLVMFloatVectorSubNodeGen.create(left, right);
+            case MULTIPLICATION:
+                return LLVMFloatVectorMulNodeGen.create(left, right);
+            case DIVISION:
+                return LLVMFloatVectorDivNodeGen.create(left, right);
+            case REMAINDER:
+                return LLVMFloatVectorRemNodeGen.create(left, right);
+            default:
+                throw new AssertionError(type);
+        }
+    }
+
+    private static LLVMExpressionNode visitBinaryI64VectorInstruction(LLVMArithmeticInstructionType type, LLVMExpressionNode left, LLVMExpressionNode right) {
+        switch (type) {
+            case ADDITION:
+                return LLVMI64VectorAddNodeGen.create(left, right);
+            case SUBTRACTION:
+                return LLVMI64VectorSubNodeGen.create(left, right);
+            case MULTIPLICATION:
+                return LLVMI64VectorMulNodeGen.create(left, right);
+            case UNSIGNED_DIVISION:
+                return LLVMI64VectorUDivNodeGen.create(left, right);
+            case DIVISION:
+                return LLVMI64VectorDivNodeGen.create(left, right);
+            case UNSIGNED_REMAINDER:
+                return LLVMI64VectorURemNodeGen.create(left, right);
+            case REMAINDER:
+                return LLVMI64VectorRemNodeGen.create(left, right);
+            default:
+                throw new AssertionError(type);
+        }
+    }
+
+    private static LLVMExpressionNode visitBinaryI32VectorInstruction(LLVMArithmeticInstructionType type, LLVMExpressionNode left, LLVMExpressionNode right) {
+        switch (type) {
+            case ADDITION:
+                return LLVMI32VectorAddNodeGen.create(left, right);
+            case SUBTRACTION:
+                return LLVMI32VectorSubNodeGen.create(left, right);
+            case MULTIPLICATION:
+                return LLVMI32VectorMulNodeGen.create(left, right);
+            case UNSIGNED_DIVISION:
+                return LLVMI32VectorUDivNodeGen.create(left, right);
+            case DIVISION:
+                return LLVMI32VectorDivNodeGen.create(left, right);
+            case UNSIGNED_REMAINDER:
+                return LLVMI32VectorURemNodeGen.create(left, right);
+            case REMAINDER:
+                return LLVMI32VectorRemNodeGen.create(left, right);
+            default:
+                throw new AssertionError(type);
+        }
+    }
+
+    private static LLVMExpressionNode visitBinaryI1Instruction(LLVMArithmeticInstructionType type, LLVMExpressionNode left, LLVMExpressionNode right) {
         switch (type) {
             case ADDITION:
                 return LLVMI1AddNodeGen.create(left, right);
+            case SUBTRACTION:
+                return LLVMI1SubNodeGen.create(left, right);
+            case MULTIPLICATION:
+                return LLVMI1MulNodeGen.create(left, right);
+            case DIVISION:
+                return LLVMI1DivNodeGen.create(left, right);
+            case REMAINDER:
+                return LLVMI1RemNodeGen.create(left, right);
+            case UNSIGNED_REMAINDER:
+                return LLVMI1URemNodeGen.create(left, right);
+            case UNSIGNED_DIVISION:
+                return LLVMI1UDivNodeGen.create(left, right);
             default:
                 throw new AssertionError(type);
         }
     }
 
-    private static LLVMI8Node visitBinaryI8Instruction(LLVMArithmeticInstructionType type, LLVMI8Node left, LLVMI8Node right) {
+    private static LLVMExpressionNode visitBinaryI8Instruction(LLVMArithmeticInstructionType type, LLVMExpressionNode left, LLVMExpressionNode right) {
         switch (type) {
             case ADDITION:
                 return LLVMI8AddNodeGen.create(left, right);
@@ -351,7 +405,7 @@ public final class LLVMArithmeticFactory {
         }
     }
 
-    private static LLVMI16Node visitBinaryI16Instruction(LLVMArithmeticInstructionType type, LLVMI16Node left, LLVMI16Node right) {
+    private static LLVMExpressionNode visitBinaryI16Instruction(LLVMArithmeticInstructionType type, LLVMExpressionNode left, LLVMExpressionNode right) {
         switch (type) {
             case ADDITION:
                 return LLVMI16AddNodeGen.create(left, right);
@@ -372,7 +426,7 @@ public final class LLVMArithmeticFactory {
         }
     }
 
-    private static LLVMI32Node visitBinaryI32Instruction(LLVMArithmeticInstructionType type, LLVMI32Node leftNode, LLVMI32Node rightNode) {
+    private static LLVMExpressionNode visitBinaryI32Instruction(LLVMArithmeticInstructionType type, LLVMExpressionNode leftNode, LLVMExpressionNode rightNode) {
         switch (type) {
             case ADDITION:
                 return LLVMI32AddNodeGen.create(leftNode, rightNode);
@@ -393,7 +447,7 @@ public final class LLVMArithmeticFactory {
         }
     }
 
-    private static LLVMI64Node visitBinaryI64Instruction(LLVMArithmeticInstructionType type, LLVMI64Node leftNode, LLVMI64Node rightNode) {
+    private static LLVMExpressionNode visitBinaryI64Instruction(LLVMArithmeticInstructionType type, LLVMExpressionNode leftNode, LLVMExpressionNode rightNode) {
         switch (type) {
             case ADDITION:
                 return LLVMI64AddNodeGen.create(leftNode, rightNode);
@@ -414,7 +468,7 @@ public final class LLVMArithmeticFactory {
         }
     }
 
-    private static LLVMFloatNode visitBinaryFloatInstruction(LLVMArithmeticInstructionType type, LLVMFloatNode left, LLVMFloatNode right) {
+    private static LLVMExpressionNode visitBinaryFloatInstruction(LLVMArithmeticInstructionType type, LLVMExpressionNode left, LLVMExpressionNode right) {
         switch (type) {
             case ADDITION:
                 return LLVMFloatAddNodeGen.create(left, right);
@@ -431,7 +485,7 @@ public final class LLVMArithmeticFactory {
         }
     }
 
-    private static LLVMDoubleNode visitBinaryDoubleInstruction(LLVMArithmeticInstructionType type, LLVMDoubleNode left, LLVMDoubleNode right) {
+    private static LLVMExpressionNode visitBinaryDoubleInstruction(LLVMArithmeticInstructionType type, LLVMExpressionNode left, LLVMExpressionNode right) {
         switch (type) {
             case ADDITION:
                 return LLVMDoubleAddNodeGen.create(left, right);
@@ -448,7 +502,7 @@ public final class LLVMArithmeticFactory {
         }
     }
 
-    private static LLVMExpressionNode visitBinary80BitFloatInstruction(LLVMArithmeticInstructionType type, LLVM80BitFloatNode left, LLVM80BitFloatNode right) {
+    private static LLVMExpressionNode visitBinary80BitFloatInstruction(LLVMArithmeticInstructionType type, LLVMExpressionNode left, LLVMExpressionNode right) {
         switch (type) {
             case ADDITION:
                 return LLVM80BitFloatAddNodeGen.create(left, right);

@@ -29,32 +29,29 @@
  */
 package com.oracle.truffle.llvm.nodes.memory;
 
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeField;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.llvm.nodes.base.LLVMAddressNode;
-import com.oracle.truffle.llvm.nodes.base.vector.LLVMDoubleVectorNode;
-import com.oracle.truffle.llvm.nodes.base.vector.LLVMFloatVectorNode;
-import com.oracle.truffle.llvm.nodes.base.vector.LLVMI16VectorNode;
-import com.oracle.truffle.llvm.nodes.base.vector.LLVMI1VectorNode;
-import com.oracle.truffle.llvm.nodes.base.vector.LLVMI32VectorNode;
-import com.oracle.truffle.llvm.nodes.base.vector.LLVMI64VectorNode;
-import com.oracle.truffle.llvm.nodes.base.vector.LLVMI8VectorNode;
-import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.memory.LLVMMemory;
-import com.oracle.truffle.llvm.types.vector.LLVMDoubleVector;
-import com.oracle.truffle.llvm.types.vector.LLVMFloatVector;
-import com.oracle.truffle.llvm.types.vector.LLVMI16Vector;
-import com.oracle.truffle.llvm.types.vector.LLVMI1Vector;
-import com.oracle.truffle.llvm.types.vector.LLVMI32Vector;
-import com.oracle.truffle.llvm.types.vector.LLVMI64Vector;
-import com.oracle.truffle.llvm.types.vector.LLVMI8Vector;
+import com.oracle.truffle.llvm.runtime.LLVMAddress;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
+import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.vector.LLVMAddressVector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMDoubleVector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMFloatVector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI16Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI1Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI32Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI64Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI8Vector;
 
 public class LLVMLoadVectorNode {
 
-    @NodeChild(type = LLVMAddressNode.class)
+    @NodeChild(type = LLVMExpressionNode.class)
     @NodeField(name = "size", type = int.class)
-    public abstract static class LLVMLoadI1VectorNode extends LLVMI1VectorNode {
+    public abstract static class LLVMLoadI1VectorNode extends LLVMExpressionNode {
 
         public abstract int getSize();
 
@@ -62,13 +59,23 @@ public class LLVMLoadVectorNode {
         public LLVMI1Vector executeI1Vector(LLVMAddress addr) {
             return LLVMMemory.getI1Vector(addr, getSize());
         }
+
+        @Specialization
+        public LLVMI1Vector executeI1Vector(LLVMGlobalVariable addr, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
+            return LLVMMemory.getI1Vector(globalAccess.getNativeLocation(addr), getSize());
+        }
     }
 
-    @NodeChild(type = LLVMAddressNode.class)
+    @NodeChild(type = LLVMExpressionNode.class)
     @NodeField(name = "size", type = int.class)
-    public abstract static class LLVMLoadI8VectorNode extends LLVMI8VectorNode {
+    public abstract static class LLVMLoadI8VectorNode extends LLVMExpressionNode {
 
         public abstract int getSize();
+
+        @Specialization
+        public LLVMI8Vector executeI8Vector(LLVMGlobalVariable addr, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
+            return LLVMMemory.getI8Vector(globalAccess.getNativeLocation(addr), getSize());
+        }
 
         @Specialization
         public LLVMI8Vector executeI8Vector(LLVMAddress addr) {
@@ -76,11 +83,16 @@ public class LLVMLoadVectorNode {
         }
     }
 
-    @NodeChild(type = LLVMAddressNode.class)
+    @NodeChild(type = LLVMExpressionNode.class)
     @NodeField(name = "size", type = int.class)
-    public abstract static class LLVMLoadI16VectorNode extends LLVMI16VectorNode {
+    public abstract static class LLVMLoadI16VectorNode extends LLVMExpressionNode {
 
         public abstract int getSize();
+
+        @Specialization
+        public LLVMI16Vector executeI16Vector(LLVMGlobalVariable addr, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
+            return LLVMMemory.getI16Vector(globalAccess.getNativeLocation(addr), getSize());
+        }
 
         @Specialization
         public LLVMI16Vector executeI16Vector(LLVMAddress addr) {
@@ -88,11 +100,16 @@ public class LLVMLoadVectorNode {
         }
     }
 
-    @NodeChild(type = LLVMAddressNode.class)
+    @NodeChild(type = LLVMExpressionNode.class)
     @NodeField(name = "size", type = int.class)
-    public abstract static class LLVMLoadI32VectorNode extends LLVMI32VectorNode {
+    public abstract static class LLVMLoadI32VectorNode extends LLVMExpressionNode {
 
         public abstract int getSize();
+
+        @Specialization
+        public LLVMI32Vector executeI32Vector(LLVMGlobalVariable addr, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
+            return LLVMMemory.getI32Vector(globalAccess.getNativeLocation(addr), getSize());
+        }
 
         @Specialization
         public LLVMI32Vector executeI32Vector(LLVMAddress addr) {
@@ -100,11 +117,16 @@ public class LLVMLoadVectorNode {
         }
     }
 
-    @NodeChild(type = LLVMAddressNode.class)
+    @NodeChild(type = LLVMExpressionNode.class)
     @NodeField(name = "size", type = int.class)
-    public abstract static class LLVMLoadI64VectorNode extends LLVMI64VectorNode {
+    public abstract static class LLVMLoadI64VectorNode extends LLVMExpressionNode {
 
         public abstract int getSize();
+
+        @Specialization
+        public LLVMI64Vector executeI64Vector(LLVMGlobalVariable addr, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
+            return LLVMMemory.getI64Vector(globalAccess.getNativeLocation(addr), getSize());
+        }
 
         @Specialization
         public LLVMI64Vector executeI64Vector(LLVMAddress addr) {
@@ -112,11 +134,16 @@ public class LLVMLoadVectorNode {
         }
     }
 
-    @NodeChild(type = LLVMAddressNode.class)
+    @NodeChild(type = LLVMExpressionNode.class)
     @NodeField(name = "size", type = int.class)
-    public abstract static class LLVMLoadFloatVectorNode extends LLVMFloatVectorNode {
+    public abstract static class LLVMLoadFloatVectorNode extends LLVMExpressionNode {
 
         public abstract int getSize();
+
+        @Specialization
+        public LLVMFloatVector executeFloatVector(LLVMGlobalVariable addr, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
+            return LLVMMemory.getFloatVector(globalAccess.getNativeLocation(addr), getSize());
+        }
 
         @Specialization
         public LLVMFloatVector executeFloatVector(LLVMAddress addr) {
@@ -124,15 +151,37 @@ public class LLVMLoadVectorNode {
         }
     }
 
-    @NodeChild(type = LLVMAddressNode.class)
+    @NodeChild(type = LLVMExpressionNode.class)
     @NodeField(name = "size", type = int.class)
-    public abstract static class LLVMLoadDoubleVectorNode extends LLVMDoubleVectorNode {
+    public abstract static class LLVMLoadDoubleVectorNode extends LLVMExpressionNode {
 
         public abstract int getSize();
 
         @Specialization
+        public LLVMDoubleVector executeDoubleVector(LLVMGlobalVariable addr, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
+            return LLVMMemory.getDoubleVector(globalAccess.getNativeLocation(addr), getSize());
+        }
+
+        @Specialization
         public LLVMDoubleVector executeDoubleVector(LLVMAddress addr) {
             return LLVMMemory.getDoubleVector(addr, getSize());
+        }
+    }
+
+    @NodeChild(type = LLVMExpressionNode.class)
+    @NodeField(name = "size", type = int.class)
+    public abstract static class LLVMLoadAddressVectorNode extends LLVMExpressionNode {
+
+        public abstract int getSize();
+
+        @Specialization
+        public LLVMAddressVector executeAddressVector(LLVMGlobalVariable addr, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
+            return LLVMMemory.getAddressVector(globalAccess.getNativeLocation(addr), getSize());
+        }
+
+        @Specialization
+        public LLVMAddressVector executeAddressVector(LLVMAddress addr) {
+            return LLVMMemory.getAddressVector(addr, getSize());
         }
     }
 

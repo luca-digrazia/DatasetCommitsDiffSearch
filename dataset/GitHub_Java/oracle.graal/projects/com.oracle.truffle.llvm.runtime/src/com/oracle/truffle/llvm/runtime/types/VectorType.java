@@ -46,6 +46,10 @@ public class VectorType extends AggregateType {
         this.length = length;
     }
 
+// public PrimitiveType getElementType() {
+// return (PrimitiveType) elementType;
+// }
+
     public Type getElementType() {
         return elementType;
     }

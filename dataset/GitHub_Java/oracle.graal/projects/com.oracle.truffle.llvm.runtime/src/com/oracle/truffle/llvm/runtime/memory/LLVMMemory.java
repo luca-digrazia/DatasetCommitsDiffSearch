@@ -405,10 +405,6 @@ public abstract class LLVMMemory {
         LLVMI8Vector.writeVectorToMemory(addr, vector);
     }
 
-    public static void putVector(LLVMAddress addr, LLVMAddressVector vector) {
-        LLVMAddressVector.writeVectorToMemory(addr, vector);
-    }
-
     @ValueType
     public static final class CMPXCHGI32 {
         private final int value;

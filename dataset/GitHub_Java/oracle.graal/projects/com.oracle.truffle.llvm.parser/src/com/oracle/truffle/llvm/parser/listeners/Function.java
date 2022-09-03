@@ -763,13 +763,13 @@ public final class Function implements ParserListener {
         int i = 0;
         int vector = getIndex(args[i++]);
 
-        Type vectorType;
+        Type type;
         if (function.isValueForwardRef(vector)) {
-            vectorType = types.get(args[i++]);
+            type = types.get(i++);
         } else {
-            vectorType = function.getValueType(vector);
+            type = ((VectorType) function.getValueType(vector)).getElementType();
         }
-        Type type = ((VectorType) vectorType).getElementType();
+
         int index = getIndex(args[i]);
 
         emit(ExtractElementInstruction.fromSymbols(function.getSymbols(), type, vector, index));
@@ -932,9 +932,13 @@ public final class Function implements ParserListener {
         int vector2 = getIndex(args[i++]);
         int mask = getIndex(args[i]);
 
-        PrimitiveType subtype = ((VectorType) vectorType).getElementType();
+        Type subtype = ((VectorType) vectorType).getElementType();
         int length = ((VectorType) function.getValueType(mask)).getNumberOfElements();
-        Type type = new VectorType(subtype, length);
+        Type type;
+        if (subtype instanceof PrimitiveType)
+            type = new VectorType((PrimitiveType) subtype, length);
+        else
+            type = new VectorType((PointerType) subtype, length);
 
         emit(ShuffleVectorInstruction.fromSymbols(function.getSymbols(), type, vector1, vector2, mask));
     }

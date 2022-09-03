@@ -179,6 +179,8 @@ final class LLVMCastsFactory {
                     default:
                         throw new AssertionError(targetType);
                 }
+            } else if (targetType instanceof VectorType && ((VectorType) targetType).getElementType() instanceof PointerType) {
+                throw new AssertionError(targetType + " " + ((VectorType) targetType).getElementType() + " " + conv); // TODO
             } else {
                 throw new AssertionError(targetType + " " + conv);
             }
@@ -221,6 +223,8 @@ final class LLVMCastsFactory {
                         default:
                             throw new AssertionError(targetType);
                     }
+                } else if (elemType instanceof PointerType) {
+                    throw new AssertionError(targetType + " " + elemType + " " + conv); // TODO
                 } else {
                     throw new AssertionError(targetType + " " + elemType + " " + conv);
                 }
@@ -311,6 +315,8 @@ final class LLVMCastsFactory {
                     default:
                         throw new AssertionError(targetType + " " + conv);
                 }
+            } else if (elemType instanceof PointerType) {
+                throw new AssertionError(targetType + " " + elemType + " " + conv); // TODO
             } else {
                 throw new AssertionError(targetType + " " + elemType + " " + conv);
             }
@@ -371,6 +377,8 @@ final class LLVMCastsFactory {
                         default:
                             throw new AssertionError(targetType + " " + conv);
                     }
+                } else if (elemType instanceof PointerType) {
+                    throw new AssertionError(targetType + " " + elemType + " " + conv); // TODO
                 } else {
                     throw new AssertionError(targetType + " " + elemType + " " + conv);
                 }
@@ -446,6 +454,8 @@ final class LLVMCastsFactory {
                         System.err.println("targetType: " + ((PrimitiveType) elemType).getPrimitiveKind());
                         throw new AssertionError(targetType);
                 }
+            } else if (elemType instanceof PointerType) {
+                throw new AssertionError(targetType + " " + elemType + " " + conv); // TODO
             } else {
                 throw new AssertionError(targetType + " " + elemType + " " + conv);
             }
@@ -554,6 +564,8 @@ final class LLVMCastsFactory {
                             System.err.println("targetType: " + ((PrimitiveType) elemType).getPrimitiveKind());
                             throw new AssertionError(targetType);
                     }
+                } else if (elemType instanceof PointerType) {
+                    throw new AssertionError(targetType + " " + elemType + " " + conv); // TODO
                 } else {
                     throw new AssertionError(targetType + " " + elemType + " " + conv);
                 }
@@ -622,6 +634,8 @@ final class LLVMCastsFactory {
                         System.err.println("targetType: " + ((PrimitiveType) elemType).getPrimitiveKind());
                         throw new AssertionError(targetType);
                 }
+            } else if (elemType instanceof PointerType) {
+                throw new AssertionError(targetType + " " + elemType + " " + conv); // TODO
             } else {
                 throw new AssertionError(targetType + " " + elemType + " " + conv);
             }
@@ -668,6 +682,8 @@ final class LLVMCastsFactory {
                         default:
                             throw new AssertionError(targetType + " " + conv);
                     }
+                } else if (elemType instanceof PointerType) {
+                    throw new AssertionError(targetType + " " + elemType + " " + conv); // TODO
                 } else {
                     throw new AssertionError(targetType + " " + elemType + " " + conv);
                 }
@@ -765,6 +781,8 @@ final class LLVMCastsFactory {
                             System.err.println("targetType: " + ((PrimitiveType) elemType).getPrimitiveKind());
                             throw new AssertionError(targetType);
                     }
+                } else if (elemType instanceof PointerType) {
+                    throw new AssertionError(targetType + " " + elemType + " " + conv); // TODO
                 } else {
                     throw new AssertionError(targetType + " " + elemType + " " + conv);
                 }
@@ -823,6 +841,8 @@ final class LLVMCastsFactory {
                         System.err.println("targetType: " + ((PrimitiveType) elemType).getPrimitiveKind());
                         throw new AssertionError(targetType);
                 }
+            } else if (elemType instanceof PointerType) {
+                throw new AssertionError(targetType + " " + elemType + " " + conv); // TODO
             } else {
                 throw new AssertionError(targetType + " " + elemType + " " + conv);
             }
