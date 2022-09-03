@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,17 +22,22 @@
  */
 package com.oracle.graal.hotspot.sparc;
 
-import static com.oracle.graal.asm.sparc.SPARCMacroAssembler.*;
-import static com.oracle.graal.sparc.SPARC.*;
-import static com.oracle.graal.api.code.ValueUtil.*;
-import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
+import static jdk.vm.ci.code.ValueUtil.asRegister;
+import static jdk.vm.ci.sparc.SPARC.g0;
+import static jdk.vm.ci.sparc.SPARC.l7;
+import static jdk.vm.ci.sparc.SPARC.sp;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.meta.AllocatableValue;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.asm.sparc.SPARCAddress;
+import com.oracle.graal.asm.sparc.SPARCAssembler.CC;
+import com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler.ScratchRegister;
+import com.oracle.graal.lir.LIRInstructionClass;
+import com.oracle.graal.lir.Opcode;
+import com.oracle.graal.lir.asm.CompilationResultBuilder;
 
 /**
  * Sets up the arguments for an exception handler in the callers frame, removes the current frame
@@ -41,28 +46,35 @@ import com.oracle.graal.lir.asm.*;
 @Opcode("JUMP_TO_EXCEPTION_HANDLER_IN_CALLER")
 final class SPARCHotSpotJumpToExceptionHandlerInCallerOp extends SPARCHotSpotEpilogueOp {
 
+    public static final LIRInstructionClass<SPARCHotSpotJumpToExceptionHandlerInCallerOp> TYPE = LIRInstructionClass.create(SPARCHotSpotJumpToExceptionHandlerInCallerOp.class);
+    public static final SizeEstimate SIZE = SizeEstimate.create(5);
+
     @Use(REG) AllocatableValue handlerInCallerPc;
     @Use(REG) AllocatableValue exception;
     @Use(REG) AllocatableValue exceptionPc;
+    private final Register thread;
+    private final int isMethodHandleReturnOffset;
 
-    SPARCHotSpotJumpToExceptionHandlerInCallerOp(AllocatableValue handlerInCallerPc, AllocatableValue exception, AllocatableValue exceptionPc) {
+    SPARCHotSpotJumpToExceptionHandlerInCallerOp(AllocatableValue handlerInCallerPc, AllocatableValue exception, AllocatableValue exceptionPc, int isMethodHandleReturnOffset, Register thread) {
+        super(TYPE, SIZE);
         this.handlerInCallerPc = handlerInCallerPc;
         this.exception = exception;
         this.exceptionPc = exceptionPc;
+        this.isMethodHandleReturnOffset = isMethodHandleReturnOffset;
+        this.thread = thread;
     }
 
     @Override
-    public void emitCode(TargetMethodAssembler tasm, SPARCMacroAssembler masm) {
-        leaveFrame(tasm);
-
+    public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
         // Restore SP from L7 if the exception PC is a method handle call site.
-        Register thread = graalRuntime().getProviders().getRegisters().getThreadRegister();
-        int isMethodHandleReturnOffset = graalRuntime().getConfig().threadIsMethodHandleReturnOffset;
         SPARCAddress dst = new SPARCAddress(thread, isMethodHandleReturnOffset);
-        new Lduw(dst, o7).emit(masm);
-        new Cmp(o7, o7).emit(masm);
-        new Movcc(ConditionFlag.NotZero, CC.Icc, l7, sp).emit(masm);
-
-        new Jmpl(asRegister(handlerInCallerPc), 0, g0).emit(masm);
+        try (ScratchRegister scratch = masm.getScratchRegister()) {
+            Register scratchReg = scratch.getRegister();
+            masm.lduw(dst, scratchReg);
+            masm.cmp(scratchReg, scratchReg);
+            masm.movcc(ConditionFlag.NotZero, CC.Icc, l7, sp);
+        }
+        masm.jmpl(asRegister(handlerInCallerPc), 0, g0);
+        leaveFrame(crb); // Delay slot
     }
 }
