@@ -22,9 +22,6 @@
  */
 package com.oracle.truffle.sl.runtime;
 
-import com.oracle.truffle.api.interop.ForeignAccessFactory;
-import com.oracle.truffle.api.interop.TruffleObject;
-
 /**
  * The SL type for a {@code null} (i.e., undefined) value. In Truffle, it is generally discouraged
  * to use the Java {@code null} value to represent the guest language {@code null} value. It is not
@@ -33,7 +30,7 @@ import com.oracle.truffle.api.interop.TruffleObject;
  * language {@code null} as a singleton, as in {@link #SINGLETON this class}, is the recommended
  * practice.
  */
-public final class SLNull implements TruffleObject {
+public final class SLNull {
 
     /**
      * The canonical value to represent {@code null} in SL.
@@ -54,10 +51,5 @@ public final class SLNull implements TruffleObject {
     @Override
     public String toString() {
         return "null";
-    }
-
-    @Override
-    public ForeignAccessFactory getForeignAccessFactory() {
-        return SLFunctionForeignAccess.INSTANCE;
     }
 }
