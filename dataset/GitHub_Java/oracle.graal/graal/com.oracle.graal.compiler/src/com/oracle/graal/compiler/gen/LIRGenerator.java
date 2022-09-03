@@ -218,7 +218,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
 
     public LIRFrameState state() {
         assert lastState != null : "must have state before instruction";
-        return stateFor(lastState, StructuredGraph.INVALID_GRAPH_ID);
+        return stateFor(lastState, -1);
     }
 
     public LIRFrameState state(long leafGraphId) {
@@ -845,7 +845,6 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
                 // only a few entries
                 emitSequentialSwitch(x, value, defaultTarget);
             } else {
-                assert value.getKind() == Kind.Int;
                 long valueRange = x.keyAt(keyCount - 1).asLong() - x.keyAt(0).asLong() + 1;
                 int switchRangeCount = switchRangeCount(x);
                 int rangeDensity = keyCount / switchRangeCount;

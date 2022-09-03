@@ -79,6 +79,7 @@ public final class GraphBuilderPhase extends Phase {
     private ProfilingInfo profilingInfo;
 
     private BytecodeStream stream;           // the bytecode stream
+    private final LogStream log;
 
     private FrameStateBuilder frameState;          // the current execution state
     private Block currentBlock;
@@ -112,6 +113,7 @@ public final class GraphBuilderPhase extends Phase {
         this.graphBuilderConfig = graphBuilderConfig;
         this.optimisticOpts = optimisticOpts;
         this.runtime = runtime;
+        this.log = GraalOptions.TraceBytecodeParserLevel > 0 ? new LogStream(TTY.out()) : null;
         assert runtime != null;
     }
 
@@ -129,12 +131,7 @@ public final class GraphBuilderPhase extends Phase {
         methodSynchronizedObject = null;
         this.currentGraph = graph;
         this.frameState = new FrameStateBuilder(method, graph, graphBuilderConfig.eagerResolving());
-        TTY.Filter filter = new TTY.Filter(GraalOptions.PrintFilter, method);
-        try {
-            build();
-        } finally {
-            filter.remove();
-        }
+        build();
     }
 
     @Override
@@ -151,6 +148,11 @@ public final class GraphBuilderPhase extends Phase {
     }
 
     private void build() {
+        if (log != null) {
+            log.println();
+            log.println("Compiling " + method);
+        }
+
         if (GraalOptions.PrintProfilingInformation) {
             TTY.println("Profiling info for " + method);
             TTY.println(MetaUtil.indent(MetaUtil.profileToString(profilingInfo, method, CodeUtil.NEW_LINE), "  "));
@@ -171,16 +173,11 @@ public final class GraphBuilderPhase extends Phase {
 
         // finish the start block
         ((StateSplit) lastInstr).setStateAfter(frameState.create(0));
-
-        currentBlock = blockMap.startBlock;
-        blockMap.startBlock.entryState = frameState;
         if (blockMap.startBlock.isLoopHeader) {
-            // TODO(lstadler,gduboscq) createTarget might not be safe at this position, since it expects currentBlock,
-            // etc. to be set up correctly. A better solution to this problem of start blocks that are loop headers
-            // would be to create a dummy block in BciBlockMapping.
             appendGoto(createTarget(blockMap.startBlock, frameState));
         } else {
             blockMap.startBlock.firstInstruction = lastInstr;
+            blockMap.startBlock.entryState = frameState;
         }
 
         for (Block block : blockMap.blocks) {
@@ -949,7 +946,7 @@ public final class GraphBuilderPhase extends Phase {
             return;
         }
         // 1. check if the exact type of the receiver can be determined
-        ResolvedJavaType exact = klass.asExactType();
+        ResolvedJavaType exact = klass.getExactType();
         if (exact == null && receiver.objectStamp().isExactType()) {
             exact = receiver.objectStamp().type();
         }
@@ -1361,7 +1358,7 @@ public final class GraphBuilderPhase extends Phase {
     }
 
     private void createReturn() {
-        if (method.isConstructor() && MetaUtil.isJavaLangObject(method.getDeclaringClass())) {
+        if (method.isConstructor() && method.getDeclaringClass().getSuperclass() == null) {
             callRegisterFinalizer();
         }
         Kind returnKind = method.getSignature().getReturnKind().getStackKind();
@@ -1376,6 +1373,7 @@ public final class GraphBuilderPhase extends Phase {
 
         synchronizedEpilogue(FrameState.AFTER_BCI);
         if (!frameState.locksEmpty()) {
+            System.out.println("unbalanced monitors");
             throw new BailoutException("unbalanced monitors");
         }
         ReturnNode returnNode = currentGraph.add(new ReturnNode(x));
@@ -1407,15 +1405,14 @@ public final class GraphBuilderPhase extends Phase {
         if (initialized && graphBuilderConfig.getSkippedExceptionTypes() != null) {
             ResolvedJavaType resolvedCatchType = (ResolvedJavaType) catchType;
             for (ResolvedJavaType skippedType : graphBuilderConfig.getSkippedExceptionTypes()) {
-                initialized &= !resolvedCatchType.isAssignableTo(skippedType);
+                initialized &= !resolvedCatchType.isSubtypeOf(skippedType);
                 if (!initialized) {
                     break;
                 }
             }
         }
 
-        ConstantNode typeInstruction = genTypeOrDeopt(Representation.ObjectHub, catchType, initialized);
-        if (typeInstruction != null) {
+        if (initialized) {
             Block nextBlock = block.successors.size() == 1 ? unwindBlock(block.deoptBci) : block.successors.get(1);
             ValueNode exception = frameState.stackAt(0);
             CheckCastNode checkCast = currentGraph.add(new CheckCastNode((ResolvedJavaType) catchType, exception, null));
@@ -1428,6 +1425,8 @@ public final class GraphBuilderPhase extends Phase {
             checkCast.setNext(catchSuccessor);
             IfNode ifNode = currentGraph.add(new IfNode(currentGraph.unique(new InstanceOfNode((ResolvedJavaType) catchType, exception, null)), checkCast, nextDispatch, 0.5, graphId));
             append(ifNode);
+        } else {
+            append(currentGraph.add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.Unresolved, graphId)));
         }
     }
 
@@ -1531,14 +1530,14 @@ public final class GraphBuilderPhase extends Phase {
 
     private void traceState() {
         if (GraalOptions.TraceBytecodeParserLevel >= TRACELEVEL_STATE && !TTY.isSuppressed()) {
-            TTY.println(String.format("|   state [nr locals = %d, stack depth = %d, method = %s]", frameState.localsSize(), frameState.stackSize(), method));
+            log.println(String.format("|   state [nr locals = %d, stack depth = %d, method = %s]", frameState.localsSize(), frameState.stackSize(), method));
             for (int i = 0; i < frameState.localsSize(); ++i) {
                 ValueNode value = frameState.localAt(i);
-                TTY.println(String.format("|   local[%d] = %-8s : %s", i, value == null ? "bogus" : value.kind().getJavaName(), value));
+                log.println(String.format("|   local[%d] = %-8s : %s", i, value == null ? "bogus" : value.kind().getJavaName(), value));
             }
             for (int i = 0; i < frameState.stackSize(); ++i) {
                 ValueNode value = frameState.stackAt(i);
-                TTY.println(String.format("|   stack[%d] = %-8s : %s", i, value == null ? "bogus" : value.kind().getJavaName(), value));
+                log.println(String.format("|   stack[%d] = %-8s : %s", i, value == null ? "bogus" : value.kind().getJavaName(), value));
             }
         }
     }
@@ -1772,7 +1771,7 @@ public final class GraphBuilderPhase extends Phase {
             if (!currentBlock.jsrScope.isEmpty()) {
                 sb.append(' ').append(currentBlock.jsrScope);
             }
-            TTY.println(sb.toString());
+            log.println(sb.toString());
         }
     }
 

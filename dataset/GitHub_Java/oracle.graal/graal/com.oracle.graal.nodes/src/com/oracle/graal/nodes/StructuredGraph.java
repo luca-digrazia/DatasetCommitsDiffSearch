@@ -57,23 +57,30 @@ public class StructuredGraph extends Graph {
     /**
      * Creates a new Graph containing a single {@link BeginNode} as the {@link #start() start} node.
      */
+    public StructuredGraph(String name) {
+        this(name, null);
+    }
+
     public StructuredGraph(String name, ResolvedJavaMethod method) {
-        this(name, method, uniqueGraphIds.incrementAndGet(), INVOCATION_ENTRY_BCI);
+        this(name, method, uniqueGraphIds.incrementAndGet());
     }
 
-    public StructuredGraph(ResolvedJavaMethod method) {
-        this(null, method, uniqueGraphIds.incrementAndGet(), INVOCATION_ENTRY_BCI);
-    }
-
-    public StructuredGraph(ResolvedJavaMethod method, int entryBCI) {
-        this(null, method, uniqueGraphIds.incrementAndGet(), entryBCI);
-    }
-
-    private StructuredGraph(String name, ResolvedJavaMethod method, long graphId, int entryBCI) {
+    private StructuredGraph(String name, ResolvedJavaMethod method, long graphId) {
         super(name);
         this.start = add(new StartNode());
         this.method = method;
         this.graphId = graphId;
+        this.entryBCI = INVOCATION_ENTRY_BCI;
+    }
+
+    public StructuredGraph(ResolvedJavaMethod method) {
+        this(method, INVOCATION_ENTRY_BCI);
+    }
+
+    public StructuredGraph(ResolvedJavaMethod method, int entryBCI) {
+        this.start = add(new StartNode());
+        this.method = method;
+        this.graphId = uniqueGraphIds.incrementAndGet();
         this.entryBCI = entryBCI;
     }
 
@@ -121,7 +128,7 @@ public class StructuredGraph extends Graph {
 
     @Override
     public StructuredGraph copy(String newName) {
-        StructuredGraph copy = new StructuredGraph(newName, method, graphId, entryBCI);
+        StructuredGraph copy = new StructuredGraph(newName, method, graphId);
         HashMap<Node, Node> replacements = new HashMap<>();
         replacements.put(start, copy.start);
         copy.addDuplicates(getNodes(), replacements);
@@ -241,34 +248,39 @@ public class StructuredGraph extends Graph {
         node.safeDelete();
     }
 
-    public void removeSplit(ControlSplitNode node, BeginNode survivingSuccessor) {
+    public void removeSplit(ControlSplitNode node, int survivingSuccessor) {
         assert node != null;
         assert node.usages().isEmpty();
-        assert survivingSuccessor != null;
-        node.clearSuccessors();
-        node.replaceAtPredecessor(survivingSuccessor);
+        assert survivingSuccessor >= 0 && survivingSuccessor < node.blockSuccessorCount() : "invalid surviving successor " + survivingSuccessor + " for " + node;
+        BeginNode begin = node.blockSuccessor(survivingSuccessor);
+        for (int i = 0; i < node.blockSuccessorCount(); i++) {
+            node.setBlockSuccessor(i, null);
+        }
+        node.replaceAtPredecessor(begin);
         node.safeDelete();
     }
 
-    public void removeSplitPropagate(ControlSplitNode node, BeginNode survivingSuccessor) {
+    public void removeSplitPropagate(ControlSplitNode node, int survivingSuccessor) {
         assert node != null;
         assert node.usages().isEmpty();
-        assert survivingSuccessor != null;
-        for (Node successor : node.successors().snapshot()) {
-            successor.replaceAtPredecessor(null);
-            if (successor != null && successor != survivingSuccessor && successor.isAlive()) {
-                GraphUtil.killCFG((BeginNode) successor);
+        assert survivingSuccessor >= 0 && survivingSuccessor < node.blockSuccessorCount() : "invalid surviving successor " + survivingSuccessor + " for " + node;
+        BeginNode begin = node.blockSuccessor(survivingSuccessor);
+        for (int i = 0; i < node.blockSuccessorCount(); i++) {
+            BeginNode successor = node.blockSuccessor(i);
+            node.setBlockSuccessor(i, null);
+            if (successor != null && successor != begin && successor.isAlive()) {
+                GraphUtil.killCFG(successor);
             }
         }
-        if (survivingSuccessor.isAlive()) {
-            node.replaceAtPredecessor(survivingSuccessor);
+        if (begin.isAlive()) {
+            node.replaceAtPredecessor(begin);
             node.safeDelete();
         } else {
-            assert node.isDeleted() : node + " " + survivingSuccessor;
+            assert node.isDeleted() : node + " " + begin;
         }
     }
 
-    public void replaceSplit(ControlSplitNode node, Node replacement, BeginNode survivingSuccessor) {
+    public void replaceSplit(ControlSplitNode node, Node replacement, int survivingSuccessor) {
         if (replacement instanceof FixedWithNextNode) {
             replaceSplitWithFixed(node, (FixedWithNextNode) replacement, survivingSuccessor);
         } else {
@@ -278,19 +290,25 @@ public class StructuredGraph extends Graph {
         }
     }
 
-    public void replaceSplitWithFixed(ControlSplitNode node, FixedWithNextNode replacement, BeginNode survivingSuccessor) {
+    public void replaceSplitWithFixed(ControlSplitNode node, FixedWithNextNode replacement, int survivingSuccessor) {
         assert node != null && replacement != null && node.isAlive() && replacement.isAlive() : "cannot replace " + node + " with " + replacement;
-        assert survivingSuccessor != null;
-        node.clearSuccessors();
-        replacement.setNext(survivingSuccessor);
+        assert survivingSuccessor >= 0 && survivingSuccessor < node.blockSuccessorCount() : "invalid surviving successor " + survivingSuccessor + " for " + node;
+        BeginNode begin = node.blockSuccessor(survivingSuccessor);
+        for (int i = 0; i < node.blockSuccessorCount(); i++) {
+            node.setBlockSuccessor(i, null);
+        }
+        replacement.setNext(begin);
         node.replaceAndDelete(replacement);
     }
 
-    public void replaceSplitWithFloating(ControlSplitNode node, FloatingNode replacement, BeginNode survivingSuccessor) {
+    public void replaceSplitWithFloating(ControlSplitNode node, FloatingNode replacement, int survivingSuccessor) {
         assert node != null && replacement != null && node.isAlive() && replacement.isAlive() : "cannot replace " + node + " with " + replacement;
-        assert survivingSuccessor != null;
-        node.clearSuccessors();
-        node.replaceAtPredecessor(survivingSuccessor);
+        assert survivingSuccessor >= 0 && survivingSuccessor < node.blockSuccessorCount() : "invalid surviving successor " + survivingSuccessor + " for " + node;
+        BeginNode begin = node.blockSuccessor(survivingSuccessor);
+        for (int i = 0; i < node.blockSuccessorCount(); i++) {
+            node.setBlockSuccessor(i, null);
+        }
+        node.replaceAtPredecessor(begin);
         node.replaceAtUsages(replacement);
         node.safeDelete();
     }

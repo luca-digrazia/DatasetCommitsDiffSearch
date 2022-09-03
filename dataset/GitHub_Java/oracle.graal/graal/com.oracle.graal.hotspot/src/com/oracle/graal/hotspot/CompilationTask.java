@@ -42,38 +42,27 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
         }
     };
 
-    public static final ThreadLocal<Long> withinCompilation = new ThreadLocal<Long>() {
-        @Override
-        protected Long initialValue() {
-            return 0L;
-        }
-    };
-
 
     private volatile boolean cancelled;
 
     private final HotSpotGraalRuntime graalRuntime;
     private final PhasePlan plan;
-    private final OptimisticOptimizations optimisticOpts;
     private final HotSpotResolvedJavaMethod method;
-    private final int entryBCI;
+    private final OptimisticOptimizations optimisticOpts;
     private final int id;
     private final int priority;
-    private final Runnable callback;
 
-    public static CompilationTask create(HotSpotGraalRuntime graalRuntime, PhasePlan plan, OptimisticOptimizations optimisticOpts, HotSpotResolvedJavaMethod method, int entryBCI, int id, int priority, Runnable callback) {
-        return new CompilationTask(graalRuntime, plan, optimisticOpts, method, entryBCI, id, priority, callback);
+    public static CompilationTask create(HotSpotGraalRuntime graalRuntime, PhasePlan plan, OptimisticOptimizations optimisticOpts, HotSpotResolvedJavaMethod method, int id, int priority) {
+        return new CompilationTask(graalRuntime, plan, optimisticOpts, method, id, priority);
     }
 
-    private CompilationTask(HotSpotGraalRuntime graalRuntime, PhasePlan plan, OptimisticOptimizations optimisticOpts, HotSpotResolvedJavaMethod method, int entryBCI, int id, int priority, Runnable callback) {
+    private CompilationTask(HotSpotGraalRuntime graalRuntime, PhasePlan plan, OptimisticOptimizations optimisticOpts, HotSpotResolvedJavaMethod method, int id, int priority) {
         this.graalRuntime = graalRuntime;
         this.plan = plan;
         this.method = method;
         this.optimisticOpts = optimisticOpts;
-        this.entryBCI = entryBCI;
         this.id = id;
         this.priority = priority;
-        this.callback = callback;
     }
 
     public ResolvedJavaMethod method() {
@@ -101,7 +90,7 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
                 }
             }
             runCompilation();
-            if (method.currentTask() == this && entryBCI == StructuredGraph.INVOCATION_ENTRY_BCI) {
+            if (method.currentTask() == this) {
                 method.setCurrentTask(null);
             }
         } finally {
@@ -110,7 +99,6 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
     }
 
     public void runCompilation() {
-        withinCompilation.set(withinCompilation.get() + 1);
         CompilationStatistics stats = CompilationStatistics.create(method);
         try {
             final boolean printCompilation = GraalOptions.PrintCompilation && !TTY.isSuppressed();
@@ -155,10 +143,6 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
             }
         }
         stats.finish(method);
-        if (callback != null) {
-            callback.run();
-        }
-        withinCompilation.set(withinCompilation.get() - 1);
     }
 
     private void installMethod(final CompilationResult tm) {
@@ -166,7 +150,7 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
             @Override
             public void run() {
                 final CodeInfo[] info = Debug.isDumpEnabled() ? new CodeInfo[1] : null;
-                graalRuntime.getRuntime().installMethod(method, entryBCI, tm, info);
+                graalRuntime.getRuntime().installMethod(method, -1, tm, info);
                 if (info != null) {
                     Debug.dump(new Object[] {tm, info[0]}, "After code installation");
                 }
