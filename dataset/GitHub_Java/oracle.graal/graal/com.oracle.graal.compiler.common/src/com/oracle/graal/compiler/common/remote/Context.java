@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.compiler.common.remote;
 
+import static java.lang.reflect.Modifier.*;
+
 import java.lang.reflect.*;
 import java.nio.*;
 import java.util.*;
@@ -31,9 +33,14 @@ import sun.awt.util.*;
 import com.oracle.graal.api.code.Register.RegisterCategory;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.compiler.common.type.*;
 
 /**
  * Manages a context for replay or remote compilation.
+ *
+ * With respect to replay or remote compilation, certain objects only exist on the VM side of the
+ * VM-compiler boundary. These are objects that encapsulate compiler references to user heap objects
+ * or other VM data such as native VM objects representing Java classes and methods.
  */
 public class Context implements AutoCloseable {
 
@@ -54,6 +61,30 @@ public class Context implements AutoCloseable {
 
     public void setMode(Mode mode) {
         this.mode = mode;
+    }
+
+    public static <K, V> HashMap<K, V> newMap() {
+        return Context.getCurrent() == null ? new HashMap<>() : new LinkedHashMap<>();
+    }
+
+    public static <K, V> HashMap<K, V> newMap(Map<K, V> m) {
+        return Context.getCurrent() == null ? new HashMap<>(m) : new LinkedHashMap<>(m);
+    }
+
+    public static <K, V> HashMap<K, V> newMap(int initialCapacity) {
+        return Context.getCurrent() == null ? new HashMap<>(initialCapacity) : new LinkedHashMap<>(initialCapacity);
+    }
+
+    public static <K, V> Map<K, V> newIdentityMap() {
+        return Context.getCurrent() == null ? new IdentityHashMap<>() : new LinkedIdentityHashMap<>();
+    }
+
+    public static <K, V> Map<K, V> newIdentityMap(int expectedMaxSize) {
+        return Context.getCurrent() == null ? new IdentityHashMap<>(expectedMaxSize) : new LinkedIdentityHashMap<>();
+    }
+
+    public static <K, V> Map<K, V> newIdentityMap(Map<K, V> m) {
+        return Context.getCurrent() == null ? new IdentityHashMap<>(m) : new LinkedIdentityHashMap<>(m);
     }
 
     /**
@@ -92,16 +123,10 @@ public class Context implements AutoCloseable {
     ));
     // @formatter:on
 
-    private static void registerStaticField(Class<?> declaringClass, String staticFieldName) {
+    private static void registerSharedGlobal(Class<?> declaringClass, String staticFieldName) {
         try {
-            Field f = declaringClass.getDeclaredField(staticFieldName);
-            assert Modifier.isStatic(f.getModifiers()) : f;
-            assert Modifier.isFinal(f.getModifiers()) : f;
-            assert !f.getType().isPrimitive() : f;
-            f.setAccessible(true);
-            Object obj = f.get(null);
-            Field existing = SpecialStaticFields.put(obj, f);
-            assert existing == null;
+            SharedGlobal global = new SharedGlobal(declaringClass.getDeclaredField(staticFieldName));
+            SharedGlobals.put(global.get(), global);
         } catch (NoSuchFieldException e) {
             // ignore non-existing fields
         } catch (Exception e) {
@@ -109,15 +134,86 @@ public class Context implements AutoCloseable {
         }
     }
 
+    private static void registerSharedGlobals(Class<?> declaringClass, Class<?> staticFieldType) {
+        assert !staticFieldType.isPrimitive();
+        try {
+            for (Field f : declaringClass.getDeclaredFields()) {
+                if (isStatic(f.getModifiers()) && isFinal(f.getModifiers()) && !f.getType().isPrimitive()) {
+                    SharedGlobal global = new SharedGlobal(f);
+                    if (staticFieldType.isAssignableFrom(f.getType())) {
+                        SharedGlobals.put(global.get(), global);
+                    } else {
+                        Class<?> componentType = f.getType().getComponentType();
+                        if (componentType != null && staticFieldType.isAssignableFrom(componentType)) {
+                            Object[] vals = global.get();
+                            for (int i = 0; i < vals.length; i++) {
+                                SharedGlobal g = new SharedGlobal(f, i);
+                                Object obj = g.get();
+                                SharedGlobals.put(obj, g);
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            throw new GraalInternalError(e);
+        }
+    }
+
+    /**
+     * A shared global is a non-primitive value in a static final variable whose identity is
+     * important to the compiler. That is, equality tests against these values are performed with
+     * {@code ==} or these values are keys in identity hash maps.
+     */
+    static class SharedGlobal {
+        final Field staticField;
+        final Integer index;
+
+        public SharedGlobal(Field staticField) {
+            this(staticField, null);
+        }
+
+        public SharedGlobal(Field staticField, Integer index) {
+            int mods = staticField.getModifiers();
+            assert isStatic(mods) && isFinal(mods) && !staticField.getType().isPrimitive() : staticField;
+            staticField.setAccessible(true);
+            this.staticField = staticField;
+            this.index = index;
+        }
+
+        @SuppressWarnings("unchecked")
+        public <T> T get() {
+            try {
+                Object value = staticField.get(null);
+                if (index != null) {
+                    value = ((Object[]) value)[index.intValue()];
+                }
+                return (T) value;
+            } catch (Exception e) {
+                throw new GraalInternalError(e);
+            }
+        }
+
+        @Override
+        public String toString() {
+            String res = staticField.getDeclaringClass().getName() + "." + staticField.getName();
+            if (index != null) {
+                res += "[" + index + "]";
+            }
+            return res;
+        }
+    }
+
     /**
      * Objects that should not be copied but retrieved from final static fields.
      */
-    private static final Map<Object, Field> SpecialStaticFields = new IdentityHashMap<>();
+    private static final Map<Object, SharedGlobal> SharedGlobals = new IdentityHashMap<>();
     static {
-        registerStaticField(ByteOrder.class, "BIG_ENDIAN");
-        registerStaticField(ByteOrder.class, "LITTLE_ENDIAN");
-        registerStaticField(ArrayList.class, "EMPTY_ELEMENTDATA");
-        registerStaticField(ArrayList.class, "DEFAULTCAPACITY_EMPTY_ELEMENTDATA");
+        registerSharedGlobal(ByteOrder.class, "BIG_ENDIAN");
+        registerSharedGlobal(ByteOrder.class, "LITTLE_ENDIAN");
+        registerSharedGlobal(ArrayList.class, "EMPTY_ELEMENTDATA");
+        registerSharedGlobal(ArrayList.class, "DEFAULTCAPACITY_EMPTY_ELEMENTDATA");
+        registerSharedGlobals(StampFactory.class, Stamp.class);
     }
 
     /**
@@ -231,7 +327,7 @@ public class Context implements AutoCloseable {
     private Object copyFieldOrElement(Deque<Object> worklist, Map<Object, Object> copies, Object srcValue) {
         Object dstValue = srcValue;
         if (srcValue != null && !Proxy.isProxyClass(srcValue.getClass())) {
-            if (isAssignableTo(srcValue.getClass(), DontCopyClasses) || SpecialStaticFields.containsKey(srcValue)) {
+            if (isAssignableTo(srcValue.getClass(), DontCopyClasses) || SharedGlobals.containsKey(srcValue)) {
                 pool.put(srcValue, srcValue);
                 return srcValue;
             }
@@ -242,7 +338,6 @@ public class Context implements AutoCloseable {
                 } else {
                     dstValue = copies.get(srcValue);
                     if (dstValue == null) {
-                        assert !worklist.contains(srcValue) : id(srcValue);
                         // System.out.printf("worklist+: %s%n", s(srcValue));
                         worklist.add(srcValue);
                         copies.put(srcValue, copies);
@@ -264,7 +359,8 @@ public class Context implements AutoCloseable {
      * In addition, copies in {@link #pool} are re-used.
      */
     private Object copy(Object root) {
-        assert !(isAssignableTo(root.getClass(), DontCopyClasses) || SpecialStaticFields.containsKey(root));
+        long start = System.currentTimeMillis();
+        assert !(isAssignableTo(root.getClass(), DontCopyClasses) || SharedGlobals.containsKey(root));
         // System.out.printf("----- %s ------%n", s(obj));
         assert pool.get(root) == null;
         Deque<Object> worklist = new IdentityLinkedList<>();
@@ -272,6 +368,12 @@ public class Context implements AutoCloseable {
         IdentityHashMap<Object, Object> copies = new IdentityHashMap<>();
         copies.put(root, copies);
         copy0(worklist, copies);
+        if (DEBUG) {
+            long duration = System.currentTimeMillis() - start;
+            if (duration > 10) {
+                System.out.printf("After copying %s (proxies: %d, pool: %d) %d ms%n", root.getClass().getSimpleName(), proxies.size(), pool.size(), duration);
+            }
+        }
         return pool.get(root);
     }
 
@@ -290,10 +392,14 @@ public class Context implements AutoCloseable {
     public Context() {
         assert currentContext.get() == null : currentContext.get();
         currentContext.set(this);
+        pool = new IdentityHashMap<>();
     }
 
     private final Map<Object, Object> proxies = new IdentityHashMap<>();
-    private final Map<Object, Object> pool = new IdentityHashMap<>();
+    private final Map<Object, Object> pool;
+
+    int invocationCacheHits;
+    int invocationCacheMisses;
 
     /**
      * Gets the value of a given object within this context.
@@ -307,13 +413,13 @@ public class Context implements AutoCloseable {
             Object proxy = proxies.get(obj);
             if (proxy == null) {
                 Class<?>[] interfaces = ProxyUtil.getAllInterfaces(obj.getClass());
-                proxy = Proxy.newProxyInstance(obj.getClass().getClassLoader(), interfaces, new Handler<>(obj, this));
+                proxy = Proxy.newProxyInstance(obj.getClass().getClassLoader(), interfaces, new Handler<>(obj));
                 proxies.put(obj, proxy);
             }
             return (T) proxy;
         } else {
             Object value;
-            if (isAssignableTo(obj.getClass(), DontCopyClasses) || SpecialStaticFields.containsKey(obj)) {
+            if (isAssignableTo(obj.getClass(), DontCopyClasses) || SharedGlobals.containsKey(obj)) {
                 value = obj;
             } else {
                 value = pool.get(obj);
@@ -329,8 +435,13 @@ public class Context implements AutoCloseable {
         }
     }
 
+    private static final boolean DEBUG = Boolean.getBoolean("graal.replayContext.debug");
+
     public void close() {
         assert currentContext.get() == this : currentContext.get();
+        if (DEBUG) {
+            System.out.printf("proxies: %d, pool: %d, invocation cache hits: %d, invocation cache misses: %d%n", proxies.size(), pool.size(), invocationCacheHits, invocationCacheMisses);
+        }
         currentContext.set(null);
     }
 
@@ -347,7 +458,7 @@ public class Context implements AutoCloseable {
                         throw new GraalInternalError("Expecting proxy, found instance of %s", o.getClass());
                     }
                 } else {
-                    if (!Proxy.isProxyClass(o.getClass())) {
+                    if (Proxy.isProxyClass(o.getClass())) {
                         throw new GraalInternalError("Expecting instance of %s, found proxy", o.getClass());
                     }
                 }
@@ -357,11 +468,66 @@ public class Context implements AutoCloseable {
     }
 
     /**
+     * Asserts that the current caller is in code that is on the VM side.
+     *
+     * @param errorMessage the error message used for the {@link GraalInternalError} thrown if the
+     *            check fails
+     * @return true if the check succeeds
+     * @throw AssertionError if the check fails
+     */
+    public static boolean assertInLocal(String errorMessage) {
+        Context c = Context.getCurrent();
+        if (c != null) {
+            if (!c.inProxyInvocation()) {
+                throw new AssertionError(errorMessage);
+            }
+        }
+        return true;
+    }
+
+    private NoContext leave;
+    int activeInvocations;
+
+    /**
+     * Enters a scope that disables the {@linkplain Context#getCurrent() current} context. The
+     * disabled scope is exited when {@link NoContext#close()} is called on the returned object.
+     */
+    public NoContext leave() {
+        return new NoContext();
+    }
+
+    public class NoContext implements AutoCloseable {
+        NoContext() {
+            assert currentContext.get() == Context.this;
+            assert Context.this.leave == null;
+            Context.this.leave = this;
+            currentContext.set(null);
+        }
+
+        public void close() {
+            assert leave == this;
+            assert currentContext.get() == null;
+            currentContext.set(Context.this);
+            leave = null;
+        }
+    }
+
+    /**
      * Gets the currently active context for the calling thread.
      *
      * @return {@code null} if there is no context active on the calling thread
      */
     public static Context getCurrent() {
         return currentContext.get();
+    }
+
+    public boolean inProxyInvocation() {
+        return activeInvocations != 0;
+    }
+
+    public static void breakpoint() {
+        if (getCurrent() != null) {
+            System.console();
+        }
     }
 }

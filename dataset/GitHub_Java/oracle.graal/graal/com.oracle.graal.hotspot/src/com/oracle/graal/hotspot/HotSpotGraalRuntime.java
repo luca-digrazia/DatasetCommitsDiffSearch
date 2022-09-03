@@ -31,7 +31,6 @@ import static com.oracle.graal.hotspot.InitTimer.*;
 
 import java.lang.reflect.*;
 import java.util.*;
-import java.util.function.*;
 
 import sun.misc.*;
 
@@ -42,6 +41,7 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.compiler.common.remote.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
@@ -80,17 +80,13 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider, R
         }
     }
 
-    private static Predicate<Void> runtimeAccessCheck;
-
     /**
-     * Sets a predicate which will be used to assert a valid calling context for a call to
-     * {@link #runtime()}. This is useful for verifying execution scopes that should not make a
-     * static access to {@link HotSpotGraalRuntime}. Such scopes are responsible for resetting the
-     * predicate to null.
+     * Checks that all accesses to a {@link HotSpotGraalRuntimeProvider} within a replay context are
+     * through references to a captured {@link HotSpotGraalRuntimeProvider}, not through the static
+     * {@link HotSpotGraalRuntimeProvider} instance of the runtime hosting the replay.
      */
-    public static void setRuntimeAccessCheck(Predicate<Void> predicate) {
-        assert runtimeAccessCheck == null || predicate == null : "at most once runtime access check can be active";
-        runtimeAccessCheck = predicate;
+    public static boolean checkRuntimeAccess() {
+        return Context.assertInLocal("Cannot access HotSpotGraalRuntime statically in replay/remote context");
     }
 
     /**
@@ -98,7 +94,7 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider, R
      */
     public static HotSpotGraalRuntime runtime() {
         assert instance != null;
-        assert runtimeAccessCheck == null || runtimeAccessCheck.test(null);
+        assert checkRuntimeAccess();
         return instance;
     }
 

@@ -25,9 +25,10 @@ package com.oracle.graal.hotspot.meta;
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.remote.*;
 import com.oracle.graal.hotspot.HotSpotVMConfig.CompressEncoding;
 
-public final class HotSpotMetaspaceConstantImpl extends PrimitiveConstant implements HotSpotMetaspaceConstant, VMConstant {
+public final class HotSpotMetaspaceConstantImpl extends PrimitiveConstant implements HotSpotMetaspaceConstant, VMConstant, Remote {
 
     private static final long serialVersionUID = 1003463314013122983L;
 
@@ -35,7 +36,7 @@ public final class HotSpotMetaspaceConstantImpl extends PrimitiveConstant implem
         return new HotSpotMetaspaceConstantImpl(kind, primitive, metaspaceObject, compressed);
     }
 
-    static Object getMetaspaceObject(JavaConstant constant) {
+    static Object getMetaspaceObject(Constant constant) {
         return ((HotSpotMetaspaceConstantImpl) constant).metaspaceObject;
     }
 
@@ -46,6 +47,7 @@ public final class HotSpotMetaspaceConstantImpl extends PrimitiveConstant implem
         super(kind, primitive);
         this.metaspaceObject = metaspaceObject;
         this.compressed = compressed;
+        assert Context.assertInLocal("Should not create metaspace constants here");
     }
 
     @Override
@@ -86,5 +88,9 @@ public final class HotSpotMetaspaceConstantImpl extends PrimitiveConstant implem
             return (HotSpotResolvedObjectType) metaspaceObject;
         }
         return null;
+    }
+
+    public long rawValue() {
+        return asLong();
     }
 }

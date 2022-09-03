@@ -28,8 +28,8 @@ import java.lang.invoke.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.remote.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.hotspot.*;
 import com.oracle.graal.lir.*;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
@@ -38,7 +38,7 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
  * Represents a constant non-{@code null} object reference, within the compiler and across the
  * compiler/runtime interface.
  */
-public final class HotSpotObjectConstantImpl extends AbstractValue implements HotSpotObjectConstant, HotSpotProxified {
+public final class HotSpotObjectConstantImpl extends AbstractValue implements HotSpotObjectConstant, Remote {
 
     private static final long serialVersionUID = 3592151693708093496L;
 
@@ -96,6 +96,7 @@ public final class HotSpotObjectConstantImpl extends AbstractValue implements Ho
         assert stableDimension == 0 || (object != null && object.getClass().isArray());
         assert stableDimension >= 0 && stableDimension <= 255;
         assert !isDefaultStable || stableDimension > 0;
+        assert Context.assertInLocal("Should not create object constants here");
     }
 
     private HotSpotObjectConstantImpl(Object object, boolean compressed) {
@@ -183,7 +184,7 @@ public final class HotSpotObjectConstantImpl extends AbstractValue implements Ho
             CallSite callSite = (CallSite) object;
             MethodHandle target = callSite.getTarget();
             if (!(callSite instanceof ConstantCallSite)) {
-                if (assumptions == null) {
+                if (assumptions == null || !assumptions.useOptimisticAssumptions()) {
                     return null;
                 }
                 assumptions.record(new Assumptions.CallSiteTargetValue(callSite, target));
