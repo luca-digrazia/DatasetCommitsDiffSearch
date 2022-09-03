@@ -34,54 +34,52 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collection;
-import java.util.List;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
-import org.junit.Assert;
-import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameter;
 import org.junit.runners.Parameterized.Parameters;
 
-import com.oracle.truffle.llvm.LLVM;
-import com.oracle.truffle.llvm.runtime.options.LLVMBaseOptionFacade;
-import com.oracle.truffle.llvm.tools.util.ProcessUtil;
+import com.oracle.truffle.llvm.test.options.TestOptions;
 
 @RunWith(Parameterized.class)
-public class SulongSuite {
+public final class SulongSuite extends BaseSuiteHarness {
 
-    private static final Path SULONG_SUITE_DIR = new File(LLVMBaseOptionFacade.getProjectRoot() + "/tests/cache/tests/sulong").toPath();
-    private static final Predicate<? super Path> isExecutable = f -> f.getFileName().toString().endsWith(".out");
-    private static final Predicate<? super Path> notExecutable = f -> !isExecutable.test(f);
-    private static final Predicate<? super Path> isFile = f -> f.toFile().isFile();
+    private static final boolean IS_MAC = System.getProperty("os.name").toLowerCase().indexOf("mac") >= 0;
+    @Parameter(value = 0) public Path path;
+    @Parameter(value = 1) public String testName;
 
-    private Path path;
-
-    public SulongSuite(Path path) {
-        this.path = path;
-    }
-
-    @Parameters
+    @Parameters(name = "{1}")
     public static Collection<Object[]> data() {
+        Path suitesPath = new File(TestOptions.TEST_SUITE_PATH).toPath();
         try {
-            return Files.walk(SULONG_SUITE_DIR).filter(isExecutable).map(f -> f.getParent()).map(f -> new Object[]{f}).collect(Collectors.toList());
+            Stream<Path> destDirs = Files.walk(suitesPath).filter(path -> path.endsWith("ref.out")).map(Path::getParent);
+            return destDirs.map(testPath -> new Object[]{testPath, suitesPath.relativize(testPath).toString()}).collect(Collectors.toList());
         } catch (IOException e) {
             throw new AssertionError("Test cases not found", e);
         }
     }
 
-    @Test
-    public void test() throws Exception {
-        assert Files.walk(path).filter(isExecutable).count() == 1;
-        Path referenceFile = Files.walk(path).filter(isExecutable).findFirst().get();
-        List<Path> testCandidates = Files.walk(path).filter(isFile).filter(notExecutable).collect(Collectors.toList());
-
-        final int referenceResult = ProcessUtil.executeNativeCommand(referenceFile.toAbsolutePath().toString()).getReturnValue();
-
-        for (Path candidate : testCandidates) {
-            int sulongResult = LLVM.executeMain(candidate.toAbsolutePath().toFile());
-            Assert.assertEquals(path.toAbsolutePath().toString(), referenceResult, sulongResult);
-        }
+    @Override
+    protected Predicate<? super Path> getIsSulongFilter() {
+        return f -> {
+            boolean isBC = f.getFileName().toString().endsWith(".bc");
+            boolean isOut = f.getFileName().toString().endsWith(".out");
+            return isBC || (isOut && !IS_MAC);
+        };
     }
+
+    @Override
+    protected Path getTestDirectory() {
+        return path;
+    }
+
+    @Override
+    protected String getTestName() {
+        return testName;
+    }
+
 }
