@@ -40,8 +40,8 @@ public final class LocationMarker {
 
     public static class Options {
         // @formatter:off
-        @Option(help = "Use decoupled pass for location marking (instead of using LSRA marking)", type = OptionType.Debug)
-        public static final OptionValue<Boolean> UseLocationMarker = new OptionValue<>(false);
+        @Option(help = "Use decoupled pass for location marking (instead of using LSRA marking)")
+        public static final OptionValue<Boolean> UseLocationMarker = new OptionValue<>(true);
         // @formatter:on
     }
 
