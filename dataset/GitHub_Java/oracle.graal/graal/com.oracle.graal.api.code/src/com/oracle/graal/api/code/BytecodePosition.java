@@ -23,7 +23,6 @@
 package com.oracle.graal.api.code;
 
 import java.io.*;
-import java.util.*;
 
 import com.oracle.graal.api.meta.*;
 
@@ -73,10 +72,13 @@ public class BytecodePosition implements Serializable {
         if (obj == this) {
             return true;
         }
-        if (obj != null && getClass() == obj.getClass()) {
-            BytecodePosition that = (BytecodePosition) obj;
-            if (this.bci == that.bci && Objects.equals(this.getMethod(), that.getMethod()) && Objects.equals(this.caller, that.caller)) {
-                return true;
+        if (obj instanceof BytecodePosition) {
+            BytecodePosition other = (BytecodePosition) obj;
+            if (other.getMethod().equals(getMethod()) && other.getBCI() == getBCI()) {
+                if (getCaller() == null) {
+                    return other.getCaller() == null;
+                }
+                return getCaller().equals(other.getCaller());
             }
         }
         return false;
@@ -108,16 +110,5 @@ public class BytecodePosition implements Serializable {
      */
     public BytecodePosition getCaller() {
         return caller;
-    }
-
-    /*
-     * Adds a caller to the current position returning the new position.
-     */
-    public BytecodePosition addCaller(BytecodePosition link) {
-        if (getCaller() == null) {
-            return new BytecodePosition(link, getMethod(), getBCI());
-        } else {
-            return new BytecodePosition(getCaller().addCaller(link), getMethod(), getBCI());
-        }
     }
 }

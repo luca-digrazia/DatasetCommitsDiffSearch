@@ -27,16 +27,15 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.hsail.*;
+import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.type.*;
 
 /**
  * This class implements the HSAIL specific portion of the LIR generator.
  */
 public abstract class HSAILNodeLIRBuilder extends NodeLIRBuilder {
 
-    public HSAILNodeLIRBuilder(StructuredGraph graph, LIRGenerator lirGen) {
+    public HSAILNodeLIRBuilder(StructuredGraph graph, LIRGeneratorTool lirGen) {
         super(graph, lirGen);
     }
 
@@ -48,30 +47,16 @@ public abstract class HSAILNodeLIRBuilder extends NodeLIRBuilder {
 
     @Override
     protected void emitDirectCall(DirectCallTargetNode callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState callState) {
-        throw GraalInternalError.unimplemented();
+        throw GraalInternalError.unimplemented(callTarget.targetMethod().format("direct call to %H.%n(%p)"));
     }
 
     @Override
     protected void emitIndirectCall(IndirectCallTargetNode callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState callState) {
-        throw GraalInternalError.unimplemented();
+        throw GraalInternalError.unimplemented(callTarget.targetMethod().format("direct call to %H.%n(%p)"));
     }
 
     @Override
     public void visitBreakpointNode(BreakpointNode node) {
-        throw GraalInternalError.unimplemented();
-    }
-
-    @Override
-    public void emitNullCheck(ValueNode v, DeoptimizingNode deopting) {
-        assert v.stamp() instanceof ObjectStamp;
-        Variable obj = newVariable(Kind.Object);
-        gen.emitMove(obj, operand(v));
-        append(new HSAILMove.NullCheckOp(obj, gen.state(deopting)));
-    }
-
-    @Override
-    public void visitInfopointNode(InfopointNode i) {
-        // TODO Auto-generated method stub
         throw GraalInternalError.unimplemented();
     }
 }

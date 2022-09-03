@@ -27,23 +27,18 @@ import java.lang.reflect.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.debug.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.lir.ptx.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.java.*;
 
 /**
  * This class implements the PTX specific portion of the LIR generator.
  */
 public class PTXNodeLIRBuilder extends NodeLIRBuilder {
-
-    // Number of the predicate register that can be used when needed.
-    // This value will be recorded and incremented in the LIR instruction
-    // that sets a predicate register. (e.g., CompareOp)
-    private int nextPredRegNum;
 
     public static final ForeignCallDescriptor ARITHMETIC_FREM = new ForeignCallDescriptor("arithmeticFrem", float.class, float.class, float.class);
     public static final ForeignCallDescriptor ARITHMETIC_DREM = new ForeignCallDescriptor("arithmeticDrem", double.class, double.class, double.class);
@@ -56,12 +51,8 @@ public class PTXNodeLIRBuilder extends NodeLIRBuilder {
         }
     }
 
-    public PTXNodeLIRBuilder(StructuredGraph graph, LIRGenerator lirGen) {
+    public PTXNodeLIRBuilder(StructuredGraph graph, LIRGeneratorTool lirGen) {
         super(graph, lirGen);
-    }
-
-    public int getNextPredRegNumber() {
-        return nextPredRegNum;
     }
 
     @Override
@@ -92,7 +83,7 @@ public class PTXNodeLIRBuilder extends NodeLIRBuilder {
             if (!Modifier.isStatic(graph.method().getModifiers())) {
                 parameterIndex--;
             }
-            Warp warpAnnotation = parameterIndex >= 0 ? MetaUtil.getParameterAnnotation(Warp.class, parameterIndex, graph.method()) : null;
+            Warp warpAnnotation = parameterIndex >= 0 ? graph.method().getParameterAnnotation(Warp.class, parameterIndex) : null;
             if (warpAnnotation != null) {
                 setResult(param, getGen().emitWarpParam(paramValue.getKind().getStackKind(), warpAnnotation));
             } else {
@@ -122,11 +113,6 @@ public class PTXNodeLIRBuilder extends NodeLIRBuilder {
     }
 
     @Override
-    public void visitCompareAndSwap(LoweredCompareAndSwapNode node, Value address) {
-        throw GraalInternalError.unimplemented("PTXLIRGenerator.visitCompareAndSwap()");
-    }
-
-    @Override
     public void visitBreakpointNode(BreakpointNode node) {
         throw GraalInternalError.unimplemented("PTXLIRGenerator.visitBreakpointNode()");
     }
@@ -136,29 +122,5 @@ public class PTXNodeLIRBuilder extends NodeLIRBuilder {
         // LIRFrameState info = state(i);
         // append(new PTXSafepointOp(info, runtime().config, this));
         Debug.log("visitSafePointNode unimplemented");
-    }
-
-    @Override
-    public void emitNullCheck(ValueNode v, DeoptimizingNode deopting) {
-        assert v.getKind() == Kind.Object;
-        append(new PTXMove.NullCheckOp(gen.load(operand(v)), gen.state(deopting)));
-    }
-
-    @Override
-    public void visitInfopointNode(InfopointNode i) {
-        throw GraalInternalError.unimplemented("PTXLIRGenerator.visitInfopointNode()");
-    }
-
-    @Override
-    public void visitReturn(ReturnNode x) {
-        AllocatableValue operand = Value.ILLEGAL;
-        if (x.result() != null) {
-            operand = gen.resultOperandFor(x.result().getKind());
-            // Load the global memory address from return parameter
-            Variable loadVar = getGen().emitLoadReturnAddress(operand.getKind(), operand, null);
-            // Store result in global memory whose location is loadVar
-            getGen().emitStoreReturnValue(operand.getKind(), loadVar, operand(x.result()), null);
-        }
-        getGen().emitReturnNoVal();
     }
 }
