@@ -32,7 +32,6 @@ import org.junit.*;
 import sun.misc.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.phases.util.*;
 import com.oracle.graal.runtime.*;
@@ -47,7 +46,6 @@ public class TypeUniverse {
 
     public final MetaAccessProvider metaAccess;
     public final ConstantReflectionProvider constantReflection;
-    public final SnippetReflectionProvider snippetReflection;
     public final Collection<Class<?>> classes = new HashSet<>();
     public final Map<Class<?>, Class<?>> arrayClasses = new HashMap<>();
     public final List<Constant> constants = new ArrayList<>();
@@ -56,7 +54,6 @@ public class TypeUniverse {
         Providers providers = Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend().getProviders();
         metaAccess = providers.getMetaAccess();
         constantReflection = providers.getConstantReflection();
-        snippetReflection = Graal.getRequiredCapability(SnippetReflectionProvider.class);
         Unsafe theUnsafe = null;
         try {
             theUnsafe = Unsafe.getUnsafe();
@@ -91,19 +88,17 @@ public class TypeUniverse {
         }
         for (Class c : classes) {
             if (c != void.class && !c.isArray()) {
-                constants.add(snippetReflection.forObject(Array.newInstance(c, 42)));
+                constants.add(Constant.forObject(Array.newInstance(c, 42)));
             }
         }
-        constants.add(snippetReflection.forObject(new ArrayList<>()));
-        constants.add(snippetReflection.forObject(new IdentityHashMap<>()));
-        constants.add(snippetReflection.forObject(new LinkedHashMap<>()));
-        constants.add(snippetReflection.forObject(new TreeMap<>()));
-        constants.add(snippetReflection.forObject(new ArrayDeque<>()));
-        constants.add(snippetReflection.forObject(new LinkedList<>()));
-        constants.add(snippetReflection.forObject("a string"));
-        constants.add(snippetReflection.forObject(42));
-        constants.add(snippetReflection.forObject(String.class));
-        constants.add(snippetReflection.forObject(String[].class));
+        constants.add(Constant.forObject(new ArrayList<>()));
+        constants.add(Constant.forObject(new IdentityHashMap<>()));
+        constants.add(Constant.forObject(new LinkedHashMap<>()));
+        constants.add(Constant.forObject(new TreeMap<>()));
+        constants.add(Constant.forObject(new ArrayDeque<>()));
+        constants.add(Constant.forObject(new LinkedList<>()));
+        constants.add(Constant.forObject("a string"));
+        constants.add(Constant.forObject(42));
     }
 
     public synchronized Class<?> getArrayClass(Class componentType) {
