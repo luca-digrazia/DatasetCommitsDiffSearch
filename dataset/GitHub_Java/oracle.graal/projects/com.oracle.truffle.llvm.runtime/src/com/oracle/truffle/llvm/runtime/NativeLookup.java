@@ -29,11 +29,12 @@
  */
 package com.oracle.truffle.llvm.runtime;
 
-import java.util.ArrayList;
+import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.interop.ForeignAccess;
@@ -42,7 +43,6 @@ import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.llvm.runtime.options.LLVMOptions;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
 import com.oracle.truffle.llvm.runtime.types.PointerType;
 import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
@@ -53,35 +53,57 @@ import com.oracle.truffle.llvm.runtime.types.VoidType;
 public final class NativeLookup {
 
     private final TruffleObject defaultLibrary;
-    private final List<TruffleObject> libraryHandles;
-
+    private final Map<Path, TruffleObject> libraryHandles = new HashMap<>();
     private final TruffleLanguage.Env env;
 
     NativeLookup(Env env) {
         this.env = env;
-        this.libraryHandles = loadLibraries(env, LLVMOptions.ENGINE.dynamicNativeLibraryPath());
-        this.defaultLibrary = loadDefaultLibrary(env);
+        this.defaultLibrary = loadDefaultLibrary();
     }
 
-    /*
-     * PRIVATE
-     */
+    public static class UnsupportedNativeTypeException extends Exception {
 
-    private static List<TruffleObject> loadLibraries(TruffleLanguage.Env env, String[] dynamicLibraryPaths) {
+        private static final long serialVersionUID = 1L;
+
+        private final Type type;
+
+        UnsupportedNativeTypeException(Type type) {
+            super("unsupported type " + type + " in native interop");
+            this.type = type;
+        }
+
+        public Type getType() {
+            return type;
+        }
+    }
+
+    public void addLibraries(List<Path> libraries) {
         CompilerAsserts.neverPartOfCompilation();
-        List<TruffleObject> handles = new ArrayList<>();
-        for (String library : dynamicLibraryPaths) {
+        for (Path l : libraries) {
+            addLibrary(l);
+        }
+    }
+
+    public void addLibrary(Path l) throws UnsatisfiedLinkError {
+        CompilerAsserts.neverPartOfCompilation();
+        if (!libraryHandles.containsKey(l) && !handeledBySulong(l)) {
             try {
-                TruffleObject lib = loadLibrary(env, library);
-                handles.add(lib);
+                libraryHandles.put(l, loadLibrary(l));
             } catch (UnsatisfiedLinkError e) {
+                System.err.println(l.toString() + " not found!\n" + e.getMessage());
+                throw e;
             }
         }
-        return handles;
     }
 
-    private static TruffleObject loadLibrary(TruffleLanguage.Env env, String libName) {
+    private static boolean handeledBySulong(Path l) {
+        String fileName = l.getFileName().toString().trim();
+        return fileName.startsWith("libstdc++.so") || fileName.startsWith("libc.so");
+    }
+
+    private TruffleObject loadLibrary(Path lib) {
         CompilerAsserts.neverPartOfCompilation();
+        String libName = lib.toString();
         String loadExpression = String.format("load \"%s\"", libName);
         final Source source = Source.newBuilder(loadExpression).name("(load " + libName + ")").mimeType("application/x-native").build();
         try {
@@ -91,7 +113,7 @@ public final class NativeLookup {
         }
     }
 
-    private static TruffleObject loadDefaultLibrary(TruffleLanguage.Env env) {
+    private TruffleObject loadDefaultLibrary() {
         CompilerAsserts.neverPartOfCompilation();
         final Source source = Source.newBuilder("default").name("default").mimeType("application/x-native").build();
         try {
@@ -113,7 +135,7 @@ public final class NativeLookup {
         }
     }
 
-    private static String getNativeType(Type type) {
+    private static String getNativeType(Type type) throws UnsupportedNativeTypeException {
         if (type instanceof FunctionType) {
             return prepareSignature((FunctionType) type, 0);
         } else if (type instanceof PointerType && ((PointerType) type).getPointeeType() instanceof FunctionType) {
@@ -123,7 +145,7 @@ public final class NativeLookup {
             return "POINTER";
         } else if (type instanceof PrimitiveType) {
             PrimitiveType primitiveType = (PrimitiveType) type;
-            PrimitiveKind kind = primitiveType.getKind();
+            PrimitiveKind kind = primitiveType.getPrimitiveKind();
             switch (kind) {
                 case I1:
                 case I8:
@@ -139,16 +161,16 @@ public final class NativeLookup {
                 case DOUBLE:
                     return "DOUBLE";
                 default:
-                    throw new AssertionError(primitiveType);
+                    throw new UnsupportedNativeTypeException(primitiveType);
 
             }
         } else if (type instanceof VoidType) {
             return "VOID";
         }
-        throw new AssertionError(type);
+        throw new UnsupportedNativeTypeException(type);
     }
 
-    private static String[] getNativeTypes(Type[] argTypes, int skipArguments) {
+    private static String[] getNativeTypes(Type[] argTypes, int skipArguments) throws UnsupportedNativeTypeException {
         String[] types = new String[argTypes.length - skipArguments];
         for (int i = skipArguments; i < argTypes.length; i++) {
             types[i - skipArguments] = getNativeType(argTypes[i]);
@@ -156,8 +178,20 @@ public final class NativeLookup {
         return types;
     }
 
-    private static TruffleObject getNativeFunction(List<TruffleObject> libraryHandles, TruffleObject defaultLibrary, String name) {
-        for (TruffleObject libraryHandle : libraryHandles) {
+    /**
+     * On Darwin, some native symbols are given a prefix supposedly to prevent mangling, e.g. glob,
+     * chmod.
+     */
+    private static final String NO_MANGLE_PREFIX = "\"\\01_";
+
+    public TruffleObject getNativeFunction(String nameIn) {
+        CompilerAsserts.neverPartOfCompilation();
+        String name = nameIn;
+        if (name.contains(NO_MANGLE_PREFIX)) {
+            name = name.replace(NO_MANGLE_PREFIX, "");
+            name = name.substring(0, name.length() - 1);
+        }
+        for (TruffleObject libraryHandle : libraryHandles.values()) {
             TruffleObject symbol = getNativeFunction(libraryHandle, name);
             if (symbol != null) {
                 return symbol;
@@ -165,16 +199,34 @@ public final class NativeLookup {
         }
         TruffleObject symbol = getNativeFunction(defaultLibrary, name);
         if (symbol == null) {
-            LLVMLogger.info("external symbol " + name + " could not be resolved!");
+            throw new LinkageError(String.format("External function %s cannot be found.", name));
+        } else {
+            return symbol;
         }
-        return symbol;
+    }
+
+    public TruffleObject getNativeDataObject(String name) {
+        CompilerAsserts.neverPartOfCompilation();
+        String realName = name.substring(1);
+        for (TruffleObject libraryHandle : libraryHandles.values()) {
+            TruffleObject symbol = getNativeDataObject(libraryHandle, realName);
+            if (symbol != null) {
+                return symbol;
+            }
+        }
+        TruffleObject symbol = getNativeDataObject(defaultLibrary, realName);
+        if (symbol == null) {
+            throw new LinkageError(String.format("External variable %s cannot be found.", name));
+        } else {
+            return symbol;
+        }
     }
 
     private static TruffleObject getNativeDataObject(TruffleObject libraryHandle, String name) {
         try {
             TruffleObject symbol = (TruffleObject) ForeignAccess.sendRead(Message.READ.createNode(),
                             libraryHandle, name);
-            if (symbol != null && 0 != (long) ForeignAccess.sendUnbox(Message.UNBOX.createNode(), symbol)) {
+            if (symbol != null && 0 != ForeignAccess.sendAsPointer(Message.AS_POINTER.createNode(), symbol)) {
                 return symbol;
             } else {
                 return null;
@@ -187,31 +239,6 @@ public final class NativeLookup {
         }
     }
 
-    private static TruffleObject getNativeDataObject(List<TruffleObject> libraryHandles, TruffleObject defaultLibrary, String name) {
-        String realName = name.substring(1);
-        for (TruffleObject libraryHandle : libraryHandles) {
-            TruffleObject symbol = getNativeDataObject(libraryHandle, realName);
-            if (symbol != null) {
-                return symbol;
-            }
-        }
-        TruffleObject symbol = getNativeDataObject(defaultLibrary, realName);
-        if (symbol == null) {
-            LLVMLogger.info("external symbol " + name + " could not be resolved!");
-        }
-        return symbol;
-    }
-
-    TruffleObject getNativeDataObject(String name) {
-        CompilerAsserts.neverPartOfCompilation();
-        return getNativeDataObject(libraryHandles, defaultLibrary, name);
-    }
-
-    public TruffleObject getNativeFunction(String name) {
-        CompilerAsserts.neverPartOfCompilation();
-        return getNativeFunction(libraryHandles, defaultLibrary, name);
-    }
-
     private static TruffleObject bindNativeFunction(TruffleObject symbol, String signature) {
         CompilerAsserts.neverPartOfCompilation();
         try {
@@ -222,7 +249,7 @@ public final class NativeLookup {
         }
     }
 
-    TruffleObject getNativeFunction(String name, String signature) {
+    public TruffleObject getNativeFunction(String name, String signature) {
         CompilerAsserts.neverPartOfCompilation();
         TruffleObject nativeSymbol = getNativeFunction(name);
         if (nativeSymbol != null) {
@@ -232,7 +259,8 @@ public final class NativeLookup {
         }
     }
 
-    static String prepareSignature(FunctionType type, int skipArguments) {
+    static String prepareSignature(FunctionType type, int skipArguments) throws UnsupportedNativeTypeException {
+        CompilerAsserts.neverPartOfCompilation();
         // TODO varargs
         CompilerAsserts.neverPartOfCompilation();
         String nativeRet = getNativeType(type.getReturnType());
@@ -251,25 +279,6 @@ public final class NativeLookup {
         sb.append(":");
         sb.append(nativeRet);
         return sb.toString();
-    }
-
-    TruffleObject resolveAsNative(LLVMFunctionDescriptor descriptor) {
-        assert descriptor.getCallTarget() == null;
-        TruffleObject symbol = descriptor.getNativeSymbol();
-        if (symbol == null) {
-            CompilerDirectives.transferToInterpreter();
-            symbol = getNativeFunction(descriptor.getName());
-            if (symbol == null) {
-                throw new RuntimeException("could not resolve external symbol " + descriptor.getName());
-            }
-            descriptor.setNativeSymbol(symbol);
-        }
-        return symbol;
-    }
-
-    void addLibraryToNativeLookup(String library) {
-        CompilerAsserts.neverPartOfCompilation();
-        libraryHandles.add(loadLibrary(env, library));
     }
 
 }
