@@ -78,7 +78,7 @@ public final class ForeignAccess {
 
     /**
      * Executes {@link Message#createNode() foreign node}.
-     *
+     * 
      * @param foreignNode the createNode created by {@link Message#createNode()}
      * @param frame the call frame
      * @param receiver foreign object to receive the message passed to {@link Message#createNode()}
@@ -87,8 +87,6 @@ public final class ForeignAccess {
      * @return return value, if any
      * @throws ClassCastException if the createNode has not been created by
      *             {@link Message#createNode()} method.
-     * @throws IllegalAccessError if the <code>receiver</code> does not support the
-     *             {@link Message#createNode() message represented} by <code>foreignNode</code>
      */
     public static Object execute(Node foreignNode, VirtualFrame frame, TruffleObject receiver, Object... arguments) {
         ForeignObjectAccessHeadNode fn = (ForeignObjectAccessHeadNode) foreignNode;
@@ -191,7 +189,7 @@ public final class ForeignAccess {
 
         /**
          * Handles {@link Message#IS_EXECUTABLE} message.
-         *
+         * 
          * @return call target to handle the message or <code>null</code> if this message is not
          *         supported
          */
@@ -199,7 +197,7 @@ public final class ForeignAccess {
 
         /**
          * Handles {@link Message#IS_BOXED} message.
-         *
+         * 
          * @return call target to handle the message or <code>null</code> if this message is not
          *         supported
          */
@@ -207,7 +205,7 @@ public final class ForeignAccess {
 
         /**
          * Handles {@link Message#HAS_SIZE} message.
-         *
+         * 
          * @return call target to handle the message or <code>null</code> if this message is not
          *         supported
          */
@@ -215,7 +213,7 @@ public final class ForeignAccess {
 
         /**
          * Handles {@link Message#GET_SIZE} message.
-         *
+         * 
          * @return call target to handle the message or <code>null</code> if this message is not
          *         supported
          */
@@ -223,7 +221,7 @@ public final class ForeignAccess {
 
         /**
          * Handles {@link Message#UNBOX} message.
-         *
+         * 
          * @return call target to handle the message or <code>null</code> if this message is not
          *         supported
          */
@@ -231,7 +229,7 @@ public final class ForeignAccess {
 
         /**
          * Handles {@link Message#READ} message.
-         *
+         * 
          * @return call target to handle the message or <code>null</code> if this message is not
          *         supported
          */
@@ -239,7 +237,7 @@ public final class ForeignAccess {
 
         /**
          * Handles {@link Message#WRITE} message.
-         *
+         * 
          * @return call target to handle the message or <code>null</code> if this message is not
          *         supported
          */
@@ -247,7 +245,7 @@ public final class ForeignAccess {
 
         /**
          * Handles {@link Message#createExecute(int)} messages.
-         *
+         * 
          * @param argumentsLength number of parameters the messages has been created for
          * @return call target to handle the message or <code>null</code> if this message is not
          *         supported
@@ -256,7 +254,7 @@ public final class ForeignAccess {
 
         /**
          * Handles {@link Message#createInvoke(int)} messages.
-         *
+         * 
          * @param argumentsLength number of parameters the messages has been created for
          * @return call target to handle the message or <code>null</code> if this message is not
          *         supported
@@ -265,7 +263,7 @@ public final class ForeignAccess {
 
         /**
          * Handles {@link Message#createNew(int)} messages.
-         *
+         * 
          * @param argumentsLength number of parameters the messages has been created for
          * @return call target to handle the message or <code>null</code> if this message is not
          *         supported
