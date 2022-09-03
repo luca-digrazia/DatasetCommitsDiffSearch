@@ -48,7 +48,7 @@ import com.oracle.graal.nodes.util.*;
  */
 public class ComputeProbabilityClosure {
 
-    private static final double EPSILON = Math.nextUp(0);
+    private static final double EPSILON = 1d / Integer.MAX_VALUE;
 
     private final StructuredGraph graph;
     private final NodesToDoubles nodeProbabilities;
@@ -191,12 +191,11 @@ public class ComputeProbabilityClosure {
                     }
                     backEdgeProb += nodeProbabilities.get(le) * factor;
                 }
-                double entryProb = nodeProbabilities.get(loopBegin);
-                double d = entryProb - backEdgeProb;
-                if (d <= EPSILON) {
+                double d = nodeProbabilities.get(loopBegin) - backEdgeProb;
+                if (d < EPSILON) {
                     d = EPSILON;
                 }
-                loopFrequency = entryProb / d;
+                loopFrequency = nodeProbabilities.get(loopBegin) / d;
                 loopBegin.setLoopFrequency(loopFrequency);
             }
             return loopFrequency;
