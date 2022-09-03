@@ -37,7 +37,7 @@ import java.util.concurrent.*;
 
 import jdk.internal.jvmci.code.*;
 import jdk.internal.jvmci.code.DataSection.Data;
-import com.oracle.graal.debug.*;
+import jdk.internal.jvmci.debug.*;
 import jdk.internal.jvmci.hotspot.*;
 import jdk.internal.jvmci.meta.*;
 
@@ -349,7 +349,6 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
                 SPARCCall.indirectJmp(crb, masm, scratch, foreignCalls.lookupForeignCall(IC_MISS_HANDLER));
             }
         }
-        masm.peephole();
     }
 
     private static int calculateConstantSize(LIR lir) {
