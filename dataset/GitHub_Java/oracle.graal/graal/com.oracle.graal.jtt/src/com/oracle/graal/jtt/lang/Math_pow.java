@@ -22,25 +22,70 @@
  */
 package com.oracle.graal.jtt.lang;
 
-import com.oracle.graal.jtt.*;
-import org.junit.*;
+import org.junit.Test;
+
+import com.oracle.graal.jtt.JTTTest;
 
 /*
  */
 public class Math_pow extends JTTTest {
 
-    public static double test(double pow) {
-        return Math.pow(2.0d, pow);
+    public static double test(double x, double y) {
+        return Math.pow(x, y);
     }
 
     @Test
     public void run0() throws Throwable {
-        runTestWithDelta(0, "test", 2d);
+        runTest("test", 2d, 0d);
     }
 
     @Test
     public void run1() throws Throwable {
-        runTestWithDelta(0, "test", 3.1d);
+        runTest("test", 2d, 0.5d);
     }
 
+    @Test
+    public void run2() throws Throwable {
+        runTest("test", -2d, 0.5d);
+    }
+
+    @Test
+    public void run3() throws Throwable {
+        runTest("test", 2d, 1d);
+    }
+
+    @Test
+    public void run4() throws Throwable {
+        runTest("test", 2d, -1d);
+    }
+
+    @Test
+    public void run5() throws Throwable {
+        runTest("test", 2d, 2d);
+    }
+
+    @Test
+    public void run6() throws Throwable {
+        runTest("test", 2d, 3.1d);
+    }
+
+    @Test
+    public void run7() throws Throwable {
+        runTest("test", 2d, Double.NaN);
+    }
+
+    @Test
+    public void run8() throws Throwable {
+        runTest("test", Double.NaN, 0d);
+    }
+
+    @Test
+    public void run9() throws Throwable {
+        runTest("test", Double.NaN, 23d);
+    }
+
+    @Test
+    public void run10() throws Throwable {
+        runTest("test", 0.999998, 1500000.0);
+    }
 }
