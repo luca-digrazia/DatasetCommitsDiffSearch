@@ -25,17 +25,24 @@
 package com.oracle.truffle.api.utilities;
 
 import com.oracle.truffle.api.*;
-import com.oracle.truffle.api.CompilerDirectives.*;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.nodes.*;
 
 /**
  * Utility class to speculate on branches to be never visited. If the {@link #enter()} method is
  * invoked first the optimized code is invalidated and the branch where {@link #enter()} is invoked
  * is enabled for compilation. Otherwise if the {@link #enter()} method was never invoked the branch
  * will not get compiled.
+ *
+ * All {@code BranchProfile} instances must be held in {@code final} fields for compiler
+ * optimizations to take effect.
  */
-public final class BranchProfile {
+public final class BranchProfile extends NodeCloneable {
 
     @CompilationFinal private boolean visited;
+
+    private BranchProfile() {
+    }
 
     public void enter() {
         if (!visited) {
@@ -44,4 +51,16 @@ public final class BranchProfile {
         }
     }
 
+    public boolean isVisited() {
+        return visited;
+    }
+
+    public static BranchProfile create() {
+        return new BranchProfile();
+    }
+
+    @Override
+    public String toString() {
+        return String.format("%s(%s)@%x", getClass().getSimpleName(), visited ? "visited" : "not-visited", hashCode());
+    }
 }
