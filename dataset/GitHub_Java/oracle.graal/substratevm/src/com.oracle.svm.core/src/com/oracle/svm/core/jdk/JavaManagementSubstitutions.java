@@ -118,7 +118,7 @@ final class Target_java_lang_management_ManagementFactory {
 
     @Substitute
     private static MBeanServer getPlatformMBeanServer() {
-        return null;
+        throw VMError.unsupportedFeature("ManagementFactory");
     }
 
     @Substitute

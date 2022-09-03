@@ -22,51 +22,25 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.svm.core.posix;
+package com.oracle.svm.core.windows;
 
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.jdk.SubstrateOperatingSystemMXBean;
-import com.oracle.svm.core.posix.headers.Times;
-import com.oracle.svm.core.posix.headers.Unistd;
 import java.lang.management.OperatingSystemMXBean;
-import java.util.concurrent.TimeUnit;
 import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
-import org.graalvm.nativeimage.StackValue;
 
-@Platforms({Platform.LINUX.class, Platform.DARWIN.class})
-class PosixSubstrateOperatingSystemMXBean extends SubstrateOperatingSystemMXBean {
-
-    /**
-     * Returns the CPU time used by the process on which the SVM process is running in nanoseconds.
-     * The returned value is of nanoseconds precision but not necessarily nanoseconds accuracy. This
-     * method returns <tt>-1</tt> if the the platform does not support this operation.
-     *
-     * @return the CPU time used by the process in nanoseconds, or <tt>-1</tt> if this operation is
-     *         not supported.
-     */
-    @Override
-    public long getProcessCpuTime() {
-        long clkTck = Unistd.sysconf(Unistd._SC_CLK_TCK());
-        if (clkTck == -1) {
-            // sysconf failed - not able to get clock tick
-            return -1;
-        }
-        long nsPerTick = TimeUnit.SECONDS.toNanos(1) / clkTck;
-        Times.tms time = StackValue.get(Times.tms.class);
-        Times.times(time);
-        return (time.tms_utime() + time.tms_stime()) * nsPerTick;
-    }
+class WindowsSubstrateOperatingSystemMXBean extends SubstrateOperatingSystemMXBean {
 
 }
 
-@Platforms({Platform.LINUX.class, Platform.DARWIN.class})
+@Platforms(Platform.WINDOWS.class)
 @AutomaticFeature
-class PosixSubstrateOperatingSystemMXBeanFeature implements Feature {
+class WindowsSubstrateOperatingSystemMXBeanFeature implements Feature {
     @Override
     public void afterRegistration(Feature.AfterRegistrationAccess access) {
-        ImageSingletons.add(OperatingSystemMXBean.class, new PosixSubstrateOperatingSystemMXBean());
+        ImageSingletons.add(OperatingSystemMXBean.class, new WindowsSubstrateOperatingSystemMXBean());
     }
 }
