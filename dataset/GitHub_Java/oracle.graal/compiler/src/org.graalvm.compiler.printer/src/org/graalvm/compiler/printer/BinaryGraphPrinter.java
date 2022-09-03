@@ -175,7 +175,7 @@ public class BinaryGraphPrinter implements GraphPrinter {
     @Override
     public void print(Graph graph, Map<Object, Object> properties, int id, String format, Object... args) throws IOException {
         writeByte(BEGIN_GRAPH);
-        if (CURRENT_MAJOR_VERSION >= 3) {
+        if (CURRENT_MAJOR_VERSION == 3) {
             writeInt(id);
             writeString(format);
             writeInt(args.length);
@@ -183,7 +183,7 @@ public class BinaryGraphPrinter implements GraphPrinter {
                 writePropertyObject(a);
             }
         } else {
-            writePoolObject(formatTitle(id, format, args));
+            writePoolObject(String.format(format, args));
         }
         writeGraph(graph, properties);
         flush();
