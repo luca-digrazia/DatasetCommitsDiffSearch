@@ -667,12 +667,7 @@ final class PolyglotLanguageContext implements VMObject {
         public void uncaughtException(Thread t, Throwable e) {
             Env currentEnv = env;
             if (currentEnv != null) {
-                try {
-                    e.printStackTrace(new PrintStream(currentEnv.err()));
-                } catch (Throwable exc) {
-                    // Still show the original error if printing on Env.err() fails for some reason
-                    e.printStackTrace();
-                }
+                e.printStackTrace(new PrintStream(currentEnv.err()));
             } else {
                 e.printStackTrace();
             }
