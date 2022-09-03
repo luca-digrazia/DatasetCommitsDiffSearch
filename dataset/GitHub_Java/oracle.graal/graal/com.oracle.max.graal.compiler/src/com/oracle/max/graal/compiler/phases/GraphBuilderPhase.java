@@ -39,7 +39,6 @@ import com.oracle.max.graal.compiler.ir.*;
 import com.oracle.max.graal.compiler.ir.Deoptimize.DeoptAction;
 import com.oracle.max.graal.compiler.schedule.*;
 import com.oracle.max.graal.compiler.util.*;
-import com.oracle.max.graal.compiler.util.LoopUtil.Loop;
 import com.oracle.max.graal.compiler.value.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.bytecode.*;
@@ -198,15 +197,9 @@ public final class GraphBuilderPhase extends Phase {
         addToWorkList(blockFromBci[0]);
         iterateAllBlocks();
 
-        List<Loop> loops = LoopUtil.computeLoops(graph);
-        NodeBitMap loopExits = graph.createNodeBitMap();
-        for (Loop loop : loops) {
-            loopExits.markAll(loop.exist());
-        }
-
         // remove Placeholders
         for (Node n : graph.getNodes()) {
-            if (n instanceof Placeholder && !loopExits.isMarked(n)) {
+            if (n instanceof Placeholder) {
                 Placeholder p = (Placeholder) n;
                 p.replace(p.next());
             }
@@ -293,7 +286,7 @@ public final class GraphBuilderPhase extends Phase {
         StateSplit first = (StateSplit) target.firstInstruction;
 
         if (target.isLoopHeader && isVisited(target)) {
-            first = (StateSplit) loopBegin(target).loopEnd().singlePredecessor();
+            first = loopBegin(target).loopEnd();
         }
 
         int bci = target.startBci;
@@ -324,16 +317,13 @@ public final class GraphBuilderPhase extends Phase {
                 } else {
                     Merge merge = new Merge(graph);
                     assert p.predecessors().size() == 1 : "predecessors size: " + p.predecessors().size();
-                    FixedNode next = p.next();
+                    merge.setNext(p.next());
                     p.setNext(null);
                     EndNode end = new EndNode(graph);
                     p.replace(end);
-                    merge.setNext(next);
                     merge.addEnd(end);
+                    target.firstInstruction = merge;
                     merge.setStateAfter(existingState);
-                    if (!(next instanceof LoopEnd)) {
-                        target.firstInstruction = merge;
-                    }
                     first = merge;
                 }
             }
@@ -387,6 +377,12 @@ public final class GraphBuilderPhase extends Phase {
     private FixedNode handleException(Value exceptionObject, int bci) {
         assert bci == Instruction.SYNCHRONIZATION_ENTRY_BCI || bci == bci() : "invalid bci";
 
+        if (GraalOptions.UseExceptionProbability && method.invocationCount() > GraalOptions.MatureInvocationCount) {
+            if (exceptionObject == null && method.exceptionProbability(bci) == 0) {
+                return null;
+            }
+        }
+
         RiExceptionHandler firstHandler = null;
         // join with all potential exception handlers
         if (exceptionHandlers != null) {
@@ -426,8 +422,6 @@ public final class GraphBuilderPhase extends Phase {
                     dispatchBlock = blockFromBci[handlerBCI];
                 }
             }
-            Placeholder p = new Placeholder(graph);
-            p.setStateAfter(frameState.duplicateWithoutStack(bci));
 
             Value currentExceptionObject;
             if (exceptionObject == null) {
@@ -440,11 +434,10 @@ public final class GraphBuilderPhase extends Phase {
             if (exceptionObject == null) {
                 ExceptionObject eObj = (ExceptionObject) currentExceptionObject;
                 eObj.setNext(target);
-                p.setNext(eObj);
+                return eObj;
             } else {
-                p.setNext(target);
+                return target;
             }
-            return p;
         }
         return null;
     }
@@ -1163,12 +1156,10 @@ public final class GraphBuilderPhase extends Phase {
                 LoopBegin loopBegin = new LoopBegin(graph);
                 LoopEnd loopEnd = new LoopEnd(graph);
                 loopEnd.setLoopBegin(loopBegin);
-                Placeholder pBegin = new Placeholder(graph);
-                pBegin.setNext(loopBegin.forwardEdge());
-                Placeholder pEnd = new Placeholder(graph);
-                pEnd.setNext(loopEnd);
+                Placeholder p = new Placeholder(graph);
+                p.setNext(loopBegin.forwardEdge());
                 loopBegin.setStateAfter(stateAfter.duplicate(block.startBci));
-                block.firstInstruction = pBegin;
+                block.firstInstruction = p;
             } else {
                 block.firstInstruction = new Placeholder(graph);
             }
@@ -1178,7 +1169,7 @@ public final class GraphBuilderPhase extends Phase {
 
         FixedNode result = null;
         if (block.isLoopHeader && isVisited(block)) {
-            result = (StateSplit) loopBegin(block).loopEnd().singlePredecessor();
+            result = loopBegin(block).loopEnd();
         } else {
             result = block.firstInstruction;
         }
@@ -1251,7 +1242,6 @@ public final class GraphBuilderPhase extends Phase {
             if (b.isLoopHeader) {
                 LoopBegin begin = loopBegin(b);
                 LoopEnd loopEnd = begin.loopEnd();
-                StateSplit loopEndPred = (StateSplit) loopEnd.singlePredecessor();
 
 //              This can happen with degenerated loops like this one:
 //                for (;;) {
@@ -1260,12 +1250,11 @@ public final class GraphBuilderPhase extends Phase {
 //                    } catch (UnresolvedException iioe) {
 //                    }
 //                }
-                if (loopEndPred.stateAfter() != null) {
+                if (loopEnd.stateAfter() != null) {
                     //loopHeaderMerge.stateBefore().merge(begin, end.stateBefore());
                     //assert loopHeaderMerge.equals(end.stateBefore());
-                    begin.stateAfter().merge(begin, loopEndPred.stateAfter());
+                    begin.stateAfter().merge(begin, loopEnd.stateAfter());
                 } else {
-                    loopEndPred.delete();
                     loopEnd.delete();
                     Merge merge = new Merge(graph);
                     merge.addEnd(begin.forwardEdge());
