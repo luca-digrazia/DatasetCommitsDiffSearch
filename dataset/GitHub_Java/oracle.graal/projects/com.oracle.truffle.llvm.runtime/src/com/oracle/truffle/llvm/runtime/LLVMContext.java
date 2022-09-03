@@ -41,6 +41,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import com.oracle.truffle.api.CompilerAsserts;
@@ -53,14 +54,10 @@ import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.llvm.runtime.NativeLookup.UnsupportedNativeTypeException;
-import com.oracle.truffle.llvm.runtime.debug.LLVMSourceContext;
-import com.oracle.truffle.llvm.runtime.datalayout.DataLayoutConverter.DataSpecConverterImpl;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.memory.LLVMNativeFunctions;
 import com.oracle.truffle.llvm.runtime.memory.LLVMThreadingStack;
 import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
-import com.oracle.truffle.llvm.runtime.types.AggregateType;
-import com.oracle.truffle.llvm.runtime.types.DataSpecConverter;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
 import com.oracle.truffle.llvm.runtime.types.Type;
 
@@ -68,7 +65,6 @@ public final class LLVMContext {
 
     private final List<Path> libraryPaths = new ArrayList<>();
     private final List<Path> bitcodeLibraries = new ArrayList<>();
-    private DataSpecConverterImpl targetDataLayout;
 
     private final List<RootCallTarget> globalVarInits = new ArrayList<>();
     private final List<RootCallTarget> globalVarDeallocs = new ArrayList<>();
@@ -89,13 +85,11 @@ public final class LLVMContext {
     private final Object handlesLock;
     private final IdentityHashMap<TruffleObject, LLVMAddress> toNative;
     private final HashMap<LLVMAddress, TruffleObject> toManaged;
-    private final LLVMSourceContext sourceContext;
 
     private final Env env;
     private final LLVMScope globalScope;
     private final LLVMFunctionPointerRegistry functionPointerRegistry;
-
-    private final Map<Class<?>, Object> contextExtension;
+    private final LLVMTypeRegistry typeRegistry;
 
     // #define SIG_DFL ((__sighandler_t) 0) /* Default action. */
     private final LLVMFunction sigDfl;
@@ -147,10 +141,40 @@ public final class LLVMContext {
 
     }
 
-    public LLVMContext(Env env, Map<Class<?>, Object> contextExtension) {
-        this.env = env;
-        this.contextExtension = contextExtension;
+    private static final class LLVMTypeRegistry {
+        private final Map<String, Object> types = new HashMap<>();
 
+        synchronized boolean exists(Type type) {
+            return types.containsKey(type.toString());
+        }
+
+        synchronized void add(Type type, Object object) {
+            if (exists(type)) {
+                throw new IllegalStateException("Type " + type.toString() + " already added.");
+            }
+            types.put(type.toString(), object);
+        }
+
+        synchronized Object lookup(Type type) {
+            if (exists(type)) {
+                return types.get(type.toString());
+            }
+            throw new IllegalStateException("Type " + type + " does not exist.");
+        }
+
+        synchronized Object lookupOrCreate(Type type, Supplier<Object> generator) {
+            if (exists(type)) {
+                return lookup(type);
+            } else {
+                Object variable = generator.get();
+                add(type, variable);
+                return variable;
+            }
+        }
+    }
+
+    public LLVMContext(Env env) {
+        this.env = env;
         this.nativeLookup = env.getOptions().get(SulongEngineOption.DISABLE_NFI) ? null : new NativeLookup(env);
         this.nativeCallStatistics = SulongEngineOption.isTrue(env.getOptions().get(SulongEngineOption.NATIVE_CALL_STATS)) ? new HashMap<>() : null;
         this.threadingStack = new LLVMThreadingStack(env.getOptions().get(SulongEngineOption.STACK_SIZE_KB));
@@ -161,8 +185,8 @@ public final class LLVMContext {
         this.toManaged = new HashMap<>();
         this.handlesLock = new Object();
         this.functionPointerRegistry = new LLVMFunctionPointerRegistry();
+        this.typeRegistry = new LLVMTypeRegistry();
         this.globalScope = LLVMScope.createGlobalScope(this);
-        this.sourceContext = new LLVMSourceContext();
 
         Object mainArgs = env.getConfig().get(LLVMLanguage.MAIN_ARGS_KEY);
         this.mainArguments = mainArgs == null ? env.getApplicationArguments() : (Object[]) mainArgs;
@@ -179,30 +203,6 @@ public final class LLVMContext {
             addBitcodeLibrary(bcl);
         }
         this.nativeFunctions = new LLVMNativeFunctionsImpl(nativeLookup);
-    }
-
-    public <T> T getContextExtension(Class<T> type) {
-        return type.cast(contextExtension.get(type));
-    }
-
-    public int getByteAlignment(Type type) {
-        return type.getAlignment(targetDataLayout);
-    }
-
-    public int getByteSize(Type type) {
-        return type.getSize(targetDataLayout);
-    }
-
-    public int getBytePadding(int offset, Type type) {
-        return Type.getPadding(offset, type, targetDataLayout);
-    }
-
-    public int getIndexOffset(int index, AggregateType type) {
-        return type.getOffsetOf(index, targetDataLayout);
-    }
-
-    public DataSpecConverter getDataSpecConverter() {
-        return targetDataLayout;
     }
 
     public void addBitcodeLibrary(String l) {
@@ -271,6 +271,21 @@ public final class LLVMContext {
 
     public LLVMScope getGlobalScope() {
         return globalScope;
+    }
+
+    @TruffleBoundary
+    public boolean typeExists(Type type) {
+        return typeRegistry.exists(type);
+    }
+
+    @TruffleBoundary
+    public Object getType(Type type) {
+        return typeRegistry.lookup(type);
+    }
+
+    @TruffleBoundary
+    public Object lookupOrCreateType(Type type, Supplier<Object> generator) {
+        return typeRegistry.lookupOrCreate(type, generator);
     }
 
     @TruffleBoundary
@@ -526,14 +541,6 @@ public final class LLVMContext {
 
     public static String getNativeSignature(FunctionType type, int skipArguments) throws UnsupportedNativeTypeException {
         return NativeLookup.prepareSignature(type, skipArguments);
-    }
-
-    public void setDataLayoutConverter(DataSpecConverterImpl layout) {
-        this.targetDataLayout = layout;
-    }
-
-    public LLVMSourceContext getSourceContext() {
-        return sourceContext;
     }
 
 }
