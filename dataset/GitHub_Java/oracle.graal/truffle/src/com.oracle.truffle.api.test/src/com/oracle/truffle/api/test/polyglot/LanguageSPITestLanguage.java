@@ -24,9 +24,7 @@ package com.oracle.truffle.api.test.polyglot;
 
 import static org.junit.Assert.assertSame;
 
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Function;
+import java.util.concurrent.Callable;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.Truffle;
@@ -40,20 +38,12 @@ public class LanguageSPITestLanguage extends TruffleLanguage<LanguageContext> {
 
     static final String ID = "LanguageSPITest";
 
-    static Function<Env, Object> runinside;
-
-    static final AtomicInteger instanceCount = new AtomicInteger();
+    static Callable<CallTarget> runinside;
 
     static class LanguageContext {
 
         int disposeCalled;
-        Env env;
-        Map<String, Object> config;
 
-    }
-
-    public LanguageSPITestLanguage() {
-        instanceCount.incrementAndGet();
     }
 
     public static LanguageContext getContext() {
@@ -62,25 +52,23 @@ public class LanguageSPITestLanguage extends TruffleLanguage<LanguageContext> {
 
     @Override
     protected CallTarget parse(ParsingRequest request) throws Exception {
-        Object result = "null result";
+        CallTarget target = null;
         if (runinside != null) {
             try {
-                result = runinside.apply(getContext().env);
+                target = runinside.call();
             } finally {
                 runinside = null;
             }
         }
-        if (result == null) {
-            result = "null result";
+        if (target != null) {
+            return target;
         }
-        return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(result));
+        return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(42));
     }
 
     @Override
     protected LanguageContext createContext(Env env) {
         LanguageSPITest.langContext = new LanguageContext();
-        LanguageSPITest.langContext.env = env;
-        LanguageSPITest.langContext.config = env.getConfig();
         return LanguageSPITest.langContext;
     }
 
@@ -97,6 +85,11 @@ public class LanguageSPITestLanguage extends TruffleLanguage<LanguageContext> {
         }.getLanguage(LanguageSPITestLanguage.class).getContextReference().get());
 
         context.disposeCalled++;
+    }
+
+    @Override
+    protected Object lookupSymbol(LanguageContext context, String symbolName) {
+        return super.lookupSymbol(context, symbolName);
     }
 
     @Override
