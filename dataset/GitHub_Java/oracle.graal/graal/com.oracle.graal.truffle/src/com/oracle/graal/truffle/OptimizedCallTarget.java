@@ -40,7 +40,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Spliterators;
-import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
@@ -69,8 +68,8 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeUtil;
 import com.oracle.truffle.api.nodes.NodeVisitor;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.api.profiles.ValueProfile;
 import com.oracle.truffle.api.utilities.CyclicAssumption;
+import com.oracle.truffle.api.utilities.ValueProfile;
 
 /**
  * Call target that is optimized by Graal upon surpassing a specific invocation threshold.
@@ -100,6 +99,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
 
     private TruffleInlining inlining;
     private int cachedNonTrivialNodeCount = -1;
+    private boolean compiling;
     private int cloneIndex;
 
     /**
@@ -108,8 +108,6 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
      * compiled methods that have this call target inlined are properly invalidated.
      */
     private final CyclicAssumption nodeRewritingAssumption;
-
-    private volatile Future<?> compilationTask;
 
     public final RootNode getRootNode() {
         return rootNode;
@@ -137,7 +135,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     }
 
     public final boolean isCompiling() {
-        return getCompilationTask() != null;
+        return compiling;
     }
 
     private static RootNode cloneRootNode(RootNode root) {
@@ -196,7 +194,6 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     public Object call(Object... args) {
         compilationProfile.reportIndirectCall();
         if (profiledArgumentTypesAssumption != null && profiledArgumentTypesAssumption.isValid()) {
-            // Argument profiling is not possible for targets of indirect calls.
             CompilerDirectives.transferToInterpreterAndInvalidate();
             profiledArgumentTypesAssumption.invalidate();
             profiledArgumentTypes = null;
@@ -234,27 +231,21 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     }
 
     @ExplodeLoop
-    public void profileArguments(Object[] args) {
-        Assumption typesAssumption = profiledArgumentTypesAssumption;
-        if (typesAssumption == null) {
+    void profileArguments(Object[] args) {
+        if (profiledArgumentTypesAssumption == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             initializeProfiledArgumentTypes(args);
-        } else {
-            Class<?>[] types = profiledArgumentTypes;
-            if (types != null) {
-                if (types.length != args.length) {
-                    CompilerDirectives.transferToInterpreterAndInvalidate();
-                    typesAssumption.invalidate();
-                    profiledArgumentTypes = null;
-                } else if (typesAssumption.isValid()) {
-                    for (int i = 0; i < types.length; i++) {
-                        Class<?> type = types[i];
-                        Object value = args[i];
-                        if (type != null && (value == null || value.getClass() != type)) {
-                            CompilerDirectives.transferToInterpreterAndInvalidate();
-                            updateProfiledArgumentTypes(args, types);
-                            break;
-                        }
+        } else if (profiledArgumentTypes != null) {
+            if (profiledArgumentTypes.length != args.length) {
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                profiledArgumentTypesAssumption.invalidate();
+                profiledArgumentTypes = null;
+            } else if (TruffleArgumentTypeSpeculation.getValue() && profiledArgumentTypesAssumption.isValid()) {
+                for (int i = 0; i < profiledArgumentTypes.length; i++) {
+                    if (profiledArgumentTypes[i] != null && !profiledArgumentTypes[i].isInstance(args[i])) {
+                        CompilerDirectives.transferToInterpreterAndInvalidate();
+                        updateProfiledArgumentTypes(args);
+                        break;
                     }
                 }
             }
@@ -264,21 +255,19 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     private void initializeProfiledArgumentTypes(Object[] args) {
         CompilerAsserts.neverPartOfCompilation();
         profiledArgumentTypesAssumption = Truffle.getRuntime().createAssumption("Profiled Argument Types");
+        profiledArgumentTypes = new Class<?>[args.length];
         if (TruffleArgumentTypeSpeculation.getValue()) {
-            Class<?>[] result = new Class<?>[args.length];
             for (int i = 0; i < args.length; i++) {
-                result[i] = classOf(args[i]);
+                profiledArgumentTypes[i] = classOf(args[i]);
             }
-
-            profiledArgumentTypes = result;
         }
     }
 
-    private void updateProfiledArgumentTypes(Object[] args, Class<?>[] types) {
+    private void updateProfiledArgumentTypes(Object[] args) {
         CompilerAsserts.neverPartOfCompilation();
         profiledArgumentTypesAssumption.invalidate();
-        for (int j = 0; j < types.length; j++) {
-            types[j] = joinTypes(types[j], classOf(args[j]));
+        for (int j = 0; j < profiledArgumentTypes.length; j++) {
+            profiledArgumentTypes[j] = joinTypes(profiledArgumentTypes[j], classOf(args[j]));
         }
         profiledArgumentTypesAssumption = Truffle.getRuntime().createAssumption("Profiled Argument Types");
     }
@@ -290,8 +279,14 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     private static Class<?> joinTypes(Class<?> class1, Class<?> class2) {
         if (class1 == class2) {
             return class1;
-        } else {
+        } else if (class1 == null || class2 == null) {
             return null;
+        } else if (class1.isAssignableFrom(class2)) {
+            return class1;
+        } else if (class2.isAssignableFrom(class1)) {
+            return class2;
+        } else {
+            return Object.class;
         }
     }
 
@@ -313,10 +308,9 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
 
     public final Object callRoot(Object[] originalArguments) {
         Object[] args = originalArguments;
-        if (CompilerDirectives.inCompiledCode()) {
-            Assumption argumentTypesAssumption = this.profiledArgumentTypesAssumption;
-            if (argumentTypesAssumption != null && argumentTypesAssumption.isValid()) {
-                args = unsafeCast(castArrayFixedLength(args, profiledArgumentTypes.length), Object[].class, true, true);
+        if (this.profiledArgumentTypesAssumption != null && CompilerDirectives.inCompiledCode() && profiledArgumentTypesAssumption.isValid()) {
+            args = unsafeCast(castArrayFixedLength(args, profiledArgumentTypes.length), Object[].class, true, true);
+            if (TruffleArgumentTypeSpeculation.getValue()) {
                 args = castArguments(args);
             }
         }
@@ -329,9 +323,8 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         return result;
     }
 
-    public void profileReturnType(Object result) {
-        Assumption returnTypeAssumption = profiledReturnTypeAssumption;
-        if (returnTypeAssumption == null) {
+    void profileReturnType(Object result) {
+        if (profiledReturnTypeAssumption == null) {
             if (TruffleReturnTypeSpeculation.getValue()) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 profiledReturnType = (result == null ? null : result.getClass());
@@ -341,7 +334,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
             if (result == null || profiledReturnType != result.getClass()) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 profiledReturnType = null;
-                returnTypeAssumption.invalidate();
+                profiledReturnTypeAssumption.invalidate();
             }
         }
     }
@@ -387,6 +380,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
 
     public final void compile() {
         if (!isCompiling()) {
+            compiling = true;
             ensureCloned();
             runtime.compile(this, TruffleBackgroundCompilation.getValue() && !TruffleCompilationExceptionsAreThrown.getValue());
         }
@@ -424,7 +418,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         if (successful && inlining != null) {
             dequeueInlinedCallSites(inlining);
         }
-        setCompilationTask(null);
+        compiling = false;
     }
 
     private void dequeueInlinedCallSites(TruffleInlining parentDecision) {
@@ -481,10 +475,9 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
 
     @ExplodeLoop
     private Object[] castArguments(Object[] originalArguments) {
-        Class<?>[] types = profiledArgumentTypes;
-        Object[] castArguments = new Object[types.length];
-        for (int i = 0; i < types.length; i++) {
-            castArguments[i] = types[i] != null ? unsafeCast(originalArguments[i], types[i], true, true) : originalArguments[i];
+        Object[] castArguments = new Object[profiledArgumentTypes.length];
+        for (int i = 0; i < profiledArgumentTypes.length; i++) {
+            castArguments[i] = profiledArgumentTypes[i] != null ? unsafeCast(originalArguments[i], profiledArgumentTypes[i], true, true) : originalArguments[i];
         }
         return castArguments;
     }
@@ -623,13 +616,5 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     @Override
     public final int hashCode() {
         return System.identityHashCode(this);
-    }
-
-    Future<?> getCompilationTask() {
-        return compilationTask;
-    }
-
-    void setCompilationTask(Future<?> compilationTask) {
-        this.compilationTask = compilationTask;
     }
 }
