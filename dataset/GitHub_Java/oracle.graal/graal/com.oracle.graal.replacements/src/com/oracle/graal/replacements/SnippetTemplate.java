@@ -185,9 +185,9 @@ public class SnippetTemplate {
 
         protected int nextParamIdx;
 
-        public Arguments(SnippetInfo info, GuardsStage guardsStage, LoweringTool.LoweringStage loweringStage) {
+        public Arguments(SnippetInfo info, GuardsStage guardsStage) {
             this.info = info;
-            this.cacheKey = new CacheKey(info, guardsStage, loweringStage);
+            this.cacheKey = new CacheKey(info, guardsStage);
             this.values = new Object[info.getParameterCount()];
         }
 
@@ -319,13 +319,11 @@ public class SnippetTemplate {
         private final ResolvedJavaMethod method;
         private final Object[] values;
         private final GuardsStage guardsStage;
-        private final LoweringTool.LoweringStage loweringStage;
         private int hash;
 
-        protected CacheKey(SnippetInfo info, GuardsStage guardsStage, LoweringTool.LoweringStage loweringStage) {
+        protected CacheKey(SnippetInfo info, GuardsStage guardsStage) {
             this.method = info.method;
             this.guardsStage = guardsStage;
-            this.loweringStage = loweringStage;
             this.values = new Object[info.getParameterCount()];
             this.hash = info.method.hashCode() + 31 * guardsStage.hashCode();
         }
@@ -344,7 +342,7 @@ public class SnippetTemplate {
             if (method != other.method) {
                 return false;
             }
-            if (guardsStage != other.guardsStage || loweringStage != other.loweringStage) {
+            if (guardsStage != other.guardsStage) {
                 return false;
             }
             for (int i = 0; i < values.length; i++) {
@@ -477,7 +475,8 @@ public class SnippetTemplate {
         ResolvedJavaMethod method = snippetGraph.method();
         Signature signature = method.getSignature();
 
-        PhaseContext phaseContext = new PhaseContext(providers, new Assumptions(false));
+        Assumptions assumptions = providers.getReplacements().getAssumptions();
+        PhaseContext phaseContext = new PhaseContext(providers, assumptions);
 
         // Copy snippet graph, replacing constant parameters with given arguments
         final StructuredGraph snippetCopy = new StructuredGraph(snippetGraph.name, snippetGraph.method());
@@ -579,14 +578,11 @@ public class SnippetTemplate {
             }
         } while (exploded);
 
-        GuardsStage guardsStage = args.cacheKey.guardsStage;
         // Perform lowering on the snippet
-        if (guardsStage.ordinal() >= GuardsStage.FIXED_DEOPTS.ordinal()) {
-            new GuardLoweringPhase().apply(snippetCopy, null);
-        }
-        snippetCopy.setGuardsStage(guardsStage);
+        snippetCopy.setGuardsStage(args.cacheKey.guardsStage);
         try (Scope s = Debug.scope("LoweringSnippetTemplate", snippetCopy)) {
-            new LoweringPhase(new CanonicalizerPhase(true), args.cacheKey.loweringStage).apply(snippetCopy, phaseContext);
+            PhaseContext c = new PhaseContext(providers, new Assumptions(false));
+            new LoweringPhase(new CanonicalizerPhase(true)).apply(snippetCopy, c);
         } catch (Throwable e) {
             throw Debug.handle(e);
         }
