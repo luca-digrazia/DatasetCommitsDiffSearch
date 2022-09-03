@@ -1027,7 +1027,7 @@ public class PolyglotEngine {
         }
 
         @Override
-        public Object asBoxedGuestValue(Object guestObject, Object vmObject) {
+        public Object boxGuestValue(Object guestObject, Object vmObject) {
             return guestObject;
         }
 
@@ -1199,6 +1199,12 @@ public class PolyglotEngine {
             } else {
                 return null;
             }
+        }
+
+        @Override
+        public Object lookupSymbol(Object vmObject, Env env, LanguageInfo targetLanguage, String symbolName) {
+            // not supported in PolyglotEngine.
+            return null;
         }
 
         @Override

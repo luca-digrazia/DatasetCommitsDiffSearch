@@ -107,8 +107,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
     final PolyglotEngineImpl engine;
     @CompilationFinal(dimensions = 1) final PolyglotLanguageContext[] contexts;
 
-    Context creatorApi;
-    Context currentApi;
+    Context api;
     final TruffleContext truffleContext;
     final PolyglotContextImpl parent;
     OutputStream out;   // effectively final
@@ -123,11 +122,11 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
     @CompilationFinal boolean createThreadAllowed;
 
     // map from class to language index
-    @CompilationFinal private FinalIntMap languageIndexMap;
+    private final FinalIntMap languageIndexMap = new FinalIntMap();
 
     Set<String> allowedPublicLanguages;     // effectively final
     Map<String, String[]> applicationArguments;  // effectively final
-    private final List<PolyglotContextImpl> childContexts = new ArrayList<>();
+    private final Set<PolyglotContextImpl> childContexts = new LinkedHashSet<>();
     boolean inContextPreInitialization; // effectively final
     FileSystem fileSystem;  // effectively final
 
@@ -316,8 +315,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
     }
 
     @Override
-    public synchronized void explicitEnter(Context sourceContext) {
-        checkCreatorAccess(sourceContext, "entered");
+    public synchronized void explicitEnter() {
         Object prev = enter();
         PolyglotThreadInfo current = getCurrentThreadInfo();
         assert current.thread == Thread.currentThread();
@@ -325,20 +323,13 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
     }
 
     @Override
-    public synchronized void explicitLeave(Context sourceContext) {
-        checkCreatorAccess(sourceContext, "left");
+    public synchronized void explicitLeave() {
         PolyglotThreadInfo current = getCurrentThreadInfo();
         LinkedList<Object> stack = current.explicitContextStack;
         if (stack.isEmpty() || current.thread == null) {
             throw new IllegalStateException("The context is not entered explicity. A context can only be left if it was previously entered.");
         }
         leave(stack.removeLast());
-    }
-
-    private void checkCreatorAccess(Context context, String operation) {
-        if (context != creatorApi) {
-            throw new IllegalStateException(String.format("Context instances that were received using Context.get() cannot be %s.", operation));
-        }
     }
 
     boolean needsEnter() {
@@ -703,19 +694,15 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
     }
 
     private PolyglotLanguageContext getLanguageContextImpl(Class<? extends TruffleLanguage<?>> languageClass) {
-        FinalIntMap map = this.languageIndexMap;
-        int indexValue = map != null ? map.get(languageClass) : -1;
+        int indexValue = languageIndexMap.get(languageClass);
         if (indexValue == -1) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             synchronized (this) {
-                if (this.languageIndexMap == null) {
-                    this.languageIndexMap = new FinalIntMap();
-                }
                 indexValue = languageIndexMap.get(languageClass);
                 if (indexValue == -1) {
                     PolyglotLanguageContext context = findLanguageContext(languageClass, true);
                     indexValue = context.language.index;
-                    this.languageIndexMap.put(languageClass, indexValue);
+                    languageIndexMap.put(languageClass, indexValue);
                 }
             }
         }
@@ -786,13 +773,12 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
     }
 
     @Override
-    public Engine getEngineImpl(Context sourceContext) {
-        return sourceContext == creatorApi ? engine.creatorApi : engine.currentApi;
+    public Engine getEngineImpl() {
+        return engine.api;
     }
 
     @Override
-    public void close(Context sourceContext, boolean cancelIfExecuting) {
-        checkCreatorAccess(sourceContext, "closed");
+    public void close(boolean cancelIfExecuting) {
         boolean closeCompleted = closeImpl(cancelIfExecuting, cancelIfExecuting);
         if (cancelIfExecuting) {
             engine.getCancelHandler().waitForClosing(this);

@@ -29,14 +29,49 @@ import com.oracle.truffle.api.interop.TruffleObject;
 
 final class JavaObject implements TruffleObject {
 
-    static final JavaObject NULL = new JavaObject(null, Object.class);
+    static final JavaObject NULL = new JavaObject(null, null, false);
 
     final Object obj;
-    final Class<?> clazz;
+    final Object languageContext;
+    private final boolean staticClass;
 
-    JavaObject(Object obj, Class<?> clazz) {
+    private JavaObject(Object obj, Object languageContext, boolean staticClass) {
         this.obj = obj;
-        this.clazz = clazz;
+        this.languageContext = languageContext;
+        this.staticClass = staticClass;
+    }
+
+    static JavaObject forClass(Class<?> clazz, Object languageContext) {
+        assert clazz != null;
+        return new JavaObject(clazz, languageContext, false);
+    }
+
+    static JavaObject forStaticClass(Class<?> clazz, Object languageContext) {
+        assert clazz != null;
+        return new JavaObject(clazz, languageContext, true);
+    }
+
+    static JavaObject forObject(Object object, Object languageContext) {
+        assert object != null && !(object instanceof Class<?>);
+        return new JavaObject(object, languageContext, false);
+    }
+
+    static boolean isInstance(TruffleObject obj) {
+        return obj instanceof JavaObject;
+    }
+
+    static boolean isJavaInstance(Class<?> targetType, Object javaObject) {
+        if (javaObject instanceof JavaObject) {
+            final Object value = valueOf((JavaObject) javaObject);
+            return targetType.isInstance(value);
+        } else {
+            return false;
+        }
+    }
+
+    static Object valueOf(TruffleObject value) {
+        final JavaObject obj = (JavaObject) value;
+        return obj.obj;
     }
 
     @Override
@@ -49,19 +84,67 @@ final class JavaObject implements TruffleObject {
         return System.identityHashCode(obj);
     }
 
-    public static boolean isInstance(TruffleObject obj) {
-        return obj instanceof JavaObject;
+    boolean isClass() {
+        return obj instanceof Class<?>;
     }
 
-    public boolean isClass() {
+    boolean isArray() {
+        return obj != null && obj.getClass().isArray();
+    }
+
+    boolean isNull() {
         return obj == null;
     }
 
+    boolean isStaticClass() {
+        return staticClass;
+    }
+
+    Class<?> getObjectClass() {
+        return obj == null ? null : obj.getClass();
+    }
+
+    Class<?> asStaticClass() {
+        assert isStaticClass();
+        return (Class<?>) obj;
+    }
+
+    Class<?> asClass() {
+        assert isClass();
+        return (Class<?>) obj;
+    }
+
+    /**
+     * Gets the {@link Class} for member lookups.
+     */
+    Class<?> getLookupClass() {
+        if (obj == null) {
+            return null;
+        } else if (isStaticClass()) {
+            return asStaticClass();
+        } else {
+            return obj.getClass();
+        }
+    }
+
     @Override
-    public boolean equals(Object other) {
-        if (other instanceof JavaObject) {
-            return obj == ((JavaObject) other).obj && clazz == ((JavaObject) other).clazz;
+    public boolean equals(Object o) {
+        if (o instanceof JavaObject) {
+            JavaObject other = (JavaObject) o;
+            return this.obj == other.obj && this.languageContext == other.languageContext;
         }
         return false;
     }
+
+    @Override
+    public String toString() {
+        if (obj == null) {
+            return "null";
+        }
+        if (isClass()) {
+            return "JavaClass[" + asClass().getTypeName() + "]";
+        }
+        return "JavaObject[" + obj + " (" + getObjectClass().getTypeName() + ")" + "]";
+    }
+
 }
