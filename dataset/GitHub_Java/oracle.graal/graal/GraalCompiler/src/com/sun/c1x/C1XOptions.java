@@ -87,6 +87,7 @@ public final class C1XOptions {
     public static boolean QuietBailout                       = ____;
 
     // all optimization settings
+    public static boolean OptLocalValueNumbering;
     public static boolean OptCSEArrayLength;
     public static boolean OptBlockSkipping;
     public static boolean OptControlFlow;
@@ -149,6 +150,7 @@ public final class C1XOptions {
         final boolean lll = (level >= 3);
 
         // Level 1 optimizations
+        OptLocalValueNumbering          = l;
         PhiLoopStores                   = l;
         OptControlFlow                  = l;
 
