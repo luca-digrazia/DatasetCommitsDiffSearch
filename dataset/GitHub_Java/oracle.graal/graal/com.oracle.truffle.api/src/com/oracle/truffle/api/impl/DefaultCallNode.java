@@ -25,39 +25,22 @@
 package com.oracle.truffle.api.impl;
 
 import com.oracle.truffle.api.*;
-import com.oracle.truffle.api.CompilerDirectives.*;
 import com.oracle.truffle.api.frame.*;
-import com.oracle.truffle.api.frame.FrameInstance.*;
 import com.oracle.truffle.api.nodes.*;
 
-public class DefaultCallNode extends CallNode implements MaterializedFrameNotify {
-
-    @CompilationFinal private FrameAccess outsideFrameAccess = FrameAccess.NONE;
-
-    private boolean inliningForced;
+public class DefaultCallNode extends CallNode {
 
     public DefaultCallNode(CallTarget target) {
         super(target);
     }
 
     @Override
-    public Object call(VirtualFrame frame, Object[] arguments) {
-        return getCurrentCallTarget().call(arguments);
+    public Object call(PackedFrame caller, Arguments arguments) {
+        return getCallTarget().call(caller, arguments);
     }
 
     @Override
-    public FrameAccess getOutsideFrameAccess() {
-        return outsideFrameAccess;
-    }
-
-    @Override
-    public void setOutsideFrameAccess(FrameAccess outsideFrameAccess) {
-        this.outsideFrameAccess = outsideFrameAccess;
-    }
-
-    @Override
-    public void forceInlining() {
-        inliningForced = true;
+    public void inline() {
     }
 
     @Override
@@ -71,18 +54,13 @@ public class DefaultCallNode extends CallNode implements MaterializedFrameNotify
     }
 
     @Override
-    public boolean isInlined() {
-        return false;
-    }
-
-    @Override
     public boolean isSplittable() {
         return false;
     }
 
     @Override
-    public boolean isInliningForced() {
-        return inliningForced;
+    public boolean isInlined() {
+        return false;
     }
 
     @Override
@@ -92,6 +70,6 @@ public class DefaultCallNode extends CallNode implements MaterializedFrameNotify
 
     @Override
     public String toString() {
-        return (getParent() != null ? getParent().toString() : super.toString()) + " call " + getCurrentCallTarget().toString();
+        return getParent() != null ? getParent().toString() : super.toString();
     }
 }

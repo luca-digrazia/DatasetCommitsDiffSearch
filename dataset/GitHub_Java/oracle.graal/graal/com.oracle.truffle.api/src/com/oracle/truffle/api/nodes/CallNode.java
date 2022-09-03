@@ -156,7 +156,7 @@ public abstract class CallNode extends Node {
     }
 
     @Override
-    protected void onReplace(Node newNode, CharSequence reason) {
+    protected void onReplace(Node newNode, String reason) {
         super.onReplace(newNode, reason);
 
         /*
