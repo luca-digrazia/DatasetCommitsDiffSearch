@@ -41,6 +41,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.TruffleLanguage.Env;
@@ -49,7 +50,7 @@ import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableRegistry;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.memory.LLVMNativeFunctions;
-import com.oracle.truffle.llvm.runtime.memory.LLVMThreadingStack;
+import com.oracle.truffle.llvm.runtime.memory.LLVMStack;
 import com.oracle.truffle.llvm.runtime.options.LLVMOptions;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
 import com.oracle.truffle.llvm.runtime.types.MetaType;
@@ -61,7 +62,7 @@ public class LLVMContext {
     private final List<RootCallTarget> globalVarDeallocs = new ArrayList<>();
     private final List<RootCallTarget> constructorFunctions = new ArrayList<>();
     private final List<RootCallTarget> destructorFunctions = new ArrayList<>();
-    private final Deque<LLVMFunctionDescriptor> atExitFunctions = new ArrayDeque<>();
+    private final Deque<RootCallTarget> atExitFunctions = new ArrayDeque<>();
     private final List<LLVMThread> runningThreads = new ArrayList<>();
 
     private final LLVMGlobalVariableRegistry globalVariableRegistry = new LLVMGlobalVariableRegistry();
@@ -70,7 +71,7 @@ public class LLVMContext {
 
     private final LLVMNativeFunctions nativeFunctions;
 
-    private final LLVMThreadingStack threadingStack = new LLVMThreadingStack();
+    private final LLVMStack stack = new LLVMStack();
 
     private Object[] mainArguments;
 
@@ -123,18 +124,18 @@ public class LLVMContext {
 
     public LLVMContext(Env env) {
         this.nativeLookup = LLVMOptions.ENGINE.disableNativeInterface() ? null : new NativeLookup(env);
-        this.nativeCallStatistics = !LLVMLogger.TARGET_NONE.equals(LLVMOptions.DEBUG.printNativeCallStatistics()) ? new HashMap<>() : null;
+        this.nativeCallStatistics = LLVMOptions.ENGINE.traceNativeCalls() ? new HashMap<>() : null;
         this.llvmIRFunctions = new HashMap<>();
         this.nativeFunctions = new LLVMNativeFunctionsImpl(nativeLookup);
-        this.sigDfl = LLVMFunctionHandle.createHandle(0);
-        this.sigIgn = LLVMFunctionHandle.createHandle(1);
-        this.sigErr = LLVMFunctionHandle.createHandle((-1) & LLVMFunction.LOWER_MASK);
+        this.sigDfl = new LLVMFunctionHandle(0);
+        this.sigIgn = new LLVMFunctionHandle(1);
+        this.sigErr = new LLVMFunctionHandle(-1);
         this.toNative = new IdentityHashMap<>();
         this.toManaged = new HashMap<>();
         this.handlesLock = new Object();
 
         assert currentFunctionIndex == 0;
-        LLVMFunctionDescriptor zeroFunction = LLVMFunctionDescriptor.createDescriptor(this, ZERO_FUNCTION, new FunctionType(MetaType.UNKNOWN, new Type[0], false), currentFunctionIndex++);
+        LLVMFunctionDescriptor zeroFunction = LLVMFunctionDescriptor.create(this, ZERO_FUNCTION, new FunctionType(MetaType.UNKNOWN, new Type[0], false), currentFunctionIndex++);
         this.llvmIRFunctions.put(ZERO_FUNCTION, zeroFunction);
         this.functionDescriptors.add(zeroFunction);
     }
@@ -201,7 +202,7 @@ public class LLVMContext {
 
     @TruffleBoundary
     public void registerNativeCall(LLVMFunctionDescriptor descriptor) {
-        if (nativeCallStatistics != null) {
+        if (LLVMOptions.ENGINE.traceNativeCalls()) {
             String name = descriptor.getName() + " " + descriptor.getType();
             if (nativeCallStatistics.containsKey(name)) {
                 int count = nativeCallStatistics.get(name) + 1;
@@ -213,7 +214,7 @@ public class LLVMContext {
     }
 
     public void printNativeCallStatistic() {
-        if (nativeCallStatistics != null) {
+        if (LLVMOptions.ENGINE.traceNativeCalls()) {
             LinkedHashMap<String, Integer> sorted = nativeCallStatistics.entrySet().stream().sorted(Map.Entry.comparingByValue()).collect(Collectors.toMap(
                             Map.Entry::getKey,
                             Map.Entry::getValue,
@@ -245,8 +246,8 @@ public class LLVMContext {
         nativeLookup.addLibraryToNativeLookup(library);
     }
 
-    public LLVMThreadingStack getThreadingStack() {
-        return threadingStack;
+    public LLVMStack getStack() {
+        return stack;
     }
 
     public void setMainArguments(Object[] mainArguments) {
@@ -277,7 +278,7 @@ public class LLVMContext {
         destructorFunctions.add(destructorFunction);
     }
 
-    public void registerAtExitFunction(LLVMFunctionDescriptor atExitFunction) {
+    public void registerAtExitFunction(RootCallTarget atExitFunction) {
         atExitFunctions.push(atExitFunction);
     }
 
@@ -326,7 +327,7 @@ public class LLVMContext {
         return destructorFunctions;
     }
 
-    public Deque<LLVMFunctionDescriptor> getAtExitFunctions() {
+    public Deque<RootCallTarget> getAtExitFunctions() {
         return atExitFunctions;
     }
 
@@ -354,9 +355,8 @@ public class LLVMContext {
         haveLoadedDynamicBitcodeLibraries = true;
     }
 
-    public LLVMFunctionDescriptor lookup(LLVMFunctionHandle handle) {
-        assert handle.isSulong();
-        return functionDescriptors.get(handle.getSulongFunctionIndex());
+    public LLVMFunctionDescriptor lookup(LLVMFunction handle) {
+        return functionDescriptors.get(handle.getFunctionIndex());
     }
 
     public List<LLVMFunctionDescriptor> getFunctionDescriptors() {
@@ -378,19 +378,27 @@ public class LLVMContext {
             functionDescriptors.add(function);
             llvmIRFunctions.put(name, function);
 
-            assert LLVMFunction.getSulongFunctionIndex(function.getFunctionPointer()) == currentFunctionIndex - 1;
+            assert function.getFunctionIndex() == currentFunctionIndex - 1;
             assert functionDescriptors.get(currentFunctionIndex - 1) == function;
         }
         return function;
 
     }
 
+    public LLVMFunctionDescriptor getDescriptorForName(String name) {
+        CompilerAsserts.neverPartOfCompilation();
+        if (llvmIRFunctions.containsKey(name)) {
+            return functionDescriptors.get(llvmIRFunctions.get(name).getFunctionIndex());
+        }
+        throw new IllegalStateException();
+    }
+
     public NativeLookup getNativeLookup() {
         return nativeLookup;
     }
 
-    public static String getNativeSignature(FunctionType type) {
-        return NativeLookup.prepareSignature(type);
+    public static String getNativeSignature(FunctionType type, int skipArguments) {
+        return NativeLookup.prepareSignature(type, skipArguments);
     }
 
 }
