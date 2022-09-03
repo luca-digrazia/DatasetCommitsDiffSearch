@@ -30,12 +30,9 @@
  */
 
 /**
- * The {@link com.oracle.truffle.api.vm.PolyglotEngine execution engine} for all Truffle-implemented
- * languages.
- * <p>
- * For more information about Truffle, including examples, please visit the <a href=
- * "{@docRoot}/com/oracle/truffle/tutorial/package-summary.html">Truffle Tutorial</a>.
- *
+ * Central place to create and control {@link com.oracle.truffle.api.vm.PolyglotEngine polyglot
+ * execution engine} and all languages hosted in it.
+ * 
  * @since 0.8 or older
  */
 package com.oracle.truffle.api.vm;

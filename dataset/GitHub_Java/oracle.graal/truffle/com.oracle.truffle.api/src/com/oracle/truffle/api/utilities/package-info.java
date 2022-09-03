@@ -29,8 +29,8 @@
  )
  */
 /**
- * Various utility classes that aim to make the development of TruffleLanguage guest
- * languages easier.
+ * Various utility classes that aim to make the development of TruffleLanguage guest languages
+ * easier.
  *
  * <p>
  * We try to capture common language patterns in this package. Here is an overview of patterns that
@@ -46,6 +46,7 @@
  * assumptions</li>
  * </ul>
  * </p>
+ * 
+ * @since 0.8 or older
  */
 package com.oracle.truffle.api.utilities;
-
