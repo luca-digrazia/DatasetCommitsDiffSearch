@@ -269,18 +269,17 @@ final class PolyglotLogHandler extends Handler {
                 String name;
                 int index = loggerName.indexOf('.');
                 if (index < 0) {
-                    id = loggerName;
-                    name = "";
+                    id = "";
+                    name = loggerName;
                 } else {
                     id = loggerName.substring(0, index);
                     name = loggerName.substring(index + 1);
                 }
-                if (name.isEmpty()) {
-                    return id;
-                }
-                final StringBuilder sb = new StringBuilder(id);
+                name = possibleSimpleName(name);
+                final StringBuilder sb = new StringBuilder();
+                sb.append(id);
                 sb.append("::");
-                sb.append(possibleSimpleName(name));
+                sb.append(name);
                 return sb.toString();
             }
 

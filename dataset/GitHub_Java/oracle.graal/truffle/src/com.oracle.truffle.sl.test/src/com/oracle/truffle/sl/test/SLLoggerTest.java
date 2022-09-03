@@ -82,10 +82,7 @@ public class SLLoggerTest {
     }
 
     @After
-    public void tearDown() throws IOException {
-        if (testHandler != null) {
-            testHandler.close();
-        }
+    public void tearDown() {
         if (currentContext != null) {
             currentContext.close();
             currentContext = null;
@@ -101,35 +98,35 @@ public class SLLoggerTest {
     }
 
     @Test
-    public void testLoggerNoConfig() throws IOException {
+    public void testLoggerNoConfig() {
         final Context context = createContext(Collections.emptyMap());
         executeSlScript(context);
         Assert.assertTrue(functionNames(testHandler.getRecords()).isEmpty());
     }
 
     @Test
-    public void testLoggerSlFunctionLevelFine() throws IOException {
+    public void testLoggerSlFunctionLevelFine() {
         final Context context = createContext(createLoggingOptions("sl", "com.oracle.truffle.sl.runtime.SLFunction", "FINE"));
         executeSlScript(context);
         Assert.assertFalse(functionNames(testHandler.getRecords()).isEmpty());
     }
 
     @Test
-    public void testLoggerSlFunctionParentLevelFine() throws IOException {
+    public void testLoggerSlFunctionParentLevelFine() {
         final Context context = createContext(createLoggingOptions("sl", "com.oracle.truffle.sl.runtime", "FINE"));
         executeSlScript(context);
         Assert.assertFalse(functionNames(testHandler.getRecords()).isEmpty());
     }
 
     @Test
-    public void testLoggerSlFunctionSiblingLevelFine() throws IOException {
+    public void testLoggerSlFunctionSiblingLevelFine() {
         final Context context = createContext(createLoggingOptions("sl", "com.oracle.truffle.sl.runtime.SLContext", "FINE"));
         executeSlScript(context);
         Assert.assertTrue(functionNames(testHandler.getRecords()).isEmpty());
     }
 
     @Test
-    public void testMultipleContextsExclusiveFineLevel() throws IOException {
+    public void testMultipleContextsExclusiveFineLevel() {
         final TestHandler handler1 = new TestHandler();
         try (Context ctx = Context.newBuilder("sl").options(createLoggingOptions("sl", "com.oracle.truffle.sl.runtime.SLFunction", "FINE")).logHandler(handler1).build()) {
             executeSlScript(ctx, ADD_SL, 2);
@@ -154,7 +151,7 @@ public class SLLoggerTest {
     }
 
     @Test
-    public void testMultipleContextsExclusiveDifferentLogLevel() throws IOException {
+    public void testMultipleContextsExclusiveDifferentLogLevel() {
         final TestHandler handler1 = new TestHandler();
         try (Context ctx = Context.newBuilder("sl").options(createLoggingOptions("sl", "com.oracle.truffle.sl.runtime.SLFunction", "FINE")).logHandler(handler1).build()) {
             executeSlScript(ctx, ADD_SL, 2);
@@ -178,7 +175,7 @@ public class SLLoggerTest {
     }
 
     @Test
-    public void testMultipleContextsNestedFineLevel() throws IOException {
+    public void testMultipleContextsNestedFineLevel() {
         final TestHandler handler1 = new TestHandler();
         final TestHandler handler2 = new TestHandler();
         final TestHandler handler3 = new TestHandler();
@@ -203,7 +200,7 @@ public class SLLoggerTest {
     }
 
     @Test
-    public void testMultipleContextsNestedDifferentLogLevel() throws IOException {
+    public void testMultipleContextsNestedDifferentLogLevel() {
         final TestHandler handler1 = new TestHandler();
         final TestHandler handler2 = new TestHandler();
         final TestHandler handler3 = new TestHandler();
@@ -226,11 +223,11 @@ public class SLLoggerTest {
         Assert.assertTrue(functionNames.isEmpty());
     }
 
-    private static void executeSlScript(final Context context) throws IOException {
+    private static void executeSlScript(final Context context) {
         executeSlScript(context, ADD_SL, 2);
     }
 
-    private static void executeSlScript(final Context context, final Source src, final int expectedResult) throws IOException {
+    private static void executeSlScript(final Context context, final Source src, final int expectedResult) {
         final Value res = context.eval(src);
         Assert.assertTrue(res.isNumber());
         Assert.assertEquals(expectedResult, res.asInt());
@@ -253,6 +250,7 @@ public class SLLoggerTest {
 
     private static final class TestHandler extends Handler {
         private final Queue<LogRecord> records;
+        private volatile boolean closed;
 
         TestHandler() {
             this.records = new ArrayDeque<>();
@@ -260,11 +258,17 @@ public class SLLoggerTest {
 
         @Override
         public void publish(LogRecord record) {
+            if (closed) {
+                throw new IllegalStateException("Closed handler");
+            }
             records.offer(record);
         }
 
         @Override
         public void flush() {
+            if (closed) {
+                throw new IllegalStateException("Closed handler");
+            }
         }
 
         public List<? extends LogRecord> getRecords() {
@@ -273,7 +277,7 @@ public class SLLoggerTest {
 
         @Override
         public void close() throws SecurityException {
-            records.clear();
+            closed = true;
         }
     }
 }

@@ -362,7 +362,7 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
 
         @Override
         public Object getCurrentContext(Object vmObject) {
-            return ((PolyglotLanguage) vmObject).profile.get();
+            return ((PolyglotLanguageInstance) vmObject).profile.get();
         }
 
         @Override

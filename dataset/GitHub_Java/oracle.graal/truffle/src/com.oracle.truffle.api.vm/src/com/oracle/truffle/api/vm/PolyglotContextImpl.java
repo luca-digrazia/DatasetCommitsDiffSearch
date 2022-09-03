@@ -569,13 +569,13 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
         PolyglotLanguage language = requirePublicLanguage(languageId);
         PolyglotLanguageContext languageContext = getContext(language);
         if (!languageContext.isInitialized()) {
-            Object prev = enterIfNeeded();
+            Object prev = enter();
             try {
                 languageContext = getContextInitialized(language, null);
             } catch (Throwable e) {
                 throw PolyglotImpl.wrapGuestException(engine, e);
             } finally {
-                leaveIfNeeded(prev);
+                leave(prev);
             }
         }
         return languageContext.getHostBindings();

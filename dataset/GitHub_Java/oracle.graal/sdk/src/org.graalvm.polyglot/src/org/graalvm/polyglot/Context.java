@@ -2,41 +2,25 @@
  * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * The Universal Permissive License (UPL), Version 1.0
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
- * Subject to the condition set forth below, permission is hereby granted to any
- * person obtaining a copy of this software, associated documentation and/or
- * data (collectively the "Software"), free of charge and under any and all
- * copyright rights in the Software, and any and all patent rights owned or
- * freely licensable by each licensor hereunder covering either (i) the
- * unmodified Software as contributed to or provided by such licensor, or (ii)
- * the Larger Works (as defined below), to deal in both
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
  *
- * (a) the Software, and
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
- * one is included with the Software each a "Larger Work" to which the Software
- * is contributed by such licensors),
- *
- * without restriction, including without limitation the rights to copy, create
- * derivative works of, display, perform, and distribute the Software and make,
- * use, sell, offer for sale, import, export, have made, and have sold the
- * Software and the Larger Work(s), and to sublicense the foregoing rights on
- * either these or other terms.
- *
- * This license is subject to the following condition:
- *
- * The above copyright notice and either this complete permission notice or at a
- * minimum a reference to the UPL must be included in all copies or substantial
- * portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 package org.graalvm.polyglot;
 
@@ -319,9 +303,8 @@ public final class Context implements AutoCloseable {
      * @param source a source object to evaluate
      * @throws PolyglotException in case parsing or evaluation of the guest language code failed.
      * @throws IllegalStateException if the context is already closed, the current thread is not
-     *             allowed to access this context
-     * @throws IllegalArgumentException if the language of the given source is not installed or the
-     *             {@link Source#getMimeType() MIME type} is not supported with the language.
+     *             allowed to access this context or if the language of the given source is not
+     *             installed.
      * @return result of the evaluation. The returned instance is is never <code>null</code>, but
      *         the result might represent a {@link Value#isNull() null} value.
      * @since 1.0
@@ -345,7 +328,6 @@ public final class Context implements AutoCloseable {
      * </pre>
      *
      * @throws PolyglotException in case parsing or evaluation of the guest language code failed.
-     * @throws IllegalArgumentException if the language does not exist or is not accessible.
      * @throws IllegalStateException if the context is already closed, the current thread is not
      *             allowed to access this context or if the given language is not installed.
      * @return result of the evaluation. The returned instance is is never <code>null</code>, but
@@ -383,8 +365,8 @@ public final class Context implements AutoCloseable {
      * language's discretion. If the language was not yet {@link #initialize(String) initialized} it
      * will be initialized when the bindings are requested.
      *
-     * @throws IllegalArgumentException if the language does not exist or is not accessible.
-     * @throws IllegalStateException if the context is already closed.
+     * @throws IllegalArgumentException if the language does not exist.
+     * @throws IllegalStateException if context is already closed.
      * @throws PolyglotException in case the lazy initialization failed due to a guest language
      *             error.
      * @since 1.0
@@ -398,11 +380,12 @@ public final class Context implements AutoCloseable {
      * language, it will be initialized the first time it is used.
      *
      * @param languageId the identifier of the language to initialize.
+     * @throws IllegalArgumentException if the language does not exist.
      * @return <code>true</code> if the language was initialized. Returns <code>false</code> if it
      *         was already initialized.
      * @throws PolyglotException in case the initialization failed due to a guest language error.
-     * @throws IllegalArgumentException if the language does not exist or is not accessible.
-     * @throws IllegalStateException if the context is already closed.
+     * @throws IllegalStateException if the context is already closed, the current thread is not
+     *             allowed to access this context or if the given language is not installed.
      * @since 1.0
      */
     public boolean initialize(String languageId) {
@@ -973,7 +956,8 @@ public final class Context implements AutoCloseable {
          * {@code JavaScriptLanguage} class.<br>
          * <p>
          * If the {@code logHandler} is not set on {@link Engine} nor on {@link Context} the log
-         * messages are printed to {@link #err(java.io.OutputStream) Context's error output stream}.
+         * messages are printed to {@link #out(java.io.OutputStream) Context's standard output
+         * stream}.
          *
          * @param logHandler the {@link Handler} to use for logging in built {@link Context}.
          * @return the {@link Builder}
