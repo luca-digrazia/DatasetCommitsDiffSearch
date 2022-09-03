@@ -25,11 +25,11 @@
 package com.oracle.graal.pointsto;
 
 import java.lang.reflect.Modifier;
+import java.util.ArrayDeque;
 import java.util.Comparator;
 import java.util.Deque;
 import java.util.IdentityHashMap;
-import java.util.concurrent.ConcurrentLinkedDeque;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.Map;
 import java.util.stream.StreamSupport;
 
 import org.graalvm.compiler.nodes.ConstantNode;
@@ -50,14 +50,13 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 public abstract class ObjectScanner {
 
     protected final BigBang bb;
-
-    private final ReusableSet scannedObjects;
+    protected final Map<Object, Boolean> scannedObjects;
     protected final Deque<WorklistEntry> worklist;
 
-    public ObjectScanner(BigBang bigbang, ReusableSet scannedObjects) {
+    public ObjectScanner(BigBang bigbang) {
         this.bb = bigbang;
-        this.worklist = new ConcurrentLinkedDeque<>();
-        this.scannedObjects = scannedObjects;
+        this.scannedObjects = new IdentityHashMap<>();
+        this.worklist = new ArrayDeque<>();
     }
 
     public void scanBootImageHeapRoots() {
@@ -68,7 +67,6 @@ public abstract class ObjectScanner {
 
         // scan the original roots
         // the original roots are all the static fields, of object type, that were accessed
-
         bb.getUniverse().getFields().stream()
                         .filter(field -> Modifier.isStatic(field.getModifiers()) && field.getJavaKind() == JavaKind.Object && field.isAccessed())
                         .sorted(fieldComparator)
@@ -222,18 +220,14 @@ public abstract class ObjectScanner {
 
     public final void scanConstant(JavaConstant value, Object reason) {
         Object valueObj = bb.getSnippetReflectionProvider().asObject(Object.class, value);
-        if (valueObj == null || valueObj instanceof WordBase) {
+        if (valueObj == null || scannedObjects.containsKey(valueObj) || valueObj instanceof WordBase) {
             return;
         }
-        if (scannedObjects.putAndAcquire(valueObj) == null) {
-            try {
-                forScannedConstant(value, reason);
-                worklist.push(new WorklistEntry(value, reason));
-            } finally {
-                scannedObjects.release(valueObj);
-            }
-        }
+        scannedObjects.put(valueObj, Boolean.TRUE);
 
+        forScannedConstant(value, reason);
+
+        worklist.push(new WorklistEntry(value, reason));
     }
 
     private void unsupportedFeature(String key, String message, Object entry) {
@@ -344,73 +338,4 @@ public abstract class ObjectScanner {
         }
     }
 
-    /**
-     * This datastructure keeps track if an object was already put or not atomically. It takes
-     * advantage of the fact that each typeflow iteration adds more objects to the set but never
-     * removes elements. Since insertions into maps are expensive we keep the map around over
-     * multiple iterations and only update the AtomicInteger sequence number after each iteration.
-     *
-     * Furthermore it also serializes on the object put until the method release is called with this
-     * object. So each object goes through two states:
-     * <li>In flight: counter = sequence - 1
-     * <li>Commited: counter = sequence
-     *
-     * If the object is in state in flight, all other calls with this object to putAndAcquire will
-     * block until release with the object is called.
-     */
-    public static final class ReusableSet {
-        private final IdentityHashMap<Object, AtomicInteger> store = new IdentityHashMap<>(50000);
-        private int sequence = 0;
-
-        public Object putAndAcquire(Object object) {
-            IdentityHashMap<Object, AtomicInteger> map = this.store;
-            AtomicInteger i = map.get(object);
-            int seq = this.sequence;
-            int inflightSequence = seq - 1;
-            while (true) {
-                if (i != null) {
-                    int current = i.get();
-                    if (current == seq) {
-                        return object; // Found and is already released
-                    } else {
-                        if (current != inflightSequence && i.compareAndSet(current, inflightSequence)) {
-                            return null; // We have successfully acquired
-                        } else { // Someone else has acquired
-                            while (i.get() != seq) { // Wait until released
-                                Thread.yield();
-                            }
-                            return object; // Object has been released
-                        }
-                    }
-                } else {
-                    AtomicInteger newSequence = new AtomicInteger(inflightSequence);
-                    synchronized (map) {
-                        i = map.putIfAbsent(object, newSequence);
-                        if (i == null) {
-                            return null;
-                        } else {
-                            continue;
-                        }
-                    }
-                }
-            }
-        }
-
-        public void release(Object o) {
-            IdentityHashMap<Object, AtomicInteger> map = this.store;
-            AtomicInteger i = map.get(o);
-            if (i == null) {
-                // We have missed a value likely someone else has updated the map at the same time.
-                // Now synchronize
-                synchronized (map) {
-                    i = map.get(o);
-                }
-            }
-            i.set(sequence);
-        }
-
-        public void reset() {
-            sequence += 2;
-        }
-    }
 }
