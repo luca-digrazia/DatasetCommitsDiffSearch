@@ -24,26 +24,113 @@ package com.oracle.graal.snippets;
 
 import java.lang.annotation.*;
 
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.snippets.nodes.*;
+
 /**
- * Denotes a class that substitutes methods of another specified class with snippets.
+ * Denotes a class that substitutes methods of another specified class. The substitute methods are
+ * exactly those annotated by {@link MethodSubstitution}.
  */
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.TYPE)
 public @interface ClassSubstitution {
 
-    Class<?> value();
+    /**
+     * Specifies the original class.
+     * <p>
+     * If the default value is specified for this element, then a non-default value must be given
+     * for the {@link #className()} element.
+     */
+    Class<?> value() default ClassSubstitution.class;
 
     /**
-     * Used to map a substitute method to an original method where the default mapping
-     * of name and signature is not possible due to name clashes with final methods in
-     * {@link Object} or signature types that are not public.
+     * Specifies the original class.
+     * <p>
+     * This method is provided for cases where the original class is not accessible (according to
+     * Java language access control rules).
+     * <p>
+     * If the default value is specified for this element, then a non-default value must be given
+     * for the {@link #value()} element.
+     */
+    String className() default "";
+
+    /**
+     * Determines if the substitutions are for classes that may not be part of the runtime.
+     * Substitutions for such classes are omitted if the original classes cannot be found.
+     */
+    boolean optional() default false;
+
+    /**
+     * Denotes a substitute method. A substitute method can call the original/substituted method by
+     * making a recursive call to itself.
      */
     @Retention(RetentionPolicy.RUNTIME)
     @Target(ElementType.METHOD)
     public @interface MethodSubstitution {
+
         /**
-         * Get the name of the original method.
+         * Gets the name of the original method.
+         * <p>
+         * If the default value is specified for this element, then the name of the original method
+         * is same as the substitute method.
          */
         String value() default "";
+
+        /**
+         * Determines if the original method is static.
+         */
+        boolean isStatic() default true;
+
+        /**
+         * Gets the {@linkplain MetaUtil#signatureToMethodDescriptor signature} of the original
+         * method.
+         * <p>
+         * If the default value is specified for this element, then the signature of the original
+         * method is the same as the substitute method.
+         */
+        String signature() default "";
+    }
+
+    /**
+     * Denotes a macro substitute method. This replaces a method invocation with an instance of the
+     * specified node class.
+     * 
+     * A macro substitution can be combined with a normal substitution, so that the macro node can
+     * be replaced with the actual substitution code during lowering.
+     */
+    @Retention(RetentionPolicy.RUNTIME)
+    @Target(ElementType.METHOD)
+    public @interface MacroSubstitution {
+
+        /**
+         * Gets the name of the substituted method.
+         * <p>
+         * If the default value is specified for this element, then the name of the substituted
+         * method is same as the substitute method.
+         */
+        String value() default "";
+
+        /**
+         * Determines if the substituted method is static.
+         */
+        boolean isStatic() default true;
+
+        /**
+         * Gets the {@linkplain MetaUtil#signatureToMethodDescriptor signature} of the substituted
+         * method.
+         * <p>
+         * If the default value is specified for this element, then the signature of the substituted
+         * method is the same as the substitute method.
+         */
+        String signature() default "";
+
+        /**
+         * The node class with which the method invocation should be replaced. It needs to be a
+         * subclass of {@link FixedWithNextNode}, and it is expected to provide a public constructor
+         * that takes an InvokeNode as a parameter. For most cases this class should subclass
+         * {@link MacroNode} and use its constructor.
+         */
+        Class<? extends FixedWithNextNode> macro();
     }
 }
