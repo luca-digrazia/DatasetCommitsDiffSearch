@@ -1167,8 +1167,9 @@ public class GraphDecoder {
         merge.removeEnd(endNode);
         FixedNode afterMerge = merge.next();
         if (!(afterMerge instanceof EndNode) || !(((EndNode) afterMerge).merge() instanceof LoopBeginNode)) {
-            FrameState stateAfter = merge.stateAfter().duplicate();
+            FrameState stateAfter = merge.stateAfter();
             merge.setNext(null);
+            merge.setStateAfter(null);
             EndNode preLoopEnd = methodScope.graph.add(new EndNode());
             LoopBeginNode newLoopBegin = methodScope.graph.add(new LoopBeginNode());
             merge.setNext(preLoopEnd);
