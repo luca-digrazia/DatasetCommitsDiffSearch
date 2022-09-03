@@ -85,22 +85,21 @@ public class IR {
             new GraphBuilderPhase(compilation, compilation.method, false).apply(compilation.graph);
 //        }
 
-        Graph graph = compilation.graph;
-
         if (GraalOptions.TestGraphDuplication) {
-            new DuplicationPhase().apply(graph);
+            new DuplicationPhase().apply(compilation.graph);
         }
 
-        new DeadCodeEliminationPhase().apply(graph);
+        new DeadCodeEliminationPhase().apply(compilation.graph);
 
         if (GraalOptions.ProbabilityAnalysis) {
-            new ComputeProbabilityPhase().apply(graph);
+            new ComputeProbabilityPhase().apply(compilation.graph);
         }
 
         if (GraalOptions.Inline) {
-            new InliningPhase(compilation, this, null).apply(graph);
+            new InliningPhase(compilation, this, null).apply(compilation.graph);
         }
 
+        Graph graph = compilation.graph;
 
         if (GraalOptions.OptCanonicalizer) {
             new CanonicalizerPhase().apply(graph);
@@ -127,25 +126,20 @@ public class IR {
         }
 
         if (GraalOptions.OptGVN) {
-            graph.recordModifications(EdgeType.USAGES); // GVN 'ideals' will get new usages
             new GlobalValueNumberingPhase().apply(graph);
             if (GraalOptions.Rematerialize) {
-                //new Rematerialization2Phase().apply(graph);
                 new RematerializationPhase().apply(graph);
             }
-            graph.stopRecordModifications();
         }
 
         new LoweringPhase(compilation.runtime).apply(graph);
         if (GraalOptions.Lower) {
             new MemoryPhase().apply(graph);
             if (GraalOptions.OptGVN) {
-                graph.recordModifications(EdgeType.USAGES);
                 new GlobalValueNumberingPhase().apply(graph);
                 if (GraalOptions.Rematerialize) {
                     new RematerializationPhase().apply(graph);
                 }
-                graph.stopRecordModifications();
             }
             if (GraalOptions.OptReadElimination) {
                 new ReadEliminationPhase().apply(graph);
