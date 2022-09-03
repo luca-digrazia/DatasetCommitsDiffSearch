@@ -81,7 +81,7 @@ public class MidTier extends PhaseSuite<MidTierContext> {
 
         appendPhase(new LoopSafepointEliminationPhase());
 
-        appendPhase(new LoopSafepointInsertionPhase());
+        appendPhase(new SafepointInsertionPhase());
 
         appendPhase(new GuardLoweringPhase());
 
