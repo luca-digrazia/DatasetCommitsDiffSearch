@@ -34,7 +34,6 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.instrumentation.Instrumentable;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.profiles.ConditionProfile;
 import com.oracle.truffle.api.source.SourceSection;
@@ -47,7 +46,6 @@ import com.oracle.truffle.llvm.nodes.others.LLVMValueProfilingNodeFactory.LLVMI1
 import com.oracle.truffle.llvm.nodes.others.LLVMValueProfilingNodeFactory.LLVMI32ProfiledValueNodeGen;
 import com.oracle.truffle.llvm.nodes.others.LLVMValueProfilingNodeFactory.LLVMI64ProfiledValueNodeGen;
 import com.oracle.truffle.llvm.nodes.others.LLVMValueProfilingNodeFactory.LLVMI8ProfiledValueNodeGen;
-import com.oracle.truffle.llvm.nodes.wrappers.LLVMInvokeNodeWrapper;
 import com.oracle.truffle.llvm.runtime.memory.LLVMStack;
 import com.oracle.truffle.llvm.runtime.memory.LLVMStack.NeedsStack;
 import com.oracle.truffle.llvm.runtime.memory.LLVMThreadingStack;
@@ -59,198 +57,133 @@ import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
 import com.oracle.truffle.llvm.runtime.types.Type;
 import com.oracle.truffle.llvm.runtime.types.VoidType;
 
-@Instrumentable(factory = LLVMInvokeNodeWrapper.class)
+@NeedsStack
 public abstract class LLVMInvokeNode extends LLVMControlFlowNode {
+    @Child protected LLVMExpressionNode normalPhiNode;
+    @Child protected LLVMExpressionNode unwindPhiNode;
+    @Child protected LLVMValueProfilingNode returnValueProfile;
 
-    @NeedsStack
-    private static class LLVMInvokeNodeImpl extends LLVMInvokeNode {
-
-        @Child protected LLVMExpressionNode normalPhiNode;
-        @Child protected LLVMExpressionNode unwindPhiNode;
-        @Child protected LLVMValueProfilingNode returnValueProfile;
-
-        protected final FunctionType type;
-
-        @CompilationFinal private LLVMThreadingStack threadingStack;
-        @CompilationFinal private FrameSlot stackPointer;
-
-        private final int normalSuccessor;
-        private final int unwindSuccessor;
-        private final FrameSlot resultLocation;
-        private final ConditionProfile profile = ConditionProfile.createCountingProfile();
-
-        LLVMInvokeNodeImpl(FunctionType type, FrameSlot resultLocation,
-                        int normalSuccessor, int unwindSuccessor,
-                        LLVMExpressionNode normalPhiNode, LLVMExpressionNode unwindPhiNode, SourceSection sourceSection) {
-            super(sourceSection);
-            this.normalSuccessor = normalSuccessor;
-            this.unwindSuccessor = unwindSuccessor;
-            this.type = type;
-            this.normalPhiNode = normalPhiNode;
-            this.unwindPhiNode = unwindPhiNode;
-            this.resultLocation = resultLocation;
-
-            initializeReturnValueProfileNode();
-        }
-
-        @Override
-        public int getSuccessorCount() {
-            return 2;
-        }
-
-        @Override
-        public int getNormalSuccessor() {
-            return normalSuccessor;
-        }
-
-        @Override
-        public int getUnwindSuccessor() {
-            return unwindSuccessor;
-        }
-
-        @Override
-        public void execute(VirtualFrame frame) {
-            // checkstyle complains if the class is abstract, so we need to provide a default
-            // implementation here
-            throw new UnsupportedOperationException("Unimplemented LLVMInvokeNode");
-        }
-
-        private void initializeReturnValueProfileNode() {
-            CompilerAsserts.neverPartOfCompilation();
-            if (type.getReturnType() instanceof PrimitiveType) {
-                switch (((PrimitiveType) type.getReturnType()).getPrimitiveKind()) {
-                    case I8:
-                        this.returnValueProfile = LLVMI8ProfiledValueNodeGen.create(null);
-                        break;
-                    case I32:
-                        this.returnValueProfile = LLVMI32ProfiledValueNodeGen.create(null);
-                        break;
-                    case I64:
-                        this.returnValueProfile = LLVMI64ProfiledValueNodeGen.create(null);
-                        break;
-                    case FLOAT:
-                        this.returnValueProfile = LLVMFloatProfiledValueNodeGen.create(null);
-                        break;
-                    case DOUBLE:
-                        this.returnValueProfile = LLVMDoubleProfiledValueNodeGen.create(null);
-                        break;
-                    case I1:
-                        this.returnValueProfile = LLVMI1ProfiledValueNodeGen.create(null);
-                        break;
-                    case I16:
-                        this.returnValueProfile = LLVMI16ProfiledValueNodeGen.create(null);
-                        break;
-                    default:
-                        this.returnValueProfile = null;
-                }
-            } else if (type.getReturnType() instanceof PointerType) {
-                this.returnValueProfile = LLVMAddressProfiledValueNodeGen.create(null);
-            } else {
-                this.returnValueProfile = null;
-            }
-        }
-
-        @Override
-        public LLVMExpressionNode getPhiNode(int successorIndex) {
-            if (successorIndex == NORMAL_SUCCESSOR) {
-                return normalPhiNode;
-            } else {
-                assert successorIndex == UNWIND_SUCCESSOR;
-                return unwindPhiNode;
-            }
-        }
-
-        @Override
-        public void writeResult(VirtualFrame frame, Object value) {
-            Type returnType = type.getReturnType();
-            CompilerAsserts.partialEvaluationConstant(returnType);
-            if (returnType instanceof VoidType) {
-                return;
-            }
-            if (returnType instanceof PrimitiveType) {
-                switch (((PrimitiveType) returnType).getPrimitiveKind()) {
-                    case I1:
-                        frame.setBoolean(resultLocation, (boolean) returnValueProfile.executeWithTarget(value));
-                        break;
-                    case I8:
-                        frame.setByte(resultLocation, (byte) returnValueProfile.executeWithTarget(value));
-                        break;
-                    case I16:
-                        frame.setInt(resultLocation, (short) returnValueProfile.executeWithTarget(value));
-                        break;
-                    case I32:
-                        frame.setInt(resultLocation, (int) returnValueProfile.executeWithTarget(value));
-                        break;
-                    case I64:
-                        frame.setLong(resultLocation, (long) returnValueProfile.executeWithTarget(value));
-                        break;
-                    case FLOAT:
-                        frame.setFloat(resultLocation, (float) returnValueProfile.executeWithTarget(value));
-                        break;
-                    case DOUBLE:
-                        frame.setDouble(resultLocation, (double) returnValueProfile.executeWithTarget(value));
-                        break;
-                    default:
-                        frame.setObject(resultLocation, value);
-                }
-            } else if (type.getReturnType() instanceof PointerType) {
-                Object profiledValue = returnValueProfile.executeWithTarget(value);
-                frame.setObject(resultLocation, profiledValue);
-            } else {
-                frame.setObject(resultLocation, value);
-            }
-        }
-
-        @Override
-        public LLVMThreadingStack getThreadingStack() {
-            if (threadingStack == null) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                threadingStack = getContext().getThreadingStack();
-            }
-            return threadingStack;
-        }
-
-        @Override
-        public FrameSlot getStackPointerSlot() {
-            if (stackPointer == null) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                stackPointer = getRootNode().getFrameDescriptor().findFrameSlot(LLVMStack.FRAME_ID);
-            }
-            return stackPointer;
-        }
-
-        @Override
-        @ExplodeLoop
-        public void writePhis(VirtualFrame frame, int successorIndex) {
-            if (profile.profile(successorIndex == NORMAL_SUCCESSOR)) {
-                normalPhiNode.executeGeneric(frame);
-            } else {
-                assert successorIndex == UNWIND_SUCCESSOR;
-                unwindPhiNode.executeGeneric(frame);
-            }
-        }
-    }
+    private final int normalSuccessor;
+    private final int unwindSuccessor;
 
     public static final int NORMAL_SUCCESSOR = 0;
     public static final int UNWIND_SUCCESSOR = 1;
 
-    public LLVMInvokeNode(SourceSection sourceSection) {
+    protected final FunctionType type;
+
+    private final FrameSlot resultLocation;
+
+    public LLVMInvokeNode(FunctionType type, FrameSlot resultLocation,
+                    int normalSuccessor, int unwindSuccessor,
+                    LLVMExpressionNode normalPhiNode, LLVMExpressionNode unwindPhiNode, SourceSection sourceSection) {
         super(sourceSection);
+        this.normalSuccessor = normalSuccessor;
+        this.unwindSuccessor = unwindSuccessor;
+        this.type = type;
+        this.normalPhiNode = normalPhiNode;
+        this.unwindPhiNode = unwindPhiNode;
+        this.resultLocation = resultLocation;
+
+        initializeReturnValueProfileNode();
     }
 
-    public abstract int getNormalSuccessor();
+    private void initializeReturnValueProfileNode() {
+        CompilerAsserts.neverPartOfCompilation();
+        if (type.getReturnType() instanceof PrimitiveType) {
+            switch (((PrimitiveType) type.getReturnType()).getPrimitiveKind()) {
+                case I8:
+                    this.returnValueProfile = LLVMI8ProfiledValueNodeGen.create(null);
+                    break;
+                case I32:
+                    this.returnValueProfile = LLVMI32ProfiledValueNodeGen.create(null);
+                    break;
+                case I64:
+                    this.returnValueProfile = LLVMI64ProfiledValueNodeGen.create(null);
+                    break;
+                case FLOAT:
+                    this.returnValueProfile = LLVMFloatProfiledValueNodeGen.create(null);
+                    break;
+                case DOUBLE:
+                    this.returnValueProfile = LLVMDoubleProfiledValueNodeGen.create(null);
+                    break;
+                case I1:
+                    this.returnValueProfile = LLVMI1ProfiledValueNodeGen.create(null);
+                    break;
+                case I16:
+                    this.returnValueProfile = LLVMI16ProfiledValueNodeGen.create(null);
+                    break;
+                default:
+                    this.returnValueProfile = null;
+            }
+        } else if (type.getReturnType() instanceof PointerType) {
+            this.returnValueProfile = LLVMAddressProfiledValueNodeGen.create(null);
+        } else {
+            this.returnValueProfile = null;
+        }
+    }
 
-    public abstract int getUnwindSuccessor();
+    @Override
+    public int getSuccessorCount() {
+        return 2;
+    }
 
-    public abstract void execute(VirtualFrame frame);
+    public int getNormalSuccessor() {
+        return normalSuccessor;
+    }
 
-    public abstract void writeResult(VirtualFrame frame, Object value);
+    public int getUnwindSuccessor() {
+        return unwindSuccessor;
+    }
 
-    public abstract LLVMThreadingStack getThreadingStack();
+    @Override
+    public LLVMExpressionNode getPhiNode(int successorIndex) {
+        if (successorIndex == NORMAL_SUCCESSOR) {
+            return normalPhiNode;
+        } else {
+            assert successorIndex == UNWIND_SUCCESSOR;
+            return unwindPhiNode;
+        }
+    }
 
-    public abstract FrameSlot getStackPointerSlot();
-
-    public abstract void writePhis(VirtualFrame frame, int successorIndex);
+    protected void writeResult(VirtualFrame frame, Object value) {
+        Type returnType = type.getReturnType();
+        CompilerAsserts.partialEvaluationConstant(returnType);
+        if (returnType instanceof VoidType) {
+            return;
+        }
+        if (returnType instanceof PrimitiveType) {
+            switch (((PrimitiveType) returnType).getPrimitiveKind()) {
+                case I1:
+                    frame.setBoolean(resultLocation, (boolean) returnValueProfile.executeWithTarget(value));
+                    break;
+                case I8:
+                    frame.setByte(resultLocation, (byte) returnValueProfile.executeWithTarget(value));
+                    break;
+                case I16:
+                    frame.setInt(resultLocation, (short) returnValueProfile.executeWithTarget(value));
+                    break;
+                case I32:
+                    frame.setInt(resultLocation, (int) returnValueProfile.executeWithTarget(value));
+                    break;
+                case I64:
+                    frame.setLong(resultLocation, (long) returnValueProfile.executeWithTarget(value));
+                    break;
+                case FLOAT:
+                    frame.setFloat(resultLocation, (float) returnValueProfile.executeWithTarget(value));
+                    break;
+                case DOUBLE:
+                    frame.setDouble(resultLocation, (double) returnValueProfile.executeWithTarget(value));
+                    break;
+                default:
+                    frame.setObject(resultLocation, value);
+            }
+        } else if (type.getReturnType() instanceof PointerType) {
+            Object profiledValue = returnValueProfile.executeWithTarget(value);
+            frame.setObject(resultLocation, profiledValue);
+        } else {
+            frame.setObject(resultLocation, value);
+        }
+    }
 
     @Override
     public boolean needsBranchProfiling() {
@@ -258,7 +191,41 @@ public abstract class LLVMInvokeNode extends LLVMControlFlowNode {
         return false;
     }
 
-    public static final class LLVMSubstitutionInvokeNode extends LLVMInvokeNodeImpl {
+    public abstract void execute(VirtualFrame frame);
+
+    @CompilationFinal private LLVMThreadingStack threadingStack;
+
+    protected LLVMThreadingStack getThreadingStack() {
+        if (threadingStack == null) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            threadingStack = getContext().getThreadingStack();
+        }
+        return threadingStack;
+    }
+
+    @CompilationFinal private FrameSlot stackPointer;
+
+    protected FrameSlot getStackPointerSlot() {
+        if (stackPointer == null) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            stackPointer = getRootNode().getFrameDescriptor().findFrameSlot(LLVMStack.FRAME_ID);
+        }
+        return stackPointer;
+    }
+
+    private final ConditionProfile profile = ConditionProfile.createCountingProfile();
+
+    @ExplodeLoop
+    public void writePhis(VirtualFrame frame, int successorIndex) {
+        if (profile.profile(successorIndex == NORMAL_SUCCESSOR)) {
+            normalPhiNode.executeGeneric(frame);
+        } else {
+            assert successorIndex == UNWIND_SUCCESSOR;
+            unwindPhiNode.executeGeneric(frame);
+        }
+    }
+
+    public static final class LLVMSubstitutionInvokeNode extends LLVMInvokeNode {
 
         @Child private LLVMExpressionNode substitution;
 
@@ -275,7 +242,7 @@ public abstract class LLVMInvokeNode extends LLVMControlFlowNode {
         }
     }
 
-    public static final class LLVMFunctionInvokeNode extends LLVMInvokeNodeImpl {
+    public static final class LLVMFunctionInvokeNode extends LLVMInvokeNode {
 
         @Child private LLVMExpressionNode functionNode;
         @Children private final LLVMExpressionNode[] argumentNodes;
@@ -305,5 +272,7 @@ public abstract class LLVMInvokeNode extends LLVMControlFlowNode {
             }
             return argValues;
         }
+
     }
+
 }

@@ -31,7 +31,6 @@ package com.oracle.truffle.llvm.runtime.types;
 
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
@@ -73,7 +72,7 @@ public final class PointerType extends AggregateType {
 
     @Override
     public int getSize(DataSpecConverter targetDataLayout) {
-        if (getPointeeType() instanceof FunctionType) {
+        if (pointeeType instanceof FunctionType) {
             return LLVMHeap.FUNCTION_PTR_SIZE_BYTE;
         } else {
             return LLVMAddress.WORD_LENGTH_BIT / Byte.SIZE;
@@ -81,25 +80,17 @@ public final class PointerType extends AggregateType {
     }
 
     @Override
-    public Type shallowCopy() {
-        final PointerType copy = new PointerType(getPointeeType());
-        copy.setSourceType(getSourceType());
-        return copy;
-    }
-
-    @Override
     public int getOffsetOf(int index, DataSpecConverter targetDataLayout) {
-        return getPointeeType().getSize(targetDataLayout) * index;
+        return pointeeType.getSize(targetDataLayout) * index;
     }
 
     @Override
     public Type getElementType(int index) {
-        return getPointeeType();
+        return pointeeType;
     }
 
     @Override
     public int getNumberOfElements() {
-        CompilerDirectives.transferToInterpreter();
         throw new IllegalStateException();
     }
 
@@ -114,9 +105,8 @@ public final class PointerType extends AggregateType {
     }
 
     @Override
-    @TruffleBoundary
     public String toString() {
-        return String.format("%s*", getPointeeType());
+        return String.format("%s*", pointeeType);
     }
 
     @Override
