@@ -33,6 +33,7 @@ import com.oracle.graal.compiler.loop.*;
 import com.oracle.graal.compiler.phases.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.Node.Verbosity;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
@@ -153,10 +154,10 @@ public class SnippetTemplate {
     public static class Cache {
 
         private final ConcurrentHashMap<SnippetTemplate.Key, SnippetTemplate> templates = new ConcurrentHashMap<>();
-        private final MetaAccessProvider runtime;
+        private final CodeCacheProvider runtime;
 
 
-        public Cache(MetaAccessProvider runtime) {
+        public Cache(CodeCacheProvider runtime) {
             this.runtime = runtime;
         }
 
@@ -215,7 +216,7 @@ public class SnippetTemplate {
     /**
      * Creates a snippet template.
      */
-    public SnippetTemplate(MetaAccessProvider runtime, SnippetTemplate.Key key) {
+    public SnippetTemplate(CodeCacheProvider runtime, SnippetTemplate.Key key) {
         ResolvedJavaMethod method = key.method;
         assert Modifier.isStatic(method.accessFlags()) : "snippet method must be static: " + method;
         Signature signature = method.signature();
@@ -326,20 +327,11 @@ public class SnippetTemplate {
 
         // Remove all frame states from inlined snippet graph. Snippets must be atomic (i.e. free
         // of side-effects that prevent deoptimizing to a point before the snippet).
-        Node curSideEffectNode = null;
-        Node curStampNode = null;
         for (Node node : snippetCopy.getNodes()) {
-            if (node instanceof ValueNode && ((ValueNode) node).stamp() == StampFactory.forNodeIntrinsic()) {
-                assert curStampNode == null : "Currently limited to stamp node (but this can be converted to a List if necessary)";
-                curStampNode = node;
-            }
             if (node instanceof StateSplit) {
                 StateSplit stateSplit = (StateSplit) node;
                 FrameState frameState = stateSplit.stateAfter();
-                if (stateSplit.hasSideEffect()) {
-                    assert curSideEffectNode == null : "Currently limited to one side-effecting node (but this can be converted to a List if necessary)";
-                    curSideEffectNode = node;
-                }
+                assert !stateSplit.hasSideEffect() : "snippets cannot contain side-effecting node " + node + "\n    " + frameState.toString(Verbosity.Debugger);
                 if (frameState != null) {
                     stateSplit.setStateAfter(null);
                 }
@@ -394,8 +386,6 @@ public class SnippetTemplate {
             }
         }
 
-        this.sideEffectNode = curSideEffectNode;
-        this.stampNode = curStampNode;
         this.returnNode = retNode;
     }
 
@@ -446,16 +436,6 @@ public class SnippetTemplate {
     private final ReturnNode returnNode;
 
     /**
-     * Node that inherits the {@link StateSplit#stateAfter()} from the replacee during instantiation.
-     */
-    private final Node sideEffectNode;
-
-    /**
-     * Node that inherits the {@link ValueNode#stamp()} from the replacee during instantiation.
-     */
-    private final Node stampNode;
-
-    /**
      * The nodes to be inlined when this specialization is instantiated.
      */
     private final ArrayList<Node> nodes;
@@ -471,7 +451,7 @@ public class SnippetTemplate {
      *
      * @return the map that will be used to bind arguments to parameters when inlining this template
      */
-    private IdentityHashMap<Node, Node> bind(StructuredGraph replaceeGraph, MetaAccessProvider runtime, SnippetTemplate.Arguments args) {
+    private IdentityHashMap<Node, Node> bind(StructuredGraph replaceeGraph, CodeCacheProvider runtime, SnippetTemplate.Arguments args) {
         IdentityHashMap<Node, Node> replacements = new IdentityHashMap<>();
 
         for (Map.Entry<String, Object> e : args) {
@@ -498,14 +478,9 @@ public class SnippetTemplate {
                 for (int j = 0; j < length; j++) {
                     LocalNode local = locals[j];
                     assert local != null;
-                    Object value = Array.get(array, j);
-                    if (value instanceof ValueNode) {
-                        replacements.put(local, (ValueNode) value);
-                    } else {
-                        Constant constant = Constant.forBoxed(local.kind(), value);
-                        ConstantNode element = ConstantNode.forConstant(constant, runtime, replaceeGraph);
-                        replacements.put(local, element);
-                    }
+                    Constant constant = Constant.forBoxed(local.kind(), Array.get(array, j));
+                    ConstantNode element = ConstantNode.forConstant(constant, runtime, replaceeGraph);
+                    replacements.put(local, element);
                 }
             }
         }
@@ -520,7 +495,7 @@ public class SnippetTemplate {
      * @param args the arguments to be bound to the flattened positional parameters of the snippet
      * @return the map of duplicated nodes (original -> duplicate)
      */
-    public Map<Node, Node> instantiate(MetaAccessProvider runtime,
+    public Map<Node, Node> instantiate(CodeCacheProvider runtime,
                     FixedWithNextNode replacee, SnippetTemplate.Arguments args) {
 
         // Inline the snippet nodes, replacing parameters with the given args in the process
@@ -538,16 +513,6 @@ public class SnippetTemplate {
         replacee.replaceAtPredecessor(firstCFGNodeDuplicate);
         FixedNode next = replacee.next();
         replacee.setNext(null);
-
-        if (sideEffectNode != null) {
-            assert ((StateSplit) replacee).hasSideEffect();
-            Node sideEffectDup = duplicates.get(sideEffectNode);
-            ((StateSplit) sideEffectDup).setStateAfter(((StateSplit) replacee).stateAfter());
-        }
-        if (stampNode != null) {
-            Node stampDup = duplicates.get(stampNode);
-            ((ValueNode) stampDup).setStamp(((ValueNode) replacee).stamp());
-        }
 
         // Replace all usages of the replacee with the value returned by the snippet
         Node returnValue = null;
@@ -582,7 +547,7 @@ public class SnippetTemplate {
      * @param lastFixedNode the CFG of the snippet is inserted after this node
      * @param args the arguments to be bound to the flattened positional parameters of the snippet
      */
-    public void instantiate(MetaAccessProvider runtime,
+    public void instantiate(CodeCacheProvider runtime,
                     FloatingNode replacee,
                     FixedWithNextNode lastFixedNode, SnippetTemplate.Arguments args) {
 
@@ -601,16 +566,6 @@ public class SnippetTemplate {
         lastFixedNode.setNext(null);
         FixedNode firstCFGNodeDuplicate = (FixedNode) duplicates.get(firstCFGNode);
         replaceeGraph.addAfterFixed(lastFixedNode, firstCFGNodeDuplicate);
-
-        if (sideEffectNode != null) {
-            assert ((StateSplit) replacee).hasSideEffect();
-            Node sideEffectDup = duplicates.get(sideEffectNode);
-            ((StateSplit) sideEffectDup).setStateAfter(((StateSplit) replacee).stateAfter());
-        }
-        if (stampNode != null) {
-            Node stampDup = duplicates.get(stampNode);
-            ((ValueNode) stampDup).setStamp(((ValueNode) replacee).stamp());
-        }
 
         // Replace all usages of the replacee with the value returned by the snippet
         assert returnNode != null : replaceeGraph;
@@ -638,7 +593,7 @@ public class SnippetTemplate {
      * @param controlSplitNode the node replaced by this wheCFG of the snippet is inserted after this node
      * @param args the arguments to be bound to the flattened positional parameters of the snippet
      */
-    public void instantiate(MetaAccessProvider runtime,
+    public void instantiate(CodeCacheProvider runtime,
                     FloatingNode replacee,
                     ControlSplitNode controlSplitNode,
                     SnippetTemplate.Arguments args) {
@@ -663,8 +618,6 @@ public class SnippetTemplate {
         controlSplitNode.replaceAtPredecessor(firstCFGNodeDuplicate);
         controlSplitNode.replaceAtUsages(null);
 
-        assert sideEffectNode == null;
-        assert stampNode == null;
         assert returnNode == null : replaceeGraph;
         GraphUtil.killCFG(controlSplitNode);
 

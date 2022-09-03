@@ -22,21 +22,24 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
+import static com.oracle.graal.hotspot.target.amd64.AMD64MonitorEnterStubCallOp.*;
+
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.target.*;
+import com.oracle.graal.hotspot.target.amd64.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.word.*;
 
 /**
  * Node implementing a call to HotSpot's {@code graal_monitorexit} stub.
+ *
+ * @see AMD64MonitorExitStubCallOp
  */
 public class MonitorExitStubCall extends FixedWithNextNode implements LIRGenLowerable {
 
     @Input private final ValueNode object;
-    public static final Descriptor MONITOREXIT = new Descriptor("monitorexit", true, void.class, Object.class, Word.class);
 
     public MonitorExitStubCall(ValueNode object) {
         super(StampFactory.forVoid());
@@ -45,10 +48,17 @@ public class MonitorExitStubCall extends FixedWithNextNode implements LIRGenLowe
 
     @Override
     public void generate(LIRGenerator gen) {
-        RuntimeCallTarget stub = gen.getRuntime().lookupRuntimeCall(MonitorExitStubCall.MONITOREXIT);
-        gen.emitCall(stub, stub.getCallingConvention(), true, gen.operand(object), gen.emitLea(gen.peekLock()));
+        RegisterValue objectFixed = OBJECT.asValue(Kind.Object);
+        RegisterValue lockFixed = LOCK.asValue(gen.target().wordKind);
+        // The register allocator cannot handle stack -> register moves so we use an LEA here
+        gen.emitMove(gen.emitLea(gen.peekLock()), lockFixed);
+        gen.emitMove(gen.operand(object), objectFixed);
+        gen.append(new AMD64MonitorExitStubCallOp(objectFixed, lockFixed, gen.state()));
     }
 
+    @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static native void call(Object hub);
+    public static void call(Object hub) {
+        throw new UnsupportedOperationException();
+    }
 }

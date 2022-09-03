@@ -22,13 +22,18 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.target.*;
-import com.oracle.graal.hotspot.*;
+import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.amd64.AMD64Move.CompareAndSwapOp;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.word.*;
+import com.oracle.graal.snippets.*;
+import com.oracle.max.asm.*;
+import com.oracle.max.asm.target.amd64.*;
 
 /**
  * A special purpose store node that differs from {@link CompareAndSwapNode} in that
@@ -53,23 +58,29 @@ public class DirectCompareAndSwapNode extends FixedWithNextNode implements LIRGe
 
     @Override
     public void generate(LIRGenerator gen) {
-        ((HotSpotLIRGenerator) gen).visitDirectCompareAndSwap(this);
-    }
+        Kind kind = newValue.kind();
+        assert kind == expectedValue.kind();
 
-    public ValueNode object() {
-        return object;
-    }
+        Value expected = gen.loadNonConst(gen.operand(expectedValue));
+        Variable newVal = gen.load(gen.operand(newValue));
 
-    public ValueNode offset() {
-        return offset;
-    }
+        int disp = 0;
+        Address address;
+        Value index = gen.operand(this.offset);
+        if (ValueUtil.isConstant(index) && NumUtil.isInt(ValueUtil.asConstant(index).asLong() + disp)) {
+            disp += (int) ValueUtil.asConstant(index).asLong();
+            address = new Address(kind, gen.load(gen.operand(this.object)), disp);
+        } else {
+            address = new Address(kind, gen.load(gen.operand(this.object)), gen.load(index), Address.Scale.Times1, disp);
+        }
 
-    public ValueNode expectedValue() {
-        return expectedValue;
-    }
+        RegisterValue rax = AMD64.rax.asValue(kind);
+        gen.emitMove(expected, rax);
+        gen.append(new CompareAndSwapOp(rax, address, rax, newVal));
 
-    public ValueNode newValue() {
-        return newValue;
+        Variable result = gen.newVariable(kind());
+        gen.emitMove(rax, result);
+        gen.setResult(this, result);
     }
 
     /**
@@ -85,5 +96,7 @@ public class DirectCompareAndSwapNode extends FixedWithNextNode implements LIRGe
      * @return either {@code expectedValue} or the actual value
      */
     @NodeIntrinsic
-    public static native Word compareAndSwap(Object object, long offset, Word expectedValue, Word newValue);
+    public static Word compareAndSwap(Object object, long offset, Word expectedValue, Word newValue) {
+        throw new UnsupportedOperationException();
+    }
 }

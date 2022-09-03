@@ -36,6 +36,7 @@ import com.oracle.graal.api.code.CompilationResult.Safepoint;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.meta.JavaType.Representation;
 import com.oracle.graal.compiler.*;
+import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.nodes.*;
@@ -69,6 +70,8 @@ public class HotSpotRuntime implements GraalCodeCacheProvider {
         this.graalRuntime = graalRuntime;
         regConfig = new HotSpotRegisterConfig(config, false);
         globalStubRegConfig = new HotSpotRegisterConfig(config, true);
+
+        System.setProperty(Backend.BACKEND_CLASS_PROPERTY, HotSpotAMD64Backend.class.getName());
     }
 
     public void installSnippets(SnippetInstaller installer) {
@@ -237,17 +240,15 @@ public class HotSpotRuntime implements GraalCodeCacheProvider {
             SafeReadNode safeReadArrayLength = safeReadArrayLength(arrayLengthNode.array(), StructuredGraph.INVALID_GRAPH_ID);
             graph.replaceFixedWithFixed(arrayLengthNode, safeReadArrayLength);
         } else if (n instanceof Invoke) {
-            Invoke invoke = (Invoke) n;
-            if (!GraalOptions.XIRLowerInvokes && invoke.callTarget() instanceof MethodCallTargetNode) {
-                MethodCallTargetNode callTarget = invoke.methodCallTarget();
+            if (!GraalOptions.XIRLowerInvokes) {
+                Invoke invoke = (Invoke) n;
+                MethodCallTargetNode callTarget = invoke.callTarget();
                 NodeInputList<ValueNode> parameters = callTarget.arguments();
                 ValueNode receiver = parameters.size() <= 0 ? null : parameters.get(0);
                 if (!callTarget.isStatic() && receiver.kind() == Kind.Object && !receiver.objectStamp().nonNull()) {
                     invoke.node().dependencies().add(tool.createNullCheckGuard(receiver, invoke.leafGraphId()));
                 }
-                Kind[] signature = MetaUtil.signatureToKinds(callTarget.targetMethod().signature(), callTarget.isStatic() ? null : callTarget.targetMethod().holder().kind());
 
-                AbstractCallTargetNode loweredCallTarget = null;
                 if (callTarget.invokeKind() == InvokeKind.Virtual &&
                     GraalOptions.InlineVTableStubs &&
                     (GraalOptions.AlwaysInlineVTableStubs || invoke.isMegamorphic())) {
@@ -257,25 +258,23 @@ public class HotSpotRuntime implements GraalCodeCacheProvider {
                         // We use LocationNode.ANY_LOCATION for the reads that access the vtable entry and the compiled code entry
                         // as HotSpot does not guarantee they are final values.
                         int vtableEntryOffset = hsMethod.vtableEntryOffset();
-                        assert vtableEntryOffset > 0;
+                        assert vtableEntryOffset != 0;
                         SafeReadNode hub = safeReadHub(graph, receiver, StructuredGraph.INVALID_GRAPH_ID);
                         Kind wordKind = graalRuntime.getTarget().wordKind;
                         Stamp nonNullWordStamp = StampFactory.forWord(wordKind, true);
                         ReadNode methodOop = graph.add(new ReadNode(hub, LocationNode.create(LocationNode.ANY_LOCATION, wordKind, vtableEntryOffset, graph), nonNullWordStamp));
                         ReadNode compiledEntry = graph.add(new ReadNode(methodOop, LocationNode.create(LocationNode.ANY_LOCATION, wordKind, config.methodCompiledEntryOffset, graph), nonNullWordStamp));
+                        callTarget.setComputedAddress(compiledEntry);
 
-                        loweredCallTarget = graph.add(new HotSpotIndirectCallTargetNode(methodOop, compiledEntry, parameters, invoke.node().stamp(), signature, callTarget.targetMethod(), CallingConvention.Type.JavaCall));
+                        // Append the methodOop to the arguments so that it can be explicitly passed in RBX as
+                        // is required for all compiled calls in HotSpot.
+                        callTarget.arguments().add(methodOop);
 
                         graph.addBeforeFixed(invoke.node(), hub);
                         graph.addAfterFixed(hub, methodOop);
                         graph.addAfterFixed(methodOop, compiledEntry);
                     }
                 }
-
-                if (loweredCallTarget == null) {
-                    loweredCallTarget = graph.add(new HotSpotDirectCallTargetNode(parameters, invoke.node().stamp(), signature, callTarget.targetMethod(), CallingConvention.Type.JavaCall, callTarget.invokeKind()));
-                }
-                callTarget.replaceAndDelete(loweredCallTarget);
             }
         } else if (n instanceof LoadFieldNode) {
             LoadFieldNode field = (LoadFieldNode) n;
@@ -441,10 +440,6 @@ public class HotSpotRuntime implements GraalCodeCacheProvider {
             newObjectSnippets.lower((InitializeObjectNode) n, tool);
         } else if (n instanceof InitializeArrayNode) {
             newObjectSnippets.lower((InitializeArrayNode) n, tool);
-        } else if (n instanceof NewMultiArrayNode) {
-            if (matches(graph, GraalOptions.HIRLowerNewMultiArray)) {
-                newObjectSnippets.lower((NewMultiArrayNode) n, tool);
-            }
         } else {
             assert false : "Node implementing Lowerable not handled: " + n;
         }

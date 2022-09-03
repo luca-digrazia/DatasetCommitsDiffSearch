@@ -34,8 +34,13 @@ import com.oracle.graal.nodes.type.*;
  */
 public final class EndLockScopeNode extends AbstractStateSplit implements LIRGenLowerable, MonitorExit {
 
-    public EndLockScopeNode() {
+    @Input private ValueNode object;
+    private final boolean eliminated;
+
+    public EndLockScopeNode(ValueNode object, boolean eliminated) {
         super(StampFactory.forVoid());
+        this.object = object;
+        this.eliminated = eliminated;
     }
 
     @Override
@@ -45,11 +50,12 @@ public final class EndLockScopeNode extends AbstractStateSplit implements LIRGen
 
     @Override
     public void generate(LIRGenerator gen) {
-        gen.unlock();
+        gen.unlock(object, eliminated);
     }
 
+    @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static void endLockScope() {
+    public static void endLockScope(Object object, @ConstantNodeParameter boolean eliminated) {
         throw new UnsupportedOperationException();
     }
 }

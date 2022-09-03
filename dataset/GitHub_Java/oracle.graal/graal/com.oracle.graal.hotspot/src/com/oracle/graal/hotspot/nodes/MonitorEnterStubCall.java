@@ -22,22 +22,26 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
+import static com.oracle.graal.hotspot.target.amd64.AMD64MonitorEnterStubCallOp.*;
+
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.target.*;
+import com.oracle.graal.hotspot.target.amd64.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.word.*;
+import com.oracle.graal.snippets.*;
 
 /**
  * Node implementing a call to HotSpot's {@code graal_monitorenter} stub.
+ *
+ * @see AMD64MonitorEnterStubCallOp
  */
 public class MonitorEnterStubCall extends FixedWithNextNode implements LIRGenLowerable {
 
     @Input private final ValueNode object;
     @Input private final ValueNode lock;
-    public static final Descriptor MONITORENTER = new Descriptor("monitorenter", true, void.class, Object.class, Word.class);
 
     public MonitorEnterStubCall(ValueNode object, ValueNode lock) {
         super(StampFactory.forVoid());
@@ -47,10 +51,16 @@ public class MonitorEnterStubCall extends FixedWithNextNode implements LIRGenLow
 
     @Override
     public void generate(LIRGenerator gen) {
-        RuntimeCallTarget stub = gen.getRuntime().lookupRuntimeCall(MonitorEnterStubCall.MONITORENTER);
-        gen.emitCall(stub, stub.getCallingConvention(), true, gen.operand(object), gen.operand(lock));
+        RegisterValue objectFixed = OBJECT.asValue(Kind.Object);
+        RegisterValue lockFixed = LOCK.asValue(gen.target().wordKind);
+        gen.emitMove(gen.operand(lock), lockFixed);
+        gen.emitMove(gen.operand(object), objectFixed);
+        gen.append(new AMD64MonitorEnterStubCallOp(objectFixed, lockFixed, gen.state()));
     }
 
+    @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static native void call(Object hub, Word lock);
+    public static void call(Object hub, Word lock) {
+        throw new UnsupportedOperationException();
+    }
 }

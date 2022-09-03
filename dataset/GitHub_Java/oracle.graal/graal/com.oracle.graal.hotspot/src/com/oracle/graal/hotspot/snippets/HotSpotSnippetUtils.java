@@ -22,11 +22,11 @@
  */
 package com.oracle.graal.hotspot.snippets;
 
+import static com.oracle.graal.nodes.extended.UnsafeLoadNode.*;
+
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.code.Register.RegisterFlag;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.Node.ConstantNodeParameter;
-import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.nodes.extended.*;
@@ -62,12 +62,12 @@ public class HotSpotSnippetUtils {
     }
 
     @Fold
-    static Register threadRegister() {
+    static Register threadReg() {
         return HotSpotGraalRuntime.getInstance().getConfig().threadRegister;
     }
 
     @Fold
-    static Register stackPointerRegister() {
+    static Register stackPointerReg() {
         return AMD64.rsp;
     }
 
@@ -96,15 +96,6 @@ public class HotSpotSnippetUtils {
         return HotSpotGraalRuntime.getInstance().getConfig().unlockedMask;
     }
 
-    /**
-     * Mask for a biasable, locked or unlocked mark word.
-     * <pre>
-     * +----------------------------------+-+-+
-     * |                                 1|1|1|
-     * +----------------------------------+-+-+
-     * </pre>
-     *
-     */
     @Fold
     static int biasedLockMaskInPlace() {
         return HotSpotGraalRuntime.getInstance().getConfig().biasedLockMaskInPlace;
@@ -115,15 +106,6 @@ public class HotSpotSnippetUtils {
         return HotSpotGraalRuntime.getInstance().getConfig().epochMaskInPlace;
     }
 
-    /**
-     * Pattern for a biasable, unlocked mark word.
-     * <pre>
-     * +----------------------------------+-+-+
-     * |                                 1|0|1|
-     * +----------------------------------+-+-+
-     * </pre>
-     *
-     */
     @Fold
     static int biasedLockPattern() {
         return HotSpotGraalRuntime.getInstance().getConfig().biasedLockPattern;
@@ -193,7 +175,7 @@ public class HotSpotSnippetUtils {
      * Loads the hub from a object, null checking it first.
      */
     static Object loadHub(Object object) {
-        return LoadHubNode.loadHub(object);
+        return UnsafeLoadNode.loadObject(object, 0, hubOffset(), true);
     }
 
 
@@ -204,36 +186,14 @@ public class HotSpotSnippetUtils {
         return object;
     }
 
-    /**
-     * Gets the value of the stack pointer register as a Word.
-     */
-    static Word stackPointer() {
-        return HotSpotSnippetUtils.registerAsWord(stackPointerRegister());
+    static Word asWord(Object object) {
+        return Word.fromObject(object);
     }
 
-    /**
-     * Gets the value of the thread register as a Word.
-     */
-    static Word thread() {
-        return HotSpotSnippetUtils.registerAsWord(threadRegister());
+    static Word loadWord(Word address, int offset) {
+        Object value = loadObject(address, 0, offset, true);
+        return asWord(value);
     }
-
-    static Word loadWordFromWord(Word address, int offset) {
-        return loadWordFromWordIntrinsic(address, 0, offset, wordKind());
-    }
-
-    static Word loadWordFromObject(Object object, int offset) {
-        return loadWordFromObjectIntrinsic(object, 0, offset, wordKind());
-    }
-
-    @NodeIntrinsic(value = RegisterNode.class, setStampFromReturnType = true)
-    public static native Word registerAsWord(@ConstantNodeParameter Register register);
-
-    @NodeIntrinsic(value = UnsafeLoadNode.class, setStampFromReturnType = true)
-    private static native Word loadWordFromObjectIntrinsic(Object object, @ConstantNodeParameter int displacement, long offset, @ConstantNodeParameter Kind wordKind);
-
-    @NodeIntrinsic(value = UnsafeLoadNode.class, setStampFromReturnType = true)
-    private static native Word loadWordFromWordIntrinsic(Word address, @ConstantNodeParameter int displacement, long offset, @ConstantNodeParameter Kind wordKind);
 
     static {
         assert arrayIndexScale(Kind.Byte) == 1;

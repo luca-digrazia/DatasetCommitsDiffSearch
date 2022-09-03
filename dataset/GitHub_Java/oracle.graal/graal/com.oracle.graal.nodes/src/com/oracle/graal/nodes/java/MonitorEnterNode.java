@@ -29,15 +29,19 @@ import com.oracle.graal.nodes.spi.*;
 /**
  * The {@code MonitorEnterNode} represents the acquisition of a monitor.
  */
-public final class MonitorEnterNode extends AccessMonitorNode implements Lowerable, MonitorEnter {
+public final class MonitorEnterNode extends AccessMonitorNode implements LIRLowerable, Lowerable, MonitorEnter {
 
     /**
      * Creates a new MonitorEnterNode.
-     * 
+     *
      * @param object the instruction producing the object
      */
     public MonitorEnterNode(ValueNode object) {
         super(object);
+    }
+
+    public void generate(LIRGeneratorTool gen) {
+        gen.visitMonitorEnter(this);
     }
 
     public void lower(LoweringTool tool) {

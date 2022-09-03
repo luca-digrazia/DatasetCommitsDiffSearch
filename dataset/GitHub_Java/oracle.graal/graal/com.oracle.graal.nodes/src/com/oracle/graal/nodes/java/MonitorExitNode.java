@@ -30,15 +30,20 @@ import com.oracle.graal.graph.*;
 /**
  * The {@code MonitorEnterNode} represents a monitor release.
  */
-public final class MonitorExitNode extends AccessMonitorNode implements Lowerable, Node.IterableNodeType, MonitorExit {
+public final class MonitorExitNode extends AccessMonitorNode implements Lowerable, LIRLowerable, Node.IterableNodeType, MonitorExit {
 
     /**
      * Creates a new MonitorExitNode.
-     * 
+     *
      * @param object the instruction produces the object value
      */
     public MonitorExitNode(ValueNode object) {
         super(object);
+    }
+
+    @Override
+    public void generate(LIRGeneratorTool gen) {
+        gen.visitMonitorExit(this);
     }
 
     public void lower(LoweringTool tool) {
