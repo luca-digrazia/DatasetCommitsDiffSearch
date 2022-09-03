@@ -24,8 +24,7 @@
  */
 package com.oracle.truffle.api.debug;
 
-import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.api.vm.PolyglotEngine;
+import java.util.concurrent.Callable;
 
 /**
  * This event is delivered to all
@@ -44,16 +43,14 @@ import com.oracle.truffle.api.vm.PolyglotEngine;
  */
 @SuppressWarnings("javadoc")
 public final class ExecutionEvent {
-    private final Object[] debugger;
-    private final PolyglotEngine engine;
-    private final int currentDepth;
-    private final Source source;
+    private Object debugger;
 
-    ExecutionEvent(PolyglotEngine engine, int currentDepth, Object[] debugger, Source source) {
+    ExecutionEvent(Debugger debugger) {
         this.debugger = debugger;
-        this.engine = engine;
-        this.currentDepth = currentDepth;
-        this.source = source;
+    }
+
+    ExecutionEvent(Callable<Debugger> debugger) {
+        this.debugger = debugger;
     }
 
     /**
@@ -66,17 +63,15 @@ public final class ExecutionEvent {
      * @since 0.9
      */
     public Debugger getDebugger() {
-        if (debugger[0] instanceof Debugger) {
-            return (Debugger) debugger[0];
+        if (debugger instanceof Debugger) {
+            return (Debugger) debugger;
         }
         try {
-            final Debugger dbg = Debugger.find(engine, true);
-            dbg.executionStarted(currentDepth, source);
-            debugger[0] = dbg;
+            debugger = ((Callable<?>) debugger).call();
         } catch (Exception ex) {
             throw new IllegalStateException(ex);
         }
-        return (Debugger) debugger[0];
+        return (Debugger) debugger;
     }
 
     /**
