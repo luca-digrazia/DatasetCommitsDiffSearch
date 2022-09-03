@@ -25,7 +25,6 @@
 package com.oracle.truffle.tck.tests;
 
 import java.io.IOException;
-import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -90,16 +89,16 @@ public class ErrorTypeTest {
         final Set<? extends String> requiredValueLanguages = TestUtil.getRequiredValueLanguages(context);
         for (Snippet snippet : snippets) {
             for (String parLanguage : requiredValueLanguages) {
-                final Collection<Map.Entry<String, ? extends Snippet>> valueConstructors = new HashSet<>();
+                final Collection<Pair<String, ? extends Snippet>> valueConstructors = new HashSet<>();
                 for (Snippet valueConstructor : context.getValueConstructors(null, parLanguage)) {
-                    valueConstructors.add(new AbstractMap.SimpleImmutableEntry<>(parLanguage, valueConstructor));
+                    valueConstructors.add(Pair.of(parLanguage, valueConstructor));
                 }
-                final List<List<Map.Entry<String, ? extends Snippet>>> applicableParams = TestUtil.findApplicableParameters(snippet, valueConstructors);
+                final List<List<Pair<String, ? extends Snippet>>> applicableParams = TestUtil.findApplicableParameters(snippet, valueConstructors);
                 if (!applicableParams.isEmpty()) {
                     final Collection<? extends Snippet> operatorOverloads = new ArrayList<>(overloads.get(snippet.getId()));
                     operatorOverloads.remove(snippet);
                     computeAllInvalidPermutations(
-                                    new AbstractMap.SimpleImmutableEntry<>(snippetLanguage, snippet),
+                                    Pair.of(snippetLanguage, snippet),
                                     applicableParams,
                                     valueConstructors,
                                     operatorOverloads,
@@ -124,27 +123,27 @@ public class ErrorTypeTest {
     }
 
     private static void computeAllInvalidPermutations(
-                    final Map.Entry<String, ? extends Snippet> operator,
-                    final List<List<Map.Entry<String, ? extends Snippet>>> applicableArgs,
-                    final Collection<Map.Entry<String, ? extends Snippet>> allValueConstructors,
+                    final Pair<String, ? extends Snippet> operator,
+                    final List<List<Pair<String, ? extends Snippet>>> applicableArgs,
+                    final Collection<Pair<String, ? extends Snippet>> allValueConstructors,
                     final Collection<? extends Snippet> overloads,
                     final Collection<? super TestRun> collector) {
         for (int i = 0; i < applicableArgs.size(); i++) {
-            final Set<Map.Entry<String, ? extends Snippet>> nonApplicableArgs = new HashSet<>(allValueConstructors);
+            final Set<Pair<String, ? extends Snippet>> nonApplicableArgs = new HashSet<>(allValueConstructors);
             nonApplicableArgs.removeAll(applicableArgs.get(i));
             if (!nonApplicableArgs.isEmpty()) {
-                final List<List<Map.Entry<String, ? extends Snippet>>> args = new ArrayList<>(applicableArgs.size());
+                final List<List<Pair<String, ? extends Snippet>>> args = new ArrayList<>(applicableArgs.size());
                 boolean canBeInvoked = true;
                 for (int j = 0; j < applicableArgs.size(); j++) {
                     if (i == j) {
                         args.add(new ArrayList<>(nonApplicableArgs));
                     } else {
-                        final List<Map.Entry<String, ? extends Snippet>> slotArgs = applicableArgs.get(j);
+                        final List<Pair<String, ? extends Snippet>> slotArgs = applicableArgs.get(j);
                         if (slotArgs.isEmpty()) {
                             canBeInvoked = false;
                             break;
                         } else {
-                            args.add(Collections.singletonList(findBestApplicableArg(slotArgs, overloads, j)));
+                            args.add(Collections.singletonList(slotArgs.get(0)));
                         }
                     }
                 }
@@ -170,33 +169,6 @@ public class ErrorTypeTest {
                 }
             }
         }
-    }
-
-    private static Map.Entry<String, ? extends Snippet> findBestApplicableArg(final List<Map.Entry<String, ? extends Snippet>> applicableTypes, final Collection<? extends Snippet> overloads,
-                    final int parameterIndex) {
-        final Iterator<Map.Entry<String, ? extends Snippet>> it = applicableTypes.iterator();
-        final Collection<TypeDescriptor> overloadsTypes = new ArrayList<>();
-        for (Snippet overload : overloads) {
-            final List<? extends TypeDescriptor> params = overload.getParameterTypes();
-            if (parameterIndex < params.size()) {
-                overloadsTypes.add(params.get(parameterIndex));
-            }
-        }
-        Map.Entry<String, ? extends Snippet> bestSoFar = it.next();
-        while (isCoveredByOverload(bestSoFar, overloadsTypes) && it.hasNext()) {
-            bestSoFar = it.next();
-        }
-        return bestSoFar;
-    }
-
-    private static boolean isCoveredByOverload(final Map.Entry<String, ? extends Snippet> value, final Collection<? extends TypeDescriptor> overloadsTypes) {
-        final TypeDescriptor valueType = value.getValue().getReturnType();
-        for (TypeDescriptor td : overloadsTypes) {
-            if (td.isAssignable(valueType)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private static boolean areParametersAssignable(final List<? extends TypeDescriptor> into, List<? extends TypeDescriptor> from) {
@@ -238,7 +210,7 @@ public class ErrorTypeTest {
                 throw new AssertionError("Expected exception.");
             }
         } finally {
-            TEST_RESULT_MATCHER.accept(new AbstractMap.SimpleImmutableEntry<>(testRun, passed));
+            TEST_RESULT_MATCHER.accept(Pair.of(testRun, passed));
         }
     }
 }

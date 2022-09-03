@@ -24,14 +24,11 @@
  */
 package com.oracle.truffle.tck.tests;
 
-import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.function.Consumer;
@@ -92,24 +89,24 @@ final class TestUtil {
                     final Set<? extends String> requiredValueLanguages,
                     final Function<String, ? extends Collection<? extends Snippet>> snippetsProvider,
                     final Function<String, ? extends Collection<? extends Snippet>> valuesProvider) {
-        final Collection<TestRun> testRuns = new LinkedHashSet<>();
+        final List<TestRun> testRuns = new ArrayList<>();
         for (String opLanguage : requiredLanguages) {
             for (Snippet operator : snippetsProvider.apply(opLanguage)) {
                 for (String parLanguage : requiredValueLanguages) {
-                    final Collection<Map.Entry<String, ? extends Snippet>> valueConstructors = new HashSet<>();
+                    final Collection<Pair<String, ? extends Snippet>> valueConstructors = new HashSet<>();
                     for (Snippet snippet : valuesProvider.apply(parLanguage)) {
-                        valueConstructors.add(new AbstractMap.SimpleImmutableEntry<>(parLanguage, snippet));
+                        valueConstructors.add(Pair.of(parLanguage, snippet));
                     }
-                    final List<List<Map.Entry<String, ? extends Snippet>>> applicableParams = findApplicableParameters(operator, valueConstructors);
+                    final List<List<Pair<String, ? extends Snippet>>> applicableParams = findApplicableParameters(operator, valueConstructors);
                     boolean canBeInvoked = true;
-                    for (List<Map.Entry<String, ? extends Snippet>> param : applicableParams) {
+                    for (List<Pair<String, ? extends Snippet>> param : applicableParams) {
                         canBeInvoked &= !param.isEmpty();
                         if (!canBeInvoked) {
                             break;
                         }
                     }
                     if (canBeInvoked) {
-                        computeAllPermutations(new AbstractMap.SimpleImmutableEntry<>(opLanguage, operator), applicableParams, testRuns);
+                        computeAllPermutations(Pair.of(opLanguage, operator), applicableParams, testRuns);
                     }
                 }
             }
@@ -131,15 +128,15 @@ final class TestUtil {
         }
     }
 
-    static List<List<Map.Entry<String, ? extends Snippet>>> findApplicableParameters(
+    static List<List<Pair<String, ? extends Snippet>>> findApplicableParameters(
                     final Snippet operator,
-                    final Collection<Map.Entry<String, ? extends Snippet>> valueConstructors) {
+                    final Collection<Pair<String, ? extends Snippet>> valueConstructors) {
         List<? extends TypeDescriptor> opParameterTypes = operator.getParameterTypes();
-        final List<List<Map.Entry<String, ? extends Snippet>>> params = new ArrayList<>(opParameterTypes.size());
+        final List<List<Pair<String, ? extends Snippet>>> params = new ArrayList<>(opParameterTypes.size());
         for (int i = 0; i < opParameterTypes.size(); i++) {
             params.add(new ArrayList<>());
             final TypeDescriptor paramTypeDesc = opParameterTypes.get(i);
-            for (Map.Entry<String, ? extends Snippet> constructor : valueConstructors) {
+            for (Pair<String, ? extends Snippet> constructor : valueConstructors) {
                 if (paramTypeDesc.isAssignable(constructor.getValue().getReturnType())) {
                     params.get(i).add(constructor);
                 }
@@ -149,15 +146,15 @@ final class TestUtil {
     }
 
     static void computeAllPermutations(
-                    final Map.Entry<String, ? extends Snippet> operator,
-                    final List<List<Map.Entry<String, ? extends Snippet>>> applicableParameters,
+                    final Pair<String, ? extends Snippet> operator,
+                    final List<List<Pair<String, ? extends Snippet>>> applicableParameters,
                     final Collection<? super TestRun> collector) {
         computeAllPermutationsImpl(operator, applicableParameters, collector, 0, new int[applicableParameters.size()]);
     }
 
     private static void computeAllPermutationsImpl(
-                    final Map.Entry<String, ? extends Snippet> operator,
-                    final List<List<Map.Entry<String, ? extends Snippet>>> applicableArgs,
+                    final Pair<String, ? extends Snippet> operator,
+                    final List<List<Pair<String, ? extends Snippet>>> applicableArgs,
                     final Collection<? super TestRun> collector,
                     final int index,
                     final int[] selected) {
@@ -168,7 +165,7 @@ final class TestUtil {
             }
             collector.add(new TestRun(operator, args));
         } else {
-            final List<Map.Entry<String, ? extends Snippet>> applicableForArg = applicableArgs.get(index);
+            final List<Pair<String, ? extends Snippet>> applicableForArg = applicableArgs.get(index);
             for (int i = 0; i < applicableForArg.size(); i++) {
                 selected[index] = i;
                 computeAllPermutationsImpl(operator, applicableArgs, collector, index + 1, selected);
@@ -250,7 +247,7 @@ final class TestUtil {
         }
     }
 
-    abstract static class CollectingMatcher<T> extends BaseMatcher<T> implements Consumer<Map.Entry<T, Boolean>> {
+    abstract static class CollectingMatcher<T> extends BaseMatcher<T> implements Consumer<Pair<T, Boolean>> {
     }
 
     private static final class TooManyFailuresMatcher<T> extends CollectingMatcher<T> {
@@ -275,7 +272,7 @@ final class TestUtil {
         }
 
         @Override
-        public void accept(final Map.Entry<T, Boolean> testRun) {
+        public void accept(final Pair<T, Boolean> testRun) {
             if (!testRun.getValue()) {
                 failures++;
             }

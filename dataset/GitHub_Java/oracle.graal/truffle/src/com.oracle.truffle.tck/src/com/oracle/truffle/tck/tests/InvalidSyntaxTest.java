@@ -25,10 +25,11 @@
 package com.oracle.truffle.tck.tests;
 
 import java.io.IOException;
-import java.util.AbstractMap;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Objects;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Source;
 import org.junit.AfterClass;
@@ -46,18 +47,14 @@ public class InvalidSyntaxTest {
     private final Source source;
 
     @Parameterized.Parameters(name = "{0}")
-    public static Collection<Object[]> createInvalidSyntaxTests() {
+    public static Collection<? extends Source> createInvalidSyntaxTests() {
         context = new TestContext();
-        final Collection<Object[]> result = new ArrayList<>();
-        for (String language : TestUtil.getRequiredLanguages(context)) {
-            for (Source src : context.getInstalledProviders().get(language).createInvalidSyntaxScripts(context.getContext())) {
-                result.add(new Object[]{
-                                String.format("%s::%s", language, src.getName()),
-                                src
-                });
+        return TestUtil.getRequiredLanguages(context).stream().flatMap(new Function<String, Stream<? extends Source>>() {
+            @Override
+            public Stream<? extends Source> apply(String lang) {
+                return context.getInstalledProviders().get(lang).createInvalidSyntaxScripts(context.getContext()).stream();
             }
-        }
-        return result;
+        }).collect(Collectors.toList());
     }
 
     @AfterClass
@@ -71,8 +68,7 @@ public class InvalidSyntaxTest {
         Engine.newBuilder().build();
     }
 
-    public InvalidSyntaxTest(final String testName, final Source source) {
-        Objects.requireNonNull(testName);
+    public InvalidSyntaxTest(final Source source) {
         Objects.requireNonNull(source);
         this.source = source;
     }
@@ -101,7 +97,7 @@ public class InvalidSyntaxTest {
                 throw new AssertionError("Syntax error should have a SourceSection.");
             }
         } finally {
-            TEST_RESULT_MATCHER.accept(new AbstractMap.SimpleImmutableEntry<>(source, exception));
+            TEST_RESULT_MATCHER.accept(Pair.of(source, exception));
         }
     }
 }

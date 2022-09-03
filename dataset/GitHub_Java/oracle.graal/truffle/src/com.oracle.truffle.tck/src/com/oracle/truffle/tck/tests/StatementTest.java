@@ -25,7 +25,6 @@
 package com.oracle.truffle.tck.tests;
 
 import java.io.IOException;
-import java.util.AbstractMap;
 import java.util.Collection;
 import java.util.Objects;
 import java.util.function.Function;
@@ -87,18 +86,16 @@ public class StatementTest {
     @Test
     public void testStatement() {
         Assume.assumeThat(testRun, TEST_RESULT_MATCHER);
-        boolean success = false;
+        Value result = null;
         try {
             try {
-                final Value result = testRun.getSnippet().getExecutableValue().execute(testRun.getActualParameters().toArray());
+                result = testRun.getSnippet().getExecutableValue().execute(testRun.getActualParameters().toArray());
                 TestUtil.validateResult(testRun, result, null);
-                success = true;
             } catch (PolyglotException pe) {
                 TestUtil.validateResult(testRun, null, pe);
-                success = true;
             }
         } finally {
-            TEST_RESULT_MATCHER.accept(new AbstractMap.SimpleImmutableEntry<>(testRun, success));
+            TEST_RESULT_MATCHER.accept(Pair.of(testRun, result != null));
         }
     }
 }
