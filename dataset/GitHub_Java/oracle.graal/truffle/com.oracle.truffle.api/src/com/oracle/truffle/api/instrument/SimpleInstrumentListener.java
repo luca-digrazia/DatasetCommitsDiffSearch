@@ -43,19 +43,13 @@ import com.oracle.truffle.api.source.SourceSection;
  * <p>
  * Notification is fully synchronous, so overrides have performance implications. Non-trivial
  * methods should be coded with Truffle guidelines and cautions in mind.
- *
- * @since 0.8 or earlier
  */
-@SuppressWarnings("deprecation")
-@Deprecated
 public interface SimpleInstrumentListener {
 
     /**
      * Receive notification that a program location is about to be executed.
      * <p>
      * <strong>Synchronous</strong>: Truffle execution waits until the call returns.
-     *
-     * @since 0.8 or earlier
      */
     void onEnter(Probe probe);
 
@@ -64,8 +58,6 @@ public interface SimpleInstrumentListener {
      * completed.
      * <p>
      * <strong>Synchronous</strong>: Truffle execution waits until the call returns.
-     *
-     * @since 0.8 or earlier
      */
     void onReturnVoid(Probe probe);
 
@@ -74,8 +66,6 @@ public interface SimpleInstrumentListener {
      * value (boxed if primitive).
      * <p>
      * <strong>Synchronous</strong>: Truffle execution waits until the call returns.
-     *
-     * @since 0.8 or earlier
      */
     void onReturnValue(Probe probe, Object result);
 
@@ -83,8 +73,6 @@ public interface SimpleInstrumentListener {
      * Receive notification that a program location's execution has just thrown an exception.
      * <p>
      * <strong>Synchronous</strong>: Truffle execution waits until the call returns.
-     *
-     * @since 0.8 or earlier
      */
     void onReturnExceptional(Probe probe, Throwable exception);
 }

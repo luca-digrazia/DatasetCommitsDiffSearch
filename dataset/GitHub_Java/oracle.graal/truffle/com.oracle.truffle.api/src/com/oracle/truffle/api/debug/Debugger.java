@@ -152,7 +152,7 @@ public final class Debugger {
      * @throws IOException if the breakpoint can not be set.
      */
     @TruffleBoundary
-    public LineBreakpoint setLineBreakpoint(int ignoreCount, LineLocation lineLocation, boolean oneShot) throws IOException {
+    public Breakpoint setLineBreakpoint(int ignoreCount, LineLocation lineLocation, boolean oneShot) throws IOException {
         return lineBreaks.create(ignoreCount, lineLocation, oneShot);
     }
 
@@ -165,7 +165,7 @@ public final class Debugger {
      * @throws IOException if the breakpoint already set
      */
     @TruffleBoundary
-    public TagBreakpoint setTagBreakpoint(int ignoreCount, SyntaxTag tag, boolean oneShot) throws IOException {
+    public Breakpoint setTagBreakpoint(int ignoreCount, SyntaxTag tag, boolean oneShot) throws IOException {
         return tagBreaks.create(ignoreCount, tag, oneShot);
     }
 
@@ -423,7 +423,7 @@ public final class Debugger {
                     doHalt(node, vFrame.materialize());
                 }
 
-                public void onReturnExceptional(Probe probe, Node node, VirtualFrame vFrame, Exception exception) {
+                public void onReturnExceptional(Probe probe, Node node, VirtualFrame vFrame, Throwable exception) {
                     doHalt(node, vFrame.materialize());
                 }
 
@@ -481,7 +481,7 @@ public final class Debugger {
                     doHalt(node, vFrame.materialize());
                 }
 
-                public void onReturnExceptional(Probe probe, Node node, VirtualFrame vFrame, Exception exception) {
+                public void onReturnExceptional(Probe probe, Node node, VirtualFrame vFrame, Throwable exception) {
                     doHalt(node, vFrame.materialize());
                 }
 
@@ -564,7 +564,7 @@ public final class Debugger {
                     doHalt(node, vFrame.materialize());
                 }
 
-                public void onReturnExceptional(Probe probe, Node node, VirtualFrame vFrame, Exception exception) {
+                public void onReturnExceptional(Probe probe, Node node, VirtualFrame vFrame, Throwable exception) {
                     doHalt(node, vFrame.materialize());
                 }
 

@@ -110,13 +110,7 @@ final class ProbeNode extends EventHandlerNode {
     }
 
     @Override
-    public void returnExceptional(Node node, VirtualFrame vFrame, Exception exception) {
-        if (exception instanceof KillException) {
-            throw (KillException) exception;
-        }
-        if (exception instanceof QuitException) {
-            throw (QuitException) exception;
-        }
+    public void returnExceptional(Node node, VirtualFrame vFrame, Throwable exception) {
         this.probe.checkProbeUnchanged();
         if (firstInstrumentNode != null) {
             firstInstrumentNode.returnExceptional(node, vFrame, exception);
