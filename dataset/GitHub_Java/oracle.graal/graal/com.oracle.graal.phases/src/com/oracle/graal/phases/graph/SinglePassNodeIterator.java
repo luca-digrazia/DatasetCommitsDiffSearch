@@ -87,11 +87,11 @@ public abstract class SinglePassNodeIterator<T extends MergeableState<T>> {
         do {
             if (current instanceof InvokeWithExceptionNode) {
                 invoke((Invoke) current);
-                queueSuccessors(current);
+                queueSuccessors(current, null);
                 current = nextQueuedNode();
             } else if (current instanceof LoopBeginNode) {
                 state.loopBegin((LoopBeginNode) current);
-                keepForLater(current, state);
+                nodeStates.put(current, state);
                 state = state.clone();
                 loopBegin((LoopBeginNode) current);
                 current = ((LoopBeginNode) current).next();
@@ -117,8 +117,8 @@ public abstract class SinglePassNodeIterator<T extends MergeableState<T>> {
                 node(current);
                 current = nextQueuedNode();
             } else if (current instanceof ControlSplitNode) {
-                controlSplit((ControlSplitNode) current);
-                queueSuccessors(current);
+                Set<Node> successors = controlSplit((ControlSplitNode) current);
+                queueSuccessors(current, successors);
                 current = nextQueuedNode();
             } else {
                 assert false : current;
@@ -127,11 +127,20 @@ public abstract class SinglePassNodeIterator<T extends MergeableState<T>> {
         finished();
     }
 
-    private void queueSuccessors(FixedNode x) {
-        keepForLater(x, state);
-        for (Node node : x.successors()) {
-            if (node != null) {
-                nodeQueue.addFirst((BeginNode) node);
+    private void queueSuccessors(FixedNode x, Set<Node> successors) {
+        nodeStates.put(x, state);
+        if (successors != null) {
+            for (Node node : successors) {
+                if (node != null) {
+                    nodeStates.put((FixedNode) node.predecessor(), state);
+                    nodeQueue.addFirst((BeginNode) node);
+                }
+            }
+        } else {
+            for (Node node : x.successors()) {
+                if (node != null) {
+                    nodeQueue.addFirst((BeginNode) node);
+                }
             }
         }
     }
@@ -150,8 +159,12 @@ public abstract class SinglePassNodeIterator<T extends MergeableState<T>> {
                     states.add(other);
                 }
                 boolean ready = state.merge(merge, states);
-                assert ready : "Not a single-pass iterator after all";
-                return merge;
+                assert ready;
+                if (ready) {
+                    return merge;
+                } else {
+                    nodeQueue.addLast(merge);
+                }
             } else {
                 assert node.predecessor() != null;
                 state = nodeStates.get(node.predecessor()).clone();
@@ -165,7 +178,7 @@ public abstract class SinglePassNodeIterator<T extends MergeableState<T>> {
     private void finishLoopEnds(LoopEndNode end) {
         assert !visitedEnds.isMarked(end);
         assert !nodeStates.containsKey(end);
-        keepForLater(end, state);
+        nodeStates.put(end, state);
         visitedEnds.mark(end);
         LoopBeginNode begin = end.loopBegin();
         boolean endsVisited = true;
@@ -190,7 +203,7 @@ public abstract class SinglePassNodeIterator<T extends MergeableState<T>> {
     private void queueMerge(EndNode end) {
         assert !visitedEnds.isMarked(end);
         assert !nodeStates.containsKey(end);
-        keepForLater(end, state);
+        nodeStates.put(end, state);
         visitedEnds.mark(end);
         MergeNode merge = end.merge();
         boolean endsVisited = true;
@@ -223,23 +236,16 @@ public abstract class SinglePassNodeIterator<T extends MergeableState<T>> {
         node(loopEnd);
     }
 
-    protected void controlSplit(ControlSplitNode controlSplit) {
+    protected Set<Node> controlSplit(ControlSplitNode controlSplit) {
         node(controlSplit);
+        return null;
     }
 
     protected void invoke(Invoke invoke) {
         node(invoke.asNode());
     }
 
-    /**
-     * The lifecycle that single-pass node iterators go through is described in {@link #apply()}
-     */
     protected void finished() {
         // nothing to do
-    }
-
-    private void keepForLater(FixedNode x, T s) {
-        assert !nodeStates.containsKey(x);
-        nodeStates.put(x, s);
     }
 }
