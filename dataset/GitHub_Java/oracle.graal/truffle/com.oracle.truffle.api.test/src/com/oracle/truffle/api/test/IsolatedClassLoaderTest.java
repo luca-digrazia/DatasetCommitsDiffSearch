@@ -49,15 +49,7 @@ public class IsolatedClassLoaderTest {
         }
         final ClassLoader testLoader = IsolatedClassLoaderTest.class.getClassLoader();
         final ClassLoader parentLoader = testLoader.getParent();
-        ClassLoader loader = new URLClassLoader(arr.toArray(new URL[0]), parentLoader) {
-            @Override
-            public Class<?> loadClass(String name) throws ClassNotFoundException {
-                if (name.startsWith("com.oracle.truffle.api")) {
-                    return super.findClass(name);
-                }
-                return super.loadClass(name);
-            }
-        };
+        ClassLoader loader = new URLClassLoader(arr.toArray(new URL[0]), parentLoader);
         Class<?> engine = loader.loadClass("com.oracle.truffle.api.vm.PolyglotEngine");
         assertEquals("Right classloader", loader, engine.getClassLoader());
 
