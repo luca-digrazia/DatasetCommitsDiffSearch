@@ -26,6 +26,7 @@ import java.util.List;
 
 import com.oracle.graal.compiler.common.spi.ConstantFieldProvider;
 import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.graph.Graph;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.graph.spi.Canonicalizable;
@@ -120,11 +121,11 @@ public class SimplifyingGraphDecoder extends GraphDecoder {
     }
 
     @Override
-    protected void cleanupGraph(MethodScope methodScope) {
+    protected void cleanupGraph(MethodScope methodScope, Graph.Mark start) {
         GraphUtil.normalizeLoops(methodScope.graph);
-        super.cleanupGraph(methodScope);
+        super.cleanupGraph(methodScope, start);
 
-        for (Node node : methodScope.graph.getNewNodes(methodScope.methodStartMark)) {
+        for (Node node : methodScope.graph.getNewNodes(start)) {
             if (node instanceof MergeNode) {
                 MergeNode mergeNode = (MergeNode) node;
                 if (mergeNode.forwardEndCount() == 1) {
@@ -133,7 +134,7 @@ public class SimplifyingGraphDecoder extends GraphDecoder {
             }
         }
 
-        for (Node node : methodScope.graph.getNewNodes(methodScope.methodStartMark)) {
+        for (Node node : methodScope.graph.getNewNodes(start)) {
             if (node instanceof BeginNode || node instanceof KillingBeginNode) {
                 if (!(node.predecessor() instanceof ControlSplitNode) && node.hasNoUsages()) {
                     GraphUtil.unlinkFixedNode((AbstractBeginNode) node);
@@ -142,7 +143,7 @@ public class SimplifyingGraphDecoder extends GraphDecoder {
             }
         }
 
-        for (Node node : methodScope.graph.getNewNodes(methodScope.methodStartMark)) {
+        for (Node node : methodScope.graph.getNewNodes(start)) {
             if (!(node instanceof FixedNode) && node.hasNoUsages()) {
                 GraphUtil.killCFG(node);
             }
