@@ -31,7 +31,6 @@ import com.oracle.max.cri.ci.*;
 import com.oracle.max.cri.ri.*;
 import com.oracle.max.criutils.*;
 import com.oracle.graal.compiler.*;
-import com.oracle.graal.hotspot.*;
 import com.oracle.graal.java.bytecode.*;
 
 /**
@@ -59,8 +58,6 @@ public final class HotSpotMethodResolvedImpl extends HotSpotMethod implements Ho
     private byte[] code;
     private boolean canBeInlined;
     private int compilationComplexity;
-
-    private CompilationTask currentTask;
 
     private HotSpotMethodResolvedImpl() {
         super(null);
@@ -364,15 +361,5 @@ public final class HotSpotMethodResolvedImpl extends HotSpotMethod implements Ho
     @Override
     public int vtableEntryOffset() {
         return compiler.getVMEntries().RiMethod_vtableEntryOffset(this);
-    }
-
-    @Override
-    public void setCurrentTask(CompilationTask task) {
-        currentTask = task;
-    }
-
-    @Override
-    public CompilationTask currentTask() {
-        return currentTask;
     }
 }
