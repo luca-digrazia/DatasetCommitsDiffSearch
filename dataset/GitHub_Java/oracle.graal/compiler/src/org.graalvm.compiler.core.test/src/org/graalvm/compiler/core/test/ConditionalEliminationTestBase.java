@@ -74,6 +74,7 @@ public class ConditionalEliminationTestBase extends GraalCompilerTest {
             new IterativeConditionalEliminationPhase(canonicalizer, true).apply(graph, context);
             canonicalizer.apply(graph, context);
             canonicalizer.apply(graph, context);
+            new ConvertDeoptimizeToGuardPhase().apply(graph, context);
         } catch (Throwable t) {
             debug.handle(t);
         }
@@ -85,6 +86,7 @@ public class ConditionalEliminationTestBase extends GraalCompilerTest {
             }
             canonicalizer.apply(referenceGraph, context);
             canonicalizer.apply(referenceGraph, context);
+            new ConvertDeoptimizeToGuardPhase().apply(graph, context);
         } catch (Throwable t) {
             debug.handle(t);
         }
