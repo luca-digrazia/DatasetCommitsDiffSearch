@@ -62,7 +62,7 @@ import com.oracle.svm.core.hub.LayoutEncoding;
 import com.oracle.svm.core.jdk.SunMiscSupport;
 import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.option.HostedOptionKey;
-import com.oracle.svm.core.os.CommittedMemoryProvider;
+import com.oracle.svm.core.os.VirtualMemoryProvider;
 import com.oracle.svm.core.stack.JavaStackWalker;
 import com.oracle.svm.core.stack.ThreadStackPrinter;
 import com.oracle.svm.core.thread.VMOperation;
@@ -284,7 +284,7 @@ public class GCImpl implements GC {
                 HeapImpl.getHeapImpl().verifyBeforeGC(cause, getCollectionEpoch());
             }
 
-            CommittedMemoryProvider.get().beforeGarbageCollection();
+            VirtualMemoryProvider.get().beforeGarbageCollection();
 
             getAccounting().beforeCollection();
 
@@ -305,7 +305,7 @@ public class GCImpl implements GC {
                 }
             }
 
-            CommittedMemoryProvider.get().afterGarbageCollection(completeCollection);
+            VirtualMemoryProvider.get().afterGarbageCollection(completeCollection);
         }
 
         getAccounting().afterCollection(completeCollection, collectionTimer);
@@ -1703,7 +1703,6 @@ final class GarbageCollectorManagementFactory {
 
     GarbageCollectorManagementFactory() {
         final List<GarbageCollectorMXBean> newList = new ArrayList<>();
-        /* Changing the order of this list will break assumptions we take in the object replacer. */
         newList.add(new IncrementalGarbageCollectorMXBean());
         newList.add(new CompleteGarbageCollectorMXBean());
         gcBeanList = newList;
@@ -1739,7 +1738,6 @@ final class GarbageCollectorManagementFactory {
 
         @Override
         public String getName() {
-            /* Changing this name will break assumptions we take in the object replacer. */
             return "young generation scavenger";
         }
 
@@ -1784,7 +1782,6 @@ final class GarbageCollectorManagementFactory {
 
         @Override
         public String getName() {
-            /* Changing this name will break assumptions we take in the object replacer. */
             return "complete scavenger";
         }
 
