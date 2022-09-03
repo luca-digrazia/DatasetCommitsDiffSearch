@@ -76,7 +76,7 @@ public class SLReadPropertyTest {
         try {
             slObject.getMember("nonexistent");
             Assert.fail("Should not reach here for a non existent field.");
-        } catch (IllegalArgumentException e) {
+        } catch (UnsupportedOperationException e) {
             // Expected exception
         }
     }

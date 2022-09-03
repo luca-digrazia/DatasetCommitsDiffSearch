@@ -41,7 +41,6 @@
 package com.oracle.truffle.sl.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.interop.KeyInfo;
 import com.oracle.truffle.api.interop.MessageResolution;
 import com.oracle.truffle.api.interop.Resolve;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
@@ -109,24 +108,6 @@ public class SLObjectMessageResolution {
     }
 
     /*
-     * An SL object resolves the REMOVE message and maps it to an object property delete access.
-     */
-    @Resolve(message = "REMOVE")
-    public abstract static class SLForeignRemoveNode extends Node {
-
-        @Child private SLForeignToSLTypeNode nameToSLType = SLForeignToSLTypeNodeGen.create();
-
-        public Object access(DynamicObject receiver, Object name) {
-            Object convertedName = nameToSLType.executeConvert(name);
-            if (receiver.containsKey(convertedName)) {
-                return receiver.delete(convertedName);
-            } else {
-                throw UnknownIdentifierException.raise(String.valueOf(convertedName));
-            }
-        }
-    }
-
-    /*
      * An SL object resolves the INVOKE message and maps it to an object property read access
      * followed by an function invocation. The object property must be an SL function object, which
      * is executed eventually.
@@ -168,17 +149,14 @@ public class SLObjectMessageResolution {
     @Resolve(message = "KEY_INFO")
     public abstract static class SLForeignPropertyInfoNode extends Node {
 
-        private static final int PROPERTY_INFO = KeyInfo.newBuilder().setReadable(true).setRemovable(true).setWritable(true).build();
-        private static final int PROPERTY_FUNCTION_INFO = KeyInfo.newBuilder().setReadable(true).setRemovable(true).setWritable(true).setInvocable(true).build();
-
         public int access(DynamicObject receiver, Object name) {
             Object property = receiver.get(name);
             if (property == null) {
                 return 0;
             } else if (property instanceof SLFunction) {
-                return PROPERTY_FUNCTION_INFO;
+                return 0b1111;
             } else {
-                return PROPERTY_INFO;
+                return 0b0111;
             }
         }
     }
