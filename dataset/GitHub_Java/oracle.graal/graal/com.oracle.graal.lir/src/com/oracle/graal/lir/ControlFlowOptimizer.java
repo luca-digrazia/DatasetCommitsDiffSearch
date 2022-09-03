@@ -22,120 +22,94 @@
  */
 package com.oracle.graal.lir;
 
-import java.util.*;
+import static com.oracle.graal.lir.LIR.verifyBlocks;
 
-import com.oracle.graal.debug.*;
-import com.oracle.graal.lir.cfg.*;
+import java.util.List;
+
+import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.DebugCounter;
+import com.oracle.graal.lir.gen.LIRGenerationResult;
+import com.oracle.graal.lir.phases.PostAllocationOptimizationPhase;
+
+import jdk.vm.ci.code.TargetDescription;
 
 /**
  * This class performs basic optimizations on the control flow graph after LIR generation.
  */
-public final class ControlFlowOptimizer {
+public final class ControlFlowOptimizer extends PostAllocationOptimizationPhase {
 
     /**
      * Performs control flow optimizations on the given LIR graph.
      */
-    public static void optimize(LIR ir) {
-        List<Block> blocks = ir.codeEmittingOrder();
-        ControlFlowOptimizer.deleteEmptyBlocks(ir, blocks);
-        ControlFlowOptimizer.deleteUnnecessaryJumps(ir, blocks);
+    @Override
+    protected void run(TargetDescription target, LIRGenerationResult lirGenRes, PostAllocationOptimizationContext context) {
+        LIR lir = lirGenRes.getLIR();
+        new Optimizer(lir).deleteEmptyBlocks(lir.codeEmittingOrder());
     }
 
-    private ControlFlowOptimizer() {
-    }
+    private static final class Optimizer {
 
-    /**
-     * Checks whether a block can be deleted. Only blocks with exactly one successor and an
-     * unconditional branch to this successor are eligable.
-     * @param block the block checked for deletion
-     * @return whether the block can be deleted
-     */
-    private static boolean canDeleteBlock(LIR ir, Block block) {
-        if (block.numberOfSux() != 1 ||
-            block.numberOfPreds() == 0 ||
-            block.suxAt(0) == block) {
-            return false;
+        private final LIR lir;
+
+        private Optimizer(LIR lir) {
+            this.lir = lir;
         }
 
-        List<LIRInstruction> instructions = ir.lir(block);
+        private static final DebugCounter BLOCKS_DELETED = Debug.counter("BlocksDeleted");
 
-        assert instructions.size() >= 2 : "block must have label and branch";
-        assert instructions.get(0) instanceof StandardOp.LabelOp : "first instruction must always be a label";
-        assert instructions.get(instructions.size() - 1) instanceof StandardOp.JumpOp : "last instruction must always be a branch";
-        assert ((StandardOp.JumpOp) instructions.get(instructions.size() - 1)).destination().label() == ((StandardOp.LabelOp) ir.lir(block.suxAt(0)).get(0)).getLabel() : "branch target must be the successor";
+        /**
+         * Checks whether a block can be deleted. Only blocks with exactly one successor and an
+         * unconditional branch to this successor are eligable.
+         *
+         * @param block the block checked for deletion
+         * @return whether the block can be deleted
+         */
+        private boolean canDeleteBlock(AbstractBlockBase<?> block) {
+            if (block == null || block.getSuccessorCount() != 1 || block.getPredecessorCount() == 0 || block.getSuccessors()[0] == block) {
+                return false;
+            }
 
-        // Block must have exactly one successor.
-        return instructions.size() == 2 && !instructions.get(instructions.size() - 1).hasState();
-    }
+            List<LIRInstruction> instructions = lir.getLIRforBlock(block);
 
-    private static void deleteEmptyBlocks(LIR ir, List<Block> blocks) {
-        assert verify(blocks);
-        Iterator<Block> iterator = blocks.iterator();
-        while (iterator.hasNext()) {
-            Block block = iterator.next();
-            if (canDeleteBlock(ir, block)) {
-                // adjust successor and predecessor lists
-                Block other = block.suxAt(0);
-                for (Block pred : block.getPredecessors()) {
-                    Collections.replaceAll(pred.getSuccessors(), block, other);
-                }
-                for (int i = 0; i < other.getPredecessors().size(); i++) {
-                    if (other.getPredecessors().get(i) == block) {
-                        other.getPredecessors().remove(i);
-                        other.getPredecessors().addAll(i, block.getPredecessors());
+            assert instructions.size() >= 2 : "block must have label and branch";
+            assert instructions.get(0) instanceof StandardOp.LabelOp : "first instruction must always be a label";
+            assert instructions.get(instructions.size() - 1) instanceof StandardOp.JumpOp : "last instruction must always be a branch";
+            assert ((StandardOp.JumpOp) instructions.get(instructions.size() - 1)).destination().label() == ((StandardOp.LabelOp) lir.getLIRforBlock(block.getSuccessors()[0]).get(
+                            0)).getLabel() : "branch target must be the successor";
+
+            // Block must have exactly one successor.
+            return instructions.size() == 2 && !instructions.get(instructions.size() - 1).hasState() && !block.isExceptionEntry();
+        }
+
+        private void alignBlock(AbstractBlockBase<?> block) {
+            if (!block.isAligned()) {
+                block.setAlign(true);
+                List<LIRInstruction> instructions = lir.getLIRforBlock(block);
+                assert instructions.get(0) instanceof StandardOp.LabelOp : "first instruction must always be a label";
+                StandardOp.LabelOp label = (StandardOp.LabelOp) instructions.get(0);
+                instructions.set(0, new StandardOp.LabelOp(label.getLabel(), true));
+            }
+        }
+
+        private void deleteEmptyBlocks(AbstractBlockBase<?>[] blocks) {
+            assert verifyBlocks(lir, blocks);
+            for (int i = 0; i < blocks.length; i++) {
+                AbstractBlockBase<?> block = blocks[i];
+                if (canDeleteBlock(block)) {
+
+                    block.delete();
+                    // adjust successor and predecessor lists
+                    AbstractBlockBase<?> other = block.getSuccessors()[0];
+                    if (block.isAligned()) {
+                        alignBlock(other);
                     }
-                }
-                block.getSuccessors().clear();
-                block.getPredecessors().clear();
-                Debug.metric("BlocksDeleted").increment();
-                iterator.remove();
-            }
-        }
-        assert verify(blocks);
-    }
 
-    private static void deleteUnnecessaryJumps(LIR ir, List<Block> blocks) {
-        // skip the last block because there a branch is always necessary
-        for (int i = blocks.size() - 2; i >= 0; i--) {
-            Block block = blocks.get(i);
-            List<LIRInstruction> instructions = ir.lir(block);
-
-            LIRInstruction lastOp = instructions.get(instructions.size() - 1);
-            if (lastOp instanceof StandardOp.JumpOp) {
-                StandardOp.JumpOp lastJump = (StandardOp.JumpOp) lastOp;
-
-                if (!lastOp.hasState()) {
-                    if (lastJump.destination().label() == ((StandardOp.LabelOp) ir.lir(blocks.get(i + 1)).get(0)).getLabel()) {
-                        // delete last branch instruction
-                        instructions.remove(instructions.size() - 1);
-                    } else {
-                        LIRInstruction prevOp = instructions.get(instructions.size() - 2);
-                        if (prevOp instanceof StandardOp.BranchOp) {
-                            StandardOp.BranchOp prevBranch = (StandardOp.BranchOp) prevOp;
-
-                            if (prevBranch.destination().label() == ((StandardOp.LabelOp) ir.lir(blocks.get(i + 1)).get(0)).getLabel() && !prevOp.hasState()) {
-                                // eliminate a conditional branch to the immediate successor
-                                prevBranch.negate(lastJump.destination());
-                                instructions.remove(instructions.size() - 1);
-                            }
-                        }
-                    }
+                    BLOCKS_DELETED.increment();
+                    blocks[i] = null;
                 }
             }
+            assert verifyBlocks(lir, blocks);
         }
-        assert verify(blocks);
-    }
-
-    private static boolean verify(List<Block> code) {
-        for (Block block : code) {
-            for (Block sux : block.getSuccessors()) {
-                assert code.contains(sux) : "missing successor from: " + block + "to: " + sux;
-            }
-            for (Block pred : block.getPredecessors()) {
-                assert code.contains(pred) : "missing predecessor from: " + block + "to: " + pred;
-            }
-        }
-
-        return true;
     }
 }

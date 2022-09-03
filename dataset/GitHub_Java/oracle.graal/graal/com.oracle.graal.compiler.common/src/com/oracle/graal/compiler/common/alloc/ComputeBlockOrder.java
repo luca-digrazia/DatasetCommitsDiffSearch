@@ -23,9 +23,14 @@
 
 package com.oracle.graal.compiler.common.alloc;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.BitSet;
+import java.util.Comparator;
+import java.util.List;
+import java.util.PriorityQueue;
 
-import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
+import com.oracle.graal.compiler.common.cfg.Loop;
 
 /**
  * Computes an ordering of the block that can be used by the linear scan register allocator and the
@@ -66,13 +71,13 @@ public final class ComputeBlockOrder {
      *
      * @return sorted list of blocks
      */
-    public static <T extends AbstractBlock<T>> List<T> computeLinearScanOrder(int blockCount, T startBlock) {
+    public static <T extends AbstractBlockBase<T>> AbstractBlockBase<?>[] computeLinearScanOrder(int blockCount, T startBlock) {
         List<T> order = new ArrayList<>();
         BitSet visitedBlocks = new BitSet(blockCount);
         PriorityQueue<T> worklist = initializeWorklist(startBlock, visitedBlocks);
         computeLinearScanOrder(order, worklist, visitedBlocks);
         assert checkOrder(order, blockCount);
-        return order;
+        return order.toArray(new AbstractBlockBase<?>[0]);
     }
 
     /**
@@ -80,19 +85,19 @@ public final class ComputeBlockOrder {
      *
      * @return sorted list of blocks
      */
-    public static <T extends AbstractBlock<T>> List<T> computeCodeEmittingOrder(int blockCount, T startBlock) {
+    public static <T extends AbstractBlockBase<T>> AbstractBlockBase<?>[] computeCodeEmittingOrder(int blockCount, T startBlock) {
         List<T> order = new ArrayList<>();
         BitSet visitedBlocks = new BitSet(blockCount);
         PriorityQueue<T> worklist = initializeWorklist(startBlock, visitedBlocks);
         computeCodeEmittingOrder(order, worklist, visitedBlocks);
         assert checkOrder(order, blockCount);
-        return order;
+        return order.toArray(new AbstractBlockBase<?>[0]);
     }
 
     /**
      * Iteratively adds paths to the code emission block order.
      */
-    private static <T extends AbstractBlock<T>> void computeCodeEmittingOrder(List<T> order, PriorityQueue<T> worklist, BitSet visitedBlocks) {
+    private static <T extends AbstractBlockBase<T>> void computeCodeEmittingOrder(List<T> order, PriorityQueue<T> worklist, BitSet visitedBlocks) {
         while (!worklist.isEmpty()) {
             T nextImportantPath = worklist.poll();
             addPathToCodeEmittingOrder(nextImportantPath, order, worklist, visitedBlocks);
@@ -102,17 +107,19 @@ public final class ComputeBlockOrder {
     /**
      * Iteratively adds paths to the linear scan block order.
      */
-    private static <T extends AbstractBlock<T>> void computeLinearScanOrder(List<T> order, PriorityQueue<T> worklist, BitSet visitedBlocks) {
+    private static <T extends AbstractBlockBase<T>> void computeLinearScanOrder(List<T> order, PriorityQueue<T> worklist, BitSet visitedBlocks) {
         while (!worklist.isEmpty()) {
             T nextImportantPath = worklist.poll();
-            addPathToLinearScanOrder(nextImportantPath, order, worklist, visitedBlocks);
+            do {
+                nextImportantPath = addPathToLinearScanOrder(nextImportantPath, order, worklist, visitedBlocks);
+            } while (nextImportantPath != null);
         }
     }
 
     /**
      * Initializes the priority queue used for the work list of blocks and adds the start block.
      */
-    private static <T extends AbstractBlock<T>> PriorityQueue<T> initializeWorklist(T startBlock, BitSet visitedBlocks) {
+    private static <T extends AbstractBlockBase<T>> PriorityQueue<T> initializeWorklist(T startBlock, BitSet visitedBlocks) {
         PriorityQueue<T> result = new PriorityQueue<>(INITIAL_WORKLIST_CAPACITY, new BlockOrderComparator<>());
         result.add(startBlock);
         visitedBlocks.set(startBlock.getId());
@@ -122,7 +129,7 @@ public final class ComputeBlockOrder {
     /**
      * Add a linear path to the linear scan order greedily following the most likely successor.
      */
-    private static <T extends AbstractBlock<T>> void addPathToLinearScanOrder(T block, List<T> order, PriorityQueue<T> worklist, BitSet visitedBlocks) {
+    private static <T extends AbstractBlockBase<T>> T addPathToLinearScanOrder(T block, List<T> order, PriorityQueue<T> worklist, BitSet visitedBlocks) {
         block.setLinearScanNumber(order.size());
         order.add(block);
         T mostLikelySuccessor = findAndMarkMostLikelySuccessor(block, visitedBlocks);
@@ -141,17 +148,18 @@ public final class ComputeBlockOrder {
                 if (unscheduledSum > block.probability() / PENALTY_VERSUS_UNSCHEDULED) {
                     // Add this merge only after at least one additional predecessor gets scheduled.
                     visitedBlocks.clear(mostLikelySuccessor.getId());
-                    return;
+                    return null;
                 }
             }
-            addPathToLinearScanOrder(mostLikelySuccessor, order, worklist, visitedBlocks);
+            return mostLikelySuccessor;
         }
+        return null;
     }
 
     /**
      * Add a linear path to the code emission order greedily following the most likely successor.
      */
-    private static <T extends AbstractBlock<T>> void addPathToCodeEmittingOrder(T initialBlock, List<T> order, PriorityQueue<T> worklist, BitSet visitedBlocks) {
+    private static <T extends AbstractBlockBase<T>> void addPathToCodeEmittingOrder(T initialBlock, List<T> order, PriorityQueue<T> worklist, BitSet visitedBlocks) {
         T block = initialBlock;
         while (block != null) {
             // Skip loop headers if there is only a single loop end block to
@@ -191,7 +199,7 @@ public final class ComputeBlockOrder {
     /**
      * Adds a block to the ordering.
      */
-    private static <T extends AbstractBlock<T>> void addBlock(T header, List<T> order) {
+    private static <T extends AbstractBlockBase<T>> void addBlock(T header, List<T> order) {
         assert !order.contains(header) : "Cannot insert block twice";
         order.add(header);
     }
@@ -199,7 +207,7 @@ public final class ComputeBlockOrder {
     /**
      * Find the highest likely unvisited successor block of a given block.
      */
-    private static <T extends AbstractBlock<T>> T findAndMarkMostLikelySuccessor(T block, BitSet visitedBlocks) {
+    private static <T extends AbstractBlockBase<T>> T findAndMarkMostLikelySuccessor(T block, BitSet visitedBlocks) {
         T result = null;
         for (T successor : block.getSuccessors()) {
             assert successor.probability() >= 0.0 : "Probabilities must be positive";
@@ -216,7 +224,7 @@ public final class ComputeBlockOrder {
     /**
      * Add successor blocks into the given work list if they are not already marked as visited.
      */
-    private static <T extends AbstractBlock<T>> void enqueueSuccessors(T block, PriorityQueue<T> worklist, BitSet visitedBlocks) {
+    private static <T extends AbstractBlockBase<T>> void enqueueSuccessors(T block, PriorityQueue<T> worklist, BitSet visitedBlocks) {
         for (T successor : block.getSuccessors()) {
             if (!visitedBlocks.get(successor.getId())) {
                 visitedBlocks.set(successor.getId());
@@ -229,14 +237,14 @@ public final class ComputeBlockOrder {
      * Skip the loop header block if the loop consists of more than one block and it has only a
      * single loop end block.
      */
-    private static <T extends AbstractBlock<T>> boolean skipLoopHeader(AbstractBlock<T> block) {
+    private static <T extends AbstractBlockBase<T>> boolean skipLoopHeader(AbstractBlockBase<T> block) {
         return (block.isLoopHeader() && !block.isLoopEnd() && block.getLoop().numBackedges() == 1);
     }
 
     /**
      * Checks that the ordering contains the expected number of blocks.
      */
-    private static boolean checkOrder(List<? extends AbstractBlock<?>> order, int expectedBlockCount) {
+    private static boolean checkOrder(List<? extends AbstractBlockBase<?>> order, int expectedBlockCount) {
         assert order.size() == expectedBlockCount : String.format("Number of blocks in ordering (%d) does not match expected block count (%d)", order.size(), expectedBlockCount);
         return true;
     }
@@ -244,7 +252,7 @@ public final class ComputeBlockOrder {
     /**
      * Comparator for sorting blocks based on loop depth and probability.
      */
-    private static class BlockOrderComparator<T extends AbstractBlock<T>> implements Comparator<T> {
+    private static class BlockOrderComparator<T extends AbstractBlockBase<T>> implements Comparator<T> {
 
         @Override
         public int compare(T a, T b) {

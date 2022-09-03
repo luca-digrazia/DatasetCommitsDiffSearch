@@ -25,6 +25,7 @@ package com.oracle.graal.compiler.common.alloc;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
+import java.util.Iterator;
 
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 import com.oracle.graal.debug.Debug;
@@ -69,21 +70,25 @@ public final class TraceBuilderResult {
     }
 
     public boolean incomingEdges(Trace trace) {
-        return incomingEdges(trace.getId(), trace.getBlocks(), 0);
+        int traceNr = trace.getId();
+        Iterator<AbstractBlockBase<?>> traceIt = getTraces().get(traceNr).getBlocks().iterator();
+        return incomingEdges(traceNr, traceIt);
     }
 
     public boolean incomingSideEdges(Trace trace) {
-        AbstractBlockBase<?>[] traceArr = trace.getBlocks();
-        if (traceArr.length <= 0) {
+        int traceNr = trace.getId();
+        Iterator<AbstractBlockBase<?>> traceIt = getTraces().get(traceNr).getBlocks().iterator();
+        if (!traceIt.hasNext()) {
             return false;
         }
-        return incomingEdges(trace.getId(), traceArr, 1);
+        traceIt.next();
+        return incomingEdges(traceNr, traceIt);
     }
 
-    private boolean incomingEdges(int traceNr, AbstractBlockBase<?>[] trace, int index) {
+    private boolean incomingEdges(int traceNr, Iterator<AbstractBlockBase<?>> trace) {
         /* TODO (je): not efficient. find better solution. */
-        for (int i = index; i < trace.length; i++) {
-            AbstractBlockBase<?> block = trace[1];
+        while (trace.hasNext()) {
+            AbstractBlockBase<?> block = trace.next();
             for (AbstractBlockBase<?> pred : block.getPredecessors()) {
                 if (getTraceForBlock(pred).getId() != traceNr) {
                     return true;
@@ -198,7 +203,7 @@ public final class TraceBuilderResult {
     }
 
     private static int getTraceIndex(Trace trace, int[] blockToTrace) {
-        return blockToTrace[trace.getBlocks()[0].getId()];
+        return blockToTrace[trace.getBlocks().get(0).getId()];
     }
 
 }

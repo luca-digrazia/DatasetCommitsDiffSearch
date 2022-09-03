@@ -22,28 +22,29 @@
  */
 package com.oracle.graal.lir.alloc.lsra;
 
-import static com.oracle.graal.compiler.common.cfg.AbstractControlFlowGraph.*;
-import static jdk.internal.jvmci.code.ValueUtil.*;
+import static com.oracle.graal.compiler.common.cfg.AbstractControlFlowGraph.commonDominator;
+import static com.oracle.graal.compiler.common.cfg.AbstractControlFlowGraph.dominates;
+import static com.oracle.graal.lir.LIRValueUtil.isStackSlotValue;
 
-import java.util.*;
-
-import jdk.internal.jvmci.code.*;
-import com.oracle.graal.debug.*;
-import jdk.internal.jvmci.meta.*;
-
-import com.oracle.graal.compiler.common.alloc.*;
-import com.oracle.graal.compiler.common.cfg.*;
-import com.oracle.graal.lir.*;
+import java.util.Iterator;
+import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.DebugCounter;
+import com.oracle.graal.debug.Indent;
+import com.oracle.graal.lir.LIRInsertionBuffer;
+import com.oracle.graal.lir.LIRInstruction;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
 import com.oracle.graal.lir.alloc.lsra.Interval.SpillState;
-import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.lir.gen.LIRGeneratorTool.SpillMoveFactory;
-import com.oracle.graal.lir.phases.*;
+import com.oracle.graal.lir.gen.LIRGenerationResult;
+import com.oracle.graal.lir.phases.AllocationPhase;
+
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.meta.AllocatableValue;
 
 public final class LinearScanOptimizeSpillPositionPhase extends AllocationPhase {
 
-    private static final DebugMetric betterSpillPos = Debug.metric("BetterSpillPosition");
-    private static final DebugMetric betterSpillPosWithLowerProbability = Debug.metric("BetterSpillPositionWithLowerProbability");
+    private static final DebugCounter betterSpillPos = Debug.counter("BetterSpillPosition");
+    private static final DebugCounter betterSpillPosWithLowerProbability = Debug.counter("BetterSpillPositionWithLowerProbability");
 
     private final LinearScan allocator;
 
@@ -52,15 +53,15 @@ public final class LinearScanOptimizeSpillPositionPhase extends AllocationPhase 
     }
 
     @Override
-    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, SpillMoveFactory spillMoveFactory,
-                    RegisterAllocationConfig registerAllocationConfig) {
+    protected void run(TargetDescription target, LIRGenerationResult lirGenRes, AllocationContext context) {
         optimizeSpillPosition();
         allocator.printIntervals("After optimize spill position");
     }
 
+    @SuppressWarnings("try")
     private void optimizeSpillPosition() {
         try (Indent indent0 = Debug.logAndIndent("OptimizeSpillPositions")) {
-            LIRInsertionBuffer[] insertionBuffers = new LIRInsertionBuffer[allocator.getLIR().linearScanOrder().size()];
+            LIRInsertionBuffer[] insertionBuffers = new LIRInsertionBuffer[allocator.getLIR().linearScanOrder().length];
             for (Interval interval : allocator.intervals()) {
                 optimizeInterval(insertionBuffers, interval);
             }
@@ -73,6 +74,7 @@ public final class LinearScanOptimizeSpillPositionPhase extends AllocationPhase 
         }
     }
 
+    @SuppressWarnings("try")
     private void optimizeInterval(LIRInsertionBuffer[] insertionBuffers, Interval interval) {
         if (interval == null || !interval.isSplitParent() || interval.spillState() != SpillState.SpillInDominator) {
             return;
@@ -108,12 +110,12 @@ public final class LinearScanOptimizeSpillPositionPhase extends AllocationPhase 
                 interval.setSpillState(SpillState.StoreAtDefinition);
                 return;
             }
-            Debug.log(3, "Spill block candidate (initial): %s", spillBlock);
+            Debug.log(Debug.VERBOSE_LOG_LEVEL, "Spill block candidate (initial): %s", spillBlock);
             // move out of loops
             if (defBlock.getLoopDepth() < spillBlock.getLoopDepth()) {
                 spillBlock = moveSpillOutOfLoop(defBlock, spillBlock);
             }
-            Debug.log(3, "Spill block candidate (after loop optimizaton): %s", spillBlock);
+            Debug.log(Debug.VERBOSE_LOG_LEVEL, "Spill block candidate (after loop optimizaton): %s", spillBlock);
 
             /*
              * The spill block is the begin of the first split child (aka the value is on the
@@ -132,7 +134,7 @@ public final class LinearScanOptimizeSpillPositionPhase extends AllocationPhase 
                 spillBlock = dom;
             }
             if (defBlock.equals(spillBlock)) {
-                Debug.log(3, "Definition is the best choice: %s", defBlock);
+                Debug.log(Debug.VERBOSE_LOG_LEVEL, "Definition is the best choice: %s", defBlock);
                 // definition is the best choice
                 interval.setSpillState(SpillState.StoreAtDefinition);
                 return;
@@ -144,7 +146,8 @@ public final class LinearScanOptimizeSpillPositionPhase extends AllocationPhase 
             }
 
             if (defBlock.probability() <= spillBlock.probability()) {
-                Debug.log(3, "Definition has lower probability %s (%f) is lower than spill block %s (%f)", defBlock, defBlock.probability(), spillBlock, spillBlock.probability());
+                Debug.log(Debug.VERBOSE_LOG_LEVEL, "Definition has lower probability %s (%f) is lower than spill block %s (%f)", defBlock, defBlock.probability(), spillBlock,
+                                spillBlock.probability());
                 // better spill block has the same probability -> do nothing
                 interval.setSpillState(SpillState.StoreAtDefinition);
                 return;
@@ -161,7 +164,7 @@ public final class LinearScanOptimizeSpillPositionPhase extends AllocationPhase 
             AllocatableValue fromLocation = interval.getSplitChildAtOpId(spillOpId, OperandMode.DEF, allocator).location();
             AllocatableValue toLocation = LinearScan.canonicalSpillOpr(interval);
             LIRInstruction move = allocator.getSpillMoveFactory().createMove(toLocation, fromLocation);
-            Debug.log(3, "Insert spill move %s", move);
+            Debug.log(Debug.VERBOSE_LOG_LEVEL, "Insert spill move %s", move);
             move.setId(LinearScan.DOMINATOR_SPILL_MOVE_ID);
             /*
              * We can use the insertion buffer directly because we always insert at position 1.
@@ -181,16 +184,17 @@ public final class LinearScanOptimizeSpillPositionPhase extends AllocationPhase 
         Range range;
         AbstractBlockBase<?> block;
 
-        public IntervalBlockIterator(Interval interval) {
+        IntervalBlockIterator(Interval interval) {
             range = interval.first();
             block = allocator.blockForId(range.from);
         }
 
+        @Override
         public AbstractBlockBase<?> next() {
             AbstractBlockBase<?> currentBlock = block;
             int nextBlockIndex = block.getLinearScanNumber() + 1;
-            if (nextBlockIndex < allocator.sortedBlocks().size()) {
-                block = allocator.sortedBlocks().get(nextBlockIndex);
+            if (nextBlockIndex < allocator.sortedBlocks().length) {
+                block = allocator.sortedBlocks()[nextBlockIndex];
                 if (range.to <= allocator.getFirstLirInstructionId(block)) {
                     range = range.next;
                     if (range == Range.EndMarker) {
@@ -205,6 +209,7 @@ public final class LinearScanOptimizeSpillPositionPhase extends AllocationPhase 
             return currentBlock;
         }
 
+        @Override
         public boolean hasNext() {
             return block != null;
         }
@@ -212,6 +217,7 @@ public final class LinearScanOptimizeSpillPositionPhase extends AllocationPhase 
 
     private Iterable<AbstractBlockBase<?>> blocksForInterval(Interval interval) {
         return new Iterable<AbstractBlockBase<?>>() {
+            @Override
             public Iterator<AbstractBlockBase<?>> iterator() {
                 return new IntervalBlockIterator(interval);
             }

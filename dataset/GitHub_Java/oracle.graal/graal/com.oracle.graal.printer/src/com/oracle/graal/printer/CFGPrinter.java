@@ -199,9 +199,8 @@ class CFGPrinter extends CompilationPrinter {
     private void scheduleInputs(Node node, Block nodeBlock) {
         if (node instanceof ValuePhiNode) {
             PhiNode phi = (PhiNode) node;
-            Block phiBlock = latestScheduling.get(phi.merge());
-            assert phiBlock != null;
-            for (Block pred : phiBlock.getPredecessors()) {
+            assert nodeBlock.getBeginNode() == phi.merge();
+            for (Block pred : nodeBlock.getPredecessors()) {
                 schedule(phi.valueAt((AbstractEndNode) pred.getEndNode()), pred);
             }
 

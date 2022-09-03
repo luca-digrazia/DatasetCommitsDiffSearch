@@ -191,12 +191,12 @@ public class GraalCompiler {
             HighTierContext highTierContext = new HighTierContext(providers, graphBuilderSuite, optimisticOpts);
             if (graph.start().next() == null) {
                 graphBuilderSuite.apply(graph, highTierContext);
+                if (UseGraalInstrumentation.getValue()) {
+                    new ExtractInstrumentationPhase().apply(graph, highTierContext);
+                }
                 new DeadCodeEliminationPhase(Optional).apply(graph);
             } else {
                 Debug.dump(Debug.INFO_LOG_LEVEL, graph, "initial state");
-            }
-            if (UseGraalInstrumentation.getValue()) {
-                new ExtractInstrumentationPhase().apply(graph, highTierContext);
             }
 
             suites.getHighTier().apply(graph, highTierContext);
@@ -231,7 +231,7 @@ public class GraalCompiler {
             try (Scope s2 = Debug.scope("CodeGen", lirGen, lirGen.getLIR())) {
                 int bytecodeSize = graph.method() == null ? 0 : graph.getBytecodeSize();
                 compilationResult.setHasUnsafeAccess(graph.hasUnsafeAccess());
-                emitCode(backend, graph.getAssumptions(), graph.method(), graph.getMethods(), bytecodeSize, lirGen, compilationResult, installedCodeOwner, factory);
+                emitCode(backend, graph.getAssumptions(), graph.method(), graph.getInlinedMethods(), bytecodeSize, lirGen, compilationResult, installedCodeOwner, factory);
             } catch (Throwable e) {
                 throw Debug.handle(e);
             }

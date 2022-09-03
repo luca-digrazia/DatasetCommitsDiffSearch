@@ -27,7 +27,6 @@ import static com.oracle.graal.lir.alloc.trace.TraceUtil.isTrivialTrace;
 import java.util.List;
 
 import com.oracle.graal.compiler.common.alloc.BiDirectionalTraceBuilder;
-import com.oracle.graal.compiler.common.alloc.SingleBlockTraceBuilder;
 import com.oracle.graal.compiler.common.alloc.Trace;
 import com.oracle.graal.compiler.common.alloc.TraceBuilderResult;
 import com.oracle.graal.compiler.common.alloc.TraceBuilderResult.TrivialTracePredicate;
@@ -48,8 +47,6 @@ public class TraceBuilderPhase extends AllocationPhase {
 
     public static class Options {
         // @formatter:off
-        @Option(help = "Single block trace builder.", type = OptionType.Debug)
-        public static final OptionValue<Boolean> TraceRAsingleBlock = new OptionValue<>(false);
         @Option(help = "Use bidirectional trace builder.", type = OptionType.Debug)
         public static final OptionValue<Boolean> TraceRAbiDirectionalTraceBuilder = new OptionValue<>(false);
         @Option(help = "Schedule trivial traces as early as possible.", type = OptionType.Debug)
@@ -84,9 +81,6 @@ public class TraceBuilderPhase extends AllocationPhase {
     private static TraceBuilderResult getTraceBuilderResult(LIR lir, AbstractBlockBase<?> startBlock, AbstractBlockBase<?>[] linearScanOrder) {
         TraceBuilderResult.TrivialTracePredicate pred = getTrivialTracePredicate(lir);
 
-        if (Options.TraceRAsingleBlock.getValue()) {
-            return SingleBlockTraceBuilder.computeTraces(startBlock, linearScanOrder, pred);
-        }
         if (Options.TraceRAbiDirectionalTraceBuilder.getValue()) {
             return BiDirectionalTraceBuilder.computeTraces(startBlock, linearScanOrder, pred);
         }

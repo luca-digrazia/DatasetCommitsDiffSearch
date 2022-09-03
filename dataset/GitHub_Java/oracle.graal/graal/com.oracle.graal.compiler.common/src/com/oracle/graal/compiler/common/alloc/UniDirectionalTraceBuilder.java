@@ -48,7 +48,7 @@ public final class UniDirectionalTraceBuilder {
      * block}.
      */
     private final int[] blocked;
-    private final Trace[] blockToTrace;
+    private final int[] blockToTrace;
 
     private UniDirectionalTraceBuilder(AbstractBlockBase<?>[] blocks) {
         processed = new BitSet(blocks.length);
@@ -56,7 +56,7 @@ public final class UniDirectionalTraceBuilder {
         assert (worklist != null);
 
         blocked = new int[blocks.length];
-        blockToTrace = new Trace[blocks.length];
+        blockToTrace = new int[blocks.length];
         for (AbstractBlockBase<?> block : blocks) {
             blocked[block.getId()] = block.getPredecessorCount();
         }
@@ -87,12 +87,7 @@ public final class UniDirectionalTraceBuilder {
             AbstractBlockBase<?> block = worklist.poll();
             assert block != null;
             if (!processed(block)) {
-                Trace trace = new Trace(startTrace(block));
-                for (AbstractBlockBase<?> traceBlock : trace.getBlocks()) {
-                    blockToTrace[traceBlock.getId()] = trace;
-                }
-                trace.setId(traces.size());
-                traces.add(trace);
+                traces.add(new Trace(startTrace(block, traces.size())));
             }
         }
         return traces;
@@ -102,7 +97,7 @@ public final class UniDirectionalTraceBuilder {
      * Build a new trace starting at {@code block}.
      */
     @SuppressWarnings("try")
-    private List<AbstractBlockBase<?>> startTrace(AbstractBlockBase<?> block) {
+    private List<AbstractBlockBase<?>> startTrace(AbstractBlockBase<?> block, int traceNumber) {
         assert checkPredecessorsProcessed(block);
         ArrayList<AbstractBlockBase<?>> trace = new ArrayList<>();
         int blockNumber = 0;
@@ -113,6 +108,7 @@ public final class UniDirectionalTraceBuilder {
                 trace.add(currentBlock);
                 unblock(currentBlock);
                 currentBlock.setLinearScanNumber(blockNumber++);
+                blockToTrace[currentBlock.getId()] = traceNumber;
             }
         }
         return trace;
