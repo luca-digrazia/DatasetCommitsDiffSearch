@@ -46,7 +46,7 @@ public final class StackValue {
      * {@codesnippet org.graalvm.nativeimage.StackValueSnippets#withSizeOf}
      *
      * It can be used to allocate a structure on the stack. The following example allocates a
-     * {@code ComplexValue} and then sends it as a regular parameter to another function to compute
+     * {@code ComplexNumber} and then sends it as a regular parameter to another function to compute
      * absolute value of the number:
      * {@codesnippet org.graalvm.nativeimage.StackValueSnippets#ninePlusSixteenSqrt}
      *
@@ -113,29 +113,28 @@ public final class StackValue {
  * This class contains <a href="https://github.com/jtulach/codesnippet4javadoc/">code snippets</a>
  * used when generating the Javadoc.
  */
-@SuppressWarnings("unused")
 @CContext(CContext.Directives.class)
 final class StackValueSnippets {
-    // BEGIN: org.graalvm.nativeimage.StackValueSnippets.ComplexValue
+    // BEGIN: org.graalvm.nativeimage.StackValueSnippets.ComplexNumber
     @CStruct
-    interface ComplexValue extends PointerBase {
+    static interface ComplexNumber extends PointerBase {
         @CField("re")
-        double realPart();
+        public double realPart();
 
         @CField("re")
-        void realPart(double re);
+        public void realPart(double re);
 
         @CField("im")
-        double imagineryPart();
+        public double imagineryPart();
 
         @CField("im")
-        void imagineryPart(double im);
+        public void imagineryPart(double im);
     }
-    // END: org.graalvm.nativeimage.StackValueSnippets.ComplexValue
+    // END: org.graalvm.nativeimage.StackValueSnippets.ComplexNumber
 
     public static void ninePlusSixteenSqrt() {
         // BEGIN: org.graalvm.nativeimage.StackValueSnippets#ninePlusSixteenSqrt
-        ComplexValue numberOnStack = StackValue.get(ComplexValue.class);
+        ComplexNumber numberOnStack = StackValue.get(ComplexNumber.class);
         numberOnStack.realPart(3.0);
         numberOnStack.imagineryPart(4.0);
         double absoluteValue = absoluteValue(numberOnStack);
@@ -143,17 +142,16 @@ final class StackValueSnippets {
         // END: org.graalvm.nativeimage.StackValueSnippets#ninePlusSixteenSqrt
     }
 
-    private static double absoluteValue(ComplexValue cn) {
+    private static double absoluteValue(ComplexNumber cn) {
         double reSquare = cn.realPart() * cn.realPart();
         double imSquare = cn.imagineryPart() * cn.imagineryPart();
         return Math.sqrt(reSquare + imSquare);
     }
 
-    @SuppressWarnings("StackValueGetClass")
     private static void withSizeOf() {
         // BEGIN: org.graalvm.nativeimage.StackValueSnippets#withSizeOf
-        ComplexValue numberOnStack = StackValue.get(
-                        SizeOf.get(ComplexValue.class));
+        ComplexNumber numberOnStack = StackValue.get(
+                        SizeOf.get(ComplexNumber.class));
         // END: org.graalvm.nativeimage.StackValueSnippets#withSizeOf
 
     }
@@ -199,7 +197,6 @@ final class StackValueSnippets {
         return sum;
     }
 
-    @SuppressWarnings("StackValueGetClass")
     private static void withSizeOfArray() {
         // BEGIN: org.graalvm.nativeimage.StackValueSnippets#withSizeOfArray
         IntOrDouble arrayOnStack = StackValue.get(
