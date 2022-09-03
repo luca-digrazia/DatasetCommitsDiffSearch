@@ -69,7 +69,7 @@ public class CGlobalDataFeature implements GraalFeature {
     }
 
     @Override
-    public void afterHeapLayout(AfterHeapLayoutAccess access) {
+    public void beforeCompilation(BeforeCompilationAccess access) {
         layout();
     }
 
