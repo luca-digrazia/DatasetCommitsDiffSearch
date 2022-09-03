@@ -48,8 +48,7 @@ public class HotSpotSnippetUtils {
 
     @Fold
     public static boolean verifyOops() {
-        return true;
-        // return config().verifyOops;
+        return config().verifyOops;
     }
 
     @Fold

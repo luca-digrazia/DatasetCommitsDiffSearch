@@ -28,29 +28,26 @@ import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.word.*;
 
 /**
  * Node implementing a call to HotSpot's {@code graal_monitorenter} stub.
  */
 public class WriteBarrierPostStubCall extends FixedWithNextNode implements LIRGenLowerable {
 
-    @Input private ValueNode object;
-    @Input private ValueNode card;
-    public static final Descriptor WBPOSTCALL = new Descriptor("wbpostcall", true, void.class, Object.class, Word.class);
+    @Input private final ValueNode object;
+    public static final Descriptor WBPOSTCALL = new Descriptor("wbpostcall", true, void.class, Object.class);
 
-    public WriteBarrierPostStubCall(ValueNode object, ValueNode card) {
+    public WriteBarrierPostStubCall(ValueNode object) {
         super(StampFactory.forVoid());
         this.object = object;
-        this.card = card;
     }
 
     @Override
     public void generate(LIRGenerator gen) {
         RuntimeCallTarget stub = gen.getRuntime().lookupRuntimeCall(WriteBarrierPostStubCall.WBPOSTCALL);
-        gen.emitCall(stub, stub.getCallingConvention(), false, gen.operand(object), gen.operand(card));
+        gen.emitCall(stub, stub.getCallingConvention(), true, gen.operand(object));
     }
 
     @NodeIntrinsic
-    public static native void call(Object hub, Word card);
+    public static native void call(Object hub);
 }

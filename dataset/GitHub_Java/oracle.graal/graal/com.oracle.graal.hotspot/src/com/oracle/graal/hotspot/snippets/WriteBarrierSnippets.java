@@ -27,6 +27,7 @@ import static com.oracle.graal.snippets.SnippetTemplate.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.snippets.*;
@@ -39,7 +40,7 @@ import com.oracle.graal.word.*;
 public class WriteBarrierSnippets implements SnippetsInterface {
 
     @Snippet
-    public static void g1PreWriteBarrier(@Parameter("object") Object object, @Parameter("previousValue") Word previousValue, @Parameter("doLoad") boolean doLoad) {
+    public static void g1PreWriteBarrier(@Parameter("object") Object object, @Parameter("previousValue") Word previousValue, @Parameter("load") boolean doLoad) {
         Word thread = thread();
         Pointer oop = Word.fromObject(object);
         Word markingAddress = thread.add(HotSpotSnippetUtils.g1SATBQueueMarkingOffset());
@@ -85,8 +86,7 @@ public class WriteBarrierSnippets implements SnippetsInterface {
             base = base.add(Word.unsigned(cardTableStart()));
         }
 
-        // if (value != null) {
-        if (true) {
+        if (value != null) {
             Word xorResult = (((Word) oop.xor(value)).unsignedShiftRight(HotSpotSnippetUtils.logOfHRGrainBytes()));
             if (xorResult.notEqual(Word.zero())) {
                 if (value.notEqual(Word.zero())) {
@@ -157,8 +157,8 @@ public class WriteBarrierSnippets implements SnippetsInterface {
             super(runtime, assumptions, target, WriteBarrierSnippets.class);
             serialFieldWriteBarrier = snippet("serialFieldWriteBarrier", Object.class);
             serialArrayWriteBarrier = snippet("serialArrayWriteBarrier", Object.class);
-            g1PreWriteBarrier = snippet("g1PreWriteBarrier", Object.class, Word.class, boolean.class);
-            g1PostWriteBarrier = snippet("g1PostWriteBarrier", Object.class, Word.class);
+            g1PreWriteBarrier = snippet("g1PreWriteBarrier", Object.class);
+            g1PostWriteBarrier = snippet("g1PostWriteBarrier", Object.class);
             this.useG1GC = useG1GC;
         }
 
@@ -185,8 +185,6 @@ public class WriteBarrierSnippets implements SnippetsInterface {
             Key key = new Key(method);
             Arguments arguments = new Arguments();
             arguments.add("object", writeBarrierPre.object());
-            arguments.add("previousValue", writeBarrierPre.previousValue());
-            arguments.add("doLoad", writeBarrierPre.doLoad());
             SnippetTemplate template = cache.get(key, assumptions);
             template.instantiate(runtime, writeBarrierPre, DEFAULT_REPLACER, arguments);
         }
@@ -196,7 +194,6 @@ public class WriteBarrierSnippets implements SnippetsInterface {
             Key key = new Key(method);
             Arguments arguments = new Arguments();
             arguments.add("object", writeBarrierPost.object());
-            arguments.add("value", writeBarrierPost.value());
             SnippetTemplate template = cache.get(key, assumptions);
             template.instantiate(runtime, writeBarrierPost, DEFAULT_REPLACER, arguments);
         }

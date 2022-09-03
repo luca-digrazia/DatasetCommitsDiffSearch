@@ -36,6 +36,8 @@ import static com.oracle.graal.hotspot.nodes.NewMultiArrayStubCall.*;
 import static com.oracle.graal.hotspot.nodes.ThreadIsInterruptedStubCall.*;
 import static com.oracle.graal.hotspot.nodes.VMErrorNode.*;
 import static com.oracle.graal.hotspot.nodes.VerifyOopStubCall.*;
+import static com.oracle.graal.hotspot.nodes.WriteBarrierPreStubCall.*;
+import static com.oracle.graal.hotspot.nodes.WriteBarrierPostStubCall.*;
 import static com.oracle.graal.hotspot.snippets.AESCryptSubstitutions.DecryptBlockStubCall.*;
 import static com.oracle.graal.hotspot.snippets.AESCryptSubstitutions.EncryptBlockStubCall.*;
 import static com.oracle.graal.hotspot.snippets.CipherBlockChainingSubstitutions.DecryptAESCryptStubCall.*;
@@ -60,6 +62,15 @@ public class AMD64HotSpotRuntime extends HotSpotRuntime {
                 /*           temps */ null,
                 /*             ret */ ret(Kind.Void));
 
+        addRuntimeCall(SET_DEOPT_INFO, config.setDeoptInfoStub,
+                /*           temps */ null,
+                /*             ret */ ret(Kind.Void),
+                /* arg0:      info */ scratch(Kind.Object));
+
+        addRuntimeCall(DEBUG, config.debugStub,
+                /*           temps */ null,
+                /*             ret */ ret(Kind.Void));
+
         addRuntimeCall(ARITHMETIC_FREM, config.arithmeticFremStub,
                 /*           temps */ null,
                 /*             ret */ ret(Kind.Float),
@@ -77,6 +88,16 @@ public class AMD64HotSpotRuntime extends HotSpotRuntime {
                 /*          ret */ ret(Kind.Void),
                 /* arg0: object */ javaCallingConvention(Kind.Object,
                 /* arg1:   lock */                       word));
+
+       addRuntimeCall(WBPRECALL, config.wbPreCallStub,
+                /*        temps */ null,
+                /*          ret */ ret(Kind.Void),
+                /* arg0: object */ javaCallingConvention(Kind.Object));
+
+       addRuntimeCall(WBPOSTCALL, config.wbPostCallStub,
+                /*        temps */ null,
+                /*          ret */ ret(Kind.Void),
+                /* arg0: object */ javaCallingConvention(Kind.Object));
 
         addRuntimeCall(MONITOREXIT, config.monitorExitStub,
                 /*        temps */ null,
@@ -168,17 +189,6 @@ public class AMD64HotSpotRuntime extends HotSpotRuntime {
                 /* arg3:      r */                         word,
               /* arg4: inLength */                         Kind.Int));
 
-        addRuntimeCall(AMD64HotSpotBackend.EXCEPTION_HANDLER, config.handleExceptionStub,
-                /*        temps */ null,
-                /*          ret */ ret(Kind.Void));
-
-        addRuntimeCall(AMD64HotSpotBackend.DEOPT_HANDLER, config.handleDeoptStub,
-                /*        temps */ null,
-                /*          ret */ ret(Kind.Void));
-
-        addRuntimeCall(AMD64HotSpotBackend.IC_MISS_HANDLER, config.inlineCacheMissStub,
-                /*        temps */ null,
-                /*          ret */ ret(Kind.Void));
         // @formatter:on
 
     }
