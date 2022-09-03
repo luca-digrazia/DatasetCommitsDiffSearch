@@ -45,7 +45,7 @@ public final class TypeCheckNode extends UnaryOpLogicNode implements Lowerable, 
         super(TYPE, object);
         this.type = type;
         assert type != null;
-        assert type.isConcrete() || type.isArray();
+        assert type.isConcrete();
     }
 
     public static LogicNode create(ResolvedJavaType type, ValueNode object) {
