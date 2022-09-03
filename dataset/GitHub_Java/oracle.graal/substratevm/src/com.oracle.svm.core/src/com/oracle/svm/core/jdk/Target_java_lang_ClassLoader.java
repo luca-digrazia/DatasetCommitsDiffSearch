@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -35,8 +33,6 @@ import java.util.List;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.hub.ClassForNameSupport;
-import com.oracle.svm.core.jdk.JavaLangSubstitutions.ClassLoaderSupport;
-import com.oracle.svm.core.snippets.KnownIntrinsics;
 
 @TargetClass(ClassLoader.class)
 @Substitute
@@ -108,7 +104,12 @@ public final class Target_java_lang_ClassLoader {
 
     @Substitute
     public static ClassLoader getSystemClassLoader() {
-        return KnownIntrinsics.unsafeCast(ClassLoaderSupport.getInstance().systemClassLoader, ClassLoader.class);
+        /*
+         * ClassLoader.getSystemClassLoader() is used as a parameter for Class.forName(String,
+         * boolean, ClassLoader) which is implemented as ClassForNameSupport.forName(name) and
+         * ignores the class loader.
+         */
+        return null;
     }
 
     @Substitute

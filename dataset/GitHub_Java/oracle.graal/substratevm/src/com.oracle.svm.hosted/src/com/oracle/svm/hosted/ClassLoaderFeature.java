@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -41,7 +39,7 @@ public class ClassLoaderFeature implements Feature {
     }
 
     private void createClassLoaders(ClassLoader classLoader) {
-        Map<ClassLoader, Target_java_lang_ClassLoader> classLoaders = ClassLoaderSupport.getInstance().classLoaders;
+        Map<ClassLoader, Target_java_lang_ClassLoader> classLoaders = ImageSingletons.lookup(ClassLoaderSupport.class).classloaders;
         if (!classLoaders.containsKey(classLoader)) {
             ClassLoader parent = classLoader.getParent();
             if (parent != null) {
@@ -54,17 +52,11 @@ public class ClassLoaderFeature implements Feature {
     }
 
     @Override
-    public void beforeAnalysis(BeforeAnalysisAccess access) {
-        createClassLoaders(ClassLoader.getSystemClassLoader());
-        ClassLoaderSupport.getInstance().systemClassLoader = ClassLoaderSupport.getInstance().classLoaders.get(ClassLoader.getSystemClassLoader());
-    }
-
-    @Override
     public void duringSetup(DuringSetupAccess access) {
         access.registerObjectReplacer(object -> {
             if (object instanceof ClassLoader) {
                 createClassLoaders((ClassLoader) object);
-                return ClassLoaderSupport.getInstance().classLoaders.get(object);
+                return ImageSingletons.lookup(ClassLoaderSupport.class).classloaders.get(object);
             }
             return object;
         });
