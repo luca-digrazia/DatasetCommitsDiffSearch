@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.printer;
 
-import static com.oracle.graal.phases.GraalOptions.*;
-
 import java.io.*;
 import java.net.*;
 import java.nio.channels.*;
@@ -35,6 +33,7 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.schedule.*;
 
 /**
@@ -61,7 +60,7 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
                 return;
             }
             previousInlineContext.clear();
-            if (PrintIdealGraphFile.getValue()) {
+            if (GraalOptions.PrintIdealGraphFile) {
                 initializeFilePrinter();
             } else {
                 initializeNetworkPrinter();
@@ -76,7 +75,7 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
 
     private void initializeFilePrinter() {
         String ext;
-        if (PrintBinaryGraphs.getValue()) {
+        if (GraalOptions.PrintBinaryGraphs) {
             ext = ".bgv";
         } else {
             ext = ".gv.xml";
@@ -92,7 +91,7 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
             num = "-" + Integer.toString(++i);
         }
         try {
-            if (PrintBinaryGraphs.getValue()) {
+            if (GraalOptions.PrintBinaryGraphs) {
                 printer = new BinaryGraphPrinter(FileChannel.open(file.toPath(), StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW));
             } else {
                 printer = new IdealGraphPrinter(new FileOutputStream(file));
@@ -106,10 +105,10 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
     }
 
     private void initializeNetworkPrinter() {
-        String host = PrintIdealGraphAddress.getValue();
-        int port = PrintBinaryGraphs.getValue() ? PrintBinaryGraphPort.getValue() : PrintIdealGraphPort.getValue();
+        String host = GraalOptions.PrintIdealGraphAddress;
+        int port = GraalOptions.PrintBinaryGraphs ? GraalOptions.PrintBinaryGraphPort : GraalOptions.PrintIdealGraphPort;
         try {
-            if (PrintBinaryGraphs.getValue()) {
+            if (GraalOptions.PrintBinaryGraphs) {
                 printer = new BinaryGraphPrinter(SocketChannel.open(new InetSocketAddress(host, port)));
             } else {
                 IdealGraphPrinter xmlPrinter = new IdealGraphPrinter(new Socket(host, port).getOutputStream());
@@ -182,18 +181,10 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
 
     private static List<String> getInlineContext() {
         List<String> result = new ArrayList<>();
-        Object last = null;
         for (Object o : Debug.context()) {
             JavaMethod method = GraalDebugConfig.asJavaMethod(o);
             if (method != null) {
-                if (last != method) {
-                    result.add(MetaUtil.format("%H::%n(%p)", method));
-                } else {
-                    // This prevents multiple adjacent method context objects for the same method
-                    // from resulting in multiple IGV tree levels. This works on the
-                    // assumption that real inlining debug scopes will have a graph
-                    // context object between the inliner and inlinee context objects.
-                }
+                result.add(MetaUtil.format("%H::%n(%p)", method));
             } else if (o instanceof DebugDumpScope) {
                 DebugDumpScope debugDumpScope = (DebugDumpScope) o;
                 if (debugDumpScope.decorator && !result.isEmpty()) {
@@ -202,7 +193,6 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
                     result.add(debugDumpScope.name);
                 }
             }
-            last = o;
         }
         if (result.isEmpty()) {
             result.add("Top Scope");
