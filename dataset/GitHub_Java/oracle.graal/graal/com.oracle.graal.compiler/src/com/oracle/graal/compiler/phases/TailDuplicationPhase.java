@@ -74,6 +74,9 @@ public class TailDuplicationPhase extends Phase {
     public static final TailDuplicationDecision DEFAULT_DECISION = new TailDuplicationDecision() {
 
         public boolean doTransform(MergeNode merge, int fixedNodeCount) {
+            if (fixedNodeCount < GraalOptions.TailDuplicationTrivialSize) {
+                return true;
+            }
             HashSet<PhiNode> improvements = new HashSet<>();
             for (PhiNode phi : merge.phis()) {
                 Stamp phiStamp = phi.stamp();
@@ -157,13 +160,13 @@ public class TailDuplicationPhase extends Phase {
             if (fixed instanceof EndNode && !(((EndNode) fixed).merge() instanceof LoopBeginNode)) {
                 metricDuplicationEnd.increment();
                 if (decision.doTransform(merge, fixedCount)) {
-                    metricDuplicationEndPerformed.add(fixedCount);
+                    metricDuplicationEndPerformed.increment();
                     new DuplicationOperation(merge, replacements).duplicate();
                 }
             } else if (merge.stateAfter() != null) {
                 metricDuplicationOther.increment();
                 if (decision.doTransform(merge, fixedCount)) {
-                    metricDuplicationOtherPerformed.add(fixedCount);
+                    metricDuplicationOtherPerformed.increment();
                     new DuplicationOperation(merge, replacements).duplicate();
                 }
             }
@@ -229,6 +232,7 @@ public class TailDuplicationPhase extends Phase {
             final HashSet<Node> duplicatedNodes = buildDuplicatedNodeSet(fixedNodes, stateAfter);
             mergeAfter.clearEnds();
             expandDuplicated(duplicatedNodes, mergeAfter);
+            retargetDependencies(duplicatedNodes, anchor);
 
             List<EndNode> endSnapshot = merge.forwardEnds().snapshot();
             List<PhiNode> phiSnapshot = merge.phis().snapshot();
@@ -481,6 +485,27 @@ public class TailDuplicationPhase extends Phase {
                         if (duplicateInput) {
                             duplicatedNodes.add(input);
                             worklist.add(input);
+                        }
+                    }
+                }
+            }
+        }
+
+        /**
+         * Moves all depdendencies that point outside the duplicated area to the supplied value anchor node.
+         *
+         * @param duplicatedNodes The set of duplicated nodes.
+         * @param anchor The node that will be the new target for all dependencies that point outside the duplicated set of nodes.
+         */
+        private static void retargetDependencies(HashSet<Node> duplicatedNodes, ValueAnchorNode anchor) {
+            for (Node node : duplicatedNodes) {
+                if (node instanceof ValueNode) {
+                    NodeInputList<ValueNode> dependencies = ((ValueNode) node).dependencies();
+                    for (int i = 0; i < dependencies.size(); i++) {
+                        Node dependency = dependencies.get(i);
+                        if (dependency != null && !duplicatedNodes.contains(dependency)) {
+                            Debug.log("retargeting dependency %s to %s on %s", dependency, anchor, node);
+                            dependencies.set(i, anchor);
                         }
                     }
                 }
