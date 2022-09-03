@@ -66,6 +66,9 @@ public class CFGPrinterObserver implements DebugDumpHandler {
         } else if (object instanceof SchedulePhase) {
             schedule = (SchedulePhase) object;
             return;
+        } else if (object instanceof LIRGenerator) {
+            cfgPrinter.lirGenerator = (LIRGenerator) object;
+            return;
         }
 
         if (compiler == null) {
@@ -83,9 +86,7 @@ public class CFGPrinterObserver implements DebugDumpHandler {
         }
 
         RiRuntime runtime = cfgPrinter.runtime;
-        if (object instanceof LIRGenerator) {
-            cfgPrinter.lirGenerator = (LIRGenerator) object;
-        } else if (object instanceof RiResolvedMethod) {
+        if (object instanceof RiResolvedMethod) {
             method = (RiResolvedMethod) object;
             cfgPrinter.printCompilation(method);
 
