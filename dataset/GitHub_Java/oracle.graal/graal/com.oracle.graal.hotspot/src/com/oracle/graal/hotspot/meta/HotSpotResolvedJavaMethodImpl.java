@@ -51,7 +51,7 @@ public final class HotSpotResolvedJavaMethodImpl extends HotSpotMethod implement
      */
     private final long metaspaceMethod;
 
-    private final HotSpotResolvedObjectTypeImpl holder;
+    private final HotSpotResolvedObjectType holder;
     private final HotSpotConstantPool constantPool;
     private final HotSpotSignature signature;
     private HotSpotMethodData methodData;
@@ -65,12 +65,12 @@ public final class HotSpotResolvedJavaMethodImpl extends HotSpotMethod implement
      * @return the {@link ResolvedJavaType} corresponding to the holder of the
      *         {@code metaspaceMethod}
      */
-    public static HotSpotResolvedObjectTypeImpl getHolder(long metaspaceMethod) {
+    public static HotSpotResolvedObjectType getHolder(long metaspaceMethod) {
         HotSpotVMConfig config = runtime().getConfig();
         final long metaspaceConstMethod = unsafe.getAddress(metaspaceMethod + config.methodConstMethodOffset);
         final long metaspaceConstantPool = unsafe.getAddress(metaspaceConstMethod + config.constMethodConstantsOffset);
         final long metaspaceKlass = unsafe.getAddress(metaspaceConstantPool + config.constantPoolHolderOffset);
-        return HotSpotResolvedObjectTypeImpl.fromMetaspaceKlass(metaspaceKlass);
+        return HotSpotResolvedObjectType.fromMetaspaceKlass(metaspaceKlass);
     }
 
     /**
@@ -80,11 +80,11 @@ public final class HotSpotResolvedJavaMethodImpl extends HotSpotMethod implement
      * @return the {@link ResolvedJavaMethod} corresponding to {@code metaspaceMethod}
      */
     public static HotSpotResolvedJavaMethod fromMetaspace(long metaspaceMethod) {
-        HotSpotResolvedObjectTypeImpl holder = getHolder(metaspaceMethod);
+        HotSpotResolvedObjectType holder = getHolder(metaspaceMethod);
         return holder.createMethod(metaspaceMethod);
     }
 
-    public HotSpotResolvedJavaMethodImpl(HotSpotResolvedObjectTypeImpl holder, long metaspaceMethod) {
+    public HotSpotResolvedJavaMethodImpl(HotSpotResolvedObjectType holder, long metaspaceMethod) {
         // It would be too much work to get the method name here so we fill it in later.
         super(null);
         this.metaspaceMethod = metaspaceMethod;
@@ -152,7 +152,7 @@ public final class HotSpotResolvedJavaMethodImpl extends HotSpotMethod implement
     }
 
     @Override
-    public HotSpotResolvedObjectTypeImpl getDeclaringClass() {
+    public HotSpotResolvedObjectType getDeclaringClass() {
         return holder;
     }
 
@@ -233,8 +233,8 @@ public final class HotSpotResolvedJavaMethodImpl extends HotSpotMethod implement
                 catchType = constantPool.lookupType(catchTypeIndex, opcode);
 
                 // Check for Throwable which catches everything.
-                if (catchType instanceof HotSpotResolvedObjectTypeImpl) {
-                    HotSpotResolvedObjectTypeImpl resolvedType = (HotSpotResolvedObjectTypeImpl) catchType;
+                if (catchType instanceof HotSpotResolvedObjectType) {
+                    HotSpotResolvedObjectType resolvedType = (HotSpotResolvedObjectType) catchType;
                     if (resolvedType.mirror() == Throwable.class) {
                         catchTypeIndex = 0;
                         catchType = null;
@@ -350,7 +350,7 @@ public final class HotSpotResolvedJavaMethodImpl extends HotSpotMethod implement
         return runtime().getCompilerToVM().getStackTraceElement(metaspaceMethod, bci);
     }
 
-    public ResolvedJavaMethod uniqueConcreteMethod(HotSpotResolvedObjectTypeImpl receiver) {
+    public ResolvedJavaMethod uniqueConcreteMethod(HotSpotResolvedObjectType receiver) {
         if (receiver.isInterface()) {
             // Cannot trust interfaces. Because of:
             // interface I { void foo(); }
@@ -622,21 +622,21 @@ public final class HotSpotResolvedJavaMethodImpl extends HotSpotMethod implement
     public int vtableEntryOffset(ResolvedJavaType resolved) {
         guarantee(isInVirtualMethodTable(resolved), "%s does not have a vtable entry", this);
         HotSpotVMConfig config = runtime().getConfig();
-        final int vtableIndex = getVtableIndex((HotSpotResolvedObjectTypeImpl) resolved);
+        final int vtableIndex = getVtableIndex((HotSpotResolvedObjectType) resolved);
         return config.instanceKlassVtableStartOffset + vtableIndex * config.vtableEntrySize + config.vtableEntryMethodOffset;
     }
 
     @Override
     public boolean isInVirtualMethodTable(ResolvedJavaType resolved) {
-        if (resolved instanceof HotSpotResolvedObjectTypeImpl) {
-            HotSpotResolvedObjectTypeImpl hotspotResolved = (HotSpotResolvedObjectTypeImpl) resolved;
+        if (resolved instanceof HotSpotResolvedObjectType) {
+            HotSpotResolvedObjectType hotspotResolved = (HotSpotResolvedObjectType) resolved;
             int vtableIndex = getVtableIndex(hotspotResolved);
             return vtableIndex >= 0 && vtableIndex < hotspotResolved.getVtableLength();
         }
         return false;
     }
 
-    private int getVtableIndex(HotSpotResolvedObjectTypeImpl resolved) {
+    private int getVtableIndex(HotSpotResolvedObjectType resolved) {
         if (!holder.isLinked()) {
             return runtime().getConfig().invalidVtableIndex;
         }
@@ -663,7 +663,7 @@ public final class HotSpotResolvedJavaMethodImpl extends HotSpotMethod implement
     }
 
     private int getVtableIndexForInterface(ResolvedJavaType resolved) {
-        HotSpotResolvedObjectTypeImpl hotspotType = (HotSpotResolvedObjectTypeImpl) resolved;
+        HotSpotResolvedObjectType hotspotType = (HotSpotResolvedObjectType) resolved;
         return runtime().getCompilerToVM().getVtableIndexForInterface(hotspotType.getMetaspaceKlass(), getMetaspaceMethod());
     }
 

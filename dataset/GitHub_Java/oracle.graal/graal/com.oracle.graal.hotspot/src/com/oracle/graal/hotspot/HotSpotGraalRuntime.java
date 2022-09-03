@@ -257,7 +257,7 @@ public final class HotSpotGraalRuntime implements GraalRuntime, RuntimeProvider,
 
     /**
      * Graal mirrors are stored as a {@link ClassValue} associated with the {@link Class} of the
-     * type. This data structure stores both {@link HotSpotResolvedJavaMethod} and
+     * type. This data structure stores both {@link HotSpotResolvedObjectType} and
      * {@link HotSpotResolvedPrimitiveType} types.
      */
     private final ClassValue<ResolvedJavaType> graalMirrors = new ClassValue<ResolvedJavaType>() {
@@ -267,7 +267,7 @@ public final class HotSpotGraalRuntime implements GraalRuntime, RuntimeProvider,
                 Kind kind = Kind.fromJavaClass(javaClass);
                 return new HotSpotResolvedPrimitiveType(kind);
             } else {
-                return new HotSpotResolvedObjectTypeImpl(javaClass);
+                return new HotSpotResolvedObjectType(javaClass);
             }
         }
     };
@@ -398,14 +398,13 @@ public final class HotSpotGraalRuntime implements GraalRuntime, RuntimeProvider,
         }
 
         // Resolve non-primitive types in the VM.
-        HotSpotResolvedObjectTypeImpl hsAccessingType = (HotSpotResolvedObjectTypeImpl) accessingType;
-        final long metaspaceKlass = compilerToVm.lookupType(name, hsAccessingType.mirror(), resolve);
+        final long metaspaceKlass = compilerToVm.lookupType(name, accessingType.mirror(), resolve);
 
         if (metaspaceKlass == 0L) {
             assert resolve == false;
             return HotSpotUnresolvedJavaType.create(name);
         }
-        return HotSpotResolvedObjectTypeImpl.fromMetaspaceKlass(metaspaceKlass);
+        return HotSpotResolvedObjectType.fromMetaspaceKlass(metaspaceKlass);
     }
 
     public HotSpotProviders getHostProviders() {

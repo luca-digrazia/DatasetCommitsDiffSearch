@@ -125,13 +125,13 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
     }
 
     /**
-     * Gets the holder for this constant pool as {@link HotSpotResolvedObjectTypeImpl}.
+     * Gets the holder for this constant pool as {@link HotSpotResolvedObjectType}.
      *
      * @return holder for this constant pool
      */
     private HotSpotResolvedObjectType getHolder() {
         final long metaspaceKlass = unsafe.getAddress(metaspaceConstantPool + runtime().getConfig().constantPoolHolderOffset);
-        return HotSpotResolvedObjectTypeImpl.fromMetaspaceKlass(metaspaceKlass);
+        return HotSpotResolvedObjectType.fromMetaspaceKlass(metaspaceKlass);
     }
 
     /**
@@ -447,7 +447,7 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
             return HotSpotUnresolvedJavaType.create("L" + name + ";");
         } else {
             assert (metaspacePointer & config.compilerToVMKlassTag) == 0;
-            return HotSpotResolvedObjectTypeImpl.fromMetaspaceKlass(metaspacePointer);
+            return HotSpotResolvedObjectType.fromMetaspaceKlass(metaspacePointer);
         }
     }
 
@@ -462,7 +462,7 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
             String name = getNameRefAt(index);
             String signature = getSignatureRefAt(index);
             if (opcode == Bytecodes.INVOKEDYNAMIC) {
-                HotSpotResolvedObjectTypeImpl holder = HotSpotResolvedObjectTypeImpl.fromObjectClass(MethodHandle.class);
+                HotSpotResolvedObjectType holder = HotSpotResolvedObjectType.fromObjectClass(MethodHandle.class);
                 return new HotSpotMethodUnresolved(name, signature, holder);
             } else {
                 final int klassIndex = getKlassRefIndexAt(index);
@@ -492,7 +492,7 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
         final int holderIndex = getKlassRefIndexAt(index);
         JavaType holder = lookupType(holderIndex, opcode);
 
-        if (holder instanceof HotSpotResolvedObjectTypeImpl) {
+        if (holder instanceof HotSpotResolvedObjectType) {
             long[] info = new long[2];
             long metaspaceKlass;
             try {
@@ -504,7 +504,7 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
                  */
                 return new HotSpotUnresolvedField(holder, name, type);
             }
-            HotSpotResolvedObjectTypeImpl resolvedHolder = HotSpotResolvedObjectTypeImpl.fromMetaspaceKlass(metaspaceKlass);
+            HotSpotResolvedObjectType resolvedHolder = HotSpotResolvedObjectType.fromMetaspaceKlass(metaspaceKlass);
             final int flags = (int) info[0];
             final long offset = info[1];
             return resolvedHolder.createField(name, type, offset, flags);
@@ -554,7 +554,7 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
             case UnresolvedClass:
             case UnresolvedClassInError:
                 final long metaspaceKlass = runtime().getCompilerToVM().constantPoolKlassAt(metaspaceConstantPool, index);
-                HotSpotResolvedObjectTypeImpl type = HotSpotResolvedObjectTypeImpl.fromMetaspaceKlass(metaspaceKlass);
+                HotSpotResolvedObjectType type = HotSpotResolvedObjectType.fromMetaspaceKlass(metaspaceKlass);
                 Class<?> klass = type.mirror();
                 if (!klass.isPrimitive() && !klass.isArray()) {
                     unsafe.ensureClassInitialized(klass);

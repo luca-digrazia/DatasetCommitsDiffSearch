@@ -24,7 +24,7 @@ package com.oracle.graal.hotspot.meta;
 
 import static com.oracle.graal.compiler.common.UnsafeAccess.*;
 import static com.oracle.graal.hotspot.meta.HotSpotResolvedJavaType.*;
-import static com.oracle.graal.hotspot.meta.HotSpotResolvedObjectTypeImpl.*;
+import static com.oracle.graal.hotspot.meta.HotSpotResolvedObjectType.*;
 
 import java.lang.reflect.*;
 
@@ -52,7 +52,7 @@ public class HotSpotMetaAccessProvider implements MetaAccessProvider {
         return fromClass(clazz);
     }
 
-    public HotSpotResolvedObjectTypeImpl lookupJavaType(JavaConstant constant) {
+    public HotSpotResolvedObjectType lookupJavaType(JavaConstant constant) {
         if (constant.isNull() || !(constant instanceof HotSpotObjectConstant)) {
             return null;
         }
@@ -115,11 +115,11 @@ public class HotSpotMetaAccessProvider implements MetaAccessProvider {
         final int modifiers = reflectionField.getModifiers();
         final long offset = Modifier.isStatic(modifiers) ? unsafe.staticFieldOffset(reflectionField) : unsafe.objectFieldOffset(reflectionField);
 
-        HotSpotResolvedObjectTypeImpl holder = fromObjectClass(fieldHolder);
+        HotSpotResolvedObjectType holder = fromObjectClass(fieldHolder);
         HotSpotResolvedJavaType type = fromClass(fieldType);
 
         if (offset != -1) {
-            HotSpotResolvedObjectTypeImpl resolved = holder;
+            HotSpotResolvedObjectType resolved = holder;
             return resolved.createField(name, type, offset, modifiers);
         } else {
             throw GraalInternalError.shouldNotReachHere("unresolved field " + reflectionField);
@@ -295,7 +295,7 @@ public class HotSpotMetaAccessProvider implements MetaAccessProvider {
     @Override
     public long getMemorySize(JavaConstant constant) {
         if (constant.getKind() == Kind.Object) {
-            HotSpotResolvedObjectTypeImpl lookupJavaType = this.lookupJavaType(constant);
+            HotSpotResolvedObjectType lookupJavaType = this.lookupJavaType(constant);
 
             if (lookupJavaType == null) {
                 return 0;

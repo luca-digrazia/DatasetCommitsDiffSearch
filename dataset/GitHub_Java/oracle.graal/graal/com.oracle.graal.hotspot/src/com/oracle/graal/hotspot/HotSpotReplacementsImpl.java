@@ -30,13 +30,9 @@ import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.replacements.*;
-import com.oracle.graal.hotspot.word.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.util.*;
 import com.oracle.graal.replacements.*;
-import com.oracle.graal.replacements.IntegerSubstitutions;
-import com.oracle.graal.replacements.LongSubstitutions;
-import com.oracle.graal.word.phases.*;
 
 /**
  * Filters certain method substitutions based on whether there is underlying hardware support for
@@ -52,7 +48,7 @@ public class HotSpotReplacementsImpl extends ReplacementsImpl {
     }
 
     @Override
-    protected ResolvedJavaMethod registerMethodSubstitution(ClassReplacements cr, Executable originalMethod, Method substituteMethod) {
+    protected ResolvedJavaMethod registerMethodSubstitution(ClassReplacements cr, Member originalMethod, Method substituteMethod) {
         final Class<?> substituteClass = substituteMethod.getDeclaringClass();
         if (substituteClass.getDeclaringClass() == BoxingSubstitutions.class) {
             if (config.useHeapProfiler) {
@@ -65,10 +61,7 @@ public class HotSpotReplacementsImpl extends ReplacementsImpl {
                 }
             } else if (substituteMethod.getName().equals("numberOfLeadingZeros")) {
                 if (config.useCountLeadingZerosInstruction) {
-                    return null;
-                }
-            } else if (substituteMethod.getName().equals("numberOfTrailingZeros")) {
-                if (config.useCountTrailingZerosInstruction) {
+                    // bsr is lzcnt
                     return null;
                 }
             }
@@ -98,29 +91,10 @@ public class HotSpotReplacementsImpl extends ReplacementsImpl {
              * the VM replicates them for every signature that they are actually used for.
              * Therefore, we cannot use the usual annotation-driven mechanism to define the
              */
-            if (MethodHandleNode.lookupMethodHandleIntrinsic(method, providers.getMetaAccess().getMethodHandleAccess()) != null) {
+            if (MethodHandleNode.lookupMethodHandleIntrinsic(method) != null) {
                 return MethodHandleNode.class;
             }
         }
         return super.getMacroSubstitution(method);
-    }
-
-    @Override
-    protected GraphMaker createGraphMaker(ResolvedJavaMethod substitute, ResolvedJavaMethod original, FrameStateProcessing frameStateProcessing) {
-        return new HotSpotGraphMaker(this, substitute, original, frameStateProcessing);
-    }
-
-    private static class HotSpotGraphMaker extends ReplacementsImpl.GraphMaker {
-
-        protected HotSpotGraphMaker(ReplacementsImpl replacements, ResolvedJavaMethod substitute, ResolvedJavaMethod substitutedMethod, FrameStateProcessing frameStateProcessing) {
-            super(replacements, substitute, substitutedMethod, frameStateProcessing);
-        }
-
-        @Override
-        protected void afterParsing(StructuredGraph graph) {
-            MetaAccessProvider metaAccess = replacements.providers.getMetaAccess();
-            new WordTypeVerificationPhase(metaAccess, replacements.snippetReflection, replacements.target.wordKind).apply(graph);
-            new HotSpotWordTypeRewriterPhase(metaAccess, replacements.snippetReflection, replacements.target.wordKind).apply(graph);
-        }
     }
 }

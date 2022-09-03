@@ -44,11 +44,8 @@ import com.oracle.graal.nodes.*;
 
 public class SPARCHotSpotNodeLIRBuilder extends SPARCNodeLIRBuilder implements HotSpotNodeLIRBuilder {
 
-    private HotSpotGraalRuntimeProvider runtime;
-
-    public SPARCHotSpotNodeLIRBuilder(HotSpotGraalRuntimeProvider runtime, StructuredGraph graph, LIRGeneratorTool lirGen) {
+    public SPARCHotSpotNodeLIRBuilder(StructuredGraph graph, LIRGeneratorTool lirGen) {
         super(graph, lirGen);
-        this.runtime = runtime;
         assert gen instanceof SPARCHotSpotLIRGenerator;
         assert getDebugInfoBuilder() instanceof HotSpotDebugInfoBuilder;
         ((SPARCHotSpotLIRGenerator) gen).setLockStack(((HotSpotDebugInfoBuilder) getDebugInfoBuilder()).lockStack());
@@ -100,7 +97,7 @@ public class SPARCHotSpotNodeLIRBuilder extends SPARCNodeLIRBuilder implements H
     protected void emitDirectCall(DirectCallTargetNode callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState callState) {
         InvokeKind invokeKind = ((HotSpotDirectCallTargetNode) callTarget).invokeKind();
         if (invokeKind == InvokeKind.Interface || invokeKind == InvokeKind.Virtual) {
-            append(new SPARCHotspotDirectVirtualCallOp(callTarget.targetMethod(), result, parameters, temps, callState, invokeKind, runtime.getConfig()));
+            append(new SPARCHotspotDirectVirtualCallOp(callTarget.targetMethod(), result, parameters, temps, callState, invokeKind));
         } else {
             assert invokeKind == InvokeKind.Static || invokeKind == InvokeKind.Special;
             HotSpotResolvedJavaMethod resolvedMethod = (HotSpotResolvedJavaMethod) callTarget.targetMethod();
