@@ -37,6 +37,7 @@ import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.replacements.*;
+import com.oracle.graal.replacements.Snippet.*;
 import com.oracle.graal.replacements.nodes.*;
 import com.oracle.graal.word.*;
 
@@ -74,7 +75,7 @@ public class ArrayCopySnippets implements Snippets {
     private static final Kind VECTOR_KIND = Kind.Long;
     private static final long VECTOR_SIZE = arrayIndexScale(Kind.Long);
 
-    private static void vectorizedCopy(Object src, int srcPos, Object dest, int destPos, int length, Kind baseKind) {
+    public static void vectorizedCopy(Object src, int srcPos, Object dest, int destPos, int length, @ConstantParameter("baseKind") Kind baseKind) {
         checkNonNull(src);
         checkNonNull(dest);
         checkLimits(src, srcPos, dest, destPos, length);

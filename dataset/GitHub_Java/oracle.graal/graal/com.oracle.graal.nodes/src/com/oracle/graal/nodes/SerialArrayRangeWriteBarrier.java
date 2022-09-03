@@ -27,26 +27,26 @@ import com.oracle.graal.nodes.type.*;
 
 public final class SerialArrayRangeWriteBarrier extends FixedWithNextNode implements Lowerable {
 
-    @Input private ValueNode destinationObject;
-    @Input private ValueNode destinationStartingIndex;
+    @Input private ValueNode dstObject;
+    @Input private ValueNode dstPos;
     @Input private ValueNode length;
 
-    public ValueNode getDestinationObject() {
-        return destinationObject;
+    public ValueNode getDstObject() {
+        return dstObject;
     }
 
-    public ValueNode getDestinationStartingIndex() {
-        return destinationStartingIndex;
+    public ValueNode getDstPos() {
+        return dstPos;
     }
 
     public ValueNode getLength() {
         return length;
     }
 
-    public SerialArrayRangeWriteBarrier(ValueNode destinationObject, ValueNode destinationStartingIndex, ValueNode length) {
+    public SerialArrayRangeWriteBarrier(ValueNode dstObject, ValueNode dstPos, ValueNode length) {
         super(StampFactory.forVoid());
-        this.destinationObject = destinationObject;
-        this.destinationStartingIndex = destinationStartingIndex;
+        this.dstObject = dstObject;
+        this.dstPos = dstPos;
         this.length = length;
 
     }
