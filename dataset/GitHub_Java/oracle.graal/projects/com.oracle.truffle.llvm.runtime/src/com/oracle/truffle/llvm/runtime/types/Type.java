@@ -31,23 +31,8 @@ package com.oracle.truffle.llvm.runtime.types;
 
 import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
-import com.oracle.truffle.llvm.runtime.types.visitors.TypeVisitor;
 
 public interface Type {
-
-    default LLVMType getLLVMType() {
-        if (this instanceof PointerType) {
-            final Type pointeeType = ((PointerType) this).getPointeeType();
-            if (pointeeType instanceof FunctionType) {
-                return new LLVMType(LLVMBaseType.FUNCTION_ADDRESS);
-            } else {
-                return new LLVMType(LLVMBaseType.ADDRESS, pointeeType == null ? null : pointeeType.getLLVMType());
-            }
-        }
-        return new LLVMType(this.getLLVMBaseType());
-    }
-
-    void accept(TypeVisitor visitor);
 
     default LLVMBaseType getLLVMBaseType() {
         throw new AssertionError("Cannot resolve to LLVMBaseType: " + this);
