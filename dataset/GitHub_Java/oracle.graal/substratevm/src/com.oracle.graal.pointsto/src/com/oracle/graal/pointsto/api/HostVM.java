@@ -68,7 +68,7 @@ public interface HostVM {
 
     boolean platformSupported(ResolvedJavaType type);
 
-    void registerType(AnalysisType newValue);
+    void registerType(AnalysisType newValue, ResolvedJavaType hostType);
 
     boolean isInitialized(AnalysisType type);
 

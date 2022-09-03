@@ -264,11 +264,11 @@ public abstract class BigBang {
     }
 
     public AnalysisPolicy analysisPolicy() {
-        return universe.analysisPolicy();
+        return hostVM.analysisPolicy();
     }
 
     public AnalysisContextPolicy<AnalysisContext> contextPolicy() {
-        return universe.analysisPolicy().getContextPolicy();
+        return hostVM.analysisPolicy().getContextPolicy();
     }
 
     public AnalysisUniverse getUniverse() {
@@ -542,7 +542,14 @@ public abstract class BigBang {
 
             int numTypes;
             do {
-                didSomeWork |= doTypeflow();
+                try (StopTimer t = typeFlowTimer.start()) {
+                    executor.start();
+                    executor.complete();
+                    didSomeWork |= (executor.getPostedOperations() > 0);
+                    executor.shutdown();
+                }
+                /* Initialize for the next iteration. */
+                executor.init(timing);
 
                 /*
                  * Check if the object graph introduces any new types, which leads to new operations
@@ -564,20 +571,6 @@ public abstract class BigBang {
 
             return didSomeWork;
         }
-    }
-
-    @SuppressWarnings("try")
-    public boolean doTypeflow() throws InterruptedException {
-        boolean didSomeWork;
-        try (StopTimer ignored = typeFlowTimer.start()) {
-            executor.start();
-            executor.complete();
-            didSomeWork = (executor.getPostedOperations() > 0);
-            executor.shutdown();
-        }
-        /* Initialize for the next iteration. */
-        executor.init(timing);
-        return didSomeWork;
     }
 
     /**
