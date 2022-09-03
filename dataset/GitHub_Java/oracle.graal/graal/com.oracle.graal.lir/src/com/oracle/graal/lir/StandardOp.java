@@ -27,13 +27,13 @@ import static com.oracle.graal.lir.LIRValueUtil.*;
 
 import java.util.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.framemap.*;
-import com.oracle.jvmci.code.*;
-import com.oracle.jvmci.common.*;
-import com.oracle.jvmci.meta.*;
 
 /**
  * A collection of machine-independent LIR operations, as well as interfaces to be implemented for
@@ -227,19 +227,6 @@ public class StandardOp {
     }
 
     /**
-     * An operation that takes one input and stores it in a stack slot as well as on an ordinary
-     * variable.
-     */
-    public interface StackStoreOp {
-
-        Value getInput();
-
-        AllocatableValue getResult();
-
-        StackSlotValue getStackSlot();
-    }
-
-    /**
      * A LIR operation that does nothing. If the operation records its position, it can be
      * subsequently {@linkplain #replace(LIR, LIRInstruction) replaced}.
      */
@@ -271,7 +258,7 @@ public class StandardOp {
         @Override
         public void emitCode(CompilationResultBuilder crb) {
             if (block != null) {
-                throw new JVMCIError(this + " should have been replaced");
+                throw new GraalInternalError(this + " should have been replaced");
             }
         }
     }
@@ -307,7 +294,7 @@ public class StandardOp {
 
         @Override
         public void emitCode(CompilationResultBuilder crb) {
-            throw new JVMCIError(this + " should have been removed");
+            throw new GraalInternalError(this + " should have been removed");
         }
 
         @Override
