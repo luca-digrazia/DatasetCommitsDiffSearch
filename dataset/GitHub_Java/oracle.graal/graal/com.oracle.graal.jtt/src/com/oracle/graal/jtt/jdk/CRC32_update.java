@@ -28,10 +28,6 @@ import org.junit.*;
 
 import com.oracle.graal.jtt.*;
 
-/**
- * Tests compiled call to {@link CRC32#update(int, int)}.
- */
-@SuppressWarnings("javadoc")
 public class CRC32_update extends JTTTest {
 
     public static long test(byte[] input) {
