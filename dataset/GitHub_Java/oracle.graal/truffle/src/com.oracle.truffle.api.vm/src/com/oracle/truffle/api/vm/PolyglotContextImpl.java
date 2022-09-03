@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -50,7 +50,6 @@ import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.Value;
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractContextImpl;
-import org.graalvm.polyglot.io.FileSystem;
 
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CallTarget;
@@ -62,6 +61,7 @@ import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleContext;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.Env;
+import org.graalvm.polyglot.io.FileSystem;
 
 @SuppressWarnings("deprecation")
 final class PolyglotContextImpl extends AbstractContextImpl implements com.oracle.truffle.api.vm.PolyglotImpl.VMObject {
@@ -108,8 +108,6 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
     final Value polyglotHostBindings; // for accesses from the polyglot api
     Predicate<String> classFilter;  // effectively final
     boolean hostAccessAllowed;      // effectively final
-    boolean hostClassLoadingAllowed;      // effectively final
-    boolean nativeAccessAllowed;    // effectively final
     @CompilationFinal boolean createThreadAllowed;
 
     // map from class to language index
@@ -139,9 +137,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
                     OutputStream err,
                     InputStream in,
                     boolean hostAccessAllowed,
-                    boolean nativeAccessAllowed,
                     boolean createThreadAllowed,
-                    boolean hostClassLoadingAllowed,
                     Predicate<String> classFilter,
                     Map<String, String> options,
                     Map<String, String[]> applicationArguments,
@@ -151,7 +147,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
         this.parent = null;
         this.engine = engine;
         this.fileSystem = fileSystem;
-        patchInstance(out, err, in, hostAccessAllowed, nativeAccessAllowed, createThreadAllowed, hostClassLoadingAllowed, classFilter, applicationArguments, allowedPublicLanguages);
+        patchInstance(out, err, in, hostAccessAllowed, createThreadAllowed, classFilter, applicationArguments, allowedPublicLanguages);
         Collection<PolyglotLanguage> languages = engine.idToLanguage.values();
         this.contexts = new PolyglotLanguageContext[languages.size() + 1];
         PolyglotLanguageContext hostContext = new PolyglotLanguageContext(this, engine.hostLanguage, null, applicationArguments.get(PolyglotEngineImpl.HOST_LANGUAGE_ID),
@@ -219,8 +215,6 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
         PolyglotContextImpl parent = creator.context;
         this.parent = creator.context;
         this.hostAccessAllowed = parent.hostAccessAllowed;
-        this.hostClassLoadingAllowed = parent.hostClassLoadingAllowed;
-        this.nativeAccessAllowed = parent.nativeAccessAllowed;
         this.createThreadAllowed = parent.createThreadAllowed;
         this.applicationArguments = parent.applicationArguments;
         this.classFilter = parent.classFilter;
@@ -996,10 +990,10 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
     }
 
     boolean patch(OutputStream newOut, OutputStream newErr, InputStream newIn, boolean newHostAccessAllowed,
-                    boolean newNativeAccessAllowed, boolean newCreateThreadAllowed, boolean newHostClassLoadingAllowed, Predicate<String> newClassFilter,
+                    boolean newCreateThreadAllowed, Predicate<String> newClassFilter,
                     Map<String, String> newOptions, Map<String, String[]> newApplicationArguments, Set<String> newAllowedPublicLanguages, FileSystem newFileSystem) {
         CompilerAsserts.neverPartOfCompilation();
-        patchInstance(newOut, newErr, newIn, newHostAccessAllowed, newNativeAccessAllowed, newCreateThreadAllowed, newHostClassLoadingAllowed, newClassFilter, newApplicationArguments, newAllowedPublicLanguages);
+        patchInstance(newOut, newErr, newIn, newHostAccessAllowed, newCreateThreadAllowed, newClassFilter, newApplicationArguments, newAllowedPublicLanguages);
         ((FileSystems.PreInitializeContextFileSystem) fileSystem).patchDelegate(newFileSystem);
         final Map<String, Map<String, String>> optionsByLanguage = new HashMap<>();
         for (String optionKey : newOptions.keySet()) {
@@ -1027,12 +1021,10 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
     }
 
     private void patchInstance(OutputStream newOut, OutputStream newErr, InputStream newIn, boolean newHostAccessAllowed,
-                    boolean newNativeAccessAllowed, boolean newCreateThreadAllowed, boolean newHostClassLoadingAllowed, Predicate<String> newClassFilter,
+                    boolean newCreateThreadAllowed, Predicate<String> newClassFilter,
                     Map<String, String[]> newApplicationArguments, Set<String> newAllowedPublicLanguages) {
         this.hostAccessAllowed = newHostAccessAllowed;
-        this.nativeAccessAllowed = newNativeAccessAllowed;
         this.createThreadAllowed = newCreateThreadAllowed;
-        this.hostClassLoadingAllowed = newHostClassLoadingAllowed;
         this.applicationArguments = newApplicationArguments;
         this.classFilter = newClassFilter;
 
@@ -1077,7 +1069,6 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
                         null,
                         null,
                         null,
-                        false,
                         false,
                         false,
                         null,
