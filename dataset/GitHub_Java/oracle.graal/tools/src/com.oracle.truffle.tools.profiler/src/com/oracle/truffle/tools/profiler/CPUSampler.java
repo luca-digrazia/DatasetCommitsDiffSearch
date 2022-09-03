@@ -712,8 +712,7 @@ class CPUSamplerSnippets {
         sampler.setCollecting(false);
         sampler.close();
         // Read information about the roots of the tree per thread.
-        for (Collection<ProfilerNode<CPUSampler.Payload>> nodes
-                : sampler.getThreadToNodesMap().values()) {
+        for (Collection<ProfilerNode<CPUSampler.Payload>> nodes : sampler.getThreadToNodesMap().values()) {
             for (ProfilerNode<CPUSampler.Payload> node : nodes) {
                 final String rootName = node.getRootName();
                 final int selfHitCount = node.getPayload().getSelfHitCount();
