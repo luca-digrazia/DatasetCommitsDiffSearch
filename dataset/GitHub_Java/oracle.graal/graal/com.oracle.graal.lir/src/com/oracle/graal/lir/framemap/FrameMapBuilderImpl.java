@@ -22,17 +22,16 @@
  */
 package com.oracle.graal.lir.framemap;
 
-import static jdk.internal.jvmci.code.ValueUtil.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
 
 import java.util.*;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.common.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.*;
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
@@ -72,7 +71,7 @@ public class FrameMapBuilderImpl implements FrameMapBuilderTool {
             return null;
         }
         if (outObjectStackSlots != null) {
-            throw JVMCIError.unimplemented();
+            throw GraalInternalError.unimplemented();
         }
         VirtualStackSlotRange slot = new VirtualStackSlotRange(numStackSlots++, slots, objects);
         stackSlots.add(slot);
@@ -99,7 +98,6 @@ public class FrameMapBuilderImpl implements FrameMapBuilderTool {
         calls.add(cc);
     }
 
-    @SuppressWarnings("try")
     public FrameMap buildFrameMap(LIRGenerationResult res, StackSlotAllocator allocator) {
         try (Scope s = Debug.scope("StackSlotAllocation")) {
             allocator.allocateStackSlots(this, res);
@@ -119,7 +117,7 @@ public class FrameMapBuilderImpl implements FrameMapBuilderTool {
         InstructionValueConsumer verifySlots = (LIRInstruction op, Value value, OperandMode mode, EnumSet<OperandFlag> flags) -> {
             assert !isVirtualStackSlot(value) : String.format("Instruction %s contains a virtual stack slot %s", op, value);
         };
-        for (AbstractBlockBase<?> block : lir.getControlFlowGraph().getBlocks()) {
+        for (AbstractBlock<?> block : lir.getControlFlowGraph().getBlocks()) {
             lir.getLIRforBlock(block).forEach(op -> {
                 op.visitEachInput(verifySlots);
                 op.visitEachAlive(verifySlots);
