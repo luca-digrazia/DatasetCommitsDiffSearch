@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,14 +23,11 @@
 package com.oracle.graal.nodes.extended;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
-public class UnboxNode extends FloatingNode implements Virtualizable, Lowerable, Canonicalizable {
+public class UnboxNode extends FixedWithNextNode implements Virtualizable, Lowerable, Canonicalizable {
 
     @Input private ValueNode value;
     private final Kind boxingKind;
@@ -50,24 +47,20 @@ public class UnboxNode extends FloatingNode implements Virtualizable, Lowerable,
     }
 
     @Override
-    public void lower(LoweringTool tool) {
-        tool.getLowerer().lower(this, tool);
+    public void lower(LoweringTool tool, LoweringType loweringType) {
+        tool.getRuntime().lower(this, tool);
     }
 
     @Override
     public void virtualize(VirtualizerTool tool) {
         State state = tool.getObjectState(value);
         if (state != null && state.getState() == EscapeState.Virtual) {
-            ResolvedJavaType objectType = state.getVirtualObject().type();
-            ResolvedJavaType expectedType = tool.getMetaAccessProvider().lookupJavaType(boxingKind.toBoxedJavaClass());
-            if (objectType.equals(expectedType)) {
-                tool.replaceWithValue(state.getEntry(0));
-            }
+            tool.replaceWithValue(state.getEntry(0));
         }
     }
 
     @Override
-    public Node canonical(CanonicalizerTool tool) {
+    public ValueNode canonical(CanonicalizerTool tool) {
         if (value.isConstant()) {
             Constant constant = value.asConstant();
             Object o = constant.asObject();
@@ -94,10 +87,7 @@ public class UnboxNode extends FloatingNode implements Virtualizable, Lowerable,
                 }
             }
         } else if (value instanceof BoxNode) {
-            BoxNode box = (BoxNode) value;
-            if (boxingKind == box.getBoxingKind()) {
-                return box.getValue();
-            }
+            return ((BoxNode) value).getValue();
         }
         if (usages().isEmpty()) {
             return null;
