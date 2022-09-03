@@ -22,23 +22,13 @@
  */
 package com.oracle.graal.phases.graph;
 
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Deque;
-import java.util.List;
-import java.util.Map;
-import java.util.function.Predicate;
+import java.util.*;
+import java.util.function.*;
 
-import com.oracle.graal.compiler.common.cfg.Loop;
-import com.oracle.graal.compiler.common.util.CompilationAlarm;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.nodes.AbstractEndNode;
-import com.oracle.graal.nodes.AbstractMergeNode;
-import com.oracle.graal.nodes.FixedNode;
-import com.oracle.graal.nodes.LoopBeginNode;
-import com.oracle.graal.nodes.cfg.Block;
-
-import jdk.vm.ci.code.BailoutException;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.cfg.*;
 
 public final class ReentrantBlockIterator {
 
@@ -73,10 +63,10 @@ public final class ReentrantBlockIterator {
     public static <StateT> LoopInfo<StateT> processLoop(BlockIteratorClosure<StateT> closure, Loop<Block> loop, StateT initialState) {
         Map<FixedNode, StateT> blockEndStates = apply(closure, loop.getHeader(), initialState, block -> !(block.getLoop() == loop || block.isLoopHeader()));
 
-        Block[] predecessors = loop.getHeader().getPredecessors();
-        LoopInfo<StateT> info = new LoopInfo<>(predecessors.length - 1, loop.getExits().size());
-        for (int i = 1; i < predecessors.length; i++) {
-            StateT endState = blockEndStates.get(predecessors[i].getEndNode());
+        List<Block> predecessors = loop.getHeader().getPredecessors();
+        LoopInfo<StateT> info = new LoopInfo<>(predecessors.size() - 1, loop.getExits().size());
+        for (int i = 1; i < predecessors.size(); i++) {
+            StateT endState = blockEndStates.get(predecessors.get(i).getEndNode());
             // make sure all end states are unique objects
             info.endStates.add(closure.cloneState(endState));
         }
@@ -105,20 +95,17 @@ public final class ReentrantBlockIterator {
         Block current = start;
 
         while (true) {
-            if (CompilationAlarm.hasExpired()) {
-                throw new BailoutException("Compilation exceeded %d seconds during CFG traversal", CompilationAlarm.Options.CompilationExpirationPeriod.getValue());
-            }
             Block next = null;
             if (stopAtBlock != null && stopAtBlock.test(current)) {
                 states.put(current.getBeginNode(), state);
             } else {
                 state = closure.processBlock(current, state);
 
-                Block[] successors = current.getSuccessors();
-                if (successors.length == 0) {
+                List<Block> successors = current.getSuccessors();
+                if (successors.isEmpty()) {
                     // nothing to do...
-                } else if (successors.length == 1) {
-                    Block successor = successors[0];
+                } else if (successors.size() == 1) {
+                    Block successor = successors.get(0);
                     if (successor.isLoopHeader()) {
                         if (current.isLoopEnd()) {
                             // nothing to do... loop ends only lead to loop begins we've already
@@ -131,7 +118,7 @@ public final class ReentrantBlockIterator {
                         AbstractEndNode end = (AbstractEndNode) current.getEndNode();
 
                         // add the end node and see if the merge is ready for processing
-                        AbstractMergeNode merge = end.merge();
+                        MergeNode merge = end.merge();
                         if (allEndsVisited(states, current, merge)) {
                             ArrayList<StateT> mergedStates = mergeStates(states, state, current, successor, merge);
                             state = closure.merge(successor, mergedStates);
@@ -162,7 +149,7 @@ public final class ReentrantBlockIterator {
         }
     }
 
-    private static <StateT> boolean allEndsVisited(Map<FixedNode, StateT> states, Block current, AbstractMergeNode merge) {
+    private static <StateT> boolean allEndsVisited(Map<FixedNode, StateT> states, Block current, MergeNode merge) {
         for (AbstractEndNode forwardEnd : merge.forwardEnds()) {
             if (forwardEnd != current.getEndNode() && !states.containsKey(forwardEnd)) {
                 return false;
@@ -171,17 +158,17 @@ public final class ReentrantBlockIterator {
         return true;
     }
 
-    private static <StateT> Block processMultipleSuccessors(BlockIteratorClosure<StateT> closure, Deque<Block> blockQueue, Map<FixedNode, StateT> states, StateT state, Block[] successors) {
-        assert successors.length > 1;
-        for (int i = 1; i < successors.length; i++) {
-            Block successor = successors[i];
+    private static <StateT> Block processMultipleSuccessors(BlockIteratorClosure<StateT> closure, Deque<Block> blockQueue, Map<FixedNode, StateT> states, StateT state, List<Block> successors) {
+        assert successors.size() > 1;
+        for (int i = 1; i < successors.size(); i++) {
+            Block successor = successors.get(i);
             blockQueue.addFirst(successor);
             states.put(successor.getBeginNode(), closure.cloneState(state));
         }
-        return successors[0];
+        return successors.get(0);
     }
 
-    private static <StateT> ArrayList<StateT> mergeStates(Map<FixedNode, StateT> states, StateT state, Block current, Block successor, AbstractMergeNode merge) {
+    private static <StateT> ArrayList<StateT> mergeStates(Map<FixedNode, StateT> states, StateT state, Block current, Block successor, MergeNode merge) {
         ArrayList<StateT> mergedStates = new ArrayList<>(merge.forwardEndCount());
         for (Block predecessor : successor.getPredecessors()) {
             assert predecessor == current || states.containsKey(predecessor.getEndNode());

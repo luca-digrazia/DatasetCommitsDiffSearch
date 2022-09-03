@@ -32,7 +32,6 @@ import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
-import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.nodes.virtual.*;
 import com.oracle.graal.phases.graph.*;
 import com.oracle.graal.phases.graph.ReentrantBlockIterator.BlockIteratorClosure;
@@ -112,12 +111,6 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
         };
         ReentrantBlockIterator.apply(closure, cfg.getStartBlock());
         assert VirtualUtil.assertNonReachable(graph, obsoleteNodes);
-        for (Node fixed : obsoleteNodes) {
-            if (fixed.isAlive()) {
-                fixed.replaceAtUsages(null);
-                GraphUtil.killWithUnusedFloatingInputs(fixed);
-            }
-        }
     }
 
     @Override
@@ -211,7 +204,7 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
     protected class MergeProcessor {
 
         protected final Block mergeBlock;
-        protected final AbstractMergeNode merge;
+        protected final MergeNode merge;
 
         protected final GraphEffectList mergeEffects;
         protected final GraphEffectList afterMergeEffects;
@@ -219,7 +212,7 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
 
         public MergeProcessor(Block mergeBlock) {
             this.mergeBlock = mergeBlock;
-            this.merge = (AbstractMergeNode) mergeBlock.getBeginNode();
+            this.merge = (MergeNode) mergeBlock.getBeginNode();
             this.mergeEffects = new GraphEffectList();
             this.afterMergeEffects = new GraphEffectList();
         }
