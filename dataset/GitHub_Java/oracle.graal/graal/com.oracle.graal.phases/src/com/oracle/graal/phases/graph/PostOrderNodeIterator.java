@@ -100,7 +100,6 @@ public abstract class PostOrderNodeIterator<T extends MergeableState<T>> {
                 assert false : current;
             }
         } while (current != null);
-        finished();
     }
 
     private void queueSuccessors(FixedNode x, Set<Node> successors) {
@@ -218,9 +217,5 @@ public abstract class PostOrderNodeIterator<T extends MergeableState<T>> {
 
     protected void invoke(Invoke invoke) {
         node(invoke.node());
-    }
-
-    protected void finished() {
-        // nothing to do
     }
 }
