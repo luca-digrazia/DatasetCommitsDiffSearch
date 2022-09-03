@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -28,8 +26,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNotSame;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -40,7 +38,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -53,11 +50,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-import org.graalvm.options.OptionCategory;
 import org.graalvm.options.OptionDescriptor;
 import org.graalvm.options.OptionDescriptors;
 import org.graalvm.options.OptionKey;
-import org.graalvm.options.OptionValues;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.PolyglotException;
@@ -66,14 +61,12 @@ import org.junit.Assert;
 import org.junit.Test;
 
 import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.Option;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleContext;
 import com.oracle.truffle.api.TruffleException;
 import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.TruffleLanguage.ContextPolicy;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ForeignAccess;
@@ -88,6 +81,7 @@ import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.api.test.polyglot.LanguageSPITestLanguage.LanguageContext;
+import java.util.Objects;
 
 public class LanguageSPITest {
 
@@ -599,362 +593,6 @@ public class LanguageSPITest {
         context2.close();
     }
 
-    @TruffleLanguage.Registration(id = OneContextLanguage.ID, name = OneContextLanguage.ID, version = "1.0", mimeType = OneContextLanguage.ID, contextPolicy = ContextPolicy.EXCLUSIVE)
-    public static class OneContextLanguage extends MultiContextLanguage {
-        static final String ID = "OneContextLanguage";
-
-        @Override
-        protected OptionDescriptors getOptionDescriptors() {
-            return null;
-        }
-
-        public static OneContextLanguage getCurrentLanguage() {
-            return getCurrentLanguage(OneContextLanguage.class);
-        }
-
-    }
-
-    @TruffleLanguage.Registration(id = MultiContextLanguage.ID, name = MultiContextLanguage.ID, version = "1.0", mimeType = MultiContextLanguage.ID, contextPolicy = ContextPolicy.SHARED)
-    public static class MultiContextLanguage extends ProxyLanguage {
-
-        static final String ID = "MultiContextLanguage";
-
-        List<Env> createContextCalled = new ArrayList<>();
-        List<Source> parseCalled = new ArrayList<>();
-        List<Integer> initializeMultiContextCalled = new ArrayList<>(); // executionIndex
-        List<Integer> initializeMultipleContextsCalled = new ArrayList<>(); // executionIndex
-        boolean contextCachingEnabled = false;
-        int executionIndex;
-
-        @Option(help = "", category = OptionCategory.DEBUG) static final OptionKey<Integer> DummyOption = new OptionKey<>(0);
-
-        @Override
-        protected OptionDescriptors getOptionDescriptors() {
-            return new MultiContextLanguageOptionDescriptors();
-        }
-
-        @Override
-        protected boolean areOptionsCompatible(OptionValues firstOptions, OptionValues newOptions) {
-            return firstOptions.get(DummyOption).equals(newOptions.get(DummyOption));
-        }
-
-        @Override
-        protected LanguageContext createContext(com.oracle.truffle.api.TruffleLanguage.Env env) {
-            wrapper = false;
-            executionIndex++;
-            createContextCalled.add(env);
-            return super.createContext(env);
-        }
-
-        @Override
-        protected CallTarget parse(ParsingRequest request) throws Exception {
-            executionIndex++;
-            parseCalled.add(request.getSource());
-            return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(42));
-        }
-
-        @Override
-        protected void initializeMultipleContexts() {
-            executionIndex++;
-            initializeMultipleContextsCalled.add(executionIndex);
-        }
-
-        @Override
-        protected boolean initializeMultiContext() {
-            executionIndex++;
-            initializeMultiContextCalled.add(executionIndex);
-            return contextCachingEnabled;
-        }
-
-        static MultiContextLanguage getInstance() {
-            return MultiContextLanguage.getCurrentLanguage(MultiContextLanguage.class);
-        }
-
-        static MultiContextLanguage getInstance(Context context) {
-            context.enter();
-            try {
-                return MultiContextLanguage.getCurrentLanguage(MultiContextLanguage.class);
-            } finally {
-                context.leave();
-            }
-        }
-
-    }
-
-    @Test
-    public void testMultiContextBoundEngine() {
-        org.graalvm.polyglot.Source source1 = org.graalvm.polyglot.Source.create(MultiContextLanguage.ID, "foo");
-        org.graalvm.polyglot.Source source2 = org.graalvm.polyglot.Source.create(MultiContextLanguage.ID, "bar");
-
-        // test behavior with bound engine
-        Context context = Context.create();
-
-        context.initialize(MultiContextLanguage.ID);
-        MultiContextLanguage lang = MultiContextLanguage.getInstance(context);
-
-        assertEquals(1, lang.createContextCalled.size());
-        assertTrue(lang.initializeMultiContextCalled.isEmpty());
-        assertTrue(lang.parseCalled.isEmpty());
-
-        context.eval(source1);
-        assertEquals(1, lang.parseCalled.size());
-        assertEquals(source1.getCharacters(), lang.parseCalled.get(0).getCharacters());
-
-        context.eval(source1); // cached parse
-        assertEquals(1, lang.parseCalled.size());
-        assertTrue(lang.initializeMultiContextCalled.isEmpty());
-
-        context.eval(source2); // cached parse
-        assertEquals(2, lang.parseCalled.size());
-        assertEquals(source2.getCharacters(), lang.parseCalled.get(1).getCharacters());
-        assertTrue(lang.initializeMultiContextCalled.isEmpty());
-        context.close();
-    }
-
-    @Test
-    public void testMultiContextBoundEngineInnerContextWithCaching() throws Exception {
-
-        org.graalvm.polyglot.Source source1 = org.graalvm.polyglot.Source.create(MultiContextLanguage.ID, "foo");
-        org.graalvm.polyglot.Source source2 = org.graalvm.polyglot.Source.create(MultiContextLanguage.ID, "bar");
-
-        Source truffleSource1 = getTruffleSource(source1);
-        Source truffleSource2 = getTruffleSource(source2);
-
-        // test behavior with bound engine
-        Context context = Context.create();
-        context.enter();
-
-        context.initialize(MultiContextLanguage.ID);
-        MultiContextLanguage lang = MultiContextLanguage.getInstance(context);
-
-        assertEquals(1, lang.createContextCalled.size());
-        assertTrue(lang.initializeMultiContextCalled.isEmpty());
-        assertTrue(lang.parseCalled.isEmpty());
-        Env env = lang.createContextCalled.get(0);
-
-        context.eval(source1);
-        assertEquals(1, lang.parseCalled.size());
-        assertEquals(source1.getCharacters(), lang.parseCalled.get(0).getCharacters());
-
-        TruffleContext innerContext = env.newContextBuilder().build();
-        Object prev = innerContext.enter();
-        Env innerEnv = ProxyLanguage.getCurrentContext().env;
-        innerEnv.parse(truffleSource1);
-        assertEquals(1, lang.parseCalled.size());
-        assertEquals(1, lang.initializeMultiContextCalled.size());
-        assertEquals(1, lang.initializeMultipleContextsCalled.size());
-        assertEquals(3, (int) lang.initializeMultipleContextsCalled.get(0));
-        assertEquals(4, (int) lang.initializeMultiContextCalled.get(0));
-        assertEquals(2, lang.createContextCalled.size());
-
-        innerEnv.parse(truffleSource1);
-        assertEquals(1, lang.parseCalled.size());
-
-        innerEnv.parse(truffleSource2);
-        assertEquals(2, lang.parseCalled.size());
-
-        innerContext.leave(prev);
-        innerContext.close();
-
-        context.eval(source2);
-        assertEquals(2, lang.parseCalled.size());
-
-        context.leave();
-        context.close();
-        assertEquals(1, lang.initializeMultiContextCalled.size());
-        assertEquals(2, lang.createContextCalled.size());
-    }
-
-    @Test
-    public void testMultiContextBoundEngineInnerContextNoCaching() throws Exception {
-        org.graalvm.polyglot.Source source1 = org.graalvm.polyglot.Source.create(OneContextLanguage.ID, "foo");
-        org.graalvm.polyglot.Source source2 = org.graalvm.polyglot.Source.create(OneContextLanguage.ID, "bar");
-
-        Source truffleSource1 = getTruffleSource(source1);
-        Source truffleSource2 = getTruffleSource(source2);
-
-        // test behavior with bound engine
-        Context context = Context.create();
-        context.enter();
-
-        context.initialize(OneContextLanguage.ID);
-        MultiContextLanguage lang = OneContextLanguage.getInstance(context);
-        assertEquals(1, lang.createContextCalled.size());
-        assertTrue(lang.initializeMultiContextCalled.isEmpty());
-        assertTrue(lang.parseCalled.isEmpty());
-        Env env = lang.createContextCalled.get(0);
-
-        context.eval(source1);
-        assertEquals(1, lang.parseCalled.size());
-        assertEquals(source1.getCharacters(), lang.parseCalled.get(0).getCharacters());
-
-        TruffleContext innerContext = env.newContextBuilder().build();
-        Object prev = innerContext.enter();
-
-        MultiContextLanguage innerLang = OneContextLanguage.getCurrentLanguage();
-        assertNotSame(innerLang, lang);
-
-        Env innerEnv = innerLang.getContextReference().get().env;
-        innerEnv.parse(truffleSource1);
-        assertEquals(1, innerLang.parseCalled.size());
-        assertEquals(0, innerLang.initializeMultiContextCalled.size());
-        assertEquals(1, innerLang.createContextCalled.size());
-
-        innerEnv.parse(truffleSource1);
-        assertEquals(1, innerLang.parseCalled.size());
-
-        innerEnv.parse(truffleSource2);
-        assertEquals(2, innerLang.parseCalled.size());
-
-        innerContext.leave(prev);
-        innerContext.close();
-
-        assertEquals(1, lang.parseCalled.size());
-        context.eval(source2);
-        assertEquals(2, lang.parseCalled.size());
-
-        context.leave();
-        context.close();
-
-        assertEquals(1, lang.createContextCalled.size());
-        assertEquals(0, lang.initializeMultiContextCalled.size());
-    }
-
-    private static Source getTruffleSource(org.graalvm.polyglot.Source source) throws NoSuchFieldException, IllegalAccessException {
-        java.lang.reflect.Field impl = source.getClass().getDeclaredField("impl");
-        impl.setAccessible(true);
-        return (Source) impl.get(source);
-    }
-
-    @Test
-    public void testInitializeMultiContextNotCalledForExclusive() {
-        // test behavior with explicit engine
-        Engine engine = Engine.create();
-        Context context1 = Context.newBuilder().engine(engine).build();
-        Context context2 = Context.newBuilder().engine(engine).build();
-        context1.initialize(OneContextLanguage.ID);
-        context2.initialize(OneContextLanguage.ID);
-        MultiContextLanguage lang1 = OneContextLanguage.getInstance(context1);
-        MultiContextLanguage lang2 = OneContextLanguage.getInstance(context2);
-        assertEquals(0, lang1.initializeMultiContextCalled.size());
-        assertEquals(0, lang2.initializeMultiContextCalled.size());
-    }
-
-    @Test
-    public void testMultiContextExplicitEngineNoCaching() {
-        org.graalvm.polyglot.Source source1 = org.graalvm.polyglot.Source.create(MultiContextLanguage.ID, "foo");
-        org.graalvm.polyglot.Source source2 = org.graalvm.polyglot.Source.create(MultiContextLanguage.ID, "bar");
-
-        // test behavior with explicit engine
-        Engine engine = Engine.create();
-        Context context1 = Context.newBuilder().engine(engine).build();
-
-        context1.initialize(MultiContextLanguage.ID);
-        MultiContextLanguage lang1 = MultiContextLanguage.getInstance(context1);
-
-        assertTrue(lang1.parseCalled.isEmpty());
-        assertEquals(1, lang1.initializeMultiContextCalled.size());
-        assertEquals(1, lang1.initializeMultipleContextsCalled.size());
-        assertEquals(1, (int) lang1.initializeMultipleContextsCalled.get(0));
-        assertEquals(2, (int) lang1.initializeMultiContextCalled.get(0));
-        assertEquals(1, lang1.createContextCalled.size());
-
-        context1.eval(source1);
-        assertEquals(1, lang1.parseCalled.size());
-        assertEquals(1, lang1.createContextCalled.size());
-
-        context1.eval(source1);
-        assertEquals(1, lang1.parseCalled.size());
-        assertEquals(1, lang1.createContextCalled.size());
-
-        context1.eval(source2);
-        assertEquals(2, lang1.parseCalled.size());
-        assertEquals(1, lang1.createContextCalled.size());
-
-        // pass a dummy option to avoid caching
-        Context context2 = Context.newBuilder().engine(engine).option(MultiContextLanguage.ID + ".DummyOption", "42").build();
-        context2.initialize(MultiContextLanguage.ID);
-        MultiContextLanguage lang2 = MultiContextLanguage.getInstance(context2);
-
-        assertEquals(2, lang1.parseCalled.size());
-        assertEquals(0, lang2.parseCalled.size());
-        assertEquals(1, lang1.createContextCalled.size());
-        assertEquals(1, lang2.createContextCalled.size());
-
-        context2.eval(source1);
-        assertEquals(2, lang1.parseCalled.size());
-        assertEquals(1, lang2.parseCalled.size());
-
-        context2.eval(source1);
-        assertEquals(2, lang1.parseCalled.size());
-        assertEquals(1, lang2.parseCalled.size());
-
-        context2.eval(source2);
-        assertEquals(2, lang1.parseCalled.size());
-        assertEquals(2, lang2.parseCalled.size());
-        assertEquals(1, lang1.createContextCalled.size());
-        assertEquals(1, lang2.createContextCalled.size());
-        engine.close();
-
-        assertEquals(1, lang1.initializeMultiContextCalled.size());
-        assertEquals(1, lang1.initializeMultipleContextsCalled.size());
-        assertEquals(1, (int) lang1.initializeMultipleContextsCalled.get(0));
-        assertEquals(2, (int) lang1.initializeMultiContextCalled.get(0));
-        assertEquals(1, lang1.createContextCalled.size());
-        assertEquals(1, lang2.createContextCalled.size());
-    }
-
-    @Test
-    public void testMultiContextExplicitEngineWithCaching() {
-        org.graalvm.polyglot.Source source1 = org.graalvm.polyglot.Source.create(MultiContextLanguage.ID, "foo");
-        org.graalvm.polyglot.Source source2 = org.graalvm.polyglot.Source.create(MultiContextLanguage.ID, "bar");
-
-        // test behavior with explicit engine
-        Engine engine = Engine.create();
-        Context context1 = Context.newBuilder().engine(engine).build();
-
-        context1.initialize(MultiContextLanguage.ID);
-        MultiContextLanguage lang = MultiContextLanguage.getInstance(context1);
-
-        assertTrue(lang.parseCalled.isEmpty());
-        assertEquals(1, lang.initializeMultiContextCalled.size());
-        assertEquals(1, lang.initializeMultipleContextsCalled.size());
-        assertEquals(1, (int) lang.initializeMultipleContextsCalled.get(0));
-        assertEquals(2, (int) lang.initializeMultiContextCalled.get(0));
-        assertEquals(1, lang.createContextCalled.size());
-
-        context1.eval(source1);
-        assertEquals(1, lang.parseCalled.size());
-
-        context1.eval(source1);
-        assertEquals(1, lang.parseCalled.size());
-
-        context1.eval(source2);
-        assertEquals(2, lang.parseCalled.size());
-        assertEquals(1, lang.createContextCalled.size());
-
-        Context context2 = Context.newBuilder().engine(engine).build();
-
-        context2.initialize(MultiContextLanguage.ID);
-        assertEquals(2, lang.parseCalled.size());
-        assertEquals(2, lang.createContextCalled.size());
-
-        context2.eval(source1);
-        assertEquals(2, lang.parseCalled.size());
-
-        context2.eval(source1);
-        assertEquals(2, lang.parseCalled.size());
-
-        context2.eval(source2);
-        assertEquals(2, lang.parseCalled.size());
-
-        engine.close();
-
-        assertEquals(2, lang.createContextCalled.size());
-        assertEquals(1, lang.initializeMultiContextCalled.size());
-        assertEquals(1, lang.initializeMultipleContextsCalled.size());
-    }
-
     @Test
     public void testErrorInCreateContext() {
         ProxyLanguage.setDelegate(new ProxyLanguage() {
@@ -1156,6 +794,7 @@ public class LanguageSPITest {
         c.close();
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testExportSymbolInCreate() {
         ProxyLanguage.setDelegate(new ProxyLanguage() {
@@ -1168,7 +807,7 @@ public class LanguageSPITest {
         });
         Context c = Context.create();
         c.initialize(ProxyLanguage.ID);
-        assertTrue(c.getPolyglotBindings().getMember("symbol").isHostObject());
+        assertTrue(c.importSymbol("symbol").isHostObject());
         c.close();
     }
 
@@ -1736,21 +1375,6 @@ public class LanguageSPITest {
         }
     }
 
-    static final String INHERITED_VERSION = "SPIInheritedVersionLanguage";
-
-    @TruffleLanguage.Registration(id = INHERITED_VERSION, name = "", mimeType = {INHERITED_VERSION})
-    public static class InheritedVersionLanguage extends LanguageSPIOrderTest.BaseLang {
-    }
-
-    @Test
-    public void testInheritedVersionLanguage() {
-        Context context = Context.create();
-        context.initialize(INHERITED_VERSION);
-        final Engine engine = context.getEngine();
-        assertEquals(engine.getVersion(), engine.getLanguages().get(INHERITED_VERSION).getVersion());
-        context.close();
-    }
-
     private static class SourceHolder implements TruffleObject {
         final Source source;
 
@@ -1764,39 +1388,4 @@ public class LanguageSPITest {
             return null;
         }
     }
-
-    static final Source TEST_SOURCE = Source.newBuilder("").mimeType("").name("testLanguageErrorDuringInitialization").build();
-
-    @SuppressWarnings("serial")
-    static class TestError extends RuntimeException implements TruffleException {
-
-        public SourceSection getSourceLocation() {
-            return TEST_SOURCE.createSection(0, 0);
-        }
-
-        public Node getLocation() {
-            return null;
-        }
-
-    }
-
-    @Test
-    public void testLanguageErrorDuringInitialization() {
-        ProxyLanguage.setDelegate(new ProxyLanguage() {
-            @Override
-            protected void initializeContext(LanguageContext c) throws Exception {
-                throw new TestError();
-            }
-        });
-
-        Context context = Context.create();
-        try {
-            context.eval(ProxyLanguage.ID, "");
-            fail();
-        } catch (PolyglotException e) {
-            assertTrue(e.isGuestException());
-            assertEquals("testLanguageErrorDuringInitialization", e.getSourceLocation().getSource().getName());
-        }
-    }
-
 }
