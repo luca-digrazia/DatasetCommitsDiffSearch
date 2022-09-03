@@ -81,7 +81,6 @@ import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.Source.SourceBuilder;
 import com.oracle.truffle.api.source.SourceSection;
-import java.nio.file.Path;
 
 /**
  * Communication between TruffleLanguage API/SPI, and other services.
@@ -243,6 +242,8 @@ public abstract class Accessor {
         public abstract boolean isHostAccessAllowed(Object vmObject, Env env);
 
         public abstract boolean isNativeAccessAllowed(Object vmObject, Env env);
+
+        public abstract boolean inContextPreInitialization(Object vmObject);
 
         public abstract Object createInternalContext(Object vmObject, Map<String, Object> config, TruffleContext spiContext);
 
@@ -414,11 +415,15 @@ public abstract class Accessor {
 
         public abstract void materializeHostFrames(Throwable original);
 
+        public abstract boolean checkTruffleFile(File file);
+
+        public abstract byte[] truffleFileContent(File file) throws IOException;
+
         public abstract void configureLoggers(Object polyglotContext, Map<String, Level> logLevels);
 
         public abstract TruffleLanguage<?> getLanguage(Env env);
 
-        public abstract Path getPath(TruffleFile file);
+        public abstract File asFile(TruffleFile file);
 
     }
 
