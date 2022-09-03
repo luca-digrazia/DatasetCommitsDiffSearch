@@ -167,11 +167,4 @@ public final class Phi extends Value {
     public void print(LogStream out) {
         out.print("phi function");
     }
-
-    @Override
-    public String shortName() {
-        return "Phi: " + index;
-    }
-
-
 }

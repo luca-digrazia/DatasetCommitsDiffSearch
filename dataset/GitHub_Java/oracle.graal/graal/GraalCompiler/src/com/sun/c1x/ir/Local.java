@@ -33,16 +33,15 @@ import com.sun.cri.ri.*;
  */
 public final class Local extends Value {
 
-    private static final int INPUT_COUNT = 1;
+    private static final int INPUT_COUNT = 0;
     private static final int SUCCESSOR_COUNT = 0;
 
-    private final int index;
+    private final int javaIndex;
     private RiType declaredType;
 
     public Local(CiKind kind, int javaIndex, Graph graph) {
         super(kind, INPUT_COUNT, SUCCESSOR_COUNT, graph);
-        this.index = javaIndex;
-        this.inputs().set(0, graph.start());
+        this.javaIndex = javaIndex;
     }
 
     @Override
@@ -54,8 +53,8 @@ public final class Local extends Value {
      * Gets the index of this local.
      * @return the index
      */
-    public int index() {
-        return index;
+    public int javaIndex() {
+        return javaIndex;
     }
 
     /**
@@ -82,6 +81,6 @@ public final class Local extends Value {
 
     @Override
     public void print(LogStream out) {
-        out.print("local[index ").print(index()).print(']');
+        out.print("local[index ").print(javaIndex()).print(']');
     }
 }

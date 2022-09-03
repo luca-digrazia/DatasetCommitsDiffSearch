@@ -27,6 +27,7 @@ import java.util.*;
 
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.vis.*;
+import com.oracle.graal.graph.vis.GraphvizTest.*;
 import com.sun.c1x.debug.*;
 import com.sun.c1x.globalstub.*;
 import com.sun.c1x.observer.*;
@@ -155,11 +156,11 @@ public class C1XCompiler extends ObservableCompiler {
                             ByteArrayOutputStream out = new ByteArrayOutputStream();
                             GraphvizPrinter printer = new GraphvizPrinter(out);
                             printer.begin(name);
-                            printer.print(graph, true);
+                            printer.print(graph);
                             printer.end();
 
                             try {
-                                GraphvizRunner.process(GraphvizRunner.DOT_LAYOUT, new ByteArrayInputStream(out.toByteArray()),
+                                GraphvizRunner.process(GraphvizRunner.DOT_COMMAND, new ByteArrayInputStream(out.toByteArray()),
                                                 new FileOutputStream(name + "_" + (n++) + event.getLabel() + ".pdf"), "pdf");
                             } catch (Exception e) {
                                 e.printStackTrace();
