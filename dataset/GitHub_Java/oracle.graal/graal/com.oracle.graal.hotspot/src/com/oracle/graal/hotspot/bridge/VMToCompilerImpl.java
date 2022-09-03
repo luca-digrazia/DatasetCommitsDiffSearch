@@ -32,6 +32,8 @@ import java.lang.reflect.*;
 import java.security.*;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.*;
+
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.CompilerThreadFactory.DebugConfigAccess;
@@ -85,6 +87,7 @@ public class VMToCompilerImpl implements VMToCompiler {
     private final HotSpotGraalRuntime runtime;
 
     private ThreadPoolExecutor compileQueue;
+    private AtomicInteger compileTaskIds = new AtomicInteger();
 
     private volatile boolean bootstrapRunning;
 
@@ -96,8 +99,8 @@ public class VMToCompilerImpl implements VMToCompiler {
         this.runtime = runtime;
     }
 
-    public int allocateCompileTaskId(HotSpotResolvedJavaMethod method, int entryBCI) {
-        return runtime.getCompilerToVM().allocateCompileId(method, entryBCI);
+    public int allocateCompileTaskId() {
+        return compileTaskIds.incrementAndGet();
     }
 
     public void startCompiler(boolean bootstrapEnabled) throws Throwable {
@@ -142,7 +145,7 @@ public class VMToCompilerImpl implements VMToCompiler {
 
         HotSpotBackend hostBackend = runtime.getHostBackend();
         final HotSpotProviders hostProviders = hostBackend.getProviders();
-        assert VerifyOptionsPhase.checkOptions(hostProviders.getMetaAccess());
+        assert VerifyOptionsPhase.checkOptions(hostProviders.getMetaAccess(), hostProviders.getForeignCalls());
 
         // Complete initialization of backends
         hostBackend.completeInitialization();
@@ -559,7 +562,7 @@ public class VMToCompilerImpl implements VMToCompiler {
             if (method.tryToQueueForCompilation()) {
                 assert method.isQueuedForCompilation();
 
-                int id = allocateCompileTaskId(method, entryBCI);
+                int id = allocateCompileTaskId();
                 HotSpotBackend backend = runtime.getHostBackend();
                 CompilationTask task = new CompilationTask(backend, method, entryBCI, id);
 
