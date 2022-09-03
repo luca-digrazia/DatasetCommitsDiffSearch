@@ -41,9 +41,22 @@ import com.oracle.graal.nodes.*;
 public final class MethodSubstitutionPlugin implements InvocationPlugin {
 
     private ResolvedJavaMethod cachedSubstitute;
+
+    /**
+     * The class in which the substitute method is declared.
+     */
     private final Class<?> declaringClass;
+
+    /**
+     * The name of the original and substitute method.
+     */
     private final String name;
+
+    /**
+     * The parameter types of the substitute method.
+     */
     private final Class<?>[] parameters;
+
     private final boolean originalIsStatic;
 
     /**
@@ -60,6 +73,25 @@ public final class MethodSubstitutionPlugin implements InvocationPlugin {
         this.name = name;
         this.parameters = parameters;
         this.originalIsStatic = parameters.length == 0 || parameters[0] != Receiver.class;
+    }
+
+    /**
+     * Creates a method substitution plugin.
+     *
+     * @param declaringClass the class in which the substitute method is declared
+     * @param name the name of the substitute method
+     * @param parameters the parameter types of the substitute method
+     */
+    public MethodSubstitutionPlugin(boolean originalIsStatic, Class<?> declaringClass, String name, Class<?>... parameters) {
+        this.declaringClass = declaringClass;
+        this.name = name;
+        this.parameters = parameters;
+        this.originalIsStatic = originalIsStatic;
+    }
+
+    public boolean inlineOnly() {
+        // Conservatively assume MacroNodes may be used in a substitution
+        return true;
     }
 
     /**
@@ -121,8 +153,7 @@ public final class MethodSubstitutionPlugin implements InvocationPlugin {
                 return m;
             }
         }
-        throw new GraalInternalError("No method found in %s compatible with \"%s(%s)\"", declaringClass.getName(), name, Arrays.asList(parameters).stream().map(c -> c.getSimpleName()).collect(
-                        Collectors.joining(", ")));
+        throw new GraalInternalError("No method found specified by %s", this);
     }
 
     /**
@@ -164,5 +195,11 @@ public final class MethodSubstitutionPlugin implements InvocationPlugin {
             }
         }
         throw new GraalInternalError("could not find method named \"execute\" in " + c.getName());
+    }
+
+    @Override
+    public String toString() {
+        return String.format("%s[%s.%s(%s)]", getClass().getSimpleName(), declaringClass.getName(), name,
+                        Arrays.asList(parameters).stream().map(c -> c.getSimpleName()).collect(Collectors.joining(", ")));
     }
 }

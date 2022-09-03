@@ -148,7 +148,7 @@ public class NodeParser extends AbstractParser<NodeData> {
         node.getFields().addAll(parseFields(lookupTypes, members));
         node.getChildren().addAll(parseChildren(lookupTypes, members));
         node.getChildExecutions().addAll(parseExecutions(node.getFields(), node.getChildren(), members));
-        node.getExecutableTypes().addAll(parseExecutableTypeData(node, members, node.getSignatureSize(), context.getFrameTypes(), false));
+        node.getExecutableTypes().addAll(parseExecutableTypeData(members, node.getChildExecutions().size(), context.getFrameTypes(), false));
 
         initializeExecutableTypes(node);
         initializeImportGuards(node, lookupTypes, members);
@@ -188,13 +188,8 @@ public class NodeParser extends AbstractParser<NodeData> {
         SpecializationData polymorphic = node.getPolymorphicSpecialization();
         if (polymorphic != null) {
             boolean polymorphicSignatureFound = false;
-            List<TypeMirror> dynamicTypes = polymorphic.getDynamicTypes();
-            TypeMirror frame = null;
-            if (polymorphic.getFrame() != null) {
-                frame = dynamicTypes.remove(0);
-            }
-
-            ExecutableTypeData polymorphicType = new ExecutableTypeData(node, polymorphic.getReturnType().getType(), "execute", frame, dynamicTypes);
+            TypeMirror frame = polymorphic.getFrame() != null ? polymorphic.getFrame().getType() : null;
+            ExecutableTypeData polymorphicType = new ExecutableTypeData(polymorphic.getReturnType().getType(), "execute", frame, TemplateMethod.getSignatureTypes(polymorphic));
             for (ExecutableTypeData type : node.getExecutableTypes()) {
                 if (polymorphicType.sameSignature(type)) {
                     polymorphicSignatureFound = true;
@@ -219,10 +214,8 @@ public class NodeParser extends AbstractParser<NodeData> {
             }
         }
         if (!additionalAbstractRootTypes.isEmpty()) {
-            node.addError("Incompatible abstract execute methods found %s.", additionalAbstractRootTypes);
+            node.addError("Incompatible abstract execute methods found %s.", rootTypes);
         }
-
-        namesUnique(node.getExecutableTypes());
 
     }
 
@@ -242,7 +235,7 @@ public class NodeParser extends AbstractParser<NodeData> {
     private static void buildExecutableHierarchy(NodeData node, ExecutableTypeData parent, ListIterator<ExecutableTypeData> executesIterator) {
         while (executesIterator.hasNext()) {
             ExecutableTypeData other = executesIterator.next();
-            if (other.canDelegateTo(parent)) {
+            if (other.canDelegateTo(node, parent)) {
                 parent.addDelegatedFrom(other);
                 executesIterator.remove();
             }
@@ -581,7 +574,7 @@ public class NodeParser extends AbstractParser<NodeData> {
         return executions;
     }
 
-    private List<ExecutableTypeData> parseExecutableTypeData(NodeData node, List<? extends Element> elements, int signatureSize, List<TypeMirror> frameTypes, boolean includeFinals) {
+    private List<ExecutableTypeData> parseExecutableTypeData(List<? extends Element> elements, int signatureSize, List<TypeMirror> frameTypes, boolean includeFinals) {
         List<ExecutableTypeData> typeData = new ArrayList<>();
         for (ExecutableElement method : ElementFilter.methodsIn(elements)) {
             Set<Modifier> modifiers = method.getModifiers();
@@ -599,7 +592,7 @@ public class NodeParser extends AbstractParser<NodeData> {
                 continue;
             }
 
-            ExecutableTypeData executableType = new ExecutableTypeData(node, method, signatureSize, context.getFrameTypes());
+            ExecutableTypeData executableType = new ExecutableTypeData(method, signatureSize, context.getFrameTypes());
 
             if (executableType.getFrameParameter() != null) {
                 boolean supportedType = false;
@@ -617,12 +610,8 @@ public class NodeParser extends AbstractParser<NodeData> {
             typeData.add(executableType);
         }
 
-        namesUnique(typeData);
+        Collections.sort(typeData);
 
-        return typeData;
-    }
-
-    private static void namesUnique(List<ExecutableTypeData> typeData) {
         List<String> names = new ArrayList<>();
         for (ExecutableTypeData type : typeData) {
             names.add(type.getUniqueName());
@@ -634,6 +623,8 @@ public class NodeParser extends AbstractParser<NodeData> {
         for (int i = 0; i < typeData.size(); i++) {
             typeData.get(i).setUniqueName(names.get(i));
         }
+
+        return typeData;
     }
 
     private void initializeExecutableTypes(NodeData node) {
@@ -641,7 +632,9 @@ public class NodeParser extends AbstractParser<NodeData> {
 
         Set<String> inconsistentFrameTypes = new HashSet<>();
         TypeMirror frameType = null;
+        Set<Integer> evaluatedCounts = new HashSet<>();
         for (ExecutableTypeData execute : allExecutes) {
+            evaluatedCounts.add(execute.getEvaluatedCount());
 
             TypeMirror frame = execute.getFrameParameter();
             TypeMirror resolvedFrameType;
@@ -795,7 +788,7 @@ public class NodeParser extends AbstractParser<NodeData> {
         if (parentNode.getFrameType() != null) {
             frameTypes = Arrays.asList(parentNode.getFrameType());
         }
-        node.getExecutableTypes().addAll(parseExecutableTypeData(node, members, child.getExecuteWith().size(), frameTypes, true));
+        node.getExecutableTypes().addAll(parseExecutableTypeData(members, child.getExecuteWith().size(), frameTypes, true));
         node.setFrameType(parentNode.getFrameType());
         return node;
     }
@@ -1295,7 +1288,7 @@ public class NodeParser extends AbstractParser<NodeData> {
         if (execution == null) {
             allowedTypes = spec.getAllowedTypes();
         } else {
-            allowedTypes = Arrays.asList(node.getGenericType(execution));
+            allowedTypes = node.getGenericTypes(execution);
         }
         if (allowedTypes.size() == 1) {
             return allowedTypes.iterator().next();
@@ -1304,10 +1297,25 @@ public class NodeParser extends AbstractParser<NodeData> {
         }
     }
 
-    private static void initializeUninitialized(final NodeData node) {
+    private void initializeUninitialized(final NodeData node) {
         SpecializationData generic = node.getGenericSpecialization();
         if (generic == null) {
             return;
+        }
+        for (Parameter parameter : generic.getReturnTypeAndParameters()) {
+            if (ElementUtils.isObject(parameter.getType())) {
+                continue;
+            }
+            Set<String> types = new HashSet<>();
+            for (SpecializationData specialization : node.getSpecializations()) {
+                Parameter actualParameter = specialization.findParameter(parameter.getLocalName());
+                if (actualParameter != null) {
+                    types.add(ElementUtils.getQualifiedName(actualParameter.getType()));
+                }
+            }
+            if (types.size() > 1) {
+                generic.replaceParameter(parameter.getLocalName(), new Parameter(parameter, context.getType(Object.class)));
+            }
         }
         TemplateMethod uninializedMethod = new TemplateMethod("Uninitialized", -1, node, generic.getSpecification(), null, null, generic.getReturnType(), generic.getParameters());
         // should not use messages from generic specialization
@@ -1321,6 +1329,7 @@ public class NodeParser extends AbstractParser<NodeData> {
         }
 
         SpecializationData generic = node.getGenericSpecialization();
+
         List<VariableElement> types = new ArrayList<>();
 
         Collection<TypeMirror> frameTypes = new HashSet<>();
@@ -1329,10 +1338,6 @@ public class NodeParser extends AbstractParser<NodeData> {
                 frameTypes.add(specialization.getFrame().getType());
             }
         }
-        if (node.supportsFrame()) {
-            frameTypes.add(node.getFrameType());
-        }
-
         if (!frameTypes.isEmpty()) {
             frameTypes = ElementUtils.uniqueSortedTypes(frameTypes);
             TypeMirror frameType;
@@ -1373,15 +1378,13 @@ public class NodeParser extends AbstractParser<NodeData> {
 
                 if (usedTypes.size() == 1) {
                     polymorphicType = usedTypes.iterator().next();
+
+                    if (!isReturnParameter && node.getTypeSystem().hasImplicitSourceTypes(polymorphicType)) {
+                        polymorphicType = context.getType(Object.class);
+                    }
                 } else {
-                    polymorphicType = ElementUtils.getCommonSuperType(context, usedTypes);
+                    polymorphicType = context.getType(Object.class);
                 }
-
-                NodeExecutionData execution = genericParameter.getSpecification().getExecution();
-                if (execution != null && !ElementUtils.isSubtypeBoxed(context, polymorphicType, node.getGenericType(execution))) {
-                    throw new AssertionError(String.format("Polymorphic types %s not compatible to generic type %s.", polymorphicType, node.getGenericType(execution)));
-                }
-
             }
             if (isReturnParameter) {
                 returnType = polymorphicType;
@@ -1392,11 +1395,8 @@ public class NodeParser extends AbstractParser<NodeData> {
         }
 
         SpecializationMethodParser parser = new SpecializationMethodParser(context, node);
-        SpecializationData polymorphic = parser.create("Polymorphic", TemplateMethod.NO_NATURAL_ORDER, null, null, returnType, types);
-        if (polymorphic == null) {
-            throw new AssertionError("Failed to parse polymorphic signature. " + parser.createDefaultMethodSpec(null, null, false, null) + " Types: " + returnType + " - " + types);
-        }
 
+        SpecializationData polymorphic = parser.create("Polymorphic", TemplateMethod.NO_NATURAL_ORDER, null, null, returnType, types);
         polymorphic.setKind(SpecializationKind.POLYMORPHIC);
         node.getSpecializations().add(polymorphic);
     }
