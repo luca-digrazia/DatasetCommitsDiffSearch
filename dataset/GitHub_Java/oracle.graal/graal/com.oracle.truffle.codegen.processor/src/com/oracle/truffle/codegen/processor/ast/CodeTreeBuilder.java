@@ -46,11 +46,6 @@ public class CodeTreeBuilder {
         this.parent = parent;
     }
 
-    @Override
-    public String toString() {
-        return root.toString();
-    }
-
     public int getTreeCount() {
         return treeCount;
     }
@@ -282,13 +277,7 @@ public class CodeTreeBuilder {
     }
 
     public CodeTreeBuilder tree(CodeTree treeToAdd) {
-        if (treeToAdd instanceof BuilderCodeTree) {
-            return push((BuilderCodeTree) treeToAdd).end();
-        } else {
-            BuilderCodeTree tree = new BuilderCodeTree(GROUP, null, null);
-            tree.add(treeToAdd);
-            return push(tree).end();
-        }
+        return push((BuilderCodeTree) treeToAdd).end();
     }
 
     public CodeTreeBuilder string(String chunk1, String chunk2, String chunk3, String chunk4, String... chunks) {
@@ -506,7 +495,7 @@ public class CodeTreeBuilder {
     }
 
     public CodeTreeBuilder create() {
-        return new CodeTreeBuilder(this);
+        return new CodeTreeBuilder(null);
     }
 
     public CodeTreeBuilder type(TypeMirror type) {
@@ -544,7 +533,7 @@ public class CodeTreeBuilder {
         if (Utils.isVoid(type)) {
             tree(content);
             return this;
-        } else if (type.getKind() == TypeKind.DECLARED && Utils.getQualifiedName(type).equals("java.lang.Object")) {
+        } else if (Utils.getQualifiedName(type).equals("java.lang.Object")) {
             tree(content);
             return this;
         } else {
