@@ -22,44 +22,36 @@
  */
 package com.oracle.graal.lir.alloc.trace;
 
-import java.util.*;
+import java.util.List;
 
-import jdk.internal.jvmci.code.*;
-import com.oracle.graal.debug.*;
+import jdk.vm.ci.code.TargetDescription;
 
-import com.oracle.graal.compiler.common.alloc.*;
-import com.oracle.graal.compiler.common.cfg.*;
-import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.lir.gen.LIRGeneratorTool.SpillMoveFactory;
-import com.oracle.graal.lir.phases.*;
+import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig;
+import com.oracle.graal.compiler.common.alloc.TraceBuilder.TraceBuilderResult;
+import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.Indent;
+import com.oracle.graal.lir.gen.LIRGenerationResult;
+import com.oracle.graal.lir.gen.LIRGeneratorTool.MoveFactory;
 
-public final class TraceLinearScanRegisterAllocationPhase extends AllocationPhase {
-
-    private final TraceLinearScan allocator;
-
-    TraceLinearScanRegisterAllocationPhase(TraceLinearScan allocator) {
-        this.allocator = allocator;
-    }
+final class TraceLinearScanRegisterAllocationPhase extends TraceLinearScanAllocationPhase {
 
     @Override
-    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, SpillMoveFactory spillMoveFactory,
-                    RegisterAllocationConfig registerAllocationConfig) {
+    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, MoveFactory spillMoveFactory,
+                    RegisterAllocationConfig registerAllocationConfig, TraceBuilderResult<?> traceBuilderResult, TraceLinearScan allocator) {
         allocator.printIntervals("Before register allocation");
-        allocateRegisters();
+        allocateRegisters(allocator);
         allocator.printIntervals("After register allocation");
     }
 
-    void allocateRegisters() {
+    @SuppressWarnings("try")
+    private static void allocateRegisters(TraceLinearScan allocator) {
         try (Indent indent = Debug.logAndIndent("allocate registers")) {
-            Interval precoloredIntervals;
-            Interval notPrecoloredIntervals;
-
-            Interval.Pair result = allocator.createUnhandledLists(TraceLinearScan.IS_PRECOLORED_INTERVAL, TraceLinearScan.IS_VARIABLE_INTERVAL);
-            precoloredIntervals = result.first;
-            notPrecoloredIntervals = result.second;
+            FixedInterval precoloredIntervals = allocator.createFixedUnhandledList();
+            TraceInterval notPrecoloredIntervals = allocator.createUnhandledListByFrom(TraceLinearScan.IS_VARIABLE_INTERVAL);
 
             // allocate cpu registers
-            LinearScanWalker lsw = new LinearScanWalker(allocator, precoloredIntervals, notPrecoloredIntervals);
+            TraceLinearScanWalker lsw = new TraceLinearScanWalker(allocator, precoloredIntervals, notPrecoloredIntervals);
             lsw.walk();
             lsw.finishAllocation();
         }

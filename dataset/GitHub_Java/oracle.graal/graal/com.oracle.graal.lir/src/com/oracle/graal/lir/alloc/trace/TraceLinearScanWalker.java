@@ -558,9 +558,7 @@ final class TraceLinearScanWalker extends TraceIntervalWalker {
     }
 
     /**
-     * Change spill state of an interval.
-     *
-     * Note: called during register allocation.
+     * Note: called during register allocation
      *
      * @param spillPos position of the spill
      */

@@ -22,70 +22,73 @@
  */
 package com.oracle.graal.lir.alloc.trace;
 
-import static com.oracle.graal.compiler.common.GraalOptions.*;
-import static jdk.internal.jvmci.code.ValueUtil.*;
+import static com.oracle.graal.compiler.common.GraalOptions.DetailedAsserts;
+import static com.oracle.graal.lir.LIRValueUtil.isStackSlotValue;
+import static com.oracle.graal.lir.LIRValueUtil.isVariable;
+import static jdk.vm.ci.code.ValueUtil.isRegister;
 
-import java.util.*;
+import java.util.List;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.meta.AllocatableValue;
 
-import com.oracle.graal.compiler.common.alloc.*;
-import com.oracle.graal.compiler.common.cfg.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.lir.*;
+import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig;
+import com.oracle.graal.compiler.common.alloc.TraceBuilder.TraceBuilderResult;
+import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.Indent;
+import com.oracle.graal.lir.LIRInsertionBuffer;
+import com.oracle.graal.lir.LIRInstruction;
+import com.oracle.graal.lir.LIRInstruction.OperandMode;
 import com.oracle.graal.lir.StandardOp.LoadConstantOp;
 import com.oracle.graal.lir.StandardOp.MoveOp;
 import com.oracle.graal.lir.StandardOp.ValueMoveOp;
-import com.oracle.graal.lir.alloc.trace.Interval.SpillState;
+import com.oracle.graal.lir.alloc.trace.TraceInterval.SpillState;
 import com.oracle.graal.lir.alloc.trace.TraceLinearScan.IntervalPredicate;
-import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.lir.gen.LIRGeneratorTool.SpillMoveFactory;
-import com.oracle.graal.lir.phases.*;
+import com.oracle.graal.lir.gen.LIRGenerationResult;
+import com.oracle.graal.lir.gen.LIRGeneratorTool.MoveFactory;
 
-public class TraceLinearScanEliminateSpillMovePhase extends AllocationPhase {
+final class TraceLinearScanEliminateSpillMovePhase extends TraceLinearScanAllocationPhase {
 
-    private static final IntervalPredicate mustStoreAtDefinition = new TraceLinearScan.IntervalPredicate() {
+    private static final IntervalPredicate spilledIntervals = new TraceLinearScan.IntervalPredicate() {
 
         @Override
-        public boolean apply(Interval i) {
-            return i.isSplitParent() && i.spillState() == SpillState.StoreAtDefinition;
+        public boolean apply(TraceInterval i) {
+            return i.isSplitParent() && SpillState.IN_MEMORY.contains(i.spillState());
         }
     };
 
-    protected final TraceLinearScan allocator;
-
-    protected TraceLinearScanEliminateSpillMovePhase(TraceLinearScan allocator) {
-        this.allocator = allocator;
-    }
-
     @Override
-    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, SpillMoveFactory spillMoveFactory,
-                    RegisterAllocationConfig registerAllocationConfig) {
-        eliminateSpillMoves();
+    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, MoveFactory spillMoveFactory,
+                    RegisterAllocationConfig registerAllocationConfig, TraceBuilderResult<?> traceBuilderResult, TraceLinearScan allocator) {
+        boolean shouldEliminateSpillMoves = shouldEliminateSpillMoves(traceBuilderResult, allocator);
+        eliminateSpillMoves(allocator, shouldEliminateSpillMoves, traceBuilderResult);
     }
 
-    /**
-     * @return the index of the first instruction that is of interest for
-     *         {@link #eliminateSpillMoves()}
-     */
-    protected int firstInstructionOfInterest() {
-        // also look at Labels as they define PHI values
-        return 0;
+    private static boolean shouldEliminateSpillMoves(TraceBuilderResult<?> traceBuilderResult, TraceLinearScan allocator) {
+        return !traceBuilderResult.incomingSideEdges(traceBuilderResult.getTraceForBlock(allocator.sortedBlocks().get(0)));
     }
 
     // called once before assignment of register numbers
-    void eliminateSpillMoves() {
-        try (Indent indent = Debug.logAndIndent("Eliminating unnecessary spill moves")) {
+    @SuppressWarnings("try")
+    private static void eliminateSpillMoves(TraceLinearScan allocator, boolean shouldEliminateSpillMoves, TraceBuilderResult<?> traceBuilderResult) {
+        try (Indent indent = Debug.logAndIndent("Eliminating unnecessary spill moves: Trace%d", traceBuilderResult.getTraceForBlock(allocator.sortedBlocks().get(0)))) {
+            allocator.sortIntervalsBySpillPos();
 
             /*
              * collect all intervals that must be stored after their definition. The list is sorted
              * by Interval.spillDefinitionPos.
              */
-            Interval interval;
-            interval = allocator.createUnhandledLists(mustStoreAtDefinition, null).first;
+            TraceInterval interval = allocator.createUnhandledListBySpillPos(spilledIntervals);
             if (DetailedAsserts.getValue()) {
                 checkIntervals(interval);
+            }
+            if (Debug.isLogEnabled()) {
+                try (Indent indent2 = Debug.logAndIndent("Sorted intervals")) {
+                    for (TraceInterval i = interval; i != null; i = i.next) {
+                        Debug.log("%5d: %s", i.spillDefinitionPos(), i);
+                    }
+                }
             }
 
             LIRInsertionBuffer insertionBuffer = new LIRInsertionBuffer();
@@ -94,73 +97,80 @@ public class TraceLinearScanEliminateSpillMovePhase extends AllocationPhase {
                     List<LIRInstruction> instructions = allocator.getLIR().getLIRforBlock(block);
                     int numInst = instructions.size();
 
+                    int lastOpId = -1;
                     // iterate all instructions of the block.
-                    for (int j = firstInstructionOfInterest(); j < numInst; j++) {
+                    for (int j = 0; j < numInst; j++) {
                         LIRInstruction op = instructions.get(j);
                         int opId = op.id();
+                        try (Indent indent2 = Debug.logAndIndent("%5d %s", opId, op)) {
 
-                        if (opId == -1) {
-                            MoveOp move = (MoveOp) op;
-                            /*
-                             * Remove move from register to stack if the stack slot is guaranteed to
-                             * be correct. Only moves that have been inserted by LinearScan can be
-                             * removed.
-                             */
-                            if (canEliminateSpillMove(block, move)) {
+                            if (opId == -1) {
+                                MoveOp move = (MoveOp) op;
                                 /*
-                                 * Move target is a stack slot that is always correct, so eliminate
-                                 * instruction.
+                                 * Remove move from register to stack if the stack slot is
+                                 * guaranteed to be correct. Only moves that have been inserted by
+                                 * LinearScan can be removed.
                                  */
-                                if (Debug.isLogEnabled()) {
-                                    if (move instanceof ValueMoveOp) {
-                                        ValueMoveOp vmove = (ValueMoveOp) move;
-                                        Debug.log("eliminating move from interval %d (%s) to %d (%s) in block %s", allocator.operandNumber(vmove.getInput()), vmove.getInput(),
-                                                        allocator.operandNumber(vmove.getResult()), vmove.getResult(), block);
-                                    } else {
-                                        LoadConstantOp load = (LoadConstantOp) move;
-                                        Debug.log("eliminating constant load from %s to %d (%s) in block %s", load.getConstant(), allocator.operandNumber(load.getResult()), load.getResult(), block);
-                                    }
-                                }
-
-                                // null-instructions are deleted by assignRegNum
-                                instructions.set(j, null);
-                            }
-
-                        } else {
-                            /*
-                             * Insert move from register to stack just after the beginning of the
-                             * interval.
-                             */
-                            assert interval == Interval.EndMarker || interval.spillDefinitionPos() >= opId : "invalid order";
-                            assert interval == Interval.EndMarker || (interval.isSplitParent() && interval.spillState() == SpillState.StoreAtDefinition) : "invalid interval";
-
-                            while (interval != Interval.EndMarker && interval.spillDefinitionPos() == opId) {
-                                if (!interval.canMaterialize()) {
-                                    if (!insertionBuffer.initialized()) {
-                                        /*
-                                         * prepare insertion buffer (appended when all instructions
-                                         * in the block are processed)
-                                         */
-                                        insertionBuffer.init(instructions);
-                                    }
-
-                                    AllocatableValue fromLocation = interval.location();
-                                    AllocatableValue toLocation = TraceLinearScan.canonicalSpillOpr(interval);
-                                    if (!fromLocation.equals(toLocation)) {
-
-                                        assert isRegister(fromLocation) : "from operand must be a register but is: " + fromLocation + " toLocation=" + toLocation + " spillState=" +
-                                                        interval.spillState();
-                                        assert isStackSlotValue(toLocation) : "to operand must be a stack slot";
-
-                                        LIRInstruction move = allocator.getSpillMoveFactory().createMove(toLocation, fromLocation);
-                                        insertionBuffer.append(j + 1, move);
-
-                                        if (Debug.isLogEnabled()) {
-                                            Debug.log("inserting move after definition of interval %d to stack slot %s at opId %d", interval.operandNumber, interval.spillSlot(), opId);
+                                if (shouldEliminateSpillMoves && canEliminateSpillMove(allocator, block, move, lastOpId)) {
+                                    /*
+                                     * Move target is a stack slot that is always correct, so
+                                     * eliminate instruction.
+                                     */
+                                    if (Debug.isLogEnabled()) {
+                                        if (move instanceof ValueMoveOp) {
+                                            ValueMoveOp vmove = (ValueMoveOp) move;
+                                            Debug.log("eliminating move from interval %d (%s) to %d (%s) in block %s", allocator.operandNumber(vmove.getInput()), vmove.getInput(),
+                                                            allocator.operandNumber(vmove.getResult()), vmove.getResult(), block);
+                                        } else {
+                                            LoadConstantOp load = (LoadConstantOp) move;
+                                            Debug.log("eliminating constant load from %s to %d (%s) in block %s", load.getConstant(), allocator.operandNumber(load.getResult()), load.getResult(),
+                                                            block);
                                         }
                                     }
+
+                                    // null-instructions are deleted by assignRegNum
+                                    instructions.set(j, null);
                                 }
-                                interval = interval.next;
+
+                            } else {
+                                lastOpId = opId;
+                                /*
+                                 * Insert move from register to stack just after the beginning of
+                                 * the interval.
+                                 */
+                                // assert interval == TraceInterval.EndMarker ||
+                                // interval.spillDefinitionPos() >= opId : "invalid order";
+                                assert interval == TraceInterval.EndMarker || (interval.isSplitParent() && SpillState.IN_MEMORY.contains(interval.spillState())) : "invalid interval";
+
+                                while (interval != TraceInterval.EndMarker && interval.spillDefinitionPos() == opId) {
+                                    Debug.log("handle %s", interval);
+                                    if (!interval.canMaterialize()) {
+                                        if (!insertionBuffer.initialized()) {
+                                            /*
+                                             * prepare insertion buffer (appended when all
+                                             * instructions in the block are processed)
+                                             */
+                                            insertionBuffer.init(instructions);
+                                        }
+
+                                        AllocatableValue fromLocation = interval.getSplitChildAtOpId(opId, OperandMode.DEF, allocator).location();
+                                        AllocatableValue toLocation = TraceLinearScan.canonicalSpillOpr(interval);
+                                        if (!fromLocation.equals(toLocation)) {
+
+                                            assert isRegister(fromLocation) : "from operand must be a register but is: " + fromLocation + " toLocation=" + toLocation + " spillState=" +
+                                                            interval.spillState();
+                                            assert isStackSlotValue(toLocation) : "to operand must be a stack slot";
+
+                                            LIRInstruction move = allocator.getSpillMoveFactory().createMove(toLocation, fromLocation);
+                                            insertionBuffer.append(j + 1, move);
+
+                                            if (Debug.isLogEnabled()) {
+                                                Debug.log("inserting move after definition of interval %d to stack slot %s at opId %d", interval.operandNumber, interval.spillSlot(), opId);
+                                            }
+                                        }
+                                    }
+                                    interval = interval.next;
+                                }
                             }
                         }
                     } // end of instruction iteration
@@ -171,42 +181,49 @@ public class TraceLinearScanEliminateSpillMovePhase extends AllocationPhase {
                 }
             } // end of block iteration
 
-            assert interval == Interval.EndMarker : "missed an interval";
+            assert interval == TraceInterval.EndMarker : "missed an interval";
         }
     }
 
     /**
+     * @param allocator
      * @param block The block {@code move} is located in.
      * @param move Spill move.
+     * @param lastOpId The id of last "normal" instruction before the spill move. (Spill moves have
+     *            no valid opId but -1.)
      */
-    protected boolean canEliminateSpillMove(AbstractBlockBase<?> block, MoveOp move) {
-        // TODO (je) do not eliminate spill moves yet!
+    private static boolean canEliminateSpillMove(TraceLinearScan allocator, AbstractBlockBase<?> block, MoveOp move, int lastOpId) {
+        assert isVariable(move.getResult()) : "LinearScan inserts only moves to variables: " + move;
+        assert lastOpId >= 0 : "Invalid lastOpId: " + lastOpId;
+
+        TraceInterval curInterval = allocator.intervalFor(move.getResult());
+
+        if (!isRegister(curInterval.location()) && curInterval.inMemoryAt(lastOpId) && isPhiResolutionMove(allocator, move)) {
+            assert isStackSlotValue(curInterval.location()) : "Not a stack slot: " + curInterval.location();
+            return true;
+        }
         return false;
-        /*
-         * assert isVariable(move.getResult()) : "LinearScan inserts only moves to variables: " +
-         * move;
-         *
-         * Interval curInterval = allocator.intervalFor(move.getResult());
-         *
-         * if (!isRegister(curInterval.location()) && curInterval.alwaysInMemory()) { assert
-         * isStackSlotValue(curInterval.location()) : "Not a stack slot: " + curInterval.location();
-         * return true; } return false;
-         */
     }
 
-    private static void checkIntervals(Interval interval) {
-        Interval prev = null;
-        Interval temp = interval;
-        while (temp != Interval.EndMarker) {
-            assert temp.spillDefinitionPos() > 0 : "invalid spill definition pos";
+    private static boolean isPhiResolutionMove(TraceLinearScan allocator, MoveOp move) {
+        TraceInterval curInterval = allocator.intervalFor(move.getResult());
+        return !curInterval.isSplitParent();
+    }
+
+    private static void checkIntervals(TraceInterval interval) {
+        TraceInterval prev = null;
+        TraceInterval temp = interval;
+        while (temp != TraceInterval.EndMarker) {
+            assert temp.spillDefinitionPos() >= 0 : "invalid spill definition pos";
             if (prev != null) {
-                assert temp.from() >= prev.from() : "intervals not sorted";
+                // assert temp.from() >= prev.from() : "intervals not sorted";
                 assert temp.spillDefinitionPos() >= prev.spillDefinitionPos() : "when intervals are sorted by from :  then they must also be sorted by spillDefinitionPos";
             }
 
             assert temp.spillSlot() != null || temp.canMaterialize() : "interval has no spill slot assigned";
             assert temp.spillDefinitionPos() >= temp.from() : "invalid order";
-            assert temp.spillDefinitionPos() <= temp.from() + 2 : "only intervals defined once at their start-pos can be optimized";
+            // assert temp.spillDefinitionPos() <= temp.from() + 2 :
+            // "only intervals defined once at their start-pos can be optimized";
 
             if (Debug.isLogEnabled()) {
                 Debug.log("interval %d (from %d to %d) must be stored at %d", temp.operandNumber, temp.from(), temp.to(), temp.spillDefinitionPos());
