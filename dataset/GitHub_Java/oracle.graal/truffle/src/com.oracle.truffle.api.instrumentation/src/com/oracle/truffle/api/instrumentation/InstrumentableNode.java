@@ -29,7 +29,6 @@ import java.util.Set;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleRuntime;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrumentation.InstrumentableNode.WrapperNode;
 import com.oracle.truffle.api.nodes.Node;
@@ -88,7 +87,7 @@ public interface InstrumentableNode extends NodeInterface {
 
     /**
      * Returns <code>true</code> if this node is instrumentable. Instrumentable nodes are points
-     * where instrumenters can attach execution events. The return values of instrumentable nodes
+     * where instrumenters can attache execution events. The return values of instrumentable nodes
      * must always be interop capable values.
      * <p>
      * The implementation of this method must ensure that its result is stable after the parent
@@ -366,7 +365,6 @@ class InstrumentableNodeSnippets {
         }
 
         @Override
-        @TruffleBoundary
         public final SourceSection getSourceSection() {
             if (sourceCharIndex == NO_SOURCE) {
                 // AST node without source
