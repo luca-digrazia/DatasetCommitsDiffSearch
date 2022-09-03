@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.phases.common;
 
+import java.util.*;
+
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
@@ -30,8 +32,11 @@ import com.oracle.graal.phases.*;
 
 public class ReadEliminationPhase extends Phase {
 
+    private Queue<PhiNode> newPhis;
+
     @Override
     protected void run(StructuredGraph graph) {
+        newPhis = new LinkedList<>();
         for (FloatingReadNode n : graph.getNodes(FloatingReadNode.class)) {
             if (isReadEliminable(n)) {
                 NodeMap<ValueNode> nodeMap = n.graph().createNodeMap();
@@ -42,11 +47,11 @@ public class ReadEliminationPhase extends Phase {
         }
     }
 
-    private static boolean isReadEliminable(FloatingReadNode n) {
+    private boolean isReadEliminable(FloatingReadNode n) {
         return isWrites(n, n.lastLocationAccess(), n.graph().createNodeBitMap());
     }
 
-    private static boolean isWrites(FloatingReadNode n, Node lastLocationAccess, NodeBitMap visited) {
+    private boolean isWrites(FloatingReadNode n, Node lastLocationAccess, NodeBitMap visited) {
         if (lastLocationAccess == null) {
             return false;
         }
@@ -72,7 +77,7 @@ public class ReadEliminationPhase extends Phase {
         return false;
     }
 
-    private static ValueNode getValue(FloatingReadNode n, Node lastLocationAccess, NodeMap<ValueNode> nodeMap) {
+    private ValueNode getValue(FloatingReadNode n, Node lastLocationAccess, NodeMap<ValueNode> nodeMap) {
         ValueNode exisiting = nodeMap.get(lastLocationAccess);
         if (exisiting != null) {
             return exisiting;
@@ -92,6 +97,7 @@ public class ReadEliminationPhase extends Phase {
             for (ValueNode value : phi.values()) {
                 newPhi.addInput(getValue(n, value, nodeMap));
             }
+            newPhis.add(newPhi);
             return newPhi;
         }
         throw GraalInternalError.shouldNotReachHere();

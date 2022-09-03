@@ -68,7 +68,7 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
 
     private final VirtualizerToolImpl tool;
 
-    private final Map<Invoke, Double> hints = new IdentityHashMap<>();
+    private final List<Invoke> hints = new ArrayList<>();
 
     public PartialEscapeClosure(NodeBitMap usages, SchedulePhase schedule, MetaAccessProvider metaAccess, Assumptions assumptions) {
         this.usages = usages;
@@ -84,7 +84,7 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
         return tool.getNewVirtualObjectCount();
     }
 
-    public Map<Invoke, Double> getHints() {
+    public Collection<Invoke> getHints() {
         return hints;
     }
 
@@ -130,9 +130,7 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
                     } else if (node instanceof MemoryCheckpoint) {
                         METRIC_MEMORYCHECKOINT.increment();
                         MemoryCheckpoint checkpoint = (MemoryCheckpoint) node;
-                        for (Object identity : checkpoint.getLocationIdentities()) {
-                            state.killReadCache(identity);
-                        }
+                        state.killReadCache(checkpoint.getLocationIdentity());
                     }
                 }
             }
@@ -233,7 +231,7 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
             if (obj != null) {
                 if (obj.isVirtual() && node instanceof MethodCallTargetNode) {
                     Invoke invoke = ((MethodCallTargetNode) node).invoke();
-                    hints.put(invoke, 5d);
+                    hints.add(invoke);
                 }
                 trace("replacing input %s at %s: %s", input, node, obj);
                 replaceWithMaterialized(input, node, insertBefore, state, obj, METRIC_MATERIALIZATIONS_UNHANDLED);

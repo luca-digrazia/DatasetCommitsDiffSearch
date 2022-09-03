@@ -25,7 +25,6 @@ package com.oracle.graal.nodes;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
@@ -34,7 +33,7 @@ import com.oracle.graal.nodes.type.*;
  * variable.
  */
 @NodeInfo(nameTemplate = "{p#type/s}Phi({i#values})")
-public final class PhiNode extends FloatingNode implements Canonicalizable, Node.IterableNodeType, GuardingNode {
+public final class PhiNode extends FloatingNode implements Canonicalizable, Node.IterableNodeType {
 
     public static enum PhiType {
         Value(null), // normal value phis
@@ -160,7 +159,7 @@ public final class PhiNode extends FloatingNode implements Canonicalizable, Node
         values.set(i, x);
     }
 
-    public ValueNode valueAt(AbstractEndNode pred) {
+    public ValueNode valueAt(EndNode pred) {
         return valueAt(merge().phiPredecessorIndex(pred));
     }
 
@@ -199,7 +198,6 @@ public final class PhiNode extends FloatingNode implements Canonicalizable, Node
 
     public void addInput(ValueNode x) {
         assert !(x instanceof PhiNode) || ((PhiNode) x).merge() instanceof LoopBeginNode || ((PhiNode) x).merge() != this.merge();
-        assert x.kind() == kind() || type != PhiType.Value;
         values.add(x);
     }
 
@@ -252,10 +250,5 @@ public final class PhiNode extends FloatingNode implements Canonicalizable, Node
 
     public boolean isLoopPhi() {
         return merge() instanceof LoopBeginNode;
-    }
-
-    @Override
-    public PhiNode asNode() {
-        return this;
     }
 }

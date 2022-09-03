@@ -145,13 +145,13 @@ public abstract class LoopFragment {
         }
     }
 
-    protected static NodeBitMap computeNodes(Graph graph, Collection<AbstractBeginNode> blocks) {
-        return computeNodes(graph, blocks, Collections.<AbstractBeginNode> emptyList());
+    protected static NodeBitMap computeNodes(Graph graph, Collection<BeginNode> blocks) {
+        return computeNodes(graph, blocks, Collections.<BeginNode> emptyList());
     }
 
-    protected static NodeBitMap computeNodes(Graph graph, Collection<AbstractBeginNode> blocks, Collection<AbstractBeginNode> earlyExits) {
+    protected static NodeBitMap computeNodes(Graph graph, Collection<BeginNode> blocks, Collection<BeginNode> earlyExits) {
         final NodeBitMap nodes = graph.createNodeBitMap(true);
-        for (AbstractBeginNode b : blocks) {
+        for (BeginNode b : blocks) {
             for (Node n : b.getBlockNodes()) {
                 if (n instanceof Invoke) {
                     nodes.mark(((Invoke) n).callTarget());
@@ -165,7 +165,7 @@ public abstract class LoopFragment {
                 nodes.mark(n);
             }
         }
-        for (AbstractBeginNode earlyExit : earlyExits) {
+        for (BeginNode earlyExit : earlyExits) {
             FrameState stateAfter = earlyExit.stateAfter();
             if (stateAfter != null) {
                 nodes.mark(stateAfter);
@@ -183,11 +183,10 @@ public abstract class LoopFragment {
             }
         }
 
-        final NodeBitMap notloopNodes = graph.createNodeBitMap(true);
-        for (AbstractBeginNode b : blocks) {
+        for (BeginNode b : blocks) {
             for (Node n : b.getBlockNodes()) {
                 for (Node usage : n.usages()) {
-                    markFloating(usage, nodes, notloopNodes);
+                    markFloating(usage, nodes);
                 }
             }
         }
@@ -195,12 +194,9 @@ public abstract class LoopFragment {
         return nodes;
     }
 
-    private static boolean markFloating(Node n, NodeBitMap loopNodes, NodeBitMap notloopNodes) {
+    private static boolean markFloating(Node n, NodeBitMap loopNodes) {
         if (loopNodes.isMarked(n)) {
             return true;
-        }
-        if (notloopNodes.isMarked(n)) {
-            return false;
         }
         if (n instanceof FixedNode) {
             return false;
@@ -212,12 +208,11 @@ public abstract class LoopFragment {
             if (mark) {
                 loopNodes.mark(n);
             } else {
-                notloopNodes.mark(n);
                 return false;
             }
         }
         for (Node usage : n.usages()) {
-            if (markFloating(usage, loopNodes, notloopNodes)) {
+            if (markFloating(usage, loopNodes)) {
                 mark = true;
             }
         }
@@ -225,12 +220,11 @@ public abstract class LoopFragment {
             loopNodes.mark(n);
             return true;
         }
-        notloopNodes.mark(n);
         return false;
     }
 
-    public static Collection<AbstractBeginNode> toHirBlocks(Collection<Block> blocks) {
-        List<AbstractBeginNode> hir = new ArrayList<>(blocks.size());
+    public static Collection<BeginNode> toHirBlocks(Collection<Block> blocks) {
+        List<BeginNode> hir = new ArrayList<>(blocks.size());
         for (Block b : blocks) {
             hir.add(b.getBeginNode());
         }
@@ -244,18 +238,19 @@ public abstract class LoopFragment {
     protected void mergeEarlyExits() {
         assert isDuplicate();
         StructuredGraph graph = graph();
-        for (AbstractBeginNode earlyExit : LoopFragment.toHirBlocks(original().loop().lirLoop().exits)) {
+        for (BeginNode earlyExit : LoopFragment.toHirBlocks(original().loop().lirLoop().exits)) {
             FixedNode next = earlyExit.next();
             if (earlyExit.isDeleted() || !this.original().contains(earlyExit)) {
                 continue;
             }
-            AbstractBeginNode newEarlyExit = getDuplicatedNode(earlyExit);
+            BeginNode newEarlyExit = getDuplicatedNode(earlyExit);
             if (newEarlyExit == null) {
                 continue;
             }
             MergeNode merge = graph.add(new MergeNode());
-            AbstractEndNode originalEnd = graph.add(new EndNode());
-            AbstractEndNode newEnd = graph.add(new EndNode());
+            merge.setProbability(next.probability());
+            EndNode originalEnd = graph.add(new EndNode());
+            EndNode newEnd = graph.add(new EndNode());
             merge.addForwardEnd(originalEnd);
             merge.addForwardEnd(newEnd);
             earlyExit.setNext(originalEnd);
