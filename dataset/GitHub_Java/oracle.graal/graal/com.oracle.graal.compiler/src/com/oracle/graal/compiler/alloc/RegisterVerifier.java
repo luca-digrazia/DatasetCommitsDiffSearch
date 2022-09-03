@@ -32,6 +32,7 @@ import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.LIRInstruction.InstructionValueProcedure;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
 import com.oracle.graal.phases.util.*;
@@ -186,10 +187,10 @@ final class RegisterVerifier {
     }
 
     void processOperations(List<LIRInstruction> ops, final Interval[] inputState) {
-        InstructionValueConsumer useConsumer = new InstructionValueConsumer() {
+        InstructionValueProcedure useProc = new InstructionValueProcedure() {
 
             @Override
-            public void visitValue(LIRInstruction op, Value operand, OperandMode mode, EnumSet<OperandFlag> flags) {
+            public Value doValue(LIRInstruction op, Value operand, OperandMode mode, EnumSet<OperandFlag> flags) {
                 // we skip spill moves inserted by the spill position optimization
                 if (LinearScan.isVariableOrRegister(operand) && allocator.isProcessed(operand) && op.id() != LinearScan.DOMINATOR_SPILL_MOVE_ID) {
                     Interval interval = intervalAt(operand);
@@ -199,17 +200,23 @@ final class RegisterVerifier {
 
                     assert checkState(inputState, interval.location(), interval.splitParent());
                 }
+                return operand;
             }
         };
 
-        InstructionValueConsumer defConsumer = (op, operand, mode, flags) -> {
-            if (LinearScan.isVariableOrRegister(operand) && allocator.isProcessed(operand)) {
-                Interval interval = intervalAt(operand);
-                if (op.id() != -1) {
-                    interval = interval.getSplitChildAtOpId(op.id(), mode, allocator);
-                }
+        InstructionValueProcedure defProc = new InstructionValueProcedure() {
 
-                statePut(inputState, interval.location(), interval.splitParent());
+            @Override
+            public Value doValue(LIRInstruction op, Value operand, OperandMode mode, EnumSet<OperandFlag> flags) {
+                if (LinearScan.isVariableOrRegister(operand) && allocator.isProcessed(operand)) {
+                    Interval interval = intervalAt(operand);
+                    if (op.id() != -1) {
+                        interval = interval.getSplitChildAtOpId(op.id(), mode, allocator);
+                    }
+
+                    statePut(inputState, interval.location(), interval.splitParent());
+                }
+                return operand;
             }
         };
 
@@ -222,19 +229,19 @@ final class RegisterVerifier {
             }
 
             // check if input operands are correct
-            op.visitEachInput(useConsumer);
+            op.forEachInput(useProc);
             // invalidate all caller save registers at calls
             if (op.destroysCallerSavedRegisters()) {
                 for (Register r : allocator.frameMap.registerConfig.getCallerSaveRegisters()) {
                     statePut(inputState, r.asValue(), null);
                 }
             }
-            op.visitEachAlive(useConsumer);
+            op.forEachAlive(useProc);
             // set temp operands (some operations use temp operands also as output operands, so
             // can't set them null)
-            op.visitEachTemp(defConsumer);
+            op.forEachTemp(defProc);
             // set output operands
-            op.visitEachOutput(defConsumer);
+            op.forEachOutput(defProc);
         }
     }
 }
