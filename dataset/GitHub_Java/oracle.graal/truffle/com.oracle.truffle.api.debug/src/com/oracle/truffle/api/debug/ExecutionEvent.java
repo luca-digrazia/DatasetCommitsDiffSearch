@@ -44,7 +44,7 @@ import com.oracle.truffle.api.vm.PolyglotEngine;
  */
 @SuppressWarnings("javadoc")
 public final class ExecutionEvent {
-    private Object[] debugger;
+    private volatile Object[] debugger;
     private final PolyglotEngine engine;
     private final int currentDepth;
     private final Source source;
@@ -65,22 +65,21 @@ public final class ExecutionEvent {
      *         ones in the same {@link com.oracle.truffle.api.vm.PolyglotEngine}.
      * @since 0.9
      */
-    public synchronized Debugger getDebugger() {
+    public Debugger getDebugger() {
         if (debugger == null) {
             throw new IllegalStateException("Event was disposed.");
         }
         if (debugger[0] instanceof Debugger) {
             return (Debugger) debugger[0];
         }
-        Debugger dbg;
         try {
-            dbg = Debugger.find(engine, true);
+            final Debugger dbg = Debugger.find(engine, true);
             dbg.executionStarted(currentDepth, source);
+            debugger[0] = dbg;
         } catch (Exception ex) {
             throw new IllegalStateException(ex);
         }
-        debugger[0] = dbg;
-        return dbg;
+        return (Debugger) debugger[0];
     }
 
     /**
@@ -122,7 +121,7 @@ public final class ExecutionEvent {
         getDebugger().prepareStepInto(1);
     }
 
-    synchronized void dispose() {
+    void dispose() {
         debugger = null;
     }
 }

@@ -75,7 +75,6 @@ import com.oracle.truffle.api.vm.PolyglotEngine;
 import com.oracle.truffle.api.vm.PolyglotEngine.Value;
 import com.oracle.truffle.sl.SLLanguage;
 
-@SuppressWarnings("deprecation")
 public class SLDebugTest {
     private Debugger debugger;
     private final LinkedList<Runnable> run = new LinkedList<>();
@@ -117,7 +116,7 @@ public class SLDebugTest {
     }
 
     private static Source createFactorial() {
-        return Source.fromText("function test() {\n" +
+        return Source.fromText("function main() {\n" +
                         "  res = fac(2);\n" + "  println(res);\n" +
                         "  return res;\n" +
                         "}\n" +
@@ -128,11 +127,12 @@ public class SLDebugTest {
                         "  nMOFact = fac(nMinusOne);\n" +
                         "  res = n * nMOFact;\n" +
                         "  return res;\n" + "}\n",
-                        "factorial.sl").withMimeType(SLLanguage.MIME_TYPE);
+                        "factorial.sl").withMimeType(
+                                        "application/x-sl");
     }
 
     private static Source createFactorialWithDebugger() {
-        return Source.fromText("function test() {\n" +
+        return Source.fromText("function main() {\n" +
                         "  res = fac(2);\n" + "  println(res);\n" +
                         "  return res;\n" +
                         "}\n" +
@@ -144,11 +144,12 @@ public class SLDebugTest {
                         "  debugger;\n" +
                         "  res = n * nMOFact;\n" +
                         "  return res;\n" + "}\n",
-                        "factorial.sl").withMimeType(SLLanguage.MIME_TYPE);
+                        "factorial.sl").withMimeType(
+                                        "application/x-sl");
     }
 
     private static Source createInteropComputation() {
-        return Source.fromText("function test() {\n" +
+        return Source.fromText("function main() {\n" +
                         "}\n" +
                         "function interopFunction(notifyHandler) {\n" +
                         "  executing = true;\n" +
@@ -157,7 +158,8 @@ public class SLDebugTest {
                         "  }\n" +
                         "  return executing;\n" +
                         "}\n",
-                        "interopComputation.sl").withMimeType(SLLanguage.MIME_TYPE);
+                        "interopComputation.sl").withMimeType(
+                                        "application/x-sl");
     }
 
     protected final String getOut() {
@@ -206,7 +208,7 @@ public class SLDebugTest {
                         null, "res", null);
         continueExecution();
 
-        Value value = engine.findGlobalSymbol("test").execute();
+        Value value = engine.findGlobalSymbol("main").execute();
         assertExecutedOK();
         Assert.assertEquals("2\n", getOut());
         Number n = value.as(Number.class);
@@ -241,7 +243,7 @@ public class SLDebugTest {
                         1L, "res", null);
         continueExecution();
 
-        Value value = engine.findGlobalSymbol("test").execute();
+        Value value = engine.findGlobalSymbol("main").execute();
         assertExecutedOK();
         Assert.assertEquals("2\n", getOut());
         Number n = value.as(Number.class);
@@ -300,7 +302,7 @@ public class SLDebugTest {
         assertLocation(3, true, "println(res)", "res", 2L);
         stepOut();
 
-        Value value = engine.findGlobalSymbol("test").execute();
+        Value value = engine.findGlobalSymbol("main").execute();
         assertExecutedOK();
 
         Number n = value.as(Number.class);

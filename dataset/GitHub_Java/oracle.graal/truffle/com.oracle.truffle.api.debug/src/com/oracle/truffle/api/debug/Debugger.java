@@ -532,10 +532,6 @@ public final class Debugger {
 
         @Override
         protected void unsetStrategy() {
-            if (beforeHaltBinding == null || afterCallBinding == null) {
-                // Instrumentation/language failure
-                return;
-            }
             traceAction("CLEAR ACTION", startStackDepth, unfinishedStepCount);
             beforeHaltBinding.dispose();
             afterCallBinding.dispose();
@@ -608,10 +604,6 @@ public final class Debugger {
 
         @Override
         protected void unsetStrategy() {
-            if (afterCallBinding == null) {
-                // Instrumentation/language failure
-                return;
-            }
             afterCallBinding.dispose();
         }
     }
@@ -693,10 +685,6 @@ public final class Debugger {
 
         @Override
         protected void unsetStrategy() {
-            if (beforeHaltBinding == null || afterCallBinding == null) {
-                // Instrumentation/language failure
-                return;
-            }
             beforeHaltBinding.dispose();
             afterCallBinding.dispose();
         }
@@ -754,10 +742,6 @@ public final class Debugger {
 
         @Override
         protected void unsetStrategy() {
-            if (beforeHaltBinding == null) {
-                // Instrumentation/language failure
-                return;
-            }
             beforeHaltBinding.dispose();
         }
     }
