@@ -251,7 +251,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
             resize();
         }
         byte tag = this.getTags()[slotIndex];
-        if (tag != accessKind.ordinal()) {
+        if (accessKind == FrameSlotKind.Object ? tag != 0 : tag != accessKind.ordinal()) {
             CompilerDirectives.transferToInterpreter();
             if (slot.getKind() == accessKind || tag == 0) {
                 descriptor.getTypeConversion().updateFrameSlot(this, slot, getValue(slot));
@@ -284,7 +284,7 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
         } else if (tag == FrameSlotKind.Float.ordinal()) {
             return getFloatUnsafe(slot);
         } else {
-            assert tag == FrameSlotKind.Object.ordinal();
+            assert tag == FrameSlotKind.Object.ordinal() || tag == FrameSlotKind.Illegal.ordinal();
             return getObjectUnsafe(slot);
         }
     }
@@ -300,47 +300,13 @@ public final class FrameWithoutBoxing implements VirtualFrame, MaterializedFrame
         }
     }
 
-    private byte getTag(FrameSlot slot) {
+    @Override
+    public boolean isInitialized(FrameSlot slot) {
         int slotIndex = slot.getIndex();
         if (slotIndex >= getTags().length) {
             CompilerDirectives.transferToInterpreter();
             resize();
         }
-        return getTags()[slotIndex];
-    }
-
-    @Override
-    public boolean isObject(FrameSlot slot) {
-        return getTag(slot) == FrameSlotKind.Object.ordinal();
-    }
-
-    @Override
-    public boolean isByte(FrameSlot slot) {
-        return getTag(slot) == FrameSlotKind.Byte.ordinal();
-    }
-
-    @Override
-    public boolean isBoolean(FrameSlot slot) {
-        return getTag(slot) == FrameSlotKind.Boolean.ordinal();
-    }
-
-    @Override
-    public boolean isInt(FrameSlot slot) {
-        return getTag(slot) == FrameSlotKind.Int.ordinal();
-    }
-
-    @Override
-    public boolean isLong(FrameSlot slot) {
-        return getTag(slot) == FrameSlotKind.Long.ordinal();
-    }
-
-    @Override
-    public boolean isFloat(FrameSlot slot) {
-        return getTag(slot) == FrameSlotKind.Float.ordinal();
-    }
-
-    @Override
-    public boolean isDouble(FrameSlot slot) {
-        return getTag(slot) == FrameSlotKind.Double.ordinal();
+        return getTags()[slotIndex] != 0;
     }
 }
