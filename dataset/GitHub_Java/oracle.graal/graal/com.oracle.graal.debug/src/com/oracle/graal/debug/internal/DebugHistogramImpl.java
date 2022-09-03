@@ -93,11 +93,7 @@ public class DebugHistogramImpl implements DebugHistogram {
             int value = map.get(o);
             char[] bar = new char[(int) (((double) value / (double) max) * barSize)];
             Arrays.fill(bar, '=');
-            String objectString = o.toString();
-            if (objectString.length() > nameSize) {
-                objectString = objectString.substring(0, nameSize - 3) + "...";
-            }
-            os.printf(formatString, objectString, value, new String(bar));
+            os.printf(formatString, o, value, new String(bar));
         }
         printLine(os, '-', lineSize);
     }
