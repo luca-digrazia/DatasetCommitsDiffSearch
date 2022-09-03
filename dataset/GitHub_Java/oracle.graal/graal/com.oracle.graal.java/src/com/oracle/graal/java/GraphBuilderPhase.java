@@ -148,7 +148,7 @@ public final class GraphBuilderPhase extends Phase {
 
         if (GraalOptions.PrintProfilingInformation) {
             TTY.println("Profiling info for " + method);
-            TTY.println(CiUtil.indent(CiUtil.profileToString(profilingInfo, method, CiUtil.NEW_LINE), "  "));
+            TTY.println(CiUtil.indent(CiUtil.profileAsString(method), "  "));
         }
 
         // compute the block map, setup exception handlers and get the entrypoint(s)
