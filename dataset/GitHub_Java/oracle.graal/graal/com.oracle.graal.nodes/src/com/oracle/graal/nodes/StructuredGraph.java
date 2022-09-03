@@ -65,7 +65,7 @@ public class StructuredGraph extends Graph implements JavaMethodContext {
      * framestates}. The stage of a graph progresses monotonously.
      *
      */
-    public enum GuardsStage {
+    public static enum GuardsStage {
         /**
          * During this stage, there can be {@link FloatingNode floating} {@link DeoptimizingNode}
          * such as {@link GuardNode GuardNodes}. New {@link DeoptimizingNode DeoptimizingNodes} can
@@ -171,7 +171,7 @@ public class StructuredGraph extends Graph implements JavaMethodContext {
      */
     private final List<ResolvedJavaMethod> inlinedMethods = new ArrayList<>();
 
-    private enum UnsafeAccessState {
+    private static enum UnsafeAccessState {
         NO_ACCESS,
         HAS_ACCESS,
         DISABLED
