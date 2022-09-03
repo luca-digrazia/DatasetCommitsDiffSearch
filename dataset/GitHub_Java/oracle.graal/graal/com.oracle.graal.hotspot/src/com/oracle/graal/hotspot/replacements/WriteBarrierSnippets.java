@@ -49,6 +49,7 @@ public class WriteBarrierSnippets implements Snippets {
     private static final SnippetCounter.Group countersWriteBarriers = SnippetCounters.getValue() ? new SnippetCounter.Group("WriteBarriers") : null;
     private static final SnippetCounter serialFieldWriteBarrierCounter = new SnippetCounter(countersWriteBarriers, "serialFieldWriteBarrier", "Number of Serial Field Write Barriers");
     private static final SnippetCounter serialArrayWriteBarrierCounter = new SnippetCounter(countersWriteBarriers, "serialArrayWriteBarrier", "Number of Serial Array Write Barriers");
+    private static final int gcStartCycles = GraalOptions.GCDebugStartCycle.getValue();
 
     @Snippet
     public static void serialArrayWriteBarrier(Object obj, Object location, @ConstantParameter boolean usePrecise) {
@@ -378,6 +379,6 @@ public class WriteBarrierSnippets implements Snippets {
     }
 
     private static boolean traceBarrier() {
-        return GraalOptions.GCDebugStartCycle.getValue() > 0 && ((int) Word.unsigned(HotSpotReplacementsUtil.gcTotalCollectionsAddress()).readLong(0) > GraalOptions.GCDebugStartCycle.getValue());
+        return gcStartCycles > 0 && ((int) Word.unsigned(HotSpotReplacementsUtil.gcTotalCollectionsAddress()).readLong(0) > gcStartCycles);
     }
 }
