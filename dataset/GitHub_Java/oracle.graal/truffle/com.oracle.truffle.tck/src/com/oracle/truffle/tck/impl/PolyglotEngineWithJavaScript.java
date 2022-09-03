@@ -39,7 +39,6 @@ import org.junit.runner.RunWith;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.vm.PolyglotEngine;
 import com.oracle.truffle.api.vm.PolyglotEngine.Value;
-import com.oracle.truffle.tck.impl.TruffleLanguageRunner.JavaScriptRunner;
 
 /**
  * Tests with code snippets referencing JavaScript. They are used from {@link PolyglotEngine} & co.
@@ -169,16 +168,11 @@ public class PolyglotEngineWithJavaScript {
             + "})\n"
         ).name("MomentToSeconds.js").mimeType("text/javascript").build();
 
-        final Moment javaMoment = new Moment(6, 30, 10);
+        final Moment m = new Moment(6, 30, 10);
 
-        // Evaluate the JavaScript function definition
-        Value jsFunction = engine.eval(src);
-
-        // Execute the JavaScript function, passing a Java object argument
-        Value jsSeconds = jsFunction.execute(javaMoment);
-
-        // Convert foreign object result to desired Java type
-        int seconds = jsSeconds.as(Number.class).intValue();
+        Value jsFunction = engine.eval(src); // Evaluate JS function def.
+        Value jsSeconds = jsFunction.execute(m); // Execute JS function
+        int seconds = jsSeconds.as(Number.class).intValue(); // Convert result
 
         assertEquals(3600 * 6 + 30 * 60 + 10, seconds);
     }
@@ -198,16 +192,12 @@ public class PolyglotEngineWithJavaScript {
             + "})\n"
         ).name("MomentToSeconds.js").mimeType("text/javascript").build();
 
-        final Moment javaMoment = new Moment(6, 30, 10);
+        final Moment m = new Moment(6, 30, 10);
 
-        // Evaluate the JavaScript function definition
-        final Value jsFunction = engine.eval(src);
-
-        // Convert the function to desired Java type
-        MomentConverter converter = jsFunction.as(MomentConverter.class);
-
-        // Execute the JavaScript function as a Java foreign function
-        int seconds = converter.toSeconds(javaMoment);
+        final Value jsFunction = engine.eval(src); // Evaluate JS function def.
+        MomentConverter converter =
+                     jsFunction.as(MomentConverter.class); // Convert function
+        int seconds = converter.toSeconds(m);         // Execute Java function
 
         assertEquals(3600 * 6 + 30 * 60 + 10, seconds);
     }
@@ -239,13 +229,13 @@ public class PolyglotEngineWithJavaScript {
         // Create a JavaScript factory for the provided Java class
         final Value jsFactory = jsFunction.execute(Moment.class);
 
-        // Convert the JavaScript factory to a Java foreign function
+        // Create Java-typed access to the JavaScript factory
         MomentFactory momentFactory = jsFactory.as(MomentFactory.class);
 
-        final Moment javaMoment = momentFactory.create(6, 30, 10);
-        assertEquals("Hours", 6, javaMoment.hours);
-        assertEquals("Minutes", 30, javaMoment.minutes);
-        assertEquals("Seconds", 10, javaMoment.seconds);
+        final Moment m = momentFactory.create(6, 30, 10);
+        assertEquals("Hours", 6, m.hours);
+        assertEquals("Minutes", 30, m.minutes);
+        assertEquals("Seconds", 10, m.seconds);
     }
     // END: com.oracle.truffle.tck.impl.PolyglotEngineWithJavaScript#createJavaScriptFactoryForJavaClass
 

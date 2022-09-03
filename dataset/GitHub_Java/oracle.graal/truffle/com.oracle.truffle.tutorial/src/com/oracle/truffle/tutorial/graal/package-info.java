@@ -66,14 +66,8 @@
  * <li>Graal as a compiler for dynamic programming languages in the Truffle framework</li>
  * </ul>
  * <p>
- * Video recording: <a href="https://youtu.be/Af9T9kFk1lM">Part 1</a>:<br>
- *
- * <iframe width="854" height="480" src="https://www.youtube.com/embed/Af9T9kFk1lM" frameborder="0" allowfullscreen></iframe>
- *
- * <br><a href="https://youtu.be/WyU7KctlhzE">Part 2</a>:<br>
- *
- * <iframe width="854" height="480" src="https://www.youtube.com/embed/WyU7KctlhzE" frameborder="0" allowfullscreen></iframe>
- *
+ * Video recording: <a href="https://youtu.be/Af9T9kFk1lM">Part 1</a>,
+ * <a href="https://youtu.be/WyU7KctlhzE">Part 2</a>
  * <br>
  * <a href="http://lafo.ssw.uni-linz.ac.at/papers/2015_CGO_Graal.pdf">Download Slides</a>
  *
@@ -83,12 +77,68 @@
  * <ul>
  * <li>The Graal project home:  <a href="https://github.com/graalvm">https://github.com/graalvm</a></li>
  * <li><a href="https://github.com/graalvm/graal-core/blob/master/docs/Publications.md#graal-papers">Graal Publications</a></li>
- * <li>{@linkplain com.oracle.truffle.tutorial Other Truffle Tutorials}
+ * <li><a href=
+ * "{@docRoot}/com/oracle/truffle/tutorial/package-summary.html">Other Truffle Tutorials</a></li>
  * </ul>
 
  *
  * </div>
- * <script src="../doc-files/tutorial.js"></script>
+<script>
+
+window.onload = function () {
+    function hide(tagname, cnt, clazz) {
+        var elems = document.getElementsByTagName(tagname)
+        for (var i = 0; cnt > 0; i++) {
+            var e = elems[i];
+            if (!e) {
+                break;
+            }
+            if (!clazz || e.getAttribute("class") === clazz) {
+                e.style.display = 'none';
+                cnt--;
+            }
+        }
+    }
+    hide("h1", 1);
+    hide("h2", 1);
+    hide("p", 1);
+    hide("div", 1, "docSummary");
+
+    var toc = "";
+    var level = 0;
+
+    document.getElementById("contents").innerHTML =
+        document.getElementById("contents").innerHTML.replace(
+            /<h([\d])>([^<]+)<\/h([\d])>/gi,
+            function (str, openLevel, titleText, closeLevel) {
+                if (openLevel != closeLevel) {
+                    return str;
+                }
+
+                if (openLevel > level) {
+                    toc += (new Array(openLevel - level + 1)).join("<ul>");
+                } else if (openLevel < level) {
+                    toc += (new Array(level - openLevel + 1)).join("</ul>");
+                }
+
+                level = parseInt(openLevel);
+
+                var anchor = titleText.replace(/ /g, "_");
+                toc += "<li><a href=\"#" + anchor + "\">" + titleText
+                    + "</a></li>";
+
+                return "<h" + openLevel + "><a name=\"" + anchor + "\">"
+                    + titleText + "</a></h" + closeLevel + ">";
+            }
+        );
+
+    if (level) {
+        toc += (new Array(level + 1)).join("</ul>");
+    }
+
+    document.getElementById("toc").innerHTML += toc;
+};
+</script>
  *
  * @since 0.25
  */

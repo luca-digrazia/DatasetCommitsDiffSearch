@@ -47,71 +47,88 @@
  )
  */
 /**
- * <a href="https://github.com/graalvm/truffle">Truffle</a>
- * is a framework for implementing languages as simple interpreters.
- * Together with the <a href="https://github.com/graalvm/graal-core/">Graal compiler</a>,
- * Truffle interpreters are automatically just-in-time compiled and programs running on
- * top of them can reach performance of normal Java.
+ * <h1>The Truffle Tutorial</h1>
+ *
+ * <div id="contents">
+ *
+ * Welcome to <a href="https://github.com/graalvm/truffle">Truffle</a>:
+ * the Open Source framework for implementing programming languages with very high performance, Java embedding,
+ * language interoperation, debugging, and general tooling support.  Truffle is part of the
+ * <a href="https://github.com/graalvm/truffle">Graal Project</a>, developed and maintained by
+ * <a href="http://labs.oracle.com/">Oracle Labs</a>
+ * and the
+ * <a href="http://www.jku.at/isse/content">Institute for System Software</a> of the
+ * Johannes Kepler University Linz.
  * <p>
- * Truffle is developed and maintained by Oracle Labs and the
- * Institute for System Software of the Johannes Kepler University Linz.
- *
- * <h1>Embedding Truffle</h1>
- *
- * In case you want to embedded Truffle into your Java application,
- * start by downloading 
- * <a href="http://www.oracle.com/technetwork/oracle-labs/program-languages/overview/">GraalVM</a>
- * which contains all the necessary pre-built components.
- * Truffle bits are <a href="http://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22com.oracle.truffle%22%20AND%20a%3A%22truffle-api%22">
- * uploaded to Maven central</a>. You can use them from your <em>pom.xml</em>
- * file as:
- * <pre>
-&lt;dependency&gt;
-    &lt;groupId&gt;<b>com.oracle.truffle</b>&lt;/groupId&gt;
-    &lt;artifactId&gt;<b>truffle-api</b>&lt;/artifactId&gt;
-    &lt;version&gt;0.23&lt;/version&gt; <em>&lt;!-- or any later version --&gt;</em>
-&lt;/dependency&gt;
-&lt;dependency&gt;
-    &lt;groupId&gt;<b>com.oracle.truffle</b>&lt;/groupId&gt;
-    &lt;artifactId&gt;<b>truffle-dsl-processor</b>&lt;/artifactId&gt;
-    &lt;version&gt;0.23&lt;/version&gt; <em>&lt;!-- same version as above --&gt;</em>
-    &lt;scope&gt;provided&lt;/scope&gt;
-&lt;/dependency&gt;
- * </pre>
- *
- * <h3>Simple Hello World!</h3>
- *
- * Integrating Truffle into your Java application starts with building
- * an instance of {@link com.oracle.truffle.api.vm.PolyglotEngine} - a
- * gate way into the polyglot world of languages. Once you have an instance
- * of the engine, you can {@link com.oracle.truffle.api.source.Source build sources}
- * and {@link com.oracle.truffle.api.vm.PolyglotEngine#eval evaluate them}.
- * The following example create a <code>hello.js</code> JavaScript source,
- * executees it and checks result of the evaluation:
- *
- * {@codesnippet com.oracle.truffle.tutorial.HelloWorld#helloWorldInJavaScript}
- *
- * 
+ * This document contains tutorial information specialized for different interests,
+ * for example whether you want to run Truffle languages inside a Java application ("Embedding...")
+ * or implement your own language using Truffle ("Implementing..").  We expect this collection to grow.
+ * <p>
+ * Tutorial Topics:
+ * <ul>
+ * <li>{@linkplain com.oracle.truffle.tutorial.background Truffle Background}</li>
+ * <li>{@linkplain com.oracle.truffle.tutorial.embedding Embedding Truffle in Java}</li>
+ * <li>{@linkplain com.oracle.truffle.tutorial.newlanguage Implementing a Language with Truffle}</li>
+ * <li>{@linkplain com.oracle.truffle.tutorial.graal The Graal Compiler}</li>
+ * </ul>
+ * </div>
 <script>
-function hide(tagname, cnt, clazz) {
-    var elems = document.getElementsByTagName(tagname)
-    for (var i = 0; cnt > 0; i++) {
-        var e = elems[i];
-        if (!e) {
-            break;
-        }
-        if (!clazz || e.getAttribute("class") === clazz) {
-            e.style.display = 'none';
-            cnt--;
+
+window.onload = function () {
+    function hide(tagname, cnt, clazz) {
+        var elems = document.getElementsByTagName(tagname)
+        for (var i = 0; cnt > 0; i++) {
+            var e = elems[i];
+            if (!e) {
+                break;
+            }
+            if (!clazz || e.getAttribute("class") === clazz) {
+                e.style.display = 'none';
+                cnt--;
+            }
         }
     }
-}
-hide("h1", 1);
-hide("h2", 1);
-hide("p", 1);
-hide("div", 1, "docSummary");
+    hide("h1", 1);
+    hide("h2", 1);
+    hide("p", 1);
+    hide("div", 1, "docSummary");
+
+    var toc = "";
+    var level = 0;
+
+    document.getElementById("contents").innerHTML =
+        document.getElementById("contents").innerHTML.replace(
+            /<h([\d])>([^<]+)<\/h([\d])>/gi,
+            function (str, openLevel, titleText, closeLevel) {
+                if (openLevel != closeLevel) {
+                    return str;
+                }
+
+                if (openLevel > level) {
+                    toc += (new Array(openLevel - level + 1)).join("<ul>");
+                } else if (openLevel < level) {
+                    toc += (new Array(level - openLevel + 1)).join("</ul>");
+                }
+
+                level = parseInt(openLevel);
+
+                var anchor = titleText.replace(/ /g, "_");
+                toc += "<li><a href=\"#" + anchor + "\">" + titleText
+                    + "</a></li>";
+
+                return "<h" + openLevel + "><a name=\"" + anchor + "\">"
+                    + titleText + "</a></h" + closeLevel + ">";
+            }
+        );
+
+    if (level) {
+        toc += (new Array(level + 1)).join("</ul>");
+    }
+
+    document.getElementById("toc").innerHTML += toc;
+};
 </script>
- * 
+ *
  * @since 0.23
  */
 package com.oracle.truffle.tutorial;
