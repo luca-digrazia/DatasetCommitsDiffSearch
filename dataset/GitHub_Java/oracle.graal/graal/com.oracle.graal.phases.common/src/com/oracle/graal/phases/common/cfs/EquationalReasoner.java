@@ -237,17 +237,6 @@ public final class EquationalReasoner {
             // picked cached substitution
             return result;
         }
-        if (FlowUtil.hasLegalObjectStamp(v) && state.isNull(v)) {
-            // it's ok to return nullConstant in deverbosify unlike in downcast
-            metricNullInserted.increment();
-            return nullConstant;
-        }
-        if (v instanceof ValueProxy) {
-            return v;
-        }
-        if (!(n instanceof FloatingNode)) {
-            return n;
-        }
         if ((visited != null && visited.contains(n)) || added.contains(v)) {
             return v;
         }
@@ -265,13 +254,30 @@ public final class EquationalReasoner {
          * Past this point, if we ever want `n` to be deverbosified, it must be looked-up by one of
          * the cases above. One sure way to achieve that is with `rememberSubstitution(old, new)`
          */
+        if (v instanceof ValueProxy) {
+            return downcast(v);
+        }
 
-        /*
-         * `deverbosifyFloatingNode()` will drill down over floating inputs, when that not possible
-         * anymore it resorts to calling `downcast()`. Thus it's ok to take the
-         * `deverbosifyFloatingNode()` route first, as no downcasting opportunity will be missed.
-         */
-        return deverbosifyFloatingNode((FloatingNode) n);
+        if (n instanceof FloatingNode) {
+            /*
+             * `deverbosifyFloatingNode()` will drill down over floating inputs, when that not
+             * possible anymore it resorts to calling `downcast()`. Thus it's ok to take the
+             * `deverbosifyFloatingNode()` route first, as no downcasting opportunity will be
+             * missed.
+             */
+            return deverbosifyFloatingNode((FloatingNode) n);
+        }
+
+        if (FlowUtil.hasLegalObjectStamp(v)) {
+            if (state.isNull(v)) {
+                // it's ok to return nullConstant in deverbosify unlike in downcast
+                metricNullInserted.increment();
+                return nullConstant;
+            }
+            return downcast(v);
+        }
+
+        return n;
     }
 
     /**
@@ -335,7 +341,16 @@ public final class EquationalReasoner {
         }
         if (changed == null) {
             assert visited.contains(f) || added.contains(f);
-            return f;
+            if (FlowUtil.hasLegalObjectStamp(f)) {
+                /*
+                 * No input has changed doesn't imply there's no witness to refine the
+                 * floating-object value.
+                 */
+                ValueNode d = downcast(f);
+                return d;
+            } else {
+                return f;
+            }
         }
         FlowUtil.inferStampAndCheck(changed);
         added.add(changed);
