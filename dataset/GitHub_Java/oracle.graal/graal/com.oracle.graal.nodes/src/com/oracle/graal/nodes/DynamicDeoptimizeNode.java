@@ -54,19 +54,16 @@ public class DynamicDeoptimizeNode extends AbstractDeoptimizeNode implements LIR
         return getSpeculation();
     }
 
-    public void generate(NodeLIRBuilderTool generator) {
-        generator.getLIRGeneratorTool().emitDeoptimize(generator.operand(actionAndReason), generator.operand(speculation), this);
+    public void generate(LIRGeneratorTool generator) {
+        generator.emitDeoptimize(generator.operand(actionAndReason), generator.operand(speculation), this);
     }
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        if (actionAndReason.isConstant() && speculation.isConstant()) {
+        if (actionAndReason.isConstant()) {
             Constant constant = actionAndReason.asConstant();
-            Constant speculationConstant = speculation.asConstant();
-            DeoptimizeNode newDeopt = graph().add(
-                            new DeoptimizeNode(tool.getMetaAccess().decodeDeoptAction(constant), tool.getMetaAccess().decodeDeoptReason(constant), tool.getMetaAccess().decodeDebugId(constant),
-                                            speculationConstant));
-            newDeopt.setStateBefore(stateBefore());
+            DeoptimizeNode newDeopt = graph().add(new DeoptimizeNode(tool.getMetaAccess().decodeDeoptAction(constant), tool.getMetaAccess().decodeDeoptReason(constant)));
+            newDeopt.setDeoptimizationState(getDeoptimizationState());
             return newDeopt;
         }
         return this;

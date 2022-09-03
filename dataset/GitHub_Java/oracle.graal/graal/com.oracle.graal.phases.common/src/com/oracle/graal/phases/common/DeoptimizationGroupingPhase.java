@@ -27,7 +27,6 @@ import java.util.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
-import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.tiers.*;
 
@@ -56,8 +55,8 @@ public class DeoptimizationGroupingPhase extends BasePhase<MidTierContext> {
                     if (target instanceof AbstractDeoptimizeNode) {
                         merge = graph.add(new MergeNode());
                         EndNode firstEnd = graph.add(new EndNode());
-                        reasonActionPhi = graph.addWithoutUnique(new PhiNode(StampFactory.forKind(Kind.Int), merge));
-                        speculationPhi = graph.addWithoutUnique(new PhiNode(StampFactory.forKind(Kind.Object), merge));
+                        reasonActionPhi = graph.addWithoutUnique(new PhiNode(Kind.Int, merge));
+                        speculationPhi = graph.addWithoutUnique(new PhiNode(Kind.Object, merge));
                         merge.addForwardEnd(firstEnd);
                         reasonActionPhi.addInput(((AbstractDeoptimizeNode) target).getActionAndReason(context.getMetaAccess()));
                         speculationPhi.addInput(((AbstractDeoptimizeNode) target).getSpeculation(context.getMetaAccess()));

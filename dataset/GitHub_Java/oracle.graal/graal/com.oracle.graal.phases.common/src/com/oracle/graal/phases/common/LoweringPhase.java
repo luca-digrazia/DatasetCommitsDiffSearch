@@ -50,11 +50,11 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
 
         private final PhaseContext context;
         private final NodeBitMap activeGuards;
-        private AnchoringNode guardAnchor;
+        private GuardingNode guardAnchor;
         private FixedWithNextNode lastFixedNode;
         private ControlFlowGraph cfg;
 
-        public LoweringToolImpl(PhaseContext context, AnchoringNode guardAnchor, NodeBitMap activeGuards, FixedWithNextNode lastFixedNode, ControlFlowGraph cfg) {
+        public LoweringToolImpl(PhaseContext context, GuardingNode guardAnchor, NodeBitMap activeGuards, FixedWithNextNode lastFixedNode, ControlFlowGraph cfg) {
             this.context = context;
             this.guardAnchor = guardAnchor;
             this.activeGuards = activeGuards;
@@ -88,7 +88,7 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
         }
 
         @Override
-        public AnchoringNode getCurrentGuardAnchor() {
+        public GuardingNode getCurrentGuardAnchor() {
             return guardAnchor;
         }
 
@@ -103,7 +103,7 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
         }
 
         private class DummyGuardHandle extends ValueNode implements GuardedNode {
-            @Input(InputType.Guard) private GuardingNode guard;
+            @Input private GuardingNode guard;
 
             public DummyGuardHandle(GuardingNode guard) {
                 super(StampFactory.forVoid());
@@ -115,7 +115,7 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
             }
 
             public void setGuard(GuardingNode guard) {
-                updateUsagesInterface(this.guard, guard);
+                updateUsages(this.guard == null ? null : this.guard.asNode(), guard == null ? null : guard.asNode());
                 this.guard = guard;
             }
 
@@ -177,7 +177,7 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
 
     /**
      * Checks that second lowering of a given graph did not introduce any new nodes.
-     *
+     * 
      * @param graph a graph that was just {@linkplain #lower lowered}
      * @throws AssertionError if the check fails
      */
@@ -206,7 +206,7 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
      * Checks that lowering of a given node did not introduce any new {@link Lowerable} nodes that
      * could be lowered in the current {@link LoweringPhase}. Such nodes must be recursively lowered
      * as part of lowering {@code node}.
-     *
+     * 
      * @param node a node that was just lowered
      * @param preLoweringMark the graph mark before {@code node} was lowered
      * @param unscheduledUsages set of {@code node}'s usages that were unscheduled before it was
@@ -253,9 +253,9 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
             processBlock(schedule.getCFG().getStartBlock(), graph.createNodeBitMap(), null);
         }
 
-        private void processBlock(Block block, NodeBitMap activeGuards, AnchoringNode parentAnchor) {
+        private void processBlock(Block block, NodeBitMap activeGuards, GuardingNode parentAnchor) {
 
-            AnchoringNode anchor = parentAnchor;
+            GuardingNode anchor = parentAnchor;
             if (anchor == null) {
                 anchor = block.getBeginNode();
             }
@@ -284,7 +284,7 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
             }
         }
 
-        private AnchoringNode process(final Block b, final NodeBitMap activeGuards, final AnchoringNode startAnchor) {
+        private GuardingNode process(final Block b, final NodeBitMap activeGuards, final GuardingNode startAnchor) {
 
             final LoweringToolImpl loweringTool = new LoweringToolImpl(context, startAnchor, activeGuards, b.getBeginNode(), schedule.getCFG());
 
@@ -312,8 +312,6 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
                     Mark preLoweringMark = node.graph().getMark();
                     ((Lowerable) node).lower(loweringTool);
                     if (loweringTool.guardAnchor.asNode().isDeleted()) {
-                        // TODO nextNode could be deleted but this is not currently supported
-                        assert nextNode.isAlive();
                         loweringTool.guardAnchor = BeginNode.prevBegin(nextNode);
                     }
                     assert checkPostNodeLowering(node, loweringTool, preLoweringMark, unscheduledUsages);
@@ -349,7 +347,7 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
          * the context of a usage that dominates all other usages. The fixed nodes resulting from
          * lowering are attached to the fixed node context of the dominating usage. This ensures the
          * post-lowering graph still has a valid schedule.
-         *
+         * 
          * @param node a {@link Lowerable} node
          */
         private Collection<Node> getUnscheduledUsages(Node node) {

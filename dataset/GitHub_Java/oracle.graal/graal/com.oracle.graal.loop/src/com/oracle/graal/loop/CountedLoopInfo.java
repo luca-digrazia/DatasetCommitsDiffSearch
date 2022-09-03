@@ -29,7 +29,6 @@ import com.oracle.graal.loop.InductionVariable.Direction;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.type.*;
 
 public class CountedLoopInfo {
 
@@ -53,18 +52,18 @@ public class CountedLoopInfo {
 
     public ValueNode maxTripCountNode(boolean assumePositive) {
         StructuredGraph graph = iv.valueNode().graph();
-        Stamp stamp = iv.valueNode().stamp();
+        Kind kind = iv.valueNode().kind();
         IntegerArithmeticNode range = IntegerArithmeticNode.sub(graph, end, iv.initNode());
         if (oneOff) {
             if (iv.direction() == Direction.Up) {
-                range = IntegerArithmeticNode.add(graph, range, ConstantNode.forIntegerStamp(stamp, 1, graph));
+                range = IntegerArithmeticNode.add(graph, range, ConstantNode.forIntegerKind(kind, 1, graph));
             } else {
-                range = IntegerArithmeticNode.sub(graph, range, ConstantNode.forIntegerStamp(stamp, 1, graph));
+                range = IntegerArithmeticNode.sub(graph, range, ConstantNode.forIntegerKind(kind, 1, graph));
             }
         }
-        IntegerDivNode div = graph.add(new IntegerDivNode(iv.valueNode().stamp().unrestricted(), range, iv.strideNode()));
+        IntegerDivNode div = graph.add(new IntegerDivNode(kind, range, iv.strideNode()));
         graph.addBeforeFixed(loop.entryPoint(), div);
-        ConstantNode zero = ConstantNode.forIntegerStamp(stamp, 0, graph);
+        ConstantNode zero = ConstantNode.forIntegerKind(kind, 0, graph);
         if (assumePositive) {
             return div;
         }
@@ -138,19 +137,19 @@ public class CountedLoopInfo {
         if (overflowGuard != null) {
             return overflowGuard;
         }
-        IntegerStamp stamp = (IntegerStamp) iv.valueNode().stamp();
+        Kind kind = iv.valueNode().kind();
         StructuredGraph graph = iv.valueNode().graph();
         CompareNode cond; // we use a negated guard with a < condition to achieve a >=
-        ConstantNode one = ConstantNode.forIntegerStamp(stamp, 1, graph);
+        ConstantNode one = ConstantNode.forIntegerKind(kind, 1, graph);
         if (iv.direction() == Direction.Up) {
-            IntegerArithmeticNode v1 = sub(graph, ConstantNode.forIntegerStamp(stamp, IntegerStamp.defaultMaxValue(stamp.getBits()), graph), sub(graph, iv.strideNode(), one));
+            IntegerArithmeticNode v1 = sub(graph, ConstantNode.forIntegerKind(kind, kind.getMaxValue(), graph), sub(graph, iv.strideNode(), one));
             if (oneOff) {
                 v1 = sub(graph, v1, one);
             }
             cond = graph.unique(new IntegerLessThanNode(v1, end));
         } else {
             assert iv.direction() == Direction.Down;
-            IntegerArithmeticNode v1 = add(graph, ConstantNode.forIntegerStamp(stamp, IntegerStamp.defaultMinValue(stamp.getBits()), graph), sub(graph, one, iv.strideNode()));
+            IntegerArithmeticNode v1 = add(graph, ConstantNode.forIntegerKind(kind, kind.getMinValue(), graph), sub(graph, one, iv.strideNode()));
             if (oneOff) {
                 v1 = add(graph, v1, one);
             }
@@ -162,7 +161,7 @@ public class CountedLoopInfo {
         return overflowGuard;
     }
 
-    public IntegerStamp getStamp() {
-        return (IntegerStamp) iv.valueNode().stamp();
+    public Kind getKind() {
+        return iv.valueNode().kind();
     }
 }

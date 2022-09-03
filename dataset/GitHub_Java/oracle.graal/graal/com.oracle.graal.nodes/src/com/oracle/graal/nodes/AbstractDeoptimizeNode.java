@@ -30,11 +30,13 @@ import com.oracle.graal.nodes.type.*;
  * This node represents an unconditional explicit request for immediate deoptimization.
  * 
  * After this node, execution will continue using a fallback execution engine (such as an
- * interpreter) at the position described by the {@link #stateBefore() deoptimization state}.
+ * interpreter) at the position described by the {@link #getDeoptimizationState() deoptimization
+ * state}.
+ * 
  */
-public abstract class AbstractDeoptimizeNode extends ControlSinkNode implements IterableNodeType, DeoptimizingNode.DeoptBefore {
+public abstract class AbstractDeoptimizeNode extends ControlSinkNode implements IterableNodeType, DeoptimizingNode {
 
-    @Input private FrameState stateBefore;
+    @Input private FrameState deoptState;
 
     public AbstractDeoptimizeNode() {
         super(StampFactory.forVoid());
@@ -46,14 +48,18 @@ public abstract class AbstractDeoptimizeNode extends ControlSinkNode implements 
     }
 
     @Override
-    public FrameState stateBefore() {
-        return stateBefore;
+    public FrameState getDeoptimizationState() {
+        return deoptState;
     }
 
     @Override
-    public void setStateBefore(FrameState f) {
-        updateUsages(stateBefore, f);
-        stateBefore = f;
+    public void setDeoptimizationState(FrameState f) {
+        updateUsages(deoptState, f);
+        deoptState = f;
+    }
+
+    public FrameState getState() {
+        return deoptState;
     }
 
     public abstract ValueNode getActionAndReason(MetaAccessProvider metaAccess);
