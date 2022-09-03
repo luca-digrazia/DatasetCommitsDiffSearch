@@ -299,17 +299,13 @@ public abstract class Node implements NodeInterface, Cloneable {
     private void reportReplace(Node oldNode, Node newNode, CharSequence reason) {
         Node node = this;
         while (node != null) {
-            boolean consumed = false;
             if (node instanceof ReplaceObserver) {
-                consumed = ((ReplaceObserver) node).nodeReplaced(oldNode, newNode, reason);
+                ((ReplaceObserver) node).nodeReplaced(oldNode, newNode, reason);
             } else if (node instanceof RootNode) {
                 CallTarget target = ((RootNode) node).getCallTarget();
                 if (target instanceof ReplaceObserver) {
-                    consumed = ((ReplaceObserver) target).nodeReplaced(oldNode, newNode, reason);
+                    ((ReplaceObserver) target).nodeReplaced(oldNode, newNode, reason);
                 }
-            }
-            if (consumed) {
-                break;
             }
             node = node.getParent();
         }
