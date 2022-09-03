@@ -33,20 +33,18 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 
+import com.oracle.truffle.llvm.parser.ir.records.TypesRecord;
 import com.oracle.truffle.llvm.parser.model.generators.ModuleGenerator;
 import com.oracle.truffle.llvm.parser.records.Records;
-import com.oracle.truffle.llvm.parser.records.TypesRecord;
 import com.oracle.truffle.llvm.runtime.types.ArrayType;
-import com.oracle.truffle.llvm.runtime.types.DataSpecConverter;
+import com.oracle.truffle.llvm.runtime.types.FloatingPointType;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
+import com.oracle.truffle.llvm.runtime.types.IntegerType;
 import com.oracle.truffle.llvm.runtime.types.MetaType;
-import com.oracle.truffle.llvm.runtime.types.OpaqueType;
 import com.oracle.truffle.llvm.runtime.types.PointerType;
-import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
 import com.oracle.truffle.llvm.runtime.types.StructureType;
 import com.oracle.truffle.llvm.runtime.types.Type;
 import com.oracle.truffle.llvm.runtime.types.VectorType;
-import com.oracle.truffle.llvm.runtime.types.VoidType;
 import com.oracle.truffle.llvm.runtime.types.visitors.TypeVisitor;
 
 public final class Types implements ParserListener, Iterable<Type> {
@@ -67,7 +65,7 @@ public final class Types implements ParserListener, Iterable<Type> {
 
     private int size = 0;
 
-    Types(ModuleGenerator generator) {
+    public Types(ModuleGenerator generator) {
         this.generator = generator;
     }
 
@@ -87,15 +85,15 @@ public final class Types implements ParserListener, Iterable<Type> {
                 return;
 
             case VOID:
-                type = VoidType.INSTANCE;
+                type = MetaType.VOID;
                 break;
 
             case FLOAT:
-                type = PrimitiveType.FLOAT;
+                type = FloatingPointType.FLOAT;
                 break;
 
             case DOUBLE:
-                type = PrimitiveType.DOUBLE;
+                type = FloatingPointType.DOUBLE;
                 break;
 
             case LABEL:
@@ -103,19 +101,11 @@ public final class Types implements ParserListener, Iterable<Type> {
                 break;
 
             case OPAQUE:
-                OpaqueType opaque = new OpaqueType();
-                if (table[size] != null) {
-                    if (table[size] instanceof UnresolvedNamedPointeeType) {
-                        opaque.setName(((UnresolvedNamedPointeeType) table[size]).getName());
-                    } else {
-                        opaque.setName(((UnresolvedNamedType) table[size]).getName());
-                    }
-                }
-                type = opaque;
+                type = MetaType.OPAQUE;
                 break;
 
             case INTEGER:
-                type = Type.getIntegerType((int) args[0]);
+                type = new IntegerType((int) args[0]);
                 break;
 
             case POINTER: {
@@ -138,7 +128,7 @@ public final class Types implements ParserListener, Iterable<Type> {
                 break;
             }
             case HALF:
-                type = PrimitiveType.HALF;
+                type = FloatingPointType.HALF;
                 break;
 
             case ARRAY:
@@ -146,19 +136,19 @@ public final class Types implements ParserListener, Iterable<Type> {
                 break;
 
             case VECTOR:
-                type = new VectorType((PrimitiveType) get(args[1]), (int) args[0]);
+                type = new VectorType(get(args[1]), (int) args[0]);
                 break;
 
             case X86_FP80:
-                type = PrimitiveType.X86_FP80;
+                type = FloatingPointType.X86_FP80;
                 break;
 
             case FP128:
-                type = PrimitiveType.F128;
+                type = FloatingPointType.FP128;
                 break;
 
             case PPC_FP128:
-                type = PrimitiveType.PPC_FP128;
+                type = FloatingPointType.PPC_FP128;
                 break;
 
             case METADATA:
@@ -166,7 +156,7 @@ public final class Types implements ParserListener, Iterable<Type> {
                 break;
 
             case X86_MMX:
-                type = MetaType.X86MMX;
+                type = MetaType.X86_MMX;
                 break;
 
             case STRUCT_ANON:
@@ -195,7 +185,7 @@ public final class Types implements ParserListener, Iterable<Type> {
                 break;
             }
             case FUNCTION:
-                type = new FunctionType(get(args[1]), toTypes(this, args, 2, args.length), false);
+                type = new FunctionType(get(args[1]), toTypes(this, args, 2, args.length), args[0] != 0);
                 break;
 
             case TOKEN:
@@ -220,7 +210,7 @@ public final class Types implements ParserListener, Iterable<Type> {
         return table[(int) index];
     }
 
-    private static class UnresolvedPointeeType extends Type {
+    private static class UnresolvedPointeeType implements Type {
 
         private final int idx;
 
@@ -231,57 +221,11 @@ public final class Types implements ParserListener, Iterable<Type> {
         @Override
         public void accept(TypeVisitor visitor) {
             // This is a private type only required for resolving
-            throw new IllegalStateException();
         }
 
         public int getIndex() {
             return idx;
         }
-
-        @Override
-        public int getBitSize() {
-            // This is a private type only required for resolving
-            throw new IllegalStateException();
-        }
-
-        @Override
-        public int getAlignment(DataSpecConverter targetDataLayout) {
-            // This is a private type only required for resolving
-            throw new IllegalStateException();
-        }
-
-        @Override
-        public int getSize(DataSpecConverter targetDataLayout) {
-            // This is a private type only required for resolving
-            throw new IllegalStateException();
-        }
-
-        @Override
-        public int hashCode() {
-            final int prime = 31;
-            int result = 1;
-            result = prime * result + idx;
-            return result;
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (this == obj) {
-                return true;
-            }
-            if (obj == null) {
-                return false;
-            }
-            if (getClass() != obj.getClass()) {
-                return false;
-            }
-            UnresolvedPointeeType other = (UnresolvedPointeeType) obj;
-            if (idx != other.idx) {
-                return false;
-            }
-            return true;
-        }
-
     }
 
     private static final class UnresolvedNamedPointeeType extends UnresolvedPointeeType {
@@ -298,7 +242,7 @@ public final class Types implements ParserListener, Iterable<Type> {
         }
     }
 
-    private static final class UnresolvedNamedType extends Type {
+    private static final class UnresolvedNamedType implements Type {
 
         private final String name;
 
@@ -314,55 +258,6 @@ public final class Types implements ParserListener, Iterable<Type> {
         public String getName() {
             return name;
         }
-
-        @Override
-        public int getBitSize() {
-            // This is a private type only required for resolving
-            throw new IllegalStateException();
-        }
-
-        @Override
-        public int getAlignment(DataSpecConverter targetDataLayout) {
-            // This is a private type only required for resolving
-            throw new IllegalStateException();
-        }
-
-        @Override
-        public int getSize(DataSpecConverter targetDataLayout) {
-            // This is a private type only required for resolving
-            throw new IllegalStateException();
-        }
-
-        @Override
-        public int hashCode() {
-            final int prime = 31;
-            int result = 1;
-            result = prime * result + ((name == null) ? 0 : name.hashCode());
-            return result;
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (this == obj) {
-                return true;
-            }
-            if (obj == null) {
-                return false;
-            }
-            if (!(obj instanceof UnresolvedNamedType)) {
-                return false;
-            }
-            UnresolvedNamedType other = (UnresolvedNamedType) obj;
-            if (name == null) {
-                if (other.name != null) {
-                    return false;
-                }
-            } else if (!name.equals(other.name)) {
-                return false;
-            }
-            return true;
-        }
-
     }
 
     @Override

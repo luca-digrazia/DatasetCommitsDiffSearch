@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, Oracle and/or its affiliates.
+ * Copyright (c) 2016, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,22 +29,25 @@
  */
 package com.oracle.truffle.llvm.runtime.types;
 
+import java.util.Objects;
+
+import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
+import com.oracle.truffle.llvm.runtime.types.metadata.MetadataBlock;
+import com.oracle.truffle.llvm.runtime.types.metadata.MetadataBlock.MetadataReference;
 import com.oracle.truffle.llvm.runtime.types.visitors.TypeVisitor;
 
-public final class ArrayType extends AggregateType {
-
-    private static final int NO_LENGTH = -1;
+public class ArrayType implements AggregateType {
 
     private final Type elementType;
+
     private final int length;
 
-    public ArrayType(Type type, int length) {
-        this.elementType = type;
-        this.length = length;
-    }
+    private MetadataReference metadata = MetadataBlock.voidRef;
 
-    public ArrayType(Type type) {
-        this(type, NO_LENGTH);
+    public ArrayType(Type type, int size) {
+        super();
+        this.elementType = type;
+        this.length = size;
     }
 
     @Override
@@ -53,29 +56,32 @@ public final class ArrayType extends AggregateType {
     }
 
     @Override
-    public int getBitSize() {
-        return getElementType().getBitSize() * getNumberOfElements();
+    public int getBits() {
+        return getElementType().getBits() * length;
     }
 
     public Type getElementType() {
         return elementType;
     }
 
-    public boolean hasLength() {
-        return length != NO_LENGTH;
+    @Override
+    public Type getElementType(int idx) {
+        return getElementType();
     }
 
     @Override
-    public int getNumberOfElements() {
-        if (length == NO_LENGTH) {
-            throw new UnsupportedOperationException();
-        }
+    public int getLength() {
         return length;
     }
 
     @Override
-    public Type getElementType(int index) {
-        return elementType;
+    public LLVMBaseType getLLVMBaseType() {
+        return LLVMBaseType.ARRAY;
+    }
+
+    @Override
+    public LLVMFunctionDescriptor.LLVMRuntimeType getRuntimeType() {
+        return LLVMFunctionDescriptor.LLVMRuntimeType.ARRAY;
     }
 
     @Override
@@ -89,47 +95,44 @@ public final class ArrayType extends AggregateType {
     }
 
     @Override
-    public int getOffsetOf(int index, DataSpecConverter targetDataLayout) {
+    public int getIndexOffset(int index, DataSpecConverter targetDataLayout) {
         return getElementType().getSize(targetDataLayout) * index;
     }
 
     @Override
-    public String toString() {
-        return String.format("[%d x %s]", getNumberOfElements(), getElementType());
+    public void setMetadataReference(MetadataReference metadata) {
+        this.metadata = metadata;
+    }
+
+    @Override
+    public MetadataReference getMetadataReference() {
+        return metadata;
     }
 
     @Override
     public int hashCode() {
-        final int prime = 31;
-        int result = 1;
-        result = prime * result + ((elementType == null) ? 0 : elementType.hashCode());
-        result = prime * result + length;
-        return result;
+        int hash = 7;
+        hash = 67 * hash + Objects.hashCode(this.getElementType());
+        hash = 67 * hash + this.length;
+        return hash;
     }
 
     @Override
     public boolean equals(Object obj) {
         if (this == obj) {
             return true;
-        }
-        if (obj == null) {
+
+        } else if (obj instanceof ArrayType) {
+            final ArrayType other = (ArrayType) obj;
+            return length == other.length && Objects.equals(getElementType(), other.getElementType());
+
+        } else {
             return false;
         }
-        if (getClass() != obj.getClass()) {
-            return false;
-        }
-        ArrayType other = (ArrayType) obj;
-        if (elementType == null) {
-            if (other.elementType != null) {
-                return false;
-            }
-        } else if (!elementType.equals(other.elementType)) {
-            return false;
-        }
-        if (length != other.length) {
-            return false;
-        }
-        return true;
     }
 
+    @Override
+    public String toString() {
+        return String.format("[%d x %s]", getLength(), getElementType());
+    }
 }
