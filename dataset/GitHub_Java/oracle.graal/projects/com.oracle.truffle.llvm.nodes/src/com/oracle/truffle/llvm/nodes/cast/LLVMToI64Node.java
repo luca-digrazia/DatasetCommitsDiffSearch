@@ -37,6 +37,7 @@ import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
@@ -47,8 +48,7 @@ import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
-import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
-import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
+import com.oracle.truffle.llvm.runtime.interop.ToLLVMNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.vector.LLVMDoubleVector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMFloatVector;
@@ -86,7 +86,7 @@ public abstract class LLVMToI64Node extends LLVMExpressionNode {
     @Child private Node asPointer = Message.AS_POINTER.createNode();
     @Child private Node toNative = Message.TO_NATIVE.createNode();
     @Child private Node unbox = Message.UNBOX.createNode();
-    @Child private ForeignToLLVM convert = ForeignToLLVM.create(ForeignToLLVMType.I64);
+    @Child private ToLLVMNode convert = ToLLVMNode.createNode(long.class);
 
     @Specialization(guards = "notLLVM(from)")
     public long executeTruffleObject(TruffleObject from) {
@@ -174,6 +174,7 @@ public abstract class LLVMToI64Node extends LLVMExpressionNode {
 
     public abstract static class LLVMToI64BitNode extends LLVMToI64Node {
 
+        @ExplodeLoop
         protected static long castI1Vector(LLVMI1Vector from, int elem) {
             if (from.getLength() != elem) {
                 CompilerDirectives.transferToInterpreter();
@@ -186,6 +187,7 @@ public abstract class LLVMToI64Node extends LLVMExpressionNode {
             return res;
         }
 
+        @ExplodeLoop
         protected static long castI8Vector(LLVMI8Vector from, int elem) {
             if (from.getLength() != elem) {
                 CompilerDirectives.transferToInterpreter();
@@ -198,6 +200,7 @@ public abstract class LLVMToI64Node extends LLVMExpressionNode {
             return res;
         }
 
+        @ExplodeLoop
         protected static long castI16Vector(LLVMI16Vector from, int elem) {
             if (from.getLength() != elem) {
                 CompilerDirectives.transferToInterpreter();
@@ -210,6 +213,7 @@ public abstract class LLVMToI64Node extends LLVMExpressionNode {
             return res;
         }
 
+        @ExplodeLoop
         protected static long castI32Vector(LLVMI32Vector from, int elem) {
             if (from.getLength() != elem) {
                 CompilerDirectives.transferToInterpreter();
@@ -222,6 +226,7 @@ public abstract class LLVMToI64Node extends LLVMExpressionNode {
             return res;
         }
 
+        @ExplodeLoop
         protected static long castFloatVector(LLVMFloatVector from, int elem) {
             if (from.getLength() != elem) {
                 CompilerDirectives.transferToInterpreter();

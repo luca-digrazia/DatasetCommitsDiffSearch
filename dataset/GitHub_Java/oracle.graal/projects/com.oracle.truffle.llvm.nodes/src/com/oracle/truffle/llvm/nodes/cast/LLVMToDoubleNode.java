@@ -39,10 +39,8 @@ import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.nodes.cast.LLVMToI64Node.LLVMToI64BitNode;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
-import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
-import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
-import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
+import com.oracle.truffle.llvm.runtime.interop.ToLLVMNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.vector.LLVMDoubleVector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMFloatVector;
@@ -55,7 +53,7 @@ import com.oracle.truffle.llvm.runtime.vector.LLVMI8Vector;
 @NodeChild(value = "fromNode", type = LLVMExpressionNode.class)
 public abstract class LLVMToDoubleNode extends LLVMExpressionNode {
 
-    @Child private ForeignToLLVM toDouble = ForeignToLLVM.create(ForeignToLLVMType.DOUBLE);
+    @Child private ToLLVMNode toDouble = ToLLVMNode.createNode(double.class);
 
     @Specialization
     public double executeLLVMBoxedPrimitive(LLVMBoxedPrimitive from) {
@@ -66,15 +64,13 @@ public abstract class LLVMToDoubleNode extends LLVMExpressionNode {
     @Child private Node isBoxed = Message.IS_BOXED.createNode();
     @Child private Node unbox = Message.UNBOX.createNode();
 
-    @Specialization
-    public double executeTruffleObject(LLVMTruffleObject from) {
-        TruffleObject base = from.getObject();
-        if (ForeignAccess.sendIsNull(isNull, base)) {
-            return from.getOffset();
-        } else if (ForeignAccess.sendIsBoxed(isBoxed, base)) {
+    @Specialization(guards = "notLLVM(from)")
+    public double executeTruffleObject(TruffleObject from) {
+        if (ForeignAccess.sendIsNull(isNull, from)) {
+            return 0;
+        } else if (ForeignAccess.sendIsBoxed(isBoxed, from)) {
             try {
-                double unboxed = (double) toDouble.executeWithTarget(ForeignAccess.sendUnbox(unbox, base));
-                return unboxed + from.getOffset();
+                return (double) toDouble.executeWithTarget(ForeignAccess.sendUnbox(unbox, from));
             } catch (UnsupportedMessageException e) {
                 CompilerDirectives.transferToInterpreter();
                 throw new IllegalStateException(e);
@@ -88,7 +84,7 @@ public abstract class LLVMToDoubleNode extends LLVMExpressionNode {
 
         @Specialization
         public double executeDouble(boolean from) {
-            return from ? 1.0 : 0.0;
+            return from ? 1 : 0;
         }
 
         @Specialization

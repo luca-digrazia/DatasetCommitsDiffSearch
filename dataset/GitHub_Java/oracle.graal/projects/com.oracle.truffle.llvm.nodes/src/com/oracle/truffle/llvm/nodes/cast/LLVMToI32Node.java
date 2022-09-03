@@ -48,8 +48,7 @@ import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
-import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
-import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
+import com.oracle.truffle.llvm.runtime.interop.ToLLVMNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.vector.LLVMFloatVector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI16Vector;
@@ -75,27 +74,29 @@ public abstract class LLVMToI32Node extends LLVMExpressionNode {
         return (int) globalAccess.getNativeLocation(from).getVal();
     }
 
+    @Specialization
+    public int executeLLVMTruffleObject(LLVMTruffleObject from) {
+        return (int) (executeTruffleObject(from.getObject()) + from.getOffset());
+    }
+
     @Child private Node isNull = Message.IS_NULL.createNode();
     @Child private Node isBoxed = Message.IS_BOXED.createNode();
     @Child private Node unbox = Message.UNBOX.createNode();
     @Child private Node asPointer = Message.AS_POINTER.createNode();
     @Child private Node toNative = Message.TO_NATIVE.createNode();
-    @Child private ForeignToLLVM convert = ForeignToLLVM.create(ForeignToLLVMType.I32);
+    @Child private ToLLVMNode convert = ToLLVMNode.createNode(int.class);
 
-    @Specialization
-    public int executeLLVMTruffleObject(LLVMTruffleObject from) {
-        TruffleObject base = from.getObject();
+    @Specialization(guards = "notLLVM(from)")
+    public int executeTruffleObject(TruffleObject from) {
         try {
-            int ptr;
-            if (ForeignAccess.sendIsNull(isNull, base)) {
-                ptr = 0;
-            } else if (ForeignAccess.sendIsBoxed(isBoxed, base)) {
-                ptr = (int) convert.executeWithTarget(ForeignAccess.sendUnbox(unbox, base));
+            if (ForeignAccess.sendIsNull(isNull, from)) {
+                return 0;
+            } else if (ForeignAccess.sendIsBoxed(isBoxed, from)) {
+                return (int) convert.executeWithTarget(ForeignAccess.sendUnbox(unbox, from));
             } else {
-                TruffleObject n = (TruffleObject) ForeignAccess.sendToNative(toNative, base);
-                ptr = (int) (ForeignAccess.sendAsPointer(asPointer, n));
+                TruffleObject n = (TruffleObject) ForeignAccess.sendToNative(toNative, from);
+                return (int) (ForeignAccess.sendAsPointer(asPointer, n));
             }
-            return ptr + (int) from.getOffset();
         } catch (UnsupportedMessageException e) {
             CompilerDirectives.transferToInterpreter();
             throw new IllegalStateException(e);

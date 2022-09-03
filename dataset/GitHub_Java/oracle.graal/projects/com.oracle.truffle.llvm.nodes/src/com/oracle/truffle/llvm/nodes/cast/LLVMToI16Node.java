@@ -45,8 +45,7 @@ import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
-import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
-import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
+import com.oracle.truffle.llvm.runtime.interop.ToLLVMNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI16Vector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI1Vector;
@@ -115,7 +114,7 @@ public abstract class LLVMToI16Node extends LLVMExpressionNode {
         @Child private Node isNull = Message.IS_NULL.createNode();
         @Child private Node isBoxed = Message.IS_BOXED.createNode();
         @Child private Node unbox = Message.UNBOX.createNode();
-        @Child private ForeignToLLVM toShort = ForeignToLLVM.create(ForeignToLLVMType.I16);
+        @Child private ToLLVMNode toShort = ToLLVMNode.createNode(short.class);
 
         @Specialization(guards = "notLLVM(from)")
         public short executeTruffleObject(TruffleObject from) {
@@ -150,11 +149,6 @@ public abstract class LLVMToI16Node extends LLVMExpressionNode {
         @Specialization
         public short executeI16(byte from) {
             return (short) (from & LLVMExpressionNode.I8_MASK);
-        }
-
-        @Specialization
-        public short executeI16(LLVMIVarBit from) {
-            return from.getZeroExtendedShortValue();
         }
 
         @Specialization

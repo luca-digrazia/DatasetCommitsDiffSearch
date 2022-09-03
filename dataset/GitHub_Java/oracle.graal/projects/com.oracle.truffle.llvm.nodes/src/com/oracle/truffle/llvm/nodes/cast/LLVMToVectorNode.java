@@ -32,6 +32,7 @@ package com.oracle.truffle.llvm.nodes.cast;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.vector.LLVMDoubleVector;
@@ -509,6 +510,7 @@ public abstract class LLVMToVectorNode extends LLVMExpressionNode {
 
     public abstract static class LLVMToI1VectorBitNode extends LLVMToVectorNode {
 
+        @ExplodeLoop
         private static LLVMI1Vector castFromLong(long from, int elem) {
             boolean[] vector = new boolean[elem];
             for (int i = 0; i < elem; i++) {
@@ -554,6 +556,7 @@ public abstract class LLVMToVectorNode extends LLVMExpressionNode {
         }
 
         @Specialization
+        @ExplodeLoop
         public LLVMI1Vector do80BitFloat(LLVM80BitFloat from) {
             final byte[] vectorBytes = from.getBytes();
             final boolean[] vector = new boolean[LLVM80BitFloat.BIT_WIDTH];
@@ -620,6 +623,7 @@ public abstract class LLVMToVectorNode extends LLVMExpressionNode {
 
     public abstract static class LLVMToI8VectorBitNode extends LLVMToVectorNode {
 
+        @ExplodeLoop
         private static LLVMI8Vector castFromLong(long from, int elem) {
             byte[] vector = new byte[elem];
             for (int i = 0; i < elem; i++) {
@@ -724,6 +728,7 @@ public abstract class LLVMToVectorNode extends LLVMExpressionNode {
 
     public abstract static class LLVMToI16VectorBitNode extends LLVMToVectorNode {
 
+        @ExplodeLoop
         private static LLVMI16Vector castFromLong(long from, int elem) {
             short[] vector = new short[elem];
             for (int i = 0; i < elem; i++) {
@@ -759,6 +764,7 @@ public abstract class LLVMToVectorNode extends LLVMExpressionNode {
         }
 
         @Specialization
+        @ExplodeLoop
         public LLVMI16Vector do80BitFloat(LLVM80BitFloat from) {
             final byte[] vectorBytes = from.getBytes();
             final short[] vector = new short[LLVM80BitFloat.BIT_WIDTH / Short.SIZE];
@@ -846,6 +852,7 @@ public abstract class LLVMToVectorNode extends LLVMExpressionNode {
         }
 
         @Specialization
+        @ExplodeLoop
         public LLVMI32Vector doI64(long from) {
             int[] vector = new int[Long.SIZE / Integer.SIZE];
             for (int i = 0; i < vector.length; i++) {
