@@ -32,8 +32,9 @@ import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.tiers.*;
 
 /**
- * Checks for {@link #isLegalObjectConstant(ConstantNode) illegal} object constants in a graph
- * processed for AOT compilation.
+ * Checks for illegal object constants in a graph processed for AOT compilation. The only legal
+ * object constants are {@linkplain String#intern() interned} strings as they will be installed in
+ * the Class Data Sharing (CDS) space.
  *
  * @see LoadJavaMirrorWithKlassPhase
  */
@@ -42,15 +43,11 @@ public class AheadOfTimeVerificationPhase extends VerifyPhase<PhaseContext> {
     @Override
     protected boolean verify(StructuredGraph graph, PhaseContext context) {
         for (ConstantNode node : getConstantNodes(graph)) {
-            if (isLegalObjectConstant(node)) {
+            if (isObject(node) && !isNullReference(node) && !isInternedString(node) && !isDirectMethodHandle(node) && !isBoundMethodHandle(node)) {
                 throw new VerificationError("illegal object constant: " + node);
             }
         }
         return true;
-    }
-
-    public static boolean isLegalObjectConstant(ConstantNode node) {
-        return isObject(node) && !isNullReference(node) && !isInternedString(node) && !isDirectMethodHandle(node) && !isBoundMethodHandle(node);
     }
 
     private static boolean isObject(ConstantNode node) {
@@ -58,7 +55,7 @@ public class AheadOfTimeVerificationPhase extends VerifyPhase<PhaseContext> {
     }
 
     private static boolean isNullReference(ConstantNode node) {
-        return isObject(node) && node.isNullConstant();
+        return isObject(node) && node.asJavaConstant().isNull();
     }
 
     private static boolean isDirectMethodHandle(ConstantNode node) {

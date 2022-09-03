@@ -73,6 +73,14 @@ public final class HotSpotObjectConstantImpl extends JavaConstant implements Hot
         }
     }
 
+    public static boolean isCompressed(Constant constant) {
+        if (JavaConstant.isNull(constant)) {
+            return HotSpotCompressedNullConstant.NULL_OBJECT.equals(constant);
+        } else {
+            return ((HotSpotObjectConstantImpl) constant).compressed;
+        }
+    }
+
     private final Object object;
     private final boolean compressed;
 
@@ -81,10 +89,6 @@ public final class HotSpotObjectConstantImpl extends JavaConstant implements Hot
         this.object = object;
         this.compressed = compressed;
         assert object != null;
-    }
-
-    public boolean isCompressed() {
-        return compressed;
     }
 
     public JavaConstant compress() {
