@@ -54,6 +54,11 @@ public abstract class Node {
         return Collections.unmodifiableList(predecessors);
     }
 
+    public Node singlePredecessor() {
+        assert predecessors.size() == 1;
+        return predecessors.get(0);
+    }
+
     public List<Node> usages() {
         return Collections.unmodifiableList(usages);
     }
@@ -160,7 +165,7 @@ public abstract class Node {
         return true;
     }
 
-    public final Node copy() {
+    public Node copy() {
         return copy(graph);
     }
 
