@@ -57,8 +57,8 @@ public abstract class InputCharAtNode extends Node {
             if (c instanceof Character) {
                 return (char) c;
             } else if (c instanceof Number) {
-                assert ((Number) c).intValue() < Character.MAX_VALUE;
-                return (char) ((Number) c).intValue();
+                assert (int)c < Character.MAX_VALUE;
+                return (char) (int)c;
             }
             CompilerDirectives.transferToInterpreter();
             throw UnsupportedTypeException.raise(new Object[]{c});
