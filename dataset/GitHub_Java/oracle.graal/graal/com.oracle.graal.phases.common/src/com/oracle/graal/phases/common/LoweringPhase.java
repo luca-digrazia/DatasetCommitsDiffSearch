@@ -65,13 +65,13 @@ public class LoweringPhase extends Phase {
         }
 
         @Override
-        public ValueNode createNullCheckGuard(ValueNode object) {
-            return createGuard(object.graph().unique(new IsNullNode(object)), DeoptimizationReason.NullCheckException, DeoptimizationAction.InvalidateReprofile, true);
+        public ValueNode createNullCheckGuard(ValueNode object, long leafGraphId) {
+            return createGuard(object.graph().unique(new IsNullNode(object)), DeoptimizationReason.NullCheckException, DeoptimizationAction.InvalidateReprofile, true, leafGraphId);
         }
 
         @Override
-        public ValueNode createGuard(BooleanNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action) {
-            return createGuard(condition, deoptReason, action, false);
+        public ValueNode createGuard(BooleanNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, long leafGraphId) {
+            return createGuard(condition, deoptReason, action, false, leafGraphId);
         }
 
         @Override
@@ -80,7 +80,7 @@ public class LoweringPhase extends Phase {
         }
 
         @Override
-        public ValueNode createGuard(BooleanNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, boolean negated) {
+        public ValueNode createGuard(BooleanNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, boolean negated, long leafGraphId) {
             if (GraalOptions.OptEliminateGuards) {
                 for (Node usage : condition.usages()) {
                     if (!activeGuards.isNew(usage) && activeGuards.isMarked(usage)) {
@@ -88,7 +88,7 @@ public class LoweringPhase extends Phase {
                     }
                 }
             }
-            GuardNode newGuard = guardAnchor.graph().unique(new GuardNode(condition, guardAnchor, deoptReason, action, negated));
+            GuardNode newGuard = guardAnchor.graph().unique(new GuardNode(condition, guardAnchor, deoptReason, action, negated, leafGraphId));
             if (GraalOptions.OptEliminateGuards) {
                 activeGuards.grow();
                 activeGuards.mark(newGuard);
@@ -129,7 +129,7 @@ public class LoweringPhase extends Phase {
 
     @Override
     protected void run(final StructuredGraph graph) {
-        int i = 0;
+        int  i = 0;
         NodeBitMap processed = graph.createNodeBitMap();
         while (true) {
             int mark = graph.getMark();
@@ -196,12 +196,9 @@ public class LoweringPhase extends Phase {
 
             if (node.isAlive() && !processed.isMarked(node) && node instanceof Lowerable) {
                 if (loweringTool.lastFixedNode == null) {
-                    // We cannot lower the node now because we don't have a fixed node to anchor the
-                    // replacements.
-                    // This can happen when previous lowerings in this lowering iteration deleted
-                    // the BeginNode of this block.
-                    // In the next iteration, we will have the new BeginNode available, and we can
-                    // lower this node.
+                    // We cannot lower the node now because we don't have a fixed node to anchor the replacements.
+                    // This can happen when previous lowerings in this lowering iteration deleted the BeginNode of this block.
+                    // In the next iteration, we will have the new BeginNode available, and we can lower this node.
                     deferred = true;
                 } else {
                     processed.mark(node);

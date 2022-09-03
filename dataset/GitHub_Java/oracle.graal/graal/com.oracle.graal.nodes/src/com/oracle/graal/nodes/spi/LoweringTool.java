@@ -29,17 +29,11 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
 
 public interface LoweringTool {
-
     TargetDescription getTarget();
-
     GraalCodeCacheProvider getRuntime();
-
-    ValueNode createNullCheckGuard(ValueNode object);
-
-    ValueNode createGuard(BooleanNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action);
-
-    ValueNode createGuard(BooleanNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, boolean negated);
-
+    ValueNode createNullCheckGuard(ValueNode object, long leafGraphId);
+    ValueNode createGuard(BooleanNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, long leafGraphId);
+    ValueNode createGuard(BooleanNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, boolean negated, long leafGraphId);
     Assumptions assumptions();
 
     Block getBlockFor(Node node);
@@ -49,3 +43,4 @@ public interface LoweringTool {
      */
     FixedWithNextNode lastFixedNode();
 }
+

@@ -68,7 +68,8 @@ public class GraalCompiler {
         this.backend = backend;
     }
 
-    public CompilationResult compileMethod(final ResolvedJavaMethod method, final StructuredGraph graph, final GraphCache cache, final PhasePlan plan, final OptimisticOptimizations optimisticOpts) {
+    public CompilationResult compileMethod(final ResolvedJavaMethod method, final StructuredGraph graph, final GraphCache cache, final PhasePlan plan,
+                    final OptimisticOptimizations optimisticOpts) {
         assert (method.getModifiers() & Modifier.NATIVE) == 0 : "compiling native methods is not supported";
 
         return Debug.scope("GraalCompiler", new Object[]{graph, method, this}, new Callable<CompilationResult>() {
@@ -90,22 +91,11 @@ public class GraalCompiler {
                 return Debug.scope("CodeGen", frameMap, new Callable<CompilationResult>() {
 
                     public CompilationResult call() {
-                        return emitCode(getLeafGraphIdArray(graph), assumptions, method, lir, frameMap);
+                        return emitCode(assumptions, method, lir, frameMap);
                     }
-
                 });
             }
         });
-    }
-
-    private static long[] getLeafGraphIdArray(StructuredGraph graph) {
-        long[] leafGraphIdArray = new long[graph.getLeafGraphIds().size() + 1];
-        int i = 0;
-        leafGraphIdArray[i++] = graph.graphId();
-        for (long id : graph.getLeafGraphIds()) {
-            leafGraphIdArray[i++] = id;
-        }
-        return leafGraphIdArray;
     }
 
     /**
@@ -275,16 +265,15 @@ public class GraalCompiler {
         return frameMap;
     }
 
-    public CompilationResult emitCode(long[] leafGraphIds, Assumptions assumptions, ResolvedJavaMethod method, LIR lir, FrameMap frameMap) {
+    public CompilationResult emitCode(Assumptions assumptions, ResolvedJavaMethod method, LIR lir, FrameMap frameMap) {
         TargetMethodAssembler tasm = backend.newAssembler(frameMap, lir);
         backend.emitCode(tasm, method, lir);
-        CompilationResult result = tasm.finishTargetMethod(method, false);
+        CompilationResult targetMethod = tasm.finishTargetMethod(method, false);
         if (!assumptions.isEmpty()) {
-            result.setAssumptions(assumptions);
+            targetMethod.setAssumptions(assumptions);
         }
-        result.setLeafGraphIds(leafGraphIds);
 
-        Debug.dump(result, "After code generation");
-        return result;
+        Debug.dump(targetMethod, "After code generation");
+        return targetMethod;
     }
 }
