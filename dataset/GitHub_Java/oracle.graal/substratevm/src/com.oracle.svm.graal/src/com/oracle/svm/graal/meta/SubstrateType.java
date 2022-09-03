@@ -309,22 +309,23 @@ public class SubstrateType extends NodeClass implements SharedType, Replaced {
     }
 
     private void getInstanceFields(boolean includeSuperclasses, List<SubstrateField> result) {
-        if (instanceFields == null) {
-            /*
-             * The type was created at run time from the Class, so we do not have field information.
-             * If we need the fields for a type, the type has to be created during image generation.
-             */
-            throw shouldNotReachHere("no instance fields for " + hub.getName() + " available");
-        }
+        /*
+         * If type was created at run time from the Class, we do not have field information. If we
+         * need the fields for a type, the type has to be created during image generation.
+         */
+        VMError.guarantee(includeSuperclasses || instanceFields != null,
+                        "no instance fields for " + hub.getName() + " available");
 
         if (includeSuperclasses && getSuperclass() != null) {
             getSuperclass().getInstanceFields(includeSuperclasses, result);
         }
 
-        if (instanceFields instanceof SubstrateField) {
-            result.add((SubstrateField) instanceFields);
-        } else {
-            result.addAll(Arrays.asList((SubstrateField[]) instanceFields));
+        if (instanceFields != null) {
+            if (instanceFields instanceof SubstrateField) {
+                result.add((SubstrateField) instanceFields);
+            } else {
+                result.addAll(Arrays.asList((SubstrateField[]) instanceFields));
+            }
         }
     }
 
