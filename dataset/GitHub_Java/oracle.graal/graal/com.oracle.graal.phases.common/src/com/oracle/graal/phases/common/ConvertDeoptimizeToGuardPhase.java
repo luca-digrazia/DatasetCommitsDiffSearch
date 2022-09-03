@@ -32,11 +32,11 @@ import com.oracle.graal.phases.*;
 
 public class ConvertDeoptimizeToGuardPhase extends Phase {
 
-    private static AbstractBeginNode findBeginNode(Node startNode) {
+    private static BeginNode findBeginNode(Node startNode) {
         Node n = startNode;
         while (true) {
-            if (n instanceof AbstractBeginNode) {
-                return (AbstractBeginNode) n;
+            if (n instanceof BeginNode) {
+                return (BeginNode) n;
             } else {
                 n = n.predecessor();
             }
@@ -57,17 +57,17 @@ public class ConvertDeoptimizeToGuardPhase extends Phase {
         new DeadCodeEliminationPhase().apply(graph);
     }
 
-    private void visitDeoptBegin(AbstractBeginNode deoptBegin, DeoptimizeNode deopt, StructuredGraph graph) {
+    private void visitDeoptBegin(BeginNode deoptBegin, DeoptimizeNode deopt, StructuredGraph graph) {
         if (deoptBegin instanceof MergeNode) {
             MergeNode mergeNode = (MergeNode) deoptBegin;
             Debug.log("Visiting %s followed by %s", mergeNode, deopt);
-            List<AbstractBeginNode> begins = new ArrayList<>();
-            for (AbstractEndNode end : mergeNode.forwardEnds()) {
-                AbstractBeginNode newBeginNode = findBeginNode(end);
+            List<BeginNode> begins = new ArrayList<>();
+            for (EndNode end : mergeNode.forwardEnds()) {
+                BeginNode newBeginNode = findBeginNode(end);
                 assert !begins.contains(newBeginNode);
                 begins.add(newBeginNode);
             }
-            for (AbstractBeginNode begin : begins) {
+            for (BeginNode begin : begins) {
                 assert !begin.isDeleted();
                 visitDeoptBegin(begin, deopt, graph);
             }
@@ -75,32 +75,14 @@ public class ConvertDeoptimizeToGuardPhase extends Phase {
             return;
         } else if (deoptBegin.predecessor() instanceof IfNode) {
             IfNode ifNode = (IfNode) deoptBegin.predecessor();
-            AbstractBeginNode otherBegin = ifNode.trueSuccessor();
+            BeginNode otherBegin = ifNode.trueSuccessor();
             LogicNode conditionNode = ifNode.condition();
             FixedGuardNode guard = graph.add(new FixedGuardNode(conditionNode, deopt.reason(), deopt.action(), deoptBegin == ifNode.trueSuccessor()));
             FixedWithNextNode pred = (FixedWithNextNode) ifNode.predecessor();
-            AbstractBeginNode survivingSuccessor;
             if (deoptBegin == ifNode.trueSuccessor()) {
-                survivingSuccessor = ifNode.falseSuccessor();
+                graph.removeSplitPropagate(ifNode, ifNode.falseSuccessor());
             } else {
-                survivingSuccessor = ifNode.trueSuccessor();
-            }
-            graph.removeSplitPropagate(ifNode, survivingSuccessor);
-            ProxyNode proxyGuard = null;
-            for (Node n : survivingSuccessor.usages().snapshot()) {
-                if (n instanceof GuardNode || n instanceof ProxyNode) {
-                    // Keep wired to the begin node.
-                } else {
-                    // Rewire to the fixed guard.
-                    if (survivingSuccessor instanceof LoopExitNode) {
-                        if (proxyGuard == null) {
-                            proxyGuard = ProxyNode.forValue(guard, survivingSuccessor, graph);
-                        }
-                        n.replaceFirstInput(survivingSuccessor, proxyGuard);
-                    } else {
-                        n.replaceFirstInput(survivingSuccessor, guard);
-                    }
-                }
+                graph.removeSplitPropagate(ifNode, ifNode.trueSuccessor());
             }
             Debug.log("Converting %s on %-5s branch of %s to guard for remaining branch %s.", deopt, deoptBegin == ifNode.trueSuccessor() ? "true" : "false", ifNode, otherBegin);
             FixedNode next = pred.next();
