@@ -68,9 +68,10 @@ public class ReplacementsImpl implements Replacements {
     private final Set<ResolvedJavaMethod> forcedSubstitutions;
     private final Map<Class<? extends SnippetTemplateCache>, SnippetTemplateCache> snippetTemplateCache;
 
-    public ReplacementsImpl(Providers providers, Assumptions assumptions) {
-        this.providers = providers.copyWith(this);
-        this.target = providers.getCodeCache().getTarget();
+    public ReplacementsImpl(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, CodeCacheProvider codeCache, ForeignCallsProvider foreignCalls, LoweringProvider lowerer,
+                    Assumptions assumptions, TargetDescription target) {
+        this.providers = new Providers(metaAccess, codeCache, constantReflection, foreignCalls, lowerer, this);
+        this.target = target;
         this.assumptions = assumptions;
         this.graphs = new ConcurrentHashMap<>();
         this.registeredMethodSubstitutions = new HashMap<>();
@@ -79,21 +80,14 @@ public class ReplacementsImpl implements Replacements {
         this.snippetTemplateCache = new HashMap<>();
     }
 
-    private static final boolean UseSnippetGraphCache = Boolean.parseBoolean(System.getProperty("graal.useSnippetGraphCache", "true"));
-
     public StructuredGraph getSnippet(ResolvedJavaMethod method) {
         assert method.getAnnotation(Snippet.class) != null : "Snippet must be annotated with @" + Snippet.class.getSimpleName();
         assert !Modifier.isAbstract(method.getModifiers()) && !Modifier.isNative(method.getModifiers()) : "Snippet must not be abstract or native";
 
-        StructuredGraph graph = UseSnippetGraphCache ? graphs.get(method) : null;
+        StructuredGraph graph = graphs.get(method);
         if (graph == null) {
-            StructuredGraph newGraph = makeGraph(method, null, inliningPolicy(method), method.getAnnotation(Snippet.class).removeAllFrameStates());
-            if (UseSnippetGraphCache) {
-                return newGraph;
-            }
-            graphs.putIfAbsent(method, newGraph);
+            graphs.putIfAbsent(method, makeGraph(method, null, inliningPolicy(method), method.getAnnotation(Snippet.class).removeAllFrameStates()));
             graph = graphs.get(method);
-
         }
         return graph;
     }

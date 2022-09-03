@@ -44,11 +44,6 @@ public class CompilerDirectivesSubstitutions {
     }
 
     @MethodSubstitution
-    public static void transferToInterpreterAndInvalidate() {
-        DeoptimizeNode.deopt(DeoptimizationAction.InvalidateReprofile, DeoptimizationReason.UnreachedCode);
-    }
-
-    @MethodSubstitution
     public static boolean inInterpreter() {
         return false;
     }
@@ -89,9 +84,6 @@ public class CompilerDirectivesSubstitutions {
 
     @MacroSubstitution(macro = CustomizedUnsafeLoadMacroNode.class, isStatic = true)
     public static native int unsafeGetInt(Object receiver, long offset, boolean condition, Object locationIdentity);
-
-    @MacroSubstitution(macro = CustomizedUnsafeLoadMacroNode.class, isStatic = true)
-    public static native long unsafeGetLong(Object receiver, long offset, boolean condition, Object locationIdentity);
 
     @MacroSubstitution(macro = CustomizedUnsafeLoadMacroNode.class, isStatic = true)
     public static native float unsafeGetFloat(Object receiver, long offset, boolean condition, Object locationIdentity);
