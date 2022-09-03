@@ -39,7 +39,6 @@ public final class GraalOptions {
 
     // inlining settings
     public static boolean Inline                             = true;
-    public static boolean AlwaysInlineIntrinsics             = ____;
     public static boolean Intrinsify                         = true;
            static boolean InlineMonomorphicCalls             = true;
            static boolean InlinePolymorphicCalls             = true;
@@ -53,7 +52,6 @@ public final class GraalOptions {
     public static int     MaximumRecursiveInlining           = 1;
     public static int     SmallCompiledCodeSize              = 2200;
     public static boolean LimitInlinedProbability            = ____;
-    public static boolean UseRelevanceBasedInlining          = true;
     // WeightBasedInliningPolicy (0)
     public static float   InliningSizePenaltyExp             = 20;
     public static float   MaximumInlineWeight                = 1.25f;
@@ -67,7 +65,7 @@ public final class GraalOptions {
     // Common options for inlining policies 1 to 4
     public static float   NestedInliningSizeRatio            = 1f;
     public static float   BoostInliningForEscapeAnalysis     = 2f;
-    public static float   RatioCapForInlining                = 1f;
+    public static float   ProbabilityCapForInlining          = 1f;
 
     // escape analysis settings
     public static boolean PartialEscapeAnalysis              = true;
@@ -123,6 +121,7 @@ public final class GraalOptions {
 
     // Debug settings:
     public static boolean Debug                              = true;
+    public static boolean DebugSnippets                      = false;
     public static boolean PerThreadDebugValues               = ____;
     public static boolean SummarizeDebugValues               = ____;
     public static boolean SummarizePerPhase                  = ____;
@@ -200,7 +199,6 @@ public final class GraalOptions {
     public static boolean OptFloatingReads                   = true;
     public static boolean OptTailDuplication                 = true;
     public static boolean OptEliminatePartiallyRedundantGuards = true;
-    public static boolean OptFilterProfiledTypes             = true;
 
     // Intrinsification settings
     public static boolean IntrinsifyArrayCopy                = true;
@@ -210,6 +208,7 @@ public final class GraalOptions {
     public static boolean IntrinsifyThreadMethods            = true;
     public static boolean IntrinsifyUnsafeMethods            = true;
     public static boolean IntrinsifyMathMethods              = true;
+    public static boolean IntrinsifyAESMethods               = true;
 
     /**
      * Counts the various paths taken through snippets.
