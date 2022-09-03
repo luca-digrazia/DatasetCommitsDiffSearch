@@ -152,7 +152,6 @@ public abstract class ValueNode extends com.oracle.graal.graph.Node {
         }
     }
 
-    @Override
     public ValueNode asNode() {
         return this;
     }
