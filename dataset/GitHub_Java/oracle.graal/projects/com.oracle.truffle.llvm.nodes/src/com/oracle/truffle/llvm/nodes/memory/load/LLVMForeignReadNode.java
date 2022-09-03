@@ -32,17 +32,17 @@ package com.oracle.truffle.llvm.nodes.memory.load;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.llvm.nodes.memory.LLVMObjectAccessFactory;
 import com.oracle.truffle.llvm.nodes.memory.LLVMOffsetToNameNode;
 import com.oracle.truffle.llvm.nodes.memory.LLVMOffsetToNameNodeGen;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMObjectAccess.LLVMObjectReadNode;
-import com.oracle.truffle.llvm.runtime.nodes.factories.LLVMObjectAccessFactory;
 
 public class LLVMForeignReadNode extends Node {
 
-    @Child private LLVMOffsetToNameNode offsetToName;
-    @Child private LLVMObjectReadNode read;
+    @Child LLVMOffsetToNameNode offsetToName;
+    @Child LLVMObjectReadNode read;
 
     protected LLVMForeignReadNode(ForeignToLLVMType type, int elementAccessSize) {
         this.offsetToName = LLVMOffsetToNameNodeGen.create(elementAccessSize);

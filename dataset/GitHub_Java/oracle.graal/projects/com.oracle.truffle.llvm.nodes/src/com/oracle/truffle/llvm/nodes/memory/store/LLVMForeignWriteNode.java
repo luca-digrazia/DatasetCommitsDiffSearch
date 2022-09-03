@@ -32,18 +32,18 @@ package com.oracle.truffle.llvm.nodes.memory.store;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropException;
+import com.oracle.truffle.llvm.nodes.memory.LLVMObjectAccessFactory;
 import com.oracle.truffle.llvm.nodes.memory.LLVMOffsetToNameNode;
 import com.oracle.truffle.llvm.nodes.memory.LLVMOffsetToNameNodeGen;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMObjectAccess.LLVMObjectWriteNode;
-import com.oracle.truffle.llvm.runtime.nodes.factories.LLVMObjectAccessFactory;
 import com.oracle.truffle.llvm.runtime.types.Type;
 
 public abstract class LLVMForeignWriteNode extends LLVMNode {
 
-    @Child private LLVMOffsetToNameNode offsetToName;
-    @Child private LLVMObjectWriteNode write;
+    @Child LLVMOffsetToNameNode offsetToName;
+    @Child LLVMObjectWriteNode write;
 
     protected LLVMForeignWriteNode(Type valueType, int elementAccessSize) {
         this.offsetToName = LLVMOffsetToNameNodeGen.create(elementAccessSize);
@@ -53,7 +53,7 @@ public abstract class LLVMForeignWriteNode extends LLVMNode {
     public abstract void execute(LLVMTruffleObject addr, Object value);
 
     @Specialization
-    protected void doForeignAccess(LLVMTruffleObject addr, Object value) {
+    void doForeignAccess(LLVMTruffleObject addr, Object value) {
         Object key = offsetToName.execute(addr.getBaseType(), addr.getOffset());
         try {
             write.executeWrite(addr.getObject(), key, addr.getOffset(), value);
