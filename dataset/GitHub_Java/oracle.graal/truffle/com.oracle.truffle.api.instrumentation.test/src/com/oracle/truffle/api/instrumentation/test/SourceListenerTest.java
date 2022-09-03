@@ -39,7 +39,7 @@ import com.oracle.truffle.api.instrumentation.SourceSectionFilter.IndexRange;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument.Registration;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
-import com.oracle.truffle.api.vm.PolyglotRuntime;
+import com.oracle.truffle.api.vm.PolyglotEngine.Instrument;
 
 public class SourceListenerTest extends AbstractInstrumentationTest {
 
@@ -61,7 +61,7 @@ public class SourceListenerTest extends AbstractInstrumentationTest {
     private void testLoadSourceImpl(int runTimes) throws IOException {
         int initialQueryCount = InstrumentationTestLanguage.getRootSourceSectionQueryCount();
 
-        PolyglotRuntime.Instrument instrument = engine.getRuntime().getInstruments().get("testLoadSource1");
+        Instrument instrument = engine.getInstruments().get("testLoadSource1");
         Source source1 = lines("STATEMENT(EXPRESSION, EXPRESSION)");
         // running the same source multiple times should not have any effect on the test result.
         for (int i = 0; i < runTimes; i++) {
@@ -133,7 +133,7 @@ public class SourceListenerTest extends AbstractInstrumentationTest {
 
     @Test
     public void testLoadSourceException() throws IOException {
-        engine.getRuntime().getInstruments().get("testLoadSourceException").setEnabled(true);
+        engine.getInstruments().get("testLoadSourceException").setEnabled(true);
         run("");
         Assert.assertTrue(getErr().contains("TestLoadSourceExceptionClass"));
     }
@@ -163,7 +163,7 @@ public class SourceListenerTest extends AbstractInstrumentationTest {
 
     @Test
     public void testAllowOnlySourceQueries() throws IOException {
-        PolyglotRuntime.Instrument instrument = engine.getRuntime().getInstruments().get("testAllowOnlySourceQueries");
+        Instrument instrument = engine.getInstruments().get("testAllowOnlySourceQueries");
         instrument.setEnabled(true);
         Source source = lines("");
         run(source);
