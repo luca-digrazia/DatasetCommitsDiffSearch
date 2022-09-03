@@ -178,7 +178,7 @@ public class DominatorConditionalEliminationPhase extends Phase {
             }
 
             protected void processConditionAnchor(ConditionAnchorNode node) {
-                tryProveCondition(node.condition(), (guard, result) -> {
+                tryProofCondition(node.condition(), (guard, result) -> {
                     if (result != node.isNegated()) {
                         node.replaceAtUsages(guard);
                         GraphUtil.unlinkFixedNode(node);
@@ -193,7 +193,7 @@ public class DominatorConditionalEliminationPhase extends Phase {
             }
 
             protected void processGuard(GuardNode node) {
-                if (!tryProveGuardCondition(node, node.getCondition(), (guard, result) -> {
+                if (!tryProofGuardCondition(node, node.getCondition(), (guard, result) -> {
                     if (result != node.isNegated()) {
                         node.replaceAndDelete(guard);
                     } else {
@@ -210,7 +210,7 @@ public class DominatorConditionalEliminationPhase extends Phase {
             }
 
             protected void processFixedGuard(FixedGuardNode node) {
-                if (!tryProveGuardCondition(node, node.condition(), (guard, result) -> {
+                if (!tryProofGuardCondition(node, node.condition(), (guard, result) -> {
                     if (result != node.isNegated()) {
                         node.replaceAtUsages(guard);
                         GraphUtil.unlinkFixedNode(node);
@@ -228,7 +228,7 @@ public class DominatorConditionalEliminationPhase extends Phase {
             }
 
             protected void processIf(IfNode node) {
-                tryProveCondition(node.condition(), (guard, result) -> {
+                tryProofCondition(node.condition(), (guard, result) -> {
                     AbstractBeginNode survivingSuccessor = node.getSuccessor(result);
                     survivingSuccessor.replaceAtUsages(InputType.Guard, guard);
                     survivingSuccessor.replaceAtPredecessor(null);
@@ -548,11 +548,11 @@ public class DominatorConditionalEliminationPhase extends Phase {
                 return proxiedGuard;
             }
 
-            protected boolean tryProveCondition(LogicNode node, GuardRewirer rewireGuardFunction) {
-                return tryProveGuardCondition(null, node, rewireGuardFunction);
+            protected boolean tryProofCondition(LogicNode node, GuardRewirer rewireGuardFunction) {
+                return tryProofGuardCondition(null, node, rewireGuardFunction);
             }
 
-            protected boolean tryProveGuardCondition(DeoptimizingGuard thisGuard, LogicNode node, GuardRewirer rewireGuardFunction) {
+            protected boolean tryProofGuardCondition(DeoptimizingGuard thisGuard, LogicNode node, GuardRewirer rewireGuardFunction) {
                 for (InfoElement infoElement : getInfoElements(node)) {
                     Stamp stamp = infoElement.getStamp();
                     JavaConstant constant = (JavaConstant) stamp.asConstant();
@@ -674,11 +674,11 @@ public class DominatorConditionalEliminationPhase extends Phase {
                 } else if (node instanceof ShortCircuitOrNode) {
                     final ShortCircuitOrNode shortCircuitOrNode = (ShortCircuitOrNode) node;
                     if (Instance.this.loopExits.isEmpty()) {
-                        return tryProveCondition(shortCircuitOrNode.getX(), (guard, result) -> {
+                        return tryProofCondition(shortCircuitOrNode.getX(), (guard, result) -> {
                             if (result == !shortCircuitOrNode.isXNegated()) {
                                 return rewireGuards(guard, true, rewireGuardFunction);
                             } else {
-                                return tryProveCondition(shortCircuitOrNode.getY(), (innerGuard, innerResult) -> {
+                                return tryProofCondition(shortCircuitOrNode.getY(), (innerGuard, innerResult) -> {
                                     if (innerGuard == guard) {
                                         return rewireGuards(guard, innerResult ^ shortCircuitOrNode.isYNegated(), rewireGuardFunction);
                                     }
@@ -849,6 +849,7 @@ public class DominatorConditionalEliminationPhase extends Phase {
         private final ValueNode guard;
 
         public InfoElement(Stamp stamp, ValueNode guard) {
+            Debug.log(4, "Creating an info element with stamp %s and guard %s", stamp.toString(), guard.toString());
             this.stamp = stamp;
             this.guard = guard;
         }
