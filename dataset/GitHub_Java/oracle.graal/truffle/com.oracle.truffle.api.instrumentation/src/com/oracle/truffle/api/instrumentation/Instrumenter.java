@@ -62,12 +62,9 @@ public abstract class Instrumenter {
     public abstract <T extends ExecutionEventListener> EventBinding<T> attachListener(SourceSectionFilter filter, T listener);
 
     /**
-     * Starts notifications for each newly loaded {@link Source} and returns a
-     * {@linkplain EventBinding binding} that can be used to terminate notifications. Only
-     * subsequent loads will be notified unless {@code includeExistingSources} is true, in which
-     * case a notification for each previous load will be delivered before this method returns.
-     * <p>
-     * <strong>Note:</strong> the provided {@link SourceSectionFilter} must only contain filters on
+     * Starts event notification for a given {@link LoadSourceListener listener} and returns a
+     * {@link EventBinding binding} which represents a handle to dispose the notification. Please
+     * note that the provided {@link SourceSectionFilter} must only contain filters on
      * {@link SourceSectionFilter.Builder#sourceIs(Source...) sources} or
      * {@link SourceSectionFilter.Builder#mimeTypeIs(String...) mime types}.
      *
@@ -75,7 +72,6 @@ public abstract class Instrumenter {
      * @param listener a listener that gets notified if a source was loaded
      * @param includeExistingSources whether or not this listener should be notified for sources
      *            which were already loaded at the time when this listener was attached.
-     * @return a handle for stopping the notification stream
      *
      * @see LoadSourceListener#onLoad(LoadSourceEvent)
      *
@@ -84,17 +80,13 @@ public abstract class Instrumenter {
     public abstract <T extends LoadSourceListener> EventBinding<T> attachLoadSourceListener(SourceSectionFilter filter, T listener, boolean includeExistingSources);
 
     /**
-     * Starts notifications for each {@link SourceSection} in every newly loaded {@Source} and
-     * returns a {@linkplain EventBinding binding} that can be used to terminate notifications. Only
-     * subsequent loads will be notified unless {@code includeExistingSourceSections} is true, in
-     * which case a notification for each previous load will be delivered before this method
-     * returns.
+     * Starts event notification for a given {@link LoadSourceSectionListener listener} and returns
+     * a {@link EventBinding binding} which represents a handle to dispose the notification.
      *
      * @param filter a filter on which sources sections trigger events
      * @param listener a listener that gets notified if a source section was loaded
      * @param includeExistingSourceSections whether or not this listener should be notified for
      *            sources which were already loaded at the time when this listener was attached.
-     * @return a handle for stopping the notification stream
      *
      * @see LoadSourceSectionListener#onLoad(LoadSourceSectionEvent)
      *
