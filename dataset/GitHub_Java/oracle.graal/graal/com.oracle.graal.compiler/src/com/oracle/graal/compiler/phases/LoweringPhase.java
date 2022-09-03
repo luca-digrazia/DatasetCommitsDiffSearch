@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.compiler.phases;
 
-import java.util.*;
-
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.*;
@@ -41,16 +39,7 @@ import com.oracle.graal.nodes.spi.*;
  */
 public class LoweringPhase extends Phase {
 
-    final class LoweringToolImpl implements LoweringTool {
-
-        final FixedNode guardAnchor;
-        final NodeBitMap activeGuards;
-        FixedWithNextNode lastFixedNode;
-
-        public LoweringToolImpl(FixedNode guardAnchor, NodeBitMap activeGuards) {
-            this.guardAnchor = guardAnchor;
-            this.activeGuards = activeGuards;
-        }
+    private abstract class LoweringToolBase implements LoweringTool {
 
         @Override
         public GraalCodeCacheProvider getRuntime() {
@@ -70,27 +59,6 @@ public class LoweringPhase extends Phase {
         @Override
         public Assumptions assumptions() {
             return assumptions;
-        }
-
-        @Override
-        public ValueNode createGuard(BooleanNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, boolean negated, long leafGraphId) {
-            if (GraalOptions.OptEliminateGuards) {
-                for (Node usage : condition.usages()) {
-                    if (!activeGuards.isNew(usage) && activeGuards.isMarked(usage)) {
-                        return (ValueNode) usage;
-                    }
-                }
-            }
-            GuardNode newGuard = guardAnchor.graph().unique(new GuardNode(condition, guardAnchor, deoptReason, action, negated, leafGraphId));
-            if (GraalOptions.OptEliminateGuards) {
-                activeGuards.grow();
-                activeGuards.mark(newGuard);
-            }
-            return newGuard;
-        }
-
-        public FixedWithNextNode lastFixedNode() {
-            return lastFixedNode;
         }
     }
 
@@ -162,40 +130,40 @@ public class LoweringPhase extends Phase {
         }
     }
 
-    private void process(final Block b, final NodeBitMap activeGuards, final FixedNode anchor, SchedulePhase schedule, NodeBitMap processed) {
+    private void process(final Block b, final NodeBitMap activeGuards, final ValueNode anchor, SchedulePhase schedule, NodeBitMap processed) {
 
-        final LoweringToolImpl loweringTool = new LoweringToolImpl(anchor, activeGuards);
+        final LoweringTool loweringTool = new LoweringToolBase() {
 
-        // Lower the instructions of this block.
-        List<ScheduledNode> nodes = schedule.nodesFor(b);
-
-        for (Node node : nodes) {
-            FixedNode lastFixedNext = null;
-            if (node instanceof FixedWithNextNode) {
-                FixedWithNextNode fixed = (FixedWithNextNode) node;
-                lastFixedNext = fixed.next();
-                loweringTool.lastFixedNode = fixed;
+            @Override
+            public ValueNode getGuardAnchor() {
+                return anchor;
             }
 
-            if (node.isAlive() && !processed.isMarked(node)) {
+            @Override
+            public ValueNode createGuard(BooleanNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, boolean negated, long leafGraphId) {
+                FixedNode guardAnchor = (FixedNode) getGuardAnchor();
+                if (GraalOptions.OptEliminateGuards) {
+                    for (Node usage : condition.usages()) {
+                        if (!activeGuards.isNew(usage) && activeGuards.isMarked(usage)) {
+                            return (ValueNode) usage;
+                        }
+                    }
+                }
+                GuardNode newGuard = guardAnchor.graph().unique(new GuardNode(condition, guardAnchor, deoptReason, action, negated, leafGraphId));
+                if (GraalOptions.OptEliminateGuards) {
+                    activeGuards.grow();
+                    activeGuards.mark(newGuard);
+                }
+                return newGuard;
+            }
+        };
+
+        // Lower the instructions of this block.
+        for (Node node : schedule.nodesFor(b)) {
+            if (!processed.isMarked(node)) {
                 processed.mark(node);
                 if (node instanceof Lowerable) {
                     ((Lowerable) node).lower(loweringTool);
-                }
-            }
-
-            if (loweringTool.lastFixedNode == node && !node.isAlive()) {
-                if (lastFixedNext == null) {
-                    loweringTool.lastFixedNode = null;
-                } else {
-                    Node prev = lastFixedNext.predecessor();
-                    if (prev != node && prev instanceof FixedWithNextNode) {
-                        loweringTool.lastFixedNode = (FixedWithNextNode) prev;
-                    } else if (lastFixedNext instanceof FixedWithNextNode) {
-                        loweringTool.lastFixedNode = (FixedWithNextNode) lastFixedNext;
-                    } else {
-                        loweringTool.lastFixedNode = null;
-                    }
                 }
             }
         }
