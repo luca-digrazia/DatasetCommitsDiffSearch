@@ -27,7 +27,6 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.nodes.util.*;
 
 @NodeInfo(nameTemplate = "FixedGuard(!={p#negated}) {p#reason/s}")
 public final class FixedGuardNode extends FixedWithNextNode implements Simplifiable, Lowerable, Node.IterableNodeType, Negatable {
@@ -84,7 +83,7 @@ public final class FixedGuardNode extends FixedWithNextNode implements Simplifia
         if (condition instanceof LogicConstantNode) {
             LogicConstantNode c = (LogicConstantNode) condition;
             if (c.getValue() != negated) {
-                graph().removeFixed(this);
+                ((StructuredGraph) graph()).removeFixed(this);
             } else {
                 FixedNode next = this.next();
                 if (next != null) {
@@ -98,21 +97,7 @@ public final class FixedGuardNode extends FixedWithNextNode implements Simplifia
 
     @Override
     public void lower(LoweringTool tool, LoweringType loweringType) {
-        if (loweringType == LoweringType.BEFORE_GUARDS) {
-            tool.getRuntime().lower(this, tool);
-        } else {
-            FixedNode next = next();
-            setNext(null);
-            DeoptimizeNode deopt = graph().add(new DeoptimizeNode(action, reason));
-            IfNode ifNode;
-            if (negated) {
-                ifNode = graph().add(new IfNode(condition, deopt, next, 0));
-            } else {
-                ifNode = graph().add(new IfNode(condition, next, deopt, 1));
-            }
-            ((FixedWithNextNode) predecessor()).setNext(ifNode);
-            GraphUtil.killWithUnusedFloatingInputs(this);
-        }
+        tool.getRuntime().lower(this, tool);
     }
 
     @Override
