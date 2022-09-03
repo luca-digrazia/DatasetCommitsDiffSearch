@@ -144,9 +144,9 @@ public class SourceSectionTest {
         assertEquals("long:3", longSource.createSection(9, 1).getShortDescription());
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testOutOfRange1() {
-        longSource.createSection(9, 5);
+        assertNotNull(longSource.createSection(9, 5));
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -177,23 +177,73 @@ public class SourceSectionTest {
         longSource.createSection(1, 1, 1, -1);
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testOutOfRange7() {
         // out of range with length
-        longSource.createSection(longSource.getCode().length() - 4, 5);
+        SourceSection section = longSource.createSection(longSource.getCode().length() - 4, 5);
+        assertEquals(12, section.getCharEndIndex());
+        assertEquals(7, section.getCharIndex());
+        assertEquals(5, section.getCharLength());
+
+        assertEquals(1, section.getStartColumn());
+        assertEquals(1, section.getEndColumn());
+        assertEquals(1, section.getStartLine());
+        assertEquals(1, section.getEndLine());
+
+        assertTrue(section.isAvailable());
+        assertFalse(section.isValid());
+        assertEquals("", section.getCode());
+        assertNotNull(section.toString());
+
+        SourceSection other = longSource.createSection(longSource.getCode().length() - 4, 5);
+        assertTrue(section.equals(other));
+        assertEquals(other.hashCode(), section.hashCode());
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testOutOfRange8() {
         // out of range with charIndex
-        longSource.createSection(longSource.getCode().length(), 1);
+        SourceSection section = longSource.createSection(longSource.getCode().length(), 1);
+        assertEquals(12, section.getCharEndIndex());
+        assertEquals(11, section.getCharIndex());
+        assertEquals(1, section.getCharLength());
 
+        assertEquals(1, section.getStartColumn());
+        assertEquals(1, section.getEndColumn());
+        assertEquals(1, section.getStartLine());
+        assertEquals(1, section.getEndLine());
+
+        assertTrue(section.isAvailable());
+        assertFalse(section.isValid());
+        assertEquals("", section.getCode());
+        assertNotNull(section.toString());
+
+        SourceSection other = longSource.createSection(longSource.getCode().length(), 1);
+        assertTrue(section.equals(other));
+        assertEquals(other.hashCode(), section.hashCode());
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testOutOfRange9() {
         // out of range with charIndex
-        longSource.createSection(longSource.getCode().length() + 1, 0);
+        SourceSection section = longSource.createSection(longSource.getCode().length() + 1, 0);
+        assertEquals(12, section.getCharEndIndex());
+        assertEquals(12, section.getCharIndex());
+        assertEquals(0, section.getCharLength());
+
+        assertEquals(1, section.getStartColumn());
+        assertEquals(1, section.getEndColumn());
+        assertEquals(1, section.getStartLine());
+        assertEquals(1, section.getEndLine());
+
+        assertTrue(section.isAvailable());
+        assertFalse(section.isValid());
+        assertEquals("", section.getCode());
+        assertNotNull(section.toString());
+
+        SourceSection other = longSource.createSection(longSource.getCode().length() + 1, 0);
+        assertTrue(section.equals(other));
+        assertEquals(other.hashCode(), section.hashCode());
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -234,6 +284,7 @@ public class SourceSectionTest {
         assertEquals(1, section.getEndLine());
         assertSame(longSource, section.getSource());
         assertFalse(section.isAvailable());
+        assertFalse(section.isValid());
 
         assertEquals("", section.getCode());
         assertNotNull(section.toString());
