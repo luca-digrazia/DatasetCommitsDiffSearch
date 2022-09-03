@@ -40,30 +40,28 @@ import com.oracle.truffle.api.nodes.LoopNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMBasicBlockNode;
 import com.oracle.truffle.llvm.nodes.func.LLVMInvokeNode;
 import com.oracle.truffle.llvm.nodes.func.LLVMResumeNode;
-import com.oracle.truffle.llvm.nodes.others.LLVMUnreachableNode;
-import com.oracle.truffle.llvm.runtime.LLVMException;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStackFrameNuller;
+import com.oracle.truffle.llvm.nodes.others.LLVMUnreachableNode;
+import com.oracle.truffle.llvm.runtime.LLVMException;
 
 public final class LLVMDispatchBasicBlockNode extends LLVMExpressionNode {
-    private final FrameSlot exceptionValueSlot;
     @Children private final LLVMBasicBlockNode[] bodyNodes;
     @CompilationFinal(dimensions = 2) private final LLVMStackFrameNuller[][] beforeSlotNullerNodes;
     @CompilationFinal(dimensions = 2) private final LLVMStackFrameNuller[][] afterSlotNullerNodes;
+    private final FrameSlot returnSlot;
 
-    public LLVMDispatchBasicBlockNode(FrameSlot exceptionValueSlot, LLVMBasicBlockNode[] bodyNodes, LLVMStackFrameNuller[][] beforeSlotNullerNodes, LLVMStackFrameNuller[][] afterSlotNullerNodes) {
-        this.exceptionValueSlot = exceptionValueSlot;
+    public LLVMDispatchBasicBlockNode(LLVMBasicBlockNode[] bodyNodes, LLVMStackFrameNuller[][] beforeSlotNullerNodes, LLVMStackFrameNuller[][] afterSlotNullerNodes, FrameSlot returnSlot) {
         this.bodyNodes = bodyNodes;
         this.beforeSlotNullerNodes = beforeSlotNullerNodes;
         this.afterSlotNullerNodes = afterSlotNullerNodes;
+        this.returnSlot = returnSlot;
     }
 
     @Override
     @ExplodeLoop(kind = LoopExplosionKind.MERGE_EXPLODE)
     public Object executeGeneric(VirtualFrame frame) {
-        Object returnValue = null;
-
         CompilerAsserts.compilationConstant(bodyNodes.length);
         int basicBlockIndex = 0;
         int backEdgeCounter = 0;
@@ -201,7 +199,7 @@ public final class LLVMDispatchBasicBlockNode extends LLVMExpressionNode {
                     nullDeadSlots(frame, basicBlockIndex, beforeSlotNullerNodes);
                     continue outer;
                 } catch (LLVMException e) {
-                    frame.setObject(exceptionValueSlot, e);
+                    invokeNode.handleException(frame, e);
                     if (CompilerDirectives.inInterpreter()) {
                         if (invokeNode.getUnwindSuccessor() <= basicBlockIndex) {
                             backEdgeCounter++;
@@ -215,7 +213,7 @@ public final class LLVMDispatchBasicBlockNode extends LLVMExpressionNode {
                 }
             } else if (controlFlowNode instanceof LLVMRetNode) {
                 LLVMRetNode retNode = (LLVMRetNode) controlFlowNode;
-                returnValue = retNode.execute(frame);
+                retNode.execute(frame);
                 // writing phis is not necessary
                 nullDeadSlots(frame, basicBlockIndex, afterSlotNullerNodes);
                 basicBlockIndex = retNode.getSuccessor();
@@ -242,7 +240,11 @@ public final class LLVMDispatchBasicBlockNode extends LLVMExpressionNode {
         }
         assert backEdgeCounter >= 0;
         LoopNode.reportLoopCount(this, backEdgeCounter);
-        return returnValue;
+        if (returnSlot == null) {
+            return null;
+        } else {
+            return frame.getValue(returnSlot);
+        }
     }
 
     @ExplodeLoop
