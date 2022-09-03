@@ -31,7 +31,6 @@ package com.oracle.truffle.llvm.parser.model.functions;
 
 import com.oracle.truffle.llvm.parser.model.attributes.AttributesCodeEntry;
 import com.oracle.truffle.llvm.parser.model.attributes.AttributesGroup;
-import com.oracle.truffle.llvm.parser.model.enums.Linkage;
 import com.oracle.truffle.llvm.parser.model.symbols.constants.Constant;
 import com.oracle.truffle.llvm.parser.model.visitors.ConstantVisitor;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
@@ -43,21 +42,19 @@ public final class FunctionDeclaration implements Constant, ValueSymbol {
     private final FunctionType type;
     private String name;
     private final AttributesCodeEntry paramAttr;
-    private final Linkage linkage;
 
-    public FunctionDeclaration(FunctionType type, String name, Linkage linkage, AttributesCodeEntry paramAttr) {
+    public FunctionDeclaration(FunctionType type, String name, AttributesCodeEntry paramAttr) {
         this.type = type;
         this.name = name;
         this.paramAttr = paramAttr;
-        this.linkage = linkage;
     }
 
-    public FunctionDeclaration(FunctionType type, Linkage linkage, AttributesCodeEntry paramAttr) {
-        this(type, LLVMIdentifier.UNKNOWN, linkage, paramAttr);
+    public FunctionDeclaration(FunctionType type, AttributesCodeEntry paramAttr) {
+        this(type, LLVMIdentifier.UNKNOWN, paramAttr);
     }
 
-    public Linkage getLinkage() {
-        return linkage;
+    public FunctionDeclaration(FunctionType type) {
+        this(type, LLVMIdentifier.UNKNOWN, AttributesCodeEntry.EMPTY);
     }
 
     @Override
