@@ -40,7 +40,7 @@ import com.oracle.graal.nodes.type.*;
  * Compress or uncompress an oop or metaspace pointer.
  */
 @NodeInfo(nameTemplate = "{p#op/s}")
-public class CompressionNode extends ConvertNode implements LIRLowerable {
+public final class CompressionNode extends ConvertNode implements LIRLowerable {
 
     private enum CompressionOp {
         Compress,
@@ -54,11 +54,6 @@ public class CompressionNode extends ConvertNode implements LIRLowerable {
         super(mkStamp(op, input.stamp(), encoding), input);
         this.op = op;
         this.encoding = encoding;
-    }
-
-    @Override
-    public boolean inferStamp() {
-        return updateStamp(mkStamp(op, getValue().stamp(), encoding));
     }
 
     public static CompressionNode compress(ValueNode input, CompressEncoding encoding) {
