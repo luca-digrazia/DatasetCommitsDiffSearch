@@ -25,7 +25,6 @@ package org.graalvm.graphio;
 import java.io.Closeable;
 import java.io.IOException;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
 import java.nio.channels.WritableByteChannel;
 import java.nio.charset.Charset;
@@ -259,11 +258,11 @@ abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaM
 
     protected abstract Iterable<Location> findLocation(ResolvedJavaMethod method, int bci, NodeSourcePosition pos);
 
-    protected abstract String findLocationFile(Location loc) throws IOException;
+    protected abstract String findLocationFile(Location loc);
 
     protected abstract int findLocationLine(Location loc);
 
-    protected abstract URI findLocationURI(Location loc) throws URISyntaxException;
+    protected abstract URI findLocationURI(Location loc);
 
     protected abstract String findLocationLanguage(Location loc);
 
@@ -569,12 +568,7 @@ abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaM
             if (versionMajor >= 6) {
                 while (ste.hasNext()) {
                     Location loc = ste.next();
-                    URI uri;
-                    try {
-                        uri = findLocationURI(loc);
-                    } catch (URISyntaxException ex) {
-                        throw new IOException(ex);
-                    }
+                    URI uri = findLocationURI(loc);
                     if (uri == null) {
                         throw new IOException("No URI for " + loc);
                     }
