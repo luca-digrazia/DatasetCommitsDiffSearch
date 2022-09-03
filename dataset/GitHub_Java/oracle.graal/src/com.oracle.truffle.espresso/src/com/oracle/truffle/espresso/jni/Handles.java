@@ -1,8 +1,29 @@
+/*
+ * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.
+ *
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ *
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
+ */
 package com.oracle.truffle.espresso.jni;
 
 import java.lang.ref.WeakReference;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Objects;
 import java.util.WeakHashMap;
@@ -12,7 +33,8 @@ import java.util.WeakHashMap;
  */
 public class Handles<T> {
 
-    private final static int DEFAULT_INITIAL_CAPACITY = 32;
+    private static final int DEFAULT_INITIAL_CAPACITY = 32;
+
     private final WeakHashMap<T, Integer> map;
     private final LinkedList<Integer> freeList = new LinkedList<>();
 
@@ -24,6 +46,7 @@ public class Handles<T> {
      *
      * @param initialCapacity must be > 0
      */
+    @SuppressWarnings({"unchecked", "rawtypes"})
     public Handles(int initialCapacity) {
         if (initialCapacity <= 0) {
             throw new IllegalArgumentException("initialCapacity must be > 0");
