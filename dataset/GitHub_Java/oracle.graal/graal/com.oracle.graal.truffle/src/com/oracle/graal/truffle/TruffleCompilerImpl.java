@@ -97,8 +97,7 @@ public class TruffleCompilerImpl {
         GraphBuilderPhase phase = (GraphBuilderPhase) backend.getSuites().getDefaultGraphBuilderSuite().findPhase(GraphBuilderPhase.class).previous();
         // copy all plugins from the host
         Plugins plugins = new Plugins(phase.getGraphBuilderConfig().getPlugins());
-        GraphBuilderConfiguration baseConfig = graalTruffleRuntime.enableInfopoints() ? GraphBuilderConfiguration.getInfopointDefault(plugins) : GraphBuilderConfiguration.getDefault(plugins);
-        this.config = baseConfig.withSkippedExceptionTypes(skippedExceptionTypes);
+        this.config = GraphBuilderConfiguration.getDefault(plugins).withSkippedExceptionTypes(skippedExceptionTypes);
 
         this.partialEvaluator = new PartialEvaluator(providers, config, Graal.getRequiredCapability(SnippetReflectionProvider.class), backend.getTarget().arch);
 

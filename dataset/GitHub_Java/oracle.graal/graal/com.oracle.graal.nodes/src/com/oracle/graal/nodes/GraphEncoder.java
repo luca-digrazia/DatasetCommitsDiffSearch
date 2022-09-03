@@ -442,6 +442,9 @@ class GraphComparison {
             }
         }
 
+        for (Node expectedNode : expectedGraph.getNodes()) {
+            assert nodeMapping.get(expectedNode) != null || (expectedNode.hasNoUsages() && !(expectedNode instanceof FixedNode)) : "expectedNode";
+        }
         return true;
     }
 
@@ -483,19 +486,7 @@ class GraphComparison {
         assert !actualIter.hasNext();
     }
 
-    protected static void verifyNodeEqual(Node e, Node actualNode, NodeMap<Node> nodeMapping, Deque<Pair<Node, Node>> workList, boolean ignoreEndNode) {
-        Node expectedNode = e;
-        if (expectedNode instanceof PhiNode) {
-            /*
-             * The input graph can contain unnecessary (eliminatable) phi functions. Such phis are
-             * not re-created during decoding, so we need to simplify the expected node too.
-             */
-            Node singleValue = ((PhiNode) expectedNode).singleValue();
-            if (singleValue != null && singleValue != PhiNode.MULTIPLE_VALUES) {
-                expectedNode = singleValue;
-            }
-        }
-
+    protected static void verifyNodeEqual(Node expectedNode, Node actualNode, NodeMap<Node> nodeMapping, Deque<Pair<Node, Node>> workList, boolean ignoreEndNode) {
         assert expectedNode.getClass() == actualNode.getClass();
         if (ignoreEndNode && expectedNode instanceof EndNode) {
             return;

@@ -22,22 +22,16 @@
  */
 package com.oracle.graal.compiler.test;
 
-import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.lang.reflect.*;
+import java.util.*;
 
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import org.junit.*;
 
-import org.junit.Test;
-
-import com.oracle.graal.nodes.EncodedGraph;
-import com.oracle.graal.nodes.GraphEncoder;
-import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.phases.common.CanonicalizerPhase;
-import com.oracle.graal.phases.tiers.PhaseContext;
+import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.tiers.*;
 
 public class GraphEncoderTest extends GraalCompilerTest {
 
@@ -78,7 +72,7 @@ public class GraphEncoderTest extends GraalCompilerTest {
 
         for (StructuredGraph originalGraph : originalGraphs) {
             EncodedGraph encodedGraph = new EncodedGraph(encoder.getEncoding(), startOffsets.get(originalGraph), encoder.getObjects(), encoder.getNodeClasses(), originalGraph.getAssumptions(),
-                            originalGraph.getMethods());
+                            originalGraph.getInlinedMethods());
             GraphEncoder.verifyEncoding(originalGraph, encodedGraph, getTarget().arch);
         }
     }

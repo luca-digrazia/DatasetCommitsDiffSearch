@@ -257,14 +257,10 @@ public class GraphDecoder {
     }
 
     public final void decode(StructuredGraph graph, EncodedGraph encodedGraph) {
-        try (Debug.Scope scope = Debug.scope("GraphDecoder", graph)) {
-            MethodScope methodScope = new MethodScope(graph, encodedGraph, LoopExplosionKind.NONE);
-            decode(methodScope, null);
-            cleanupGraph(methodScope, null);
-            methodScope.graph.verify();
-        } catch (Throwable ex) {
-            Debug.handle(ex);
-        }
+        MethodScope methodScope = new MethodScope(graph, encodedGraph, LoopExplosionKind.NONE);
+        decode(methodScope, null);
+        cleanupGraph(methodScope, null);
+        methodScope.graph.verify();
     }
 
     protected final void decode(MethodScope methodScope, FixedWithNextNode startNode) {
@@ -291,7 +287,6 @@ public class GraphDecoder {
                 assert loopScope.nextIterations.peekFirst().loopIteration == loopScope.loopIteration + 1;
                 loopScope = loopScope.nextIterations.removeFirst();
             } else {
-                propagateCreatedNodes(loopScope);
                 loopScope = loopScope.outer;
             }
         }
@@ -305,19 +300,6 @@ public class GraphDecoder {
             cleanupGraph(methodScope, start);
             Debug.dump(methodScope.graph, "Before loop detection");
             detectLoops(methodScope.graph, detectLoopsStart);
-        }
-    }
-
-    private static void propagateCreatedNodes(LoopScope loopScope) {
-        if (loopScope.outer == null) {
-            return;
-        }
-
-        /* Register nodes that were created while decoding the loop to the outside scope. */
-        for (int i = 0; i < loopScope.createdNodes.length; i++) {
-            if (loopScope.outer.createdNodes[i] == null) {
-                loopScope.outer.createdNodes[i] = loopScope.createdNodes[i];
-            }
         }
     }
 
