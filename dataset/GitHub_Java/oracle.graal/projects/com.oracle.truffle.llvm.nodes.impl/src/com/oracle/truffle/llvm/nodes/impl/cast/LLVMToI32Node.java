@@ -43,7 +43,7 @@ import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI64Node;
 import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI8Node;
 import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMIVarBitNode;
 import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.LLVMFunction;
+import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.types.LLVMIVarBit;
 import com.oracle.truffle.llvm.types.floating.LLVM80BitFloat;
 
@@ -107,6 +107,11 @@ public abstract class LLVMToI32Node extends LLVMI32Node {
     public abstract static class LLVMAddressToI32Node extends LLVMToI32Node {
 
         @Specialization
+        public int executeI32(boolean from) {
+            return from ? 1 : 0;
+        }
+
+        @Specialization
         public int executeI32(LLVMAddress from) {
             return (int) from.getVal();
         }
@@ -148,11 +153,32 @@ public abstract class LLVMToI32Node extends LLVMI32Node {
         }
     }
 
+    @NodeChild(value = "fromNode", type = LLVMFloatNode.class)
+    public abstract static class LLVMFloatToI32BitNode extends LLVMToI32Node {
+
+        @Specialization
+        public int executeI32(float from) {
+            return Float.floatToIntBits(from);
+        }
+    }
+
     @NodeChild(value = "fromNode", type = LLVMDoubleNode.class)
     public abstract static class LLVMDoubleToI32Node extends LLVMToI32Node {
 
         @Specialization
         public int executeI32(double from) {
+            return (int) from;
+        }
+    }
+
+    @NodeChild(value = "fromNode", type = LLVMDoubleNode.class)
+    public abstract static class LLVMDoubleToUnsignedI32Node extends LLVMToI32Node {
+
+        @Specialization
+        public int executeI32(double from) {
+            if (from > Integer.MAX_VALUE) {
+                return (int) (from + Integer.MIN_VALUE) - Integer.MIN_VALUE;
+            }
             return (int) from;
         }
     }
@@ -170,8 +196,8 @@ public abstract class LLVMToI32Node extends LLVMI32Node {
     public abstract static class LLVMFunctionToI32Node extends LLVMToI32Node {
 
         @Specialization
-        public int executeI32(LLVMFunction from) {
-            return (int) from.getFunctionAddress().getVal();
+        public int executeI32(LLVMFunctionDescriptor from) {
+            return from.getFunctionIndex();
         }
     }
 
