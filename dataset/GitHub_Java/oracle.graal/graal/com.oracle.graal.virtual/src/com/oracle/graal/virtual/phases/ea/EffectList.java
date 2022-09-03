@@ -25,96 +25,85 @@ package com.oracle.graal.virtual.phases.ea;
 import java.lang.reflect.*;
 import java.util.*;
 
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 
 /**
- * An {@link EffectList} can be used to maintain a list of {@link Effect}s and backtrack to a previous state by
- * truncating the list. It can also maintain a level for each effect, which helps in creating a string representation
- * for the list.
+ * An {@link EffectList} can be used to maintain a list of {@link Effect}s and backtrack to a
+ * previous state by truncating the list.
  */
 public class EffectList implements Iterable<EffectList.Effect> {
 
-    public abstract static class Effect {
-
-        public boolean isVisible() {
+    public interface Effect {
+        default boolean isVisible() {
             return true;
         }
 
-        @Override
-        public String toString() {
-            StringBuilder str = new StringBuilder();
-            for (Field field : getClass().getDeclaredFields()) {
-                String name = field.getName();
-                if (name.contains("$")) {
-                    name = name.substring(name.indexOf('$') + 1);
-                }
-                if (!Modifier.isStatic(field.getModifiers()) && !name.equals("0")) {
-                    try {
-                        field.setAccessible(true);
-                        str.append(str.length() > 0 ? ", " : "").append(name).append("=").append(format(field.get(this)));
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
-                }
-            }
-            return name() + " [" + str + "]";
-        }
-
-        private static String format(Object object) {
-            if (object != null && Object[].class.isAssignableFrom(object.getClass())) {
-                return Arrays.toString((Object[]) object);
-            }
-            return "" + object;
-        }
-
-        public abstract String name();
-
-        public abstract void apply(StructuredGraph graph, ArrayList<Node> obsoleteNodes);
+        void apply(StructuredGraph graph, ArrayList<Node> obsoleteNodes);
     }
 
-    private Effect[] effects = new Effect[16];
-    private int[] level = new int[16];
-    private int size;
-    private int currentLevel;
-
-    public void add(Effect effect) {
-        if (effects.length == size) {
-            effects = Arrays.copyOf(effects, effects.length * 2);
-            level = Arrays.copyOf(level, effects.length);
+    public interface SimpleEffect extends Effect {
+        default void apply(StructuredGraph graph, ArrayList<Node> obsoleteNodes) {
+            apply(graph);
         }
-        level[size] = currentLevel;
+
+        void apply(StructuredGraph graph);
+    }
+
+    private static final Effect[] EMPTY_ARRAY = new Effect[0];
+    private static final String[] EMPTY_STRING_ARRAY = new String[0];
+
+    private Effect[] effects = EMPTY_ARRAY;
+    private String[] names = EMPTY_STRING_ARRAY;
+    private int size;
+
+    private void enlarge(int elements) {
+        int length = effects.length;
+        if (size + elements > length) {
+            while (size + elements > length) {
+                length = Math.max(length * 2, 4);
+            }
+            effects = Arrays.copyOf(effects, length);
+            if (Debug.isEnabled()) {
+                names = Arrays.copyOf(names, length);
+            }
+        }
+    }
+
+    public void add(String name, SimpleEffect effect) {
+        add(name, (Effect) effect);
+    }
+
+    public void add(String name, Effect effect) {
+        assert effect != null;
+        enlarge(1);
+        if (Debug.isEnabled()) {
+            names[size] = name;
+        }
         effects[size++] = effect;
     }
 
-    public void addAll(Collection< ? extends Effect> list) {
-        int length = effects.length;
-        if (size + list.size() > length) {
-            while (size + list.size() > length) {
-                length *= 2;
-            }
-            effects = Arrays.copyOf(effects, length);
-            level = Arrays.copyOf(level, effects.length);
+    public void addAll(EffectList list) {
+        enlarge(list.size);
+        System.arraycopy(list.effects, 0, effects, size, list.size);
+        if (Debug.isEnabled()) {
+            System.arraycopy(list.names, 0, names, size, list.size);
         }
-        for (Effect effect : list) {
-            level[size] = currentLevel;
-            effects[size++] = effect;
-        }
+        size += list.size;
     }
 
-    public void addAll(EffectList list) {
-        int length = effects.length;
-        if (size + list.size > length) {
-            while (size + list.size > length) {
-                length *= 2;
-            }
-            effects = Arrays.copyOf(effects, length);
-            level = Arrays.copyOf(level, effects.length);
+    public void insertAll(EffectList list, int position) {
+        assert position >= 0 && position <= size;
+        enlarge(list.size);
+        System.arraycopy(effects, position, effects, position + list.size, size - position);
+        System.arraycopy(list.effects, 0, effects, position, list.size);
+        if (Debug.isEnabled()) {
+            System.arraycopy(names, position, names, position + list.size, size - position);
+            System.arraycopy(list.names, 0, names, position, list.size);
         }
-        for (Effect effect : list) {
-            level[size] = currentLevel;
-            effects[size++] = effect;
-        }
+        size += list.size;
     }
 
     public int checkpoint() {
@@ -154,26 +143,11 @@ public class EffectList implements Iterable<EffectList.Effect> {
         };
     }
 
-    public void incLevel() {
-        currentLevel++;
-    }
-
-    public void decLevel() {
-        currentLevel--;
-    }
-
     public Effect get(int index) {
         if (index >= size) {
             throw new IndexOutOfBoundsException();
         }
         return effects[index];
-    }
-
-    public int levelAt(int index) {
-        if (index >= size) {
-            throw new IndexOutOfBoundsException();
-        }
-        return level[index];
     }
 
     public void clear() {
@@ -184,18 +158,70 @@ public class EffectList implements Iterable<EffectList.Effect> {
         return size == 0;
     }
 
+    public void apply(StructuredGraph graph, ArrayList<Node> obsoleteNodes) {
+        for (int i = 0; i < size(); i++) {
+            Effect effect = effects[i];
+            try {
+                effect.apply(graph, obsoleteNodes);
+            } catch (Throwable t) {
+                StringBuilder str = new StringBuilder();
+                toString(str, i);
+                throw new GraalInternalError(t).addContext("effect", str);
+            }
+            if (effect.isVisible() && Debug.isLogEnabled()) {
+                StringBuilder str = new StringBuilder();
+                toString(str, i);
+                Debug.log("    %s", str);
+            }
+        }
+    }
+
+    private void toString(StringBuilder str, int i) {
+        Effect effect = effects[i];
+        str.append(getName(i)).append(" [");
+        boolean first = true;
+        for (Field field : effect.getClass().getDeclaredFields()) {
+            try {
+                field.setAccessible(true);
+                Object object = field.get(effect);
+                if (object == this) {
+                    // Inner classes could capture the EffectList itself.
+                    continue;
+                }
+                str.append(first ? "" : ", ").append(format(object));
+                first = false;
+            } catch (SecurityException | IllegalAccessException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        str.append(']');
+    }
+
+    private static String format(Object object) {
+        if (object != null && Object[].class.isAssignableFrom(object.getClass())) {
+            return Arrays.toString((Object[]) object);
+        }
+        return "" + object;
+    }
+
     @Override
     public String toString() {
         StringBuilder str = new StringBuilder();
         for (int i = 0; i < size(); i++) {
             Effect effect = get(i);
             if (effect.isVisible()) {
-                for (int i2 = 0; i2 < levelAt(i); i2++) {
-                    str.append("    ");
-                }
-                str.append(effect).toString();
+                toString(str, i);
+                str.append('\n');
             }
         }
         return str.toString();
+    }
+
+    private String getName(int i) {
+        if (Debug.isEnabled()) {
+            return names[i];
+        } else {
+            return "";
+        }
     }
 }
