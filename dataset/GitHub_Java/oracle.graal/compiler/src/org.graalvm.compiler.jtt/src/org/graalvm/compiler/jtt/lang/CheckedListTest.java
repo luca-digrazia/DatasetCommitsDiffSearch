@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -42,7 +42,8 @@ public final class CheckedListTest extends JTTTest {
         runTest("testCast");
     }
 
-    public void testCast() {
+    @SuppressWarnings({"unchecked", "rawtypes", "serial"})
+    public static void testCast() {
         final AtomicBoolean addAllWasCalled = new AtomicBoolean();
         ArrayList orig = new ArrayList() {
             @Override
@@ -68,10 +69,10 @@ public final class CheckedListTest extends JTTTest {
         runTest("testCopyOf");
     }
 
-    public void testCopyOf() {
-        Object[] mixed = new Object[] {"a", "b", 18};
+    public static void testCopyOf() {
+        Object[] mixed = new Object[]{"a", "b", 18};
         try {
-            Arrays.copyOf(mixed, 4, new String[0].getClass());
+            Arrays.copyOf(mixed, 4, String[].class);
         } catch (ArrayStoreException e) {
             return;
         }
@@ -83,8 +84,8 @@ public final class CheckedListTest extends JTTTest {
         runTest("testArraycopy");
     }
 
-    public void testArraycopy() {
-        Object[] mixed = new Object[] {"a", "b", 18};
+    public static void testArraycopy() {
+        Object[] mixed = new Object[]{"a", "b", 18};
         try {
             String[] strings = new String[4];
             System.arraycopy(mixed, 0, strings, 0, 3);
