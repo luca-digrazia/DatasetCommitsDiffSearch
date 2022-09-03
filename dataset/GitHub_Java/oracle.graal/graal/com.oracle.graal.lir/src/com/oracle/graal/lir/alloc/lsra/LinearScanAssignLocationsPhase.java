@@ -29,11 +29,11 @@ import static jdk.internal.jvmci.code.ValueUtil.*;
 import java.util.*;
 
 import jdk.internal.jvmci.code.*;
+import com.oracle.graal.debug.*;
 import jdk.internal.jvmci.meta.*;
 
 import com.oracle.graal.compiler.common.alloc.*;
 import com.oracle.graal.compiler.common.cfg.*;
-import com.oracle.graal.debug.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
@@ -156,6 +156,7 @@ public class LinearScanAssignLocationsPhase extends AllocationPhase {
         int numInst = instructions.size();
         boolean hasDead = false;
 
+        InstructionValueProcedure assignProc = (op, operand, mode, flags) -> isVariable(operand) ? colorLirOperand(op, (Variable) operand, mode) : operand;
         for (int j = 0; j < numInst; j++) {
             final LIRInstruction op = instructions.get(j);
             if (op == null) {
@@ -163,9 +164,40 @@ public class LinearScanAssignLocationsPhase extends AllocationPhase {
                  * this can happen when spill-moves are removed in eliminateSpillMoves
                  */
                 hasDead = true;
-            } else if (assignLocations(op)) {
-                instructions.set(j, null);
-                hasDead = true;
+                continue;
+            }
+
+            // remove useless moves
+            MoveOp move = null;
+            if (op instanceof MoveOp) {
+                move = (MoveOp) op;
+                AllocatableValue result = move.getResult();
+                if (isVariable(result) && allocator.isMaterialized(result, op.id(), OperandMode.DEF)) {
+                    /*
+                     * This happens if a materializable interval is originally not spilled but then
+                     * kicked out in LinearScanWalker.splitForSpilling(). When kicking out such an
+                     * interval this move operation was already generated.
+                     */
+                    instructions.set(j, null);
+                    hasDead = true;
+                    continue;
+                }
+            }
+
+            op.forEachInput(assignProc);
+            op.forEachAlive(assignProc);
+            op.forEachTemp(assignProc);
+            op.forEachOutput(assignProc);
+
+            // compute reference map and debug information
+            op.forEachState((inst, state) -> computeDebugInfo(inst, state));
+
+            // remove useless moves
+            if (move != null) {
+                if (move.getInput().equals(move.getResult())) {
+                    instructions.set(j, null);
+                    hasDead = true;
+                }
             }
         }
 
@@ -173,48 +205,6 @@ public class LinearScanAssignLocationsPhase extends AllocationPhase {
             // Remove null values from the list.
             instructions.removeAll(Collections.singleton(null));
         }
-    }
-
-    /**
-     * Assigns the operand of an {@link LIRInstruction}.
-     *
-     * @param op The {@link LIRInstruction} that should be colored.
-     * @return {@code true} if the instruction should be deleted.
-     */
-    protected boolean assignLocations(LIRInstruction op) {
-        assert op != null;
-
-        InstructionValueProcedure assignProc = (inst, operand, mode, flags) -> isVariable(operand) ? colorLirOperand(inst, (Variable) operand, mode) : operand;
-        // remove useless moves
-        MoveOp move = null;
-        if (op instanceof MoveOp) {
-            move = (MoveOp) op;
-            AllocatableValue result = move.getResult();
-            if (isVariable(result) && allocator.isMaterialized(result, op.id(), OperandMode.DEF)) {
-                /*
-                 * This happens if a materializable interval is originally not spilled but then
-                 * kicked out in LinearScanWalker.splitForSpilling(). When kicking out such an
-                 * interval this move operation was already generated.
-                 */
-                return true;
-            }
-        }
-
-        op.forEachInput(assignProc);
-        op.forEachAlive(assignProc);
-        op.forEachTemp(assignProc);
-        op.forEachOutput(assignProc);
-
-        // compute reference map and debug information
-        op.forEachState((inst, state) -> computeDebugInfo(inst, state));
-
-        // remove useless moves
-        if (move != null) {
-            if (move.getInput().equals(move.getResult())) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private void assignLocations() {
