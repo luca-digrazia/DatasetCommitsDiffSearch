@@ -71,7 +71,7 @@ public final class Assumptions implements Serializable, Iterable<Assumptions.Ass
 
         @Override
         public String toString() {
-            return "NoFinalizableSubclass[receiverType=" + receiverType.toJavaName() + "]";
+            return "NoFinalizableSubclass[receiverType=" + toJavaName(receiverType) + "]";
         }
 
     }
@@ -97,7 +97,7 @@ public final class Assumptions implements Serializable, Iterable<Assumptions.Ass
             this.context = context;
             this.subtype = subtype;
             assert !subtype.isAbstract() : subtype.toString() + " : " + context.toString();
-            assert !subtype.isArray() || subtype.getElementalType().isFinal() : subtype.toString() + " : " + context.toString();
+            assert !subtype.isArray() || getElementalType(subtype).isFinal() : subtype.toString() + " : " + context.toString();
         }
 
         @Override
@@ -120,7 +120,7 @@ public final class Assumptions implements Serializable, Iterable<Assumptions.Ass
 
         @Override
         public String toString() {
-            return "ConcreteSubtype[context=" + context.toJavaName() + ", subtype=" + subtype.toJavaName() + "]";
+            return "ConcreteSubtype[context=" + toJavaName(context) + ", subtype=" + toJavaName(subtype) + "]";
         }
     }
 
@@ -174,7 +174,7 @@ public final class Assumptions implements Serializable, Iterable<Assumptions.Ass
 
         @Override
         public String toString() {
-            return "ConcreteMethod[method=" + method.format("%H.%n(%p)") + ", context=" + context.toJavaName() + ", impl=" + impl.format("%H.%n(%p)") + "]";
+            return "ConcreteMethod[method=" + format("%H.%n(%p)", method) + ", context=" + toJavaName(context) + ", impl=" + format("%H.%n(%p)", impl) + "]";
         }
     }
 
@@ -207,7 +207,7 @@ public final class Assumptions implements Serializable, Iterable<Assumptions.Ass
 
         @Override
         public String toString() {
-            return "MethodContents[method=" + method.format("%H.%n(%p)") + "]";
+            return "MethodContents[method=" + format("%H.%n(%p)", method) + "]";
         }
     }
 
@@ -239,7 +239,7 @@ public final class Assumptions implements Serializable, Iterable<Assumptions.Ass
         public boolean equals(Object obj) {
             if (obj instanceof CallSiteTargetValue) {
                 CallSiteTargetValue other = (CallSiteTargetValue) obj;
-                return callSite.equals(other.callSite) && methodHandle.equals(other.methodHandle);
+                return other.callSite == callSite && other.methodHandle == methodHandle;
             }
             return false;
         }
@@ -274,36 +274,6 @@ public final class Assumptions implements Serializable, Iterable<Assumptions.Ass
 
     public boolean useOptimisticAssumptions() {
         return useOptimisticAssumptions;
-    }
-
-    @Override
-    public int hashCode() {
-        throw new UnsupportedOperationException("hashCode");
-    }
-
-    @Override
-    public String toString() {
-        return identityHashCodeString(this);
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
-        }
-        if (obj instanceof Assumptions) {
-            Assumptions that = (Assumptions) obj;
-            if (useOptimisticAssumptions != that.useOptimisticAssumptions || count != that.count) {
-                return false;
-            }
-            for (int i = 0; i < count; i++) {
-                if (!list[i].equals(that.list[i])) {
-                    return false;
-                }
-            }
-            return true;
-        }
-        return false;
     }
 
     @Override
