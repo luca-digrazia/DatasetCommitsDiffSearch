@@ -154,7 +154,7 @@ public class BytecodeInterpreterPartialEvaluationTest extends PartialEvaluationT
         assertPartialEvalEquals("constant42", new Program(bytecodes, 0, 3));
     }
 
-    @Test(timeout = 1000)
+    @Test
     public void simpleProgramWithManyIfs() {
         byte[] bytecodes = new byte[]{
         /* 0: */Bytecode.CONST,
