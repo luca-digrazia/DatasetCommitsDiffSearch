@@ -22,13 +22,9 @@
  */
 package com.oracle.truffle.api.test.vm;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
 
 import org.junit.After;
-import org.junit.Test;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.Truffle;
@@ -40,6 +36,11 @@ import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.api.vm.PolyglotEngine;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+import org.junit.Test;
 
 /**
  * Bug report validating test.
@@ -132,6 +133,7 @@ public class InitializationTest {
     @TruffleLanguage.Registration(mimeType = "application/x-abstrlang", name = "AbstrLang", version = "0.1")
     public static final class TestLanguage extends AbstractLanguage {
 
+        @SuppressWarnings("deprecation")
         @Override
         protected MyEnv createContext(Env env) {
             assertNull("Not defined symbol", env.importSymbol("unknown"));
