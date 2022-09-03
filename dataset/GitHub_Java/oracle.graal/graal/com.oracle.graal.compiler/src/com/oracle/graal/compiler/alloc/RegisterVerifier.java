@@ -214,7 +214,6 @@ final class RegisterVerifier {
             }
 
             ValueProcedure useProc = new ValueProcedure() {
-
                 @Override
                 public Value doValue(Value operand, OperandMode mode, EnumSet<OperandFlag> flags) {
                     if (LinearScan.isVariableOrRegister(operand) && allocator.isProcessed(operand)) {
@@ -230,7 +229,6 @@ final class RegisterVerifier {
             };
 
             ValueProcedure defProc = new ValueProcedure() {
-
                 @Override
                 public Value doValue(Value operand, OperandMode mode, EnumSet<OperandFlag> flags) {
                     if (LinearScan.isVariableOrRegister(operand) && allocator.isProcessed(operand)) {
@@ -254,8 +252,7 @@ final class RegisterVerifier {
                 }
             }
             op.forEachAlive(useProc);
-            // set temp operands (some operations use temp operands also as output operands, so
-            // can't set them null)
+            // set temp operands (some operations use temp operands also as output operands, so can't set them null)
             op.forEachTemp(defProc);
             // set output operands
             op.forEachOutput(defProc);

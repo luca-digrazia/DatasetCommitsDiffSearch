@@ -29,7 +29,6 @@ package com.oracle.graal.phases;
  *
  * (thomaswue) WARNING: Fields of this class are treated as final by Graal.
  */
-// @formatter:off
 public final class GraalOptions {
 
     // Checkstyle: stop
