@@ -366,7 +366,11 @@ abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaM
         if (id == null) {
             addPoolEntry(object);
         } else {
-            if (findJavaField(object) != null) {
+            if (object instanceof Enum<?> || findEnumOrdinal(object) >= 0) {
+                writeByte(POOL_ENUM);
+            } else if (object instanceof Class<?> || findJavaTypeName(object) != null) {
+                writeByte(POOL_CLASS);
+            } else if (findJavaField(object) != null) {
                 writeByte(POOL_FIELD);
             } else if (findSignature(object) != null) {
                 writeByte(POOL_SIGNATURE);
@@ -380,13 +384,7 @@ abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaM
                 } else if (findMethod(object) != null) {
                     writeByte(POOL_METHOD);
                 } else {
-                    if (object instanceof Enum<?> || findEnumOrdinal(object) >= 0) {
-                        writeByte(POOL_ENUM);
-                    } else if (object instanceof Class<?> || findJavaTypeName(object) != null) {
-                        writeByte(POOL_CLASS);
-                    } else {
-                        writeByte(POOL_STRING);
-                    }
+                    writeByte(POOL_STRING);
                 }
             }
             writeShort(id.charValue());
@@ -515,7 +513,24 @@ abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaM
         char index = constantPool.add(object);
         writeByte(POOL_NEW);
         writeShort(index);
-        if ((field = findJavaField(object)) != null) {
+        if ((typeName = findJavaTypeName(object)) != null) {
+            writeByte(POOL_CLASS);
+            writeString(typeName);
+            String[] enumValueNames = findEnumTypeValues(object);
+            if (enumValueNames != null) {
+                writeByte(ENUM_KLASS);
+                writeInt(enumValueNames.length);
+                for (String o : enumValueNames) {
+                    writePoolObject(o);
+                }
+            } else {
+                writeByte(KLASS);
+            }
+        } else if ((enumOrdinal = findEnumOrdinal(object)) >= 0) {
+            writeByte(POOL_ENUM);
+            writePoolObject(findEnumClass(object));
+            writeInt(enumOrdinal);
+        } else if ((field = findJavaField(object)) != null) {
             writeByte(POOL_FIELD);
             writePoolObject(findFieldDeclaringClass(field));
             writePoolObject(findFieldName(field));
@@ -569,27 +584,8 @@ abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaM
             }
             ResolvedJavaMethod method = findMethod(object);
             if (method == null) {
-                if ((typeName = findJavaTypeName(object)) != null) {
-                    writeByte(POOL_CLASS);
-                    writeString(typeName);
-                    String[] enumValueNames = findEnumTypeValues(object);
-                    if (enumValueNames != null) {
-                        writeByte(ENUM_KLASS);
-                        writeInt(enumValueNames.length);
-                        for (String o : enumValueNames) {
-                            writePoolObject(o);
-                        }
-                    } else {
-                        writeByte(KLASS);
-                    }
-                } else if ((enumOrdinal = findEnumOrdinal(object)) >= 0) {
-                    writeByte(POOL_ENUM);
-                    writePoolObject(findEnumClass(object));
-                    writeInt(enumOrdinal);
-                } else {
-                    writeByte(POOL_STRING);
-                    writeString(object.toString());
-                }
+                writeByte(POOL_STRING);
+                writeString(object.toString());
                 return;
             }
             writeByte(POOL_METHOD);
