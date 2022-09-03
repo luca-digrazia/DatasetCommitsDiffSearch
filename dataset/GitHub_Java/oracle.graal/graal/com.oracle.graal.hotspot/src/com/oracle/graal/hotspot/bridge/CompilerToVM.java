@@ -84,7 +84,6 @@ public interface CompilerToVM {
      * Used to implement {@link ResolvedJavaType#findUniqueConcreteMethod(ResolvedJavaMethod)}.
      *
      * @param metaspaceMethod the metaspace Method on which to based the search
-     * @param actualHolderMetaspaceKlass the best known type of receiver
      * @return the metaspace Method result or 0 is there is no unique concrete method for
      *         {@code metaspaceMethod}
      */

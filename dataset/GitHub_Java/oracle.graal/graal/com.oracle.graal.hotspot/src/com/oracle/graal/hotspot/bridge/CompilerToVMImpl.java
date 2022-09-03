@@ -160,7 +160,7 @@ public class CompilerToVMImpl implements CompilerToVM {
     public native long readUnsafeKlassPointer(Object o);
 
     @Override
-    public native Object readUncompressedOop(long address);
+    public native Object readUnsafeOop(Object base, long displacement, boolean compressed);
 
     @Override
     public native void doNotInlineOrCompile(long metaspaceMethod);
@@ -181,9 +181,7 @@ public class CompilerToVMImpl implements CompilerToVM {
 
     public native int allocateCompileId(long metaspaceMethod, int entryBCI);
 
-    public String getGPUs() {
-        return "";
-    }
+    public native String getGPUs();
 
     public native boolean canInlineMethod(long metaspaceMethod);
 
@@ -206,6 +204,4 @@ public class CompilerToVMImpl implements CompilerToVM {
     public native boolean shouldDebugNonSafepoints();
 
     public native void writeDebugOutput(byte[] bytes, int offset, int length);
-
-    public native void flushDebugOutput();
 }
