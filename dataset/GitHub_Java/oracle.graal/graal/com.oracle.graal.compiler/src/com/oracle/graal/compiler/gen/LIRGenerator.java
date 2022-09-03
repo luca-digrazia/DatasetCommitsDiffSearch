@@ -57,7 +57,7 @@ import com.oracle.graal.phases.util.*;
 /**
  * This class traverses the HIR instructions and generates LIR instructions from them.
  */
-public abstract class LIRGenerator implements LIRGeneratorTool, LIRTypeTool, LIRGeneratorCommon, NodeBasedLIRGenerator {
+public abstract class LIRGenerator implements LIRGeneratorTool, LIRTypeTool {
 
     public static class Options {
         // @formatter:off
@@ -74,7 +74,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool, LIRTypeTool, LIR
     private final NodeMap<Value> nodeOperands;
     private final DebugInfoBuilder debugInfoBuilder;
 
-    protected AbstractBlock<?> currentBlock;
+    protected Block currentBlock;
     private final int traceLevel;
     private final boolean printIRWithLIR;
 
@@ -164,21 +164,12 @@ public abstract class LIRGenerator implements LIRGeneratorTool, LIRTypeTool, LIR
      */
     public abstract boolean canStoreConstant(Constant c, boolean isCompressed);
 
-    public LIRGenerator(Providers providers, CallingConvention cc, LIRGenerationResult res) {
-        this(null, providers, cc, res);
-    }
-
     public LIRGenerator(StructuredGraph graph, Providers providers, CallingConvention cc, LIRGenerationResult res) {
         this.res = res;
         this.providers = providers;
         this.cc = cc;
-        if (graph != null) {
-            this.nodeOperands = graph.createNodeMap();
-            this.debugInfoBuilder = createDebugInfoBuilder(nodeOperands);
-        } else {
-            this.nodeOperands = null;
-            this.debugInfoBuilder = null;
-        }
+        this.nodeOperands = graph.createNodeMap();
+        this.debugInfoBuilder = createDebugInfoBuilder(nodeOperands);
         this.traceLevel = Options.TraceLIRGeneratorLevel.getValue();
         this.printIRWithLIR = Options.PrintIRWithLIR.getValue();
     }
@@ -250,14 +241,13 @@ public abstract class LIRGenerator implements LIRGeneratorTool, LIRTypeTool, LIR
                         constantLoads = new HashMap<>();
                     }
                     LoadConstant load = constantLoads.get(value);
-                    assert currentBlock instanceof Block;
                     if (load == null) {
                         int index = res.getLIR().getLIRforBlock(currentBlock).size();
                         loadedValue = emitMove(value);
                         LIRInstruction op = res.getLIR().getLIRforBlock(currentBlock).get(index);
-                        constantLoads.put(value, new LoadConstant(loadedValue, (Block) currentBlock, index, op));
+                        constantLoads.put(value, new LoadConstant(loadedValue, currentBlock, index, op));
                     } else {
-                        Block dominator = ControlFlowGraph.commonDominator(load.block, (Block) currentBlock);
+                        Block dominator = ControlFlowGraph.commonDominator(load.block, currentBlock);
                         loadedValue = load.variable;
                         if (dominator != load.block) {
                             load.unpin(res.getLIR());
@@ -276,7 +266,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool, LIRTypeTool, LIR
     }
 
     public ValueNode valueForOperand(Value value) {
-        for (Entry<Node, Value> entry : getNodeOperands().entries()) {
+        for (Entry<Node, Value> entry : nodeOperands.entries()) {
             if (entry.getValue().equals(value)) {
                 return (ValueNode) entry.getKey();
             }
@@ -342,8 +332,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool, LIRTypeTool, LIR
         int suxIndex = currentBlock.getSuccessors().indexOf(result);
         assert suxIndex != -1 : "Block not in successor list of current block";
 
-        assert currentBlock instanceof Block;
-        return LabelRef.forSuccessor(res.getLIR(), (Block) currentBlock, suxIndex);
+        return LabelRef.forSuccessor(res.getLIR(), currentBlock, suxIndex);
     }
 
     /**
@@ -857,7 +846,6 @@ public abstract class LIRGenerator implements LIRGeneratorTool, LIRTypeTool, LIR
     protected abstract void emitTableSwitch(int lowKey, LabelRef defaultTarget, LabelRef[] targets, Value key);
 
     public final NodeMap<Value> getNodeOperands() {
-        assert nodeOperands != null;
         return nodeOperands;
     }
 
@@ -866,7 +854,6 @@ public abstract class LIRGenerator implements LIRGeneratorTool, LIRTypeTool, LIR
     }
 
     public DebugInfoBuilder getDebugInfoBuilder() {
-        assert debugInfoBuilder != null;
         return debugInfoBuilder;
     }
 

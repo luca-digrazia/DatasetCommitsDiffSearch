@@ -30,7 +30,6 @@ import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 /**
@@ -58,9 +57,9 @@ public final class AllocaNode extends FixedWithNextNode implements LIRGenResLowe
     }
 
     @Override
-    public void generate(NodeLIRBuilderTool gen, LIRGenerationResult res) {
+    public void generate(LIRGenerator gen, LIRGenerationResult res) {
         StackSlot array = res.getFrameMap().allocateStackSlots(slots, objects, null);
-        Value result = gen.getLIRGeneratorTool().emitAddress(array);
+        Value result = gen.emitAddress(array);
         gen.setResult(this, result);
     }
 }
