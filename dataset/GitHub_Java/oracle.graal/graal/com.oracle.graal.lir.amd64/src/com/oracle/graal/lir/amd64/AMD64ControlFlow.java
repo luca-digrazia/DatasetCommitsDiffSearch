@@ -22,18 +22,18 @@
  */
 package com.oracle.graal.lir.amd64;
 
-import jdk.internal.jvmci.amd64.*;
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.code.CompilationResult.*;
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.meta.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
-import static jdk.internal.jvmci.code.ValueUtil.*;
 
+import com.oracle.graal.amd64.*;
+import com.oracle.graal.api.code.CompilationResult.JumpTable;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
 import com.oracle.graal.asm.amd64.*;
-import com.oracle.graal.asm.amd64.AMD64Address.*;
-import com.oracle.graal.asm.amd64.AMD64Assembler.*;
+import com.oracle.graal.asm.amd64.AMD64Address.Scale;
+import com.oracle.graal.asm.amd64.AMD64Assembler.ConditionFlag;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.BlockEndOp;
@@ -42,12 +42,10 @@ import com.oracle.graal.lir.asm.*;
 
 public class AMD64ControlFlow {
 
-    public static final class ReturnOp extends AMD64BlockEndOp implements BlockEndOp {
-        public static final LIRInstructionClass<ReturnOp> TYPE = LIRInstructionClass.create(ReturnOp.class);
+    public static class ReturnOp extends AMD64LIRInstruction implements BlockEndOp {
         @Use({REG, ILLEGAL}) protected Value x;
 
         public ReturnOp(Value x) {
-            super(TYPE);
             this.x = x;
         }
 
@@ -58,8 +56,7 @@ public class AMD64ControlFlow {
         }
     }
 
-    public static class BranchOp extends AMD64BlockEndOp implements StandardOp.BranchOp {
-        public static final LIRInstructionClass<BranchOp> TYPE = LIRInstructionClass.create(BranchOp.class);
+    public static class BranchOp extends AMD64LIRInstruction implements StandardOp.BranchOp {
         protected final ConditionFlag condition;
         protected final LabelRef trueDestination;
         protected final LabelRef falseDestination;
@@ -71,11 +68,6 @@ public class AMD64ControlFlow {
         }
 
         public BranchOp(ConditionFlag condition, LabelRef trueDestination, LabelRef falseDestination, double trueDestinationProbability) {
-            this(TYPE, condition, trueDestination, falseDestination, trueDestinationProbability);
-        }
-
-        protected BranchOp(LIRInstructionClass<? extends BranchOp> c, ConditionFlag condition, LabelRef trueDestination, LabelRef falseDestination, double trueDestinationProbability) {
-            super(c);
             this.condition = condition;
             this.trueDestination = trueDestination;
             this.falseDestination = falseDestination;
@@ -110,12 +102,11 @@ public class AMD64ControlFlow {
         }
     }
 
-    public static final class FloatBranchOp extends BranchOp {
-        public static final LIRInstructionClass<FloatBranchOp> TYPE = LIRInstructionClass.create(FloatBranchOp.class);
+    public static class FloatBranchOp extends BranchOp {
         protected boolean unorderedIsTrue;
 
         public FloatBranchOp(Condition condition, boolean unorderedIsTrue, LabelRef trueDestination, LabelRef falseDestination, double trueDestinationProbability) {
-            super(TYPE, floatCond(condition), trueDestination, falseDestination, trueDestinationProbability);
+            super(floatCond(condition), trueDestination, falseDestination, trueDestinationProbability);
             this.unorderedIsTrue = unorderedIsTrue;
         }
 
@@ -125,9 +116,8 @@ public class AMD64ControlFlow {
         }
     }
 
-    public static final class StrategySwitchOp extends AMD64BlockEndOp {
-        public static final LIRInstructionClass<StrategySwitchOp> TYPE = LIRInstructionClass.create(StrategySwitchOp.class);
-        @Use({CONST}) protected JavaConstant[] keyConstants;
+    public static class StrategySwitchOp extends AMD64LIRInstruction implements BlockEndOp {
+        @Use({CONST}) protected Constant[] keyConstants;
         private final LabelRef[] keyTargets;
         private LabelRef defaultTarget;
         @Alive({REG}) protected Value key;
@@ -135,7 +125,6 @@ public class AMD64ControlFlow {
         private final SwitchStrategy strategy;
 
         public StrategySwitchOp(SwitchStrategy strategy, LabelRef[] keyTargets, LabelRef defaultTarget, Value key, Value scratch) {
-            super(TYPE);
             this.strategy = strategy;
             this.keyConstants = strategy.keyConstants;
             this.keyTargets = keyTargets;
@@ -172,7 +161,7 @@ public class AMD64ControlFlow {
                             masm.cmpptr(keyRegister, asObjectReg(scratch));
                             break;
                         default:
-                            throw new JVMCIError("switch only supported for int, long and object");
+                            throw new GraalInternalError("switch only supported for int, long and object");
                     }
                     masm.jcc(intCond(condition), target);
                 }
@@ -181,8 +170,7 @@ public class AMD64ControlFlow {
         }
     }
 
-    public static final class TableSwitchOp extends AMD64BlockEndOp {
-        public static final LIRInstructionClass<TableSwitchOp> TYPE = LIRInstructionClass.create(TableSwitchOp.class);
+    public static class TableSwitchOp extends AMD64LIRInstruction implements BlockEndOp {
         private final int lowKey;
         private final LabelRef defaultTarget;
         private final LabelRef[] targets;
@@ -191,7 +179,6 @@ public class AMD64ControlFlow {
         @Temp protected Value scratch;
 
         public TableSwitchOp(final int lowKey, final LabelRef defaultTarget, final LabelRef[] targets, Value index, Variable scratch, Variable idxScratch) {
-            super(TYPE);
             this.lowKey = lowKey;
             this.defaultTarget = defaultTarget;
             this.targets = targets;
@@ -267,15 +254,13 @@ public class AMD64ControlFlow {
     }
 
     @Opcode("CMOVE")
-    public static final class CondMoveOp extends AMD64LIRInstruction {
-        public static final LIRInstructionClass<CondMoveOp> TYPE = LIRInstructionClass.create(CondMoveOp.class);
+    public static class CondMoveOp extends AMD64LIRInstruction {
         @Def({REG, HINT}) protected Value result;
         @Alive({REG}) protected Value trueValue;
         @Use({REG, STACK, CONST}) protected Value falseValue;
         private final ConditionFlag condition;
 
         public CondMoveOp(Variable result, Condition condition, AllocatableValue trueValue, Value falseValue) {
-            super(TYPE);
             this.result = result;
             this.condition = intCond(condition);
             this.trueValue = trueValue;
@@ -289,8 +274,7 @@ public class AMD64ControlFlow {
     }
 
     @Opcode("CMOVE")
-    public static final class FloatCondMoveOp extends AMD64LIRInstruction {
-        public static final LIRInstructionClass<FloatCondMoveOp> TYPE = LIRInstructionClass.create(FloatCondMoveOp.class);
+    public static class FloatCondMoveOp extends AMD64LIRInstruction {
         @Def({REG}) protected Value result;
         @Alive({REG}) protected Value trueValue;
         @Alive({REG}) protected Value falseValue;
@@ -298,7 +282,6 @@ public class AMD64ControlFlow {
         private final boolean unorderedIsTrue;
 
         public FloatCondMoveOp(Variable result, Condition condition, boolean unorderedIsTrue, Variable trueValue, Variable falseValue) {
-            super(TYPE);
             this.result = result;
             this.condition = floatCond(condition);
             this.unorderedIsTrue = unorderedIsTrue;
@@ -354,7 +337,7 @@ public class AMD64ControlFlow {
                     masm.cmovq(cond, asRegister(result), asRegister(other));
                     break;
                 default:
-                    throw JVMCIError.shouldNotReachHere();
+                    throw GraalInternalError.shouldNotReachHere();
             }
         } else {
             AMD64Address addr = (AMD64Address) crb.asAddress(other);
@@ -370,7 +353,7 @@ public class AMD64ControlFlow {
                     masm.cmovq(cond, asRegister(result), addr);
                     break;
                 default:
-                    throw JVMCIError.shouldNotReachHere();
+                    throw GraalInternalError.shouldNotReachHere();
             }
         }
     }
@@ -398,7 +381,7 @@ public class AMD64ControlFlow {
             case BT:
                 return ConditionFlag.Below;
             default:
-                throw JVMCIError.shouldNotReachHere();
+                throw GraalInternalError.shouldNotReachHere();
         }
     }
 
@@ -417,7 +400,7 @@ public class AMD64ControlFlow {
             case GT:
                 return ConditionFlag.Above;
             default:
-                throw JVMCIError.shouldNotReachHere();
+                throw GraalInternalError.shouldNotReachHere();
         }
     }
 
@@ -436,7 +419,7 @@ public class AMD64ControlFlow {
             case NoOverflow:
                 return true;
             default:
-                throw JVMCIError.shouldNotReachHere();
+                throw GraalInternalError.shouldNotReachHere();
         }
     }
 }
