@@ -976,7 +976,7 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
 
         private List<CodeExecutableElement> createImplicitChildrenAccessors() {
             NodeData node = getModel().getNode();
-            // Map<NodeChildData, Set<TypeData>> expectTypes = new HashMap<>();
+// Map<NodeChildData, Set<TypeData>> expectTypes = new HashMap<>();
             @SuppressWarnings("unchecked")
             List<Set<TypeData>> expectTypes = Arrays.<Set<TypeData>> asList(new Set[node.getGenericSpecialization().getParameters().size()]);
 
@@ -1315,9 +1315,8 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
             TypeMirror genericReturnType = node.getGenericSpecialization().getReturnType().getType();
             CodeExecutableElement method = new CodeExecutableElement(modifiers(PROTECTED), genericReturnType, EXECUTE_GENERIC_NAME);
 
-            if (!node.getGenericSpecialization().hasFrame(getContext())) {
-                method.getAnnotationMirrors().add(new CodeAnnotationMirror(getContext().getTruffleTypes().getSlowPath()));
-            }
+            method.getAnnotationMirrors().add(new CodeAnnotationMirror(getContext().getTruffleTypes().getSlowPath()));
+
             addInternalValueParameters(method, node.getGenericSpecialization(), node.needsFrame(), false);
             final CodeTreeBuilder builder = method.createBuilder();
 
@@ -1391,7 +1390,7 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
                 return true;
             }
             SpecializationGroup previous = group.getPreviousGroup();
-            if (previous == null || previous.findElseConnectableGuards(checkMinimumState).isEmpty()) {
+            if (previous == null || previous.getElseConnectableGuards().isEmpty()) {
                 return true;
             }
 
@@ -1417,11 +1416,30 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
             String guardsAnd = "";
             String guardsCastAnd = "";
 
+            List<GuardData> elseGuards = group.getElseConnectableGuards();
+
             boolean minimumState = checkMinimumState;
             if (minimumState) {
-                int groupMaxIndex = group.getUncheckedSpecializationIndex();
+                int groupMaxIndex = group.getMaxSpecializationIndex();
 
-                if (groupMaxIndex > -1) {
+                int genericIndex = node.getSpecializations().indexOf(node.getGenericSpecialization());
+                if (groupMaxIndex >= genericIndex) {
+                    // no minimum state check for an generic index
+                    minimumState = false;
+                }
+
+                if (minimumState) {
+                    // no minimum state check if alread checked by parent group
+                    int parentMaxIndex = -1;
+                    if (group.getParent() != null) {
+                        parentMaxIndex = group.getParent().getMaxSpecializationIndex();
+                    }
+                    if (groupMaxIndex == parentMaxIndex) {
+                        minimumState = false;
+                    }
+                }
+
+                if (minimumState) {
                     guardsBuilder.string(guardsAnd);
                     guardsBuilder.string("minimumState < " + groupMaxIndex);
                     guardsAnd = " && ";
@@ -1470,7 +1488,6 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
                     castBuilder.tree(cast);
                 }
             }
-            List<GuardData> elseGuards = group.findElseConnectableGuards(checkMinimumState);
 
             for (GuardData guard : group.getGuards()) {
                 if (elseGuards.contains(guard)) {
@@ -2134,7 +2151,7 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
 
             CodeTree expression;
             if (sourceType == null) {
-                ExecutableTypeData targetExecutable = resolveExecutableType(child, castSourceType);
+                ExecutableTypeData targetExecutable = resolveExecutableType(child, targetType);
                 expression = createExecuteChildExpression(parent, child, targetParameter, targetExecutable, unexpectedParameter);
                 sourceType = targetExecutable.getType();
             } else {
@@ -2688,8 +2705,8 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
             final SpecializationData polymorphic = node.getGenericPolymorphicSpecialization();
 
             ExecutableElement executeCached = nodeGen.getMethod(executeCachedName(polymorphic));
-            // ExecutableTypeData execType = new ExecutableTypeData(polymorphic, executeCached,
-            // node.getTypeSystem(), polymorphic.getReturnType().getTypeSystemType());
+// ExecutableTypeData execType = new ExecutableTypeData(polymorphic, executeCached,
+// node.getTypeSystem(), polymorphic.getReturnType().getTypeSystemType());
 
             ExecutableTypeMethodParser parser = new ExecutableTypeMethodParser(getContext(), node);
             ExecutableTypeData execType = parser.parse(Arrays.asList(executeCached)).get(0);
