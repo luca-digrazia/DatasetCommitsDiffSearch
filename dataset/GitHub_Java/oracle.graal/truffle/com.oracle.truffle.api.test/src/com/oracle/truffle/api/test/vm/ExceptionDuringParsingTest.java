@@ -25,12 +25,9 @@ package com.oracle.truffle.api.test.vm;
 import com.oracle.truffle.api.impl.Accessor;
 import com.oracle.truffle.api.source.Source;
 import static com.oracle.truffle.api.test.vm.ImplicitExplicitExportTest.L1;
-import com.oracle.truffle.api.vm.TruffleVM;
+import com.oracle.truffle.api.vm.PolyglotEngine;
 import java.io.IOException;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.*;
 import org.junit.Test;
 
 public class ExceptionDuringParsingTest {
@@ -38,37 +35,15 @@ public class ExceptionDuringParsingTest {
 
     @Test
     public void canGetAccessToOwnLanguageInstance() throws Exception {
-        TruffleVM vm = TruffleVM.newVM().build();
-        TruffleVM.Language language = vm.getLanguages().get(L1);
+        PolyglotEngine vm = PolyglotEngine.buildNew().build();
+        PolyglotEngine.Language language = vm.getLanguages().get(L1);
         assertNotNull("L1 language is defined", language);
 
-        final Source src = Source.fromText("parse=No, no, no!", "Fail on parsing").withMimeType(L1);
         try {
-            vm.eval(src);
+            vm.eval(Source.fromText("parse=No, no, no!", "Fail on parsing").withMimeType(L1));
             fail("Exception thrown");
         } catch (IOException ex) {
             assertEquals(ex.getMessage(), "No, no, no!");
-        }
-
-        vm.dispose();
-
-        try {
-            vm.eval(src);
-            fail("Should throw an exception");
-        } catch (IllegalStateException ex) {
-            assertTrue(ex.getMessage(), ex.getMessage().contains("disposed"));
-        }
-        try {
-            vm.findGlobalSymbol("nothing");
-            fail("Should throw an exception");
-        } catch (IllegalStateException ex) {
-            assertTrue(ex.getMessage(), ex.getMessage().contains("disposed"));
-        }
-        try {
-            vm.dispose();
-            fail("Should throw an exception");
-        } catch (IllegalStateException ex) {
-            assertTrue(ex.getMessage(), ex.getMessage().contains("disposed"));
         }
     }
 }

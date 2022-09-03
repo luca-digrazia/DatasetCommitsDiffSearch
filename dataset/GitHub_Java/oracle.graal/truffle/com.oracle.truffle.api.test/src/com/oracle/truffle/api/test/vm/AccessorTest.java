@@ -22,13 +22,16 @@
  */
 package com.oracle.truffle.api.test.vm;
 
+import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.impl.Accessor;
+import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.test.vm.ImplicitExplicitExportTest.ExportImportLanguage1;
 import static com.oracle.truffle.api.test.vm.ImplicitExplicitExportTest.L1;
-import com.oracle.truffle.api.vm.TruffleVM;
+import com.oracle.truffle.api.vm.PolyglotEngine;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.util.concurrent.Executors;
 import static org.junit.Assert.*;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -45,22 +48,28 @@ public class AccessorTest {
 
     @Test
     public void canGetAccessToOwnLanguageInstance() throws Exception {
-        TruffleVM vm = TruffleVM.newVM().build();
-        TruffleVM.Language language = vm.getLanguages().get(L1);
+        PolyglotEngine vm = PolyglotEngine.buildNew().executor(Executors.newSingleThreadExecutor()).build();
+        PolyglotEngine.Language language = vm.getLanguages().get(L1);
         assertNotNull("L1 language is defined", language);
 
-        Object ret = vm.eval(L1, "return nothing");
+        Source s = Source.fromText("return nothing", "nothing").withMimeType(L1);
+        Object ret = vm.eval(s).get();
         assertNull("nothing is returned", ret);
 
         Object afterInitialization = findLanguageByClass(vm);
         assertNotNull("Language found", afterInitialization);
-        assertTrue("Right instance", afterInitialization instanceof ExportImportLanguage1);
+        assertTrue("Right instance: " + afterInitialization, afterInitialization instanceof ExportImportLanguage1);
     }
 
-    Object findLanguageByClass(TruffleVM vm) throws IllegalAccessException, NoSuchMethodException, SecurityException, IllegalArgumentException, InvocationTargetException {
-        Method find = Accessor.class.getDeclaredMethod("findLanguage", TruffleVM.class, Class.class);
+    Object findLanguageByClass(PolyglotEngine vm) throws IllegalAccessException, NoSuchMethodException, SecurityException, IllegalArgumentException, InvocationTargetException, NoSuchFieldException {
+        Method find = Accessor.class.getDeclaredMethod("findLanguage", Object.class, Class.class);
         find.setAccessible(true);
-        Object language1 = find.invoke(API, vm, ExportImportLanguage1.class);
-        return language1;
+        TruffleLanguage.Env env = (TruffleLanguage.Env) find.invoke(API, vm, ExportImportLanguage1.class);
+        Field f = env.getClass().getDeclaredField("langCtx");
+        f.setAccessible(true);
+        Object langCtx = f.get(env);
+        f = langCtx.getClass().getDeclaredField("lang");
+        f.setAccessible(true);
+        return f.get(langCtx);
     }
 }

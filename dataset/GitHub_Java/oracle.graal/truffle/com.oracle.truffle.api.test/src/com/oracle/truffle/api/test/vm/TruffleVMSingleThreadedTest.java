@@ -31,11 +31,11 @@ import org.junit.*;
 import com.oracle.truffle.api.vm.*;
 
 public class TruffleVMSingleThreadedTest {
-    TruffleVM tvm;
+    PolyglotEngine tvm;
 
     @Before
     public void initInDifferentThread() throws InterruptedException {
-        final TruffleVM.Builder b = TruffleVM.newVM();
+        final PolyglotEngine.Builder b = PolyglotEngine.buildNew();
         Thread t = new Thread("Initializer") {
             @Override
             public void run() {

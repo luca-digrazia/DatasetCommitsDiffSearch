@@ -24,66 +24,39 @@
  */
 package com.oracle.truffle.api.vm;
 
-import java.io.Closeable;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InterruptedIOException;
-import java.io.OutputStream;
-import java.io.Reader;
-import java.io.Writer;
-import java.lang.reflect.InvocationHandler;
-import java.lang.reflect.Method;
-import java.net.URI;
-import java.net.URL;
-import java.net.URLConnection;
-import java.nio.file.Files;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executor;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-
-import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.TruffleLanguage.Registration;
-import com.oracle.truffle.api.debug.DebugSupportProvider;
-import com.oracle.truffle.api.debug.Debugger;
-import com.oracle.truffle.api.debug.ExecutionEvent;
-import com.oracle.truffle.api.debug.SuspendedEvent;
-import com.oracle.truffle.api.impl.Accessor;
-import com.oracle.truffle.api.instrument.Probe;
-import com.oracle.truffle.api.instrument.ToolSupportProvider;
+import com.oracle.truffle.api.debug.*;
+import com.oracle.truffle.api.impl.*;
+import com.oracle.truffle.api.instrument.*;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.java.JavaInterop;
-import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.api.source.*;
+import java.io.*;
+import java.net.*;
+import java.nio.file.*;
+import java.util.*;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executor;
+import java.util.logging.*;
 
 /**
  * Gate way into the world of {@link TruffleLanguage Truffle languages}. {@link #buildNew()
  * Instantiate} your own portal into the isolated, multi language system with all the registered
- * languages ready for your use. A {@link PolyglotEngine} runs inside of a <em>JVM</em>, there can
- * however be multiple instances (some would say tenants) of {@link PolyglotEngine} running next to
- * each other in a single <em>JVM</em> with a complete mutual isolation. There is 1:N mapping
- * between <em>JVM</em> and {@link PolyglotEngine}.
+ * languages ready for your use. A {@link PolyglotEngine} runs inside of a <em>JVM</em>, there can however
+ * be multiple instances (some would say tenants) of {@link PolyglotEngine} running next to each other in a
+ * single <em>JVM</em> with a complete mutual isolation. There is 1:N mapping between <em>JVM</em>
+ * and {@link PolyglotEngine}.
  * <p>
  * It would not be correct to think of a {@link PolyglotEngine} as a runtime for a single
  * {@link TruffleLanguage Truffle language} (Ruby, Python, R, C, JavaScript, etc.) either.
- * {@link PolyglotEngine} can host as many of Truffle languages as {@link Registration registered on
- * a class path} of your <em>JVM</em> application. {@link PolyglotEngine} orchestrates these
- * languages, manages exchange of objects and calls among them. While it may happen that there is
- * just one activated language inside of a {@link PolyglotEngine}, the greatest strength of
- * {@link PolyglotEngine} is in inter-operability between all Truffle languages. There is 1:N
- * mapping between {@link PolyglotEngine} and {@link TruffleLanguage Truffle language
- * implementations}.
+ * {@link PolyglotEngine} can host as many of Truffle languages as {@link Registration registered on a
+ * class path} of your <em>JVM</em> application. {@link PolyglotEngine} orchestrates these languages,
+ * manages exchange of objects and calls among them. While it may happen that there is just one
+ * activated language inside of a {@link PolyglotEngine}, the greatest strength of {@link PolyglotEngine} is in
+ * inter-operability between all Truffle languages. There is 1:N mapping between {@link PolyglotEngine} and
+ * {@link TruffleLanguage Truffle language implementations}.
  * <p>
  * Use {@link #buildNew()} to create new isolated portal ready for execution of various languages.
  * All the languages in a single portal see each other exported global symbols and can cooperate.
@@ -96,10 +69,10 @@ import com.oracle.truffle.api.source.Source;
  * is about to be processed, its appropriate engine (if found), is initialized. Once an engine gets
  * initialized, it remains so, until the virtual machine isn't garbage collected.
  * <p>
- * The engine is single-threaded and tries to enforce that. It records the thread it has been
- * {@link Builder#build() created} by and checks that all subsequent calls are coming from the same
- * thread. There is 1:1 mapping between {@link PolyglotEngine} and a thread that can tell it what to
- * do.
+ * The <code>TruffleVM</code> is single-threaded and tries to enforce that. It records the thread it
+ * has been {@link Builder#build() created} by and checks that all subsequent calls are coming from
+ * the same thread. There is 1:1 mapping between {@link PolyglotEngine} and a thread that can tell it what
+ * to do.
  */
 @SuppressWarnings("rawtypes")
 public class PolyglotEngine {
@@ -108,13 +81,12 @@ public class PolyglotEngine {
     private final Thread initThread;
     private final Executor executor;
     private final Map<String, Language> langs;
-    private final InputStream in;
-    private final OutputStream err;
-    private final OutputStream out;
+    private final Reader in;
+    private final Writer err;
+    private final Writer out;
     private final EventConsumer<?>[] handlers;
     private final Map<String, Object> globals;
     private Debugger debugger;
-    private boolean disposed;
 
     /**
      * Private & temporary only constructor.
@@ -133,7 +105,7 @@ public class PolyglotEngine {
     /**
      * Real constructor used from the builder.
      */
-    PolyglotEngine(Executor executor, Map<String, Object> globals, OutputStream out, OutputStream err, InputStream in, EventConsumer<?>[] handlers) {
+    PolyglotEngine(Executor executor, Map<String, Object> globals, Writer out, Writer err, Reader in, EventConsumer<?>[] handlers) {
         this.executor = executor;
         this.out = out;
         this.err = err;
@@ -142,13 +114,8 @@ public class PolyglotEngine {
         this.initThread = Thread.currentThread();
         this.globals = new HashMap<>(globals);
         Map<String, Language> map = new HashMap<>();
-        /* We want to create a language instance but per LanguageCache and not per mime type. */
-        Set<LanguageCache> uniqueCaches = new HashSet<>(LanguageCache.languages().values());
-        for (LanguageCache languageCache : uniqueCaches) {
-            Language newLanguage = new Language(languageCache);
-            for (String mimeType : newLanguage.getMimeTypes()) {
-                map.put(mimeType, newLanguage);
-            }
+        for (Map.Entry<String, LanguageCache> en : LanguageCache.languages().entrySet()) {
+            map.put(en.getKey(), createLanguage(en));
         }
         this.langs = map;
     }
@@ -159,9 +126,9 @@ public class PolyglotEngine {
      *
      * <pre>
      * {@link PolyglotEngine} vm = {@link PolyglotEngine}.{@link PolyglotEngine#buildNew() buildNew()}
-     *     .{@link Builder#setOut(java.io.OutputStream) setOut}({@link OutputStream yourOutput})
-     *     .{@link Builder#setErr(java.io.OutputStream) setrr}({@link OutputStream yourOutput})
-     *     .{@link Builder#setIn(java.io.InputStream) setIn}({@link InputStream yourInput})
+     *     .{@link Builder#stdOut(java.io.Writer) stdOut}({@link Writer yourWriter})
+     *     .{@link Builder#stdErr(java.io.Writer) stdErr}({@link Writer yourWriter})
+     *     .{@link Builder#stdIn(java.io.Reader) stdIn}({@link Reader yourReader})
      *     .{@link Builder#build() build()};
      * </pre>
      *
@@ -174,27 +141,27 @@ public class PolyglotEngine {
     public static PolyglotEngine.Builder buildNew() {
         // making Builder non-static inner class is a
         // nasty trick to avoid the Builder class to appear
-        // in Javadoc next to PolyglotEngine class
+        // in Javadoc next to TruffleVM class
         PolyglotEngine vm = new PolyglotEngine();
         return vm.new Builder();
     }
 
     /**
-     * Builder for a new {@link PolyglotEngine}. Call various configuration methods in a chain and
-     * at the end create new {@link PolyglotEngine virtual machine}:
+     * Builder for a new {@link PolyglotEngine}. Call various configuration methods in a chain and at the
+     * end create new {@link PolyglotEngine virtual machine}:
      *
      * <pre>
      * {@link PolyglotEngine} vm = {@link PolyglotEngine}.{@link PolyglotEngine#buildNew() buildNew()}
-     *     .{@link Builder#setOut(java.io.OutputStream) setOut}({@link OutputStream yourOutput})
-     *     .{@link Builder#setErr(java.io.OutputStream) setrr}({@link OutputStream yourOutput})
-     *     .{@link Builder#setIn(java.io.InputStream) setIn}({@link InputStream yourInput})
+     *     .{@link Builder#stdOut(java.io.Writer) stdOut}({@link Writer yourWriter})
+     *     .{@link Builder#stdErr(java.io.Writer) stdErr}({@link Writer yourWriter})
+     *     .{@link Builder#stdIn(java.io.Reader) stdIn}({@link Reader yourReader})
      *     .{@link Builder#build() build()};
      * </pre>
      */
     public class Builder {
-        private OutputStream out;
-        private OutputStream err;
-        private InputStream in;
+        private Writer out;
+        private Writer err;
+        private Reader in;
         private final List<EventConsumer<?>> handlers = new ArrayList<>();
         private final Map<String, Object> globals = new HashMap<>();
         private Executor executor;
@@ -206,62 +173,35 @@ public class PolyglotEngine {
          * Changes the default output for languages running in <em>to be created</em>
          * {@link PolyglotEngine virtual machine}. The default is to use {@link System#out}.
          *
-         * @param os the stream to use as output
+         * @param w the writer to use as output
          * @return instance of this builder
          */
-        public Builder setOut(OutputStream os) {
-            out = os;
-            return this;
-        }
-
-        /**
-         * @deprecated does nothing
-         */
-        @Deprecated
-        @SuppressWarnings("unused")
         public Builder stdOut(Writer w) {
+            out = w;
             return this;
         }
 
         /**
-         * Changes the error output for languages running in <em>to be created</em>
-         * {@link PolyglotEngine virtual machine}. The default is to use {@link System#err}.
+         * Changes the error output for languages running in <em>to be created</em> {@link PolyglotEngine
+         * virtual machine}. The default is to use {@link System#err}.
          *
-         * @param os the stream to use as output
+         * @param w the writer to use as output
          * @return instance of this builder
          */
-        public Builder setErr(OutputStream os) {
-            err = os;
-            return this;
-        }
-
-        /**
-         * @deprecated does nothing
-         */
-        @Deprecated
-        @SuppressWarnings("unused")
         public Builder stdErr(Writer w) {
+            err = w;
             return this;
         }
 
         /**
-         * Changes the default input for languages running in <em>to be created</em>
-         * {@link PolyglotEngine virtual machine}. The default is to use {@link System#in}.
+         * Changes the default input for languages running in <em>to be created</em> {@link PolyglotEngine
+         * virtual machine}. The default is to use {@link System#out}.
          *
-         * @param is the stream to use as input
+         * @param r the reader to use as input
          * @return instance of this builder
          */
-        public Builder setIn(InputStream is) {
-            in = is;
-            return this;
-        }
-
-        /**
-         * @deprecated does nothing
-         */
-        @Deprecated
-        @SuppressWarnings("unused")
         public Builder stdIn(Reader r) {
+            in = r;
             return this;
         }
 
@@ -279,12 +219,11 @@ public class PolyglotEngine {
         }
 
         /**
-         * Adds global named symbol into the configuration of to-be-built {@link PolyglotEngine}.
-         * This symbol will be accessible to all languages via
-         * {@link Env#importSymbol(java.lang.String)} and will take precedence over
-         * {@link TruffleLanguage#findExportedSymbol symbols exported by languages itself}. Repeated
-         * use of <code>globalSymbol</code> is possible; later definition of the same name overrides
-         * the previous one.
+         * Adds global named symbol into the configuration of to-be-built {@link PolyglotEngine}. This
+         * symbol will be accessible to all languages via {@link Env#importSymbol(java.lang.String)}
+         * and will take precedence over {@link TruffleLanguage#findExportedSymbol symbols exported
+         * by languages itself}. Repeated use of <code>globalSymbol</code> is possible; later
+         * definition of the same name overrides the previous one.
          *
          * @param name name of the symbol to register
          * @param obj value of the object - expected to be primitive wrapper, {@link String} or
@@ -319,21 +258,21 @@ public class PolyglotEngine {
         }
 
         /**
-         * Creates the {@link PolyglotEngine Truffle virtual machine}. The configuration is taken
-         * from values passed into configuration methods in this class.
+         * Creates the {@link PolyglotEngine Truffle virtual machine}. The configuration is taken from
+         * values passed into configuration methods in this class.
          *
          * @return new, isolated virtual machine with pre-registered languages
          */
         @SuppressWarnings("deprecation")
         public PolyglotEngine build() {
             if (out == null) {
-                out = System.out;
+                out = new OutputStreamWriter(System.out);
             }
             if (err == null) {
-                err = System.err;
+                err = new OutputStreamWriter(System.err);
             }
             if (in == null) {
-                in = System.in;
+                in = new InputStreamReader(System.in);
             }
             Executor nonNullExecutor = executor != null ? executor : new Executor() {
                 @Override
@@ -455,35 +394,6 @@ public class PolyglotEngine {
         return eval(l, source);
     }
 
-    /**
-     * Dispose instance of this engine. A user can explicitly
-     * {@link TruffleLanguage#disposeContext(java.lang.Object) dispose all resources} allocated by
-     * the languages active in this engine, when it is known the system is not going to be used in
-     * the future.
-     * <p>
-     * Calling any other method of this class after the dispose has been done yields an
-     * {@link IllegalStateException}.
-     */
-    public void dispose() {
-        checkThread();
-        disposed = true;
-        executor.execute(new Runnable() {
-            @Override
-            public void run() {
-                for (Language language : getLanguages().values()) {
-                    TruffleLanguage<?> impl = language.getImpl(false);
-                    if (impl != null) {
-                        try {
-                            SPI.dispose(impl, language.getEnv(true));
-                        } catch (Exception | Error ex) {
-                            LOG.log(Level.SEVERE, "Error disposing " + impl, ex);
-                        }
-                    }
-                }
-            }
-        });
-    }
-
     private Value eval(final Language l, final Source s) throws IOException {
         final Debugger[] fillIn = {debugger};
         final Object[] result = {null, null};
@@ -502,10 +412,10 @@ public class PolyglotEngine {
     Value createValue(TruffleLanguage lang, Object[] result, CountDownLatch ready) {
         return new Value(lang, result, ready);
     }
-
     Language createLanguage(Map.Entry<String, LanguageCache> en) {
         return new Language(en.getValue());
     }
+
 
     @SuppressWarnings("try")
     private void evalImpl(Debugger[] fillIn, TruffleLanguage<?>[] fillLang, Source s, Object[] result, Language l, CountDownLatch ready) {
@@ -596,10 +506,7 @@ public class PolyglotEngine {
 
     private void checkThread() {
         if (initThread != Thread.currentThread()) {
-            throw new IllegalStateException("PolyglotEngine created on " + initThread.getName() + " but used on " + Thread.currentThread().getName());
-        }
-        if (disposed) {
-            throw new IllegalStateException("Engine has already been disposed");
+            throw new IllegalStateException("TruffleVM created on " + initThread.getName() + " but used on " + Thread.currentThread().getName());
         }
     }
 
@@ -643,8 +550,7 @@ public class PolyglotEngine {
 
     /**
      * A future value wrapper. A user level wrapper around values returned by evaluation of various
-     * {@link PolyglotEngine} functions like
-     * {@link PolyglotEngine#findGlobalSymbol(java.lang.String)} and
+     * {@link PolyglotEngine} functions like {@link PolyglotEngine#findGlobalSymbol(java.lang.String)} and
      * {@link PolyglotEngine#eval(com.oracle.truffle.api.source.Source)} or value returned by
      * {@link #invoke(java.lang.Object, java.lang.Object...) sbbsequent of execution}. In case the
      * {@link PolyglotEngine} has been initialized for
@@ -684,7 +590,7 @@ public class PolyglotEngine {
          * delegates to
          * {@link JavaInterop#asJavaObject(java.lang.Class, com.oracle.truffle.api.interop.TruffleObject)}
          * just handles primitive types as well.
-         *
+         * 
          * @param <T> the type of the view one wants to obtain
          * @param representation the class of the view interface (it has to be an interface)
          * @return instance of the view wrapping the object of this symbol
@@ -696,8 +602,7 @@ public class PolyglotEngine {
             if (representation.isInstance(obj)) {
                 return representation.cast(obj);
             }
-            T wrapper = JavaInterop.asJavaObject(representation, (TruffleObject) obj);
-            return JavaWrapper.create(representation, wrapper, this);
+            return JavaInterop.asJavaObject(representation, (TruffleObject) obj);
         }
 
         /**
@@ -729,44 +634,16 @@ public class PolyglotEngine {
         }
 
         @SuppressWarnings("try")
-        final Value invokeProxy(final InvocationHandler chain, final Object wrapper, final Method method, final Object[] args) throws IOException {
-            final Debugger[] fillIn = {debugger};
-            final CountDownLatch done = new CountDownLatch(1);
-            final Object[] res = {null, null};
-            executor.execute(new Runnable() {
-                @Override
-                public void run() {
-                    try (final Closeable c = SPI.executionStart(PolyglotEngine.this, fillIn, null)) {
-                        if (debugger == null) {
-                            debugger = fillIn[0];
-                        }
-                        res[0] = chain.invoke(wrapper, method, args);
-                    } catch (IOException ex) {
-                        res[1] = ex;
-                    } catch (Throwable ex) {
-                        res[1] = ex;
-                    } finally {
-                        done.countDown();
-                    }
-                }
-            });
-            exceptionCheck(res);
-            return new Value(language, res, done);
-        }
-
-        @SuppressWarnings("try")
         private void invokeImpl(Debugger[] fillIn, Object thiz, Object[] args, Object[] res, CountDownLatch done) {
             try (final Closeable c = SPI.executionStart(PolyglotEngine.this, fillIn, null)) {
                 if (debugger == null) {
                     debugger = fillIn[0];
                 }
                 List<Object> arr = new ArrayList<>();
-                if (thiz == null) {
-                    if (language != null) {
-                        Object global = SPI.languageGlobal(SPI.findLanguage(PolyglotEngine.this, language.getClass()));
-                        if (global != null) {
-                            arr.add(global);
-                        }
+                if (thiz == null && language != null) {
+                    Object global = SPI.languageGlobal(SPI.findLanguage(PolyglotEngine.this, language.getClass()));
+                    if (global != null) {
+                        arr.add(global);
                     }
                 } else {
                     arr.add(thiz);
@@ -803,13 +680,12 @@ public class PolyglotEngine {
     }
 
     /**
-     * Description of a language registered in {@link PolyglotEngine Truffle virtual machine}.
-     * Languages are registered by {@link Registration} annotation which stores necessary
-     * information into a descriptor inside of the language's JAR file. When a new
-     * {@link PolyglotEngine} is created, it reads all available descriptors and creates
-     * {@link Language} objects to represent them. One can obtain a {@link #getName() name} or list
-     * of supported {@link #getMimeTypes() MIME types} for each language. The actual language
-     * implementation is not initialized until
+     * Description of a language registered in {@link PolyglotEngine Truffle virtual machine}. Languages
+     * are registered by {@link Registration} annotation which stores necessary information into a
+     * descriptor inside of the language's JAR file. When a new {@link PolyglotEngine} is created, it reads
+     * all available descriptors and creates {@link Language} objects to represent them. One can
+     * obtain a {@link #getName() name} or list of supported {@link #getMimeTypes() MIME types} for
+     * each language. The actual language implementation is not initialized until
      * {@link PolyglotEngine#eval(java.lang.String, java.lang.String) a code is evaluated} in it.
      */
     public class Language {
@@ -940,7 +816,7 @@ public class PolyglotEngine {
         }
 
         @Override
-        protected Env attachEnv(Object obj, TruffleLanguage<?> language, OutputStream stdOut, OutputStream stdErr, InputStream stdIn) {
+        public Env attachEnv(Object obj, TruffleLanguage<?> language, Writer stdOut, Writer stdErr, Reader stdIn) {
             PolyglotEngine vm = (PolyglotEngine) obj;
             return super.attachEnv(vm, language, stdOut, stdErr, stdIn);
         }
@@ -991,11 +867,6 @@ public class PolyglotEngine {
         protected void dispatchEvent(Object obj, Object event) {
             PolyglotEngine vm = (PolyglotEngine) obj;
             vm.dispatch(event);
-        }
-
-        @Override
-        protected void dispose(TruffleLanguage<?> impl, TruffleLanguage.Env env) {
-            super.dispose(impl, env);
         }
     } // end of SPIAccessor
 }

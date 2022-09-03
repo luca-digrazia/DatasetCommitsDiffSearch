@@ -40,42 +40,28 @@
  */
 package com.oracle.truffle.sl.test.instrument;
 
-import com.oracle.truffle.api.instrument.ASTProber;
-import com.oracle.truffle.api.instrument.Instrument;
-import com.oracle.truffle.api.instrument.Probe;
-import com.oracle.truffle.api.instrument.StandardSyntaxTag;
-import com.oracle.truffle.api.instrument.impl.DefaultSimpleInstrumentListener;
+import java.io.*;
+import java.nio.charset.*;
+import java.nio.file.*;
+import java.nio.file.attribute.*;
+import java.util.*;
+
+import org.junit.*;
+import org.junit.internal.*;
+import org.junit.runner.*;
+import org.junit.runner.manipulation.*;
+import org.junit.runner.notification.*;
+import org.junit.runners.*;
+import org.junit.runners.model.*;
+
+import com.oracle.truffle.api.instrument.*;
+import com.oracle.truffle.api.instrument.impl.*;
 import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.api.vm.TruffleVM;
-import com.oracle.truffle.sl.nodes.instrument.SLStandardASTProber;
-import com.oracle.truffle.sl.nodes.local.SLWriteLocalVariableNode;
-import com.oracle.truffle.sl.test.SLTestRunner;
+import com.oracle.truffle.api.vm.*;
+import com.oracle.truffle.sl.nodes.instrument.*;
+import com.oracle.truffle.sl.nodes.local.*;
+import com.oracle.truffle.sl.test.*;
 import com.oracle.truffle.sl.test.instrument.SLInstrumentTestRunner.InstrumentTestCase;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.PrintWriter;
-import java.nio.charset.Charset;
-import java.nio.file.FileSystems;
-import java.nio.file.FileVisitResult;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.attribute.BasicFileAttributes;
-import java.util.ArrayList;
-import java.util.List;
-import org.junit.Assert;
-import org.junit.internal.TextListener;
-import org.junit.runner.Description;
-import org.junit.runner.JUnitCore;
-import org.junit.runner.Result;
-import org.junit.runner.manipulation.Filter;
-import org.junit.runner.manipulation.NoTestsRemainException;
-import org.junit.runner.notification.Failure;
-import org.junit.runner.notification.RunNotifier;
-import org.junit.runners.ParentRunner;
-import org.junit.runners.model.InitializationError;
 
 /**
  * This class builds and executes the tests for instrumenting SL. Although much of this class is
@@ -234,31 +220,31 @@ public final class SLInstrumentTestRunner extends ParentRunner<InstrumentTestCas
         notifier.fireTestStarted(testCase.name);
 
         ByteArrayOutputStream out = new ByteArrayOutputStream();
+        PrintWriter printer = new PrintWriter(out);
         final ASTProber prober = new SLStandardASTProber();
         Probe.registerASTProber(prober);
         try {
             // We use the name of the file to determine what visitor to attach to it.
             if (testCase.baseName.endsWith(ASSIGNMENT_VALUE_SUFFIX)) {
                 // Set up the execution context for Simple and register our two listeners
-                TruffleVM vm = TruffleVM.newVM().setIn(new ByteArrayInputStream(testCase.testInput.getBytes("UTF-8"))).setOut(out).build();
+                PolyglotEngine vm = PolyglotEngine.buildNew().stdIn(new BufferedReader(new StringReader(testCase.testInput))).stdOut(printer).build();
 
                 final String src = readAllLines(testCase.path);
                 vm.eval(Source.fromText(src, testCase.path.toString()).withMimeType("application/x-sl"));
 
                 // Attach an instrument to every probe tagged as an assignment
                 for (Probe probe : Probe.findProbesTaggedAs(StandardSyntaxTag.ASSIGNMENT)) {
-                    PrintWriter pw = new PrintWriter(out);
-                    SLPrintAssigmentValueListener slPrintAssigmentValueListener = new SLPrintAssigmentValueListener(pw);
-                    pw.close();
+                    SLPrintAssigmentValueListener slPrintAssigmentValueListener = new SLPrintAssigmentValueListener(printer);
                     probe.attach(Instrument.create(slPrintAssigmentValueListener, "SL print assignment value"));
                 }
 
-                TruffleVM.Symbol main = vm.findGlobalSymbol("main");
+                PolyglotEngine.Value main = vm.findGlobalSymbol("main");
                 main.invoke(null);
             } else {
                 notifier.fireTestFailure(new Failure(testCase.name, new UnsupportedOperationException("No instrumentation found.")));
             }
-            out.flush();
+
+            printer.flush();
             String actualOutput = new String(out.toByteArray());
             Assert.assertEquals(testCase.expectedOutput, actualOutput);
         } catch (Throwable ex) {
