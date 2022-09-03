@@ -27,27 +27,17 @@ import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.*;
 
-
 public class LockEliminationPhase extends Phase {
 
     @Override
     protected void run(StructuredGraph graph) {
-        for (MonitorExitNode node : graph.getNodes(MonitorExitNode.class)) {
+        for (MonitorExitNode node : graph.getNodes(MonitorExitNode.TYPE)) {
             FixedNode next = node.next();
-            if (next instanceof MonitorEnterNode) {
-                MonitorEnterNode monitorEnterNode = (MonitorEnterNode) next;
-                if (monitorEnterNode.object() == node.object()) {
-                    ((FixedWithNextNode) node.predecessor()).setNext(monitorEnterNode.next());
-                    FrameState stateAfterFirst = node.stateAfter();
-                    FrameState stateAfterSecond = monitorEnterNode.stateAfter();
-                    node.safeDelete();
-                    monitorEnterNode.safeDelete();
-                    if (stateAfterFirst.usages().isEmpty()) {
-                        GraphUtil.killWithUnusedFloatingInputs(stateAfterFirst);
-                    }
-                    if (stateAfterSecond.usages().isEmpty()) {
-                        GraphUtil.killWithUnusedFloatingInputs(stateAfterSecond);
-                    }
+            if (next instanceof MonitorEnterNode || next instanceof RawMonitorEnterNode) {
+                AccessMonitorNode monitorEnterNode = (AccessMonitorNode) next;
+                if (GraphUtil.unproxify(monitorEnterNode.object()) == GraphUtil.unproxify(node.object())) {
+                    GraphUtil.removeFixedWithUnusedInputs(monitorEnterNode);
+                    GraphUtil.removeFixedWithUnusedInputs(node);
                 }
             }
         }

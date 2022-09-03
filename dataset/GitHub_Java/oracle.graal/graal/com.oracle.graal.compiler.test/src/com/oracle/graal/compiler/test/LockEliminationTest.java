@@ -22,16 +22,15 @@
  */
 package com.oracle.graal.compiler.test;
 
-import java.lang.reflect.*;
-
+import com.oracle.jvmci.meta.ResolvedJavaMethod;
 import org.junit.*;
 
-import com.oracle.graal.api.code.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.spi.Lowerable.LoweringType;
-import com.oracle.graal.phases.*;
+import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.common.inlining.*;
 import com.oracle.graal.phases.tiers.*;
 
 public class LockEliminationTest extends GraalCompilerTest {
@@ -62,10 +61,10 @@ public class LockEliminationTest extends GraalCompilerTest {
         test("testSynchronizedSnippet", new A(), new A());
 
         StructuredGraph graph = getGraph("testSynchronizedSnippet");
-        new CanonicalizerPhase.Instance(runtime(), null, true).apply(graph);
+        new CanonicalizerPhase().apply(graph, new PhaseContext(getProviders()));
         new LockEliminationPhase().apply(graph);
-        assertEquals(1, graph.getNodes().filter(MonitorEnterNode.class).count());
-        assertEquals(1, graph.getNodes().filter(MonitorExitNode.class).count());
+        assertDeepEquals(1, graph.getNodes().filter(RawMonitorEnterNode.class).count());
+        assertDeepEquals(1, graph.getNodes().filter(MonitorExitNode.class).count());
     }
 
     public static void testSynchronizedMethodSnippet(A x) {
@@ -80,23 +79,21 @@ public class LockEliminationTest extends GraalCompilerTest {
         test("testSynchronizedMethodSnippet", new A());
 
         StructuredGraph graph = getGraph("testSynchronizedMethodSnippet");
-        new CanonicalizerPhase.Instance(runtime(), null, true).apply(graph);
+        new CanonicalizerPhase().apply(graph, new PhaseContext(getProviders()));
         new LockEliminationPhase().apply(graph);
-        assertEquals(1, graph.getNodes().filter(MonitorEnterNode.class).count());
-        assertEquals(1, graph.getNodes().filter(MonitorExitNode.class).count());
+        assertDeepEquals(1, graph.getNodes().filter(RawMonitorEnterNode.class).count());
+        assertDeepEquals(1, graph.getNodes().filter(MonitorExitNode.class).count());
     }
 
     private StructuredGraph getGraph(String snippet) {
-        Method method = getMethod(snippet);
-        StructuredGraph graph = parse(method);
-        PhasePlan phasePlan = getDefaultPhasePlan();
-        Assumptions assumptions = new Assumptions(true);
-        HighTierContext context = new HighTierContext(runtime(), assumptions, replacements, null, phasePlan, OptimisticOptimizations.ALL);
-        new CanonicalizerPhase(true).apply(graph, context);
-        new InliningPhase().apply(graph, context);
-        new CanonicalizerPhase(true).apply(graph, context);
+        ResolvedJavaMethod method = getResolvedJavaMethod(snippet);
+        StructuredGraph graph = parseEager(method, AllowAssumptions.YES);
+        HighTierContext context = getDefaultHighTierContext();
+        new CanonicalizerPhase().apply(graph, context);
+        new InliningPhase(new CanonicalizerPhase()).apply(graph, context);
+        new CanonicalizerPhase().apply(graph, context);
         new DeadCodeEliminationPhase().apply(graph);
-        new LoweringPhase(LoweringType.BEFORE_GUARDS).apply(graph, context);
+        new LoweringPhase(new CanonicalizerPhase(), LoweringTool.StandardLoweringStage.HIGH_TIER).apply(graph, context);
         new ValueAnchorCleanupPhase().apply(graph);
         new LockEliminationPhase().apply(graph);
         return graph;

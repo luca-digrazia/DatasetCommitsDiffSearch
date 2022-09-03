@@ -22,15 +22,14 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import jdk.internal.jvmci.meta.*;
-import jdk.internal.jvmci.meta.Assumptions.*;
-
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.jvmci.meta.Assumptions.AssumptionResult;
+import com.oracle.jvmci.meta.*;
 
 /**
  * Loads an object's hub. The object is not null-checked by this operation.
@@ -67,7 +66,7 @@ public final class LoadHubNode extends FloatingGuardedNode implements Lowerable,
         this(hubStamp(stampProvider, value), value, guard);
     }
 
-    private LoadHubNode(Stamp stamp, ValueNode value, ValueNode guard) {
+    public LoadHubNode(Stamp stamp, ValueNode value, ValueNode guard) {
         super(TYPE, stamp, (GuardingNode) guard);
         assert value != guard;
         this.value = value;
