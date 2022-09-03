@@ -29,9 +29,9 @@ import java.util.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.nodes.cfg.*;
 
 /**
  * A collection of machine-independent LIR operations, as well as interfaces to be implemented for
@@ -43,23 +43,23 @@ public class StandardOp {
      * A block delimiter. Every well formed block must contain exactly one such operation and it
      * must be the last operation in the block.
      */
-    public interface BlockEndOp extends LIRInstruction {
+    public interface BlockEndOp {
     }
 
-    public interface NullCheck extends LIRInstruction {
+    public interface NullCheck {
         Value getCheckedValue();
 
         LIRFrameState getState();
     }
 
-    public interface ImplicitNullCheck extends LIRInstruction {
+    public interface ImplicitNullCheck {
         boolean makeNullCheckFor(Value value, LIRFrameState nullCheckState, int implicitNullCheckLimit);
     }
 
     /**
      * LIR operation that defines the position of a label.
      */
-    public static class LabelOp extends LIRInstructionBase {
+    public static class LabelOp extends LIRInstruction {
 
         private static final Value[] NO_VALUES = new Value[0];
 
@@ -103,7 +103,7 @@ public class StandardOp {
     /**
      * LIR operation that is an unconditional jump to a {@link #destination()}.
      */
-    public static class JumpOp extends LIRInstructionBase implements BlockEndOp {
+    public static class JumpOp extends LIRInstruction implements BlockEndOp {
 
         private final LabelRef destination;
 
@@ -133,7 +133,7 @@ public class StandardOp {
      * Marker interface for a LIR operation that moves a value from {@link #getInput()} to
      * {@link #getResult()}.
      */
-    public interface MoveOp extends LIRInstruction {
+    public interface MoveOp {
 
         Value getInput();
 
@@ -145,7 +145,7 @@ public class StandardOp {
      * {@linkplain #remove(Set) pruned} and a mapping from registers to the frame slots in which
      * they are saved can be {@linkplain #getMap(FrameMap) retrieved}.
      */
-    public interface SaveRegistersOp extends LIRInstruction {
+    public interface SaveRegistersOp {
 
         /**
          * Determines if the {@link #remove(Set)} operation is supported for this object.
@@ -154,7 +154,7 @@ public class StandardOp {
 
         /**
          * Prunes {@code doNotSave} from the registers saved by this operation.
-         *
+         * 
          * @param doNotSave registers that should not be saved by this operation
          * @return the number of registers pruned
          * @throws UnsupportedOperationException if removal is not {@linkplain #supportsRemove()
@@ -165,8 +165,8 @@ public class StandardOp {
         /**
          * Gets a map from the saved registers saved by this operation to the frame slots in which
          * they are saved.
-         *
-         * @param frameMap used to {@linkplain FrameMap#offsetForStackSlot(StackSlot) convert} a
+         * 
+         * @param frameMap used to {@linkplain FrameMap#indexForStackSlot(StackSlot) convert} a
          *            virtual slot to a frame slot index
          */
         RegisterSaveLayout getMap(FrameMap frameMap);
@@ -177,7 +177,7 @@ public class StandardOp {
      * A LIR operation that does nothing. If the operation records its position, it can be
      * subsequently {@linkplain #replace(LIR, LIRInstruction) replaced}.
      */
-    public static class NoOp extends LIRInstructionBase {
+    public static class NoOp extends LIRInstruction {
 
         /**
          * The block in which this instruction is located.
