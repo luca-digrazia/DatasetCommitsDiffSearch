@@ -479,11 +479,10 @@ final class PolyglotContextImpl extends AbstractContextImpl implements VMObject 
     }
 
     private PolyglotLanguageContext getLanguageContextImpl(Class<? extends TruffleLanguage<?>> languageClass) {
+        assert boundThread.get() == null || boundThread.get() == Thread.currentThread() : "not designed for thread-safety";
         int indexValue = languageIndexMap.get(languageClass);
         if (indexValue == -1) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            Thread thread = boundThread.get();
-            assert thread == null || thread == Thread.currentThread() : "the language context must be initialized by the thread using the PolyglotContext";
             PolyglotLanguageContext context = findLanguageContext(languageClass, false);
             if (context == null) {
                 throw new IllegalArgumentException(String.format("Illegal or unregistered language class provided %s.", languageClass.getName()));
@@ -491,9 +490,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements VMObject 
             indexValue = context.language.index;
             languageIndexMap.put(languageClass, indexValue);
         }
-        PolyglotLanguageContext context = contexts[indexValue];
-        assert context != null : "the language context must be initialized by eval() before using getCurrentContext()";
-        return context;
+        return contexts[indexValue];
     }
 
     @Override
