@@ -2,7 +2,6 @@ package com.litepaltest.test.crud.query;
 
 import java.util.List;
 
-import org.litepal.LitePal;
 import org.litepal.crud.DataSupport;
 
 import com.litepaltest.model.Book;
@@ -12,10 +11,10 @@ public class QueryClusterTest extends LitePalTestCase {
 
 	public void testSelect() {
 		List<Book> expectedBooks = getBooks(null, null, null, null, null, null, null);
-		List<Book> books = LitePal.select("bookname", "price").find(Book.class);
+		List<Book> books = DataSupport.select("bookname", "price").find(Book.class);
 		assertEquals(expectedBooks.size(), books.size());
-        Book firstBook = LitePal.select("bookname", "price").findFirst(Book.class);
-        Book lastBook = LitePal.select("bookname", "price").findLast(Book.class);
+        Book firstBook = DataSupport.select("bookname", "price").findFirst(Book.class);
+        Book lastBook = DataSupport.select("bookname", "price").findLast(Book.class);
         assertNotNull(firstBook);
 		for (int i = 0; i < books.size(); i++) {
 			Book book = books.get(i);
@@ -54,9 +53,9 @@ public class QueryClusterTest extends LitePalTestCase {
 	}
 
 	public void testWhere() {
-		List<Book> books = LitePal.where("bookname = ?", "Android First Line").find(Book.class);
-        Book firstBook = LitePal.where("bookname = ?", "Android First Line").findFirst(Book.class);
-        Book lastBook = LitePal.where("bookname = ?", "Android First Line").findLast(Book.class);
+		List<Book> books = DataSupport.where("bookname = ?", "Android First Line").find(Book.class);
+        Book firstBook = DataSupport.where("bookname = ?", "Android First Line").findFirst(Book.class);
+        Book lastBook = DataSupport.where("bookname = ?", "Android First Line").findLast(Book.class);
 		for (int i = 0; i < books.size(); i++) {
             Book book = books.get(i);
 			assertTrue(book.isSaved());
@@ -91,15 +90,15 @@ public class QueryClusterTest extends LitePalTestCase {
 		}
 		List<Book> expectedBooks = getBooks(null, "bookname like ?",
 				new String[] { "Android%Line" }, null, null, null, null);
-		List<Book> realBooks = LitePal.where("bookname like ?", "Android%Line")
+		List<Book> realBooks = DataSupport.where("bookname like ?", "Android%Line")
 				.find(Book.class);
 		assertEquals(expectedBooks.size(), realBooks.size());
 	}
 
 	public void testOrder() {
-		List<Book> books = LitePal.order("ID").find(Book.class);
-		Book firstBook = LitePal.order("ID").findFirst(Book.class);
-		Book lastBook = LitePal.order("ID").findLast(Book.class);
+		List<Book> books = DataSupport.order("ID").find(Book.class);
+		Book firstBook = DataSupport.order("ID").findFirst(Book.class);
+		Book lastBook = DataSupport.order("ID").findLast(Book.class);
         Book preBook = null;
 		for (int i = 0; i < books.size(); i++) {
 			Book book = books.get(i);
@@ -131,9 +130,9 @@ public class QueryClusterTest extends LitePalTestCase {
                 assertEquals(lastBook.getId(), book.getId());
             }
 		}
-		List<Book> inverseBooks = LitePal.order("ID desc").find(Book.class);
-        Book inverseFirstBook = LitePal.order("ID desc").findFirst(Book.class);
-        Book inverseLastBook = LitePal.order("ID desc").findLast(Book.class);
+		List<Book> inverseBooks = DataSupport.order("ID desc").find(Book.class);
+        Book inverseFirstBook = DataSupport.order("ID desc").findFirst(Book.class);
+        Book inverseLastBook = DataSupport.order("ID desc").findLast(Book.class);
 		Book inversePreBook = null;
 		for (int i = 0; i < inverseBooks.size(); i++) {
 			Book book = inverseBooks.get(i);
@@ -168,11 +167,11 @@ public class QueryClusterTest extends LitePalTestCase {
 	}
 
 	public void testLimit() {
-		List<Book> bookList = LitePal.limit(1).find(Book.class);
+		List<Book> bookList = DataSupport.limit(1).find(Book.class);
 		assertEquals(1, bookList.size());
 		Book book = bookList.get(0);
 		assertTrue(book.isSaved());
-		Book firstBook = LitePal.findFirst(Book.class);
+		Book firstBook = DataSupport.findFirst(Book.class);
 		assertTrue(firstBook.isSaved());
 		assertEquals(firstBook.getBookName(), book.getBookName());
 		assertEquals(firstBook.getPages(), book.getPages());
@@ -182,11 +181,11 @@ public class QueryClusterTest extends LitePalTestCase {
 		assertEquals(firstBook.getIsbn(), book.getIsbn());
 		assertEquals(firstBook.getLevel(), book.getLevel());
 		assertEquals(firstBook.getId(), book.getId());
-		bookList = LitePal.order("id desc").limit(1).find(Book.class);
+		bookList = DataSupport.order("id desc").limit(1).find(Book.class);
 		assertEquals(1, bookList.size());
 		book = bookList.get(0);
 		assertTrue(book.isSaved());
-		Book lastBook = LitePal.findLast(Book.class);
+		Book lastBook = DataSupport.findLast(Book.class);
 		assertTrue(lastBook.isSaved());
 		assertEquals(lastBook.getBookName(), book.getBookName());
 		assertEquals(lastBook.getPages(), book.getPages());
@@ -199,9 +198,9 @@ public class QueryClusterTest extends LitePalTestCase {
 	}
 
 	public void testOffset() {
-		List<Book> list = LitePal.offset(1).find(Book.class);
+		List<Book> list = DataSupport.offset(1).find(Book.class);
 		assertEquals(0, list.size());
-		List<Book> bookList = LitePal.limit(1).offset(1).find(Book.class);
+		List<Book> bookList = DataSupport.limit(1).offset(1).find(Book.class);
 		assertEquals(1, bookList.size());
 		Book book = bookList.get(0);
 		assertTrue(book.isSaved());
@@ -227,15 +226,15 @@ public class QueryClusterTest extends LitePalTestCase {
 			book.save();
 			ids[i] = book.getId();
 		}
-		List<Book> books = LitePal
+		List<Book> books = DataSupport
 				.select("pages", "isPublished")
 				.where("id=? or id=? or id=?", String.valueOf(ids[0]), String.valueOf(ids[1]),
 						String.valueOf(ids[2])).order("id").limit(2).offset(1).find(Book.class);
-        Book firstBook = LitePal
+        Book firstBook = DataSupport
 				.select("pages", "isPublished")
 				.where("id=? or id=? or id=?", String.valueOf(ids[0]), String.valueOf(ids[1]),
 						String.valueOf(ids[2])).order("id").limit(2).offset(1).findFirst(Book.class);
-        Book lastBook = LitePal
+        Book lastBook = DataSupport
                 .select("pages", "isPublished")
                 .where("id=? or id=? or id=?", String.valueOf(ids[0]), String.valueOf(ids[1]),
                         String.valueOf(ids[2])).order("id").limit(2).offset(1).findLast(Book.class);
