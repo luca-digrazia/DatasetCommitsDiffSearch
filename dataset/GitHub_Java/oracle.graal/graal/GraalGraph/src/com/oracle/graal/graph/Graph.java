@@ -29,29 +29,26 @@ import java.util.Collections;
 public class Graph {
 
     private final ArrayList<Node> nodes;
-    private final Root root;
     private int nextId;
 
     public Graph() {
         nodes = new ArrayList<Node>();
-        root = new Root(this);
+    }
+
+    public synchronized int nextId(Node node) {
+        int id = nextId++;
+        nodes.add(id, node);
+        return id;
     }
 
     public Collection<Node> getNodes() {
         return Collections.unmodifiableCollection(nodes);
     }
 
-    int register(Node node) {
-        int id = nextId++;
-        nodes.add(id, node);
-        return id;
-    }
-
-    void unregister(Node node) {
-        nodes.set(node.id(), Node.Null);
-    }
-
-    public Root root() {
-        return root;
+    public Node local(Node node) {
+        if (node.graph() == this) {
+            return node;
+        }
+        return node.cloneNode(this);
     }
 }

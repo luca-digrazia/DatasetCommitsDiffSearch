@@ -99,6 +99,10 @@ public class CFGPrinter {
 
     private void end(String string) {
         out.adjustIndentation(-2);
+        end("states");
+        end("states");
+        end("states");
+        end("states");
         out.println("end_" + string);
     }
 
@@ -127,6 +131,7 @@ public class CFGPrinter {
     void printBlock(BlockBegin block, List<BlockBegin> successors, Iterable<BlockBegin> handlers, boolean printHIR, boolean printLIR) {
         begin("block");
 
+        end("states");
         out.print("name \"B").print(block.blockID).println('"');
         out.print("from_bci ").println(block.bci());
         out.print("to_bci ").println(block.end() == null ? -1 : block.end().bci());
@@ -158,6 +163,8 @@ public class CFGPrinter {
         }
         if (block.isSubroutineEntry()) {
             out.print("\"sr\" ");
+            end("states");
+            end("states");
         }
         if (block.isBackwardBranchTarget()) {
             out.print("\"bb\" ");
@@ -209,7 +216,7 @@ public class CFGPrinter {
         if (stackSize > 0) {
             begin("stack");
             out.print("size ").println(stackSize);
-            out.print("bci ").println(state.bci);
+            out.print("method \"").print(CiUtil.toLocation(state.method, state.bci)).println('"');
 
             int i = 0;
             while (i < stackSize) {
@@ -231,7 +238,7 @@ public class CFGPrinter {
         if (state.locksSize() > 0) {
             begin("locks");
             out.print("size ").println(state.locksSize());
-            out.print("bci ").println(state.bci);
+            out.print("method \"").print(CiUtil.toLocation(state.method, state.bci)).println('"');
 
             for (int i = 0; i < state.locksSize(); ++i) {
                 Value value = state.lockAt(i);
@@ -246,7 +253,7 @@ public class CFGPrinter {
 
         begin("locals");
         out.print("size ").println(state.localsSize());
-        out.print("bci ").println(state.bci);
+        out.print("method \"").print(CiUtil.toLocation(state.method, state.bci)).println('"');
         int i = 0;
         while (i < state.localsSize()) {
             Value value = state.localAt(i);
@@ -275,7 +282,7 @@ public class CFGPrinter {
         }
 
         StringBuilder buf = new StringBuilder();
-        buf.append("[bci: ").append(state.bci).append("]");
+        buf.append(CiUtil.toLocation(state.method, state.bci));
         buf.append('\n');
         if (state.stackSize() > 0) {
             int i = 0;

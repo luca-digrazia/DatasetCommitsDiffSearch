@@ -31,7 +31,6 @@ import com.sun.c1x.lir.*;
 import com.sun.c1x.util.*;
 import com.sun.c1x.value.*;
 import com.sun.cri.ci.*;
-import com.sun.cri.ri.*;
 
 /**
  * Denotes the beginning of a basic block, and holds information
@@ -395,7 +394,7 @@ public final class BlockBegin extends Instruction {
         v.visitBlockBegin(this);
     }
 
-    public void mergeOrClone(FrameState newState, RiMethod method) {
+    public void mergeOrClone(FrameState newState) {
         FrameState existingState = stateBefore;
 
         if (existingState == null) {
@@ -410,7 +409,7 @@ public final class BlockBegin extends Instruction {
 
             if (C1XOptions.UseStackMapTableLiveness) {
                 // if a liveness map is available, use it to invalidate dead locals
-                CiBitMap[] livenessMap = method.livenessMap();
+                CiBitMap[] livenessMap = newState.method.livenessMap();
                 if (livenessMap != null && bci() >= 0) {
                     assert bci() < livenessMap.length;
                     CiBitMap liveness = livenessMap[bci()];
@@ -427,7 +426,7 @@ public final class BlockBegin extends Instruction {
 
             stateBefore = newState;
         } else {
-            if (!C1XOptions.AssumeVerifiedBytecode && !existingState.isSame(newState)) {
+            if (!C1XOptions.AssumeVerifiedBytecode && !existingState.isSameAcrossScopes(newState)) {
                 // stacks or locks do not match--bytecodes would not verify
                 throw new CiBailout("stack or locks do not match");
             }

@@ -22,48 +22,119 @@
  */
 package com.oracle.graal.graph;
 
-import java.util.AbstractList;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 
-public abstract class Node implements Cloneable {
-
-    public static final Node Null = null;
-    public static final int DeletedID = -1;
+public abstract class Node {
 
     private final Graph graph;
-    private int id;
+    private final int id;
     private final NodeArray inputs;
     private final NodeArray successors;
     private final ArrayList<Node> usages;
     private final ArrayList<Node> predecessors;
 
-    public Node(int inputCount, int successorCount, Graph graph) {
-        assert graph != null;
+    public Node(Node[] inputs, Node[] successors, Graph graph) {
         this.graph = graph;
-        this.id = graph.register(this);
-        this.inputs = new NodeArray(inputCount);
-        this.successors = new NodeArray(successorCount);
+        if (graph != null) {
+            this.id = graph.nextId(this); // this pointer escaping in a constructor..
+        } else {
+            this.id = -1;
+        }
+        this.inputs = new NodeArray(inputs);
+        this.successors = new NodeArray(successors);
         this.predecessors = new ArrayList<Node>();
         this.usages = new ArrayList<Node>();
+        for(Node input : inputs) {
+            input.usages.add(this);
+        }
+        for(Node successor : successors) {
+            successor.predecessors.add(this);
+        }
     }
 
-    public Collection<Node> predecessors() {
+    public Node(int inputs, int successors, Graph graph) {
+        this(nullNodes(inputs, graph), nullNodes(successors, graph), graph);
+    }
+
+    public class NodeArray implements Iterable<Node> {
+
+        private final Node[] nodes;
+
+        public NodeArray(Node[] nodes) {
+            this.nodes = nodes;
+        }
+
+        @Override
+        public Iterator<Node> iterator() {
+            return Arrays.asList(this.nodes).iterator();
+        }
+
+        public Node set(int index, Node node) {
+            if (node.graph != Node.this.graph) {
+                // fail
+                System.err.println("node.graph != Node.this.graph");
+            }
+            Node old = nodes[index];
+            nodes[index] = node;
+            if (Node.this.inputs == this) { // :-/
+                old.usages.remove(Node.this);
+                node.usages.add(Node.this);
+            } else {
+                assert Node.this.successors == this;
+                old.predecessors.remove(Node.this);
+                node.predecessors.add(Node.this);
+            }
+
+            return old;
+        }
+
+        public boolean contains(Node n) {
+            for (int i = 0; i < nodes.length; i++) {
+                if (nodes[i] == n) { // equals?
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        public boolean replace(Node toReplace, Node replacement) {
+            for (int i = 0; i < nodes.length; i++) {
+                if (nodes[i] == toReplace) { // equals?
+                    this.set(i, replacement);
+                    return true; // replace only one occurrence
+                }
+            }
+            return false;
+        }
+
+        public Node[] asArray() {
+            Node[] copy = new Node[nodes.length];
+            System.arraycopy(nodes, 0, copy, 0, nodes.length);
+            return copy;
+        }
+        
+        public int size() {
+            return nodes.length;
+        }
+    }
+
+    public Collection<Node> getPredecessors() {
         return Collections.unmodifiableCollection(predecessors);
     }
 
-    public Collection<Node> usages() {
+    public Collection<Node> getUsages() {
         return Collections.unmodifiableCollection(usages);
     }
 
-    public NodeArray inputs() {
+    public NodeArray getInputs() {
         return inputs;
     }
 
-    public NodeArray successors() {
+    public NodeArray getSuccessors() {
         return successors;
     }
 
@@ -76,138 +147,50 @@ public abstract class Node implements Cloneable {
     }
 
     public void replace(Node other) {
-        assert !isDeleted() && !other.isDeleted();
-        assert other == null || other.graph == graph;
-        for (Node usage : usages) {
-            usage.inputs.replaceFirstOccurrence(this, other);
+        if (other.graph != this.graph) {
+            other = other.cloneNode(this.graph);
+        }
+        Node[] myInputs = inputs.nodes;
+        for (int i = 0; i < myInputs.length; i++) {
+            other.inputs.set(i, myInputs[i]);
+        }
+        while(!usages.isEmpty()) {
+            Node usage = usages.get(0);
+            usage.inputs.replace(this, other);
+        }
+
+        Node[] mySuccessors = successors.nodes;
+        for (int i = 0; i < mySuccessors.length; i++) {
+            other.successors.set(i, mySuccessors[i]);
         }
         for (Node predecessor : predecessors) {
-            predecessor.successors.replaceFirstOccurrence(this, other);
+            predecessor.successors.replace(this, other);
         }
-        if (other != null) {
-            other.usages.addAll(usages);
-            other.predecessors.addAll(predecessors);
-        }
-        usages.clear();
-        predecessors.clear();
-        delete();
+    }
+    
+    protected Node setInput(int index, Node in) {
+        return this.getInputs().set(index, in);
+    }
+    
+    protected Node setSuccessor(int index, Node sux) {
+        return this.getSuccessors().set(index, sux);
     }
 
-    public boolean isDeleted() {
-        return id == DeletedID;
+    public abstract Node cloneNode(Graph into);
+
+    protected Node getInput(int index) {
+        return this.inputs.nodes[index];
     }
 
-    public void delete() {
-        assert !isDeleted();
-        assert usages.size() == 0 && predecessors.size() == 0;
-        for (int i = 0; i < inputs.size(); ++i) {
-            inputs.set(i, Null);
-        }
-        for (int i = 0; i < successors.size(); ++i) {
-            successors.set(i, Null);
-        }
-        // make sure its not connected. pred usages
-        graph.unregister(this);
-        id = DeletedID;
-        assert isDeleted();
+    protected Node getSuccessor(int index) {
+        return this.successors.nodes[index];
     }
 
-    public Node copy() {
-        return copy(graph);
-    }
-
-    /**
-     * 
-     * @param into
-     * @return
-     */
-    public abstract Node copy(Graph into);
-
-    /**
-     * 
-     * @return
-     */
-    protected int inputCount() {
-        return 0;
-    }
-
-    /**
-     * 
-     * @return
-     */
-    protected int successorCount() {
-        return 0;
-    }
-
-    @Override
-    public String toString() {
-        return this.getClass().getSimpleName() + "-" + this.id();
-    }
-
-    public class NodeArray extends AbstractList<Node> {
-
-        private final Node[] nodes;
-
-        public NodeArray(int length) {
-            this.nodes = new Node[length];
+    private static Node[] nullNodes(int number, Graph graph) {
+        Node[] nodes = new Node[number];
+        for (int i = 0; i < number; i++) {
+            nodes[i] = new NullNode(0, 0, graph);
         }
-
-        public Iterator<Node> iterator() {
-            return Arrays.asList(this.nodes).iterator();
-        }
-
-        private Node self() {
-            return Node.this;
-        }
-
-        public Node set(int index, Node node) {
-            // TODO: re-enable after Value class layout changes
-//            assert node == Null || node.graph == self().graph;
-            Node old = nodes[index];
-
-            if (old != node) {
-                nodes[index] = node;
-                if (Node.this.inputs == this) {
-                    if (old != null) {
-                        old.usages.remove(self());
-                    }
-                    if (node != null) {
-                        node.usages.add(self());
-                    }
-                } else {
-                    assert Node.this.successors == this;
-                    if (old != null) {
-                        old.predecessors.remove(self());
-                    }
-                    if (node != null) {
-                        node.predecessors.add(self());
-                    }
-                }
-            }
-
-            return old;
-        }
-
-        public Node get(int index) {
-            return nodes[index];
-        }
-
-        public Node[] toArray() {
-            return Arrays.copyOf(nodes, nodes.length);
-        }
-
-        private boolean replaceFirstOccurrence(Node toReplace, Node replacement) {
-            for (int i = 0; i < nodes.length; i++) {
-                if (nodes[i] == toReplace) {
-                    nodes[i] = replacement;
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        public int size() {
-            return nodes.length;
-        }
+        return nodes;
     }
 }

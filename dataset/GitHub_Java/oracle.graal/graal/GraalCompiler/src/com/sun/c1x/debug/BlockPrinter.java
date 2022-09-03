@@ -67,7 +67,7 @@ public class BlockPrinter implements BlockClosure {
 
     private static void printFrameState(FrameState newFrameState, LogStream out) {
         int startPosition = out.position();
-        if (newFrameState.stackSize() == 0) {
+        if (newFrameState.stackEmpty()) {
           out.print("empty stack");
         } else {
           out.print("stack [");

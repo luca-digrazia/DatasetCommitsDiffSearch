@@ -465,7 +465,7 @@ public abstract class LIRGenerator extends ValueVisitor {
         CiValue resultOperand = resultOperandFor(x.kind);
         CiCallingConvention cc = compilation.frameMap().getCallingConvention(x.signature(), JavaCall);
         List<CiValue> pointerSlots = new ArrayList<CiValue>(2);
-        List<CiValue> argList = visitInvokeArguments(cc, x, pointerSlots);
+        List<CiValue> argList = visitInvokeArguments(cc, x.arguments(), pointerSlots);
 
         if (C1XOptions.InvokeSnippetAfterArguments) {
             destinationAddress = emitXir(snippet, x, info.copy(), null, x.target(), false, pointerSlots);
@@ -834,7 +834,7 @@ public abstract class LIRGenerator extends ValueVisitor {
             if (rangeDensity >= C1XOptions.RangeTestsSwitchDensity) {
                 visitSwitchRanges(switchRanges, tag, x.defaultSuccessor());
             } else {
-                List<BlockBegin> nonDefaultSuccessors = x.blockSuccessors().subList(0, x.numberOfCases());
+                List<BlockBegin> nonDefaultSuccessors = x.successors().subList(0, x.numberOfCases());
                 BlockBegin[] targets = nonDefaultSuccessors.toArray(new BlockBegin[nonDefaultSuccessors.size()]);
                 lir.tableswitch(tag, x.lowKey(), x.defaultSuccessor(), targets);
             }
@@ -1434,12 +1434,11 @@ public abstract class LIRGenerator extends ValueVisitor {
         return new LIRDebugInfo(state, x.exceptionHandlers());
     }
 
-    List<CiValue> visitInvokeArguments(CiCallingConvention cc, Invoke x, List<CiValue> pointerSlots) {
+    List<CiValue> visitInvokeArguments(CiCallingConvention cc, Value[] args, List<CiValue> pointerSlots) {
         // for each argument, load it into the correct location
-        List<CiValue> argList = new ArrayList<CiValue>(x.argumentCount());
+        List<CiValue> argList = new ArrayList<CiValue>(args.length);
         int j = 0;
-        for (int i = 0; i < x.argumentCount(); i++) {
-            Value arg = x.argument(i);
+        for (Value arg : args) {
             if (arg != null) {
                 CiValue operand = cc.locations[j++];
                 if (operand.isRegister()) {
@@ -1457,7 +1456,7 @@ public abstract class LIRGenerator extends ValueVisitor {
                     }
 
                     if (arg.kind == CiKind.Object && pointerSlots != null) {
-                        // This slot must be marked explicitly in the pointer map.
+                        // This slot must be marked explicitedly in the pointer map.
                         pointerSlots.add(slot);
                     }
                 }
@@ -1601,7 +1600,7 @@ public abstract class LIRGenerator extends ValueVisitor {
 
     private CiValue emitInvokeKnown(RiMethod method, FrameState stateBefore, Value... args) {
         boolean isStatic = Modifier.isStatic(method.accessFlags());
-        Invoke invoke = new Invoke(isStatic ? Bytecodes.INVOKESTATIC : Bytecodes.INVOKESPECIAL, method.signature().returnKind(), args, method, null, stateBefore, null);
+        Invoke invoke = new Invoke(isStatic ? Bytecodes.INVOKESTATIC : Bytecodes.INVOKESPECIAL, method.signature().returnKind(), args, method, null, stateBefore);
         visitInvoke(invoke);
         return invoke.operand();
     }
