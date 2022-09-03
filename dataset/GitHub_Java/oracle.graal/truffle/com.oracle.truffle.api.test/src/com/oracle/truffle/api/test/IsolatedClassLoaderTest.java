@@ -22,38 +22,42 @@
  */
 package com.oracle.truffle.api.test;
 
-import com.oracle.truffle.api.impl.TruffleLocator;
+import java.io.File;
 import java.lang.reflect.Method;
 import java.net.URL;
 import java.net.URLClassLoader;
-import java.security.CodeSource;
-import java.security.ProtectionDomain;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 
 public class IsolatedClassLoaderTest {
+    private static final boolean JDK8 = System.getProperty("java.specification.version").compareTo("1.9") < 0;
+
     @Test
     public void loadLanguageByOwnClassLoaderOnJDK8() throws Exception {
-        final ProtectionDomain domain = TruffleLocator.class.getProtectionDomain();
-        final CodeSource source = domain.getCodeSource();
-        if (source == null) {
-            // skip the test
+        if (!JDK8) {
             return;
         }
-        final URL truffleURL = source.getLocation();
-        final String locatorName = "com.oracle.truffle.api.impl.TruffleLocator";
-        ClassLoader loader = new URLClassLoader(new URL[]{truffleURL}) {
+        List<URL> arr = new ArrayList<>();
+        for (String entry : System.getProperty("java.class.path").split(File.pathSeparator)) {
+            File cpEntry = new File(entry);
+            arr.add(cpEntry.toURI().toURL());
+        }
+        final ClassLoader testLoader = IsolatedClassLoaderTest.class.getClassLoader();
+        final ClassLoader parentLoader = testLoader.getParent();
+        ClassLoader loader = new URLClassLoader(arr.toArray(new URL[0]), parentLoader) {
             @Override
             public Class<?> loadClass(String name) throws ClassNotFoundException {
-                if (name.startsWith(locatorName)) {
+                if (name.startsWith("com.oracle.truffle.api")) {
                     return super.findClass(name);
                 }
                 return super.loadClass(name);
             }
         };
-        Class<?> locator = loader.loadClass(locatorName);
+        Class<?> locator = loader.loadClass("com.oracle.truffle.api.impl.TruffleLocator");
         assertEquals("Right classloader", loader, locator.getClassLoader());
 
         final Method loadersMethod = locator.getDeclaredMethod("loaders");
