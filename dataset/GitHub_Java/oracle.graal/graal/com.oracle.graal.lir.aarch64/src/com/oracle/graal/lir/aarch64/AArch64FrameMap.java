@@ -91,7 +91,7 @@ public class AArch64FrameMap extends FrameMap {
 
     private int frameSetupSize() {
         // Size of return address and frame pointer that are saved in function prologue
-        return getTarget().arch.getWordSize() * 2;
+        return returnAddressSize() + getTarget().arch.getWordSize();
     }
 
     @Override
