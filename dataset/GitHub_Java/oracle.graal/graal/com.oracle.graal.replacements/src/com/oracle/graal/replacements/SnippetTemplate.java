@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.replacements;
 
-import static com.oracle.graal.api.meta.MetaUtil.*;
-
 import java.lang.reflect.*;
 import java.util.*;
 import java.util.Map.Entry;
@@ -42,10 +40,8 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.common.*;
-import com.oracle.graal.replacements.Snippet.ConstantParameter;
+import com.oracle.graal.replacements.Snippet.*;
 import com.oracle.graal.replacements.Snippet.Parameter;
-import com.oracle.graal.replacements.Snippet.Varargs;
-import com.oracle.graal.replacements.Snippet.VarargsParameter;
 import com.oracle.graal.replacements.nodes.*;
 import com.oracle.graal.word.*;
 import com.oracle.graal.word.phases.*;
@@ -162,25 +158,23 @@ public class SnippetTemplate {
         private final ConcurrentHashMap<SnippetTemplate.Key, SnippetTemplate> templates = new ConcurrentHashMap<>();
         private final MetaAccessProvider runtime;
         private final TargetDescription target;
-        private final Replacements replacements;
 
-        public Cache(MetaAccessProvider runtime, Replacements replacements, TargetDescription target) {
+        public Cache(MetaAccessProvider runtime, TargetDescription target) {
             this.runtime = runtime;
-            this.replacements = replacements;
             this.target = target;
         }
 
         /**
          * Gets a template for a given key, creating it first if necessary.
          */
-        public SnippetTemplate get(final SnippetTemplate.Key key) {
+        public SnippetTemplate get(final SnippetTemplate.Key key, final Assumptions assumptions) {
             SnippetTemplate template = templates.get(key);
             if (template == null) {
                 template = Debug.scope("SnippetSpecialization", key.method, new Callable<SnippetTemplate>() {
 
                     @Override
                     public SnippetTemplate call() throws Exception {
-                        return new SnippetTemplate(runtime, replacements, target, key);
+                        return new SnippetTemplate(runtime, assumptions, target, key);
                     }
                 });
                 // System.out.println(key + " -> " + template);
@@ -194,20 +188,19 @@ public class SnippetTemplate {
 
         protected final Cache cache;
         protected final MetaAccessProvider runtime;
-        protected final Replacements replacements;
+        protected final Assumptions assumptions;
         protected Class<?> snippetsClass;
 
-        public AbstractTemplates(MetaAccessProvider runtime, Replacements replacements, TargetDescription target, Class<T> snippetsClass) {
+        public AbstractTemplates(MetaAccessProvider runtime, Assumptions assumptions, TargetDescription target, Class<T> snippetsClass) {
             this.runtime = runtime;
-            this.replacements = replacements;
+            this.assumptions = assumptions;
             if (snippetsClass == null) {
                 assert this instanceof Snippets;
                 this.snippetsClass = getClass();
             } else {
                 this.snippetsClass = snippetsClass;
             }
-            this.cache = new Cache(runtime, replacements, target);
-            replacements.registerSnippets(this.snippetsClass);
+            this.cache = new Cache(runtime, target);
         }
 
         protected ResolvedJavaMethod snippet(String name, Class<?>... parameterTypes) {
@@ -238,19 +231,16 @@ public class SnippetTemplate {
     /**
      * Creates a snippet template.
      */
-    public SnippetTemplate(MetaAccessProvider runtime, Replacements replacements, TargetDescription target, SnippetTemplate.Key key) {
+    public SnippetTemplate(MetaAccessProvider runtime, Assumptions assumptions, TargetDescription target, SnippetTemplate.Key key) {
         ResolvedJavaMethod method = key.method;
         assert Modifier.isStatic(method.getModifiers()) : "snippet method must be static: " + method;
         Signature signature = method.getSignature();
 
         // Copy snippet graph, replacing constant parameters with given arguments
-        StructuredGraph snippetGraph = replacements.getSnippet(method);
-        if (snippetGraph == null) {
-            throw new GraalInternalError("Snippet has not been registered: %s", format("%H.%n(%p)", method));
-        }
+        StructuredGraph snippetGraph = (StructuredGraph) method.getCompilerStorage().get(Snippet.class);
         StructuredGraph snippetCopy = new StructuredGraph(snippetGraph.name, snippetGraph.method());
-        IdentityHashMap<Node, Node> nodeReplacements = new IdentityHashMap<>();
-        nodeReplacements.put(snippetGraph.start(), snippetCopy.start());
+        IdentityHashMap<Node, Node> replacements = new IdentityHashMap<>();
+        replacements.put(snippetGraph.start(), snippetCopy.start());
 
         int parameterCount = signature.getParameterCount(false);
         assert checkTemplate(runtime, key, parameterCount, method, signature);
@@ -270,7 +260,7 @@ public class SnippetTemplate {
                 } else {
                     constantArg = Constant.forBoxed(kind, arg);
                 }
-                nodeReplacements.put(snippetGraph.getLocal(i), ConstantNode.forConstant(constantArg, runtime, snippetCopy));
+                replacements.put(snippetGraph.getLocal(i), ConstantNode.forConstant(constantArg, runtime, snippetCopy));
             } else {
                 VarargsParameter vp = MetaUtil.getParameterAnnotation(VarargsParameter.class, i, method);
                 if (vp != null) {
@@ -278,7 +268,7 @@ public class SnippetTemplate {
                     Varargs varargs = (Varargs) key.get(name);
                     Object array = varargs.getArray();
                     ConstantNode placeholder = ConstantNode.forObject(array, runtime, snippetCopy);
-                    nodeReplacements.put(snippetGraph.getLocal(i), placeholder);
+                    replacements.put(snippetGraph.getLocal(i), placeholder);
                     placeholders[i] = placeholder;
                     varargsParameterAnnotations[i] = vp;
                 } else {
@@ -286,15 +276,15 @@ public class SnippetTemplate {
                 }
             }
         }
-        snippetCopy.addDuplicates(snippetGraph.getNodes(), nodeReplacements);
+        snippetCopy.addDuplicates(snippetGraph.getNodes(), replacements);
 
         Debug.dump(snippetCopy, "Before specialization");
-        if (!nodeReplacements.isEmpty()) {
+        if (!replacements.isEmpty()) {
             // Do deferred intrinsification of node intrinsics
             new NodeIntrinsificationPhase(runtime, new BoxingMethodPool(runtime)).apply(snippetCopy);
             new WordTypeRewriterPhase(runtime, target.wordKind).apply(snippetCopy);
 
-            new CanonicalizerPhase(runtime, replacements.getAssumptions(), 0, null).apply(snippetCopy);
+            new CanonicalizerPhase(runtime, assumptions, 0, null).apply(snippetCopy);
         }
         assert NodeIntrinsificationVerificationPhase.verify(snippetCopy);
 
@@ -354,7 +344,7 @@ public class SnippetTemplate {
                     LoopEx loop = new LoopsData(snippetCopy).loop(loopBegin);
                     int mark = snippetCopy.getMark();
                     LoopTransformations.fullUnroll(loop, runtime, null);
-                    new CanonicalizerPhase(runtime, replacements.getAssumptions(), mark, null).apply(snippetCopy);
+                    new CanonicalizerPhase(runtime, assumptions, mark, null).apply(snippetCopy);
                 }
                 FixedNode explodeLoopNext = explodeLoop.next();
                 explodeLoop.clearSuccessors();
@@ -497,7 +487,7 @@ public class SnippetTemplate {
                 } else {
                     Kind kind = ((LocalNode) parameter).kind();
                     assert argument != null || kind == Kind.Object : this + " cannot accept null for non-object parameter named " + name;
-                    Constant constant = forBoxed(argument, kind);
+                    Constant constant = Constant.forBoxed(kind, argument);
                     replacements.put((LocalNode) parameter, ConstantNode.forConstant(constant, runtime, replaceeGraph));
                 }
             } else if (parameter instanceof LocalNode[]) {
@@ -521,7 +511,7 @@ public class SnippetTemplate {
                     if (value instanceof ValueNode) {
                         replacements.put(local, (ValueNode) value);
                     } else {
-                        Constant constant = forBoxed(value, local.kind());
+                        Constant constant = Constant.forBoxed(local.kind(), value);
                         ConstantNode element = ConstantNode.forConstant(constant, runtime, replaceeGraph);
                         replacements.put(local, element);
                     }
@@ -531,32 +521,6 @@ public class SnippetTemplate {
             }
         }
         return replacements;
-    }
-
-    /**
-     * Converts a Java boxed value to a {@link Constant} of the right kind. This adjusts for the
-     * limitation that a {@link Local}'s kind is a {@linkplain Kind#getStackKind() stack kind} and
-     * so cannot be used for re-boxing primitives smaller than an int.
-     * 
-     * @param argument a Java boxed value
-     * @param localKind the kind of the {@link Local} to which {@code argument} will be bound
-     */
-    protected Constant forBoxed(Object argument, Kind localKind) {
-        assert localKind == localKind.getStackKind();
-        if (localKind == Kind.Int && !(argument instanceof Integer)) {
-            if (argument instanceof Boolean) {
-                return Constant.forBoxed(Kind.Boolean, argument);
-            }
-            if (argument instanceof Byte) {
-                return Constant.forBoxed(Kind.Byte, argument);
-            }
-            if (argument instanceof Short) {
-                return Constant.forBoxed(Kind.Short, argument);
-            }
-            assert argument instanceof Character;
-            return Constant.forBoxed(Kind.Char, argument);
-        }
-        return Constant.forBoxed(localKind, argument);
     }
 
     /**
