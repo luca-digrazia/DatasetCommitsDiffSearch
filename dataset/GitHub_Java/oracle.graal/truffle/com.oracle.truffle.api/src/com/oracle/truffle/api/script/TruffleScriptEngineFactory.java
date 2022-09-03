@@ -24,8 +24,7 @@
  */
 package com.oracle.truffle.api.script;
 
-import javax.script.ScriptEngine;
-import javax.script.ScriptEngineFactory;
+import javax.script.*;
 
 @Deprecated
 /**
