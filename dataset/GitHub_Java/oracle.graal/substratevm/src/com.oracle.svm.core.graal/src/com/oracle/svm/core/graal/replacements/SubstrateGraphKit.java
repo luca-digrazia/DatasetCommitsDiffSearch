@@ -46,7 +46,6 @@ import org.graalvm.compiler.nodes.InvokeNode;
 import org.graalvm.compiler.nodes.MergeNode;
 import org.graalvm.compiler.nodes.PiNode;
 import org.graalvm.compiler.nodes.ReturnNode;
-import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.UnwindNode;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.calc.FloatingNode;
@@ -61,13 +60,12 @@ import org.graalvm.compiler.replacements.GraphKit;
 import org.graalvm.compiler.word.WordTypes;
 import org.graalvm.word.WordBase;
 
-import com.oracle.svm.core.graal.code.SubstrateCallingConventionType;
+import com.oracle.svm.core.graal.code.amd64.SubstrateCallingConventionType;
 import com.oracle.svm.core.graal.meta.SubstrateLoweringProvider;
 import com.oracle.svm.core.graal.nodes.DeoptEntryNode;
 import com.oracle.svm.core.meta.SubstrateObjectConstant;
 import com.oracle.svm.core.nodes.CFunctionEpilogueNode;
 import com.oracle.svm.core.nodes.CFunctionPrologueNode;
-import com.oracle.svm.core.util.VMError;
 
 import jdk.vm.ci.code.BytecodeFrame;
 import jdk.vm.ci.code.CallingConvention;
@@ -249,18 +247,8 @@ public class SubstrateGraphKit extends GraphKit {
         return WordBase.class.isAssignableFrom(klass);
     }
 
-    public StructuredGraph finalizeGraph() {
-        if (lastFixedNode != null) {
-            throw VMError.shouldNotReachHere("Manually constructed graph does not terminate control flow properly. lastFixedNode: " + lastFixedNode);
-        }
-
-        mergeUnwinds();
-        assert graph.verify();
-        return graph;
-    }
-
     /** A graph with multiple unwinds is invalid. Merge the various unwind paths. */
-    private void mergeUnwinds() {
+    public void mergeUnwinds() {
         List<UnwindNode> unwinds = new ArrayList<>();
         for (Node node : getGraph().getNodes()) {
             if (node instanceof UnwindNode) {
