@@ -411,7 +411,7 @@ public final class Source {
      * @since 1.0
      */
     public static String findLanguage(File file) throws IOException {
-        return getImpl().findLanguage(file);
+        return IMPL.findLanguage(file);
     }
 
     /**
@@ -421,7 +421,7 @@ public final class Source {
      * @since 1.0
      */
     public static String findLanguage(String mimeType) {
-        return getImpl().findLanguage(mimeType);
+        return IMPL.findLanguage(mimeType);
     }
 
     public static class Builder {
