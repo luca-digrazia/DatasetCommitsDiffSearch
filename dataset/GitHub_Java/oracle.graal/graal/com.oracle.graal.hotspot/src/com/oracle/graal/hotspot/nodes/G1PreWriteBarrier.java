@@ -70,8 +70,4 @@ public class G1PreWriteBarrier extends WriteBarrier implements DeoptimizingNode 
     public DeoptimizationReason getDeoptimizationReason() {
         return DeoptimizationReason.NullCheckException;
     }
-
-    public FrameState getState() {
-        return deoptimizationState;
-    }
 }
