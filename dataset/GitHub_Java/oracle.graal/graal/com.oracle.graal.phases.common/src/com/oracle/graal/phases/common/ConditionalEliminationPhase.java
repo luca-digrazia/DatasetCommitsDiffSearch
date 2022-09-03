@@ -351,7 +351,6 @@ public class ConditionalEliminationPhase extends Phase {
             if (falseConstant.usages().isEmpty()) {
                 graph.removeFloating(falseConstant);
             }
-            super.finished();
         }
 
         private void registerCondition(boolean isTrue, LogicNode condition, ValueNode anchor) {
