@@ -89,13 +89,10 @@ public final class DefaultTruffleCompiler extends TruffleCompiler {
         }
 
         public static class Instance extends GraphBuilderPhase.Instance {
-            private boolean mustInstrumentBranches;
-
             public Instance(MetaAccessProvider metaAccess, StampProvider stampProvider,
                             ConstantReflectionProvider constantReflection, GraphBuilderConfiguration config,
                             OptimisticOptimizations optimisticOpts, IntrinsicContext initialIntrinsicContext) {
                 super(metaAccess, stampProvider, constantReflection, config, optimisticOpts, initialIntrinsicContext);
-                this.mustInstrumentBranches = TruffleCompilerOptions.TruffleInstrumentBranches.getValue();
             }
 
             @Override
@@ -110,7 +107,7 @@ public final class DefaultTruffleCompiler extends TruffleCompiler {
                 return new BytecodeParser(this, graph, parent, method, entryBCI, intrinsicContext) {
                     @Override
                     protected void postProcessIfNode(ValueNode node) {
-                        if (mustInstrumentBranches) {
+                        if (TruffleCompilerOptions.TruffleInstrumentBranches.getValue()) {
                             InstrumentBranchesPhase.addNodeSourceLocation(node, createBytecodePosition());
                         }
                     }
