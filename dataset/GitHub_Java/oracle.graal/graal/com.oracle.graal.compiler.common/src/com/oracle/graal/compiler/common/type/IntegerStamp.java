@@ -24,7 +24,6 @@ package com.oracle.graal.compiler.common.type;
 
 import java.util.*;
 
-import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.spi.*;
@@ -48,20 +47,20 @@ public class IntegerStamp extends PrimitiveStamp {
         this.upperBound = upperBound;
         this.downMask = downMask;
         this.upMask = upMask;
-        assert lowerBound >= CodeUtil.minValue(bits) : this;
-        assert upperBound <= CodeUtil.maxValue(bits) : this;
-        assert (downMask & CodeUtil.mask(bits)) == downMask : this;
-        assert (upMask & CodeUtil.mask(bits)) == upMask : this;
+        assert lowerBound >= defaultMinValue(bits) : this;
+        assert upperBound <= defaultMaxValue(bits) : this;
+        assert (downMask & defaultMask(bits)) == downMask : this;
+        assert (upMask & defaultMask(bits)) == upMask : this;
     }
 
     @Override
     public Stamp unrestricted() {
-        return new IntegerStamp(getBits(), CodeUtil.minValue(getBits()), CodeUtil.maxValue(getBits()), 0, CodeUtil.mask(getBits()));
+        return new IntegerStamp(getBits(), defaultMinValue(getBits()), defaultMaxValue(getBits()), 0, defaultMask(getBits()));
     }
 
     @Override
     public Stamp illegal() {
-        return new IntegerStamp(getBits(), CodeUtil.maxValue(getBits()), CodeUtil.minValue(getBits()), CodeUtil.mask(getBits()), 0);
+        return new IntegerStamp(getBits(), defaultMaxValue(getBits()), defaultMinValue(getBits()), defaultMask(getBits()), 0);
     }
 
     @Override
@@ -85,7 +84,7 @@ public class IntegerStamp extends PrimitiveStamp {
     }
 
     @Override
-    public LIRKind getLIRKind(LIRKindTool tool) {
+    public PlatformKind getPlatformKind(PlatformKindTool tool) {
         return tool.getIntegerKind(getBits());
     }
 
@@ -136,11 +135,11 @@ public class IntegerStamp extends PrimitiveStamp {
     }
 
     public boolean isUnrestricted() {
-        return lowerBound == CodeUtil.minValue(getBits()) && upperBound == CodeUtil.maxValue(getBits()) && downMask == 0 && upMask == CodeUtil.mask(getBits());
+        return lowerBound == defaultMinValue(getBits()) && upperBound == defaultMaxValue(getBits()) && downMask == 0 && upMask == defaultMask(getBits());
     }
 
     public boolean contains(long value) {
-        return value >= lowerBound && value <= upperBound && (value & downMask) == downMask && (value & upMask) == (value & CodeUtil.mask(getBits()));
+        return value >= lowerBound && value <= upperBound && (value & downMask) == downMask && (value & upMask) == (value & defaultMask(getBits()));
     }
 
     public boolean isPositive() {
@@ -174,14 +173,14 @@ public class IntegerStamp extends PrimitiveStamp {
         str.append(getBits());
         if (lowerBound == upperBound) {
             str.append(" [").append(lowerBound).append(']');
-        } else if (lowerBound != CodeUtil.minValue(getBits()) || upperBound != CodeUtil.maxValue(getBits())) {
+        } else if (lowerBound != defaultMinValue(getBits()) || upperBound != defaultMaxValue(getBits())) {
             str.append(" [").append(lowerBound).append(" - ").append(upperBound).append(']');
         }
         if (downMask != 0) {
             str.append(" \u21ca");
             new Formatter(str).format("%016x", downMask);
         }
-        if (upMask != CodeUtil.mask(getBits())) {
+        if (upMask != defaultMask(getBits())) {
             str.append(" \u21c8");
             new Formatter(str).format("%016x", upMask);
         }
@@ -269,12 +268,29 @@ public class IntegerStamp extends PrimitiveStamp {
         return true;
     }
 
+    public static long defaultMask(int bits) {
+        assert 0 <= bits && bits <= 64;
+        if (bits == 64) {
+            return 0xffffffffffffffffL;
+        } else {
+            return (1L << bits) - 1;
+        }
+    }
+
+    public static long defaultMinValue(int bits) {
+        return -1L << (bits - 1);
+    }
+
+    public static long defaultMaxValue(int bits) {
+        return defaultMask(bits - 1);
+    }
+
     public static long upMaskFor(int bits, long lowerBound, long upperBound) {
         long mask = lowerBound | upperBound;
         if (mask == 0) {
             return 0;
         } else {
-            return ((-1L) >>> Long.numberOfLeadingZeros(mask)) & CodeUtil.mask(bits);
+            return ((-1L) >>> Long.numberOfLeadingZeros(mask)) & defaultMask(bits);
         }
     }
 
