@@ -128,7 +128,7 @@ public final class ArrayLength extends FloatingNode {
             if (constantValue != null && constantValue.isNonNull()) {
                 Graph graph = node.graph();
                 if (graph instanceof CompilerGraph) {
-                    RiRuntime runtime = ((CompilerGraph) graph).runtime();
+                    RiRuntime runtime = ((CompilerGraph) graph).getCompilation().runtime;
                     return Constant.forInt(runtime.getArrayLength(constantValue), graph);
                 }
             }

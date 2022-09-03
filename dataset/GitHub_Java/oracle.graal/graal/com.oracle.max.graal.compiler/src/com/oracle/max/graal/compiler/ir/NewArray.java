@@ -36,6 +36,8 @@ import com.sun.cri.ci.*;
  */
 public abstract class NewArray extends FixedNodeWithNext {
 
+    private static final EscapeOp ESCAPE = new NewArrayEscapeOp();
+
     private static final int INPUT_COUNT = 1;
     private static final int INPUT_LENGTH = 0;
 
@@ -107,7 +109,7 @@ public abstract class NewArray extends FixedNodeWithNext {
         return super.lookup(clazz);
     }
 
-    private static final EscapeOp ESCAPE = new EscapeOp() {
+    private static class NewArrayEscapeOp implements EscapeOp {
 
         @Override
         public boolean canAnalyze(Node node) {
@@ -205,27 +207,31 @@ public abstract class NewArray extends FixedNodeWithNext {
         }
 
         @Override
-        public int updateState(Node node, Node current, Map<Object, Integer> fieldIndex, Value[] fieldState) {
+        public EscapeField updateState(Node node, Node current, Map<Object, EscapeField> fields, Map<EscapeField, Value> fieldState) {
             if (current instanceof AccessIndexed) {
                 int index = ((AccessIndexed) current).index().asConstant().asInt();
+                EscapeField field = fields.get(index);
                 if (current instanceof LoadIndexed) {
                     LoadIndexed x = (LoadIndexed) current;
                     if (x.array() == node) {
-                        x.replaceAtUsages(fieldState[index]);
+                        x.replaceAtUsages(fieldState.get(field));
                         assert x.usages().size() == 0;
                         x.replaceAndDelete(x.next());
                     }
                 } else if (current instanceof StoreIndexed) {
                     StoreIndexed x = (StoreIndexed) current;
                     if (x.array() == node) {
-                        fieldState[index] = x.value();
+                        fieldState.put(field, x.value());
                         assert x.usages().size() == 0;
-                        x.replaceAndDelete(x.next());
-                        return index;
+                        WriteMemoryCheckpointNode checkpoint = new WriteMemoryCheckpointNode(x.graph());
+                        checkpoint.setStateAfter(x.stateAfter());
+                        checkpoint.setNext(x.next());
+                        x.replaceAndDelete(checkpoint);
+                        return field;
                     }
                 }
             }
-            return -1;
+            return null;
         }
-    };
+    }
 }

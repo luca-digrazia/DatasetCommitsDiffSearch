@@ -267,11 +267,10 @@ public class IdentifyBlocksPhase extends Phase {
                 assert mergeBlock != null : "no block for merge " + merge.id();
                 for (int i = 0; i < phi.valueCount(); ++i) {
                     if (phi.valueAt(i) == n) {
-                        if (mergeBlock.getPredecessors().size() <= i) {
+                        if (mergeBlock.getPredecessors().size() == 0) {
                             TTY.println(merge.toString());
                             TTY.println(phi.toString());
                             TTY.println(merge.phiPredecessors().toString());
-                            TTY.println(phi.inputs().toString());
                             TTY.println("value count: " + phi.valueCount());
                         }
                         block = getCommonDominator(block, mergeBlock.getPredecessors().get(i));
