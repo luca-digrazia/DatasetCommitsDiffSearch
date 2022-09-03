@@ -22,8 +22,6 @@
  */
 package org.graalvm.compiler.nodes.calc;
 
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.MetaAccessProvider;
 import org.graalvm.compiler.core.common.calc.Condition;
 import org.graalvm.compiler.core.common.type.IntegerStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
@@ -38,7 +36,6 @@ import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.util.GraphUtil;
 
 import jdk.vm.ci.meta.TriState;
-import org.graalvm.compiler.options.OptionValues;
 
 /**
  * Common super-class for "a < b" comparisons both {@linkplain IntegerLowerThanNode signed} and
@@ -56,6 +53,19 @@ public abstract class IntegerLowerThanNode extends CompareNode {
 
     protected LowerOp getOp() {
         return op;
+    }
+
+    @Override
+    public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
+        ValueNode result = super.canonical(tool, forX, forY);
+        if (result != this) {
+            return result;
+        }
+        LogicNode synonym = getOp().findSynonym(forX, forY);
+        if (synonym != null) {
+            return synonym;
+        }
+        return this;
     }
 
     @Override
@@ -115,20 +125,7 @@ public abstract class IntegerLowerThanNode extends CompareNode {
         return getOp().tryFold(xStampGeneric, yStampGeneric);
     }
 
-    public abstract static class LowerOp extends CompareOp {
-        @Override
-        public ValueNode canonical(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, OptionValues options, Integer smallestCompareWidth, Condition condition, boolean unorderedIsTrue, ValueNode forX, ValueNode forY) {
-            ValueNode result = super.canonical(constantReflection, metaAccess, options, smallestCompareWidth, condition, unorderedIsTrue, forX, forY);
-            if (result != null) {
-                return result;
-            }
-            LogicNode synonym = findSynonym(forX, forY);
-            if (synonym != null) {
-                return synonym;
-            }
-            return null;
-        }
-
+    public abstract static class LowerOp {
         protected abstract long upperBound(IntegerStamp stamp);
 
         protected abstract long lowerBound(IntegerStamp stamp);
