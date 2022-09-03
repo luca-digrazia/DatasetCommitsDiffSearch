@@ -104,7 +104,7 @@ public final class CheckCastNode extends TypeCheckNode implements Canonicalizabl
         return this;
     }
 
-    // TODO (thomaswue): Find a better way to handle anchors.
+    // TODO(tw): Find a better way to handle anchors.
     private void freeAnchor() {
         ValueAnchorNode anchorUsage = usages().filter(ValueAnchorNode.class).first();
         if (anchorUsage != null) {
