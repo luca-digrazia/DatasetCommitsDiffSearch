@@ -40,92 +40,24 @@
  */
 package com.oracle.truffle.sl.runtime;
 
-import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.interop.ForeignAccess;
-import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.object.DynamicObject;
 import com.oracle.truffle.api.object.ObjectType;
-import com.oracle.truffle.sl.nodes.interop.SLForeignReadNode;
-import com.oracle.truffle.sl.nodes.interop.SLForeignWriteNode;
 
-final class SLObjectType extends ObjectType implements ForeignAccess.Factory10, ForeignAccess.Factory {
-    private final ForeignAccess access;
+public final class SLObjectType extends ObjectType {
 
-    public SLObjectType() {
-        this.access = ForeignAccess.create(null, this);
+    public static final ObjectType SINGLETON = new SLObjectType();
+
+    private SLObjectType() {
+    }
+
+    public static boolean isInstance(TruffleObject obj) {
+        return SLContext.isSLObject(obj);
     }
 
     @Override
     public ForeignAccess getForeignAccessFactory(DynamicObject obj) {
-        return access;
+        return SLObjectMessageResolutionForeign.ACCESS;
     }
-
-    @Override
-    public CallTarget accessIsNull() {
-        return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(false));
-    }
-
-    @Override
-    public CallTarget accessIsExecutable() {
-        return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(false));
-    }
-
-    @Override
-    public CallTarget accessIsBoxed() {
-        return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(false));
-    }
-
-    @Override
-    public CallTarget accessHasSize() {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public CallTarget accessGetSize() {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public CallTarget accessUnbox() {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public CallTarget accessRead() {
-        return Truffle.getRuntime().createCallTarget(new SLForeignReadNode());
-    }
-
-    @Override
-    public CallTarget accessWrite() {
-        return Truffle.getRuntime().createCallTarget(new SLForeignWriteNode());
-    }
-
-    @Override
-    public CallTarget accessExecute(int argumentsLength) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public CallTarget accessInvoke(int argumentsLength) {
-        return null;
-    }
-
-    @Override
-    public CallTarget accessNew(int argumentsLength) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public CallTarget accessMessage(Message unknown) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public boolean canHandle(TruffleObject obj) {
-        return SLContext.isSLObject(obj);
-    }
-
 }

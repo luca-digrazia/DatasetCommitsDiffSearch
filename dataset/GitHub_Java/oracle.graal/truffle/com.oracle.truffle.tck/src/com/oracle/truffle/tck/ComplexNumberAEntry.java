@@ -32,7 +32,7 @@ final class ComplexNumberAEntry implements TruffleObject {
     private final ComplexNumbersA numbers;
     private final int index;
 
-    public ComplexNumberAEntry(ComplexNumbersA numbers, int index) {
+    ComplexNumberAEntry(ComplexNumbersA numbers, int index) {
         this.numbers = numbers;
         this.index = index;
     }
@@ -42,7 +42,7 @@ final class ComplexNumberAEntry implements TruffleObject {
     }
 
     public ForeignAccess getForeignAccess() {
-        return ComplexNumberAEntryForeign.ACCESS;
+        return ComplexNumberAEntryMessageResolutionForeign.ACCESS;
     }
 
     public ComplexNumbersA getNumbers() {

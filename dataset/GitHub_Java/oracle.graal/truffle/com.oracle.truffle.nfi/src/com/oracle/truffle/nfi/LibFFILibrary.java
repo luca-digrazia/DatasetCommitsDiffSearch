@@ -27,7 +27,7 @@ package com.oracle.truffle.nfi;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.TruffleObject;
 
-class LibFFILibrary implements TruffleObject {
+final class LibFFILibrary implements TruffleObject {
 
     static final LibFFILibrary DEFAULT = new LibFFILibrary(0);
 
@@ -50,10 +50,10 @@ class LibFFILibrary implements TruffleObject {
 
     @Override
     public ForeignAccess getForeignAccess() {
-        return LibFFILibraryMessageResolutionForeign.createAccess();
+        return LibFFILibraryMessageResolutionForeign.ACCESS;
     }
 
-    private static class Destructor extends NativeAllocation.Destructor {
+    private static final class Destructor extends NativeAllocation.Destructor {
 
         private final long handle;
 

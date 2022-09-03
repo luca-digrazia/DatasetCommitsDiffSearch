@@ -46,7 +46,6 @@ import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.utilities.CyclicAssumption;
-import com.oracle.truffle.sl.SLLanguage;
 import com.oracle.truffle.sl.nodes.SLUndefinedFunctionRootNode;
 
 /**
@@ -81,9 +80,9 @@ public final class SLFunction implements TruffleObject {
      */
     private final CyclicAssumption callTargetStable;
 
-    protected SLFunction(SLLanguage language, String name) {
+    protected SLFunction(String name) {
         this.name = name;
-        this.callTarget = Truffle.getRuntime().createCallTarget(new SLUndefinedFunctionRootNode(language, name));
+        this.callTarget = Truffle.getRuntime().createCallTarget(new SLUndefinedFunctionRootNode(name));
         this.callTargetStable = new CyclicAssumption(name);
     }
 

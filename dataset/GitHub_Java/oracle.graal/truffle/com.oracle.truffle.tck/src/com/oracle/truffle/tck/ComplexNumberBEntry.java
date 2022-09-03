@@ -32,13 +32,13 @@ class ComplexNumberBEntry implements TruffleObject {
     private final ComplexNumbersB numbers;
     private final int index;
 
-    public ComplexNumberBEntry(ComplexNumbersB numbers, int index) {
+    ComplexNumberBEntry(ComplexNumbersB numbers, int index) {
         this.numbers = numbers;
         this.index = index;
     }
 
     public ForeignAccess getForeignAccess() {
-        return ComplexNumberBEntryForeign.ACCESS;
+        return ComplexNumberBEntryMessageResolutionForeign.ACCESS;
     }
 
     public static boolean isInstance(TruffleObject obj) {
