@@ -54,6 +54,7 @@ import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.debug.Indent;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.java.ComputeLoopFrequenciesClosure;
+import org.graalvm.compiler.java.GraphBuilderPhase;
 import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.StructuredGraph.AllowAssumptions;
@@ -64,8 +65,10 @@ import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration.Plu
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderTool;
 import org.graalvm.compiler.nodes.graphbuilderconf.InlineInvokePlugin;
+import org.graalvm.compiler.nodes.graphbuilderconf.IntrinsicContext;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins;
 import org.graalvm.compiler.nodes.graphbuilderconf.LoopExplosionPlugin;
+import org.graalvm.compiler.nodes.graphbuilderconf.NodePlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.ParameterPlugin;
 import org.graalvm.compiler.nodes.java.InstanceOfNode;
 import org.graalvm.compiler.nodes.java.MethodCallTargetNode;
@@ -130,6 +133,7 @@ public class PartialEvaluator {
     private final ResolvedJavaMethod callRootMethod;
     private final GraphBuilderConfiguration configForParsing;
     private final InvocationPlugins decodingInvocationPlugins;
+    private final NodePlugin[] nodePlugins;
 
     public PartialEvaluator(Providers providers, GraphBuilderConfiguration configForRoot, SnippetReflectionProvider snippetReflection, Architecture architecture,
                     InstrumentPhase.Instrumentation instrumentation) {
@@ -150,6 +154,7 @@ public class PartialEvaluator {
 
         this.configForParsing = createGraphBuilderConfig(configForRoot, true);
         this.decodingInvocationPlugins = createDecodingInvocationPlugins(configForRoot.getPlugins());
+        this.nodePlugins = configForRoot.getPlugins().getNodePlugins();
     }
 
     public Providers getProviders() {
@@ -386,7 +391,13 @@ public class PartialEvaluator {
             plugins.appendInlineInvokePlugin(new InlineDuringParsingPlugin());
         }
 
-        return new CachingPEGraphDecoder(architecture, graph, providers, newConfig, TruffleCompiler.Optimizations, AllowAssumptions.ifNonNull(graph.getAssumptions()), graph.getOptions());
+        return new CachingPEGraphDecoder(providers, newConfig, TruffleCompiler.Optimizations, AllowAssumptions.ifNonNull(graph.getAssumptions()), architecture, graph.getOptions()) {
+            @Override
+            protected GraphBuilderPhase.Instance createGraphBuilderPhaseInstance(IntrinsicContext initialIntrinsicContext) {
+                return new GraphBuilderPhase.Instance(providers.getMetaAccess(), providers.getStampProvider(), providers.getConstantReflection(),
+                                providers.getConstantFieldProvider(), graphBuilderConfig, optimisticOpts, initialIntrinsicContext);
+            }
+        };
     }
 
     protected void doGraphPE(OptimizedCallTarget callTarget, StructuredGraph graph, HighTierContext tierContext, TruffleInlining inliningDecision) {
@@ -408,7 +419,7 @@ public class PartialEvaluator {
             inlineInvokePlugins = new InlineInvokePlugin[]{replacements, inlineInvokePlugin};
         }
 
-        decoder.decode(graph, graph.method(), loopExplosionPlugin, decodingInvocationPlugins, inlineInvokePlugins, parameterPlugin);
+        decoder.decode(graph, graph.method(), loopExplosionPlugin, decodingInvocationPlugins, inlineInvokePlugins, parameterPlugin, nodePlugins);
 
         if (TruffleCompilerOptions.getValue(PrintTruffleExpansionHistogram)) {
             histogramPlugin.print(callTarget);
