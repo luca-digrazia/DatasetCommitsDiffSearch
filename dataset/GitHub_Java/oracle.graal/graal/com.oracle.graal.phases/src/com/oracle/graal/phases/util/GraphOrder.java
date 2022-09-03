@@ -110,8 +110,8 @@ public final class GraphOrder {
                     }
                 }
                 nodes.add(node);
-                if (node instanceof AbstractMergeNode) {
-                    for (PhiNode phi : ((AbstractMergeNode) node).phis()) {
+                if (node instanceof MergeNode) {
+                    for (PhiNode phi : ((MergeNode) node).phis()) {
                         visited.mark(phi);
                         nodes.add(phi);
                     }
@@ -172,25 +172,21 @@ public final class GraphOrder {
                             pendingStateAfter = null;
                         }
 
-                        if (node instanceof AbstractMergeNode) {
+                        if (node instanceof MergeNode) {
                             // phis aren't scheduled, so they need to be added explicitly
-                            currentState.markAll(((AbstractMergeNode) node).phis());
+                            currentState.markAll(((MergeNode) node).phis());
                             if (node instanceof LoopBeginNode) {
                                 // remember the state at the loop entry, it's restored at exits
                                 loopEntryStates.put((LoopBeginNode) node, currentState.copy());
                             }
                         } else if (node instanceof ProxyNode) {
-                            assert false : "proxy nodes should not be in the schedule";
+                            for (Node input : node.inputs()) {
+                                if (input != ((ProxyNode) node).proxyPoint()) {
+                                    assert currentState.isMarked(input) : input + " not available at " + node + " in block " + block + "\n" + list;
+                                }
+                            }
                         } else if (node instanceof LoopExitNode) {
                             if (graph.hasValueProxies()) {
-                                for (ProxyNode proxy : ((LoopExitNode) node).proxies()) {
-                                    for (Node input : proxy.inputs()) {
-                                        if (input != proxy.proxyPoint()) {
-                                            assert currentState.isMarked(input) : input + " not available at " + proxy + " in block " + block + "\n" + list;
-                                        }
-                                    }
-                                }
-
                                 // loop contents are only accessible via proxies at the exit
                                 currentState.clearAll();
                                 currentState.markAll(loopEntryStates.get(((LoopExitNode) node).loopBegin()));
@@ -214,7 +210,7 @@ public final class GraphOrder {
                             }
                         }
                         if (node instanceof AbstractEndNode) {
-                            AbstractMergeNode merge = ((AbstractEndNode) node).merge();
+                            MergeNode merge = ((AbstractEndNode) node).merge();
                             for (PhiNode phi : merge.phis()) {
                                 ValueNode phiValue = phi.valueAt((AbstractEndNode) node);
                                 assert phiValue == null || currentState.isMarked(phiValue) : phiValue + " not available at phi " + phi + " / end " + node + " in block " + block;
