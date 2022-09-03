@@ -22,18 +22,21 @@
  */
 package com.oracle.graal.lir.alloc.lsra;
 
+import com.oracle.jvmci.code.StackSlot;
+import com.oracle.jvmci.code.TargetDescription;
+import com.oracle.jvmci.code.Register;
+import com.oracle.jvmci.code.BailoutException;
+import com.oracle.jvmci.meta.JavaConstant;
+import com.oracle.jvmci.meta.Kind;
+import com.oracle.jvmci.meta.Value;
+import com.oracle.jvmci.meta.LIRKind;
+import com.oracle.jvmci.meta.AllocatableValue;
+import static com.oracle.jvmci.code.ValueUtil.*;
 import static com.oracle.graal.compiler.common.GraalOptions.*;
 import static com.oracle.graal.lir.LIRValueUtil.*;
 import static com.oracle.graal.lir.debug.LIRGenerationDebugContext.*;
-import static jdk.internal.jvmci.code.ValueUtil.*;
 
 import java.util.*;
-
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.common.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.*;
-import jdk.internal.jvmci.meta.*;
 
 import com.oracle.graal.compiler.common.alloc.*;
 import com.oracle.graal.compiler.common.cfg.*;
@@ -41,6 +44,7 @@ import com.oracle.graal.compiler.common.util.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
+import com.oracle.graal.lir.StandardOp.LabelOp;
 import com.oracle.graal.lir.StandardOp.MoveOp;
 import com.oracle.graal.lir.StandardOp.StackStoreOp;
 import com.oracle.graal.lir.alloc.lsra.Interval.RegisterPriority;
@@ -49,6 +53,9 @@ import com.oracle.graal.lir.alloc.lsra.LinearScan.BlockData;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.lir.gen.LIRGeneratorTool.SpillMoveFactory;
 import com.oracle.graal.lir.phases.*;
+import com.oracle.jvmci.common.*;
+import com.oracle.jvmci.debug.*;
+import com.oracle.jvmci.debug.Debug.Scope;
 
 class LinearScanLifetimeAnalysisPhase extends AllocationPhase {
 
@@ -203,7 +210,7 @@ class LinearScanLifetimeAnalysisPhase extends AllocationPhase {
                 for (int j = 0; j < numInst; j++) {
                     final LIRInstruction op = instructions.get(j);
 
-                    try (Indent indent2 = Debug.logAndIndent("handle op %d: %s", op.id(), op)) {
+                    try (Indent indent2 = Debug.logAndIndent("handle op %d", op.id())) {
                         op.visitEachInput(useConsumer);
                         op.visitEachAlive(useConsumer);
                         /*
@@ -352,7 +359,7 @@ class LinearScanLifetimeAnalysisPhase extends AllocationPhase {
         }
     }
 
-    protected void reportFailure(int numBlocks) {
+    private void reportFailure(int numBlocks) {
         try (Scope s = Debug.forceLog()) {
             try (Indent indent = Debug.logAndIndent("report failure")) {
 
@@ -436,7 +443,7 @@ class LinearScanLifetimeAnalysisPhase extends AllocationPhase {
         }
     }
 
-    protected void verifyLiveness() {
+    private void verifyLiveness() {
         /*
          * Check that fixed intervals are not live at block boundaries (live set must be empty at
          * fixed intervals).
@@ -520,7 +527,7 @@ class LinearScanLifetimeAnalysisPhase extends AllocationPhase {
             }
         }
 
-        changeSpillDefinitionPos(op, operand, interval, defPos);
+        changeSpillDefinitionPos(interval, defPos);
         if (registerPriority == RegisterPriority.None && interval.spillState().ordinal() <= SpillState.StartInMemory.ordinal() && isStackSlot(operand)) {
             // detection of method-parameters and roundfp-results
             interval.setSpillState(SpillState.StartInMemory);
@@ -591,11 +598,8 @@ class LinearScanLifetimeAnalysisPhase extends AllocationPhase {
 
     /**
      * Eliminates moves from register to stack if the stack slot is known to be correct.
-     *
-     * @param op
-     * @param operand
      */
-    protected void changeSpillDefinitionPos(LIRInstruction op, AllocatableValue operand, Interval interval, int defPos) {
+    void changeSpillDefinitionPos(Interval interval, int defPos) {
         assert interval.isSplitParent() : "can only be called for split parents";
 
         switch (interval.spillState()) {
@@ -636,10 +640,15 @@ class LinearScanLifetimeAnalysisPhase extends AllocationPhase {
     /**
      * Determines the register priority for an instruction's output/result operand.
      */
-    protected RegisterPriority registerPriorityOfOutputOperand(LIRInstruction op) {
+    private static RegisterPriority registerPriorityOfOutputOperand(LIRInstruction op) {
         if (op instanceof MoveOp) {
             MoveOp move = (MoveOp) op;
             if (optimizeMethodArgument(move.getInput())) {
+                return RegisterPriority.None;
+            }
+        } else if (op instanceof LabelOp) {
+            LabelOp label = (LabelOp) op;
+            if (label.isPhiIn()) {
                 return RegisterPriority.None;
             }
         } else if (op instanceof StackStoreOp) {
