@@ -124,11 +124,7 @@ public class HotSpotForeignCallLinkage implements ForeignCallLinkage, InvokeTarg
                     boolean reexecutable, LocationIdentity... killedLocations) {
         CallingConvention outgoingCc = createCallingConvention(descriptor, outgoingCcType);
         CallingConvention incomingCc = incomingCcType == null ? null : createCallingConvention(descriptor, incomingCcType);
-        HotSpotForeignCallLinkage linkage = new HotSpotForeignCallLinkage(descriptor, address, effect, transition, outgoingCc, incomingCc, reexecutable, killedLocations);
-        if (outgoingCcType == Type.NativeCall) {
-            linkage.temporaries = graalRuntime().getNativeABICallerSaveRegisters();
-        }
-        return linkage;
+        return new HotSpotForeignCallLinkage(descriptor, address, effect, transition, outgoingCc, incomingCc, reexecutable, killedLocations);
     }
 
     /**
@@ -144,7 +140,7 @@ public class HotSpotForeignCallLinkage implements ForeignCallLinkage, InvokeTarg
         }
         TargetDescription target = graalRuntime().getTarget();
         JavaType returnType = asJavaType(descriptor.getResultType(), runtime);
-        return runtime.getRegisterConfig().getCallingConvention(ccType, returnType, parameterTypes, target, false);
+        return runtime.lookupRegisterConfig().getCallingConvention(ccType, returnType, parameterTypes, target, false);
     }
 
     private static JavaType asJavaType(Class type, HotSpotRuntime runtime) {
