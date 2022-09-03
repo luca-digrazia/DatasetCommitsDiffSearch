@@ -218,8 +218,6 @@ public interface CompilerToVM {
 
     long readUnsafeKlassPointer(Object o);
 
-    void dontInline(long metaspaceMethod, HotSpotResolvedJavaMethod method);
-
     /**
      * Invalidates the profiling information and restarts profiling upon the next invocation.
      * 
@@ -230,9 +228,4 @@ public interface CompilerToVM {
     void invalidateInstalledCode(HotSpotInstalledCode hotspotInstalledCode);
 
     boolean isTypeLinked(HotSpotResolvedObjectType hotSpotResolvedObjectType);
-
-    /**
-     * Collects the current values of all Graal benchmark counters, summed up over all threads.
-     */
-    long[] collectCounters();
 }
