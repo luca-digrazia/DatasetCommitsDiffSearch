@@ -449,9 +449,6 @@ public final class SchedulePhase extends Phase {
         if (cfg.getNodeToBlock().containsKey(node)) {
             return;
         }
-        if (node instanceof VirtualObjectNode) {
-            return;
-        }
         // PhiNodes, ProxyNodes and FixedNodes should already have been placed in blocks by
         // ControlFlowGraph.identifyBlocks
         if (node instanceof PhiNode || node instanceof ProxyNode || node instanceof FixedNode) {
