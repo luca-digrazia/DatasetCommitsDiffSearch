@@ -110,15 +110,14 @@ public class MacroNode extends AbstractStateSplit implements Lowerable, MemoryCh
     }
 
     protected void replaceSnippetInvokes(StructuredGraph snippetGraph) {
-        for (MethodCallTargetNode call : snippetGraph.getNodes(MethodCallTargetNode.class)) {
-            Invoke invoke = call.invoke();
-            if (call.targetMethod() != getTargetMethod()) {
+        for (InvokeNode invoke : snippetGraph.getNodes().filter(InvokeNode.class)) {
+            if (((MethodCallTargetNode) invoke.callTarget()).targetMethod() != getTargetMethod()) {
                 throw new GraalInternalError("unexpected invoke %s in snippet", getClass().getSimpleName());
             }
             if (invoke.stateAfter().bci == FrameState.INVALID_FRAMESTATE_BCI) {
                 InvokeNode newInvoke = snippetGraph.add(new InvokeNode(invoke.callTarget(), getBci()));
                 newInvoke.setStateAfter(snippetGraph.add(new FrameState(FrameState.AFTER_BCI)));
-                snippetGraph.replaceFixedWithFixed((InvokeNode) invoke.asNode(), newInvoke);
+                snippetGraph.replaceFixedWithFixed(invoke, newInvoke);
             } else {
                 assert invoke.stateAfter().bci == FrameState.AFTER_BCI : invoke;
             }
