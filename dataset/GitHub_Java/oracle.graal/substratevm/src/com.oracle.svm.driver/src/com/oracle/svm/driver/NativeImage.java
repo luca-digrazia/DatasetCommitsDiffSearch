@@ -1056,11 +1056,11 @@ public class NativeImage {
         }
     }
 
-    public static Error showError(String message) {
+    static Error showError(String message) {
         throw new NativeImageError(message);
     }
 
-    public static Error showError(String message, Throwable cause) {
+    static Error showError(String message, Throwable cause) {
         throw new NativeImageError(message, cause);
     }
 
