@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,39 +22,60 @@
  */
 package com.oracle.graal.truffle.hotspot.nfi;
 
-import java.util.*;
+import java.util.Arrays;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.debug.*;
+import jdk.vm.ci.code.InstalledCode;
+import jdk.vm.ci.code.InvalidInstalledCodeException;
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.meta.JavaKind;
+
+import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.nfi.api.*;
+import com.oracle.nfi.api.NativeFunctionHandle;
+import com.oracle.truffle.api.CompilerDirectives;
 
 public class HotSpotNativeFunctionHandle implements NativeFunctionHandle {
 
-    private final InstalledCode code;
-    private final String name;
+    private final HotSpotNativeFunctionPointer pointer;
+    private final Class<?> returnType;
     private final Class<?>[] argumentTypes;
+    private final NativeCallStubGraphBuilder graphBuilder;
 
-    public HotSpotNativeFunctionHandle(InstalledCode code, String name, Class<?>... argumentTypes) {
+    InstalledCode code;
+
+    public HotSpotNativeFunctionHandle(NativeCallStubGraphBuilder graphBuilder, HotSpotNativeFunctionPointer pointer, Class<?> returnType, Class<?>... argumentTypes) {
+        this.pointer = pointer;
+        this.returnType = returnType;
         this.argumentTypes = argumentTypes;
-        this.name = name;
-        this.code = code;
+        this.graphBuilder = graphBuilder;
     }
 
+    HotSpotNativeFunctionPointer getPointer() {
+        return pointer;
+    }
+
+    Class<?> getReturnType() {
+        return returnType;
+    }
+
+    Class<?>[] getArgumentTypes() {
+        return argumentTypes;
+    }
+
+    @SuppressWarnings("try")
     private void traceCall(Object... args) {
         try (Scope s = Debug.scope("GNFI")) {
             if (Debug.isLogEnabled()) {
-                Debug.log("[GNFI] %s%s", name, Arrays.toString(args));
+                Debug.log("[GNFI] %s%s", pointer.getName(), Arrays.toString(args));
             }
         }
     }
 
+    @SuppressWarnings("try")
     private void traceResult(Object result) {
         try (Scope s = Debug.scope("GNFI")) {
             if (Debug.isLogEnabled()) {
-                Debug.log("[GNFI] %s --> %s", name, result);
+                Debug.log("[GNFI] %s --> %s", pointer.getName(), result);
             }
         }
     }
@@ -62,14 +83,27 @@ public class HotSpotNativeFunctionHandle implements NativeFunctionHandle {
     @Override
     public Object call(Object... args) {
         assert checkArgs(args);
-        try {
-            traceCall(args);
-            Object res = code.executeVarargs(args, null, null);
-            traceResult(res);
-            return res;
-        } catch (InvalidInstalledCodeException e) {
-            throw GraalInternalError.shouldNotReachHere("Execution of GNFI Callstub failed: " + name);
+        int attempts = 10;
+        while (--attempts >= 0) {
+            try {
+                if (CompilerDirectives.inInterpreter()) {
+                    traceCall(args);
+                }
+                Object res = code.executeVarargs(this, args);
+                if (CompilerDirectives.inInterpreter()) {
+                    traceResult(res);
+                }
+                return res;
+            } catch (InvalidInstalledCodeException e) {
+                CompilerDirectives.transferToInterpreter();
+                // Reinstall the stub if it has been invalidated by the VM.
+                // This can be caused by the NMethodSweeper for example.
+                // Once there is VM independent support for calling
+                // a native function, it should replace this mechanism.
+                graphBuilder.installNativeFunctionStub(this);
+            }
         }
+        throw JVMCIError.shouldNotReachHere("NFI call stub for " + pointer.getName() + " was invalidated and could not be recompiled");
     }
 
     private boolean checkArgs(Object... args) {
@@ -79,7 +113,7 @@ public class HotSpotNativeFunctionHandle implements NativeFunctionHandle {
             assert arg != null;
             Class<?> expectedType = argumentTypes[i];
             if (expectedType.isPrimitive()) {
-                Kind kind = Kind.fromJavaClass(expectedType);
+                JavaKind kind = JavaKind.fromJavaClass(expectedType);
                 expectedType = kind.toBoxedJavaClass();
             }
             assert expectedType == arg.getClass() : this + " expected arg " + i + " to be " + expectedType.getName() + ", not " + arg.getClass().getName();
@@ -90,6 +124,6 @@ public class HotSpotNativeFunctionHandle implements NativeFunctionHandle {
 
     @Override
     public String toString() {
-        return name + Arrays.toString(argumentTypes);
+        return pointer.getName() + Arrays.toString(argumentTypes);
     }
 }
