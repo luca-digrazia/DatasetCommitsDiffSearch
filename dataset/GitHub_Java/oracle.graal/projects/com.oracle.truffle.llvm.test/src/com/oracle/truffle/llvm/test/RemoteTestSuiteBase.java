@@ -29,6 +29,8 @@
  */
 package com.oracle.truffle.llvm.test;
 
+import static org.junit.Assert.assertEquals;
+
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
@@ -39,12 +41,18 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 
+import com.oracle.truffle.llvm.LLVM;
+import com.oracle.truffle.llvm.runtime.LLVMLogger;
+import com.oracle.truffle.llvm.test.RemoteLLVMTester.RemoteProgramArgsBuilder;
+import com.oracle.truffle.llvm.test.options.SulongTestOptions;
 import com.oracle.truffle.llvm.tools.util.ProcessUtil;
+import com.oracle.truffle.llvm.tools.util.ProcessUtil.ProcessResult;
 
 public class RemoteTestSuiteBase extends TestSuiteBase {
 
@@ -55,31 +63,66 @@ public class RemoteTestSuiteBase extends TestSuiteBase {
 
     protected static final Pattern RETURN_VALUE_PATTERN = Pattern.compile("exit ([-]*[0-9]*)");
 
-    // we have to launch a remote process to capture native prints
-    public List<String> launchRemote(File bitCodeFile) throws IOException, AssertionError {
-        String str = bitCodeFile.getAbsolutePath() + "\n";
-        outputStream.write(str);
-        outputStream.flush();
-        String line;
+    public List<String> launchLocal(TestCaseFiles tuple, Object... args) {
+        List<String> result = new ArrayList<>();
+        LLVMLogger.info("current file: " + tuple.getOriginalFile().getAbsolutePath());
+        try {
+            int retValue;
+            if (args == null || args.length == 0) {
+                retValue = LLVM.executeMain(tuple.getBitCodeFile());
+            } else {
+                retValue = LLVM.executeMain(tuple.getBitCodeFile(), args);
+            }
+            result.add("exit " + retValue);
+        } catch (Throwable t) {
+            recordError(tuple, t);
+            result.add("exit -1");
+        }
+        return result;
+    }
 
-        List<String> lines = new ArrayList<>();
-        while (true) {
-            line = reader.readLine();
-            lines.add(line);
-            if (line == null) {
-                throw new IllegalStateException();
+    public List<String> launchRemote(TestCaseFiles tuple, Object... args) throws IOException, AssertionError {
+        if (SulongTestOptions.TEST.runRemoteTestcasesAsLocal()) {
+            return launchLocal(tuple, args);
+        } else {
+            String str = new RemoteProgramArgsBuilder(tuple.getBitCodeFile()).args(args).getCommand();
+            outputStream.write(str);
+            outputStream.flush();
+            String line;
+
+            List<String> lines = new ArrayList<>();
+            while (true) {
+                line = reader.readLine();
+                lines.add(line);
+                if (line == null) {
+                    throw new IllegalStateException();
+                }
+                if (RETURN_VALUE_PATTERN.matcher(line).matches()) {
+                    int lineBeforeExit = lines.size() - 2;
+                    if (outputPrintedNewline(lines, lineBeforeExit)) {
+                        lines.remove(lineBeforeExit);
+                    }
+                    break;
+                } else if (line.matches("<error>")) {
+                    readErrorAndFail(tuple.getBitCodeFile());
+                    break;
+                }
             }
-            if (RETURN_VALUE_PATTERN.matcher(line).matches()) {
-                break;
-            } else if (line.matches("<error>")) {
-                readErrorAndFail(bitCodeFile);
-                break;
+            while (reader.ready()) {
+                lines.add(reader.readLine());
             }
+            return lines;
         }
-        while (reader.ready()) {
-            lines.add(reader.readLine());
-        }
-        return lines;
+
+    }
+
+    // we have to launch a remote process to capture native prints
+    public List<String> launchRemote(TestCaseFiles tuple) throws IOException, AssertionError {
+        return launchRemote(tuple, new Object[0]);
+    }
+
+    private static boolean outputPrintedNewline(List<String> lines, int lineBeforeExit) {
+        return lines.get(lineBeforeExit).equals("");
     }
 
     protected static int parseAndRemoveReturnValue(List<String> expectedLines) {
@@ -93,24 +136,29 @@ public class RemoteTestSuiteBase extends TestSuiteBase {
 
     @AfterClass
     public static void endRemoteProcess() {
-        try {
-            outputStream.write("exit\n");
-            outputStream.flush();
-        } catch (Exception e) {
-            throw new AssertionError(e);
+        if (!SulongTestOptions.TEST.runRemoteTestcasesAsLocal()) {
+            try {
+                outputStream.write("exit\n");
+                outputStream.flush();
+            } catch (Exception e) {
+                throw new AssertionError(e);
+            }
         }
+
     }
 
     @BeforeClass
     public static void startRemoteProcess() throws IOException {
-        remoteTruffleProcess = TestHelper.launchRemoteTruffle();
-        outputStream = new BufferedWriter(new OutputStreamWriter(remoteTruffleProcess.getOutputStream()));
-        reader = new BufferedReader(new InputStreamReader(remoteTruffleProcess.getInputStream()));
-        errorReader = new BufferedReader(new InputStreamReader(remoteTruffleProcess.getErrorStream()));
-        if (!remoteTruffleProcess.isAlive()) {
-            throw new IllegalStateException(ProcessUtil.readStream(remoteTruffleProcess.getErrorStream()));
+        if (!SulongTestOptions.TEST.runRemoteTestcasesAsLocal()) {
+            remoteTruffleProcess = TestHelper.launchRemoteTruffle();
+            outputStream = new BufferedWriter(new OutputStreamWriter(remoteTruffleProcess.getOutputStream()));
+            reader = new BufferedReader(new InputStreamReader(remoteTruffleProcess.getInputStream()));
+            errorReader = new BufferedReader(new InputStreamReader(remoteTruffleProcess.getErrorStream()));
+            if (!remoteTruffleProcess.isAlive()) {
+                throw new IllegalStateException(ProcessUtil.readStreamAndClose(remoteTruffleProcess.getErrorStream()));
+            }
+            TestHelper.compileToLLVMIRWithClang(LLVMPaths.FLUSH_C_FILE, LLVMPaths.FLUSH_BITCODE_FILE);
         }
-        TestHelper.compileToLLVMIRWithClang(LLVMPaths.FLUSH_C_FILE, LLVMPaths.FLUSH_BITCODE_FILE);
     }
 
     private static void readErrorAndFail(File bitCodeFile) throws IOException {
@@ -124,6 +172,32 @@ public class RemoteTestSuiteBase extends TestSuiteBase {
             }
         }
         Assert.fail(bitCodeFile + errorMessage.toString());
+    }
+
+    public void remoteLaunchAndTest(TestCaseFiles tuple) throws Throwable {
+        LLVMLogger.info("original file: " + tuple.getOriginalFile());
+        try {
+            List<String> launchRemote = launchRemote(tuple);
+            int sulongRetValue = parseAndRemoveReturnValue(launchRemote);
+            String sulongLines = launchRemote.stream().collect(Collectors.joining("\n"));
+            sulongLines = sulongLines.length() == 0 ? sulongLines : sulongLines + "\n";
+            ProcessResult processResult = TestHelper.executeLLVMBinary(tuple.getBitCodeFile());
+            String expectedLines = processResult.getStdOutput();
+            int expectedReturnValue = processResult.getReturnValue();
+            boolean pass = expectedLines.equals(sulongLines);
+            boolean undefinedReturnCode = tuple.hasFlag(TestCaseFlag.UNDEFINED_RETURN_CODE);
+            if (!undefinedReturnCode) {
+                pass &= expectedReturnValue == sulongRetValue;
+            }
+            recordTestCase(tuple, pass);
+            assertEquals(tuple.getBitCodeFile().getAbsolutePath(), expectedLines, sulongLines);
+            if (!undefinedReturnCode) {
+                assertEquals(tuple.getBitCodeFile().getAbsolutePath(), expectedReturnValue, sulongRetValue);
+            }
+        } catch (Throwable e) {
+            recordError(tuple, e);
+            throw e;
+        }
     }
 
 }
