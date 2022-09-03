@@ -77,12 +77,12 @@ public final class LLVMTypedForeignObject implements LLVMObjectAccess, LLVMInter
     }
 
     @Override
-    public LLVMObjectReadNode createReadNode() {
-        return new ForeignReadNode();
+    public LLVMObjectReadNode createReadNode(ForeignToLLVMType toLLVMType) {
+        return new ForeignReadNode(toLLVMType);
     }
 
     @Override
-    public LLVMObjectWriteNode createWriteNode() {
+    public LLVMObjectWriteNode createWriteNode(ForeignToLLVMType toLLVMType) {
         return new ForeignWriteNode();
     }
 
@@ -174,13 +174,17 @@ public final class LLVMTypedForeignObject implements LLVMObjectAccess, LLVMInter
 
     static class ForeignReadNode extends LLVMObjectReadNode {
 
-        @Child LLVMInteropReadNode read = LLVMInteropReadNode.create();
+        @Child LLVMInteropReadNode read;
         @Child ForeignGetTypeNode getType = ForeignGetTypeNodeGen.create();
 
+        protected ForeignReadNode(ForeignToLLVMType type) {
+            this.read = LLVMInteropReadNode.create(type);
+        }
+
         @Override
-        public Object executeRead(Object obj, long offset, ForeignToLLVMType type) throws InteropException {
+        public Object executeRead(Object obj, long offset) throws InteropException {
             LLVMTypedForeignObject object = (LLVMTypedForeignObject) obj;
-            return read.execute(getType.execute(object), object.getForeign(), offset, type);
+            return read.execute(getType.execute(object), object.getForeign(), offset);
         }
 
         @Override
@@ -196,7 +200,7 @@ public final class LLVMTypedForeignObject implements LLVMObjectAccess, LLVMInter
         @Child ForeignGetTypeNode getType = ForeignGetTypeNodeGen.create();
 
         @Override
-        public void executeWrite(Object obj, long offset, Object value, ForeignToLLVMType type) throws InteropException {
+        public void executeWrite(Object obj, long offset, Object value) throws InteropException {
             LLVMTypedForeignObject object = (LLVMTypedForeignObject) obj;
             Object escapedValue = dataEscape.executeWithTarget(value);
             write.execute(getType.execute(object), object.getForeign(), offset, escapedValue);

@@ -29,409 +29,240 @@
  */
 package com.oracle.truffle.llvm.nodes.op;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.TruffleLanguage.ContextReference;
-import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.Fallback;
-import com.oracle.truffle.api.dsl.ImportStatic;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropException;
-import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.llvm.nodes.op.LLVMPointerCompareNodeGen.ForeignToComparableValueNodeGen;
-import com.oracle.truffle.llvm.nodes.op.LLVMPointerCompareNodeGen.LLVMAddressEQNodeGen;
-import com.oracle.truffle.llvm.nodes.op.LLVMPointerCompareNodeGen.LLVMAddressEqualsNodeGen;
-import com.oracle.truffle.llvm.nodes.op.LLVMPointerCompareNodeGen.LLVMAddressNEQNodeGen;
-import com.oracle.truffle.llvm.nodes.op.LLVMPointerCompareNodeGen.LLVMForeignEqualsNodeGen;
-import com.oracle.truffle.llvm.nodes.op.LLVMPointerCompareNodeGen.LLVMManagedEqualsNodeGen;
-import com.oracle.truffle.llvm.nodes.op.LLVMPointerCompareNodeGen.LLVMNativeEqualsNodeGen;
-import com.oracle.truffle.llvm.nodes.op.LLVMPointerCompareNodeGen.ManagedToComparableValueNodeGen;
-import com.oracle.truffle.llvm.nodes.op.LLVMPointerCompareNodeGen.NativeToComparableValueNodeGen;
-import com.oracle.truffle.llvm.nodes.op.LLVMPointerCompareNodeGen.ToComparableValueNodeGen;
-import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
-import com.oracle.truffle.llvm.runtime.LLVMContext;
-import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
-import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
+import com.oracle.truffle.llvm.nodes.op.LLVMPointerCompareNodeGen.LLVMManagedCompareNodeGen;
+import com.oracle.truffle.llvm.nodes.op.LLVMPointerCompareNodeGen.LLVMNativeCompareNodeGen;
+import com.oracle.truffle.llvm.nodes.op.LLVMPointerCompareNodeGen.LLVMNegateNodeGen;
+import com.oracle.truffle.llvm.nodes.op.LLVMPointerCompareNodeGen.LLVMPointToSameObjectNodeGen;
+import com.oracle.truffle.llvm.nodes.op.ToComparableValue.ManagedToComparableValue;
 import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalReadNode;
-import com.oracle.truffle.llvm.runtime.interop.LLVMTypedForeignObject;
-import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
-import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMObjectNativeLibrary;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 
 @NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
-public abstract class LLVMPointerCompareNode extends LLVMExpressionNode {
-
-    public enum Kind {
-        ULT,
-        UGT,
-        UGE,
-        ULE,
-        SLE,
-        SGT,
-        SGE,
-        SLT,
-        EQ,
-        NEQ,
-    }
-
-    public static LLVMExpressionNode create(Kind kind, LLVMExpressionNode l, LLVMExpressionNode r) {
-        switch (kind) {
-            case SLT:
-                return LLVMPointerCompareNodeGen.create(new NativePointerCompare() {
-
-                    @Override
-                    public boolean compare(long val1, long val2) {
-                        return val1 < val2;
-                    }
-                }, l, r);
-
-            case SGE:
-                return LLVMPointerCompareNodeGen.create(new NativePointerCompare() {
-
-                    @Override
-                    public boolean compare(long val1, long val2) {
-                        return val1 >= val2;
-                    }
-                }, l, r);
-            case SGT:
-                return LLVMPointerCompareNodeGen.create(new NativePointerCompare() {
-
-                    @Override
-                    public boolean compare(long val1, long val2) {
-                        return val1 > val2;
-                    }
-                }, l, r);
-            case SLE:
-                return LLVMPointerCompareNodeGen.create(new NativePointerCompare() {
-
-                    @Override
-                    public boolean compare(long val1, long val2) {
-                        return val1 <= val2;
-                    }
-                }, l, r);
-            case UGE:
-                return LLVMPointerCompareNodeGen.create(new NativePointerCompare() {
-
-                    @Override
-                    public boolean compare(long val1, long val2) {
-                        return Long.compareUnsigned(val1, val2) >= 0;
-                    }
-                }, l, r);
-            case UGT:
-                return LLVMPointerCompareNodeGen.create(new NativePointerCompare() {
-
-                    @Override
-                    public boolean compare(long val1, long val2) {
-                        return Long.compareUnsigned(val1, val2) > 0;
-                    }
-                }, l, r);
-            case ULE:
-                return LLVMPointerCompareNodeGen.create(new NativePointerCompare() {
-
-                    @Override
-                    public boolean compare(long val1, long val2) {
-                        return Long.compareUnsigned(val1, val2) <= 0;
-                    }
-                }, l, r);
-            case ULT:
-                return LLVMPointerCompareNodeGen.create(new NativePointerCompare() {
-
-                    @Override
-                    public boolean compare(long val1, long val2) {
-                        return Long.compareUnsigned(val1, val2) < 0;
-                    }
-                }, l, r);
-
-            case EQ:
-                return LLVMAddressEQNodeGen.create(l, r);
-            case NEQ:
-                return LLVMAddressNEQNodeGen.create(l, r);
-            default:
-                throw new AssertionError();
-
-        }
-    }
-
-    protected abstract static class NativePointerCompare {
-
-        abstract boolean compare(long val1, long val2);
-
-    }
-
+public abstract class LLVMPointerCompareNode extends LLVMAbstractCompareNode {
     private final NativePointerCompare op;
 
     public LLVMPointerCompareNode(NativePointerCompare op) {
         this.op = op;
     }
 
-    protected abstract static class ForeignToComparableValue extends LLVMNode {
-
-        abstract long execute(TruffleObject obj);
-
-        public static ForeignToComparableValue create() {
-            return ForeignToComparableValueNodeGen.create();
-        }
-
-        @Specialization
-        protected long doLLVMTruffleObject(LLVMTypedForeignObject obj) {
-            return getHashCode(obj.getForeign());
-        }
-
-        @Fallback
-        protected long doOther(TruffleObject obj) {
-            return getHashCode(obj);
-        }
+    @Specialization(guards = {"libA.guard(a)", "libB.guard(b)"})
+    protected boolean doCached(Object a, Object b,
+                    @Cached("createCached(a)") LLVMObjectNativeLibrary libA,
+                    @Cached("createCached(b)") LLVMObjectNativeLibrary libB,
+                    @Cached("createCompare()") LLVMNativeCompareNode compare) {
+        return compare.execute(a, libA, b, libB, op);
     }
 
-    @ImportStatic(ForeignToLLVMType.class)
-    protected abstract static class ManagedToComparableValue extends LLVMNode {
-
-        abstract long execute(Object obj);
-
-        @Specialization
-        protected long doAddress(long address) {
-            return address;
-        }
-
-        @Specialization
-        protected long doManagedMalloc(LLVMVirtualAllocationAddress address) {
-            if (address.isNull()) {
-                return address.getOffset();
-            } else {
-                return getHashCode(address.getObject()) + address.getOffset();
-            }
-        }
-
-        @Specialization
-        protected long doLLVMTruffleObject(LLVMTruffleObject address,
-                        @Cached("create()") ForeignToComparableValue toComparable) {
-            return toComparable.execute(address.getObject()) + address.getOffset();
-        }
-
-        @Specialization
-        protected long doLLVMBoxedPrimitive(LLVMBoxedPrimitive address,
-                        @Cached("create(I64)") ForeignToLLVM toLLVM) {
-            return (long) toLLVM.executeWithTarget(address.getValue());
-        }
-
-        public static ManagedToComparableValue create() {
-            return ManagedToComparableValueNodeGen.create();
-        }
-    }
-
-    protected abstract static class NativeToComparableValue extends LLVMNode {
-
-        protected abstract long execute(Object obj, LLVMObjectNativeLibrary lib);
-
-        @Specialization(guards = "lib.isPointer(obj)")
-        protected long doPointer(Object obj, LLVMObjectNativeLibrary lib) {
-            try {
-                return lib.asPointer(obj);
-            } catch (InteropException ex) {
-                throw ex.raise();
-            }
-        }
-
-        @Specialization(guards = "!lib.isPointer(obj)")
-        @SuppressWarnings("unused")
-        protected long doManaged(Object obj, LLVMObjectNativeLibrary lib,
-                        @Cached("create()") ManagedToComparableValue toComparable) {
-            return toComparable.execute(obj);
-        }
-    }
-
-    protected abstract static class ToComparableValue extends LLVMNode {
-
-        protected abstract long execute(Object obj);
-
-        @Specialization(guards = "lib.guard(obj)")
-        protected long doNativeCached(Object obj,
-                        @Cached("createCached(obj)") LLVMObjectNativeLibrary lib,
-                        @Cached("createToComparable()") NativeToComparableValue toComparable) {
-            return doNative(obj, lib, toComparable);
-        }
-
-        @Specialization(replaces = "doNativeCached", guards = "lib.guard(obj)")
-        protected long doNative(Object obj,
-                        @Cached("createGeneric()") LLVMObjectNativeLibrary lib,
-                        @Cached("createToComparable()") NativeToComparableValue toComparable) {
-            return toComparable.execute(obj, lib);
-        }
-
-        static NativeToComparableValue createToComparable() {
-            return NativeToComparableValueNodeGen.create();
-        }
+    @Specialization(replaces = "doCached", guards = {"lib.guard(a)", "lib.guard(b)"})
+    protected boolean doGeneric(Object a, Object b,
+                    @Cached("createGeneric()") LLVMObjectNativeLibrary lib,
+                    @Cached("createCompare()") LLVMNativeCompareNode compare) {
+        return compare.execute(a, lib, b, lib, op);
     }
 
     @TruffleBoundary
-    private static int getHashCode(Object address) {
-        return address.hashCode();
+    protected static LLVMNativeCompareNode createCompare() {
+        return LLVMNativeCompareNodeGen.create();
     }
 
-    @Child private ToComparableValue convertVal1 = ToComparableValueNodeGen.create();
-    @Child private ToComparableValue convertVal2 = ToComparableValueNodeGen.create();
+    public static LLVMAbstractCompareNode create(Kind kind, LLVMExpressionNode l, LLVMExpressionNode r) {
+        switch (kind) {
+            case SLT:
+                return LLVMPointerCompareNodeGen.create(new NativePointerCompare() {
 
-    @Specialization
-    protected boolean doGenericCompare(Object val1, Object val2) {
-        return op.compare(convertVal1.execute(val1), convertVal2.execute(val2));
-    }
+                    @Override
+                    public boolean compare(long a, long b) {
+                        return a < b;
+                    }
+                }, l, r);
+            case SLE:
+                return LLVMPointerCompareNodeGen.create(new NativePointerCompare() {
 
-    abstract static class LLVMForeignEqualsNode extends LLVMNode {
+                    @Override
+                    public boolean compare(long a, long b) {
+                        return a <= b;
+                    }
+                }, l, r);
+            case ULE:
+                return LLVMPointerCompareNodeGen.create(new NativePointerCompare() {
 
-        abstract boolean execute(Env env, TruffleObject obj1, TruffleObject obj2);
+                    @Override
+                    public boolean compare(long a, long b) {
+                        return Long.compareUnsigned(a, b) <= 0;
+                    }
+                }, l, r);
+            case ULT:
+                return LLVMPointerCompareNodeGen.create(new NativePointerCompare() {
 
-        boolean isHostObject(Env env, TruffleObject obj) {
-            return env.isHostObject(obj);
-        }
+                    @Override
+                    public boolean compare(long a, long b) {
+                        return Long.compareUnsigned(a, b) < 0;
+                    }
+                }, l, r);
+            case EQ:
+                return LLVMAddressEqualsNodeGen.create(l, r);
+            case NEQ:
+                return LLVMNegateNodeGen.create(LLVMAddressEqualsNodeGen.create(null, null), l, r);
+            default:
+                throw new AssertionError();
 
-        @Specialization(guards = {"isHostObject(env, obj1)", "isHostObject(env, obj2)"})
-        protected boolean doJava(Env env, TruffleObject obj1, TruffleObject obj2) {
-            return env.asHostObject(obj1) == env.asHostObject(obj2);
-        }
-
-        @Specialization
-        protected boolean doForeign(Env env, LLVMTypedForeignObject obj1, LLVMTypedForeignObject obj2,
-                        @Cached("create()") LLVMForeignEqualsNode equals) {
-            return equals.execute(env, obj1.getForeign(), obj2.getForeign());
-        }
-
-        @Fallback
-        protected boolean doOther(@SuppressWarnings("unused") Env env, TruffleObject obj1, TruffleObject obj2) {
-            return obj1 == obj2;
-        }
-
-        public static LLVMForeignEqualsNode create() {
-            return LLVMForeignEqualsNodeGen.create();
-        }
-    }
-
-    abstract static class LLVMManagedEqualsNode extends LLVMNode {
-
-        abstract boolean execute(Object val1, Object val2);
-
-        @Specialization
-        protected boolean doForeign(LLVMTruffleObject obj1, LLVMTruffleObject obj2,
-                        @Cached("create()") LLVMForeignEqualsNode equals,
-                        @Cached("getContextReference()") ContextReference<LLVMContext> ctxRef) {
-            return equals.execute(ctxRef.get().getEnv(), obj1.getObject(), obj2.getObject()) && obj1.getOffset() == obj2.getOffset();
-        }
-
-        @Specialization
-        protected boolean doGlobal(LLVMGlobal g1, LLVMGlobal g2) {
-            return g1 == g2;
-        }
-
-        @Specialization
-        protected boolean doVirtual(LLVMVirtualAllocationAddress v1, LLVMVirtualAllocationAddress v2) {
-            return v1.getObject() == v2.getObject() && v1.getOffset() == v2.getOffset();
-        }
-
-        @Specialization
-        protected boolean doFunctionDescriptor(LLVMFunctionDescriptor f1, LLVMFunctionDescriptor f2) {
-            return f1 == f2;
-        }
-
-        @Specialization
-        protected boolean doForeign(LLVMGlobal g1, LLVMTruffleObject obj2,
-                        @Cached("create()") LLVMManagedEqualsNode recursive,
-                        @Cached("create()") LLVMGlobalReadNode.ReadObjectNode readGlobalNode) {
-            Object value = readGlobalNode.execute(g1);
-            return recursive.execute(value, obj2);
-        }
-
-        @Specialization
-        protected boolean doForeign(LLVMTruffleObject obj1, LLVMGlobal g2,
-                        @Cached("create()") LLVMManagedEqualsNode recursive,
-                        @Cached("create()") LLVMGlobalReadNode.ReadObjectNode readGlobalNode) {
-            Object value = readGlobalNode.execute(g2);
-            return recursive.execute(obj1, value);
-        }
-
-        @Specialization(guards = "val1.getClass() != val2.getClass()")
-        @SuppressWarnings("unused")
-        protected boolean doDifferentType(Object val1, Object val2) {
-            // different type, and at least one of them is managed, and not a pointer
-            // these objects can not have the same address
-            return false;
-        }
-
-        public static LLVMManagedEqualsNode create() {
-            return LLVMManagedEqualsNodeGen.create();
         }
     }
 
-    abstract static class LLVMNativeEqualsNode extends LLVMNode {
+    public enum Kind {
+        ULT,
+        ULE,
+        SLT,
+        SLE,
+        EQ,
+        NEQ,
+    }
 
-        abstract boolean execute(Object val1, LLVMObjectNativeLibrary lib1,
-                        Object val2, LLVMObjectNativeLibrary lib2);
+    protected abstract static class NativePointerCompare {
+        abstract boolean compare(long a, long b);
+    }
 
-        @Specialization(guards = {"lib1.isPointer(val1)", "lib2.isPointer(val2)"})
-        protected boolean doPointerPointer(Object val1, LLVMObjectNativeLibrary lib1,
-                        Object val2, LLVMObjectNativeLibrary lib2) {
+    abstract static class LLVMNativeCompareNode extends LLVMNode {
+        abstract boolean execute(Object a, LLVMObjectNativeLibrary libA, Object b, LLVMObjectNativeLibrary libB, NativePointerCompare op);
+
+        @Specialization(guards = {"libA.isPointer(a)", "libB.isPointer(b)"})
+        protected boolean doPointerPointer(Object a, LLVMObjectNativeLibrary libA, Object b, LLVMObjectNativeLibrary libB, NativePointerCompare op) {
             try {
-                return lib1.asPointer(val1) == lib2.asPointer(val2);
+                return op.compare(libA.asPointer(a), libB.asPointer(b));
             } catch (InteropException ex) {
                 throw ex.raise();
             }
         }
 
-        @Specialization(guards = "!lib1.isPointer(val1) || !lib2.isPointer(val2)")
-        protected boolean doOther(Object val1, @SuppressWarnings("unused") LLVMObjectNativeLibrary lib1,
-                        Object val2, @SuppressWarnings("unused") LLVMObjectNativeLibrary lib2,
-                        @Cached("create()") LLVMManagedEqualsNode managedEquals) {
-            return managedEquals.execute(val1, val2);
+        @Specialization(guards = "!libA.isPointer(a) || !libB.isPointer(b)")
+        protected boolean doOther(Object a, LLVMObjectNativeLibrary libA, Object b, LLVMObjectNativeLibrary libB, NativePointerCompare op,
+                        @Cached("create()") LLVMManagedCompareNode managedCompare) {
+            return managedCompare.execute(a, libA, b, libB, op);
         }
     }
 
-    abstract static class LLVMAddressEqualsNode extends LLVMNode {
+    /**
+     * Whenever we used {@link ManagedToComparableValue} in this class, we only convert the managed
+     * object to a long value and ignore the pointer offset (including the offset would increase the
+     * probability of collisions). However, we can only ignore the offset safely when we know that
+     * both pointers do not point to the same object.
+     */
+    abstract static class LLVMManagedCompareNode extends LLVMNode {
+        abstract boolean execute(Object a, LLVMObjectNativeLibrary libA, Object b, LLVMObjectNativeLibrary libB, NativePointerCompare op);
 
-        abstract boolean execute(Object val1, Object val2);
-
-        @Specialization(guards = {"lib1.guard(val1)", "lib2.guard(val2)"})
-        protected boolean doCached(Object val1, Object val2,
-                        @Cached("createCached(val1)") LLVMObjectNativeLibrary lib1,
-                        @Cached("createCached(val2)") LLVMObjectNativeLibrary lib2,
-                        @Cached("createEquals()") LLVMNativeEqualsNode equals) {
-            return equals.execute(val1, lib1, val2, lib2);
+        @Specialization(guards = {"pointToSameObject.execute(a, b)"})
+        protected boolean doForeign(LLVMManagedPointer a, @SuppressWarnings("unused") LLVMObjectNativeLibrary libA,
+                        LLVMManagedPointer b, @SuppressWarnings("unused") LLVMObjectNativeLibrary libB, NativePointerCompare op,
+                        @Cached("create()") @SuppressWarnings("unused") LLVMPointToSameObjectNode pointToSameObject) {
+            return op.compare(a.getOffset(), b.getOffset());
         }
 
-        @Specialization(replaces = "doCached", guards = {"lib.guard(val1)", "lib.guard(val2)"})
-        protected boolean doGeneric(Object val1, Object val2,
-                        @Cached("createGeneric()") LLVMObjectNativeLibrary lib,
-                        @Cached("createEquals()") LLVMNativeEqualsNode equals) {
-            return equals.execute(val1, lib, val2, lib);
+        @Specialization(guards = "!pointToSameObject.execute(a, b)")
+        protected boolean doForeign(LLVMManagedPointer a, @SuppressWarnings("unused") LLVMObjectNativeLibrary libA,
+                        LLVMManagedPointer b, @SuppressWarnings("unused") LLVMObjectNativeLibrary libB, NativePointerCompare op,
+                        @Cached("create()") @SuppressWarnings("unused") LLVMPointToSameObjectNode pointToSameObject,
+                        @Cached("createIgnoreOffset()") ManagedToComparableValue convertA,
+                        @Cached("createIgnoreOffset()") ManagedToComparableValue convertB) {
+            return op.compare(convertA.executeWithTarget(a), convertB.executeWithTarget(b));
         }
 
-        static LLVMNativeEqualsNode createEquals() {
-            return LLVMNativeEqualsNodeGen.create();
+        @Specialization(guards = "pointToSameObject.execute(a, b)")
+        protected boolean doVirtual(LLVMVirtualAllocationAddress a, @SuppressWarnings("unused") LLVMObjectNativeLibrary libA,
+                        LLVMVirtualAllocationAddress b, @SuppressWarnings("unused") LLVMObjectNativeLibrary libB, NativePointerCompare op,
+                        @Cached("create()") @SuppressWarnings("unused") LLVMPointToSameObjectNode pointToSameObject) {
+            return op.compare(a.getOffset(), b.getOffset());
+        }
+
+        @Specialization(guards = "!pointToSameObject.execute(a, b)")
+        protected boolean doVirtual(LLVMVirtualAllocationAddress a, @SuppressWarnings("unused") LLVMObjectNativeLibrary libA,
+                        LLVMVirtualAllocationAddress b, @SuppressWarnings("unused") LLVMObjectNativeLibrary libB, NativePointerCompare op,
+                        @Cached("create()") @SuppressWarnings("unused") LLVMPointToSameObjectNode pointToSameObject,
+                        @Cached("createIgnoreOffset()") ManagedToComparableValue convertA,
+                        @Cached("createIgnoreOffset()") ManagedToComparableValue convertB) {
+            return op.compare(convertA.executeWithTarget(a), convertB.executeWithTarget(b));
+        }
+
+        @Specialization(guards = "libA.isPointer(a)")
+        protected boolean doManagedNative(Object a, LLVMObjectNativeLibrary libA, Object b, LLVMObjectNativeLibrary libB, NativePointerCompare op,
+                        @Cached("createIgnoreOffset()") ManagedToComparableValue convert) {
+            assert !libB.isPointer(b);
+            try {
+                return op.compare(libA.asPointer(a), convert.executeWithTarget(b));
+            } catch (InteropException e) {
+                throw e.raise();
+            }
+        }
+
+        @Specialization(guards = "libB.isPointer(b)")
+        protected boolean doManagedNative(LLVMManagedPointer a, LLVMObjectNativeLibrary libA, Object b, LLVMObjectNativeLibrary libB, NativePointerCompare op,
+                        @Cached("createIgnoreOffset()") ManagedToComparableValue convert) {
+            assert !libA.isPointer(a);
+            try {
+                return op.compare(convert.executeWithTarget(a), libB.asPointer(b));
+            } catch (InteropException e) {
+                throw e.raise();
+            }
+        }
+
+        @TruffleBoundary
+        public static LLVMManagedCompareNode create() {
+            return LLVMManagedCompareNodeGen.create();
+        }
+    }
+
+    /**
+     * Uses an inline cache to devirtualize the virtual call to equals.
+     */
+    public abstract static class LLVMPointToSameObjectNode extends LLVMNode {
+        abstract boolean execute(Object a, Object b);
+
+        @Specialization(guards = "cachedClassA == getObjectClass(a)")
+        protected boolean pointToSameObjectCached(LLVMManagedPointer a, LLVMManagedPointer b,
+                        @Cached("getObjectClass(a)") Class<?> cachedClassA) {
+            return CompilerDirectives.castExact(a.getObject(), cachedClassA).equals(b.getObject());
+        }
+
+        @Specialization(replaces = "pointToSameObjectCached")
+        protected boolean pointToSameObject(LLVMManagedPointer a, LLVMManagedPointer b) {
+            return a.getObject().equals(b.getObject());
+        }
+
+        @Specialization
+        protected boolean pointToSameObject(LLVMVirtualAllocationAddress a, LLVMVirtualAllocationAddress b) {
+            return a.getObject() == b.getObject();
+        }
+
+        protected static Class<?> getObjectClass(LLVMManagedPointer pointer) {
+            return pointer.getObject().getClass();
+        }
+
+        @TruffleBoundary
+        public static LLVMPointToSameObjectNode create() {
+            return LLVMPointToSameObjectNodeGen.create();
         }
     }
 
     @NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
-    abstract static class LLVMAddressEQNode extends LLVMExpressionNode {
+    public abstract static class LLVMNegateNode extends LLVMAbstractCompareNode {
+        @Child private LLVMAbstractCompareNode booleanExpression;
 
-        @Child private LLVMAddressEqualsNode equals = LLVMAddressEqualsNodeGen.create();
-
-        @Specialization
-        protected boolean doCompare(Object val1, Object val2) {
-            return equals.execute(val1, val2);
+        LLVMNegateNode(LLVMAbstractCompareNode booleanExpression) {
+            this.booleanExpression = booleanExpression;
         }
-    }
-
-    @NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
-    abstract static class LLVMAddressNEQNode extends LLVMExpressionNode {
-
-        @Child private LLVMAddressEqualsNode equals = LLVMAddressEqualsNodeGen.create();
 
         @Specialization
-        protected boolean doCompare(Object val1, Object val2) {
-            return !equals.execute(val1, val2);
+        protected boolean doCompare(Object a, Object b) {
+            return !booleanExpression.executeWithTarget(a, b);
         }
     }
 }
