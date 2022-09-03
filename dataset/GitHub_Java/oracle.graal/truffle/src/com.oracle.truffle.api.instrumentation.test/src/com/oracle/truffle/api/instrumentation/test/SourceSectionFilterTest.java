@@ -24,7 +24,6 @@
  */
 package com.oracle.truffle.api.instrumentation.test;
 
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -33,22 +32,13 @@ import java.util.Set;
 import org.junit.Assert;
 import org.junit.Test;
 
-import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.instrumentation.InstrumentableNode;
-import com.oracle.truffle.api.instrumentation.ProbeNode;
 import com.oracle.truffle.api.instrumentation.SourceSectionFilter;
-import com.oracle.truffle.api.instrumentation.Tag;
 import com.oracle.truffle.api.instrumentation.SourceSectionFilter.IndexRange;
-import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.api.test.ReflectionUtils;
-
-import org.graalvm.polyglot.Engine;
-import org.graalvm.polyglot.Language;
 
 public class SourceSectionFilterTest {
 
@@ -93,71 +83,8 @@ public class SourceSectionFilterTest {
         }
     }
 
-    static class SourceSectionNode extends Node implements InstrumentableNode {
-        private final SourceSection sourceSection;
-        private final Class<?>[] tags;
-
-        SourceSectionNode(SourceSection sourceSection, final Class<?>... tags) {
-            this.sourceSection = sourceSection;
-            this.tags = tags;
-        }
-
-        @Override
-        public SourceSection getSourceSection() {
-            return sourceSection;
-        }
-
-        public boolean isInstrumentable() {
-            return sourceSection != null;
-        }
-
-        public boolean hasTag(Class<? extends Tag> tag) {
-            for (int i = 0; i < tags.length; i++) {
-                if (tags[i] == tag) {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        public WrapperNode createWrapper(ProbeNode probe) {
-            return null;
-        }
-
-    }
-
     private static Node createNode(final SourceSection section, final Class<?>... tags) {
-        return new SourceSectionNode(section, tags);
-    }
-
-    static RootNode createRootNode(final SourceSection section, final Boolean internal, Node... children) throws Exception {
-        Engine engine = Engine.create();
-        return createRootNode(engine, section, internal, children);
-    }
-
-    static RootNode createRootNode(Engine engine, final SourceSection section, final Boolean internal, Node... children) throws Exception {
-        Language language = engine.getLanguages().get(InstrumentationTestLanguage.ID);
-        Field impl = Language.class.getDeclaredField("impl");
-        ReflectionUtils.setAccessible(impl, true);
-        Object polyglotLanguage = impl.get(language);
-        Method ensureInitialized = polyglotLanguage.getClass().getDeclaredMethod("ensureInitialized");
-        ReflectionUtils.setAccessible(ensureInitialized, true);
-        ensureInitialized.invoke(polyglotLanguage);
-        Field info = polyglotLanguage.getClass().getDeclaredField("info");
-        ReflectionUtils.setAccessible(info, true);
-        LanguageInfo languageInfo = (LanguageInfo) info.get(polyglotLanguage);
-        Field spi = LanguageInfo.class.getDeclaredField("spi");
-        ReflectionUtils.setAccessible(spi, true);
-        TruffleLanguage<?> truffleLanguage = (TruffleLanguage<?>) spi.get(languageInfo);
-
-        return new RootNode(truffleLanguage) {
-
-            @Node.Children Node[] rootChildren = children;
-
-            @Override
-            protected boolean isInstrumentable() {
-                return true;
-            }
+        return new Node() {
 
             @Override
             public SourceSection getSourceSection() {
@@ -165,17 +92,13 @@ public class SourceSectionFilterTest {
             }
 
             @Override
-            public boolean isInternal() {
-                if (internal == null) {
-                    return super.isInternal();
-                } else {
-                    return internal;
+            protected boolean isTaggedWith(Class<?> tag) {
+                for (int i = 0; i < tags.length; i++) {
+                    if (tags[i] == tag) {
+                        return true;
+                    }
                 }
-            }
-
-            @Override
-            public Object execute(VirtualFrame frame) {
-                return null;
+                return super.isTaggedWith(tag);
             }
 
         };
@@ -629,6 +552,10 @@ public class SourceSectionFilterTest {
                         isInstrumented(SourceSectionFilter.newBuilder().sourceSectionEquals(sampleSource1.createSection(2, 6), sampleSource1.createSection(2, 7)).build(),
                                         null, createNode(sampleSource1.createUnavailableSection())));
 
+        Assert.assertFalse(
+                        isInstrumented(SourceSectionFilter.newBuilder().sourceSectionEquals(sampleSource1.createSection(2, 6), sampleSource1.createSection(2, 7)).build(),
+                                        root1, null));
+
         Assert.assertNotNull(SourceSectionFilter.newBuilder().sourceSectionEquals(sampleSource1.createSection(1, 6)).build().toString());
     }
 
@@ -729,34 +656,6 @@ public class SourceSectionFilterTest {
                                         null, source(InstrumentationTestLanguage.EXPRESSION, InstrumentationTestLanguage.STATEMENT)));
 
         Assert.assertNotNull(SourceSectionFilter.newBuilder().tagIsNot(InstrumentationTestLanguage.STATEMENT, InstrumentationTestLanguage.EXPRESSION).build().toString());
-    }
-
-    @Test
-    public void testIgnoreInternal() throws Exception {
-        SourceSectionFilter internalFilter = SourceSectionFilter.newBuilder().includeInternal(false).build();
-        SourceSectionFilter defaultFilter = SourceSectionFilter.newBuilder().build();
-        Assert.assertTrue(
-                        isInstrumented(internalFilter, null, source()));
-        Source nonInternalSource = Source.newBuilder("line1\nline2\nline3\nline4").name("unknown").mimeType(InstrumentationTestLanguage.MIME_TYPE).build();
-        // Default non-internal RootNode
-        RootNode root = createRootNode(nonInternalSource.createSection(0, 23), null);
-        Assert.assertTrue(
-                        isInstrumented(internalFilter, root, createNode(nonInternalSource.createSection(1))));
-        // Internal RootNode
-        root = createRootNode(nonInternalSource.createSection(0, 23), true);
-        Assert.assertFalse(
-                        isInstrumented(internalFilter, root, createNode(nonInternalSource.createSection(1))));
-        Assert.assertTrue(
-                        isInstrumented(defaultFilter, root, createNode(nonInternalSource.createSection(1))));
-        Source internalSource = Source.newBuilder("line1\nline2\nline3\nline4").name("unknown").mimeType(InstrumentationTestLanguage.MIME_TYPE).internal().build();
-        // Default internal RootNode
-        root = createRootNode(internalSource.createSection(0, 23), null);
-        Assert.assertFalse(
-                        isInstrumented(internalFilter, root, createNode(internalSource.createSection(1))));
-        // Non-internal RootNode
-        root = createRootNode(nonInternalSource.createSection(0, 23), false);
-        Assert.assertTrue(
-                        isInstrumented(internalFilter, root, createNode(internalSource.createSection(1))));
     }
 
     @Test

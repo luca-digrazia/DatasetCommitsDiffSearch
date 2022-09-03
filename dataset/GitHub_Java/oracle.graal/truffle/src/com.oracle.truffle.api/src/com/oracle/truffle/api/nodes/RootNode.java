@@ -204,6 +204,7 @@ public abstract class RootNode extends Node {
      * @see #getLanguageInfo()
      * @since 0.25
      */
+    @SuppressWarnings("unchecked")
     public final <C extends TruffleLanguage> C getLanguage(Class<C> languageClass) {
         if (languageInfo == null) {
             return null;
@@ -215,7 +216,7 @@ public abstract class RootNode extends Node {
                 throw new ClassCastException("Illegal language class specified. Expected " + language.getClass().getName() + ".");
             }
         }
-        return languageClass.cast(language);
+        return (C) language;
     }
 
     /**

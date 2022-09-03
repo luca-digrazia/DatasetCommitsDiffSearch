@@ -182,14 +182,6 @@ public abstract class Accessor {
 
         public abstract boolean isHostAccessAllowed(Object vmObject, Env env);
 
-        public abstract Object createInternalContext(Object vmObject, Map<String, Object> config);
-
-        public abstract Object enterInternalContext(Object impl);
-
-        public abstract void leaveInternalContext(Object impl, Object prev);
-
-        public abstract void closeInternalContext(Object impl);
-
     }
 
     public abstract static class LanguageSupport {
@@ -198,8 +190,6 @@ public abstract class Accessor {
 
         public abstract Env createEnv(Object vmObject, LanguageInfo info, OutputStream stdOut, OutputStream stdErr, InputStream stdIn, Map<String, Object> config, OptionValues options,
                         String[] applicationArguments);
-
-        public abstract Object createEnvContext(Env localEnv);
 
         public abstract void postInitEnv(Env env);
 
