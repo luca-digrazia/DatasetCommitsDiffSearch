@@ -153,6 +153,9 @@ public class CFGPrinter {
         if (block.isExceptionEntry()) {
             out.print("\"ex\" ");
         }
+        if (block.isCriticalEdgeSplit()) {
+            out.print("\"ces\" ");
+        }
         if (block.isLinearScanLoopHeader()) {
             out.print("\"llh\" ");
         }
