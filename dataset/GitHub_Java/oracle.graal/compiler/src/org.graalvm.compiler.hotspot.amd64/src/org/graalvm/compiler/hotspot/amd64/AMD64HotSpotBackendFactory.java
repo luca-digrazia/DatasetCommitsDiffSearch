@@ -35,7 +35,6 @@ import org.graalvm.compiler.hotspot.HotSpotBackend;
 import org.graalvm.compiler.hotspot.HotSpotBackendFactory;
 import org.graalvm.compiler.hotspot.HotSpotGraalRuntimeProvider;
 import org.graalvm.compiler.hotspot.HotSpotReplacementsImpl;
-import org.graalvm.compiler.hotspot.meta.AddressLoweringHotSpotSuitesProvider;
 import org.graalvm.compiler.hotspot.meta.HotSpotForeignCallsProvider;
 import org.graalvm.compiler.hotspot.meta.HotSpotGraalConstantFieldProvider;
 import org.graalvm.compiler.hotspot.meta.HotSpotGraphBuilderPlugins;
@@ -183,7 +182,7 @@ public class AMD64HotSpotBackendFactory implements HotSpotBackendFactory {
      */
     protected HotSpotSuitesProvider createSuites(GraalHotSpotVMConfig config, HotSpotGraalRuntimeProvider runtime, CompilerConfiguration compilerConfiguration, Plugins plugins,
                     HotSpotRegistersProvider registers, Replacements replacements, OptionValues options) {
-        return new AddressLoweringHotSpotSuitesProvider(new AMD64HotSpotSuitesCreator(compilerConfiguration, plugins), config, runtime,
+        return new AMD64HotSpotSuitesProvider(new AMD64HotSpotSuitesCreator(compilerConfiguration, plugins), config, runtime,
                         new AMD64HotSpotAddressLowering(config, registers.getHeapBaseRegister(), options));
     }
 
