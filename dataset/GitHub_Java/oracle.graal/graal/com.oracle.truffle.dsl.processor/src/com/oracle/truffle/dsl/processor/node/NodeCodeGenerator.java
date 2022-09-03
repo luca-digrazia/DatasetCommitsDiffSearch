@@ -1769,12 +1769,6 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
             CodeTreeBuilder builder = parent.create();
             builder.declaration(getContext().getTruffleTypes().getNode(), "root", currentNode);
             builder.startIf().string(currentNode).string(".next0 != null").end().startBlock();
-            /*
-             * Communicates to the caller of executeAndSpecialize that it was rewritten to generic.
-             * Its important that this is used instead of the currentNode since the caller is this.
-             * CurrentNode may not be this anymore at this place.
-             */
-            builder.statement("this.next0 = null");
             builder.tree(createFindRoot(builder, node, false));
             builder.end();
             builder.end();
@@ -2508,10 +2502,9 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
 
             builder.startIf().string("depth > ").string(String.valueOf(node.getPolymorphicDepth())).end();
             builder.startBlock();
-            String message = "Polymorphic limit reached (" + node.getPolymorphicDepth() + ")";
-            String castRoot = "(" + baseClassName(node) + ") root";
+            String message = ("Polymorphic limit reached (" + node.getPolymorphicDepth() + ")");
             builder.tree(createGenericInvoke(builder, node.getGenericPolymorphicSpecialization(), node.getGenericSpecialization(),
-                            createReplaceCall(builder, node.getGenericSpecialization(), "root", castRoot, message), null));
+                            createReplaceCall(builder, node.getGenericSpecialization(), "root", "this", message), null));
             builder.end();
 
             builder.startElseBlock();
@@ -2528,9 +2521,7 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
 
             builder.declaration(node.getGenericSpecialization().getReturnType().getType(), "result", specializeCall.getRoot());
 
-            builder.startIf().string("this.next0 != null").end().startBlock();
             builder.startStatement().string("(").cast(nodePolymorphicClassName(node, node.getGenericPolymorphicSpecialization())).string("root).optimizeTypes()").end();
-            builder.end();
 
             if (Utils.isVoid(builder.findMethod().getReturnType())) {
                 builder.returnStatement();
