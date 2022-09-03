@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,14 +23,17 @@
 
 package com.oracle.graal.compiler.sparc;
 
+import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.lir.sparc.SPARCArithmetic.*;
 import static com.oracle.graal.lir.sparc.SPARCBitManipulationOp.IntrinsicOpcode.*;
 import static com.oracle.graal.lir.sparc.SPARCCompare.*;
 import static com.oracle.graal.lir.sparc.SPARCMathIntrinsicOp.IntrinsicOpcode.*;
-import static com.oracle.jvmci.code.ValueUtil.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.asm.sparc.SPARCAssembler.*;
+import com.oracle.graal.asm.sparc.SPARCAssembler.CC;
+import com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.common.spi.*;
 import com.oracle.graal.lir.*;
@@ -60,11 +63,9 @@ import com.oracle.graal.lir.sparc.SPARCMove.NullCheckOp;
 import com.oracle.graal.lir.sparc.SPARCMove.SPARCStackMove;
 import com.oracle.graal.lir.sparc.SPARCMove.StackLoadAddressOp;
 import com.oracle.graal.phases.util.*;
-import com.oracle.jvmci.code.*;
+import com.oracle.graal.sparc.*;
+import com.oracle.graal.sparc.SPARC.CPUFeature;
 import com.oracle.jvmci.common.*;
-import com.oracle.jvmci.meta.*;
-import com.oracle.jvmci.sparc.*;
-import com.oracle.jvmci.sparc.SPARC.CPUFeature;
 
 /**
  * This class implements the SPARC specific portion of the LIR generator.
@@ -140,18 +141,74 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
         append(new LoadDataAddressOp(dst, data));
     }
 
+    @Override
+    public SPARCAddressValue emitAddress(Value base, long displacement, Value index, int scale) {
+        AllocatableValue baseRegister;
+        long finalDisp = displacement;
+        if (isConstant(base)) {
+            if (asConstant(base).isNull()) {
+                baseRegister = SPARC.g0.asValue(base.getLIRKind());
+            } else if (asConstant(base).getKind() != Kind.Object) {
+                finalDisp += asConstant(base).asLong();
+                baseRegister = Value.ILLEGAL;
+            } else {
+                baseRegister = load(base);
+            }
+        } else {
+            baseRegister = asAllocatable(base);
+        }
+
+        AllocatableValue indexRegister;
+        if (!index.equals(Value.ILLEGAL) && scale != 0) {
+            if (isConstant(index)) {
+                finalDisp += asConstant(index).asLong() * scale;
+                indexRegister = Value.ILLEGAL;
+            } else {
+                Value longIndex = index.getKind() == Kind.Long ? index : emitSignExtend(index, 32, 64);
+                if (scale != 1) {
+                    if (CodeUtil.isPowerOf2(scale)) {
+                        indexRegister = emitShl(longIndex, JavaConstant.forLong(CodeUtil.log2(scale)));
+                    } else {
+                        indexRegister = emitMul(longIndex, JavaConstant.forLong(scale), false);
+                    }
+                } else {
+                    indexRegister = asAllocatable(longIndex);
+                }
+            }
+        } else {
+            indexRegister = Value.ILLEGAL;
+        }
+
+        int displacementInt;
+
+        // If we don't have an index register we can use a displacement, otherwise load the
+        // displacement into a register and add it to the base.
+        if (indexRegister.equals(Value.ILLEGAL) && SPARCAssembler.isSimm13(finalDisp)) {
+            displacementInt = (int) finalDisp;
+        } else {
+            displacementInt = 0;
+            if (baseRegister.equals(Value.ILLEGAL)) {
+                baseRegister = load(JavaConstant.forLong(finalDisp));
+            } else {
+                if (finalDisp == 0) {
+                    // Nothing to do. Just use the base register.
+                } else {
+                    Variable longBaseRegister = newVariable(LIRKind.derivedReference(Kind.Long));
+                    emitMove(longBaseRegister, baseRegister);
+                    baseRegister = emitAdd(longBaseRegister, JavaConstant.forLong(finalDisp), false);
+                }
+            }
+        }
+
+        LIRKind resultKind = getAddressKind(base, displacement, index);
+        return new SPARCAddressValue(resultKind, baseRegister, indexRegister, displacementInt);
+    }
+
     protected SPARCAddressValue asAddressValue(Value address) {
         if (address instanceof SPARCAddressValue) {
             return (SPARCAddressValue) address;
         } else {
-            LIRKind kind = address.getLIRKind();
-            if (address instanceof JavaConstant) {
-                long displacement = ((JavaConstant) address).asLong();
-                if (SPARCAssembler.isSimm13(displacement)) {
-                    return new SPARCImmediateAddressValue(kind, SPARC.g0.asValue(kind), (int) displacement);
-                }
-            }
-            return new SPARCImmediateAddressValue(kind, asAllocatable(address), 0);
+            return emitAddress(address, 0, Value.ILLEGAL, 0);
         }
     }
 
@@ -290,7 +347,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
                 throw JVMCIError.shouldNotReachHere();
         }
         Variable result = newVariable(trueValue.getLIRKind());
-        ConditionFlag finalCondition = SPARCControlFlow.fromCondition(conditionFlags, mirrored ? cond.mirror() : cond, unorderedIsTrue);
+        ConditionFlag finalCondition = ConditionFlag.fromCondtition(conditionFlags, mirrored ? cond.mirror() : cond, unorderedIsTrue);
         append(new CondMoveOp(result, conditionFlags, finalCondition, actualTrueValue, actualFalseValue));
         return result;
     }
@@ -366,7 +423,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
             default:
                 throw JVMCIError.shouldNotReachHere();
         }
-        ConditionFlag flag = SPARCControlFlow.fromCondition(conditionCode, Condition.EQ, false);
+        ConditionFlag flag = ConditionFlag.fromCondtition(conditionCode, Condition.EQ, false);
         append(new CondMoveOp(result, conditionCode, flag, loadSimm11(trueValue), loadSimm11(falseValue)));
         return result;
     }

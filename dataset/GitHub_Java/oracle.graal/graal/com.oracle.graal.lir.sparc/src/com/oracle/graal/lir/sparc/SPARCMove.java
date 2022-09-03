@@ -22,31 +22,24 @@
  */
 package com.oracle.graal.lir.sparc;
 
-import com.oracle.jvmci.code.Register;
-import com.oracle.jvmci.code.StackSlotValue;
-import com.oracle.jvmci.code.StackSlot;
-import com.oracle.jvmci.meta.LIRKind;
-import com.oracle.jvmci.meta.PlatformKind;
-import com.oracle.jvmci.meta.Kind;
-import com.oracle.jvmci.meta.Value;
-import com.oracle.jvmci.meta.AllocatableValue;
-import com.oracle.jvmci.meta.JavaConstant;
-import com.oracle.jvmci.sparc.*;
-import com.oracle.jvmci.sparc.SPARC.*;
-
-import static com.oracle.jvmci.code.ValueUtil.*;
-import static com.oracle.jvmci.meta.Kind.*;
-import static com.oracle.jvmci.sparc.SPARC.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
+import static com.oracle.graal.api.meta.Kind.*;
 import static com.oracle.graal.asm.sparc.SPARCAssembler.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
+import static com.oracle.graal.sparc.SPARC.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler.*;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler.ScratchRegister;
+import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Setx;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.ImplicitNullCheck;
 import com.oracle.graal.lir.StandardOp.MoveOp;
 import com.oracle.graal.lir.StandardOp.NullCheck;
 import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.sparc.*;
+import com.oracle.graal.sparc.SPARC.CPUFeature;
 import com.oracle.jvmci.common.*;
 
 public class SPARCMove {
@@ -338,7 +331,7 @@ public class SPARCMove {
         }
 
         public boolean makeNullCheckFor(Value value, LIRFrameState nullCheckState, int implicitNullCheckLimit) {
-            if (state == null && address.isValidImplicitNullCheckFor(value, implicitNullCheckLimit)) {
+            if (state == null && value.equals(address.base) && address.index.equals(Value.ILLEGAL) && address.displacement >= 0 && address.displacement < implicitNullCheckLimit) {
                 state = nullCheckState;
                 return true;
             }
