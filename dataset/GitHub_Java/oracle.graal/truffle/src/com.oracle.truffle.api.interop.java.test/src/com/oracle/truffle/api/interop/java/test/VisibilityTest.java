@@ -286,6 +286,10 @@ public class VisibilityTest {
     public static class F4 extends F3 {
     }
 
+    public static class F5 extends F1 {
+        protected int a = -1;
+    }
+
     @Test
     public void testPublicClassPublicField() throws InteropException {
         Assert.assertEquals(10, read(new F1(), "a"));
@@ -312,6 +316,8 @@ public class VisibilityTest {
         // public field in public superclass but shadowed by public field in private class
         Assert.assertNull(read(new F3(), "a"));
         Assert.assertNull(read(new F4(), "a"));
+        // public field in public superclass but shadowed by protected field
+        Assert.assertNull(read(new F5(), "a"));
     }
 
     private static Object read(Object obj, String name) throws InteropException {
