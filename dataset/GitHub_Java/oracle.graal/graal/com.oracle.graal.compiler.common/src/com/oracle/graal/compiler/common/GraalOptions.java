@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.compiler.common;
 
-import com.oracle.jvmci.options.*;
+import com.oracle.graal.options.*;
 
 /**
  * This class encapsulates options that control the behavior of the Graal compiler.
@@ -128,6 +128,9 @@ public final class GraalOptions {
     @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> VerifyPhases = new OptionValue<>(false);
 
+    @Option(help = "", type = OptionType.Debug)
+    public static final OptionValue<String> PrintFilter = new OptionValue<>(null);
+
     // Debug settings:
     @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> BootstrapReplacements = new OptionValue<>(false);
@@ -170,15 +173,32 @@ public final class GraalOptions {
     public static final OptionValue<Boolean> PrintIdealGraphSchedule = new OptionValue<>(false);
 
     // Other printing settings
+    @Option(help = "", type = OptionType.Debug)
+    public static final OptionValue<Boolean> PrintCompilation = new OptionValue<>(false);
+
+    @Option(help = "", type = OptionType.Debug)
+    public static final OptionValue<Boolean> PrintAfterCompilation = new OptionValue<>(false);
+
     @Option(help = "Print profiling information when parsing a method's bytecode", type = OptionType.Debug)
     public static final OptionValue<Boolean> PrintProfilingInformation = new OptionValue<>(false);
 
     @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> PrintCodeBytes = new OptionValue<>(false);
 
+    @Option(help = "", type = OptionType.Debug)
+    public static final OptionValue<Boolean> PrintBailout = new OptionValue<>(false);
 
     @Option(help = "", type = OptionType.Debug)
     public static final StableOptionValue<Boolean> TraceEscapeAnalysis = new StableOptionValue<>(false);
+
+    @Option(help = "", type = OptionType.Debug)
+    public static final OptionValue<Boolean> ExitVMOnBailout = new OptionValue<>(false);
+
+    @Option(help = "", type = OptionType.Debug)
+    public static final OptionValue<Boolean> ExitVMOnException = new OptionValue<>(true);
+
+    @Option(help = "", type = OptionType.Debug)
+    public static final OptionValue<Boolean> PrintStackTraceOnException = new OptionValue<>(false);
 
     // HotSpot command line options
     @Option(help = "Print inlining optimizations", type = OptionType.Debug)
@@ -190,6 +210,9 @@ public final class GraalOptions {
 
     @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> ConditionalElimination = new OptionValue<>(true);
+
+    @Option(help = "", type = OptionType.Debug)
+    public static final OptionValue<Boolean> UseProfilingInformation = new OptionValue<>(true);
 
     @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> RemoveNeverExecutedCode = new OptionValue<>(true);
@@ -263,7 +286,7 @@ public final class GraalOptions {
     public static final OptionValue<Boolean> OptImplicitNullChecks = new OptionValue<>(true);
 
     @Option(help = "", type = OptionType.Debug)
-    public static final OptionValue<Boolean> OptClearNonLiveLocals = new OptionValue<>(true);
+    public static final OptionValue<Boolean> OptLivenessAnalysis = new OptionValue<>(true);
 
     @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> OptLoopTransform = new OptionValue<>(true);
@@ -286,8 +309,11 @@ public final class GraalOptions {
     @Option(help = "Allow backend to match complex expressions.", type = OptionType.Debug)
     public static final OptionValue<Boolean> MatchExpressions = new OptionValue<>(true);
 
-    @Option(help = "Generate SSA LIR.", type = OptionType.Debug)
-    public static final OptionValue<Boolean> SSA_LIR = new OptionValue<>(false);
+    @Option(help = "Constant fold final fields with default values.", type = OptionType.Debug)
+    public static final OptionValue<Boolean> TrustFinalDefaultFields = new OptionValue<>(true);
+
+    @Option(help = "Mark well-known stable fields as such.", type = OptionType.Debug)
+    public static final OptionValue<Boolean> ImplicitStableValues = new OptionValue<>(true);
 
     /**
      * Counts the various paths taken through snippets.
@@ -298,7 +324,7 @@ public final class GraalOptions {
     @Option(help = "Enable expensive assertions", type = OptionType.Debug)
     public static final OptionValue<Boolean> DetailedAsserts = new StableOptionValue<Boolean>() {
         @Override
-        protected Boolean defaultValue() {
+        protected Boolean initialValue() {
             boolean enabled = false;
             // turn detailed assertions on when the general assertions are on (misusing the assert keyword for this)
             assert (enabled = true) == true;

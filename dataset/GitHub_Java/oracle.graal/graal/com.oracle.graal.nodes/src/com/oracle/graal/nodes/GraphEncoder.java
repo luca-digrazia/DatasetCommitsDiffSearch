@@ -27,7 +27,6 @@ import java.util.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.util.*;
-import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
@@ -389,15 +388,7 @@ public class GraphEncoder {
         decoder.decode(decodedGraph, encodedGraph);
 
         decodedGraph.verify();
-        try {
-            GraphComparison.verifyGraphsEqual(originalGraph, decodedGraph);
-        } catch (Throwable ex) {
-            try (Debug.Scope scope = Debug.scope("GraphEncoder")) {
-                Debug.dump(originalGraph, "Original Graph");
-                Debug.dump(decodedGraph, "Decoded Graph");
-            }
-            throw ex;
-        }
+        GraphComparison.verifyGraphsEqual(originalGraph, decodedGraph);
         return true;
     }
 }
@@ -492,7 +483,19 @@ class GraphComparison {
         assert !actualIter.hasNext();
     }
 
-    protected static void verifyNodeEqual(Node expectedNode, Node actualNode, NodeMap<Node> nodeMapping, Deque<Pair<Node, Node>> workList, boolean ignoreEndNode) {
+    protected static void verifyNodeEqual(Node e, Node actualNode, NodeMap<Node> nodeMapping, Deque<Pair<Node, Node>> workList, boolean ignoreEndNode) {
+        Node expectedNode = e;
+        if (expectedNode instanceof PhiNode) {
+            /*
+             * The input graph can contain unnecessary (eliminatable) phi functions. Such phis are
+             * not re-created during decoding, so we need to simplify the expected node too.
+             */
+            Node singleValue = ((PhiNode) expectedNode).singleValue();
+            if (singleValue != null && singleValue != PhiNode.MULTIPLE_VALUES) {
+                expectedNode = singleValue;
+            }
+        }
+
         assert expectedNode.getClass() == actualNode.getClass();
         if (ignoreEndNode && expectedNode instanceof EndNode) {
             return;

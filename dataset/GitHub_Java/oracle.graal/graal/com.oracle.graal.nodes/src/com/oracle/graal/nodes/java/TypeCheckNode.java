@@ -166,7 +166,7 @@ public final class TypeCheckNode extends UnaryOpLogicNode implements Lowerable, 
             if (objectType != null) {
                 ResolvedJavaType instanceofType = type;
                 if (instanceofType.equals(objectType)) {
-                    if (objectStamp.nonNull() && (objectStamp.isExactType() || objectType.isFinal())) {
+                    if (objectStamp.nonNull()) {
                         return TriState.TRUE;
                     }
                 } else {

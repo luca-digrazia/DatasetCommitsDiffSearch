@@ -121,11 +121,10 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 ReplacementContext replacementContext = initialReplacementContext;
                 BytecodeParser parser = new BytecodeParser(null, metaAccess, method, graphBuilderConfig, optimisticOpts, entryBCI, replacementContext);
                 HIRFrameStateBuilder frameState = new HIRFrameStateBuilder(parser, method, graph);
-
                 frameState.initializeForMethodStart(graphBuilderConfig.eagerResolving() || replacementContext != null, graphBuilderConfig.getPlugins().getParameterPlugin());
                 parser.build(graph.start(), frameState);
 
-                GraphUtil.normalizeLoops(graph);
+                connectLoopEndToBegin(graph);
 
                 // Remove dead parameters.
                 for (ParameterNode param : graph.getNodes(ParameterNode.TYPE)) {
@@ -329,13 +328,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                         if (method.isSynchronized()) {
                             startNode.setStateAfter(createFrameState(BytecodeFrame.BEFORE_BCI));
                         } else {
-
-                            if (graph.method() != null && graph.method().isJavaLangObjectInit()) {
-                                // Don't clear the receiver when Object.<init> is the compilation
-                                // root. The receiver is needed as input to RegisterFinalizerNode.
-                            } else {
-                                frameState.clearNonLiveLocals(startBlock, liveness, true);
-                            }
+                            frameState.clearNonLiveLocals(startBlock, liveness, true);
                             assert bci() == 0;
                             startNode.setStateAfter(createFrameState(bci()));
                         }
@@ -1159,8 +1152,8 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 // be conservative if information was not recorded (could result in endless
                 // recompiles otherwise)
                 Invoke invoke;
-                if (graphBuilderConfig.omitAllExceptionEdges() ||
-                                (!StressInvokeWithExceptionNode.getValue() && optimisticOpts.useExceptionProbability() && profilingInfo != null && profilingInfo.getExceptionSeen(bci()) == TriState.FALSE)) {
+                if (!StressInvokeWithExceptionNode.getValue() &&
+                                (graphBuilderConfig.omitAllExceptionEdges() || (optimisticOpts.useExceptionProbability() && profilingInfo != null && profilingInfo.getExceptionSeen(bci()) == TriState.FALSE))) {
                     invoke = createInvoke(callTarget, resultType);
                 } else {
                     invoke = createInvokeWithException(callTarget, resultType);
@@ -1447,9 +1440,6 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
             }
 
             private void beforeReturn(ValueNode x, Kind kind) {
-                if (graph.method() != null && graph.method().isJavaLangObjectInit()) {
-                    append(new RegisterFinalizerNode(frameState.localAt(0)));
-                }
                 if (graphBuilderConfig.insertNonSafepointDebugInfo()) {
                     append(createInfoPointNode(InfopointReason.METHOD_END));
                 }
@@ -2422,9 +2412,8 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 return frameState.create(bci);
             }
 
-            public void setStateAfter(StateSplit stateSplit) {
-                FrameState stateAfter = createFrameState(stream.nextBCI());
-                stateSplit.setStateAfter(stateAfter);
+            public FrameState createStateAfter() {
+                return createFrameState(stream.nextBCI());
             }
         }
     }
@@ -2438,5 +2427,28 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
         boolean assertionsEnabled = false;
         assert assertionsEnabled = true;
         return assertionsEnabled;
+    }
+
+    /**
+     * Remove loop header without loop ends. This can happen with degenerated loops like this one:
+     *
+     * <pre>
+     * for (;;) {
+     *     try {
+     *         break;
+     *     } catch (UnresolvedException iioe) {
+     *     }
+     * }
+     * </pre>
+     */
+    public static void connectLoopEndToBegin(StructuredGraph graph) {
+        for (LoopBeginNode begin : graph.getNodes(LoopBeginNode.TYPE)) {
+            if (begin.loopEnds().isEmpty()) {
+                assert begin.forwardEndCount() == 1;
+                graph.reduceDegenerateLoopBegin(begin);
+            } else {
+                GraphUtil.normalizeLoopBegin(begin);
+            }
+        }
     }
 }
