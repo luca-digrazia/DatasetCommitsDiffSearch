@@ -30,16 +30,9 @@ import com.oracle.graal.api.meta.*;
 public interface ForeignCallLinkage extends InvokeTarget {
 
     /**
-     * Gets the details of where parameters are passed and value(s) are returned from the caller's
-     * perspective.
+     * Gets the details of where parameters are passed and value(s) are returned.
      */
-    CallingConvention getOutgoingCallingConvention();
-
-    /**
-     * Gets the details of where parameters are passed and value(s) are returned from the callee's
-     * perspective.
-     */
-    CallingConvention getIncomingCallingConvention();
+    CallingConvention getCallingConvention();
 
     /**
      * Returns the maximum absolute offset of PC relative call to this stub from any position in the
