@@ -57,7 +57,7 @@ public class FunctionV32 extends FunctionV38 {
     }
 
     @Override
-    protected void createCall(long[] args) {
+    protected void crateCall(long[] args) {
         int i = 2;
         int target = getIndex(args[i++]);
         int[] arguments = new int[args.length - i];
