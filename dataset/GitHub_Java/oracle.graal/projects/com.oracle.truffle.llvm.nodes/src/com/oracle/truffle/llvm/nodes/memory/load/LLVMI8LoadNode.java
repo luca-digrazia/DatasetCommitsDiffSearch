@@ -38,8 +38,8 @@ import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalReadNode;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 
@@ -48,19 +48,18 @@ public abstract class LLVMI8LoadNode extends LLVMLoadNode {
     private final ByteValueProfile profile = ByteValueProfile.createIdentityProfile();
 
     @Specialization
-    protected byte doI8(LLVMAddress addr) {
+    public byte executeI8(LLVMAddress addr) {
         byte val = LLVMMemory.getI8(addr);
         return profile.profile(val);
     }
 
     @Specialization
-    protected byte doI8(LLVMVirtualAllocationAddress address) {
+    public byte executeI8(LLVMVirtualAllocationAddress address) {
         return address.getI8();
     }
 
     @Specialization
-    protected byte doI8(LLVMGlobal addr,
-                    @Cached("createRead()") LLVMGlobalReadNode globalAccess) {
+    public byte executeI8(LLVMGlobalVariable addr, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
         return profile.profile(globalAccess.getI8(addr));
     }
 
@@ -69,13 +68,12 @@ public abstract class LLVMI8LoadNode extends LLVMLoadNode {
     }
 
     @Specialization
-    protected byte doI8(VirtualFrame frame, LLVMTruffleObject addr,
-                    @Cached("createForeignRead()") LLVMForeignReadNode foreignRead) {
+    public byte executeI8(VirtualFrame frame, LLVMTruffleObject addr, @Cached("createForeignRead()") LLVMForeignReadNode foreignRead) {
         return (byte) foreignRead.execute(frame, addr);
     }
 
     @Specialization
-    protected byte doLLVMBoxedPrimitive(LLVMBoxedPrimitive addr) {
+    public byte executeLLVMBoxedPrimitive(LLVMBoxedPrimitive addr) {
         if (addr.getValue() instanceof Long) {
             return LLVMMemory.getI8((long) addr.getValue());
         } else {

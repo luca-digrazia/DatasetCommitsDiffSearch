@@ -37,26 +37,25 @@ import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalReadNode;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 
 public abstract class LLVMI1LoadNode extends LLVMLoadNode {
 
     @Specialization
-    protected boolean doBoolean(LLVMGlobal addr,
-                    @Cached("createRead()") LLVMGlobalReadNode globalAccess) {
+    public boolean executeBoolean(LLVMGlobalVariable addr, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
         return globalAccess.getI1(addr);
     }
 
     @Specialization
-    protected boolean doI1(LLVMVirtualAllocationAddress address) {
+    public boolean executeI1(LLVMVirtualAllocationAddress address) {
         return address.getI1();
     }
 
     @Specialization
-    protected boolean doI1(LLVMAddress addr) {
+    public boolean executeI1(LLVMAddress addr) {
         return LLVMMemory.getI1(addr);
     }
 
@@ -65,13 +64,12 @@ public abstract class LLVMI1LoadNode extends LLVMLoadNode {
     }
 
     @Specialization
-    protected boolean doI1(VirtualFrame frame, LLVMTruffleObject addr,
-                    @Cached("createForeignRead()") LLVMForeignReadNode foreignRead) {
+    public boolean executeI1(VirtualFrame frame, LLVMTruffleObject addr, @Cached("createForeignRead()") LLVMForeignReadNode foreignRead) {
         return (boolean) foreignRead.execute(frame, addr);
     }
 
     @Specialization
-    protected boolean doLLVMBoxedPrimitive(LLVMBoxedPrimitive addr) {
+    public boolean executeLLVMBoxedPrimitive(LLVMBoxedPrimitive addr) {
         if (addr.getValue() instanceof Long) {
             return LLVMMemory.getI1((long) addr.getValue());
         } else {

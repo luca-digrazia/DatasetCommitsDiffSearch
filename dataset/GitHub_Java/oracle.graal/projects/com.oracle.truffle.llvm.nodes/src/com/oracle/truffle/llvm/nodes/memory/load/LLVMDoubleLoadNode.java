@@ -38,8 +38,8 @@ import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalReadNode;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 
@@ -48,18 +48,17 @@ public abstract class LLVMDoubleLoadNode extends LLVMLoadNode {
     private final DoubleValueProfile profile = DoubleValueProfile.createRawIdentityProfile();
 
     @Specialization
-    protected double doDouble(LLVMGlobal addr,
-                    @Cached("createRead()") LLVMGlobalReadNode globalAccess) {
+    public double executeDouble(LLVMGlobalVariable addr, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
         return profile.profile(globalAccess.getDouble(addr));
     }
 
     @Specialization
-    protected double doDouble(LLVMVirtualAllocationAddress address) {
+    public double executeDouble(LLVMVirtualAllocationAddress address) {
         return address.getDouble();
     }
 
     @Specialization
-    protected double doDouble(LLVMAddress addr) {
+    public double executeDouble(LLVMAddress addr) {
         double value = LLVMMemory.getDouble(addr);
         return profile.profile(value);
     }
@@ -69,13 +68,12 @@ public abstract class LLVMDoubleLoadNode extends LLVMLoadNode {
     }
 
     @Specialization
-    protected double doDouble(VirtualFrame frame, LLVMTruffleObject addr,
-                    @Cached("createForeignRead()") LLVMForeignReadNode foreignRead) {
+    public double executeDouble(VirtualFrame frame, LLVMTruffleObject addr, @Cached("createForeignRead()") LLVMForeignReadNode foreignRead) {
         return (double) foreignRead.execute(frame, addr);
     }
 
     @Specialization
-    protected double doLLVMBoxedPrimitive(LLVMBoxedPrimitive addr) {
+    public double executeLLVMBoxedPrimitive(LLVMBoxedPrimitive addr) {
         if (addr.getValue() instanceof Long) {
             return LLVMMemory.getDouble((long) addr.getValue());
         } else {

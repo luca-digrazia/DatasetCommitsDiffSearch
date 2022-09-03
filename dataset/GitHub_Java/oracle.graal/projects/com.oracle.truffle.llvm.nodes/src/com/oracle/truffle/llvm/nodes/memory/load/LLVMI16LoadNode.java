@@ -37,21 +37,20 @@ import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
-import com.oracle.truffle.llvm.runtime.global.LLVMGlobalReadNode;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariableAccess;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 
 public abstract class LLVMI16LoadNode extends LLVMLoadNode {
 
     @Specialization
-    protected short doShort(LLVMGlobal addr,
-                    @Cached("createRead()") LLVMGlobalReadNode globalAccess) {
+    public short executeShort(LLVMGlobalVariable addr, @Cached("createGlobalAccess()") LLVMGlobalVariableAccess globalAccess) {
         return globalAccess.getI16(addr);
     }
 
     @Specialization
-    protected short doShort(LLVMAddress addr) {
+    public short executeShort(LLVMAddress addr) {
         return LLVMMemory.getI16(addr);
     }
 
@@ -60,18 +59,17 @@ public abstract class LLVMI16LoadNode extends LLVMLoadNode {
     }
 
     @Specialization
-    protected short doI16(LLVMVirtualAllocationAddress address) {
+    public short executeI16(LLVMVirtualAllocationAddress address) {
         return address.getI16();
     }
 
     @Specialization
-    protected short doShort(VirtualFrame frame, LLVMTruffleObject addr,
-                    @Cached("createForeignRead()") LLVMForeignReadNode foreignRead) {
+    public short executeShort(VirtualFrame frame, LLVMTruffleObject addr, @Cached("createForeignRead()") LLVMForeignReadNode foreignRead) {
         return (short) foreignRead.execute(frame, addr);
     }
 
     @Specialization
-    protected short doLLVMBoxedPrimitive(LLVMBoxedPrimitive addr) {
+    public short executeLLVMBoxedPrimitive(LLVMBoxedPrimitive addr) {
         if (addr.getValue() instanceof Long) {
             return LLVMMemory.getI16((long) addr.getValue());
         } else {
