@@ -23,6 +23,8 @@
 package com.oracle.graal.hotspot.test;
 
 import static com.oracle.graal.compiler.GraalCompilerOptions.ExitVMOnException;
+import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
+import jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider;
 
 import org.junit.Test;
 
@@ -31,20 +33,16 @@ import com.oracle.graal.hotspot.CompileTheWorld;
 import com.oracle.graal.hotspot.CompileTheWorld.Config;
 import com.oracle.graal.hotspot.HotSpotGraalCompiler;
 
-import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
-import jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider;
-
 /**
  * Tests {@link CompileTheWorld} functionality.
  */
 public class CompileTheWorldTest extends GraalCompilerTest {
 
     @Test
-    public void testJDK() throws Throwable {
+    public void testRtJar() throws Throwable {
         boolean originalSetting = ExitVMOnException.getValue();
         // Compile a couple classes in rt.jar
         HotSpotJVMCIRuntimeProvider runtime = HotSpotJVMCIRuntime.runtime();
-        System.setProperty(CompileTheWorld.LIMITMODS_PROPERTY_NAME, "java.base");
         new CompileTheWorld(runtime, (HotSpotGraalCompiler) runtime.getCompiler(), CompileTheWorld.SUN_BOOT_CLASS_PATH, new Config("-Inline"), 1, 5, null, null, true).compile();
         assert ExitVMOnException.getValue() == originalSetting;
     }
