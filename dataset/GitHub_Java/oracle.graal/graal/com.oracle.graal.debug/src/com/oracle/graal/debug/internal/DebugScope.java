@@ -52,6 +52,7 @@ public final class DebugScope implements Debug.Scope {
             }
         }
 
+        @Override
         public void log(String msg, Object... args) {
             if (isLogEnabled()) {
                 printScopeName();
@@ -60,16 +61,29 @@ public final class DebugScope implements Debug.Scope {
             }
         }
 
-        IndentImpl indent() {
+        @Override
+        public Indent indent() {
             lastUsedIndent = new IndentImpl(this);
             return lastUsedIndent;
         }
 
         @Override
-        public void close() {
+        public Indent logAndIndent(String msg, Object... args) {
+            log(msg, args);
+            return indent();
+        }
+
+        @Override
+        public Indent outdent() {
             if (parentIndent != null) {
                 lastUsedIndent = parentIndent;
             }
+            return lastUsedIndent;
+        }
+
+        @Override
+        public void close() {
+            outdent();
         }
     }
 
@@ -210,7 +224,7 @@ public final class DebugScope implements Debug.Scope {
     /**
      * Creates and enters a new debug scope which is either a child of the current scope or a
      * disjoint top level scope.
-     *
+     * 
      * @param name the name of the new scope
      * @param sandboxConfig the configuration to use for a new top level scope, or null if the new
      *            scope should be a child scope
@@ -373,7 +387,7 @@ public final class DebugScope implements Debug.Scope {
     }
 
     public Indent pushIndentLogger() {
-        lastUsedIndent = lastUsedIndent.indent();
+        lastUsedIndent = (IndentImpl) lastUsedIndent.indent();
         return lastUsedIndent;
     }
 }
