@@ -58,7 +58,6 @@ public class CPUTracerInstrument extends TruffleInstrument {
     public static final String ID = "cputracer";
 
     static final String VERSION = "0.3.0";
-    private boolean enabled;
     private CPUTracer tracer;
     private static ProfilerToolFactory<CPUTracer> factory;
 
@@ -109,13 +108,12 @@ public class CPUTracerInstrument extends TruffleInstrument {
     protected void onCreate(Env env) {
 
         tracer = factory.create(env);
-        enabled = env.getOptions().get(CPUTracerCLI.ENABLED);
-        if (enabled) {
+        if (env.getOptions().get(CPUTracerCLI.ENABLED)) {
             try {
                 tracer.setFilter(getSourceSectionFilter(env));
             } catch (IllegalArgumentException e) {
                 new PrintStream(env.err()).println(ID + " error: " + e.getMessage());
-                enabled = false;
+                env.getOptions().set(CPUTracerCLI.ENABLED, false);
                 tracer.setCollecting(false);
                 env.registerService(tracer);
                 return;
@@ -132,9 +130,8 @@ public class CPUTracerInstrument extends TruffleInstrument {
         final boolean internals = env.getOptions().get(CPUTracerCLI.TRACE_INTERNAL);
         final Object[] filterRootName = env.getOptions().get(CPUTracerCLI.FILTER_ROOT);
         final Object[] filterFile = env.getOptions().get(CPUTracerCLI.FILTER_FILE);
-        final String filterMimeType = env.getOptions().get(CPUTracerCLI.FILTER_MIME_TYPE);
         final String filterLanguage = env.getOptions().get(CPUTracerCLI.FILTER_LANGUAGE);
-        return CPUTracerCLI.buildFilter(roots, statements, calls, internals, filterRootName, filterFile, filterMimeType, filterLanguage);
+        return CPUTracerCLI.buildFilter(roots, statements, calls, internals, filterRootName, filterFile, filterLanguage);
     }
 
     /**
@@ -154,7 +151,7 @@ public class CPUTracerInstrument extends TruffleInstrument {
      */
     @Override
     protected void onDispose(Env env) {
-        if (enabled) {
+        if (env.getOptions().get(CPUTracerCLI.ENABLED)) {
             CPUTracerCLI.handleOutput(env, tracer);
             tracer.close();
         }
