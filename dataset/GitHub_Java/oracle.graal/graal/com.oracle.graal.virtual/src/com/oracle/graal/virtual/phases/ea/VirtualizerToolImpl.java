@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.virtual.phases.ea;
 
-import static com.oracle.graal.phases.GraalOptions.*;
+import static com.oracle.graal.virtual.phases.ea.PartialEscapeAnalysisPhase.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
@@ -33,6 +33,7 @@ import com.oracle.graal.nodes.spi.Virtualizable.EscapeState;
 import com.oracle.graal.nodes.spi.Virtualizable.State;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.virtual.*;
+import com.oracle.graal.phases.*;
 
 class VirtualizerToolImpl implements VirtualizerTool {
 
@@ -149,7 +150,7 @@ class VirtualizerToolImpl implements VirtualizerTool {
 
     @Override
     public void createVirtualObject(VirtualObjectNode virtualObject, ValueNode[] entryState, int[] locks) {
-        VirtualUtil.trace("{{%s}} ", current);
+        trace("{{%s}} ", current);
         if (virtualObject.isAlive()) {
             state.addAndMarkAlias(virtualObject, virtualObject, usages);
         } else {
@@ -165,7 +166,7 @@ class VirtualizerToolImpl implements VirtualizerTool {
 
     @Override
     public int getMaximumEntryCount() {
-        return MaximumEscapeAnalysisArrayLength.getValue();
+        return GraalOptions.MaximumEscapeAnalysisArrayLength;
     }
 
     @Override
@@ -184,14 +185,14 @@ class VirtualizerToolImpl implements VirtualizerTool {
 
     @Override
     public void addReadCache(ValueNode object, ResolvedJavaField identity, ValueNode value) {
-        if (OptEarlyReadElimination.getValue()) {
+        if (GraalOptions.OptEarlyReadElimination) {
             state.addReadCache(object, identity, value);
         }
     }
 
     @Override
     public ValueNode getReadCache(ValueNode object, ResolvedJavaField identity) {
-        if (OptEarlyReadElimination.getValue()) {
+        if (GraalOptions.OptEarlyReadElimination) {
             return state.getReadCache(object, identity);
         }
         return null;
@@ -199,7 +200,7 @@ class VirtualizerToolImpl implements VirtualizerTool {
 
     @Override
     public void killReadCache(ResolvedJavaField identity) {
-        if (OptEarlyReadElimination.getValue()) {
+        if (GraalOptions.OptEarlyReadElimination) {
             state.killReadCache(identity);
         }
     }
