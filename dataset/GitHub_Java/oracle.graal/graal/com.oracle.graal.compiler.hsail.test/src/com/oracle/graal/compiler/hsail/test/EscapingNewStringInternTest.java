@@ -29,28 +29,16 @@ import org.junit.Test;
 import com.oracle.graal.debug.*;
 
 /**
- * Tests allocation of a new String based on string concatenation.
+ * Tests allocation of a new String based on string interning.
  */
 
-public class EscapingNewStringConcatTest extends EscapingNewBase {
-
-    @Result public String[] myOutArray = new String[NUM];
-    public String[] inArray = new String[NUM];
-
-    @Override
-    void setupArrays() {
-        super.setupArrays();
-        for (int i = 0; i < NUM; i++) {
-            inArray[i] = Integer.toString(i + 100);
-        }
-    }
+public class EscapingNewStringInternTest extends EscapingNewBase {
 
     public void run(int gid) {
-        outArray[gid] = inArray[gid] + inArray[(gid + NUM / 2) % NUM];
-        myOutArray[gid] = inArray[(gid + NUM / 2) % NUM] + inArray[gid];
+        outArray[gid] = Integer.toString(gid * 111).intern();
     }
 
-    // Node implementing Lowerable not handled in HSAIL Backend: 6274|MonitorEnter
+    // at node: 12|Invoke#Direct#intern
     @Test(expected = com.oracle.graal.graph.GraalInternalError.class)
     public void test() {
         try (DebugConfigScope s = disableIntercept()) {

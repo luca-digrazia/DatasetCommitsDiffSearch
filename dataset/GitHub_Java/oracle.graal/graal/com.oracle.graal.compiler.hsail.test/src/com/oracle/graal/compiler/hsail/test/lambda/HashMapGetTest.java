@@ -24,60 +24,73 @@
 package com.oracle.graal.compiler.hsail.test.lambda;
 
 import static com.oracle.graal.debug.Debug.*;
-import static com.oracle.graal.debug.DelegatingDebugConfig.Feature.*;
 
 import com.oracle.graal.compiler.hsail.test.infra.GraalKernelTester;
 import com.oracle.graal.debug.*;
 
+import java.util.HashMap;
+
 import org.junit.Test;
 
-import java.util.Arrays;
-
 /**
- * Tests non-escaping object creation and calling a method on it.
+ * Tests calling HashMap.get().
  */
-public class NonEscapingNewObjWithArrayTest extends GraalKernelTester {
+public class HashMapGetTest extends GraalKernelTester {
+
     static final int NUM = 20;
-    @Result public float[] outArray = new float[NUM];
 
     static class MyObj {
-        float a[];
-
-        public MyObj(float[] src, int ofst) {
-            a = Arrays.copyOfRange(src, ofst, ofst + 3);
+        public MyObj(int id) {
+            this.id = id;
         }
 
-        public float productOf() {
-            return a[0] * a[1] * a[2];
+        int id;
+
+        public int getId() {
+            return id;
         }
+
+        @Override
+        public boolean equals(Object other) {
+            if (!(other instanceof MyObj)) {
+                return false;
+            }
+            MyObj othobj = (MyObj) other;
+            return (othobj.id == this.id);
+        }
+
+        @Override
+        public int hashCode() {
+            return 43 * (id % 7);
+        }
+
     }
+
+    @Result public MyObj[] outArray = new MyObj[NUM];
+    MyObj[] inArray = new MyObj[NUM];
+    public HashMap<MyObj, MyObj> inMap = new HashMap<>();
 
     void setupArrays() {
         for (int i = 0; i < NUM; i++) {
-            outArray[i] = -i;
+            MyObj myobj = new MyObj(i);
+            inMap.put(myobj, new MyObj(i * 3));
+            inArray[NUM - 1 - i] = myobj;
+            outArray[i] = null;
         }
     }
 
     @Override
     public void runTest() {
         setupArrays();
-        float[] fsrc = new float[2 * NUM];
-        for (int i = 0; i < 2 * NUM; i++) {
-            fsrc[i] = i;
-        }
 
         dispatchLambdaKernel(NUM, (gid) -> {
-            outArray[gid] = new MyObj(fsrc, gid).productOf();
+            outArray[gid] = inMap.get(inArray[gid]);
         });
     }
 
-    @Override
-    protected boolean supportsRequiredCapabilities() {
-        // although not escaping, seems to require object allocation support
-        return (canHandleObjectAllocation());
-    }
-
-    // NYI emitForeignCall floatArraycopy
+    // ForeignCall to Invoke#Direct#get
+    // not inlining HashMapGetTest.lambda$38@15: java.util.HashMap.get(Object):Object (20 bytes): no
+    // type profile exists
     @Test(expected = com.oracle.graal.graph.GraalInternalError.class)
     public void test() {
         try (DebugConfigScope s = disableIntercept()) {
@@ -87,7 +100,7 @@ public class NonEscapingNewObjWithArrayTest extends GraalKernelTester {
 
     @Test(expected = com.oracle.graal.graph.GraalInternalError.class)
     public void testUsingLambdaMethod() {
-        try (DebugConfigScope dcs = setConfig(new DelegatingDebugConfig().disable(INTERCEPT))) {
+        try (DebugConfigScope s = disableIntercept()) {
             testGeneratedHsailUsingLambdaMethod();
         }
     }

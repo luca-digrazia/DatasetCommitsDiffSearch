@@ -28,59 +28,37 @@ import static com.oracle.graal.debug.DelegatingDebugConfig.Feature.*;
 
 import com.oracle.graal.compiler.hsail.test.infra.GraalKernelTester;
 import com.oracle.graal.debug.*;
+import java.util.concurrent.atomic.LongAdder;
 
 import org.junit.Test;
 
-import java.util.Arrays;
-
 /**
- * Tests non-escaping object creation and calling a method on it.
+ * Tests calling LongAdder.add().
  */
-public class NonEscapingNewObjWithArrayTest extends GraalKernelTester {
+public class LongAdderTest extends GraalKernelTester {
+
     static final int NUM = 20;
-    @Result public float[] outArray = new float[NUM];
-
-    static class MyObj {
-        float a[];
-
-        public MyObj(float[] src, int ofst) {
-            a = Arrays.copyOfRange(src, ofst, ofst + 3);
-        }
-
-        public float productOf() {
-            return a[0] * a[1] * a[2];
-        }
-    }
+    @Result public long finalSum;
+    LongAdder adder = new LongAdder();
 
     void setupArrays() {
-        for (int i = 0; i < NUM; i++) {
-            outArray[i] = -i;
-        }
     }
 
     @Override
     public void runTest() {
         setupArrays();
-        float[] fsrc = new float[2 * NUM];
-        for (int i = 0; i < 2 * NUM; i++) {
-            fsrc[i] = i;
-        }
 
         dispatchLambdaKernel(NUM, (gid) -> {
-            outArray[gid] = new MyObj(fsrc, gid).productOf();
+            adder.add(gid);
         });
+
+        finalSum = adder.sum();
     }
 
-    @Override
-    protected boolean supportsRequiredCapabilities() {
-        // although not escaping, seems to require object allocation support
-        return (canHandleObjectAllocation());
-    }
-
-    // NYI emitForeignCall floatArraycopy
+    // cannot handle node: CurrentJavaThread
     @Test(expected = com.oracle.graal.graph.GraalInternalError.class)
     public void test() {
-        try (DebugConfigScope s = disableIntercept()) {
+        try (DebugConfigScope dcs = setConfig(new DelegatingDebugConfig().disable(INTERCEPT))) {
             testGeneratedHsail();
         }
     }
@@ -91,5 +69,4 @@ public class NonEscapingNewObjWithArrayTest extends GraalKernelTester {
             testGeneratedHsailUsingLambdaMethod();
         }
     }
-
 }

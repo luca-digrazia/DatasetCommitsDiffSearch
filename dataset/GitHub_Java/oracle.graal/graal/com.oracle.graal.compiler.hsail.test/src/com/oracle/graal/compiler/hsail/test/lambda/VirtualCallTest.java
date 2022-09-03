@@ -24,36 +24,61 @@
 package com.oracle.graal.compiler.hsail.test.lambda;
 
 import static com.oracle.graal.debug.Debug.*;
-import static com.oracle.graal.debug.DelegatingDebugConfig.Feature.*;
 
 import com.oracle.graal.compiler.hsail.test.infra.GraalKernelTester;
 import com.oracle.graal.debug.*;
 
 import org.junit.Test;
 
-import java.util.Arrays;
-
 /**
- * Tests non-escaping object creation and calling a method on it.
+ * Tests a true virtual method call.
  */
-public class NonEscapingNewObjWithArrayTest extends GraalKernelTester {
+public class VirtualCallTest extends GraalKernelTester {
+
     static final int NUM = 20;
-    @Result public float[] outArray = new float[NUM];
 
-    static class MyObj {
-        float a[];
+    static abstract class Shape {
 
-        public MyObj(float[] src, int ofst) {
-            a = Arrays.copyOfRange(src, ofst, ofst + 3);
+        abstract public float getArea();
+    }
+
+    static class Circle extends Shape {
+
+        private float radius;
+
+        Circle(float r) {
+            radius = r;
         }
 
-        public float productOf() {
-            return a[0] * a[1] * a[2];
+        @Override
+        public float getArea() {
+            return (float) (Math.PI * radius * radius);
         }
     }
 
+    static class Square extends Shape {
+
+        private float len;
+
+        Square(float _len) {
+            len = _len;
+        }
+
+        @Override
+        public float getArea() {
+            return len * len;
+        }
+    }
+
+    @Result public float[] outArray = new float[NUM];
+    public Shape[] inShapeArray = new Shape[NUM];
+
     void setupArrays() {
         for (int i = 0; i < NUM; i++) {
+            if (i % 2 == 0)
+                inShapeArray[i] = new Circle(i + 1);
+            else
+                inShapeArray[i] = new Square(i + 1);
             outArray[i] = -i;
         }
     }
@@ -61,23 +86,14 @@ public class NonEscapingNewObjWithArrayTest extends GraalKernelTester {
     @Override
     public void runTest() {
         setupArrays();
-        float[] fsrc = new float[2 * NUM];
-        for (int i = 0; i < 2 * NUM; i++) {
-            fsrc[i] = i;
-        }
 
         dispatchLambdaKernel(NUM, (gid) -> {
-            outArray[gid] = new MyObj(fsrc, gid).productOf();
+            Shape shape = inShapeArray[gid];
+            outArray[gid] = shape.getArea();
         });
     }
 
-    @Override
-    protected boolean supportsRequiredCapabilities() {
-        // although not escaping, seems to require object allocation support
-        return (canHandleObjectAllocation());
-    }
-
-    // NYI emitForeignCall floatArraycopy
+    // graal says not inlining getArea():float (0 bytes): no type profile exists
     @Test(expected = com.oracle.graal.graph.GraalInternalError.class)
     public void test() {
         try (DebugConfigScope s = disableIntercept()) {
@@ -87,7 +103,7 @@ public class NonEscapingNewObjWithArrayTest extends GraalKernelTester {
 
     @Test(expected = com.oracle.graal.graph.GraalInternalError.class)
     public void testUsingLambdaMethod() {
-        try (DebugConfigScope dcs = setConfig(new DelegatingDebugConfig().disable(INTERCEPT))) {
+        try (DebugConfigScope s = disableIntercept()) {
             testGeneratedHsailUsingLambdaMethod();
         }
     }

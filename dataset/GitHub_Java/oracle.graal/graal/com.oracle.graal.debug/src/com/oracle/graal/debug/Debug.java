@@ -94,10 +94,6 @@ public class Debug {
         return ENABLED && DebugScope.getInstance().isTimeEnabled();
     }
 
-    public static boolean isMemUseTrackingEnabled() {
-        return ENABLED && DebugScope.getInstance().isMemUseTrackingEnabled();
-    }
-
     public static boolean isLogEnabledForMethod() {
         if (!ENABLED) {
             return false;
@@ -185,19 +181,6 @@ public class Debug {
     public static Scope scope(Object name) {
         if (ENABLED) {
             return DebugScope.getInstance().scope(convertFormatArg(name).toString(), null);
-        } else {
-            return null;
-        }
-    }
-
-    /**
-     * @see #scope(Object)
-     * @param contextObjects an array of object to be appended to the {@linkplain #context()
-     *            current} debug context
-     */
-    public static Scope scope(Object name, Object[] contextObjects) {
-        if (ENABLED) {
-            return DebugScope.getInstance().scope(convertFormatArg(name).toString(), null, contextObjects);
         } else {
             return null;
         }
@@ -590,69 +573,6 @@ public class Debug {
     }
 
     /**
-     * Creates a {@linkplain DebugMemUseTracker memory use tracker} that is enabled iff debugging is
-     * {@linkplain #isEnabled() enabled}.
-     * <p>
-     * A disabled tracker has virtually no overhead.
-     */
-    public static DebugMemUseTracker memUseTracker(CharSequence name) {
-        if (!ENABLED) {
-            return VOID_MEM_USE_TRACKER;
-        }
-        return createMemUseTracker("%s", name, null);
-    }
-
-    /**
-     * Creates a debug memory use tracker. Invoking this method is equivalent to:
-     *
-     * <pre>
-     * Debug.memUseTracker(format, arg, null)
-     * </pre>
-     *
-     * except that the string formatting only happens if metering is enabled.
-     *
-     * @see #metric(String, Object, Object)
-     */
-    public static DebugMemUseTracker memUseTracker(String format, Object arg) {
-        if (!ENABLED) {
-            return VOID_MEM_USE_TRACKER;
-        }
-        return createMemUseTracker(format, arg, null);
-    }
-
-    /**
-     * Creates a debug memory use tracker. Invoking this method is equivalent to:
-     *
-     * <pre>
-     * Debug.memUseTracker(String.format(format, arg1, arg2))
-     * </pre>
-     *
-     * except that the string formatting only happens if memory use tracking is enabled. In
-     * addition, each argument is subject to the following type based conversion before being passed
-     * as an argument to {@link String#format(String, Object...)}:
-     *
-     * <pre>
-     *     Type          | Conversion
-     * ------------------+-----------------
-     *  java.lang.Class  | arg.getSimpleName()
-     *                   |
-     * </pre>
-     *
-     * @see #memUseTracker(CharSequence)
-     */
-    public static DebugMemUseTracker memUseTracker(String format, Object arg1, Object arg2) {
-        if (!ENABLED) {
-            return VOID_MEM_USE_TRACKER;
-        }
-        return createMemUseTracker(format, arg1, arg2);
-    }
-
-    private static DebugMemUseTracker createMemUseTracker(String format, Object arg1, Object arg2) {
-        String name = formatDebugName(format, arg1, arg2);
-        return new MemUseTrackerImpl(name);
-    }
-
-    /**
      * Creates a {@linkplain DebugMetric metric} that is enabled iff debugging is
      * {@linkplain #isEnabled() enabled} or the system property whose name is formed by adding to
      * {@value #ENABLE_METRIC_PROPERTY_NAME_PREFIX} to {@code name} is
@@ -741,7 +661,7 @@ public class Debug {
 
     private static DebugMetric createMetric(String format, Object arg1, Object arg2) {
         String name = formatDebugName(format, arg1, arg2);
-        boolean conditional = enabledMetrics == null || !enabledMetrics.contains(name);
+        boolean conditional = enabledMetrics != null && enabledMetrics.contains(name);
         return new MetricImpl(name, conditional);
     }
 
@@ -769,10 +689,10 @@ public class Debug {
     }
 
     public static DebugConfig silentConfig() {
-        return fixedConfig(false, false, false, false, false, Collections.<DebugDumpHandler> emptyList(), System.out);
+        return fixedConfig(false, false, false, false, Collections.<DebugDumpHandler> emptyList(), System.out);
     }
 
-    public static DebugConfig fixedConfig(final boolean isLogEnabled, final boolean isDumpEnabled, final boolean isMeterEnabled, final boolean isMemUseTrackingEnabled, final boolean isTimerEnabled,
+    public static DebugConfig fixedConfig(final boolean isLogEnabled, final boolean isDumpEnabled, final boolean isMeterEnabled, final boolean isTimerEnabled,
                     final Collection<DebugDumpHandler> dumpHandlers, final PrintStream output) {
         return new DebugConfig() {
 
@@ -788,11 +708,6 @@ public class Debug {
             @Override
             public boolean isMeterEnabled() {
                 return isMeterEnabled;
-            }
-
-            @Override
-            public boolean isMemUseTrackingEnabled() {
-                return isMemUseTrackingEnabled;
             }
 
             @Override
@@ -852,17 +767,6 @@ public class Debug {
 
         public long getCurrentValue() {
             return 0L;
-        }
-    };
-
-    private static final DebugMemUseTracker VOID_MEM_USE_TRACKER = new DebugMemUseTracker() {
-
-        public Closeable start() {
-            return MemUseTrackerImpl.VOID_CLOSEABLE;
-        }
-
-        public long getCurrentValue() {
-            return 0;
         }
     };
 
@@ -958,19 +862,7 @@ public class Debug {
 
     public static Object convertFormatArg(Object arg) {
         if (arg instanceof Class) {
-            Class<?> c = (Class<?>) arg;
-            final String simpleName = c.getSimpleName();
-            Class<?> enclosingClass = c.getEnclosingClass();
-            if (enclosingClass != null) {
-                String prefix = "";
-                while (enclosingClass != null) {
-                    prefix = enclosingClass.getSimpleName() + "_" + prefix;
-                    enclosingClass = enclosingClass.getEnclosingClass();
-                }
-                return prefix + simpleName;
-            } else {
-                return simpleName;
-            }
+            return ((Class<?>) arg).getSimpleName();
         }
         return arg;
     }
@@ -981,7 +873,7 @@ public class Debug {
 
     private static DebugTimer createTimer(String format, Object arg1, Object arg2) {
         String name = formatDebugName(format, arg1, arg2);
-        boolean conditional = enabledTimers == null || !enabledTimers.contains(name);
+        boolean conditional = enabledTimers != null && enabledTimers.contains(name);
         return new TimerImpl(name, conditional);
     }
 

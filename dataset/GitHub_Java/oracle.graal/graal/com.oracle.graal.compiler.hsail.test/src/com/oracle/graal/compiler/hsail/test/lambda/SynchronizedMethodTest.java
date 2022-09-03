@@ -24,60 +24,42 @@
 package com.oracle.graal.compiler.hsail.test.lambda;
 
 import static com.oracle.graal.debug.Debug.*;
-import static com.oracle.graal.debug.DelegatingDebugConfig.Feature.*;
 
 import com.oracle.graal.compiler.hsail.test.infra.GraalKernelTester;
 import com.oracle.graal.debug.*;
 
 import org.junit.Test;
 
-import java.util.Arrays;
-
 /**
- * Tests non-escaping object creation and calling a method on it.
+ * Tests calling a synchronized method.
  */
-public class NonEscapingNewObjWithArrayTest extends GraalKernelTester {
+public class SynchronizedMethodTest extends GraalKernelTester {
+
     static final int NUM = 20;
-    @Result public float[] outArray = new float[NUM];
-
-    static class MyObj {
-        float a[];
-
-        public MyObj(float[] src, int ofst) {
-            a = Arrays.copyOfRange(src, ofst, ofst + 3);
-        }
-
-        public float productOf() {
-            return a[0] * a[1] * a[2];
-        }
-    }
+    @Result public int[] outArray = new int[NUM];
+    public int[] inArray = new int[NUM];
 
     void setupArrays() {
         for (int i = 0; i < NUM; i++) {
+            inArray[i] = i;
             outArray[i] = -i;
         }
+    }
+
+    synchronized int syncSquare(int n) {
+        return n * n;
     }
 
     @Override
     public void runTest() {
         setupArrays();
-        float[] fsrc = new float[2 * NUM];
-        for (int i = 0; i < 2 * NUM; i++) {
-            fsrc[i] = i;
-        }
 
         dispatchLambdaKernel(NUM, (gid) -> {
-            outArray[gid] = new MyObj(fsrc, gid).productOf();
+            outArray[gid] = syncSquare(inArray[gid]);
         });
     }
 
-    @Override
-    protected boolean supportsRequiredCapabilities() {
-        // although not escaping, seems to require object allocation support
-        return (canHandleObjectAllocation());
-    }
-
-    // NYI emitForeignCall floatArraycopy
+    // cannot handle the BeginLockScope node
     @Test(expected = com.oracle.graal.graph.GraalInternalError.class)
     public void test() {
         try (DebugConfigScope s = disableIntercept()) {
@@ -85,9 +67,10 @@ public class NonEscapingNewObjWithArrayTest extends GraalKernelTester {
         }
     }
 
+    // cannot handle the BeginLockScope node
     @Test(expected = com.oracle.graal.graph.GraalInternalError.class)
     public void testUsingLambdaMethod() {
-        try (DebugConfigScope dcs = setConfig(new DelegatingDebugConfig().disable(INTERCEPT))) {
+        try (DebugConfigScope s = disableIntercept()) {
             testGeneratedHsailUsingLambdaMethod();
         }
     }
