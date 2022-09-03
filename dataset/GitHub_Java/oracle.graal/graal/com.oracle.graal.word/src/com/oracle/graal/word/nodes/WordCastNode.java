@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -36,9 +36,8 @@ import com.oracle.graal.word.phases.*;
  * impact on the pointer maps for the GC, so it must not be scheduled or optimized away.
  */
 @NodeInfo
-public final class WordCastNode extends FixedWithNextNode implements LIRLowerable, Canonicalizable {
+public class WordCastNode extends FixedWithNextNode implements LIRLowerable, Canonicalizable {
 
-    public static final NodeClass TYPE = NodeClass.get(WordCastNode.class);
     @Input ValueNode input;
 
     public static WordCastNode wordToObject(ValueNode input, Kind wordKind) {
@@ -52,7 +51,7 @@ public final class WordCastNode extends FixedWithNextNode implements LIRLowerabl
     }
 
     public WordCastNode(Stamp stamp, ValueNode input) {
-        super(TYPE, stamp);
+        super(stamp);
         this.input = input;
     }
 
