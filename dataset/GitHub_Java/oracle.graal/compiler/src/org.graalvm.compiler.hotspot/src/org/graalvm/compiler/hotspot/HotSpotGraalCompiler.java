@@ -43,7 +43,6 @@ import org.graalvm.compiler.debug.DebugHandlersFactory;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.DebugContext.Activation;
 import org.graalvm.compiler.debug.DebugOptions;
-import org.graalvm.compiler.debug.TTY;
 import org.graalvm.compiler.hotspot.CompilationCounters.Options;
 import org.graalvm.compiler.hotspot.meta.HotSpotProviders;
 import org.graalvm.compiler.hotspot.phases.OnStackReplacementPhase;
@@ -84,6 +83,7 @@ public class HotSpotGraalCompiler implements GraalJVMCICompiler {
     private final CompilationCounters compilationCounters;
     private final BootstrapWatchDog bootstrapWatchDog;
     private List<DebugHandlersFactory> factories;
+    private final boolean mustLogInlining;
 
     HotSpotGraalCompiler(HotSpotJVMCIRuntimeProvider jvmciRuntime, HotSpotGraalRuntimeProvider graalRuntime, OptionValues options) {
         this.jvmciRuntime = jvmciRuntime;
@@ -91,6 +91,7 @@ public class HotSpotGraalCompiler implements GraalJVMCICompiler {
         // It is sufficient to have one compilation counter object per Graal compiler object.
         this.compilationCounters = Options.CompilationCountLimit.getValue(options) > 0 ? new CompilationCounters(options) : null;
         this.bootstrapWatchDog = graalRuntime.isBootstrapping() && !DebugOptions.BootstrapInitializeOnly.getValue(options) ? BootstrapWatchDog.maybeCreate(graalRuntime) : null;
+        mustLogInlining = GraalOptions.EnableContextualInlineLogging.getValue(options);
     }
 
     public List<DebugHandlersFactory> getDebugHandlersFactories() {
@@ -264,7 +265,7 @@ public class HotSpotGraalCompiler implements GraalJVMCICompiler {
         if (shouldDebugNonSafepoints || isOSR) {
             PhaseSuite<HighTierContext> newGbs = suite.copy();
 
-            if (shouldDebugNonSafepoints) {
+            if (shouldDebugNonSafepoints || mustLogInlining) {
                 GraphBuilderPhase graphBuilderPhase = (GraphBuilderPhase) newGbs.findPhase(GraphBuilderPhase.class).previous();
                 GraphBuilderConfiguration graphBuilderConfig = graphBuilderPhase.getGraphBuilderConfig();
                 graphBuilderConfig = graphBuilderConfig.withNodeSourcePosition(true);
