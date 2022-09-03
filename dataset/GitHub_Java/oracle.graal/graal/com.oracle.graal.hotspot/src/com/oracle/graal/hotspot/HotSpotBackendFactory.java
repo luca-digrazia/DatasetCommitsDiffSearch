@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,23 +22,25 @@
  */
 package com.oracle.graal.hotspot;
 
-import com.oracle.graal.api.runtime.*;
-import com.oracle.graal.hotspot.jvmci.HotSpotJVMCIRuntime.Options;
-import com.oracle.jvmci.runtime.*;
+import com.oracle.graal.phases.tiers.CompilerConfiguration;
 
-public interface HotSpotBackendFactory extends Service {
+import jdk.vm.ci.code.Architecture;
+import jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider;
 
-    HotSpotBackend createBackend(HotSpotGraalRuntimeProvider runtime, JVMCIBackend jvmciBackend, HotSpotBackend host);
-
-    /**
-     * Gets the CPU architecture of this backend.
-     */
-    String getArchitecture();
+public interface HotSpotBackendFactory {
 
     /**
-     * Gets the name of the {@link Options#JVMCIRuntime JVMCIRuntime} in which the backend created
-     * by this factory should be used.
+     * Gets the name of this backend factory. This should not include the {@link #getArchitecture()
+     * architecture}. The {@link CompilerConfigurationFactory} can select alternative backends based
+     * on this name.
      */
-    String getGraalRuntimeName();
+    String getName();
 
+    /**
+     * Gets the class describing the architecture the backend created by this factory is associated
+     * with.
+     */
+    Class<? extends Architecture> getArchitecture();
+
+    HotSpotBackend createBackend(HotSpotGraalRuntimeProvider runtime, CompilerConfiguration compilerConfiguration, HotSpotJVMCIRuntimeProvider jvmciRuntime, HotSpotBackend host);
 }

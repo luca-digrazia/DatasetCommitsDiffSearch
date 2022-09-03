@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,68 +22,141 @@
  */
 package com.oracle.graal.hotspot.sparc;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.runtime.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.hotspot.*;
-import com.oracle.graal.hotspot.meta.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.phases.util.*;
-import com.oracle.graal.sparc.*;
+import java.util.HashSet;
+import java.util.Set;
+
+import com.oracle.graal.compiler.sparc.SPARCAddressLowering;
+import com.oracle.graal.compiler.sparc.SPARCSuitesProvider;
+import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
+import com.oracle.graal.hotspot.HotSpotBackend;
+import com.oracle.graal.hotspot.HotSpotBackendFactory;
+import com.oracle.graal.hotspot.HotSpotGraalRuntimeProvider;
+import com.oracle.graal.hotspot.HotSpotReplacementsImpl;
+import com.oracle.graal.hotspot.meta.HotSpotConstantFieldProvider;
+import com.oracle.graal.hotspot.meta.HotSpotForeignCallsProvider;
+import com.oracle.graal.hotspot.meta.HotSpotGraalConstantFieldProvider;
+import com.oracle.graal.hotspot.meta.HotSpotGraphBuilderPlugins;
+import com.oracle.graal.hotspot.meta.HotSpotLoweringProvider;
+import com.oracle.graal.hotspot.meta.HotSpotProviders;
+import com.oracle.graal.hotspot.meta.HotSpotRegisters;
+import com.oracle.graal.hotspot.meta.HotSpotRegistersProvider;
+import com.oracle.graal.hotspot.meta.HotSpotSnippetReflectionProvider;
+import com.oracle.graal.hotspot.meta.HotSpotStampProvider;
+import com.oracle.graal.hotspot.meta.HotSpotSuitesProvider;
+import com.oracle.graal.hotspot.nodes.HotSpotNodeCostProvider;
+import com.oracle.graal.hotspot.word.HotSpotWordTypes;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
+import com.oracle.graal.nodes.spi.LoweringProvider;
+import com.oracle.graal.nodes.spi.NodeCostProvider;
+import com.oracle.graal.phases.tiers.CompilerConfiguration;
+import com.oracle.graal.phases.util.Providers;
+import com.oracle.graal.replacements.sparc.SPARCGraphBuilderPlugins;
+import com.oracle.graal.serviceprovider.ServiceProvider;
+
+import jdk.vm.ci.code.Architecture;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.RegisterConfig;
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.hotspot.HotSpotCodeCacheProvider;
+import jdk.vm.ci.hotspot.HotSpotConstantReflectionProvider;
+import jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider;
+import jdk.vm.ci.hotspot.HotSpotMetaAccessProvider;
+import jdk.vm.ci.meta.Value;
+import jdk.vm.ci.runtime.JVMCIBackend;
+import jdk.vm.ci.sparc.SPARC;
 
 @ServiceProvider(HotSpotBackendFactory.class)
 public class SPARCHotSpotBackendFactory implements HotSpotBackendFactory {
 
-    protected static Architecture createArchitecture() {
-        return new SPARC();
+    @Override
+    public String getName() {
+        return "core";
     }
 
-    protected TargetDescription createTarget() {
-        final int stackFrameAlignment = 16;
-        final int implicitNullCheckLimit = 4096;
-        final boolean inlineObjects = true;
-        return new TargetDescription(createArchitecture(), true, stackFrameAlignment, implicitNullCheckLimit, inlineObjects);
+    @Override
+    public Class<? extends Architecture> getArchitecture() {
+        return SPARC.class;
     }
 
-    public HotSpotBackend createBackend(HotSpotGraalRuntime runtime, HotSpotBackend host) {
+    @Override
+    public HotSpotBackend createBackend(HotSpotGraalRuntimeProvider runtime, CompilerConfiguration compilerConfiguration, HotSpotJVMCIRuntimeProvider jvmciRuntime, HotSpotBackend host) {
         assert host == null;
-        TargetDescription target = createTarget();
 
-        HotSpotMetaAccessProvider metaAccess = new HotSpotMetaAccessProvider(runtime);
-        HotSpotCodeCacheProvider codeCache = new SPARCHotSpotCodeCacheProvider(runtime, target);
-        HotSpotConstantReflectionProvider constantReflection = new HotSpotConstantReflectionProvider(runtime);
-        Value[] nativeABICallerSaveRegisters = createNativeABICallerSaveRegisters(runtime.getConfig(), codeCache.getRegisterConfig());
-        HotSpotForeignCallsProvider foreignCalls = new SPARCHotSpotForeignCallsProvider(runtime, metaAccess, codeCache, nativeABICallerSaveRegisters);
-        LoweringProvider lowerer = new SPARCHotSpotLoweringProvider(runtime, metaAccess, foreignCalls);
-        // Replacements cannot have speculative optimizations since they have
-        // to be valid for the entire run of the VM.
-        Assumptions assumptions = new Assumptions(false);
-        Providers p = new Providers(metaAccess, codeCache, constantReflection, foreignCalls, lowerer, null);
-        HotSpotReplacementsImpl replacements = new HotSpotReplacementsImpl(p, runtime.getConfig(), assumptions);
-        HotSpotDisassemblerProvider disassembler = new HotSpotDisassemblerProvider(runtime);
-        HotSpotSuitesProvider suites = new HotSpotSuitesProvider(runtime);
-        HotSpotRegisters registers = new HotSpotRegisters(Register.None, Register.None, Register.None); // FIXME
-        HotSpotProviders providers = new HotSpotProviders(metaAccess, codeCache, constantReflection, foreignCalls, lowerer, replacements, disassembler, suites, registers);
+        GraalHotSpotVMConfig config = runtime.getVMConfig();
+        JVMCIBackend jvmci = jvmciRuntime.getHostJVMCIBackend();
+        HotSpotRegistersProvider registers = createRegisters();
+        HotSpotMetaAccessProvider metaAccess = (HotSpotMetaAccessProvider) jvmci.getMetaAccess();
+        HotSpotCodeCacheProvider codeCache = (HotSpotCodeCacheProvider) jvmci.getCodeCache();
+        TargetDescription target = codeCache.getTarget();
+        HotSpotConstantReflectionProvider constantReflection = (HotSpotConstantReflectionProvider) jvmci.getConstantReflection();
+        HotSpotConstantFieldProvider constantFieldProvider = new HotSpotGraalConstantFieldProvider(config, metaAccess);
+        Value[] nativeABICallerSaveRegisters = createNativeABICallerSaveRegisters(config, codeCache.getRegisterConfig());
+        HotSpotWordTypes wordTypes = new HotSpotWordTypes(metaAccess, target.wordJavaKind);
+        HotSpotForeignCallsProvider foreignCalls = new SPARCHotSpotForeignCallsProvider(jvmciRuntime, runtime, metaAccess, codeCache, wordTypes, nativeABICallerSaveRegisters);
+        LoweringProvider lowerer = createLowerer(runtime, metaAccess, foreignCalls, registers, constantReflection, target);
+        HotSpotStampProvider stampProvider = new HotSpotStampProvider();
+        NodeCostProvider nodeCostProvider = new SPARCHotSpotNodeCostProvider();
+        Providers p = new Providers(metaAccess, codeCache, constantReflection, constantFieldProvider, foreignCalls, lowerer, null, stampProvider, nodeCostProvider);
+        HotSpotSnippetReflectionProvider snippetReflection = new HotSpotSnippetReflectionProvider(runtime, constantReflection, wordTypes);
+        HotSpotReplacementsImpl replacements = new HotSpotReplacementsImpl(p, snippetReflection, target);
+        Plugins plugins = createGraphBuilderPlugins(config, metaAccess, constantReflection, foreignCalls, stampProvider, snippetReflection, replacements, wordTypes);
+        replacements.setGraphBuilderPlugins(plugins);
+        HotSpotSuitesProvider suites = createSuites(config, runtime, compilerConfiguration, plugins);
+        HotSpotProviders providers = new HotSpotProviders(metaAccess, codeCache, constantReflection, constantFieldProvider, foreignCalls, lowerer, replacements, nodeCostProvider, suites, registers,
+                        snippetReflection,
+                        wordTypes, plugins);
 
-        return new SPARCHotSpotBackend(runtime, providers);
+        return createBackend(config, runtime, providers);
+    }
+
+    protected Plugins createGraphBuilderPlugins(GraalHotSpotVMConfig config, HotSpotMetaAccessProvider metaAccess, HotSpotConstantReflectionProvider constantReflection,
+                    HotSpotForeignCallsProvider foreignCalls, HotSpotStampProvider stampProvider, HotSpotSnippetReflectionProvider snippetReflection, HotSpotReplacementsImpl replacements,
+                    HotSpotWordTypes wordTypes) {
+        Plugins plugins = HotSpotGraphBuilderPlugins.create(config, wordTypes, metaAccess, constantReflection, snippetReflection, foreignCalls, stampProvider, replacements);
+        SPARCGraphBuilderPlugins.register(plugins);
+        return plugins;
+    }
+
+    protected HotSpotSuitesProvider createSuites(GraalHotSpotVMConfig config, HotSpotGraalRuntimeProvider runtime, CompilerConfiguration compilerConfiguration, Plugins plugins) {
+        return new HotSpotSuitesProvider(new SPARCSuitesProvider(compilerConfiguration, plugins), config, runtime, new SPARCAddressLowering());
+    }
+
+    protected SPARCHotSpotBackend createBackend(GraalHotSpotVMConfig config, HotSpotGraalRuntimeProvider runtime, HotSpotProviders providers) {
+        return new SPARCHotSpotBackend(config, runtime, providers);
+    }
+
+    protected HotSpotLoweringProvider createLowerer(HotSpotGraalRuntimeProvider runtime, HotSpotMetaAccessProvider metaAccess, HotSpotForeignCallsProvider foreignCalls,
+                    HotSpotRegistersProvider registers, HotSpotConstantReflectionProvider constantReflection, TargetDescription target) {
+        return new SPARCHotSpotLoweringProvider(runtime, metaAccess, foreignCalls, registers, constantReflection, target);
+    }
+
+    protected HotSpotRegistersProvider createRegisters() {
+        return new HotSpotRegisters(SPARC.g2, SPARC.g6, SPARC.sp);
+    }
+
+    protected HotSpotNodeCostProvider createNodeCostProvider() {
+        return new SPARCHotSpotNodeCostProvider();
     }
 
     @SuppressWarnings("unused")
-    private static Value[] createNativeABICallerSaveRegisters(HotSpotVMConfig config, RegisterConfig regConfig) {
-        throw GraalInternalError.unimplemented();
-    }
-
-    public String getArchitecture() {
-        return "SPARC";
-    }
-
-    public String getGraalRuntimeName() {
-        return "basic";
+    private static Value[] createNativeABICallerSaveRegisters(GraalHotSpotVMConfig config, RegisterConfig regConfig) {
+        Set<Register> callerSavedRegisters = new HashSet<>();
+        SPARC.fpusRegisters.addTo(callerSavedRegisters);
+        SPARC.fpudRegisters.addTo(callerSavedRegisters);
+        callerSavedRegisters.add(SPARC.g1);
+        callerSavedRegisters.add(SPARC.g4);
+        callerSavedRegisters.add(SPARC.g5);
+        Value[] nativeABICallerSaveRegisters = new Value[callerSavedRegisters.size()];
+        int i = 0;
+        for (Register reg : callerSavedRegisters) {
+            nativeABICallerSaveRegisters[i] = reg.asValue();
+            i++;
+        }
+        return nativeABICallerSaveRegisters;
     }
 
     @Override
     public String toString() {
-        return getGraalRuntimeName() + ":" + getArchitecture();
+        return "SPARC";
     }
 }

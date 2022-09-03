@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,7 +27,7 @@ import com.oracle.graal.phases.tiers.CompilerConfiguration;
 import com.oracle.graal.serviceprovider.ServiceProvider;
 
 @ServiceProvider(CompilerConfigurationFactory.class)
-public class EconomyCompilerConfigurationFactory extends DefaultCompilerConfigurationFactory {
+public class EconomyCompilerConfigurationFactory extends CompilerConfigurationFactory {
 
     public static final String NAME = "economy";
 
@@ -38,7 +38,13 @@ public class EconomyCompilerConfigurationFactory extends DefaultCompilerConfigur
     }
 
     @Override
-    protected CompilerConfiguration createCompilerConfiguration() {
+    public CompilerConfiguration createCompilerConfiguration() {
         return new EconomyCompilerConfiguration();
+    }
+
+    @Override
+    public BackendMap createBackendMap() {
+        // the economy configuration only differs in the frontend, it reuses the "core" backend
+        return new DefaultBackendMap(CoreCompilerConfigurationFactory.NAME);
     }
 }
