@@ -23,13 +23,13 @@
 package com.oracle.graal.graph;
 
 import static com.oracle.graal.compiler.common.Fields.translateInto;
-import static com.oracle.graal.debug.GraalError.shouldNotReachHere;
 import static com.oracle.graal.graph.Edges.translateInto;
-import static com.oracle.graal.graph.Graph.isModificationCountsEnabled;
+import static com.oracle.graal.graph.Graph.MODIFICATION_COUNTS_ENABLED;
 import static com.oracle.graal.graph.InputEdges.translateInto;
 import static com.oracle.graal.graph.Node.WithAllEdges;
 import static com.oracle.graal.graph.Node.newIdentityMap;
 import static com.oracle.graal.graph.UnsafeAccess.UNSAFE;
+import static jdk.vm.ci.common.JVMCIError.shouldNotReachHere;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.AnnotatedElement;
@@ -44,6 +44,8 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import jdk.vm.ci.common.JVMCIError;
+
 import com.oracle.graal.compiler.common.FieldIntrospection;
 import com.oracle.graal.compiler.common.Fields;
 import com.oracle.graal.compiler.common.FieldsScanner;
@@ -52,7 +54,6 @@ import com.oracle.graal.debug.DebugCloseable;
 import com.oracle.graal.debug.DebugCounter;
 import com.oracle.graal.debug.DebugTimer;
 import com.oracle.graal.debug.Fingerprint;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.graph.Edges.Type;
 import com.oracle.graal.graph.Graph.DuplicationReplacement;
 import com.oracle.graal.graph.Node.EdgeVisitor;
@@ -420,11 +421,11 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
                     if (INPUT_LIST_CLASS.isAssignableFrom(type)) {
                         // NodeInputList fields should not be final since they are
                         // written (via Unsafe) in clearInputs()
-                        GraalError.guarantee(!Modifier.isFinal(modifiers), "NodeInputList input field %s should not be final", field);
-                        GraalError.guarantee(!Modifier.isPublic(modifiers), "NodeInputList input field %s should not be public", field);
+                        JVMCIError.guarantee(!Modifier.isFinal(modifiers), "NodeInputList input field %s should not be final", field);
+                        JVMCIError.guarantee(!Modifier.isPublic(modifiers), "NodeInputList input field %s should not be public", field);
                     } else {
-                        GraalError.guarantee(NODE_CLASS.isAssignableFrom(type) || type.isInterface(), "invalid input type: %s", type);
-                        GraalError.guarantee(!Modifier.isFinal(modifiers), "Node input field %s should not be final", field);
+                        JVMCIError.guarantee(NODE_CLASS.isAssignableFrom(type) || type.isInterface(), "invalid input type: %s", type);
+                        JVMCIError.guarantee(!Modifier.isFinal(modifiers), "Node input field %s should not be final", field);
                         directInputs++;
                     }
                     InputType inputType;
@@ -439,18 +440,18 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
                     if (SUCCESSOR_LIST_CLASS.isAssignableFrom(type)) {
                         // NodeSuccessorList fields should not be final since they are
                         // written (via Unsafe) in clearSuccessors()
-                        GraalError.guarantee(!Modifier.isFinal(modifiers), "NodeSuccessorList successor field % should not be final", field);
-                        GraalError.guarantee(!Modifier.isPublic(modifiers), "NodeSuccessorList successor field %s should not be public", field);
+                        JVMCIError.guarantee(!Modifier.isFinal(modifiers), "NodeSuccessorList successor field % should not be final", field);
+                        JVMCIError.guarantee(!Modifier.isPublic(modifiers), "NodeSuccessorList successor field %s should not be public", field);
                     } else {
-                        GraalError.guarantee(NODE_CLASS.isAssignableFrom(type), "invalid successor type: %s", type);
-                        GraalError.guarantee(!Modifier.isFinal(modifiers), "Node successor field %s should not be final", field);
+                        JVMCIError.guarantee(NODE_CLASS.isAssignableFrom(type), "invalid successor type: %s", type);
+                        JVMCIError.guarantee(!Modifier.isFinal(modifiers), "Node successor field %s should not be final", field);
                         directSuccessors++;
                     }
                     successors.add(new EdgeInfo(offset, field.getName(), type, field.getDeclaringClass()));
                 } else {
-                    GraalError.guarantee(!NODE_CLASS.isAssignableFrom(type) || field.getName().equals("Null"), "suspicious node field: %s", field);
-                    GraalError.guarantee(!INPUT_LIST_CLASS.isAssignableFrom(type), "suspicious node input list field: %s", field);
-                    GraalError.guarantee(!SUCCESSOR_LIST_CLASS.isAssignableFrom(type), "suspicious node successor list field: %s", field);
+                    JVMCIError.guarantee(!NODE_CLASS.isAssignableFrom(type) || field.getName().equals("Null"), "suspicious node field: %s", field);
+                    JVMCIError.guarantee(!INPUT_LIST_CLASS.isAssignableFrom(type), "suspicious node input list field: %s", field);
+                    JVMCIError.guarantee(!SUCCESSOR_LIST_CLASS.isAssignableFrom(type), "suspicious node successor list field: %s", field);
                     super.scanField(field, offset);
                 }
             }
@@ -981,7 +982,7 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
 
         private RawEdgesWithModCountIterator(Node node, long mask) {
             super(node, mask);
-            assert isModificationCountsEnabled();
+            assert MODIFICATION_COUNTS_ENABLED;
             this.modCount = node.modCount();
         }
 
@@ -1019,7 +1020,7 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
 
             @Override
             public Iterator<Node> iterator() {
-                if (isModificationCountsEnabled()) {
+                if (MODIFICATION_COUNTS_ENABLED) {
                     return new RawEdgesWithModCountIterator(node, mask);
                 } else {
                     return new RawEdgesIterator(node, mask);
@@ -1034,7 +1035,7 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
 
             @Override
             public Iterator<Node> iterator() {
-                if (isModificationCountsEnabled()) {
+                if (MODIFICATION_COUNTS_ENABLED) {
                     return new RawEdgesWithModCountIterator(node, mask);
                 } else {
                     return new RawEdgesIterator(node, mask);
