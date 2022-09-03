@@ -75,6 +75,10 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Fram
         return callHelper(caller, args);
     }
 
+    public CompilationProfile getCompilationProfile() {
+        return compilationProfile;
+    }
+
     private Object callHelper(PackedFrame caller, Arguments args) {
         if (installedCode != null && installedCode.isValid()) {
             TruffleRuntime runtime = Truffle.getRuntime();
@@ -96,10 +100,6 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Fram
         } else {
             return interpreterCall(caller, args);
         }
-    }
-
-    public CompilationProfile getCompilationProfile() {
-        return compilationProfile;
     }
 
     private Object compiledCodeInvalidated(PackedFrame caller, Arguments args) {
@@ -130,12 +130,9 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Fram
     private Object interpreterCall(PackedFrame caller, Arguments args) {
         CompilerAsserts.neverPartOfCompilation();
         compilationProfile.reportInterpreterCall();
-        if (compilationEnabled && shouldCompile()) {
-            if (isCompiling()) {
-                return waitForCompilation(caller, args);
-            }
+        if (compilationEnabled) {
             boolean inlined = shouldInline() && inline();
-            if (!inlined) {
+            if (!inlined && shouldCompile()) {
                 compile();
             }
         }
@@ -150,29 +147,24 @@ public final class OptimizedCallTarget extends DefaultCallTarget implements Fram
         return TruffleFunctionInlining.getValue();
     }
 
-    private boolean isCompiling() {
+    public void compile() {
+        CompilerAsserts.neverPartOfCompilation();
         if (installedCodeTask != null) {
+            // There is already a compilation running.
             if (installedCodeTask.isCancelled()) {
                 installedCodeTask = null;
-                return false;
+            } else {
+                if (installedCodeTask.isDone()) {
+                    installedCode = receiveInstalledCode();
+                }
+                return;
             }
-            return true;
         }
-        return false;
-    }
 
-    public void compile() {
         this.installedCodeTask = compiler.compile(this);
         if (!TruffleBackgroundCompilation.getValue()) {
             installedCode = receiveInstalledCode();
         }
-    }
-
-    private Object waitForCompilation(PackedFrame caller, Arguments args) {
-        if (installedCodeTask.isDone()) {
-            installedCode = receiveInstalledCode();
-        }
-        return executeHelper(caller, args);
     }
 
     private InstalledCode receiveInstalledCode() {

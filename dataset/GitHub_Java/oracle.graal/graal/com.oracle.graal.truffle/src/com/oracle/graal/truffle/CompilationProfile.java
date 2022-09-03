@@ -26,6 +26,8 @@ import static com.oracle.graal.truffle.TruffleCompilerOptions.*;
 
 public class CompilationProfile {
 
+    private static final int MIN_INVOKES_AFTER_INLINING = 2;
+
     private int invokeCounter;
     private int originalInvokeCounter;
     private int loopAndInvokeCounter;
@@ -100,9 +102,9 @@ public class CompilationProfile {
         loopAndInvokeCounter--;
     }
 
-    void reportInliningPerformed(TruffleInlining inlining) {
-        invokeCounter = inlining.getInvocationReprofileCount();
-        int inliningReprofileCount = inlining.getReprofileCount();
+    void reportInliningPerformed() {
+        invokeCounter = MIN_INVOKES_AFTER_INLINING;
+        int inliningReprofileCount = TruffleInliningReprofileCount.getValue();
         loopAndInvokeCounter = inliningReprofileCount;
         originalInvokeCounter = inliningReprofileCount;
     }
