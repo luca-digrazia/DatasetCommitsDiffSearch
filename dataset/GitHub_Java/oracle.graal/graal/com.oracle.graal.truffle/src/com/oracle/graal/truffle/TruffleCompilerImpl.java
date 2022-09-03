@@ -36,6 +36,7 @@ import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.debug.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.java.*;
 import com.oracle.graal.nodes.*;
@@ -139,6 +140,8 @@ public class TruffleCompilerImpl implements TruffleCompiler {
             }
         });
 
+        final Graph graphCopy = graph.copy();
+
         final CompilationResult result = Debug.scope("TruffleGraal", new Callable<CompilationResult>() {
 
             @Override
@@ -169,7 +172,7 @@ public class TruffleCompilerImpl implements TruffleCompiler {
 
             @Override
             public InstalledCode call() throws Exception {
-                InstalledCode installedCode = runtime.addMethod(graph.method(), result);
+                InstalledCode installedCode = runtime.addMethod(graph.method(), result, graphCopy);
                 if (installedCode != null) {
                     Debug.dump(new Object[]{result, installedCode}, "After code installation");
                 }
