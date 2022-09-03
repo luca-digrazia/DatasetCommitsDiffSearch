@@ -89,17 +89,11 @@ public abstract class CompositeValue extends Value implements Cloneable {
 
     @Override
     public final CompositeValue clone() {
-        CompositeValue compositeValue = null;
         try {
-            compositeValue = (CompositeValue) super.clone();
+            return (CompositeValue) super.clone();
         } catch (CloneNotSupportedException e) {
             throw new GraalInternalError(e);
         }
-
-        // copy value arrays
-        getValueClass().copyValueArrays(compositeValue);
-
-        return compositeValue;
     }
 
 }
