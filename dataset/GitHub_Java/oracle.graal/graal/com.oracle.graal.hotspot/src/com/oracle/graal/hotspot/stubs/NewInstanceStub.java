@@ -104,10 +104,9 @@ public class NewInstanceStub extends SnippetStub {
     @Snippet
     private static Object newInstance(Word hub, @ConstantParameter Word intArrayHub, @ConstantParameter Register threadRegister) {
         int sizeInBytes = hub.readInt(klassInstanceSizeOffset(), LocationIdentity.FINAL_LOCATION);
-        Word thread = registerAsWord(threadRegister);
         if (!forceSlowPath() && inlineContiguousAllocationSupported()) {
             if (hub.readByte(klassStateOffset(), CLASS_STATE_LOCATION) == klassStateFullyInitialized()) {
-                Word memory = refillAllocate(thread, intArrayHub, sizeInBytes, logging());
+                Word memory = refillAllocate(threadRegister, intArrayHub, sizeInBytes, logging());
                 if (memory.notEqual(0)) {
                     Word prototypeMarkWord = hub.readWord(prototypeMarkWordOffset(), PROTOTYPE_MARK_WORD_LOCATION);
                     initializeObjectHeader(memory, prototypeMarkWord, hub);
@@ -123,9 +122,9 @@ public class NewInstanceStub extends SnippetStub {
             printf("newInstance: calling new_instance_c\n");
         }
 
-        newInstanceC(NEW_INSTANCE_C, thread, hub);
-        handlePendingException(thread, true);
-        return verifyObject(getAndClearObjectResult(thread));
+        newInstanceC(NEW_INSTANCE_C, registerAsWord(threadRegister), hub);
+        handlePendingException(true);
+        return verifyObject(getAndClearObjectResult(registerAsWord(threadRegister)));
     }
 
     /**
@@ -138,7 +137,7 @@ public class NewInstanceStub extends SnippetStub {
      * @return the newly allocated, uninitialized chunk of memory, or {@link Word#zero()} if the
      *         operation was unsuccessful
      */
-    static Word refillAllocate(Word thread, Word intArrayHub, int sizeInBytes, boolean log) {
+    static Word refillAllocate(Register threadRegister, Word intArrayHub, int sizeInBytes, boolean log) {
         // If G1 is enabled, the "eden" allocation space is not the same always
         // and therefore we have to go to slowpath to allocate a new TLAB.
         if (useG1GC()) {
@@ -150,6 +149,7 @@ public class NewInstanceStub extends SnippetStub {
         Word intArrayMarkWord = Word.unsigned(tlabIntArrayMarkWord());
         int alignmentReserveInBytes = tlabAlignmentReserveInHeapWords() * wordSize();
 
+        Word thread = registerAsWord(threadRegister);
         Word top = readTlabTop(thread);
         Word end = readTlabEnd(thread);
 

@@ -102,9 +102,8 @@ public class NewArrayStub extends SnippetStub {
         }
 
         // check that array length is small enough for fast path.
-        Word thread = registerAsWord(threadRegister);
         if (length <= MAX_ARRAY_FAST_PATH_ALLOCATION_LENGTH) {
-            Word memory = refillAllocate(thread, intArrayHub, sizeInBytes, logging());
+            Word memory = refillAllocate(threadRegister, intArrayHub, sizeInBytes, logging());
             if (memory.notEqual(0)) {
                 if (logging()) {
                     printf("newArray: allocated new array at %p\n", memory.rawValue());
@@ -116,9 +115,9 @@ public class NewArrayStub extends SnippetStub {
             printf("newArray: calling new_array_c\n");
         }
 
-        newArrayC(NEW_ARRAY_C, thread, hub, length);
-        handlePendingException(thread, true);
-        return verifyObject(getAndClearObjectResult(thread));
+        newArrayC(NEW_ARRAY_C, registerAsWord(threadRegister), hub, length);
+        handlePendingException(true);
+        return verifyObject(getAndClearObjectResult(registerAsWord(threadRegister)));
     }
 
     public static final ForeignCallDescriptor NEW_ARRAY_C = descriptorFor(NewArrayStub.class, "newArrayC");
