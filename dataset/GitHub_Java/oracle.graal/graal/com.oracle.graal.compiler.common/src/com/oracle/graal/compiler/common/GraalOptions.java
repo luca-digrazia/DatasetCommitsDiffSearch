@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +22,10 @@
  */
 package com.oracle.graal.compiler.common;
 
-import com.oracle.graal.options.*;
+import com.oracle.graal.options.Option;
+import com.oracle.graal.options.OptionType;
+import com.oracle.graal.options.OptionValue;
+import com.oracle.graal.options.StableOptionValue;
 
 /**
  * This class encapsulates options that control the behavior of the Graal compiler.
@@ -30,256 +33,251 @@ import com.oracle.graal.options.*;
 // @formatter:off
 public final class GraalOptions {
 
-    @Option(help = "Use baseline compiler configuration")
-    public static final OptionValue<Boolean> UseBaselineCompiler = new OptionValue<>(false);
-    @Option(help = "Enable use of compiler intrinsics")
+    @Option(help = "Use compiler intrinsifications.", type = OptionType.Debug)
     public static final OptionValue<Boolean> Intrinsify = new OptionValue<>(true);
-    @Option(help = "Enable inlining of monomorphic calls")
+
+    @Option(help = "Inline calls with monomorphic type profile.", type = OptionType.Expert)
     public static final OptionValue<Boolean> InlineMonomorphicCalls = new OptionValue<>(true);
-    @Option(help = "Enable inlining of polymorphic calls")
+
+    @Option(help = "Inline calls with polymorphic type profile.", type = OptionType.Expert)
     public static final OptionValue<Boolean> InlinePolymorphicCalls = new OptionValue<>(true);
-    @Option(help = "Enable inlining of megamorphic calls")
+
+    @Option(help = "Inline calls with megamorphic type profile (i.e., not all types could be recorded).", type = OptionType.Expert)
     public static final OptionValue<Boolean> InlineMegamorphicCalls = new OptionValue<>(true);
-    @Option(help = "")
-    public static final OptionValue<Double> MegamorphicInliningMinMethodProbability = new OptionValue<>(0.33D);
-    @Option(help = "")
+
+    @Option(help = "Maximum desired size of the compiler graph in nodes.", type = OptionType.User)
     public static final OptionValue<Integer> MaximumDesiredSize = new OptionValue<>(20000);
-    @Option(help = "")
+
+    @Option(help = "Minimum probability for methods to be inlined for megamorphic type profiles.", type = OptionType.Expert)
+    public static final OptionValue<Double> MegamorphicInliningMinMethodProbability = new OptionValue<>(0.33D);
+
+    @Option(help = "Maximum level of recursive inlining.", type = OptionType.Expert)
     public static final OptionValue<Integer> MaximumRecursiveInlining = new OptionValue<>(5);
 
-    // inlining settings
-    @Option(help = "")
-    public static final OptionValue<Float> BoostInliningForEscapeAnalysis = new OptionValue<>(2f);
-    @Option(help = "")
-    public static final OptionValue<Float> RelevanceCapForInlining = new OptionValue<>(1f);
-    @Option(help = "")
-    public static final OptionValue<Float> CapInheritedRelevance = new OptionValue<>(1f);
-    @Option(help = "")
-    public static final OptionValue<Boolean> IterativeInlining = new OptionValue<>(false);
-
-    @Option(help = "")
+    @Option(help = "Graphs with less than this number of nodes are trivial and therefore always inlined.", type = OptionType.Expert)
     public static final OptionValue<Integer> TrivialInliningSize = new OptionValue<>(10);
-    @Option(help = "")
+
+    @Option(help = "Inlining is explored up to this number of nodes in the graph for each call site.", type = OptionType.Expert)
     public static final OptionValue<Integer> MaximumInliningSize = new OptionValue<>(300);
-    @Option(help = "")
+
+    @Option(help = "If the previous low-level graph size of the method exceeds the threshold, it is not inlined.", type = OptionType.Expert)
     public static final OptionValue<Integer> SmallCompiledLowLevelGraphSize = new OptionValue<>(300);
-    @Option(help = "")
+
+    @Option(help = "", type = OptionType.Expert)
     public static final OptionValue<Double> LimitInlinedInvokes = new OptionValue<>(5.0);
-    @Option(help = "")
+
+    @Option(help = "", type = OptionType.Expert)
     public static final OptionValue<Boolean> InlineEverything = new OptionValue<>(false);
 
     // escape analysis settings
-    @Option(help = "")
+    @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> PartialEscapeAnalysis = new OptionValue<>(true);
-    @Option(help = "")
+
+    @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Integer> EscapeAnalysisIterations = new OptionValue<>(2);
-    @Option(help = "")
+
+    @Option(help = "", type = OptionType.Debug)
+    public static final OptionValue<Integer> EscapeAnalysisLoopCutoff = new OptionValue<>(20);
+
+    @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<String> EscapeAnalyzeOnly = new OptionValue<>(null);
-    @Option(help = "")
+
+    @Option(help = "", type = OptionType.Expert)
     public static final OptionValue<Integer> MaximumEscapeAnalysisArrayLength = new OptionValue<>(32);
-    @Option(help = "")
+
+    @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> PEAInliningHints = new OptionValue<>(false);
 
-    @Option(help = "")
+    @Option(help = "", type = OptionType.Expert)
     public static final OptionValue<Double> TailDuplicationProbability = new OptionValue<>(0.5);
-    @Option(help = "")
+
+    @Option(help = "", type = OptionType.Expert)
     public static final OptionValue<Integer> TailDuplicationTrivialSize = new OptionValue<>(1);
 
-    // profiling information
-    @Option(help = "")
+    @Option(help = "", type = OptionType.Expert)
     public static final OptionValue<Integer> DeoptsToDisableOptimisticOptimization = new OptionValue<>(40);
 
-    // graph caching
-    @Option(help = "")
-    public static final OptionValue<Boolean> CacheGraphs = new OptionValue<>(true);
-
-    //loop transform settings TODO (gd) tune
-    @Option(help = "")
+    @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> LoopPeeling = new OptionValue<>(true);
-    @Option(help = "")
+
+    @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> ReassociateInvariants = new OptionValue<>(true);
-    @Option(help = "")
+
+    @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> FullUnroll = new OptionValue<>(true);
-    @Option(help = "")
+
+    @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> LoopUnswitch = new OptionValue<>(true);
-    @Option(help = "")
-    public static final OptionValue<Integer> FullUnrollMaxNodes = new OptionValue<>(300);
-    @Option(help = "")
-    public static final OptionValue<Integer> ExactFullUnrollMaxNodes = new OptionValue<>(1200);
-    @Option(help = "")
+
+    @Option(help = "", type = OptionType.Expert)
     public static final OptionValue<Float> MinimumPeelProbability = new OptionValue<>(0.35f);
-    @Option(help = "")
+
+    @Option(help = "", type = OptionType.Expert)
     public static final OptionValue<Integer> LoopMaxUnswitch = new OptionValue<>(3);
-    @Option(help = "")
-    public static final OptionValue<Integer> LoopUnswitchMaxIncrease = new OptionValue<>(50);
-    @Option(help = "")
-    public static final OptionValue<Integer> LoopUnswitchUncertaintyBoost = new OptionValue<>(5);
-    @Option(help = "")
+
+    @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> UseLoopLimitChecks = new OptionValue<>(true);
 
     // debugging settings
-    @Option(help = "")
+    @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> ZapStackOnMethodEntry = new OptionValue<>(false);
-    @Option(help = "")
+
+    @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> DeoptALot = new OptionValue<>(false);
-    @Option(help = "")
+
+    @Option(help = "Stress the code emitting explicit exception throwing code.", type = OptionType.Debug)
+    public static final OptionValue<Boolean> StressExplicitExceptionCode = new OptionValue<>(false);
+
+    @Option(help = "Stress the code emitting invokes with explicit exception edges.", type = OptionType.Debug)
+    public static final OptionValue<Boolean> StressInvokeWithExceptionNode = new OptionValue<>(false);
+
+    @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> VerifyPhases = new OptionValue<>(false);
 
-    @Option(help = "")
-    public static final OptionValue<String> PrintFilter = new OptionValue<>(null);
-
     // Debug settings:
-    @Option(help = "")
-    public static final OptionValue<Boolean> BootstrapReplacements = new OptionValue<>(false);
-    @Option(help = "")
+    @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Integer> GCDebugStartCycle = new OptionValue<>(-1);
-    // Ideal graph visualizer output settings
-    @Option(help = "Dump IdealGraphVisualizer output in binary format")
-    public static final OptionValue<Boolean> PrintBinaryGraphs = new OptionValue<>(true);
-    @Option(help = "Output probabilities for fixed nodes during binary graph dumping")
-    public static final OptionValue<Boolean> PrintGraphProbabilities = new OptionValue<>(false);
-    @Option(help = "Enable dumping to the C1Visualizer. Enabling this option implies PrintBackendCFG.")
-    public static final OptionValue<Boolean> PrintCFG = new OptionValue<>(false);
-    @Option(help = "Enable dumping LIR, register allocation and code generation info to the C1Visualizer.")
-    public static final OptionValue<Boolean> PrintBackendCFG = new OptionValue<>(true);
-    @Option(help = "")
-    public static final OptionValue<Boolean> PrintIdealGraphFile = new OptionValue<>(false);
-    @Option(help = "")
-    public static final OptionValue<String> PrintIdealGraphAddress = new OptionValue<>("127.0.0.1");
-    @Option(help = "")
-    public static final OptionValue<Integer> PrintIdealGraphPort = new OptionValue<>(4444);
-    @Option(help = "")
-    public static final OptionValue<Integer> PrintBinaryGraphPort = new OptionValue<>(4445);
+
+    @Option(help = "Perform platform dependent validation of the Java heap at returns", type = OptionType.Debug)
+    public static final OptionValue<Boolean> VerifyHeapAtReturn = new OptionValue<>(false);
 
     // Other printing settings
-    @Option(help = "")
-    public static final OptionValue<Boolean> PrintCompilation = new OptionValue<>(false);
-    @Option(help = "")
-    public static final OptionValue<Boolean> PrintAfterCompilation = new OptionValue<>(false);
-    @Option(help = "Print profiling information when parsing a method's bytecode")
+    @Option(help = "Print profiling information when parsing a method's bytecode", type = OptionType.Debug)
     public static final OptionValue<Boolean> PrintProfilingInformation = new OptionValue<>(false);
-    @Option(help = "")
-    public static final OptionValue<Boolean> PrintCodeBytes = new OptionValue<>(false);
-    @Option(help = "")
-    public static final OptionValue<Boolean> PrintBailout = new OptionValue<>(false);
-    @Option(help = "")
-    public static final OptionValue<Boolean> TraceEscapeAnalysis = new OptionValue<>(false);
-    @Option(help = "")
-    public static final OptionValue<Boolean> ExitVMOnBailout = new OptionValue<>(false);
-    @Option(help = "")
-    public static final OptionValue<Boolean> ExitVMOnException = new OptionValue<>(true);
-    @Option(help = "")
-    public static final OptionValue<Boolean> PrintStackTraceOnException = new OptionValue<>(false);
-    @Option(help = "Set a phase after which the decompiler dumps the graph, -G:Dump= required")
-    public static final OptionValue<String> DecompileAfterPhase = new OptionValue<>(null);
+
+    @Option(help = "", type = OptionType.Debug)
+    public static final StableOptionValue<Boolean> TraceEscapeAnalysis = new StableOptionValue<>(false);
 
     // HotSpot command line options
-    @Option(help = "")
-    public static final OptionValue<Boolean> HotSpotPrintCompilation = new OptionValue<>(false);
-    @Option(help = "")
-    public static final OptionValue<Boolean> HotSpotCIPrintCompilerName = new OptionValue<>(false);
-    @Option(help = "")
+    @Option(help = "Print inlining optimizations", type = OptionType.Debug)
     public static final OptionValue<Boolean> HotSpotPrintInlining = new OptionValue<>(false);
 
     // Register allocator debugging
-    @Option(help = "")
+    @Option(help = "Comma separated list of registers that register allocation is limited to.", type = OptionType.Debug)
     public static final OptionValue<String> RegisterPressure = new OptionValue<>(null);
 
-    // Code generator settings
-    @Option(help = "")
+    @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> ConditionalElimination = new OptionValue<>(true);
-    @Option(help = "")
-    public static final OptionValue<Boolean> UseProfilingInformation = new OptionValue<>(true);
-    @Option(help = "")
+
+    @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> RemoveNeverExecutedCode = new OptionValue<>(true);
-    @Option(help = "")
+
+    @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> UseExceptionProbability = new OptionValue<>(true);
-    @Option(help = "")
+
+    @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> UseExceptionProbabilityForOperations = new OptionValue<>(true);
-    @Option(help = "")
+
+    @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> OmitHotExceptionStacktrace = new OptionValue<>(false);
-    @Option(help = "")
+
+    @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> GenSafepoints = new OptionValue<>(true);
-    @Option(help = "")
+
+    @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> GenLoopSafepoints = new OptionValue<>(true);
-    @Option(help = "")
+
+    @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> UseTypeCheckHints = new OptionValue<>(true);
-    @Option(help = "")
+
+    @Option(help = "", type = OptionType.Expert)
     public static final OptionValue<Boolean> InlineVTableStubs = new OptionValue<>(true);
-    @Option(help = "")
+
+    @Option(help = "", type = OptionType.Expert)
     public static final OptionValue<Boolean> AlwaysInlineVTableStubs = new OptionValue<>(false);
-    @Option(help = "")
-    public static final OptionValue<Boolean> GenAssertionCode = new OptionValue<>(false);
-    @Option(help = "")
-    public static final OptionValue<Boolean> AlignCallsForPatching = new OptionValue<>(true);
-    @Option(help = "")
+
+    @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> ResolveClassBeforeStaticInvoke = new OptionValue<>(false);
-    @Option(help = "")
+
+    @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> CanOmitFrame = new OptionValue<>(true);
 
-    @Option(help = "")
-    public static final OptionValue<Boolean> MemoryAwareScheduling = new OptionValue<>(true);
-
-    // Translating tableswitch instructions
-    @Option(help = "")
-    public static final OptionValue<Integer> MinimumJumpTableSize = new OptionValue<>(5);
-    @Option(help = "")
-    public static final OptionValue<Integer> RangeTestsSwitchDensity = new OptionValue<>(5);
-    @Option(help = "")
-    public static final OptionValue<Double> MinTableSwitchDensity = new OptionValue<>(0.5);
-
     // Ahead of time compilation
-    @Option(help = "Try to avoid emitting code where patching is required")
+    @Option(help = "Try to avoid emitting code where patching is required", type = OptionType.Expert)
     public static final OptionValue<Boolean> ImmutableCode = new OptionValue<>(false);
 
-    @Option(help = "")
+    @Option(help = "Generate position independent code", type = OptionType.Expert)
+    public static final OptionValue<Boolean> GeneratePIC = new OptionValue<>(false);
+
+    @Option(help = "", type = OptionType.Expert)
     public static final OptionValue<Boolean> CallArrayCopy = new OptionValue<>(true);
 
     // Runtime settings
-    @Option(help = "")
+    @Option(help = "", type = OptionType.Expert)
     public static final OptionValue<Boolean> SupportJsrBytecodes = new OptionValue<>(true);
 
-    @Option(help = "")
+    @Option(help = "", type = OptionType.Expert)
     public static final OptionValue<Boolean> OptAssumptions = new OptionValue<>(true);
-    @Option(help = "")
+
+    @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> OptConvertDeoptsToGuards = new OptionValue<>(true);
-    @Option(help = "")
+
+    @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> OptReadElimination = new OptionValue<>(true);
-    @Option(help = "")
-    public static final OptionValue<Boolean> OptCanonicalizer = new OptionValue<>(true);
-    @Option(help = "")
+
+    @Option(help = "", type = OptionType.Debug)
+    public static final OptionValue<Integer> ReadEliminationMaxLoopVisits = new OptionValue<>(5);
+
+    @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> OptDeoptimizationGrouping = new OptionValue<>(true);
-    @Option(help = "")
+
+    @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> OptScheduleOutOfLoops = new OptionValue<>(true);
-    @Option(help = "")
+
+    @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> OptEliminateGuards = new OptionValue<>(true);
-    @Option(help = "")
+
+    @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> OptImplicitNullChecks = new OptionValue<>(true);
-    @Option(help = "")
-    public static final OptionValue<Boolean> OptLivenessAnalysis = new OptionValue<>(true);
-    @Option(help = "")
+
+    @Option(help = "", type = OptionType.Debug)
+    public static final OptionValue<Boolean> OptClearNonLiveLocals = new OptionValue<>(true);
+
+    @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> OptLoopTransform = new OptionValue<>(true);
-    @Option(help = "")
+
+    @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> OptFloatingReads = new OptionValue<>(true);
-    @Option(help = "")
-    public static final OptionValue<Boolean> OptTailDuplication = new OptionValue<>(true);
-    @Option(help = "")
+
+    @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> OptEliminatePartiallyRedundantGuards = new OptionValue<>(true);
-    @Option(help = "")
+
+    @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> OptFilterProfiledTypes = new OptionValue<>(true);
-    @Option(help = "")
+
+    @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> OptDevirtualizeInvokesOptimistically = new OptionValue<>(true);
-    @Option(help = "")
+
+    @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> OptPushThroughPi = new OptionValue<>(true);
-    @Option(help = "Allow backend to emit arithmetic and compares directly against memory.")
-    public static final OptionValue<Boolean> OptFoldMemory = new OptionValue<>(false);
-    @Option(help = "Allow backend to match complex expressions.")
+
+    @Option(help = "Allow backend to match complex expressions.", type = OptionType.Debug)
     public static final OptionValue<Boolean> MatchExpressions = new OptionValue<>(true);
 
-
-    /**
-     * Counts the various paths taken through snippets.
-     */
-    @Option(help = "")
+    @Option(help = "Enable counters for various paths in snippets.", type = OptionType.Debug)
     public static final OptionValue<Boolean> SnippetCounters = new OptionValue<>(false);
+
+    @Option(help = "Eagerly construct extra snippet info.", type = OptionType.Debug)
+    public static final OptionValue<Boolean> EagerSnippets = new OptionValue<>(false);
+
+    @Option(help = "Use a cache for snippet graphs.", type = OptionType.Debug)
+    public static final OptionValue<Boolean> UseSnippetGraphCache = new OptionValue<>(true);
+
+    @Option(help = "Enable expensive assertions", type = OptionType.Debug)
+    public static final OptionValue<Boolean> DetailedAsserts = new StableOptionValue<Boolean>() {
+        @Override
+        protected Boolean defaultValue() {
+            boolean enabled = false;
+            // turn detailed assertions on when the general assertions are on (misusing the assert keyword for this)
+            assert (enabled = true) == true;
+            return enabled;
+        }
+    };
+
+    @Option(help = "Enable Graal instrumentation")
+    public static final OptionValue<Boolean> UseGraalInstrumentation = new OptionValue<>(false);
+
+    @Option(help = "Enable experimental Trace Register Allocation.", type = OptionType.Debug)
+    public static final OptionValue<Boolean> TraceRA = new OptionValue<>(false);
+
 }
