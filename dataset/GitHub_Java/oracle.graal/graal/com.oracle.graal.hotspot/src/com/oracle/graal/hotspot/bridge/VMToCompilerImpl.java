@@ -174,19 +174,6 @@ public class VMToCompilerImpl implements VMToCompiler {
 
         if (DebugEnabled.getValue()) {
             DebugEnvironment.initialize(log);
-
-            String summary = DebugValueSummary.getValue();
-            if (summary != null) {
-                switch (summary) {
-                    case "Name":
-                    case "Partial":
-                    case "Complete":
-                    case "Thread":
-                        break;
-                    default:
-                        throw new GraalInternalError("Unsupported value for DebugSummaryValue: %s", summary);
-                }
-            }
         }
 
         assert VerifyHotSpotOptionsPhase.checkOptions();
@@ -461,27 +448,14 @@ public class VMToCompilerImpl implements VMToCompiler {
 
                 String summary = DebugValueSummary.getValue();
                 if (summary == null) {
-                    summary = "Complete";
+                    summary = "Scope";
                 }
                 switch (summary) {
-                    case "Name":
-                        printSummary(topLevelMaps, sortedValues);
-                        break;
-                    case "Partial": {
+                    case "PartialScope": {
                         DebugValueMap globalMap = new DebugValueMap("Global");
                         for (DebugValueMap map : topLevelMaps) {
                             flattenChildren(map, globalMap);
                         }
-                        globalMap.normalize();
-                        printMap(new DebugValueScope(null, globalMap), sortedValues);
-                        break;
-                    }
-                    case "Complete": {
-                        DebugValueMap globalMap = new DebugValueMap("Global");
-                        for (DebugValueMap map : topLevelMaps) {
-                            globalMap.addChild(map);
-                        }
-                        globalMap.group();
                         globalMap.normalize();
                         printMap(new DebugValueScope(null, globalMap), sortedValues);
                         break;
@@ -494,8 +468,20 @@ public class VMToCompilerImpl implements VMToCompiler {
                             printMap(new DebugValueScope(null, map), sortedValues);
                         }
                         break;
-                    default:
-                        throw new GraalInternalError("Unknown summary type: %s", summary);
+                    case "Name":
+                        printSummary(topLevelMaps, sortedValues);
+                        break;
+                    case "Scope": // fall through
+                    default: {
+                        DebugValueMap globalMap = new DebugValueMap("Global");
+                        for (DebugValueMap map : topLevelMaps) {
+                            globalMap.addChild(map);
+                        }
+                        globalMap.group();
+                        globalMap.normalize();
+                        printMap(new DebugValueScope(null, globalMap), sortedValues);
+                        break;
+                    }
                 }
             }
         }
