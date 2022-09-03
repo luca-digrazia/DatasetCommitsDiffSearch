@@ -26,7 +26,6 @@ import java.util.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.java.GraphBuilderPlugin.AnnotatedInvocationPlugin;
 import com.oracle.graal.java.GraphBuilderPlugin.InlineInvokePlugin;
 import com.oracle.graal.java.GraphBuilderPlugin.LoadFieldPlugin;
 import com.oracle.graal.java.GraphBuilderPlugin.LoopExplosionPlugin;
@@ -45,7 +44,6 @@ public class GraphBuilderConfiguration {
     private LoadFieldPlugin loadFieldPlugin;
     private ParameterPlugin parameterPlugin;
     private InlineInvokePlugin inlineInvokePlugin;
-    private AnnotatedInvocationPlugin annotatedInvocationPlugin;
     private LoopExplosionPlugin loopExplosionPlugin;
 
     public static enum DebugInfoMode {
@@ -107,20 +105,12 @@ public class GraphBuilderConfiguration {
         return invocationPlugins;
     }
 
-    public AnnotatedInvocationPlugin getAnnotatedInvocationPlugin() {
-        return annotatedInvocationPlugin;
-    }
-
-    public void setAnnotatedInvocationPlugin(AnnotatedInvocationPlugin plugin) {
-        this.annotatedInvocationPlugin = plugin;
-    }
-
     public LoadFieldPlugin getLoadFieldPlugin() {
         return loadFieldPlugin;
     }
 
-    public void setLoadFieldPlugin(LoadFieldPlugin plugin) {
-        this.loadFieldPlugin = plugin;
+    public void setLoadFieldPlugin(LoadFieldPlugin loadFieldPlugin) {
+        this.loadFieldPlugin = loadFieldPlugin;
     }
 
     public ResolvedJavaType[] getSkippedExceptionTypes() {
@@ -176,24 +166,24 @@ public class GraphBuilderConfiguration {
         return parameterPlugin;
     }
 
-    public void setParameterPlugin(ParameterPlugin plugin) {
-        this.parameterPlugin = plugin;
+    public void setParameterPlugin(ParameterPlugin parameterPlugin) {
+        this.parameterPlugin = parameterPlugin;
     }
 
     public InlineInvokePlugin getInlineInvokePlugin() {
         return inlineInvokePlugin;
     }
 
-    public void setInlineInvokePlugin(InlineInvokePlugin plugin) {
-        this.inlineInvokePlugin = plugin;
+    public void setInlineInvokePlugin(InlineInvokePlugin inlineInvokePlugin) {
+        this.inlineInvokePlugin = inlineInvokePlugin;
     }
 
     public LoopExplosionPlugin getLoopExplosionPlugin() {
         return loopExplosionPlugin;
     }
 
-    public void setLoopExplosionPlugin(LoopExplosionPlugin plugin) {
-        this.loopExplosionPlugin = plugin;
+    public void setLoopExplosionPlugin(LoopExplosionPlugin loopExplosionPlugin) {
+        this.loopExplosionPlugin = loopExplosionPlugin;
     }
 
     public GraphBuilderConfiguration copyPluginsFrom(GraphBuilderConfiguration other) {
@@ -202,7 +192,6 @@ public class GraphBuilderConfiguration {
         this.loadFieldPlugin = other.loadFieldPlugin;
         this.inlineInvokePlugin = other.inlineInvokePlugin;
         this.loopExplosionPlugin = other.loopExplosionPlugin;
-        this.annotatedInvocationPlugin = other.annotatedInvocationPlugin;
         return this;
     }
 }

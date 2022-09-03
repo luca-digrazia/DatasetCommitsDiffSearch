@@ -294,8 +294,8 @@ public abstract class GraalCompilerTest extends GraalTest {
 
     protected void assertConstantReturn(StructuredGraph graph, int value) {
         String graphString = getCanonicalGraphString(graph, false, true);
-        Assert.assertEquals("unexpected number of ReturnNodes: " + graphString, graph.getNodes(ReturnNode.TYPE).count(), 1);
-        ValueNode result = graph.getNodes(ReturnNode.TYPE).first().result();
+        Assert.assertEquals("unexpected number of ReturnNodes: " + graphString, graph.getNodes(ReturnNode.class).count(), 1);
+        ValueNode result = graph.getNodes(ReturnNode.class).first().result();
         Assert.assertTrue("unexpected ReturnNode result node: " + graphString, result.isConstant());
         Assert.assertEquals("unexpected ReturnNode result kind: " + graphString, result.asJavaConstant().getKind(), Kind.Int);
         Assert.assertEquals("unexpected ReturnNode result: " + graphString, result.asJavaConstant().asInt(), value);
@@ -303,7 +303,6 @@ public abstract class GraalCompilerTest extends GraalTest {
 
     protected static String getCanonicalGraphString(StructuredGraph graph, boolean excludeVirtual, boolean checkConstants) {
         SchedulePhase schedule = new SchedulePhase();
-        schedule.setScheduleConstants(true);
         schedule.apply(graph);
 
         NodeMap<Integer> canonicalId = graph.createNodeMap();
