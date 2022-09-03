@@ -31,7 +31,6 @@ import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.truffle.*;
 import com.oracle.graal.truffle.nodes.*;
-import com.oracle.graal.truffle.nodes.frame.*;
 import com.oracle.graal.truffle.nodes.typesystem.*;
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.frame.*;
@@ -72,7 +71,7 @@ public class CompilerDirectivesSubstitutions {
     public static native void bailout(String reason);
 
     @MacroSubstitution(macro = UnsafeTypeCastMacroNode.class, isStatic = true)
-    public static native Object unsafeCast(Object value, Class<?> clazz, boolean condition, boolean nonNull);
+    public static native Object unsafeCast(Object value, Class clazz, boolean condition, boolean nonNull);
 
     @MethodSubstitution
     private static Class<? extends MaterializedFrame> getUnsafeFrameType() {
@@ -166,10 +165,4 @@ public class CompilerDirectivesSubstitutions {
     public static Object unsafeGetFinalObject(Object receiver, long offset, boolean condition, Object locationIdentity) {
         return CustomizedUnsafeLoadFinalNode.load(receiver, offset, condition, locationIdentity, Kind.Object);
     }
-
-    @MethodSubstitution
-    public static void materialize(Object obj) {
-        ForceMaterializeNode.force(obj);
-    }
-
 }
