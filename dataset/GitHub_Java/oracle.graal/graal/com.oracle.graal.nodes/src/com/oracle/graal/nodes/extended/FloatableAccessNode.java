@@ -22,25 +22,45 @@
  */
 package com.oracle.graal.nodes.extended;
 
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.type.*;
 
 /**
- * An {@link AccessNode} that can be converted to a {@link FloatingAccessNode}.
+ * An {@link FixedAccessNode} that can be converted to a {@link FloatingAccessNode}.
  */
-public abstract class FloatableAccessNode extends AccessNode {
+@NodeInfo
+public abstract class FloatableAccessNode extends FixedAccessNode {
+    public static final NodeClass<FloatableAccessNode> TYPE = NodeClass.create(FloatableAccessNode.class);
 
-    public FloatableAccessNode(ValueNode object, ValueNode location, Stamp stamp) {
-        super(object, location, stamp);
+    protected FloatableAccessNode(NodeClass<? extends FloatableAccessNode> c, ValueNode object, ValueNode location, Stamp stamp) {
+        super(c, object, location, stamp);
     }
 
-    public FloatableAccessNode(ValueNode object, ValueNode location, Stamp stamp, GuardingNode guard, WriteBarrierType barrierType, boolean compress) {
-        super(object, location, stamp, guard, barrierType, compress);
+    protected FloatableAccessNode(NodeClass<? extends FloatableAccessNode> c, ValueNode object, ValueNode location, Stamp stamp, GuardingNode guard, BarrierType barrierType) {
+        super(c, object, location, stamp, guard, barrierType, false, null);
     }
 
-    public FloatableAccessNode(ValueNode object, ValueNode location, Stamp stamp, WriteBarrierType barrierType, boolean compress) {
-        super(object, location, stamp, barrierType, compress);
+    protected FloatableAccessNode(NodeClass<? extends FloatableAccessNode> c, ValueNode object, ValueNode location, Stamp stamp, GuardingNode guard, BarrierType barrierType, boolean nullCheck,
+                    FrameState stateBefore) {
+        super(c, object, location, stamp, guard, barrierType, nullCheck, stateBefore);
     }
 
-    public abstract FloatingAccessNode asFloatingNode(ValueNode lastLocationAccess);
+    public abstract FloatingAccessNode asFloatingNode(MemoryNode lastLocationAccess);
+
+    protected boolean forceFixed;
+
+    public void setForceFixed(boolean flag) {
+        this.forceFixed = flag;
+    }
+
+    /**
+     * AccessNodes can float only if their location identities are not ANY_LOCATION. Furthermore, in
+     * case G1 is enabled any access (read) to the java.lang.ref.Reference.referent field which has
+     * an attached write barrier with pre-semantics can not also float.
+     */
+    public boolean canFloat() {
+        return !forceFixed && location().getLocationIdentity().isSingle() && getBarrierType() == BarrierType.NONE;
+    }
 }
