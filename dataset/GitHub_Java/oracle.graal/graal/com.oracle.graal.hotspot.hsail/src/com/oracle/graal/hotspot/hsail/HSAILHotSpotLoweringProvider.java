@@ -22,27 +22,30 @@
  */
 package com.oracle.graal.hotspot.hsail;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.hotspot.*;
-import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 
-public class HSAILHotSpotLoweringProvider extends HotSpotLoweringProvider {
+public class HSAILHotSpotLoweringProvider implements LoweringProvider {
 
-    public HSAILHotSpotLoweringProvider(HotSpotGraalRuntime runtime, MetaAccessProvider metaAccess, ForeignCallsProvider foreignCalls, HotSpotRegistersProvider registers) {
-        super(runtime, metaAccess, foreignCalls, registers);
+    private LoweringProvider host;
+
+    public HSAILHotSpotLoweringProvider(LoweringProvider host) {
+        this.host = host;
     }
 
-    @Override
     public void lower(Node n, LoweringTool tool) {
         if (n instanceof ConvertNode) {
+            // TODO
             return;
         } else {
-            super.lower(n, tool);
+            host.lower(n, tool);
         }
     }
 
+    public ValueNode reconstructArrayIndex(LocationNode location) {
+        throw GraalInternalError.unimplemented();
+    }
 }

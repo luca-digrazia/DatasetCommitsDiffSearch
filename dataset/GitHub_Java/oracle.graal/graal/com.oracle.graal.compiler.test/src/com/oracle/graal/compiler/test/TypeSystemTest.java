@@ -98,11 +98,13 @@ public class TypeSystemTest extends GraalCompilerTest {
         test("test4Snippet", "referenceSnippet3");
     }
 
-    @SuppressWarnings("unused")
+    public static final Object constantObject1 = "1";
+    public static final Object constantObject2 = "2";
+    public static final Object constantObject3 = "3";
+
     public static int test4Snippet(Object o) {
         if (o == null) {
-            Object o2 = Integer.class;
-            if (o == o2) {
+            if (o == constantObject1) {
                 return 3;
             } else {
                 return 1;
@@ -119,41 +121,40 @@ public class TypeSystemTest extends GraalCompilerTest {
 
     public static int referenceSnippet5(Object o, Object a) {
         if (o == null) {
-            if (a == Integer.class || a == Double.class) {
+            if (a == constantObject1 || a == constantObject2) {
                 return 1;
             }
         } else {
-            if (a == Double.class || a == Long.class) {
+            if (a == constantObject2 || a == constantObject3) {
                 return 11;
             }
         }
-        if (a == Integer.class) {
+        if (a == constantObject1) {
             return 3;
         }
         return 5;
     }
 
-    @SuppressWarnings("unused")
     public static int test5Snippet(Object o, Object a) {
         if (o == null) {
-            if (a == Integer.class || a == Double.class) {
+            if (a == constantObject1 || a == constantObject2) {
                 if (a == null) {
                     return 10;
                 }
                 return 1;
             }
         } else {
-            if (a == Double.class || a == Long.class) {
+            if (a == constantObject2 || a == constantObject3) {
                 if (a != null) {
                     return 11;
                 }
                 return 2;
             }
         }
-        if (a == Integer.class) {
+        if (a == constantObject1) {
             return 3;
         }
-        if (a == Double.class) {
+        if (a == constantObject2) {
             return 4;
         }
         return 5;
@@ -184,6 +185,7 @@ public class TypeSystemTest extends GraalCompilerTest {
         StructuredGraph graph = parse(snippet);
         Debug.dump(graph, "Graph");
         Assumptions assumptions = new Assumptions(false);
+        new CanonicalizerPhase(true).apply(graph, new PhaseContext(getProviders(), assumptions));
         new ConditionalEliminationPhase(getMetaAccess()).apply(graph);
         new CanonicalizerPhase(true).apply(graph, new PhaseContext(getProviders(), assumptions));
         // a second canonicalizer is needed to process nested MaterializeNodes
@@ -196,8 +198,8 @@ public class TypeSystemTest extends GraalCompilerTest {
     @Override
     protected void assertEquals(StructuredGraph expected, StructuredGraph graph) {
         if (getNodeCountExcludingUnusedConstants(expected) != getNodeCountExcludingUnusedConstants(graph)) {
-            Debug.dump(expected, "expected (node count)");
-            Debug.dump(graph, "graph (node count)");
+            outputGraph(expected, "expected");
+            outputGraph(graph, "actual");
             Assert.fail("Graphs do not have the same number of nodes: " + expected.getNodeCount() + " vs. " + graph.getNodeCount());
         }
     }
@@ -237,11 +239,12 @@ public class TypeSystemTest extends GraalCompilerTest {
 
     private <T extends Node> void testHelper(String snippet, Class<T> clazz) {
         StructuredGraph graph = parse(snippet);
+        Debug.dump(graph, "Graph");
         Assumptions assumptions = new Assumptions(false);
         new CanonicalizerPhase(true).apply(graph, new PhaseContext(getProviders(), assumptions));
         new ConditionalEliminationPhase(getMetaAccess()).apply(graph);
         new CanonicalizerPhase(true).apply(graph, new PhaseContext(getProviders(), assumptions));
-        Debug.dump(graph, "Graph " + snippet);
+        Debug.dump(graph, "Graph");
         Assert.assertFalse("shouldn't have nodes of type " + clazz, graph.getNodes().filter(clazz).iterator().hasNext());
     }
 }
