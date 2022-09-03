@@ -35,7 +35,6 @@ import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeField;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.instrumentation.Instrumentable;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.oracle.truffle.api.source.SourceSection;
@@ -59,15 +58,10 @@ import com.oracle.truffle.llvm.runtime.vector.LLVMI32Vector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI64Vector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI8Vector;
 
-@Instrumentable(factory = LLVMRetNodeWrapper.class)
 public abstract class LLVMRetNode extends LLVMControlFlowNode {
 
     public LLVMRetNode(SourceSection sourceSection) {
         super(sourceSection);
-    }
-
-    public LLVMRetNode(LLVMRetNode delegate) {
-        super(delegate.getSourceSection());
     }
 
     @Override

@@ -31,81 +31,56 @@ package com.oracle.truffle.llvm.nodes.control;
 
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.instrumentation.Instrumentable;
 import com.oracle.truffle.api.source.SourceSection;
-import com.oracle.truffle.llvm.nodes.wrappers.LLVMConditionalBranchNodeWrapper;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
-@Instrumentable(factory = LLVMConditionalBranchNodeWrapper.class)
-public abstract class LLVMConditionalBranchNode extends LLVMControlFlowNode {
+public class LLVMConditionalBranchNode extends LLVMControlFlowNode {
 
-    public static LLVMConditionalBranchNode create(int trueSuccessor, int falseSuccessor, LLVMExpressionNode truePhi, LLVMExpressionNode falsePhi, LLVMExpressionNode condition,
-                    SourceSection sourceSection) {
-        return new LLVMConditionalBranchNodeImpl(trueSuccessor, falseSuccessor, truePhi, falsePhi, condition, sourceSection);
-    }
+    @Child private LLVMExpressionNode condition;
+    @Child private LLVMExpressionNode truePhi;
+    @Child private LLVMExpressionNode falsePhi;
+    private final int trueSuccessor;
+    private final int falseSuccessor;
 
     public static final int TRUE_SUCCESSOR = 0;
     public static final int FALSE_SUCCESSOR = 1;
 
-    public LLVMConditionalBranchNode(SourceSection sourceSection) {
+    public LLVMConditionalBranchNode(int trueSuccessor, int falseSuccessor, LLVMExpressionNode truePhi, LLVMExpressionNode falsePhi, LLVMExpressionNode condition,
+                    SourceSection sourceSection) {
         super(sourceSection);
+        this.trueSuccessor = trueSuccessor;
+        this.falseSuccessor = falseSuccessor;
+        this.truePhi = truePhi;
+        this.falsePhi = falsePhi;
+        this.condition = condition;
     }
 
-    public abstract boolean executeCondition(VirtualFrame frame);
+    @Override
+    public int getSuccessorCount() {
+        return 2;
+    }
 
-    public abstract int getTrueSuccessor();
-
-    public abstract int getFalseSuccessor();
-
-    private static final class LLVMConditionalBranchNodeImpl extends LLVMConditionalBranchNode {
-
-        @Child private LLVMExpressionNode condition;
-        @Child private LLVMExpressionNode truePhi;
-        @Child private LLVMExpressionNode falsePhi;
-        private final int trueSuccessor;
-        private final int falseSuccessor;
-
-        private LLVMConditionalBranchNodeImpl(int trueSuccessor, int falseSuccessor, LLVMExpressionNode truePhi, LLVMExpressionNode falsePhi, LLVMExpressionNode condition,
-                        SourceSection sourceSection) {
-            super(sourceSection);
-            this.trueSuccessor = trueSuccessor;
-            this.falseSuccessor = falseSuccessor;
-            this.truePhi = truePhi;
-            this.falsePhi = falsePhi;
-            this.condition = condition;
+    @Override
+    public LLVMExpressionNode getPhiNode(int successorIndex) {
+        CompilerAsserts.partialEvaluationConstant(successorIndex);
+        if (successorIndex == TRUE_SUCCESSOR) {
+            return truePhi;
+        } else {
+            assert successorIndex == FALSE_SUCCESSOR;
+            return falsePhi;
         }
+    }
 
-        @Override
-        public int getSuccessorCount() {
-            return 2;
-        }
+    public boolean executeCondition(VirtualFrame frame) {
+        return condition.executeI1(frame);
+    }
 
-        @Override
-        public LLVMExpressionNode getPhiNode(int successorIndex) {
-            CompilerAsserts.partialEvaluationConstant(successorIndex);
-            if (successorIndex == TRUE_SUCCESSOR) {
-                return truePhi;
-            } else {
-                assert successorIndex == FALSE_SUCCESSOR;
-                return falsePhi;
-            }
-        }
+    public int getTrueSuccessor() {
+        return trueSuccessor;
+    }
 
-        @Override
-        public boolean executeCondition(VirtualFrame frame) {
-            return condition.executeI1(frame);
-        }
-
-        @Override
-        public int getTrueSuccessor() {
-            return trueSuccessor;
-        }
-
-        @Override
-        public int getFalseSuccessor() {
-            return falseSuccessor;
-        }
-
+    public int getFalseSuccessor() {
+        return falseSuccessor;
     }
 }

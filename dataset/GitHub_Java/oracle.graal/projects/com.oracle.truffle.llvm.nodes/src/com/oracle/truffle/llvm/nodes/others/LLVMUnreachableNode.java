@@ -31,7 +31,7 @@ package com.oracle.truffle.llvm.nodes.others;
 
 import com.oracle.truffle.api.nodes.ControlFlowException;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
 public class LLVMUnreachableNode extends LLVMControlFlowNode {
 
@@ -49,7 +49,7 @@ public class LLVMUnreachableNode extends LLVMControlFlowNode {
     }
 
     @Override
-    public LLVMStatementNode getPhiNode(int successorIndex) {
+    public LLVMExpressionNode getPhiNode(int successorIndex) {
         return null;
     }
 

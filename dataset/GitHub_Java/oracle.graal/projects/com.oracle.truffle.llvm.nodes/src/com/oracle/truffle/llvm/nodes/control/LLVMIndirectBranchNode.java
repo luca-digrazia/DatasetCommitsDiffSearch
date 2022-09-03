@@ -32,62 +32,42 @@ package com.oracle.truffle.llvm.nodes.control;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.instrumentation.Instrumentable;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.oracle.truffle.api.source.SourceSection;
-import com.oracle.truffle.llvm.nodes.wrappers.LLVMIndirectBranchNodeWrapper;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 
-@Instrumentable(factory = LLVMIndirectBranchNodeWrapper.class)
-public abstract class LLVMIndirectBranchNode extends LLVMControlFlowNode {
+public final class LLVMIndirectBranchNode extends LLVMControlFlowNode {
 
-    public static LLVMIndirectBranchNode create(LLVMBranchAddressNode branchAddress, int[] indices, LLVMExpressionNode[] phiWriteNodes, SourceSection sourceSection) {
-        return new LLVMIndirectBranchNodeImpl(branchAddress, indices, phiWriteNodes, sourceSection);
-    }
+    @Child private LLVMBranchAddressNode branchAddress;
+    @Children private final LLVMExpressionNode[] phiWriteNodes;
+    @CompilationFinal(dimensions = 1) private final int[] successors;
 
-    public LLVMIndirectBranchNode(SourceSection sourceSection) {
+    public LLVMIndirectBranchNode(LLVMBranchAddressNode branchAddress, int[] indices, LLVMExpressionNode[] phiWriteNodes, SourceSection sourceSection) {
         super(sourceSection);
+        assert indices.length > 1;
+        this.successors = indices;
+        this.branchAddress = branchAddress;
+        this.phiWriteNodes = phiWriteNodes;
     }
 
-    public abstract int executeCondition(VirtualFrame frame);
+    @Override
+    public int getSuccessorCount() {
+        return successors.length;
+    }
 
-    public abstract int[] getSuccessors();
+    @Override
+    public LLVMExpressionNode getPhiNode(int successorIndex) {
+        return phiWriteNodes[successorIndex];
+    }
 
-    private static final class LLVMIndirectBranchNodeImpl extends LLVMIndirectBranchNode {
+    public int executeCondition(VirtualFrame frame) {
+        return branchAddress.branchAddress(frame);
+    }
 
-        @Child private LLVMBranchAddressNode branchAddress;
-        @Children private final LLVMExpressionNode[] phiWriteNodes;
-        @CompilationFinal(dimensions = 1) private final int[] successors;
-
-        private LLVMIndirectBranchNodeImpl(LLVMBranchAddressNode branchAddress, int[] indices, LLVMExpressionNode[] phiWriteNodes, SourceSection sourceSection) {
-            super(sourceSection);
-            assert indices.length > 1;
-            this.successors = indices;
-            this.branchAddress = branchAddress;
-            this.phiWriteNodes = phiWriteNodes;
-        }
-
-        @Override
-        public int getSuccessorCount() {
-            return successors.length;
-        }
-
-        @Override
-        public LLVMExpressionNode getPhiNode(int successorIndex) {
-            return phiWriteNodes[successorIndex];
-        }
-
-        @Override
-        public int executeCondition(VirtualFrame frame) {
-            return branchAddress.branchAddress(frame);
-        }
-
-        @Override
-        public int[] getSuccessors() {
-            return successors;
-        }
+    public int[] getSuccessors() {
+        return successors;
     }
 
     public abstract static class LLVMBranchAddressNode extends LLVMNode {

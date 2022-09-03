@@ -29,57 +29,33 @@
  */
 package com.oracle.truffle.llvm.nodes.control;
 
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.instrumentation.Instrumentable;
 import com.oracle.truffle.api.source.SourceSection;
-import com.oracle.truffle.llvm.nodes.wrappers.LLVMBrUnconditionalNodeWrapper;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
-@Instrumentable(factory = LLVMBrUnconditionalNodeWrapper.class)
-public abstract class LLVMBrUnconditionalNode extends LLVMControlFlowNode {
+public class LLVMBrUnconditionalNode extends LLVMControlFlowNode {
 
-    public static LLVMBrUnconditionalNode create(int successor, LLVMExpressionNode phi, SourceSection sourceSection) {
-        return new LLVMBrUnconditionalNodeImpl(successor, phi, sourceSection);
-    }
+    @Child private LLVMExpressionNode phi;
+    private final int successor;
 
-    public LLVMBrUnconditionalNode(SourceSection sourceSection) {
+    public LLVMBrUnconditionalNode(int successor, LLVMExpressionNode phi, SourceSection sourceSection) {
         super(sourceSection);
+        this.successor = successor;
+        this.phi = phi;
     }
 
-    public abstract int getSuccessor();
+    @Override
+    public int getSuccessorCount() {
+        return 1;
+    }
 
-    // we need an execute method so the node can be properly instrumented
-    public abstract void execute(VirtualFrame frame);
+    @Override
+    public LLVMExpressionNode getPhiNode(int successorIndex) {
+        assert successorIndex == 0;
+        return phi;
+    }
 
-    private static final class LLVMBrUnconditionalNodeImpl extends LLVMBrUnconditionalNode {
-        @Child private LLVMExpressionNode phi;
-        private final int successor;
-
-        private LLVMBrUnconditionalNodeImpl(int successor, LLVMExpressionNode phi, SourceSection sourceSection) {
-            super(sourceSection);
-            this.successor = successor;
-            this.phi = phi;
-        }
-
-        @Override
-        public int getSuccessorCount() {
-            return 1;
-        }
-
-        @Override
-        public LLVMExpressionNode getPhiNode(int successorIndex) {
-            assert successorIndex == 0;
-            return phi;
-        }
-
-        @Override
-        public int getSuccessor() {
-            return successor;
-        }
-
-        @Override
-        public void execute(VirtualFrame frame) {
-        }
+    public int getSuccessor() {
+        return successor;
     }
 }
