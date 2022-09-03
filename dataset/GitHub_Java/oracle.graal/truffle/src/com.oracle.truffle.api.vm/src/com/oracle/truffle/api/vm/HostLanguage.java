@@ -24,10 +24,7 @@
  */
 package com.oracle.truffle.api.vm;
 
-import java.io.IOException;
 import java.lang.reflect.Array;
-import java.net.MalformedURLException;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -44,7 +41,6 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleException;
-import com.oracle.truffle.api.TruffleFile;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -70,7 +66,6 @@ class HostLanguage extends TruffleLanguage<HostContext> {
         volatile PolyglotLanguageContext internalContext;
         final Map<String, Class<?>> classCache = new HashMap<>();
         private volatile Iterable<Scope> topScopes;
-        private volatile HostClassLoader classloader;
 
         HostContext(Env env) {
             this.env = env;
@@ -79,31 +74,20 @@ class HostLanguage extends TruffleLanguage<HostContext> {
         @TruffleBoundary
         Class<?> findClass(String className) {
             lookupInternalContext();
-            checkHostAccessAllowed();
+
+            if (!internalContext.context.hostAccessAllowed) {
+                throw new HostLanguageException(String.format("Host class access is not allowed."));
+            }
             if (TruffleOptions.AOT) {
                 throw new HostLanguageException(String.format("The host class %s is not accessible in native mode.", className));
             }
-
             Class<?> loadedClass = classCache.get(className);
             if (loadedClass == null) {
-                loadedClass = findClassImpl(className);
+                loadedClass = loadClass(className);
                 classCache.put(className, loadedClass);
             }
             assert loadedClass != null;
             return loadedClass;
-        }
-
-        private void checkHostAccessAllowed() {
-            if (!internalContext.context.hostAccessAllowed) {
-                throw new HostLanguageException(String.format("Host class access is not allowed."));
-            }
-        }
-
-        private HostClassLoader getClassloader() {
-            if (classloader == null) {
-                classloader = new HostClassLoader(this, internalContext.getEngine().contextClassLoader);
-            }
-            return classloader;
         }
 
         private void lookupInternalContext() {
@@ -112,9 +96,12 @@ class HostLanguage extends TruffleLanguage<HostContext> {
             }
         }
 
-        Class<?> findClassImpl(String className) {
+        Class<?> loadClass(String className) {
             lookupInternalContext();
-            validateClass(className);
+            Predicate<String> classFilter = internalContext.context.classFilter;
+            if (classFilter != null && !classFilter.test(className)) {
+                throw new HostLanguageException(String.format("Access to host class %s is not allowed.", className));
+            }
             if (className.endsWith("[]")) {
                 Class<?> componentType = findClass(className.substring(0, className.length() - 2));
                 return Array.newInstance(componentType, 0).getClass();
@@ -124,16 +111,9 @@ class HostLanguage extends TruffleLanguage<HostContext> {
                 return primitiveType;
             }
             try {
-                return getClassloader().loadClass(className);
+                return internalContext.getEngine().contextClassLoader.loadClass(className);
             } catch (ClassNotFoundException e) {
                 throw new HostLanguageException(String.format("Access to host class %s is not allowed or does not exist.", className));
-            }
-        }
-
-        void validateClass(String className) {
-            Predicate<String> classFilter = internalContext.context.classFilter;
-            if (classFilter != null && !classFilter.test(className)) {
-                throw new HostLanguageException(String.format("Access to host class %s is not allowed.", className));
             }
         }
 
@@ -158,27 +138,6 @@ class HostLanguage extends TruffleLanguage<HostContext> {
                 default:
                     return null;
             }
-        }
-
-        public void addToHostClasspath(TruffleFile classpathEntry) {
-            lookupInternalContext();
-            checkHostAccessAllowed();
-            if (TruffleOptions.AOT) {
-                throw new HostLanguageException(String.format("Cannot add classpath entry %s in native mode.", classpathEntry.getName()));
-            }
-            if (!internalContext.context.hostAccessAllowed) {
-                throw new HostLanguageException(String.format("Host class access is not allowed."));
-            }
-            if (!internalContext.context.hostClassLoadingAllowed) {
-                throw new HostLanguageException(String.format("Host class loading is not allowed."));
-            }
-            URL url;
-            try {
-                url = classpathEntry.toUri().toURL();
-            } catch (MalformedURLException e) {
-                throw new HostLanguageException("Invalid host classpath entry " + classpathEntry.getPath() + ".");
-            }
-            getClassloader().addURL(url);
         }
     }
 
@@ -215,20 +174,6 @@ class HostLanguage extends TruffleLanguage<HostContext> {
                 return VMAccessor.JAVAINTEROP.toGuestObject(allTarget, getContextReference().get().internalContext);
             }
         });
-    }
-
-    @Override
-    protected void disposeContext(HostContext context) {
-        HostClassLoader cl = context.classloader;
-        if (cl != null) {
-            try {
-                cl.close();
-            } catch (IOException e) {
-                // lets ignore that
-            }
-            context.classloader = null;
-        }
-        super.disposeContext(context);
     }
 
     @Override
