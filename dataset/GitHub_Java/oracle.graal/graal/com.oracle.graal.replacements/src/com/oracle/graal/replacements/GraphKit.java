@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.replacements;
 
-import static com.oracle.graal.compiler.common.CompilationIdentifier.INVALID_COMPILATION_ID;
 import static com.oracle.graal.nodes.StructuredGraph.NO_PROFILING_INFO;
 import static com.oracle.graal.nodes.graphbuilderconf.IntrinsicContext.CompilationContext.INLINE_AFTER_PARSING;
 
@@ -31,11 +30,9 @@ import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.oracle.graal.compiler.common.spi.ConstantFieldProvider;
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.compiler.common.type.StampPair;
 import com.oracle.graal.graph.Graph;
-import com.oracle.graal.graph.Node.ValueNumberable;
 import com.oracle.graal.java.FrameStateBuilder;
 import com.oracle.graal.java.GraphBuilderPhase;
 import com.oracle.graal.nodes.AbstractBeginNode;
@@ -120,11 +117,6 @@ public class GraphKit implements GraphBuilderTool {
     }
 
     @Override
-    public ConstantFieldProvider getConstantFieldProvider() {
-        return providers.getConstantFieldProvider();
-    }
-
-    @Override
     public MetaAccessProvider getMetaAccess() {
         return providers.getMetaAccess();
     }
@@ -144,12 +136,8 @@ public class GraphKit implements GraphBuilderTool {
      *
      * @return a node similar to {@code node} if one exists, otherwise {@code node}
      */
-    public <T extends FloatingNode & ValueNumberable> T unique(T node) {
+    public <T extends FloatingNode> T unique(T node) {
         return graph.unique(changeToWord(node));
-    }
-
-    public <T extends ValueNode> T add(T node) {
-        return graph.add(changeToWord(node));
     }
 
     public <T extends ValueNode> T changeToWord(T node) {
@@ -315,18 +303,15 @@ public class GraphKit implements GraphBuilderTool {
         Plugins plugins = new Plugins(graphBuilderPlugins);
         GraphBuilderConfiguration config = GraphBuilderConfiguration.getSnippetDefault(plugins);
 
-        StructuredGraph calleeGraph = new StructuredGraph(method, AllowAssumptions.NO, NO_PROFILING_INFO, INVALID_COMPILATION_ID);
-        IntrinsicContext initialReplacementContext = new IntrinsicContext(method, method, providers.getReplacements().getReplacementBytecodeProvider(), INLINE_AFTER_PARSING);
-        GraphBuilderPhase.Instance instance = new GraphBuilderPhase.Instance(metaAccess, providers.getStampProvider(), providers.getConstantReflection(), providers.getConstantFieldProvider(), config,
-                        OptimisticOptimizations.NONE,
-                        initialReplacementContext);
-        instance.apply(calleeGraph);
+        StructuredGraph calleeGraph = new StructuredGraph(method, AllowAssumptions.NO, NO_PROFILING_INFO);
+        IntrinsicContext initialReplacementContext = new IntrinsicContext(method, method, INLINE_AFTER_PARSING);
+        new GraphBuilderPhase.Instance(metaAccess, providers.getStampProvider(), providers.getConstantReflection(), config, OptimisticOptimizations.NONE, initialReplacementContext).apply(calleeGraph);
 
         // Remove all frame states from inlinee
         calleeGraph.clearAllStateAfter();
         new DeadCodeEliminationPhase(Optionality.Required).apply(calleeGraph);
 
-        InliningUtil.inline(invoke, calleeGraph, false, null, method);
+        InliningUtil.inline(invoke, calleeGraph, false, null);
     }
 
     protected void pushStructure(Structure structure) {

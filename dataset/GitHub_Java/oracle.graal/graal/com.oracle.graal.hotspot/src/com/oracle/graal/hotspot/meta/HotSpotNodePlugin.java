@@ -23,7 +23,7 @@
 package com.oracle.graal.hotspot.meta;
 
 import static com.oracle.graal.compiler.common.GraalOptions.ImmutableCode;
-import static com.oracle.graal.hotspot.meta.HotSpotGraalConstantFieldProvider.FieldReadEnabledInImmutableCode;
+import static com.oracle.graal.hotspot.meta.HotSpotGraalConstantReflectionProvider.FieldReadEnabledInImmutableCode;
 
 import com.oracle.graal.compiler.common.type.StampPair;
 import com.oracle.graal.nodes.ConstantNode;
@@ -33,7 +33,6 @@ import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderTool;
 import com.oracle.graal.nodes.graphbuilderconf.InlineInvokePlugin;
 import com.oracle.graal.nodes.graphbuilderconf.NodePlugin;
 import com.oracle.graal.nodes.graphbuilderconf.TypePlugin;
-import com.oracle.graal.nodes.util.ConstantFoldUtil;
 import com.oracle.graal.replacements.WordOperationPlugin;
 import com.oracle.graal.word.Word;
 
@@ -90,7 +89,7 @@ public final class HotSpotNodePlugin implements NodePlugin, TypePlugin {
 
     @Override
     public boolean handleLoadField(GraphBuilderContext b, ValueNode object, ResolvedJavaField field) {
-        if (!ImmutableCode.getValue(b.getOptions()) || b.parsingIntrinsic()) {
+        if (!ImmutableCode.getValue() || b.parsingIntrinsic()) {
             if (object.isConstant()) {
                 JavaConstant asJavaConstant = object.asJavaConstant();
                 if (tryReadField(b, field, asJavaConstant)) {
@@ -106,7 +105,7 @@ public final class HotSpotNodePlugin implements NodePlugin, TypePlugin {
 
     @Override
     public boolean handleLoadStaticField(GraphBuilderContext b, ResolvedJavaField field) {
-        if (!ImmutableCode.getValue(b.getOptions()) || b.parsingIntrinsic()) {
+        if (!ImmutableCode.getValue() || b.parsingIntrinsic()) {
             if (tryReadField(b, field, null)) {
                 return true;
             }
@@ -119,7 +118,7 @@ public final class HotSpotNodePlugin implements NodePlugin, TypePlugin {
 
     private static boolean tryReadField(GraphBuilderContext b, ResolvedJavaField field, JavaConstant object) {
         // FieldReadEnabledInImmutableCode is non null only if assertions are enabled
-        if (FieldReadEnabledInImmutableCode != null && ImmutableCode.getValue(b.getOptions())) {
+        if (FieldReadEnabledInImmutableCode != null && ImmutableCode.getValue()) {
             FieldReadEnabledInImmutableCode.set(Boolean.TRUE);
             try {
                 return tryConstantFold(b, field, object);
@@ -132,10 +131,10 @@ public final class HotSpotNodePlugin implements NodePlugin, TypePlugin {
     }
 
     private static boolean tryConstantFold(GraphBuilderContext b, ResolvedJavaField field, JavaConstant object) {
-        ConstantNode result = ConstantFoldUtil.tryConstantFold(b.getConstantFieldProvider(), b.getConstantReflection(), b.getMetaAccess(), field, object, b.getOptions());
+        JavaConstant result = b.getConstantReflection().readConstantFieldValue(field, object);
         if (result != null) {
-            result = b.getGraph().unique(result);
-            b.push(field.getJavaKind(), result);
+            ConstantNode constantNode = ConstantNode.forConstant(result, b.getMetaAccess(), b.getGraph());
+            b.push(field.getJavaKind(), constantNode);
             return true;
         }
         return false;

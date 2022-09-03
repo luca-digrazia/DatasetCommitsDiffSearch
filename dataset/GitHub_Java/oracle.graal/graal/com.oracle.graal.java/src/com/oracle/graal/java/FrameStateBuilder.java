@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,80 +22,246 @@
  */
 package com.oracle.graal.java;
 
-import static com.oracle.graal.graph.iterators.NodePredicates.*;
-import static com.oracle.graal.nodes.ValueUtil.*;
-import static java.lang.reflect.Modifier.*;
+import static com.oracle.graal.bytecode.Bytecodes.DUP;
+import static com.oracle.graal.bytecode.Bytecodes.DUP2;
+import static com.oracle.graal.bytecode.Bytecodes.DUP2_X1;
+import static com.oracle.graal.bytecode.Bytecodes.DUP2_X2;
+import static com.oracle.graal.bytecode.Bytecodes.DUP_X1;
+import static com.oracle.graal.bytecode.Bytecodes.DUP_X2;
+import static com.oracle.graal.bytecode.Bytecodes.POP;
+import static com.oracle.graal.bytecode.Bytecodes.POP2;
+import static com.oracle.graal.bytecode.Bytecodes.SWAP;
+import static com.oracle.graal.java.BytecodeParserOptions.HideSubstitutionStates;
+import static com.oracle.graal.nodes.FrameState.TWO_SLOT_MARKER;
+import static jdk.vm.ci.common.JVMCIError.shouldNotReachHere;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.function.Function;
 
-import com.oracle.graal.debug.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.Node.Verbosity;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.PhiNode.PhiType;
-import com.oracle.graal.nodes.type.*;
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.compiler.common.type.StampPair;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.graph.NodeSourcePosition;
+import com.oracle.graal.java.BciBlockMapping.BciBlock;
+import com.oracle.graal.nodeinfo.Verbosity;
+import com.oracle.graal.nodes.AbstractMergeNode;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.FrameState;
+import com.oracle.graal.nodes.LoopBeginNode;
+import com.oracle.graal.nodes.LoopExitNode;
+import com.oracle.graal.nodes.ParameterNode;
+import com.oracle.graal.nodes.PhiNode;
+import com.oracle.graal.nodes.ProxyNode;
+import com.oracle.graal.nodes.StateSplit;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.ValuePhiNode;
+import com.oracle.graal.nodes.calc.FloatingNode;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
+import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderTool;
+import com.oracle.graal.nodes.graphbuilderconf.IntrinsicContext.SideEffectsState;
+import com.oracle.graal.nodes.graphbuilderconf.ParameterPlugin;
+import com.oracle.graal.nodes.java.MonitorIdNode;
+import com.oracle.graal.nodes.util.GraphUtil;
 
-public class FrameStateBuilder {
-    private final RiResolvedMethod method;
-    private final StructuredGraph graph;
+import jdk.vm.ci.code.BailoutException;
+import jdk.vm.ci.code.BytecodeFrame;
+import jdk.vm.ci.meta.Assumptions;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.vm.ci.meta.Signature;
 
-    private final ValueNode[] locals;
-    private final ValueNode[] stack;
+public final class FrameStateBuilder implements SideEffectsState {
+
+    private static final ValueNode[] EMPTY_ARRAY = new ValueNode[0];
+    private static final MonitorIdNode[] EMPTY_MONITOR_ARRAY = new MonitorIdNode[0];
+
+    private final BytecodeParser parser;
+    private final GraphBuilderTool tool;
+    private final ResolvedJavaMethod method;
     private int stackSize;
+    protected final ValueNode[] locals;
+    protected final ValueNode[] stack;
+    private ValueNode[] lockedObjects;
+    private boolean canVerifyKind;
+
+    /**
+     * @see BytecodeFrame#rethrowException
+     */
     private boolean rethrowException;
 
-    public FrameStateBuilder(RiResolvedMethod method, StructuredGraph graph, boolean eagerResolve) {
-        assert graph != null;
+    private MonitorIdNode[] monitorIds;
+    private final StructuredGraph graph;
+    private FrameState outerFrameState;
+
+    /**
+     * The closest {@link StateSplit#hasSideEffect() side-effect} predecessors. There will be more
+     * than one when the current block contains no side-effects but merging predecessor blocks do.
+     */
+    private List<StateSplit> sideEffects;
+
+    private JavaConstant constantReceiver;
+
+    /**
+     * Creates a new frame state builder for the given method and the given target graph.
+     *
+     * @param method the method whose frame is simulated
+     * @param graph the target graph of Graal nodes created by the builder
+     */
+    public FrameStateBuilder(GraphBuilderTool tool, ResolvedJavaMethod method, StructuredGraph graph) {
+        this.tool = tool;
+        if (tool instanceof BytecodeParser) {
+            this.parser = (BytecodeParser) tool;
+        } else {
+            this.parser = null;
+        }
         this.method = method;
+        this.locals = allocateArray(method.getMaxLocals());
+        this.stack = allocateArray(Math.max(1, method.getMaxStackSize()));
+        this.lockedObjects = allocateArray(0);
+
+        assert graph != null;
+
+        this.monitorIds = EMPTY_MONITOR_ARRAY;
         this.graph = graph;
-        this.locals = new ValueNode[method.maxLocals()];
-        // we always need at least one stack slot (for exceptions)
-        this.stack = new ValueNode[Math.max(1, method.maxStackSize())];
+        this.canVerifyKind = true;
+    }
+
+    public void disableKindVerification() {
+        canVerifyKind = false;
+    }
+
+    public void initializeFromArgumentsArray(ValueNode[] arguments) {
 
         int javaIndex = 0;
         int index = 0;
-        if (!isStatic(method.accessFlags())) {
-            // add the receiver
-            LocalNode local = graph.unique(new LocalNode(javaIndex, StampFactory.declaredNonNull(method.holder())));
-            storeLocal(javaIndex, local);
+        if (!method.isStatic()) {
+            // set the receiver
+            locals[javaIndex] = arguments[index];
             javaIndex = 1;
             index = 1;
+            constantReceiver = locals[0].asJavaConstant();
         }
-        RiSignature sig = method.signature();
-        int max = sig.argumentCount(false);
-        RiResolvedType accessingClass = method.holder();
+        Signature sig = method.getSignature();
+        int max = sig.getParameterCount(false);
         for (int i = 0; i < max; i++) {
-            RiType type = sig.argumentTypeAt(i, accessingClass);
-            if (eagerResolve) {
-                type = type.resolve(accessingClass);
+            JavaKind kind = sig.getParameterKind(i);
+            locals[javaIndex] = arguments[index];
+            javaIndex++;
+            if (kind.needsTwoSlots()) {
+                locals[javaIndex] = TWO_SLOT_MARKER;
+                javaIndex++;
             }
-            CiKind kind = type.kind(false).stackKind();
-            Stamp stamp;
-            if (kind == CiKind.Object && type instanceof RiResolvedType) {
-                RiResolvedType resolvedType = (RiResolvedType) type;
-                stamp = StampFactory.declared(resolvedType);
-            } else {
-                stamp = StampFactory.forKind(kind);
-            }
-            LocalNode local = graph.unique(new LocalNode(index, stamp));
-            storeLocal(javaIndex, local);
-            javaIndex += stackSlots(kind);
             index++;
         }
     }
 
-    private FrameStateBuilder(RiResolvedMethod method, StructuredGraph graph, ValueNode[] locals, ValueNode[] stack, int stackSize, boolean rethrowException) {
-        assert locals.length == method.maxLocals();
-        assert stack.length == Math.max(1, method.maxStackSize());
+    public void initializeForMethodStart(Assumptions assumptions, boolean eagerResolve, Plugins plugins) {
 
-        this.method = method;
-        this.graph = graph;
-        this.locals = locals;
-        this.stack = stack;
-        this.stackSize = stackSize;
-        this.rethrowException = rethrowException;
+        int javaIndex = 0;
+        int index = 0;
+        ResolvedJavaType originalType = method.getDeclaringClass();
+        if (!method.isStatic()) {
+            // add the receiver
+            FloatingNode receiver = null;
+            StampPair receiverStamp = null;
+            if (plugins != null) {
+                receiverStamp = plugins.getOverridingStamp(tool, originalType, true);
+            }
+            if (receiverStamp == null) {
+                receiverStamp = StampFactory.forDeclaredType(assumptions, originalType, true);
+            }
+
+            if (plugins != null) {
+                for (ParameterPlugin plugin : plugins.getParameterPlugins()) {
+                    receiver = plugin.interceptParameter(tool, index, receiverStamp);
+                    if (receiver != null) {
+                        break;
+                    }
+                }
+            }
+            if (receiver == null) {
+                receiver = new ParameterNode(javaIndex, receiverStamp);
+            }
+
+            locals[javaIndex] = graph.unique(receiver);
+            javaIndex = 1;
+            index = 1;
+        }
+        Signature sig = method.getSignature();
+        int max = sig.getParameterCount(false);
+        ResolvedJavaType accessingClass = originalType;
+        for (int i = 0; i < max; i++) {
+            JavaType type = sig.getParameterType(i, accessingClass);
+            if (eagerResolve) {
+                type = type.resolve(accessingClass);
+            }
+            JavaKind kind = type.getJavaKind();
+            StampPair stamp = null;
+            if (plugins != null) {
+                stamp = plugins.getOverridingStamp(tool, type, false);
+            }
+            if (stamp == null) {
+                stamp = StampFactory.forDeclaredType(assumptions, type, false);
+            }
+
+            FloatingNode param = null;
+            if (plugins != null) {
+                for (ParameterPlugin plugin : plugins.getParameterPlugins()) {
+                    param = plugin.interceptParameter(tool, index, stamp);
+                    if (param != null) {
+                        break;
+                    }
+                }
+            }
+            if (param == null) {
+                param = new ParameterNode(index, stamp);
+            }
+
+            locals[javaIndex] = graph.unique(param);
+            javaIndex++;
+            if (kind.needsTwoSlots()) {
+                locals[javaIndex] = TWO_SLOT_MARKER;
+                javaIndex++;
+            }
+            index++;
+        }
+    }
+
+    private FrameStateBuilder(FrameStateBuilder other) {
+        this.parser = other.parser;
+        this.tool = other.tool;
+        this.method = other.method;
+        this.stackSize = other.stackSize;
+        this.locals = other.locals.clone();
+        this.stack = other.stack.clone();
+        this.lockedObjects = other.lockedObjects.length == 0 ? other.lockedObjects : other.lockedObjects.clone();
+        this.rethrowException = other.rethrowException;
+        this.canVerifyKind = other.canVerifyKind;
+
+        assert locals.length == method.getMaxLocals();
+        assert stack.length == Math.max(1, method.getMaxStackSize());
+
+        assert other.graph != null;
+        graph = other.graph;
+        monitorIds = other.monitorIds.length == 0 ? other.monitorIds : other.monitorIds.clone();
+
+        assert locals.length == method.getMaxLocals();
+        assert stack.length == Math.max(1, method.getMaxStackSize());
+        assert lockedObjects.length == monitorIds.length;
+    }
+
+    private static ValueNode[] allocateArray(int length) {
+        return length == 0 ? EMPTY_ARRAY : new ValueNode[length];
+    }
+
+    public ResolvedJavaMethod getMethod() {
+        return method;
     }
 
     @Override
@@ -103,11 +269,15 @@ public class FrameStateBuilder {
         StringBuilder sb = new StringBuilder();
         sb.append("[locals: [");
         for (int i = 0; i < locals.length; i++) {
-            sb.append(i == 0 ? "" : ",").append(locals[i] == null ? "_" : locals[i].toString(Verbosity.Id));
+            sb.append(i == 0 ? "" : ",").append(locals[i] == null ? "_" : locals[i] == TWO_SLOT_MARKER ? "#" : locals[i].toString(Verbosity.Id));
         }
         sb.append("] stack: [");
         for (int i = 0; i < stackSize; i++) {
-            sb.append(i == 0 ? "" : ",").append(stack[i] == null ? "_" : stack[i].toString(Verbosity.Id));
+            sb.append(i == 0 ? "" : ",").append(stack[i] == null ? "_" : stack[i] == TWO_SLOT_MARKER ? "#" : stack[i].toString(Verbosity.Id));
+        }
+        sb.append("] locks: [");
+        for (int i = 0; i < lockedObjects.length; i++) {
+            sb.append(i == 0 ? "" : ",").append(lockedObjects[i].toString(Verbosity.Id)).append(" / ").append(monitorIds[i].toString(Verbosity.Id));
         }
         sb.append("]");
         if (rethrowException) {
@@ -117,192 +287,371 @@ public class FrameStateBuilder {
         return sb.toString();
     }
 
-    public FrameState create(int bci) {
-        return graph.add(new FrameState(method, bci, locals, stack, stackSize, rethrowException, false));
+    public FrameState create(int bci, StateSplit forStateSplit) {
+        if (parser != null && parser.parsingIntrinsic()) {
+            return parser.intrinsicContext.createFrameState(parser.getGraph(), this, forStateSplit);
+        }
+
+        // Skip intrinsic frames
+        return create(bci, parser != null ? parser.getNonIntrinsicAncestor() : null, false, null, null);
     }
 
-    public FrameState duplicateWithoutStack(int bci) {
-        return graph.add(new FrameState(method, bci, locals, new ValueNode[0], 0, false, false));
+    /**
+     * @param pushedValues if non-null, values to {@link #push(JavaKind, ValueNode)} to the stack
+     *            before creating the {@link FrameState}
+     */
+    public FrameState create(int bci, BytecodeParser parent, boolean duringCall, JavaKind[] pushedSlotKinds, ValueNode[] pushedValues) {
+        if (outerFrameState == null && parent != null) {
+            assert !parent.parsingIntrinsic() : "must already have the next non-intrinsic ancestor";
+            outerFrameState = parent.getFrameStateBuilder().create(parent.bci(), parent.getNonIntrinsicAncestor(), true, null, null);
+        }
+        if (bci == BytecodeFrame.AFTER_EXCEPTION_BCI && parent != null) {
+            FrameState newFrameState = outerFrameState.duplicateModified(outerFrameState.bci, true, false, JavaKind.Void, new JavaKind[]{JavaKind.Object}, new ValueNode[]{stack[0]});
+            return newFrameState;
+        }
+        if (bci == BytecodeFrame.INVALID_FRAMESTATE_BCI) {
+            throw shouldNotReachHere();
+        }
+
+        if (pushedValues != null) {
+            assert pushedSlotKinds.length == pushedValues.length;
+            int stackSizeToRestore = stackSize;
+            for (int i = 0; i < pushedValues.length; i++) {
+                push(pushedSlotKinds[i], pushedValues[i]);
+            }
+            FrameState res = graph.add(new FrameState(outerFrameState, method, bci, locals, stack, stackSize, lockedObjects, Arrays.asList(monitorIds), rethrowException, duringCall));
+            stackSize = stackSizeToRestore;
+            return res;
+        } else {
+            if (bci == BytecodeFrame.AFTER_EXCEPTION_BCI) {
+                assert outerFrameState == null;
+                clearLocals();
+            }
+            return graph.add(new FrameState(outerFrameState, method, bci, locals, stack, stackSize, lockedObjects, Arrays.asList(monitorIds), rethrowException, duringCall));
+        }
     }
 
+    public NodeSourcePosition createBytecodePosition(int bci) {
+        BytecodeParser parent = parser.getParent();
+        if (HideSubstitutionStates.getValue()) {
+            if (parser.parsingIntrinsic()) {
+                // Attribute to the method being replaced
+                return new NodeSourcePosition(constantReceiver, parent.getFrameStateBuilder().createBytecodePosition(parent.bci()), parser.intrinsicContext.getOriginalMethod(), -1);
+            }
+            // Skip intrinsic frames
+            parent = parser.getNonIntrinsicAncestor();
+        }
+        return create(null, constantReceiver, bci, parent);
+    }
+
+    private NodeSourcePosition create(NodeSourcePosition o, JavaConstant receiver, int bci, BytecodeParser parent) {
+        NodeSourcePosition outer = o;
+        if (outer == null && parent != null) {
+            outer = parent.getFrameStateBuilder().createBytecodePosition(parent.bci());
+        }
+        if (bci == BytecodeFrame.AFTER_EXCEPTION_BCI && parent != null) {
+            return FrameState.toSourcePosition(outerFrameState);
+        }
+        if (bci == BytecodeFrame.INVALID_FRAMESTATE_BCI) {
+            throw shouldNotReachHere();
+        }
+        return new NodeSourcePosition(receiver, outer, method, bci);
+    }
 
     public FrameStateBuilder copy() {
-        return new FrameStateBuilder(method, graph, Arrays.copyOf(locals, locals.length), Arrays.copyOf(stack, stack.length), stackSize, rethrowException);
+        return new FrameStateBuilder(this);
     }
-
-    public FrameStateBuilder copyWithException(ValueNode exceptionObject) {
-        ValueNode[] newStack = new ValueNode[stack.length];
-        newStack[0] = exceptionObject;
-        return new FrameStateBuilder(method, graph, Arrays.copyOf(locals, locals.length), newStack, 1, true);
-    }
-
 
     public boolean isCompatibleWith(FrameStateBuilder other) {
-        assert method == other.method && graph == other.graph && localsSize() == other.localsSize() : "Can only compare frame states of the same method";
+        assert method.equals(other.method) && graph == other.graph && localsSize() == other.localsSize() : "Can only compare frame states of the same method";
+        assert lockedObjects.length == monitorIds.length && other.lockedObjects.length == other.monitorIds.length : "mismatch between lockedObjects and monitorIds";
 
         if (stackSize() != other.stackSize()) {
             return false;
         }
         for (int i = 0; i < stackSize(); i++) {
-            ValueNode x = stackAt(i);
-            ValueNode y = other.stackAt(i);
-            if (x != y && ValueUtil.typeMismatch(x, y)) {
+            ValueNode x = stack[i];
+            ValueNode y = other.stack[i];
+            assert x != null && y != null;
+            if (x != y && (x == TWO_SLOT_MARKER || x.isDeleted() || y == TWO_SLOT_MARKER || y.isDeleted() || x.getStackKind() != y.getStackKind())) {
                 return false;
+            }
+        }
+        if (lockedObjects.length != other.lockedObjects.length) {
+            return false;
+        }
+        for (int i = 0; i < lockedObjects.length; i++) {
+            if (GraphUtil.originalValue(lockedObjects[i]) != GraphUtil.originalValue(other.lockedObjects[i]) || monitorIds[i] != other.monitorIds[i]) {
+                throw new BailoutException("unbalanced monitors");
             }
         }
         return true;
     }
 
-    public void merge(MergeNode block, FrameStateBuilder other) {
+    public void merge(AbstractMergeNode block, FrameStateBuilder other) {
         assert isCompatibleWith(other);
 
         for (int i = 0; i < localsSize(); i++) {
-            storeLocal(i, merge(localAt(i), other.localAt(i), block));
+            locals[i] = merge(locals[i], other.locals[i], block);
         }
         for (int i = 0; i < stackSize(); i++) {
-            storeStack(i, merge(stackAt(i), other.stackAt(i), block));
+            stack[i] = merge(stack[i], other.stack[i], block);
+        }
+        for (int i = 0; i < lockedObjects.length; i++) {
+            lockedObjects[i] = merge(lockedObjects[i], other.lockedObjects[i], block);
+            assert monitorIds[i] == other.monitorIds[i];
+        }
+
+        if (sideEffects == null) {
+            sideEffects = other.sideEffects;
+        } else {
+            if (other.sideEffects != null) {
+                sideEffects.addAll(other.sideEffects);
+            }
         }
     }
 
-    private ValueNode merge(ValueNode currentValue, ValueNode otherValue, MergeNode block) {
-        if (currentValue == null) {
+    private ValueNode merge(ValueNode currentValue, ValueNode otherValue, AbstractMergeNode block) {
+        if (currentValue == null || currentValue.isDeleted()) {
             return null;
-
         } else if (block.isPhiAtMerge(currentValue)) {
-            if (otherValue == null || currentValue.kind() != otherValue.kind()) {
-                deletePhi((PhiNode) currentValue);
-                return null;
+            if (otherValue == null || otherValue == TWO_SLOT_MARKER || otherValue.isDeleted() || currentValue.getStackKind() != otherValue.getStackKind()) {
+                // This phi must be dead anyway, add input of correct stack kind to keep the graph
+                // invariants.
+                ((PhiNode) currentValue).addInput(ConstantNode.defaultForKind(currentValue.getStackKind(), graph));
+            } else {
+                ((PhiNode) currentValue).addInput(otherValue);
             }
-            ((PhiNode) currentValue).addInput(otherValue);
             return currentValue;
-
         } else if (currentValue != otherValue) {
-            assert !(block instanceof LoopBeginNode) : "Phi functions for loop headers are create eagerly for all locals and stack slots";
-            if (otherValue == null || currentValue.kind() != otherValue.kind()) {
+            if (currentValue == TWO_SLOT_MARKER || otherValue == TWO_SLOT_MARKER) {
+                return null;
+            } else if (otherValue == null || otherValue.isDeleted() || currentValue.getStackKind() != otherValue.getStackKind()) {
                 return null;
             }
-
-            PhiNode phi = graph.unique(new PhiNode(currentValue.kind(), block, PhiType.Value));
-            for (int i = 0; i < block.phiPredecessorCount(); i++) {
-                phi.addInput(currentValue);
-            }
-            phi.addInput(otherValue);
-            assert phi.valueCount() == block.phiPredecessorCount() + 1 : "valueCount=" + phi.valueCount() + " predSize= " + block.phiPredecessorCount();
-            return phi;
-
+            assert !(block instanceof LoopBeginNode) : String.format("Phi functions for loop headers are create eagerly for changed locals and all stack slots: %s != %s", currentValue, otherValue);
+            return createValuePhi(currentValue, otherValue, block);
         } else {
             return currentValue;
         }
     }
 
-    private void deletePhi(PhiNode phi) {
-        if (phi.isDeleted()) {
-            return;
+    private ValuePhiNode createValuePhi(ValueNode currentValue, ValueNode otherValue, AbstractMergeNode block) {
+        ValuePhiNode phi = graph.addWithoutUnique(new ValuePhiNode(currentValue.stamp().unrestricted(), block));
+        for (int i = 0; i < block.phiPredecessorCount(); i++) {
+            phi.addInput(currentValue);
         }
-        // Collect all phi functions that use this phi so that we can delete them recursively (after we delete ourselfs to avoid circles).
-        List<PhiNode> phiUsages = phi.usages().filter(PhiNode.class).snapshot();
-        List<ValueProxyNode> vpnUsages = phi.usages().filter(ValueProxyNode.class).snapshot();
-
-        // Remove the phi function from all FrameStates where it is used and then delete it.
-        assert phi.usages().filter(isNotA(FrameState.class).nor(PhiNode.class).nor(ValueProxyNode.class)).isEmpty() : "phi function that gets deletes must only be used in frame states";
-        phi.replaceAtUsages(null);
-        phi.safeDelete();
-
-        for (PhiNode phiUsage : phiUsages) {
-            deletePhi(phiUsage);
-        }
-        for (ValueProxyNode proxyUsage : vpnUsages) {
-            deleteProxy(proxyUsage);
-        }
+        phi.addInput(otherValue);
+        assert phi.valueCount() == block.phiPredecessorCount() + 1;
+        return phi;
     }
 
-    private void deleteProxy(ValueProxyNode proxy) {
-        if (proxy.isDeleted()) {
-            return;
-        }
-        // Collect all phi functions that use this phi so that we can delete them recursively (after we delete ourselfs to avoid circles).
-        List<PhiNode> phiUsages = proxy.usages().filter(PhiNode.class).snapshot();
-        List<ValueProxyNode> vpnUsages = proxy.usages().filter(ValueProxyNode.class).snapshot();
-
-        // Remove the proxy function from all FrameStates where it is used and then delete it.
-        assert proxy.usages().filter(isNotA(FrameState.class).nor(PhiNode.class).nor(ValueProxyNode.class)).isEmpty() : "phi function that gets deletes must only be used in frame states";
-        proxy.replaceAtUsages(null);
-        proxy.safeDelete();
-
-        for (PhiNode phiUsage : phiUsages) {
-            deletePhi(phiUsage);
-        }
-        for (ValueProxyNode proxyUsage : vpnUsages) {
-            deleteProxy(proxyUsage);
-        }
-    }
-
-    public void insertLoopPhis(LoopBeginNode loopBegin) {
+    public void inferPhiStamps(AbstractMergeNode block) {
         for (int i = 0; i < localsSize(); i++) {
-            storeLocal(i, createLoopPhi(loopBegin, localAt(i)));
+            inferPhiStamp(block, locals[i]);
         }
         for (int i = 0; i < stackSize(); i++) {
-            storeStack(i, createLoopPhi(loopBegin, stackAt(i)));
+            inferPhiStamp(block, stack[i]);
+        }
+        for (int i = 0; i < lockedObjects.length; i++) {
+            inferPhiStamp(block, lockedObjects[i]);
         }
     }
 
-    public void insertProxies(LoopExitNode loopExit, FrameStateBuilder loopEntryState) {
+    private static void inferPhiStamp(AbstractMergeNode block, ValueNode node) {
+        if (block.isPhiAtMerge(node)) {
+            node.inferStamp();
+        }
+    }
+
+    public void insertLoopPhis(LocalLiveness liveness, int loopId, LoopBeginNode loopBegin, boolean forcePhis, boolean stampFromValueForForcedPhis) {
         for (int i = 0; i < localsSize(); i++) {
-            ValueNode value = localAt(i);
-            if (value != null && (!loopEntryState.contains(value) || loopExit.loopBegin().isPhiAtMerge(value))) {
-                Debug.log(" inserting proxy for %s", value);
-                storeLocal(i, graph.unique(new ValueProxyNode(value, loopExit, PhiType.Value)));
+            boolean changedInLoop = liveness.localIsChangedInLoop(loopId, i);
+            if (forcePhis || changedInLoop) {
+                locals[i] = createLoopPhi(loopBegin, locals[i], stampFromValueForForcedPhis && !changedInLoop);
             }
         }
         for (int i = 0; i < stackSize(); i++) {
-            ValueNode value = stackAt(i);
+            stack[i] = createLoopPhi(loopBegin, stack[i], false);
+        }
+        for (int i = 0; i < lockedObjects.length; i++) {
+            lockedObjects[i] = createLoopPhi(loopBegin, lockedObjects[i], false);
+        }
+    }
+
+    public void insertLoopProxies(LoopExitNode loopExit, FrameStateBuilder loopEntryState) {
+        for (int i = 0; i < localsSize(); i++) {
+            ValueNode value = locals[i];
+            if (value != null && value != TWO_SLOT_MARKER && (!loopEntryState.contains(value) || loopExit.loopBegin().isPhiAtMerge(value))) {
+                Debug.log(" inserting proxy for %s", value);
+                locals[i] = ProxyNode.forValue(value, loopExit, graph);
+            }
+        }
+        for (int i = 0; i < stackSize(); i++) {
+            ValueNode value = stack[i];
+            if (value != null && value != TWO_SLOT_MARKER && (!loopEntryState.contains(value) || loopExit.loopBegin().isPhiAtMerge(value))) {
+                Debug.log(" inserting proxy for %s", value);
+                stack[i] = ProxyNode.forValue(value, loopExit, graph);
+            }
+        }
+        for (int i = 0; i < lockedObjects.length; i++) {
+            ValueNode value = lockedObjects[i];
             if (value != null && (!loopEntryState.contains(value) || loopExit.loopBegin().isPhiAtMerge(value))) {
                 Debug.log(" inserting proxy for %s", value);
-                storeStack(i, graph.unique(new ValueProxyNode(value, loopExit, PhiType.Value)));
+                lockedObjects[i] = ProxyNode.forValue(value, loopExit, graph);
             }
         }
     }
 
-    private PhiNode createLoopPhi(MergeNode block, ValueNode value) {
-        if (value == null) {
-            return null;
+    public void insertProxies(Function<ValueNode, ValueNode> proxyFunction) {
+        for (int i = 0; i < localsSize(); i++) {
+            ValueNode value = locals[i];
+            if (value != null && value != TWO_SLOT_MARKER) {
+                Debug.log(" inserting proxy for %s", value);
+                locals[i] = proxyFunction.apply(value);
+            }
+        }
+        for (int i = 0; i < stackSize(); i++) {
+            ValueNode value = stack[i];
+            if (value != null && value != TWO_SLOT_MARKER) {
+                Debug.log(" inserting proxy for %s", value);
+                stack[i] = proxyFunction.apply(value);
+            }
+        }
+        for (int i = 0; i < lockedObjects.length; i++) {
+            ValueNode value = lockedObjects[i];
+            if (value != null) {
+                Debug.log(" inserting proxy for %s", value);
+                lockedObjects[i] = proxyFunction.apply(value);
+            }
+        }
+    }
+
+    private ValueNode createLoopPhi(AbstractMergeNode block, ValueNode value, boolean stampFromValue) {
+        if (value == null || value == TWO_SLOT_MARKER) {
+            return value;
         }
         assert !block.isPhiAtMerge(value) : "phi function for this block already created";
 
-        PhiNode phi = graph.unique(new PhiNode(value.kind(), block, PhiType.Value));
+        ValuePhiNode phi = graph.addWithoutUnique(new ValuePhiNode(stampFromValue ? value.stamp() : value.stamp().unrestricted(), block));
         phi.addInput(value);
         return phi;
     }
 
-    public void cleanupDeletedPhis() {
-        for (int i = 0; i < localsSize(); i++) {
-            if (localAt(i) != null && localAt(i).isDeleted()) {
-                assert localAt(i) instanceof PhiNode : "Only phi functions can be deleted during parsing";
-                storeLocal(i, null);
-            }
+    /**
+     * Adds a locked monitor to this frame state.
+     *
+     * @param object the object whose monitor will be locked.
+     */
+    public void pushLock(ValueNode object, MonitorIdNode monitorId) {
+        assert object.isAlive() && object.getStackKind() == JavaKind.Object : "unexpected value: " + object;
+        lockedObjects = Arrays.copyOf(lockedObjects, lockedObjects.length + 1);
+        monitorIds = Arrays.copyOf(monitorIds, monitorIds.length + 1);
+        lockedObjects[lockedObjects.length - 1] = object;
+        monitorIds[monitorIds.length - 1] = monitorId;
+        assert lockedObjects.length == monitorIds.length;
+    }
+
+    /**
+     * Removes a locked monitor from this frame state.
+     *
+     * @return the object whose monitor was removed from the locks list.
+     */
+    public ValueNode popLock() {
+        try {
+            return lockedObjects[lockedObjects.length - 1];
+        } finally {
+            lockedObjects = lockedObjects.length == 1 ? EMPTY_ARRAY : Arrays.copyOf(lockedObjects, lockedObjects.length - 1);
+            monitorIds = monitorIds.length == 1 ? EMPTY_MONITOR_ARRAY : Arrays.copyOf(monitorIds, monitorIds.length - 1);
+            assert lockedObjects.length == monitorIds.length;
         }
     }
 
-    public void clearNonLiveLocals(BitMap liveness) {
-        if (liveness == null) {
+    public MonitorIdNode peekMonitorId() {
+        return monitorIds[monitorIds.length - 1];
+    }
+
+    /**
+     * @return the current lock depth
+     */
+    public int lockDepth(boolean includeParents) {
+        int depth = lockedObjects.length;
+        assert depth == monitorIds.length;
+        if (includeParents && parser.getParent() != null) {
+            depth += parser.getParent().frameState.lockDepth(true);
+        }
+        return depth;
+    }
+
+    public boolean contains(ValueNode value) {
+        for (int i = 0; i < localsSize(); i++) {
+            if (locals[i] == value) {
+                return true;
+            }
+        }
+        for (int i = 0; i < stackSize(); i++) {
+            if (stack[i] == value) {
+                return true;
+            }
+        }
+        assert lockedObjects.length == monitorIds.length;
+        for (int i = 0; i < lockedObjects.length; i++) {
+            if (lockedObjects[i] == value || monitorIds[i] == value) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public void clearNonLiveLocals(BciBlock block, LocalLiveness liveness, boolean liveIn) {
+        /*
+         * (lstadler) if somebody is tempted to remove/disable this clearing code: it's possible to
+         * remove it for normal compilations, but not for OSR compilations - otherwise dead object
+         * slots at the OSR entry aren't cleared. it is also not enough to rely on PiNodes with
+         * Kind.Illegal, because the conflicting branch might not have been parsed.
+         */
+        if (!parser.graphBuilderConfig.clearNonLiveLocals()) {
             return;
         }
-        assert liveness.size() == locals.length;
-        for (int i = 0; i < locals.length; i++) {
-            if (!liveness.get(i)) {
-                locals[i] = null;
+        if (liveIn) {
+            for (int i = 0; i < locals.length; i++) {
+                if (!liveness.localIsLiveIn(block, i)) {
+                    assert locals[i] != TWO_SLOT_MARKER || locals[i - 1] == null : "Clearing of second slot must have cleared the first slot too";
+                    locals[i] = null;
+                }
+            }
+        } else {
+            for (int i = 0; i < locals.length; i++) {
+                if (!liveness.localIsLiveOut(block, i)) {
+                    assert locals[i] != TWO_SLOT_MARKER || locals[i - 1] == null : "Clearing of second slot must have cleared the first slot too";
+                    locals[i] = null;
+                }
             }
         }
     }
 
+    /**
+     * Clears all local variables.
+     */
+    public void clearLocals() {
+        for (int i = 0; i < locals.length; i++) {
+            locals[i] = null;
+        }
+    }
+
+    /**
+     * @see BytecodeFrame#rethrowException
+     */
     public boolean rethrowException() {
         return rethrowException;
     }
 
+    /**
+     * @see BytecodeFrame#rethrowException
+     */
     public void setRethrowException(boolean b) {
         rethrowException = b;
     }
-
 
     /**
      * Returns the size of the local variables.
@@ -320,24 +669,15 @@ public class FrameStateBuilder {
         return stackSize;
     }
 
-    /**
-     * Gets the value in the local variables at the specified index, without any sanity checking.
-     *
-     * @param i the index into the locals
-     * @return the instruction that produced the value for the specified local
-     */
-    protected final ValueNode localAt(int i) {
-        return locals[i];
-    }
+    private boolean verifyKind(JavaKind slotKind, ValueNode x) {
+        assert x != null;
+        assert x != TWO_SLOT_MARKER;
+        assert slotKind.getSlotCount() > 0;
 
-    /**
-     * Get the value on the stack at the specified stack index.
-     *
-     * @param i the index into the stack, with {@code 0} being the bottom of the stack
-     * @return the instruction at the specified position in the stack
-     */
-    protected final ValueNode stackAt(int i) {
-        return stack[i];
+        if (canVerifyKind) {
+            assert x.getStackKind() == slotKind.getStackKind();
+        }
+        return true;
     }
 
     /**
@@ -345,232 +685,116 @@ public class FrameStateBuilder {
      * and that two-stack values are properly handled.
      *
      * @param i the index of the local variable to load
+     * @param slotKind the kind of the local variable from the point of view of the bytecodes
      * @return the instruction that produced the specified local
      */
-    public ValueNode loadLocal(int i) {
+    public ValueNode loadLocal(int i, JavaKind slotKind) {
         ValueNode x = locals[i];
-        assert !x.isDeleted();
-        assert !isTwoSlot(x.kind()) || locals[i + 1] == null;
-        assert i == 0 || locals[i - 1] == null || !isTwoSlot(locals[i - 1].kind());
+        assert verifyKind(slotKind, x);
+        assert slotKind.needsTwoSlots() ? locals[i + 1] == TWO_SLOT_MARKER : (i == locals.length - 1 || locals[i + 1] != TWO_SLOT_MARKER);
         return x;
     }
 
     /**
-     * Stores a given local variable at the specified index. If the value is a {@linkplain CiKind#isDoubleWord() double word},
-     * then the next local variable index is also overwritten.
+     * Stores a given local variable at the specified index. If the value occupies two slots, then
+     * the next local variable index is also overwritten.
      *
      * @param i the index at which to store
+     * @param slotKind the kind of the local variable from the point of view of the bytecodes
      * @param x the instruction which produces the value for the local
      */
-    public void storeLocal(int i, ValueNode x) {
-        assert x == null || x.kind() != CiKind.Void && x.kind() != CiKind.Illegal : "unexpected value: " + x;
+    public void storeLocal(int i, JavaKind slotKind, ValueNode x) {
+        assert verifyKind(slotKind, x);
+
+        if (locals[i] == TWO_SLOT_MARKER) {
+            /* Writing the second slot of a two-slot value invalidates the first slot. */
+            locals[i - 1] = null;
+        }
         locals[i] = x;
-        if (x != null && isTwoSlot(x.kind())) {
-            // if this is a double word, then kill i+1
+        if (slotKind.needsTwoSlots()) {
+            /* Writing a two-slot value: mark the second slot. */
+            locals[i + 1] = TWO_SLOT_MARKER;
+        } else if (i < locals.length - 1 && locals[i + 1] == TWO_SLOT_MARKER) {
+            /*
+             * Writing a one-slot value to an index previously occupied by a two-slot value: clear
+             * the old marker of the second slot.
+             */
             locals[i + 1] = null;
         }
-        if (x != null && i > 0) {
-            ValueNode p = locals[i - 1];
-            if (p != null && isTwoSlot(p.kind())) {
-                // if there was a double word at i - 1, then kill it
-                locals[i - 1] = null;
-            }
-        }
-    }
-
-    private void storeStack(int i, ValueNode x) {
-        assert x == null || stack[i] == null || x.kind() == stack[i].kind() : "Method does not handle changes from one-slot to two-slot values";
-        stack[i] = x;
     }
 
     /**
      * Pushes an instruction onto the stack with the expected type.
-     * @param kind the type expected for this instruction
+     *
+     * @param slotKind the kind of the stack element from the point of view of the bytecodes
      * @param x the instruction to push onto the stack
      */
-    public void push(CiKind kind, ValueNode x) {
-        assert !x.isDeleted() && x.kind() != CiKind.Void && x.kind() != CiKind.Illegal;
-        xpush(assertKind(kind, x));
-        if (isTwoSlot(kind)) {
-            xpush(null);
+    public void push(JavaKind slotKind, ValueNode x) {
+        assert verifyKind(slotKind, x);
+
+        xpush(x);
+        if (slotKind.needsTwoSlots()) {
+            xpush(TWO_SLOT_MARKER);
         }
     }
 
-    /**
-     * Pushes a value onto the stack without checking the type.
-     * @param x the instruction to push onto the stack
-     */
-    public void xpush(ValueNode x) {
-        assert x == null || (!x.isDeleted() && x.kind() != CiKind.Void && x.kind() != CiKind.Illegal);
-        stack[stackSize++] = x;
-    }
-
-    /**
-     * Pushes a value onto the stack and checks that it is an int.
-     * @param x the instruction to push onto the stack
-     */
-    public void ipush(ValueNode x) {
-        xpush(assertInt(x));
-    }
-
-    /**
-     * Pushes a value onto the stack and checks that it is a float.
-     * @param x the instruction to push onto the stack
-     */
-    public void fpush(ValueNode x) {
-        xpush(assertFloat(x));
-    }
-
-    /**
-     * Pushes a value onto the stack and checks that it is an object.
-     * @param x the instruction to push onto the stack
-     */
-    public void apush(ValueNode x) {
-        xpush(assertObject(x));
-    }
-
-    /**
-     * Pushes a value onto the stack and checks that it is a JSR return address.
-     * @param x the instruction to push onto the stack
-     */
-    public void jpush(ValueNode x) {
-        xpush(assertJsr(x));
-    }
-
-    /**
-     * Pushes a value onto the stack and checks that it is a long.
-     *
-     * @param x the instruction to push onto the stack
-     */
-    public void lpush(ValueNode x) {
-        xpush(assertLong(x));
-        xpush(null);
-    }
-
-    /**
-     * Pushes a value onto the stack and checks that it is a double.
-     * @param x the instruction to push onto the stack
-     */
-    public void dpush(ValueNode x) {
-        xpush(assertDouble(x));
-        xpush(null);
-    }
-
-    public void pushReturn(CiKind kind, ValueNode x) {
-        if (kind != CiKind.Void) {
-            push(kind.stackKind(), x);
+    public void pushReturn(JavaKind slotKind, ValueNode x) {
+        if (slotKind != JavaKind.Void) {
+            push(slotKind, x);
         }
     }
 
     /**
      * Pops an instruction off the stack with the expected type.
-     * @param kind the expected type
+     *
+     * @param slotKind the kind of the stack element from the point of view of the bytecodes
      * @return the instruction on the top of the stack
      */
-    public ValueNode pop(CiKind kind) {
-        assert kind != CiKind.Void;
-        if (isTwoSlot(kind)) {
-            xpop();
+    public ValueNode pop(JavaKind slotKind) {
+        if (slotKind.needsTwoSlots()) {
+            ValueNode s = xpop();
+            assert s == TWO_SLOT_MARKER;
         }
-        return assertKind(kind, xpop());
+        ValueNode x = xpop();
+        assert verifyKind(slotKind, x);
+        return x;
     }
 
-    /**
-     * Pops a value off of the stack without checking the type.
-     * @return x the instruction popped off the stack
-     */
-    public ValueNode xpop() {
+    private void xpush(ValueNode x) {
+        assert x != null;
+        stack[stackSize++] = x;
+    }
+
+    private ValueNode xpop() {
         ValueNode result = stack[--stackSize];
-        assert result == null || !result.isDeleted();
+        assert result != null;
+        return result;
+    }
+
+    private ValueNode xpeek() {
+        ValueNode result = stack[stackSize - 1];
+        assert result != null;
         return result;
     }
 
     /**
-     * Pops a value off of the stack and checks that it is an int.
-     * @return x the instruction popped off the stack
-     */
-    public ValueNode ipop() {
-        return assertInt(xpop());
-    }
-
-    /**
-     * Pops a value off of the stack and checks that it is a float.
-     * @return x the instruction popped off the stack
-     */
-    public ValueNode fpop() {
-        return assertFloat(xpop());
-    }
-
-    /**
-     * Pops a value off of the stack and checks that it is an object.
-     * @return x the instruction popped off the stack
-     */
-    public ValueNode apop() {
-        return assertObject(xpop());
-    }
-
-    /**
-     * Pops a value off of the stack and checks that it is a JSR return address.
-     * @return x the instruction popped off the stack
-     */
-    public ValueNode jpop() {
-        return assertJsr(xpop());
-    }
-
-    /**
-     * Pops a value off of the stack and checks that it is a long.
-     * @return x the instruction popped off the stack
-     */
-    public ValueNode lpop() {
-        assertHigh(xpop());
-        return assertLong(xpop());
-    }
-
-    /**
-     * Pops a value off of the stack and checks that it is a double.
-     * @return x the instruction popped off the stack
-     */
-    public ValueNode dpop() {
-        assertHigh(xpop());
-        return assertDouble(xpop());
-    }
-
-    /**
-     * Pop the specified number of slots off of this stack and return them as an array of instructions.
-     * @param size the number of arguments off of the stack
+     * Pop the specified number of slots off of this stack and return them as an array of
+     * instructions.
+     *
      * @return an array containing the arguments off of the stack
      */
-    public ValueNode[] popArguments(int slotSize, int argSize) {
-        int base = stackSize - slotSize;
-        ValueNode[] r = new ValueNode[argSize];
-        int argIndex = 0;
-        int stackindex = 0;
-        while (stackindex < slotSize) {
-            ValueNode element = stack[base + stackindex];
-            assert element != null;
-            r[argIndex++] = element;
-            stackindex += stackSlots(element.kind());
-        }
-        stackSize = base;
-        return r;
-    }
-
-    /**
-     * Peeks an element from the operand stack.
-     * @param argumentNumber The number of the argument, relative from the top of the stack (0 = top).
-     *        Long and double arguments only count as one argument, i.e., null-slots are ignored.
-     * @return The peeked argument.
-     */
-    public ValueNode peek(int argumentNumber) {
-        int idx = stackSize() - 1;
-        for (int i = 0; i < argumentNumber; i++) {
-            if (stackAt(idx) == null) {
-                idx--;
-                assert isTwoSlot(stackAt(idx).kind());
+    public ValueNode[] popArguments(int argSize) {
+        ValueNode[] result = allocateArray(argSize);
+        for (int i = argSize - 1; i >= 0; i--) {
+            ValueNode x = xpop();
+            if (x == TWO_SLOT_MARKER) {
+                /* Ignore second slot of two-slot value. */
+                x = xpop();
             }
-            idx--;
+            assert x != null && x != TWO_SLOT_MARKER;
+            result[i] = x;
         }
-        return stackAt(idx);
+        return result;
     }
 
     /**
@@ -580,26 +804,183 @@ public class FrameStateBuilder {
         stackSize = 0;
     }
 
-    public static int stackSlots(CiKind kind) {
-        return isTwoSlot(kind) ? 2 : 1;
+    /**
+     * Performs a raw stack operation as defined in the Java bytecode specification.
+     *
+     * @param opcode The Java bytecode.
+     */
+    public void stackOp(int opcode) {
+        switch (opcode) {
+            case POP: {
+                ValueNode w1 = xpop();
+                assert w1 != TWO_SLOT_MARKER;
+                break;
+            }
+            case POP2: {
+                xpop();
+                ValueNode w2 = xpop();
+                assert w2 != TWO_SLOT_MARKER;
+                break;
+            }
+            case DUP: {
+                ValueNode w1 = xpeek();
+                assert w1 != TWO_SLOT_MARKER;
+                xpush(w1);
+                break;
+            }
+            case DUP_X1: {
+                ValueNode w1 = xpop();
+                ValueNode w2 = xpop();
+                assert w1 != TWO_SLOT_MARKER;
+                xpush(w1);
+                xpush(w2);
+                xpush(w1);
+                break;
+            }
+            case DUP_X2: {
+                ValueNode w1 = xpop();
+                ValueNode w2 = xpop();
+                ValueNode w3 = xpop();
+                assert w1 != TWO_SLOT_MARKER;
+                xpush(w1);
+                xpush(w3);
+                xpush(w2);
+                xpush(w1);
+                break;
+            }
+            case DUP2: {
+                ValueNode w1 = xpop();
+                ValueNode w2 = xpop();
+                xpush(w2);
+                xpush(w1);
+                xpush(w2);
+                xpush(w1);
+                break;
+            }
+            case DUP2_X1: {
+                ValueNode w1 = xpop();
+                ValueNode w2 = xpop();
+                ValueNode w3 = xpop();
+                xpush(w2);
+                xpush(w1);
+                xpush(w3);
+                xpush(w2);
+                xpush(w1);
+                break;
+            }
+            case DUP2_X2: {
+                ValueNode w1 = xpop();
+                ValueNode w2 = xpop();
+                ValueNode w3 = xpop();
+                ValueNode w4 = xpop();
+                xpush(w2);
+                xpush(w1);
+                xpush(w4);
+                xpush(w3);
+                xpush(w2);
+                xpush(w1);
+                break;
+            }
+            case SWAP: {
+                ValueNode w1 = xpop();
+                ValueNode w2 = xpop();
+                assert w1 != TWO_SLOT_MARKER;
+                assert w2 != TWO_SLOT_MARKER;
+                xpush(w1);
+                xpush(w2);
+                break;
+            }
+            default:
+                throw shouldNotReachHere();
+        }
     }
 
-    public static boolean isTwoSlot(CiKind kind) {
-        assert kind != CiKind.Void && kind != CiKind.Illegal;
-        return kind == CiKind.Long || kind == CiKind.Double;
+    @Override
+    public int hashCode() {
+        int result = hashCode(locals, locals.length);
+        result *= 13;
+        result += hashCode(stack, this.stackSize);
+        return result;
     }
 
-    public boolean contains(ValueNode value) {
-        for (int i = 0; i < localsSize(); i++) {
-            if (localAt(i) == value) {
-                return true;
+    private static int hashCode(Object[] a, int length) {
+        int result = 1;
+        for (int i = 0; i < length; ++i) {
+            Object element = a[i];
+            result = 31 * result + (element == null ? 0 : System.identityHashCode(element));
+        }
+        return result;
+    }
+
+    private static boolean equals(ValueNode[] a, ValueNode[] b, int length) {
+        for (int i = 0; i < length; ++i) {
+            if (a[i] != b[i]) {
+                return false;
             }
         }
-        for (int i = 0; i < stackSize(); i++) {
-            if (stackAt(i) == value) {
-                return true;
+        return true;
+    }
+
+    @Override
+    public boolean equals(Object otherObject) {
+        if (otherObject instanceof FrameStateBuilder) {
+            FrameStateBuilder other = (FrameStateBuilder) otherObject;
+            if (!other.method.equals(method)) {
+                return false;
             }
+            if (other.stackSize != stackSize) {
+                return false;
+            }
+            if (other.parser != parser) {
+                return false;
+            }
+            if (other.tool != tool) {
+                return false;
+            }
+            if (other.rethrowException != rethrowException) {
+                return false;
+            }
+            if (other.graph != graph) {
+                return false;
+            }
+            if (other.locals.length != locals.length) {
+                return false;
+            }
+            return equals(other.locals, locals, locals.length) && equals(other.stack, stack, stackSize) && equals(other.lockedObjects, lockedObjects, lockedObjects.length) &&
+                            equals(other.monitorIds, monitorIds, monitorIds.length);
         }
         return false;
+    }
+
+    @Override
+    public boolean isAfterSideEffect() {
+        return sideEffects != null;
+    }
+
+    @Override
+    public Iterable<StateSplit> sideEffects() {
+        return sideEffects;
+    }
+
+    @Override
+    public void addSideEffect(StateSplit sideEffect) {
+        assert sideEffect != null;
+        assert sideEffect.hasSideEffect();
+        if (sideEffects == null) {
+            sideEffects = new ArrayList<>(4);
+        }
+        sideEffects.add(sideEffect);
+    }
+
+    public void traceState() {
+        Debug.log(String.format("|   state [nr locals = %d, stack depth = %d, method = %s]", localsSize(), stackSize(), method));
+        for (int i = 0; i < localsSize(); ++i) {
+            ValueNode value = locals[i];
+            Debug.log(String.format("|   local[%d] = %-8s : %s", i, value == null ? "bogus" : value == TWO_SLOT_MARKER ? "second" : value.getStackKind().getJavaName(), value));
+        }
+        for (int i = 0; i < stackSize(); ++i) {
+            ValueNode value = stack[i];
+            Debug.log(String.format("|   stack[%d] = %-8s : %s", i, value == null ? "bogus" : value == TWO_SLOT_MARKER ? "second" : value.getStackKind().getJavaName(), value));
+        }
     }
 }

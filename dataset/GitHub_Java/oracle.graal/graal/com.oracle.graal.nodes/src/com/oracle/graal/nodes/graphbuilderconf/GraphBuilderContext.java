@@ -32,7 +32,6 @@ import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.compiler.common.type.StampPair;
 import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.FixedGuardNode;
-import com.oracle.graal.nodes.LogicNode;
 import com.oracle.graal.nodes.PiNode;
 import com.oracle.graal.nodes.StateSplit;
 import com.oracle.graal.nodes.ValueNode;
@@ -214,7 +213,7 @@ public interface GraphBuilderContext extends GraphBuilderTool {
      */
     default ValueNode nullCheckedValue(ValueNode value) {
         if (!StampTool.isPointerNonNull(value.stamp())) {
-            LogicNode condition = getGraph().unique(IsNullNode.create(value));
+            IsNullNode condition = getGraph().unique(new IsNullNode(value));
             ObjectStamp receiverStamp = (ObjectStamp) value.stamp();
             Stamp stamp = receiverStamp.join(objectNonNull());
             FixedGuardNode fixedGuard = append(new FixedGuardNode(condition, NullCheckException, InvalidateReprofile, true));

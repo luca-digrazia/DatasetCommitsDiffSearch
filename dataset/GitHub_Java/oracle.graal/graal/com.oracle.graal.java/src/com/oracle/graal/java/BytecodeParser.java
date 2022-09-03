@@ -262,10 +262,8 @@ import com.oracle.graal.bytecode.BytecodeSwitch;
 import com.oracle.graal.bytecode.BytecodeTableSwitch;
 import com.oracle.graal.bytecode.Bytecodes;
 import com.oracle.graal.compiler.common.GraalOptions;
-import com.oracle.graal.compiler.common.LocationIdentity;
 import com.oracle.graal.compiler.common.calc.Condition;
 import com.oracle.graal.compiler.common.calc.FloatConvert;
-import com.oracle.graal.compiler.common.spi.ConstantFieldProvider;
 import com.oracle.graal.compiler.common.type.AbstractPointerStamp;
 import com.oracle.graal.compiler.common.type.ObjectStamp;
 import com.oracle.graal.compiler.common.type.Stamp;
@@ -399,6 +397,7 @@ import jdk.vm.ci.meta.JavaMethod;
 import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.JavaTypeProfile;
 import jdk.vm.ci.meta.LineNumberTable;
+import jdk.vm.ci.meta.LocationIdentity;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.MetaUtil;
 import jdk.vm.ci.meta.ProfilingInfo;
@@ -590,7 +589,6 @@ public class BytecodeParser implements GraphBuilderContext {
         this.metaAccess = graphBuilderInstance.metaAccess;
         this.stampProvider = graphBuilderInstance.stampProvider;
         this.constantReflection = graphBuilderInstance.constantReflection;
-        this.constantFieldProvider = graphBuilderInstance.constantFieldProvider;
         this.stream = new BytecodeStream(method.getCode());
         this.profilingInfo = graph.useProfilingInfo() ? method.getProfilingInfo() : null;
         this.constantPool = method.getConstantPool();
@@ -1310,7 +1308,6 @@ public class BytecodeParser implements GraphBuilderContext {
     protected final ConstantPool constantPool;
     protected final MetaAccessProvider metaAccess;
     private final ConstantReflectionProvider constantReflection;
-    private final ConstantFieldProvider constantFieldProvider;
     private final StampProvider stampProvider;
     protected final IntrinsicContext intrinsicContext;
 
@@ -2629,11 +2626,6 @@ public class BytecodeParser implements GraphBuilderContext {
     @Override
     public ConstantReflectionProvider getConstantReflection() {
         return constantReflection;
-    }
-
-    @Override
-    public ConstantFieldProvider getConstantFieldProvider() {
-        return constantFieldProvider;
     }
 
     /**
