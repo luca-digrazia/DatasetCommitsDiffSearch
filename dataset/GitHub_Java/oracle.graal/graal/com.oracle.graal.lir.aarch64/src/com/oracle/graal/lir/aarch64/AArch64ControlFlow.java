@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,35 +22,38 @@
  */
 package com.oracle.graal.lir.aarch64;
 
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.HINT;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
 import static jdk.vm.ci.code.ValueUtil.asAllocatableValue;
 import static jdk.vm.ci.code.ValueUtil.asRegister;
 
 import java.util.function.Function;
 
-import jdk.vm.ci.aarch64.AArch64Kind;
-import jdk.vm.ci.code.CompilationResult.JumpTable;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.LIRKind;
-import jdk.vm.ci.meta.Value;
-
 import com.oracle.graal.asm.Label;
 import com.oracle.graal.asm.NumUtil;
-import com.oracle.graal.asm.aarch64.AArch64Address;
 import com.oracle.graal.asm.aarch64.AArch64Assembler;
+import com.oracle.graal.asm.aarch64.AArch64Assembler.ConditionFlag;
+import com.oracle.graal.asm.aarch64.AArch64Assembler.ExtendType;
 import com.oracle.graal.asm.aarch64.AArch64MacroAssembler;
-import com.oracle.graal.asm.aarch64.AArch64MacroAssembler.PatchLabelKind;
+import com.oracle.graal.code.CompilationResult.JumpTable;
+import com.oracle.graal.compiler.common.LIRKind;
 import com.oracle.graal.compiler.common.calc.Condition;
+import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.lir.ConstantValue;
 import com.oracle.graal.lir.LIRInstructionClass;
 import com.oracle.graal.lir.LabelRef;
 import com.oracle.graal.lir.Opcode;
 import com.oracle.graal.lir.StandardOp;
 import com.oracle.graal.lir.SwitchStrategy;
+import com.oracle.graal.lir.SwitchStrategy.BaseSwitchClosure;
 import com.oracle.graal.lir.Variable;
 import com.oracle.graal.lir.asm.CompilationResultBuilder;
+
+import jdk.vm.ci.aarch64.AArch64Kind;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.Value;
 
 public class AArch64ControlFlow {
 
@@ -158,18 +161,23 @@ public class AArch64ControlFlow {
         public static final LIRInstructionClass<StrategySwitchOp> TYPE = LIRInstructionClass.create(StrategySwitchOp.class);
 
         private final Constant[] keyConstants;
-        private final SwitchStrategy strategy;
-        private final Function<Condition, AArch64Assembler.ConditionFlag> converter;
+        protected final SwitchStrategy strategy;
+        private final Function<Condition, ConditionFlag> converter;
         private final LabelRef[] keyTargets;
         private final LabelRef defaultTarget;
         @Alive protected Value key;
         // TODO (das) This could be optimized: We only need the scratch register in case of a
-        // datapatch, or too large
-        // immediates.
+        // datapatch, or too large immediates.
         @Temp protected Value scratch;
 
-        public StrategySwitchOp(SwitchStrategy strategy, LabelRef[] keyTargets, LabelRef defaultTarget, Value key, Value scratch, Function<Condition, AArch64Assembler.ConditionFlag> converter) {
-            super(TYPE);
+        public StrategySwitchOp(SwitchStrategy strategy, LabelRef[] keyTargets, LabelRef defaultTarget, Value key, Value scratch,
+                        Function<Condition, ConditionFlag> converter) {
+            this(TYPE, strategy, keyTargets, defaultTarget, key, scratch, converter);
+        }
+
+        protected StrategySwitchOp(LIRInstructionClass<? extends StrategySwitchOp> c, SwitchStrategy strategy, LabelRef[] keyTargets, LabelRef defaultTarget, Value key, Value scratch,
+                        Function<Condition, ConditionFlag> converter) {
+            super(c);
             this.strategy = strategy;
             this.converter = converter;
             this.keyConstants = strategy.getKeyConstants();
@@ -183,39 +191,30 @@ public class AArch64ControlFlow {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, AArch64MacroAssembler masm) {
-            strategy.run(new SwitchClosure(crb, masm));
+            strategy.run(new SwitchClosure(asRegister(key), crb, masm));
         }
 
-        private class SwitchClosure extends SwitchStrategy.BaseSwitchClosure {
-            private final AArch64MacroAssembler masm;
-            private final CompilationResultBuilder crb;
+        public class SwitchClosure extends BaseSwitchClosure {
 
-            public SwitchClosure(CompilationResultBuilder crb, AArch64MacroAssembler masm) {
+            protected final Register keyRegister;
+            protected final CompilationResultBuilder crb;
+            protected final AArch64MacroAssembler masm;
+
+            protected SwitchClosure(Register keyRegister, CompilationResultBuilder crb, AArch64MacroAssembler masm) {
                 super(crb, masm, keyTargets, defaultTarget);
-                this.masm = masm;
+                this.keyRegister = keyRegister;
                 this.crb = crb;
+                this.masm = masm;
             }
 
-            @Override
-            protected void conditionalJump(int index, Condition condition, Label target) {
-                emitComparison(keyConstants[index]);
-                masm.branchConditionally(converter.apply(condition), target);
-            }
-
-            private void emitComparison(Constant c) {
+            protected void emitComparison(Constant c) {
                 JavaConstant jc = (JavaConstant) c;
                 ConstantValue constVal = new ConstantValue(LIRKind.value(key.getPlatformKind()), c);
                 switch (jc.getJavaKind()) {
                     case Int:
                         long lc = jc.asLong();
                         assert NumUtil.isInt(lc);
-                        if (crb.codeCache.needsDataPatch(jc)) {
-                            crb.recordInlineDataInCode(jc);
-                            masm.forceMov(asRegister(scratch), (int) lc);
-                            masm.cmp(32, asRegister(key), asRegister(scratch));
-                        } else {
-                            emitCompare(crb, masm, key, scratch, constVal);
-                        }
+                        emitCompare(crb, masm, key, scratch, constVal);
                         break;
                     case Long:
                         emitCompare(crb, masm, key, scratch, constVal);
@@ -224,74 +223,70 @@ public class AArch64ControlFlow {
                         emitCompare(crb, masm, key, scratch, constVal);
                         break;
                     default:
-                        throw new JVMCIError("switch only supported for int, long and object");
+                        throw new GraalError("switch only supported for int, long and object");
                 }
+            }
+
+            @Override
+            protected void conditionalJump(int index, Condition condition, Label target) {
+                emitComparison(keyConstants[index]);
+                masm.branchConditionally(converter.apply(condition), target);
             }
         }
     }
 
-    public static class TableSwitchOp extends AArch64BlockEndOp implements StandardOp.BlockEndOp {
+    public static final class TableSwitchOp extends AArch64BlockEndOp {
         public static final LIRInstructionClass<TableSwitchOp> TYPE = LIRInstructionClass.create(TableSwitchOp.class);
-
         private final int lowKey;
         private final LabelRef defaultTarget;
         private final LabelRef[] targets;
-        @Alive protected Variable keyValue;
-        @Temp protected Variable scratchValue;
+        @Use protected Value index;
+        @Temp({REG, HINT}) protected Value idxScratch;
+        @Temp protected Value scratch;
 
-        public TableSwitchOp(int lowKey, LabelRef defaultTarget, LabelRef[] targets, Variable key, Variable scratch) {
+        public TableSwitchOp(final int lowKey, final LabelRef defaultTarget, final LabelRef[] targets, Value index, Variable scratch, Variable idxScratch) {
             super(TYPE);
             this.lowKey = lowKey;
             this.defaultTarget = defaultTarget;
             this.targets = targets;
-            this.keyValue = key;
-            this.scratchValue = scratch;
+            this.index = index;
+            this.scratch = scratch;
+            this.idxScratch = idxScratch;
         }
 
         @Override
         public void emitCode(CompilationResultBuilder crb, AArch64MacroAssembler masm) {
-            Register key = asRegister(keyValue);
-            Register scratch = asRegister(scratchValue);
-            if (lowKey != 0) {
-                if (AArch64MacroAssembler.isArithmeticImmediate(lowKey)) {
-                    masm.sub(32, key, key, lowKey);
-                } else {
-                    ConstantValue constVal = new ConstantValue(LIRKind.value(AArch64Kind.WORD), JavaConstant.forInt(lowKey));
-                    AArch64Move.move(crb, masm, scratchValue, constVal);
-                    masm.sub(32, key, key, scratch);
-                }
-            }
+            Register indexReg = asRegister(index, AArch64Kind.DWORD);
+            Register idxScratchReg = asRegister(idxScratch, AArch64Kind.DWORD);
+            Register scratchReg = asRegister(scratch, AArch64Kind.QWORD);
+
+            // Compare index against jump table bounds
+            int highKey = lowKey + targets.length - 1;
+            masm.sub(32, idxScratchReg, indexReg, lowKey);
+            masm.cmp(32, idxScratchReg, highKey - lowKey);
+
+            // Jump to default target if index is not within the jump table
             if (defaultTarget != null) {
-                // if key is not in table range, jump to default target if it exists.
-                ConstantValue constVal = new ConstantValue(LIRKind.value(AArch64Kind.WORD), JavaConstant.forInt(targets.length));
-                emitCompare(crb, masm, keyValue, scratchValue, constVal);
-                masm.branchConditionally(AArch64Assembler.ConditionFlag.HS, defaultTarget.label());
+                masm.branchConditionally(ConditionFlag.HI, defaultTarget.label());
             }
 
-            // Load the start address of the jump table - which starts 3 instructions after the adr
-            // - into scratch.
-            masm.adr(scratch, 4 * 3);
-            masm.ldr(32, scratch, AArch64Address.createRegisterOffsetAddress(scratch, key, /* scaled */true));
-            masm.jmp(scratch);
-            int jumpTablePos = masm.position();
+            Label jumpTable = new Label();
+            masm.adr(scratchReg, jumpTable);
+            masm.add(64, scratchReg, scratchReg, idxScratchReg, ExtendType.UXTW, 2);
+            masm.jmp(scratchReg);
+            masm.bind(jumpTable);
             // emit jump table entries
             for (LabelRef target : targets) {
-                Label label = target.label();
-                if (label.isBound()) {
-                    masm.emitInt(target.label().position());
-                } else {
-                    label.addPatchAt(masm.position());
-                    masm.emitInt(PatchLabelKind.JUMP_ADDRESS.encoding);
-                }
+                masm.jmp(target.label());
             }
-            JumpTable jt = new JumpTable(jumpTablePos, lowKey, lowKey + targets.length - 1, 4);
+            JumpTable jt = new JumpTable(jumpTable.position(), lowKey, highKey - 1, 4);
             crb.compilationResult.addAnnotation(jt);
         }
     }
 
     private static void emitCompare(CompilationResultBuilder crb, AArch64MacroAssembler masm, Value key, Value scratchValue, ConstantValue c) {
         long imm = c.getJavaConstant().asLong();
-        int size = key.getPlatformKind().getSizeInBytes() * Byte.SIZE;
+        final int size = key.getPlatformKind().getSizeInBytes() * Byte.SIZE;
         if (AArch64MacroAssembler.isComparisonImmediate(imm)) {
             masm.cmp(size, asRegister(key), (int) imm);
         } else {
