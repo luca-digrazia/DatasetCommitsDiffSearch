@@ -305,7 +305,7 @@ public class WriteBarrierVerificationTest extends HotSpotGraalCompilerTest {
         test("test6Snippet", 5, new int[]{1, 2});
     }
 
-    @Test(expected = AssertionError.class)
+    @Test
     public void test23() {
         test("test6Snippet", 5, new int[]{3});
     }
@@ -573,7 +573,7 @@ public class WriteBarrierVerificationTest extends HotSpotGraalCompilerTest {
         test("test11Snippet", 11, new int[]{5});
     }
 
-    @Test
+    @Test(expected = AssertionError.class)
     public void test56() {
         test("test11Snippet", 11, new int[]{11});
     }
@@ -728,7 +728,7 @@ public class WriteBarrierVerificationTest extends HotSpotGraalCompilerTest {
 
             DebugConfig debugConfig = DebugScope.getConfig();
             DebugConfig fixedConfig = debugConfig == null ? null
-                            : Debug.fixedConfig(0, 0, false, false, false, false, false, debugConfig.dumpHandlers(), debugConfig.verifyHandlers(), debugConfig.output());
+                            : Debug.fixedConfig(debugConfig.getOptions(), 0, 0, false, false, false, false, false, debugConfig.dumpHandlers(), debugConfig.verifyHandlers(), debugConfig.output());
             try (DebugConfigScope s = Debug.setConfig(fixedConfig)) {
                 ReentrantNodeIterator.apply(closure, graph.start(), false);
                 new WriteBarrierVerificationPhase(config).apply(graph);
