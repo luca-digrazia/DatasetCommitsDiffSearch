@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,24 +22,46 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp.Mul;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.Canonicalizable.BinaryCommutative;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.lir.gen.ArithmeticLIRGeneratorTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+
+import jdk.vm.ci.code.CodeUtil;
+import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.PrimitiveConstant;
+import jdk.vm.ci.meta.Value;
 
 @NodeInfo(shortName = "*")
-public class MulNode extends BinaryArithmeticNode implements NarrowableArithmeticNode {
+public class MulNode extends BinaryArithmeticNode<Mul> implements NarrowableArithmeticNode, BinaryCommutative<ValueNode> {
 
-    public static MulNode create(ValueNode x, ValueNode y) {
-        return USE_GENERATED_NODES ? new MulNodeGen(x, y) : new MulNode(x, y);
+    public static final NodeClass<MulNode> TYPE = NodeClass.create(MulNode.class);
+
+    public MulNode(ValueNode x, ValueNode y) {
+        this(TYPE, x, y);
     }
 
-    protected MulNode(ValueNode x, ValueNode y) {
-        super(ArithmeticOpTable.forStamp(x.stamp()).getMul(), x, y);
+    protected MulNode(NodeClass<? extends MulNode> c, ValueNode x, ValueNode y) {
+        super(c, ArithmeticOpTable::getMul, x, y);
+    }
+
+    public static ValueNode create(ValueNode x, ValueNode y) {
+        BinaryOp<Mul> op = ArithmeticOpTable.forStamp(x.stamp()).getMul();
+        Stamp stamp = op.foldStamp(x.stamp(), y.stamp());
+        ConstantNode tryConstantFold = tryConstantFold(op, x, y, stamp);
+        if (tryConstantFold != null) {
+            return tryConstantFold;
+        } else {
+            return new MulNode(x, y).maybeCommuteInputs();
+        }
     }
 
     @Override
@@ -50,28 +72,32 @@ public class MulNode extends BinaryArithmeticNode implements NarrowableArithmeti
         }
 
         if (forX.isConstant() && !forY.isConstant()) {
-            return MulNode.create(forY, forX);
+            // we try to swap and canonicalize
+            ValueNode improvement = canonical(tool, forY, forX);
+            if (improvement != this) {
+                return improvement;
+            }
+            // if this fails we only swap
+            return new MulNode(forY, forX);
         }
         if (forY.isConstant()) {
+            BinaryOp<Mul> op = getOp(forX, forY);
             Constant c = forY.asConstant();
-            if (getOp().isNeutral(c)) {
+            if (op.isNeutral(c)) {
                 return forX;
             }
 
-            if (c.getKind().isNumericInteger()) {
-                long i = c.asLong();
-                long abs = Math.abs(i);
-                if (abs > 0 && CodeUtil.isPowerOf2(abs)) {
-                    LeftShiftNode shift = LeftShiftNode.create(forX, ConstantNode.forInt(CodeUtil.log2(abs)));
-                    if (i < 0) {
-                        return NegateNode.create(shift);
-                    } else {
-                        return shift;
-                    }
+            if (c instanceof PrimitiveConstant && ((PrimitiveConstant) c).getJavaKind().isNumericInteger()) {
+                long i = ((PrimitiveConstant) c).asLong();
+                if (i > 0 && CodeUtil.isPowerOf2(i)) {
+                    return new LeftShiftNode(forX, ConstantNode.forInt(CodeUtil.log2(i)));
+                }
+                if (i == 0) {
+                    return ConstantNode.forIntegerStamp(stamp, 0);
                 }
             }
 
-            if (getOp().isAssociative()) {
+            if (op.isAssociative()) {
                 // canonicalize expressions like "(a * 1) * 2"
                 return reassociate(this, ValueNode.isConstantPredicate(), forX, forY);
             }
@@ -80,14 +106,14 @@ public class MulNode extends BinaryArithmeticNode implements NarrowableArithmeti
     }
 
     @Override
-    public void generate(NodeMappableLIRBuilder builder, ArithmeticLIRGenerator gen) {
-        Value op1 = builder.operand(getX());
-        Value op2 = builder.operand(getY());
-        if (!getY().isConstant() && !FloatAddNode.livesLonger(this, getY(), builder)) {
-            Value op = op1;
+    public void generate(NodeLIRBuilderTool nodeValueMap, ArithmeticLIRGeneratorTool gen) {
+        Value op1 = nodeValueMap.operand(getX());
+        Value op2 = nodeValueMap.operand(getY());
+        if (shouldSwapInputs(nodeValueMap)) {
+            Value tmp = op1;
             op1 = op2;
-            op2 = op;
+            op2 = tmp;
         }
-        builder.setResult(this, gen.emitMul(op1, op2));
+        nodeValueMap.setResult(this, gen.emitMul(op1, op2, false));
     }
 }

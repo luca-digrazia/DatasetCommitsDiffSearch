@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,23 +22,44 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp;
+import com.oracle.graal.compiler.common.type.ArithmeticOpTable.BinaryOp.Add;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.Canonicalizable.BinaryCommutative;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.lir.gen.ArithmeticLIRGeneratorTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+
+import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.Value;
 
 @NodeInfo(shortName = "+")
-public class AddNode extends BinaryArithmeticNode implements NarrowableArithmeticNode {
+public class AddNode extends BinaryArithmeticNode<Add> implements NarrowableArithmeticNode, BinaryCommutative<ValueNode> {
 
-    public static AddNode create(ValueNode x, ValueNode y) {
-        return USE_GENERATED_NODES ? new AddNodeGen(x, y) : new AddNode(x, y);
+    public static final NodeClass<AddNode> TYPE = NodeClass.create(AddNode.class);
+
+    public AddNode(ValueNode x, ValueNode y) {
+        this(TYPE, x, y);
     }
 
-    protected AddNode(ValueNode x, ValueNode y) {
-        super(ArithmeticOpTable.forStamp(x.stamp()).getAdd(), x, y);
+    protected AddNode(NodeClass<? extends AddNode> c, ValueNode x, ValueNode y) {
+        super(c, ArithmeticOpTable::getAdd, x, y);
+    }
+
+    public static ValueNode create(ValueNode x, ValueNode y) {
+        BinaryOp<Add> op = ArithmeticOpTable.forStamp(x.stamp()).getAdd();
+        Stamp stamp = op.foldStamp(x.stamp(), y.stamp());
+        ConstantNode tryConstantFold = tryConstantFold(op, x, y, stamp);
+        if (tryConstantFold != null) {
+            return tryConstantFold;
+        } else {
+            return new AddNode(x, y).maybeCommuteInputs();
+        }
     }
 
     @Override
@@ -49,9 +70,16 @@ public class AddNode extends BinaryArithmeticNode implements NarrowableArithmeti
         }
 
         if (forX.isConstant() && !forY.isConstant()) {
-            return AddNode.create(forY, forX);
+            // we try to swap and canonicalize
+            ValueNode improvement = canonical(tool, forY, forX);
+            if (improvement != this) {
+                return improvement;
+            }
+            // if this fails we only swap
+            return new AddNode(forY, forX);
         }
-        boolean associative = getOp().isAssociative();
+        BinaryOp<Add> op = getOp(forX, forY);
+        boolean associative = op.isAssociative();
         if (associative) {
             if (forX instanceof SubNode) {
                 SubNode sub = (SubNode) forX;
@@ -70,7 +98,7 @@ public class AddNode extends BinaryArithmeticNode implements NarrowableArithmeti
         }
         if (forY.isConstant()) {
             Constant c = forY.asConstant();
-            if (getOp().isNeutral(c)) {
+            if (op.isNeutral(c)) {
                 return forX;
             }
             if (associative) {
@@ -90,15 +118,15 @@ public class AddNode extends BinaryArithmeticNode implements NarrowableArithmeti
     }
 
     @Override
-    public void generate(NodeMappableLIRBuilder builder, ArithmeticLIRGenerator gen) {
-        Value op1 = builder.operand(getX());
+    public void generate(NodeLIRBuilderTool nodeValueMap, ArithmeticLIRGeneratorTool gen) {
+        Value op1 = nodeValueMap.operand(getX());
         assert op1 != null : getX() + ", this=" + this;
-        Value op2 = builder.operand(getY());
-        if (!getY().isConstant() && !FloatAddNode.livesLonger(this, getY(), builder)) {
-            Value op = op1;
+        Value op2 = nodeValueMap.operand(getY());
+        if (shouldSwapInputs(nodeValueMap)) {
+            Value tmp = op1;
             op1 = op2;
-            op2 = op;
+            op2 = tmp;
         }
-        builder.setResult(this, gen.emitAdd(op1, op2));
+        nodeValueMap.setResult(this, gen.emitAdd(op1, op2, false));
     }
 }
