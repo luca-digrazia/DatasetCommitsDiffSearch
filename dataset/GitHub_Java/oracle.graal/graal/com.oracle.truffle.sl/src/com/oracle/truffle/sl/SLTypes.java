@@ -24,7 +24,7 @@ package com.oracle.truffle.sl;
 
 import java.math.*;
 
-import com.oracle.truffle.api.codegen.*;
+import com.oracle.truffle.api.dsl.*;
 
 @TypeSystem({int.class, BigInteger.class, boolean.class, String.class})
 public class SLTypes {
@@ -41,33 +41,14 @@ public class SLTypes {
             return (int) value;
         } else {
             int result = ((BigInteger) value).intValue();
-            assert BigInteger.valueOf(result).equals(value) : "Loosing precision";
+            assert BigInteger.valueOf(result).equals(value) : "Losing precision";
             return result;
         }
     }
 
-    @TypeCheck
-    public boolean isBigInteger(Object value) {
-        return value instanceof Integer || value instanceof BigInteger;
+    @ImplicitCast
+    public BigInteger castBigInteger(int integer) {
+        return BigInteger.valueOf(integer);
     }
 
-    @TypeCast
-    public BigInteger asBigInteger(Object value) {
-        if (value instanceof Integer) {
-            return BigInteger.valueOf((int) value);
-        } else {
-            return (BigInteger) value;
-        }
-    }
-
-    @TypeCast
-    public BigInteger asBigInteger(int value) {
-        return BigInteger.valueOf(value);
-    }
-
-    @TypeCheck
-    public boolean isBigInteger(@SuppressWarnings("unused") int value) {
-        return true;
-    }
 }
-
