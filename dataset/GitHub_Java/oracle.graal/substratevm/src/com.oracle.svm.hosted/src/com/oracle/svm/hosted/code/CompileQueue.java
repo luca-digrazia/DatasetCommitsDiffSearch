@@ -535,11 +535,6 @@ public class CompileQueue {
 
                     boolean inlined = false;
                     for (Invoke invoke : graph.getInvokes()) {
-                        if (invoke instanceof InvokeNode) {
-                            throw VMError.shouldNotReachHere("Found InvokeNode without exception edge: invocation of " +
-                                            invoke.callTarget().targetMethod().format("%H.%n(%p)") + " in " + (graph.method() == null ? graph.toString() : graph.method().format("%H.%n(%p)")));
-                        }
-
                         if (invoke.useForInlining()) {
                             inlined |= tryInlineTrivial(graph, invoke, !inlined);
                         }
