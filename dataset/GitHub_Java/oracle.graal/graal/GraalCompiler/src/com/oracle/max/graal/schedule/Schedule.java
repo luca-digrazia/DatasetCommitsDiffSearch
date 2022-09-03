@@ -243,13 +243,6 @@ public class Schedule {
                         block = getCommonDominator(block, mergeBlock.getPredecessors().get(i));
                     }
                 }
-            } else if (usage instanceof FrameState && ((FrameState) usage).block() != null) {
-                Merge merge = ((FrameState) usage).block();
-                for (Node pred : merge.predecessors()) {
-                    if (isCFG(pred)) {
-                        block = getCommonDominator(block, nodeToBlock.get(pred));
-                    }
-                }
             } else {
                 block = getCommonDominator(block, assignLatestPossibleBlockToNode(usage));
             }
