@@ -163,16 +163,6 @@ public final class ComputeBlockOrder {
         }
         curBit--;
 
-        if (cur.getBeginNode().probability() > 0.5) {
-            weight |= 1 << curBit;
-        }
-        curBit--;
-
-        if (cur.getBeginNode().probability() > 0.05) {
-            weight |= 1 << curBit;
-        }
-        curBit--;
-
         // guarantee that weight is > 0
         weight |= 1;
 
@@ -275,22 +265,18 @@ public final class ComputeBlockOrder {
 
         do {
             Block cur = workList.remove(workList.size() - 1);
-            processBlock(cur);
-        } while (workList.size() > 0);
-    }
+            appendBlock(cur);
 
-    private void processBlock(Block cur) {
-        appendBlock(cur);
-
-        Node endNode = cur.getEndNode();
-        if (endNode instanceof IfNode && ((IfNode) endNode).probability() < 0.5) {
-            assert cur.numberOfSux() == 2;
-            checkAndSortIntoWorkList(cur.suxAt(1));
-            checkAndSortIntoWorkList(cur.suxAt(0));
-        } else {
-            for (Block sux : cur.getSuccessors()) {
-                checkAndSortIntoWorkList(sux);
+            Node endNode = cur.getEndNode();
+            if (endNode instanceof IfNode && ((IfNode) endNode).probability() < 0.5) {
+                assert cur.numberOfSux() == 2;
+                checkAndSortIntoWorkList(cur.suxAt(1));
+                checkAndSortIntoWorkList(cur.suxAt(0));
+            } else {
+                for (Block sux : cur.getSuccessors()) {
+                    checkAndSortIntoWorkList(sux);
+                }
             }
-        }
+        } while (workList.size() > 0);
     }
 }

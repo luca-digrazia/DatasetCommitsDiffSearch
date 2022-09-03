@@ -121,10 +121,6 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
         return this;
     }
 
-    public void setTakenProbability(double prob) {
-        takenProbability = prob;
-    }
-
     @Override
     public double probability(BeginNode successor) {
         return successor == trueSuccessor ? takenProbability : 1 - takenProbability;
@@ -432,7 +428,6 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
         originalFalseSuccessor.prepareDelete();
 
         FixedNode next = merge.next();
-        FrameState state = merge.stateAfter();
         merge.setNext(null);
         setTrueSuccessor(null);
         setFalseSuccessor(null);
@@ -443,9 +438,6 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
         merge.safeDelete();
         trueEnd.safeDelete();
         falseEnd.safeDelete();
-        if (state != null) {
-            tool.removeIfUnused(state);
-        }
         tool.addToWorkList(next);
     }
 }
