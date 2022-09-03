@@ -283,23 +283,43 @@ public abstract class DynamicObjectImpl extends DynamicObject implements Cloneab
     @Override
     @TruffleBoundary
     public void define(Object id, Object value, int flags) {
-        define(id, value, flags, ShapeImpl.DEFAULT_LAYOUT_FACTORY);
+        ShapeImpl oldShape = getShape();
+        Property existing = oldShape.getProperty(id);
+        if (existing == null) {
+            updateShape();
+            oldShape = getShape();
+            Shape newShape = oldShape.addProperty(Property.create(id, oldShape.allocator().locationForValue(value, true, value != null), flags));
+            updateShape();
+            newShape.getLastProperty().setGeneric(this, value, oldShape, newShape);
+        } else {
+            defineExisting(id, value, flags, existing, oldShape);
+        }
+    }
+
+    private void defineExisting(Object id, Object value, int flags, Property existing, ShapeImpl oldShape) {
+        if (existing.getFlags() == flags) {
+            existing.setGeneric(this, value, null);
+        } else {
+            Property newProperty = Property.create(id, oldShape.getLayout().existingLocationForValue(value, existing.getLocation(), oldShape), flags);
+            Shape newShape = oldShape.replaceProperty(existing, newProperty);
+            this.setShapeAndResize(newShape);
+            newProperty.setInternal(this, value);
+        }
     }
 
     @Override
     @TruffleBoundary
     public void define(Object id, Object value, int flags, LocationFactory locationFactory) {
         ShapeImpl oldShape = getShape();
-        ShapeImpl newShape = oldShape.defineProperty(id, value, flags, locationFactory);
-        if (updateShape()) {
+        Property existing = oldShape.getProperty(id);
+        if (existing == null) {
+            updateShape();
             oldShape = getShape();
-        }
-        Property property = newShape.getProperty(id);
-
-        if (oldShape == newShape) {
-            property.setSafe(this, value, oldShape);
+            Shape newShape = oldShape.addProperty(Property.create(id, locationFactory.createLocation(oldShape, value), flags));
+            updateShape();
+            newShape.getLastProperty().setGeneric(this, value, oldShape, newShape);
         } else {
-            property.setSafe(this, value, oldShape, newShape);
+            defineExisting(id, value, flags, existing, oldShape);
         }
     }
 
@@ -344,6 +364,6 @@ public abstract class DynamicObjectImpl extends DynamicObject implements Cloneab
 
     @Override
     public ForeignAccess getForeignAccess() {
-        return getShape().getForeignAccessFactory(this);
+        return getShape().getForeignAccessFactory();
     }
 }
