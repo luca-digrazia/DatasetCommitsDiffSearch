@@ -277,11 +277,7 @@ public class OptionValue<T> {
                 overrideScope.getOverrides(this, (Collection<Object>) values);
             }
         }
-        if (value != UNINITIALIZED) {
-            values.add(value);
-        } else {
-            values.add(getInitialValue());
-        }
+        values.add(value);
         return values;
     }
 
