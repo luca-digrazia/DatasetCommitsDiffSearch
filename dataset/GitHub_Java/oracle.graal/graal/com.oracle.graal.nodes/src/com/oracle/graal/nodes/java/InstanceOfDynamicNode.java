@@ -23,8 +23,6 @@
 package com.oracle.graal.nodes.java;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -46,27 +44,23 @@ public final class InstanceOfDynamicNode extends LogicNode implements Canonicali
     public InstanceOfDynamicNode(ValueNode mirror, ValueNode object) {
         this.mirror = mirror;
         this.object = object;
-        assert mirror.getKind() == Kind.Object : mirror.getKind();
+        assert mirror.kind() == Kind.Object : mirror.kind();
         assert ObjectStamp.isExactType(mirror);
         assert ObjectStamp.typeOrNull(mirror).getName().equals("Ljava/lang/Class;");
     }
 
     @Override
-    public void lower(LoweringTool tool) {
-        tool.getLowerer().lower(this, tool);
+    public void lower(LoweringTool tool, LoweringType loweringType) {
+        tool.getRuntime().lower(this, tool);
     }
 
     @Override
-    public Node canonical(CanonicalizerTool tool) {
+    public LogicNode canonical(CanonicalizerTool tool) {
         assert object() != null : this;
         if (mirror().isConstant()) {
             Class clazz = (Class) mirror().asConstant().asObject();
-            ResolvedJavaType t = tool.getMetaAccess().lookupJavaType(clazz);
-            if (t.isPrimitive()) {
-                return LogicConstantNode.contradiction(graph());
-            } else {
-                return graph().unique(new InstanceOfNode(t, object(), null));
-            }
+            ResolvedJavaType t = tool.runtime().lookupJavaType(clazz);
+            return graph().unique(new InstanceOfNode(t, object(), null));
         }
         return this;
     }
