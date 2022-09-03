@@ -31,6 +31,7 @@ package com.oracle.truffle.llvm.nodes.control;
 
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
@@ -38,21 +39,21 @@ import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 public class LLVMConditionalBranchNode extends LLVMControlFlowNode {
 
     @Child private LLVMExpressionNode condition;
-    @Child private LLVMExpressionNode truePhi;
-    @Child private LLVMExpressionNode falsePhi;
+    @Children final LLVMExpressionNode[] truePhiWriteNodes;
+    @Children final LLVMExpressionNode[] falsePhiWriteNodes;
     private final int trueSuccessor;
     private final int falseSuccessor;
 
     public static final int TRUE_SUCCESSOR = 0;
     public static final int FALSE_SUCCESSOR = 1;
 
-    public LLVMConditionalBranchNode(int trueSuccessor, int falseSuccessor, LLVMExpressionNode truePhi, LLVMExpressionNode falsePhi, LLVMExpressionNode condition,
+    public LLVMConditionalBranchNode(int trueSuccessor, int falseSuccessor, LLVMExpressionNode[] truePhiWriteNodes, LLVMExpressionNode[] falsePhiWriteNodes, LLVMExpressionNode condition,
                     SourceSection sourceSection) {
         super(sourceSection);
         this.trueSuccessor = trueSuccessor;
         this.falseSuccessor = falseSuccessor;
-        this.truePhi = truePhi;
-        this.falsePhi = falsePhi;
+        this.truePhiWriteNodes = truePhiWriteNodes;
+        this.falsePhiWriteNodes = falsePhiWriteNodes;
         this.condition = condition;
     }
 
@@ -61,14 +62,27 @@ public class LLVMConditionalBranchNode extends LLVMControlFlowNode {
         return 2;
     }
 
-    @Override
-    public LLVMExpressionNode getPhiNode(int successorIndex) {
+    public void writePhis(VirtualFrame frame, int successorIndex) {
         CompilerAsserts.partialEvaluationConstant(successorIndex);
         if (successorIndex == TRUE_SUCCESSOR) {
-            return truePhi;
+            runTruePhis(frame);
         } else {
             assert successorIndex == FALSE_SUCCESSOR;
-            return falsePhi;
+            runFalsePhis(frame);
+        }
+    }
+
+    @ExplodeLoop
+    private void runFalsePhis(VirtualFrame frame) {
+        for (int i = 0; i < falsePhiWriteNodes.length; i++) {
+            falsePhiWriteNodes[i].executeGeneric(frame);
+        }
+    }
+
+    @ExplodeLoop
+    private void runTruePhis(VirtualFrame frame) {
+        for (int i = 0; i < truePhiWriteNodes.length; i++) {
+            truePhiWriteNodes[i].executeGeneric(frame);
         }
     }
 
