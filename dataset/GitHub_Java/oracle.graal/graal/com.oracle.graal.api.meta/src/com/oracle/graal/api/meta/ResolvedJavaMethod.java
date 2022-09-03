@@ -24,7 +24,6 @@ package com.oracle.graal.api.meta;
 
 import java.lang.annotation.*;
 import java.lang.reflect.*;
-import java.lang.reflect.Method;
 import java.util.*;
 
 /**
@@ -55,6 +54,13 @@ public interface ResolvedJavaMethod extends JavaMethod, InvokeTarget {
      * @return the size of the compiled machine code in bytes, or 0 if no compiled code exists.
      */
     int getCompiledCodeSize();
+
+    /**
+     * Returns an estimate how complex it is to compile this method.
+     * 
+     * @return A value >= 0, where higher means more complex.
+     */
+    int getCompilationComplexity();
 
     /**
      * Returns the {@link ResolvedJavaType} object representing the class or interface that declares
@@ -195,4 +201,11 @@ public interface ResolvedJavaMethod extends JavaMethod, InvokeTarget {
      * @return The newly created and initialized object.
      */
     Constant newInstance(Constant[] arguments);
+
+    /**
+     * Gets the encoding of (that is, a constant representing the value of) this method.
+     * 
+     * @return a constant representing a reference to this method
+     */
+    Constant getEncoding();
 }
