@@ -134,12 +134,13 @@ public final class OptimizedDirectCallNode extends DirectCallNode implements Mat
     }
 
     /** Used by the splitting strategy to install new targets. */
-    void split() {
+    public void installSplitCallTarget(OptimizedCallTarget newTarget) {
         CompilerAsserts.neverPartOfCompilation();
 
-        assert !isCallTargetCloned();
-        OptimizedCallTarget currentTarget = getCallTarget();
-        OptimizedCallTarget newTarget = getCallTarget().cloneUninitialized();
+        OptimizedCallTarget currentTarget = getCurrentCallTarget();
+        if (currentTarget == newTarget) {
+            return;
+        }
 
         if (callCount >= 1) {
             currentTarget.decrementKnownCallSites();
@@ -150,7 +151,11 @@ public final class OptimizedDirectCallNode extends DirectCallNode implements Mat
             // dummy replace to report the split, irrelevant if this node is not adopted
             replace(this, "Split call " + newTarget.toString());
         }
-        splitCallTarget = newTarget;
+        if (newTarget.getSourceCallTarget() == null) {
+            splitCallTarget = null;
+        } else {
+            splitCallTarget = newTarget;
+        }
         runtime.getCompilationNotify().notifyCompilationSplit(this);
     }
 
