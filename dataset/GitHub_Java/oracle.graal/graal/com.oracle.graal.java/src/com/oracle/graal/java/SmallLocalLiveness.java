@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.java;
 
-import com.oracle.graal.java.BciBlockMapping.*;
+import com.oracle.graal.java.BciBlockMapping.BciBlock;
 
 public final class SmallLocalLiveness extends LocalLiveness {
     /*
@@ -119,7 +119,7 @@ public final class SmallLocalLiveness extends LocalLiveness {
             if ((tmp & 1L) == 1L) {
                 this.localsChangedInLoop[pos] |= bit;
             }
-            tmp >>= 1;
+            tmp >>>= 1;
             ++pos;
         }
     }

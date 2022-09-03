@@ -22,9 +22,9 @@
  */
 package com.oracle.graal.java;
 
-import java.util.*;
+import java.util.BitSet;
 
-import com.oracle.graal.java.BciBlockMapping.*;
+import com.oracle.graal.java.BciBlockMapping.BciBlock;
 
 public final class LargeLocalLiveness extends LocalLiveness {
     private BitSet[] localsLiveIn;
@@ -111,7 +111,7 @@ public final class LargeLocalLiveness extends LocalLiveness {
             if ((tmp & 1L) == 1L) {
                 this.localsChangedInLoop[pos].set(local);
             }
-            tmp >>= 1;
+            tmp >>>= 1;
             ++pos;
         }
     }
