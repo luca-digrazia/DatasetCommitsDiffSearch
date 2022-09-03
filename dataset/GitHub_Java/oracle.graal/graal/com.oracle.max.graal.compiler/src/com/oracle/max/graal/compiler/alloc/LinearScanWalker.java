@@ -26,18 +26,17 @@ import static com.sun.cri.ci.CiUtil.*;
 
 import java.util.*;
 
-import com.oracle.max.criutils.*;
 import com.oracle.max.graal.compiler.*;
-import com.oracle.max.graal.compiler.alloc.Interval.RegisterBinding;
-import com.oracle.max.graal.compiler.alloc.Interval.RegisterPriority;
-import com.oracle.max.graal.compiler.alloc.Interval.SpillState;
-import com.oracle.max.graal.compiler.alloc.Interval.State;
+import com.oracle.max.graal.compiler.alloc.Interval.*;
+import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.compiler.util.*;
 import com.sun.cri.ci.*;
-import com.sun.cri.ci.CiRegister.RegisterFlag;
+import com.sun.cri.ci.CiRegister.*;
 
 /**
+ *
+ * @author Thomas Wuerthinger
  */
 final class LinearScanWalker extends IntervalWalker {
 
@@ -233,7 +232,7 @@ final class LinearScanWalker extends IntervalWalker {
         // numbering of instructions is known.
         // When the block already contains spill moves, the index must be increased until the
         // correct index is reached.
-        List<LIRInstruction> list = opBlock.lir();
+        List<LIRInstruction> list = opBlock.lir().instructionsList();
         int index = (opId - list.get(0).id()) >> 1;
         assert list.get(index).id() <= opId : "error in calculation";
 
@@ -789,7 +788,7 @@ final class LinearScanWalker extends IntervalWalker {
 
     boolean noAllocationPossible(Interval interval) {
 
-        if (compilation.compiler.target.arch.isX86()) {
+        if (compilation.target.arch.isX86()) {
             // fast calculation of intervals that can never get a register because the
             // the next instruction is a call that blocks all registers
             // Note: this does not work if callee-saved registers are available (e.g. on Sparc)
@@ -817,9 +816,9 @@ final class LinearScanWalker extends IntervalWalker {
     void initVarsForAlloc(Interval interval) {
         EnumMap<RegisterFlag, CiRegister[]> categorizedRegs = allocator.compilation.registerConfig.getCategorizedAllocatableRegisters();
         if (allocator.operands.mustBeByteRegister(interval.operand)) {
-            assert interval.kind()  != CiKind.Float && interval.kind()  != CiKind.Double : "cpu regs only";
+            assert interval.kind() != CiKind.Float && interval.kind() != CiKind.Double : "cpu regs only";
             availableRegs = categorizedRegs.get(RegisterFlag.Byte);
-        } else if (interval.kind()  == CiKind.Float || interval.kind()  == CiKind.Double) {
+        } else if (interval.kind() == CiKind.Float || interval.kind() == CiKind.Double) {
             availableRegs = categorizedRegs.get(RegisterFlag.FPU);
         } else {
             availableRegs = categorizedRegs.get(RegisterFlag.CPU);
@@ -827,12 +826,13 @@ final class LinearScanWalker extends IntervalWalker {
     }
 
     boolean isMove(LIRInstruction op, Interval from, Interval to) {
-        if (op.code != StandardOpcode.MOVE) {
+        if (op.code != LIROpcode.Move) {
             return false;
         }
+        assert op instanceof LIROp1 : "move must be LIROp1";
 
-        CiValue input = op.input(0);
-        CiValue result = op.result();
+        CiValue input = ((LIROp1) op).operand();
+        CiValue result = ((LIROp1) op).result();
         return input.isVariable() && result.isVariable() && input == from.operand && result == to.operand;
     }
 

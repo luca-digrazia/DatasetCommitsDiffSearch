@@ -90,7 +90,7 @@ public class IR {
         //printGraph("After DeadCodeElimination", compilation.graph);
 
         if (GraalOptions.Inline) {
-            new InliningPhase(compilation, this, null).apply(compilation.graph);
+            new InliningPhase(compilation, this, null, GraalOptions.TraceInlining).apply(compilation.graph);
         }
 
         Graph graph = compilation.graph;
@@ -114,7 +114,6 @@ public class IR {
         if (GraalOptions.Lower) {
             new LoweringPhase(compilation.runtime).apply(graph);
             new MemoryPhase().apply(graph);
-            new ReadEliminationPhase().apply(graph);
         }
 
         IdentifyBlocksPhase schedule = new IdentifyBlocksPhase(true);

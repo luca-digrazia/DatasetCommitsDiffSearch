@@ -1904,20 +1904,18 @@ public final class LinearScan {
         do {
             boolean found = false;
             for (int i = 0; i < escapeFields.length; i++) {
-                if (escapeFields[i].representation() == current.field().representation()) {
-                    if (values[i] == null) {
-                        values[i] = toCiValue(opId, current.input());
-                    }
+                if (escapeFields[i] == current.field() && values[i] == null) {
+                    values[i] = toCiValue(opId, current.input());
                     found = true;
                     break;
                 }
             }
-            assert found : type + "." + current.field() + " not found";
+            assert found;
             current = current.object();
         } while (current != null);
 
-        for (int i = 0; i < escapeFields.length; i++) {
-            assert values[i] != null : type + "." + escapeFields[i];
+        for (CiValue val : values) {
+            assert val != null;
         }
 
         CiVirtualObject vobj = CiVirtualObject.get(type, values, obj.id());
