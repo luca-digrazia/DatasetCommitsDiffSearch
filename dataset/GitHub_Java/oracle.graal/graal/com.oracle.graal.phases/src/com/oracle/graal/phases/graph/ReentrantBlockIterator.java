@@ -24,7 +24,6 @@ package com.oracle.graal.phases.graph;
 
 import java.util.*;
 
-import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
 
@@ -38,32 +37,30 @@ public final class ReentrantBlockIterator {
 
     public abstract static class BlockIteratorClosure<StateT> {
 
-        protected abstract StateT getInitialState();
-
         protected abstract StateT processBlock(Block block, StateT currentState);
 
         protected abstract StateT merge(Block merge, List<StateT> states);
 
         protected abstract StateT cloneState(StateT oldState);
 
-        protected abstract List<StateT> processLoop(Loop<Block> loop, StateT initialState);
+        protected abstract List<StateT> processLoop(Loop loop, StateT initialState);
     }
 
     private ReentrantBlockIterator() {
         // no instances allowed
     }
 
-    public static <StateT> LoopInfo<StateT> processLoop(BlockIteratorClosure<StateT> closure, Loop<Block> loop, StateT initialState) {
-        IdentityHashMap<FixedNode, StateT> blockEndStates = apply(closure, loop.getHeader(), initialState, new HashSet<>(loop.getBlocks()));
+    public static <StateT> LoopInfo<StateT> processLoop(BlockIteratorClosure<StateT> closure, Loop loop, StateT initialState) {
+        IdentityHashMap<FixedNode, StateT> blockEndStates = apply(closure, loop.header, initialState, new HashSet<>(loop.blocks));
 
         LoopInfo<StateT> info = new LoopInfo<>();
-        List<Block> predecessors = loop.getHeader().getPredecessors();
+        List<Block> predecessors = loop.header.getPredecessors();
         for (int i = 1; i < predecessors.size(); i++) {
             StateT endState = blockEndStates.get(predecessors.get(i).getEndNode());
             // make sure all end states are unique objects
             info.endStates.add(closure.cloneState(endState));
         }
-        for (Block loopExit : loop.getExits()) {
+        for (Block loopExit : loop.exits) {
             assert loopExit.getPredecessorCount() == 1;
             assert blockEndStates.containsKey(loopExit.getBeginNode());
             StateT exitState = blockEndStates.get(loopExit.getBeginNode());
@@ -71,10 +68,6 @@ public final class ReentrantBlockIterator {
             info.exitStates.add(closure.cloneState(exitState));
         }
         return info;
-    }
-
-    public static <StateT> void apply(BlockIteratorClosure<StateT> closure, Block start) {
-        apply(closure, start, closure.getInitialState(), null);
     }
 
     public static <StateT> IdentityHashMap<FixedNode, StateT> apply(BlockIteratorClosure<StateT> closure, Block start, StateT initialState, Set<Block> boundary) {
@@ -102,15 +95,15 @@ public final class ReentrantBlockIterator {
                             states.put(current.getEndNode(), state);
                         } else {
                             // recurse into the loop
-                            Loop<Block> loop = successor.getLoop();
-                            LoopBeginNode loopBegin = (LoopBeginNode) loop.getHeader().getBeginNode();
+                            Loop loop = successor.getLoop();
+                            LoopBeginNode loopBegin = loop.loopBegin();
                             assert successor.getBeginNode() == loopBegin;
 
                             List<StateT> exitStates = closure.processLoop(loop, state);
 
                             int i = 0;
-                            assert loop.getExits().size() == exitStates.size();
-                            for (Block exit : loop.getExits()) {
+                            assert loop.exits.size() == exitStates.size();
+                            for (Block exit : loop.exits) {
                                 states.put(exit.getBeginNode(), exitStates.get(i++));
                                 blockQueue.addFirst(exit);
                             }
@@ -174,7 +167,6 @@ public final class ReentrantBlockIterator {
                         mergedStates.add(states.get(end));
                     }
                     state = closure.merge(current, mergedStates);
-                    states.put(merge, state);
                 }
             }
         }

@@ -34,7 +34,7 @@ import com.oracle.graal.phases.graph.ReentrantNodeIterator.NodeIteratorClosure;
 
 public class FrameStateAssignmentPhase extends Phase {
 
-    private static class FrameStateAssignmentClosure extends NodeIteratorClosure<FrameState> {
+    private static class FrameStateAssignementClosure extends NodeIteratorClosure<FrameState> {
 
         @Override
         protected FrameState processNode(FixedNode node, FrameState currentState) {
@@ -48,9 +48,11 @@ public class FrameStateAssignmentPhase extends Phase {
             if (node instanceof StateSplit) {
                 StateSplit stateSplit = (StateSplit) node;
                 if (stateSplit.stateAfter() != null) {
-                    FrameState newState = stateSplit.stateAfter();
-                    stateSplit.setStateAfter(null);
-                    return newState;
+                    try {
+                        return stateSplit.stateAfter();
+                    } finally {
+                        stateSplit.setStateAfter(null);
+                    }
                 }
             }
             return currentState;
@@ -79,7 +81,7 @@ public class FrameStateAssignmentPhase extends Phase {
     @Override
     protected void run(StructuredGraph graph) {
         assert checkFixedDeopts(graph);
-        ReentrantNodeIterator.apply(new FrameStateAssignmentClosure(), graph.start(), null, null);
+        ReentrantNodeIterator.apply(new FrameStateAssignementClosure(), graph.start(), null, null);
     }
 
     private static boolean checkFixedDeopts(StructuredGraph graph) {
