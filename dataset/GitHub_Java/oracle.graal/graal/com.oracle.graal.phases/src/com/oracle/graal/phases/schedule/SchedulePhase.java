@@ -465,11 +465,11 @@ public final class SchedulePhase extends Phase {
      *
      * <pre>
      *    U      upperbound block, defined by last access location of the floating read
-     *    &and;
+     *    &#9650;
      *    E      earliest block
-     *    &and;
+     *    &#9650;
      *    O      optimal block, first block that contains a kill of the read's location
-     *    &and;
+     *    &#9650;
      *    L      latest block
      * </pre>
      *

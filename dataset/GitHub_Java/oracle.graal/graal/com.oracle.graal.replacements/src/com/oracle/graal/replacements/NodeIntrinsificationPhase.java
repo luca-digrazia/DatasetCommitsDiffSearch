@@ -32,10 +32,9 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.Node.ConstantNodeParameter;
-import com.oracle.graal.graph.Node.InjectedNodeParameter;
-import com.oracle.graal.graph.Node.NodeIntrinsic;
+import com.oracle.graal.graph.Node.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.PhiNode.PhiType;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
@@ -71,10 +70,9 @@ public class NodeIntrinsificationPhase extends Phase {
 
     protected boolean tryIntrinsify(MethodCallTargetNode methodCallTargetNode, List<Node> cleanUpReturnList) {
         ResolvedJavaMethod target = methodCallTargetNode.targetMethod();
+        NodeIntrinsic intrinsic = target.getAnnotation(Node.NodeIntrinsic.class);
         ResolvedJavaType declaringClass = target.getDeclaringClass();
         StructuredGraph graph = methodCallTargetNode.graph();
-
-        NodeIntrinsic intrinsic = getIntrinsic(target);
         if (intrinsic != null) {
             assert target.getAnnotation(Fold.class) == null;
             assert Modifier.isStatic(target.getModifiers()) : "node intrinsic must be static: " + target;
@@ -128,13 +126,6 @@ public class NodeIntrinsificationPhase extends Phase {
             }
         }
         return true;
-    }
-
-    /**
-     * Permits a subclass to override the default definition of "intrinsic".
-     */
-    protected NodeIntrinsic getIntrinsic(ResolvedJavaMethod method) {
-        return method.getAnnotation(Node.NodeIntrinsic.class);
     }
 
     /**
@@ -388,8 +379,8 @@ public class NodeIntrinsificationPhase extends Phase {
             }
         } else if (usage instanceof ProxyNode) {
             ProxyNode proxy = (ProxyNode) usage;
-            assert proxy instanceof ValueProxyNode;
-            ProxyNode newProxy = ProxyNode.forValue((ValueNode) intrinsifiedNode, proxy.proxyPoint(), graph);
+            assert proxy.type() == PhiType.Value;
+            ProxyNode newProxy = graph.unique(new ProxyNode((ValueNode) intrinsifiedNode, proxy.proxyPoint(), PhiType.Value));
             for (Node proxyUsage : usage.usages().snapshot()) {
                 checkCheckCastUsage(graph, newProxy, proxy, proxyUsage);
             }
