@@ -126,7 +126,13 @@ public class AMD64LIRGenerator extends LIRGenerator {
         value.setDestroysRegister();
         value.loadItem();
         CiVariable reg = newVariable(x.kind);
-        lir.negate(value.result(), reg);
+        GlobalStub globalStub = null;
+        if (x.kind == CiKind.Float) {
+            globalStub = stubFor(GlobalStub.Id.fneg);
+        } else if (x.kind == CiKind.Double) {
+            globalStub = stubFor(GlobalStub.Id.dneg);
+        }
+        lir.negate(value.result(), reg, globalStub);
         setResult(x, reg);
     }
 
