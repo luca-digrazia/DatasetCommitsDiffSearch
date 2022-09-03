@@ -135,9 +135,7 @@ public class StandardGraphBuilderPlugins {
         registerIntegerLongPlugins(plugins, JavaKind.Long);
         registerFloatPlugins(plugins);
         registerDoublePlugins(plugins);
-        if (System.getProperty("java.specification.version").compareTo("1.9") < 0) {
-            registerStringPlugins(plugins);
-        }
+        registerStringPlugins(plugins);
         registerArraysPlugins(plugins);
         registerArrayPlugins(plugins);
         registerUnsafePlugins(plugins);

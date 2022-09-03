@@ -22,20 +22,17 @@
  */
 package com.oracle.graal.phases.common.instrumentation.nodes;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_IGNORED;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_IGNORED;
-
 import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.graph.NodeClass;
 import com.oracle.graal.nodeinfo.NodeInfo;
 import com.oracle.graal.nodes.ConstantNode;
 import com.oracle.graal.nodes.FixedWithNextNode;
 import com.oracle.graal.nodes.ValueNode;
 
+import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.JavaConstant;
 
-@NodeInfo(cycles = CYCLES_IGNORED, size = SIZE_IGNORED)
+@NodeInfo
 public final class InstrumentationBeginNode extends FixedWithNextNode {
 
     public static final NodeClass<InstrumentationBeginNode> TYPE = NodeClass.create(InstrumentationBeginNode.class);
@@ -47,7 +44,7 @@ public final class InstrumentationBeginNode extends FixedWithNextNode {
         super(TYPE, StampFactory.forVoid());
 
         if (!(offset instanceof ConstantNode)) {
-            throw GraalError.shouldNotReachHere("should pass constant integer to instrumentationBegin(int)");
+            throw JVMCIError.shouldNotReachHere("should pass constant integer to instrumentationBegin(int)");
         }
         JavaConstant constant = ((ConstantNode) offset).asJavaConstant();
         this.offset = constant == null ? 0 : constant.asInt();
