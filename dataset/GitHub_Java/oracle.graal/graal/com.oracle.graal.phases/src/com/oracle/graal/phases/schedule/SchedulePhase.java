@@ -36,7 +36,6 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.virtual.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.graph.*;
@@ -786,7 +785,7 @@ public final class SchedulePhase extends Phase {
                     if (!(usage instanceof FrameState)) {
                         throw new SchedulingError(usage.toString());
                     }
-                    if (!(unscheduledUsage instanceof NodeWithState)) {
+                    if (!(unscheduledUsage instanceof StateSplit || unscheduledUsage instanceof DeoptimizingNode)) {
                         throw new SchedulingError(unscheduledUsage.toString());
                     }
                     // Otherwise: Put the input into the same block as the usage.
