@@ -23,7 +23,6 @@
 package com.oracle.graal.hotspot.snippets;
 
 import static com.oracle.graal.snippets.nodes.BranchProbabilityNode.*;
-import sun.misc.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
@@ -49,7 +48,8 @@ public class HotSpotSnippetUtils {
 
     @Fold
     public static boolean verifyOops() {
-        return config().verifyOops;
+        return true;
+        // return config().verifyOops;
     }
 
     @Fold
@@ -99,7 +99,7 @@ public class HotSpotSnippetUtils {
 
     @Fold
     public static int pageSize() {
-        return Unsafe.getUnsafe().pageSize();
+        return HotSpotGraalRuntime.getInstance().getTarget().pageSize;
     }
 
     @Fold
@@ -225,6 +225,36 @@ public class HotSpotSnippetUtils {
     @Fold
     public static long cardTableStart() {
         return config().cardtableStartAddress;
+    }
+
+    @Fold
+    public static int g1CardQueueIndexOffset() {
+        return config().g1CardQueueIndexOffset;
+    }
+
+    @Fold
+    public static int g1CardQueueBufferOffset() {
+        return config().g1CardQueueBufferOffset;
+    }
+
+    @Fold
+    public static int logOfHRGrainBytes() {
+        return config().logOfHRGrainBytes;
+    }
+
+    @Fold
+    public static int g1SATBQueueMarkingOffset() {
+        return config().g1SATBQueueMarkingOffset;
+    }
+
+    @Fold
+    public static int g1SATBQueueIndexOffset() {
+        return config().g1SATBQueueIndexOffset;
+    }
+
+    @Fold
+    public static int g1SATBQueueBufferOffset() {
+        return config().g1SATBQueueBufferOffset;
     }
 
     @Fold
