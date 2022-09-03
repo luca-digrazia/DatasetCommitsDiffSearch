@@ -23,9 +23,7 @@
 package com.oracle.graal.hotspot;
 
 import static com.oracle.graal.graph.UnsafeAccess.*;
-import static com.oracle.graal.hotspot.CompileTheWorld.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.Options.*;
-import static com.oracle.graal.phases.GraalOptions.*;
 
 import java.lang.reflect.*;
 import java.util.*;
@@ -234,23 +232,23 @@ public final class HotSpotGraalRuntime implements GraalRuntime, RuntimeProvider 
         initMirror(typeVoid);
 
         // Set some global options:
-        if (config.compileTheWorld && CompileTheWorld.Options.CompileTheWorldClasspath.getValue() == null) {
-            CompileTheWorld.Options.CompileTheWorldClasspath.setValue(SUN_BOOT_CLASS_PATH);
+        if (config.compileTheWorld) {
+            GraalOptions.CompileTheWorld.setValue(CompileTheWorld.SUN_BOOT_CLASS_PATH);
         }
         if (config.compileTheWorldStartAt != 1) {
-            CompileTheWorld.Options.CompileTheWorldStartAt.setValue(config.compileTheWorldStartAt);
+            GraalOptions.CompileTheWorldStartAt.setValue(config.compileTheWorldStartAt);
         }
         if (config.compileTheWorldStopAt != Integer.MAX_VALUE) {
-            CompileTheWorld.Options.CompileTheWorldStopAt.setValue(config.compileTheWorldStopAt);
+            GraalOptions.CompileTheWorldStopAt.setValue(config.compileTheWorldStopAt);
         }
 
         // Only set HotSpotPrintCompilation and HotSpotPrintInlining if they still have their
         // default value (false).
-        if (HotSpotPrintCompilation.getValue() == false) {
-            HotSpotPrintCompilation.setValue(config.printCompilation);
+        if (GraalOptions.HotSpotPrintCompilation.getValue() == false) {
+            GraalOptions.HotSpotPrintCompilation.setValue(config.printCompilation);
         }
-        if (HotSpotPrintInlining.getValue() == false) {
-            HotSpotPrintInlining.setValue(config.printInlining);
+        if (GraalOptions.HotSpotPrintInlining.getValue() == false) {
+            GraalOptions.HotSpotPrintInlining.setValue(config.printInlining);
         }
 
         if (Boolean.valueOf(System.getProperty("graal.printconfig"))) {
