@@ -32,8 +32,7 @@ package com.oracle.truffle.llvm.nodes.impl.func;
 import com.oracle.truffle.api.dsl.NodeField;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
+import com.oracle.truffle.llvm.nodes.impl.base.LLVMAddressNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMFunctionNode;
 import com.oracle.truffle.llvm.nodes.impl.base.floating.LLVM80BitFloatNode;
 import com.oracle.truffle.llvm.nodes.impl.base.floating.LLVMDoubleNode;
@@ -182,20 +181,24 @@ public class LLVMArgNode {
 
     }
 
-    @NodeField(name = "index", type = int.class)
-    public abstract static class LLVMAddressArgNode extends LLVMExpressionNode {
+    public static final class LLVMAddressArgNode extends LLVMAddressNode {
 
-        public abstract int getIndex();
+        private final int index;
 
-        @Specialization(rewriteOn = ClassCastException.class)
-        public Object executePointee(VirtualFrame frame) {
-            return ((LLVMAddress) frame.getArguments()[getIndex()]).copy();
+        public LLVMAddressArgNode(int index) {
+            this.index = index;
         }
 
-        @Specialization
-        public Object executeObject(VirtualFrame frame) {
-            return frame.getArguments()[getIndex()];
+        @Override
+        public Object executeGeneric(VirtualFrame frame) {
+            return frame.getArguments()[index];
         }
+
+        @Override
+        public LLVMAddress executePointee(VirtualFrame frame) {
+            return (LLVMAddress) executeGeneric(frame);
+        }
+
     }
 
     @NodeField(name = "index", type = int.class)
@@ -205,9 +208,10 @@ public class LLVMArgNode {
 
         @Specialization
         @Override
-        public TruffleObject executeFunction(VirtualFrame frame) {
-            return (TruffleObject) frame.getArguments()[getIndex()];
+        public LLVMFunctionDescriptor executeFunction(VirtualFrame frame) {
+            return (LLVMFunctionDescriptor) frame.getArguments()[getIndex()];
         }
+
     }
 
     @NodeField(name = "index", type = int.class)
