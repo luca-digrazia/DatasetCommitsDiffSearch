@@ -37,9 +37,8 @@ import com.oracle.graal.virtual.nodes.*;
 import com.oracle.graal.virtual.phases.ea.*;
 
 /**
- * In these test cases the probability of all invokes is set to a high value, such that an
- * InliningPhase should inline them all. After that, the EscapeAnalysisPhase is expected to remove
- * all allocations and return the correct values.
+ * In these test cases the probability of all invokes is set to a high value, such that an InliningPhase should inline them all.
+ * After that, the EscapeAnalysisPhase is expected to remove all allocations and return the correct values.
  */
 public class EscapeAnalysisTest extends GraalCompilerTest {
 
@@ -100,8 +99,7 @@ public class EscapeAnalysisTest extends GraalCompilerTest {
     }
 
     /**
-     * This test case differs from the last one in that it requires inlining within a synchronized
-     * region.
+     * This test case differs from the last one in that it requires inlining within a synchronized region.
      */
     public static int testMonitor2Snippet() {
         Integer x = new Integer(0);
@@ -123,10 +121,8 @@ public class EscapeAnalysisTest extends GraalCompilerTest {
     }
 
     public static class TestObject {
-
         int x;
         int y;
-
         public TestObject(int x, int y) {
             this.x = x;
             this.y = y;
@@ -161,9 +157,7 @@ public class EscapeAnalysisTest extends GraalCompilerTest {
     }
 
     public static class TestObject2 {
-
         Object o;
-
         public TestObject2(Object o) {
             this.o = o;
         }
