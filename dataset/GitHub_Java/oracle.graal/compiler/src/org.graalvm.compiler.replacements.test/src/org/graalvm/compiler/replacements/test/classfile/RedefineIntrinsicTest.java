@@ -134,10 +134,7 @@ public class RedefineIntrinsicTest extends ReplacementsTest {
         testAgainstExpected(callIntrinsicGetValue, new Result("intrinsic", null), receiver, args);
 
         // Apply redefinition of intrinsic bytecode
-        if (!redefineIntrinsic()) {
-            // running on JDK9 without agent
-            return;
-        }
+        redefineIntrinsic();
 
         // Expect redefinition to have no effect
         Assert.assertEquals("original", Original.getValue());
@@ -169,7 +166,7 @@ public class RedefineIntrinsicTest extends ReplacementsTest {
         jar.closeEntry();
     }
 
-    static boolean redefineIntrinsic() throws Exception {
+    static void redefineIntrinsic() throws Exception {
         Manifest manifest = new Manifest();
         manifest.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
         Attributes mainAttrs = manifest.getMainAttributes();
@@ -184,13 +181,13 @@ public class RedefineIntrinsicTest extends ReplacementsTest {
             add(jarStream, Redefiner.class);
             jarStream.close();
 
-            return loadAgent(jar);
+            loadAgent(jar);
         } finally {
             Files.deleteIfExists(jar);
         }
     }
 
-    public static boolean loadAgent(Path agent) throws Exception {
+    public static void loadAgent(Path agent) throws Exception {
         String vmName = ManagementFactory.getRuntimeMXBean().getName();
         int p = vmName.indexOf('@');
         assumeTrue("VM name not in <pid>@<host> format: " + vmName, p != -1);
@@ -200,19 +197,8 @@ public class RedefineIntrinsicTest extends ReplacementsTest {
             ClassLoader cl = ToolProvider.getSystemToolClassLoader();
             c = Class.forName("com.sun.tools.attach.VirtualMachine", true, cl);
         } else {
-            try {
-                // I don't know what changed to make this necessary...
-                c = Class.forName("com.sun.tools.attach.VirtualMachine", true, RedefineIntrinsicTest.class.getClassLoader());
-            } catch (ClassNotFoundException ex) {
-                try {
-                    Class.forName("javax.naming.Reference");
-                } catch (ClassNotFoundException coreNamingMissing) {
-                    // if core JDK classes aren't found, we are probably running in a
-                    // JDK9 java.base environment and then missing class is OK
-                    return false;
-                }
-                throw ex;
-            }
+            // I don't know what changed to make this necessary...
+            c = Class.forName("com.sun.tools.attach.VirtualMachine", true, RedefineIntrinsicTest.class.getClassLoader());
         }
         Method attach = c.getDeclaredMethod("attach", String.class);
         Method loadAgent = c.getDeclaredMethod("loadAgent", String.class, String.class);
@@ -220,7 +206,6 @@ public class RedefineIntrinsicTest extends ReplacementsTest {
         Object vm = attach.invoke(null, pid);
         loadAgent.invoke(vm, agent.toString(), "");
         detach.invoke(vm);
-        return true;
     }
 
     public static class RedefinerAgent {
