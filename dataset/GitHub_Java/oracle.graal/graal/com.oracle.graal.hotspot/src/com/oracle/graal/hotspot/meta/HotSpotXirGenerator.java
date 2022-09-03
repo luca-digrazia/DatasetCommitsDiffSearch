@@ -44,6 +44,7 @@ import com.oracle.max.cri.xir.CiXirAssembler.XirLabel;
 import com.oracle.max.cri.xir.CiXirAssembler.XirMark;
 import com.oracle.max.cri.xir.CiXirAssembler.XirOperand;
 import com.oracle.max.cri.xir.CiXirAssembler.XirParameter;
+import com.oracle.max.criutils.*;
 
 public class HotSpotXirGenerator implements RiXirGenerator {
 
@@ -315,7 +316,7 @@ public class HotSpotXirGenerator implements RiXirGenerator {
             asm.bindInline(resume);
 
             asm.pload(target.wordKind, temp1, hub, asm.i(config.instanceHeaderPrototypeOffset), false);
-            asm.pstore(target.wordKind, result, asm.i(config.markOffset), temp1, false);
+            asm.pstore(target.wordKind, result, temp1, false);
             asm.mov(temp1o, hub); // need a temporary register since Intel cannot store 64-bit constants to memory
             asm.pstore(Kind.Object, result, asm.i(config.hubOffset), temp1o, false);
 
@@ -378,7 +379,7 @@ public class HotSpotXirGenerator implements RiXirGenerator {
 
             final int aligning = target.wordSize;
             final int arrayLengthOffset = target.wordSize * 2;
-            final int arrayElementOffset = kind.arrayBaseOffset();
+            final int arrayElementOffset = config.getArrayOffset(kind);
 
             // Calculate aligned size
             asm.mov(size, length);
@@ -401,7 +402,7 @@ public class HotSpotXirGenerator implements RiXirGenerator {
 
             // Now the new object is in result, store mark word and klass
             asm.pload(target.wordKind, temp1, hub, asm.i(config.instanceHeaderPrototypeOffset), false);
-            asm.pstore(target.wordKind, result, asm.i(config.markOffset), temp1, false);
+            asm.pstore(target.wordKind, result, temp1, false);
             asm.mov(temp1o, hub); // need a temporary register since Intel cannot store 64-bit constants to memory
             asm.pstore(Kind.Object, result, asm.i(config.hubOffset), temp1o, false);
 
@@ -447,7 +448,7 @@ public class HotSpotXirGenerator implements RiXirGenerator {
             XirOperand rank = asm.createRegisterTemp("rank", Kind.Int, AMD64.rbx);
             XirOperand sizes = asm.createRegisterTemp("sizes", Kind.Long, AMD64.rcx);
             XirOperand thread = asm.createRegisterTemp("thread", Kind.Long, AMD64.r15);
-            asm.add(sizes, thread, asm.l(config.threadMultiNewArrayStorageOffset));
+            asm.add(sizes, thread, asm.l(config.threadMultiNewArrayStorage));
             for (int i = 0; i < dimensions; i++) {
                 XirParameter length = asm.createInputParameter("length" + i, Kind.Int, true);
                 asm.pstore(Kind.Int, sizes, asm.i(i * target.sizeInBytes(Kind.Int)), length, false);
