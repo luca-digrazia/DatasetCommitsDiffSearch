@@ -108,7 +108,7 @@ public class InliningData {
         final OptimisticOptimizations optimisticOpts = context.getOptimisticOptimizations();
 
         if (callTarget.invokeKind() == MethodCallTargetNode.InvokeKind.Special || targetMethod.canBeStaticallyBound()) {
-            return getExactInlineInfo(invoke, targetMethod);
+            return getExactInlineInfo(invoke, optimisticOpts, targetMethod);
         }
 
         assert callTarget.invokeKind() == MethodCallTargetNode.InvokeKind.Virtual || callTarget.invokeKind() == MethodCallTargetNode.InvokeKind.Interface;
@@ -133,7 +133,7 @@ public class InliningData {
                     assert targetMethod.getDeclaringClass().isAssignableFrom(holder) : holder + " subtype of " + targetMethod.getDeclaringClass() + " for " + targetMethod;
                     ResolvedJavaMethod resolvedMethod = holder.resolveMethod(targetMethod, contextType);
                     if (resolvedMethod != null) {
-                        return getExactInlineInfo(invoke, resolvedMethod);
+                        return getExactInlineInfo(invoke, optimisticOpts, resolvedMethod);
                     }
                 }
             }
@@ -143,7 +143,7 @@ public class InliningData {
             // arrays can be treated as Objects
             ResolvedJavaMethod resolvedMethod = holder.resolveMethod(targetMethod, contextType);
             if (resolvedMethod != null) {
-                return getExactInlineInfo(invoke, resolvedMethod);
+                return getExactInlineInfo(invoke, optimisticOpts, resolvedMethod);
             }
         }
 
@@ -298,9 +298,9 @@ public class InliningData {
         return new AssumptionInlineInfo(invoke, concrete, takenAssumption);
     }
 
-    public InlineInfo getExactInlineInfo(Invoke invoke, ResolvedJavaMethod targetMethod) {
+    public InlineInfo getExactInlineInfo(Invoke invoke, OptimisticOptimizations optimisticOpts, ResolvedJavaMethod targetMethod) {
         assert !targetMethod.isAbstract();
-        if (!InliningUtil.checkTargetConditions(this, context.getReplacements(), invoke, targetMethod, context.getOptimisticOptimizations())) {
+        if (!InliningUtil.checkTargetConditions(this, context.getReplacements(), invoke, targetMethod, optimisticOpts)) {
             return null;
         }
         return new ExactInlineInfo(invoke, targetMethod);
