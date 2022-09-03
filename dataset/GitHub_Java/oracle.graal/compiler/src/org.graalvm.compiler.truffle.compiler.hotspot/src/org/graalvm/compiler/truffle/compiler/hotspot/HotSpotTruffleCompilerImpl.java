@@ -265,7 +265,7 @@ public final class HotSpotTruffleCompilerImpl extends TruffleCompilerImpl implem
 
     @Override
     protected InstalledCode createInstalledCode(CompilableTruffleAST compilable) {
-        return new HotSpotTruffleInstalledCode(compilable, TruffleCompilerOptions.TruffleLowTierCompilation.getValue(getOptions()));
+        return new HotSpotTruffleInstalledCode(compilable);
     }
 
     @Override
