@@ -38,8 +38,7 @@ import sun.misc.Unsafe;
 @ClassSubstitution(String.class)
 public class AMD64StringSubstitutions {
 
-    // Only exists in JDK <= 8
-    @MethodSubstitution(isStatic = true, optional = true)
+    @MethodSubstitution(isStatic = true)
     public static int indexOf(char[] source, int sourceOffset, int sourceCount,
                     @ConstantNodeParameter char[] target, int targetOffset, int targetCount,
                     int origFromIndex) {
