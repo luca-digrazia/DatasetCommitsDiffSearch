@@ -100,7 +100,6 @@ public class InliningUtil {
         }
     }
 
-    @SuppressWarnings("try")
     public static void logInliningDecision(final String msg, final Object... args) {
         try (Scope s = Debug.scope(inliningDecisionsScopeString)) {
             // Can't use log here since we are varargs
@@ -145,7 +144,6 @@ public class InliningUtil {
         logInliningDecision(inliningMsg, args);
     }
 
-    @SuppressWarnings("try")
     public static boolean shouldLogInliningDecision() {
         try (Scope s = Debug.scope(inliningDecisionsScopeString)) {
             return Debug.isLogEnabled();

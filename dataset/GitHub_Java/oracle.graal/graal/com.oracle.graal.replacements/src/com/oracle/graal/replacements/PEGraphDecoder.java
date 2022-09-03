@@ -47,7 +47,6 @@ import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.util.GraphUtil;
 import com.oracle.graal.phases.common.inlining.*;
 
 /**
@@ -130,8 +129,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
 
         @Override
         public BailoutException bailout(String string) {
-            BailoutException bailout = new BailoutException(string);
-            throw GraphUtil.createBailoutException(string, bailout, GraphUtil.approxSourceStackTraceElement(methodScope.getBytecodePosition()));
+            throw new BailoutException(string);
         }
 
         @Override
@@ -175,7 +173,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         }
 
         @Override
-        public void push(JavaKind kind, ValueNode value) {
+        public void push(Kind kind, ValueNode value) {
             throw unimplemented();
         }
 
@@ -230,7 +228,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         }
 
         @Override
-        public void push(JavaKind kind, ValueNode value) {
+        public void push(Kind kind, ValueNode value) {
             if (pushedNode != null) {
                 throw unimplemented("Only one push is supported");
             }
@@ -323,14 +321,13 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         PEMethodScope methodScope = (PEMethodScope) s;
 
         if (loopScope.loopIteration > MaximumLoopExplosionCount.getValue()) {
-            throw tooManyLoopExplosionIterations(methodScope);
+            String message = "too many loop explosion iterations - does the explosion not terminate for method " + methodScope.method + "?";
+            if (FailedLoopExplosionIsFatal.getValue()) {
+                throw new RuntimeException(message);
+            } else {
+                throw new BailoutException(message);
+            }
         }
-    }
-
-    private static RuntimeException tooManyLoopExplosionIterations(PEMethodScope methodScope) {
-        String message = "too many loop explosion iterations - does the explosion not terminate for method " + methodScope.method + "?";
-        RuntimeException bailout = FailedLoopExplosionIsFatal.getValue() ? new RuntimeException(message) : new BailoutException(message);
-        throw GraphUtil.createBailoutException(message, bailout, GraphUtil.approxSourceStackTraceElement(methodScope.getBytecodePosition()));
     }
 
     @Override
@@ -622,7 +619,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
                 stateAtReturn = (FrameState) decodeFloatingNode(methodScope.caller, methodScope.callerLoopScope, methodScope.invokeData.stateAfterOrderId);
             }
 
-            JavaKind invokeReturnKind = methodScope.invokeData.invoke.asNode().getStackKind();
+            Kind invokeReturnKind = methodScope.invokeData.invoke.asNode().getStackKind();
             FrameState outerState = stateAtReturn.duplicateModified(methodScope.graph, methodScope.invokeData.invoke.bci(), stateAtReturn.rethrowException(), true, invokeReturnKind, null, null);
 
             /*
