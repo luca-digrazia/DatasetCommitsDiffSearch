@@ -35,7 +35,6 @@ import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropException;
-import com.oracle.truffle.api.object.DynamicObject;
 import com.oracle.truffle.llvm.nodes.op.LLVMPointerCompareNodeGen.LLVMManagedCompareNodeGen;
 import com.oracle.truffle.llvm.nodes.op.LLVMPointerCompareNodeGen.LLVMNativeCompareNodeGen;
 import com.oracle.truffle.llvm.nodes.op.LLVMPointerCompareNodeGen.LLVMNegateNodeGen;
@@ -275,14 +274,7 @@ public abstract class LLVMPointerCompareNode extends LLVMAbstractCompareNode {
             return false;
         }
 
-        @Specialization
-        protected boolean pointToSameDynamicObject(DynamicObject a, DynamicObject b) {
-            // workaround for Graal issue GR-12757 - this removes the redundant checks from the
-            // compiler graph
-            return a.equals(b);
-        }
-
-        @Specialization(guards = {"!isTypedForeignObject(a)", "!isTypedForeignObject(b)", "cachedClass == a.getClass()"}, replaces = "pointToSameDynamicObject")
+        @Specialization(guards = {"!isTypedForeignObject(a)", "!isTypedForeignObject(b)", "cachedClass == a.getClass()"})
         protected boolean pointToSameObjectCached(Object a, Object b,
                         @Cached("a.getClass()") Class<?> cachedClass) {
             return CompilerDirectives.castExact(a, cachedClass).equals(b);

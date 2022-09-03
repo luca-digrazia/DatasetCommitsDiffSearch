@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -34,6 +34,7 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.llvm.nodes.op.arith.floating.LLVMArithmeticFactory;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
@@ -98,7 +99,12 @@ public abstract class LLVMArithmeticNode extends LLVMExpressionNode {
         @Specialization
         protected LLVM80BitFloat add(LLVM80BitFloat left, LLVM80BitFloat right,
                         @Cached("createFP80AddNode()") LLVMArithmeticOpNode node) {
-            return (LLVM80BitFloat) node.execute(left, right);
+            try {
+                return (LLVM80BitFloat) node.execute(left, right);
+            } catch (InteropException e) {
+                CompilerDirectives.transferToInterpreter();
+                throw e.raise();
+            }
         }
     }
 
@@ -150,7 +156,12 @@ public abstract class LLVMArithmeticNode extends LLVMExpressionNode {
         @Specialization
         protected LLVM80BitFloat mul(LLVM80BitFloat left, LLVM80BitFloat right,
                         @Cached("createFP80MulNode()") LLVMArithmeticOpNode node) {
-            return (LLVM80BitFloat) node.execute(left, right);
+            try {
+                return (LLVM80BitFloat) node.execute(left, right);
+            } catch (InteropException e) {
+                CompilerDirectives.transferToInterpreter();
+                throw e.raise();
+            }
         }
     }
 
@@ -202,7 +213,12 @@ public abstract class LLVMArithmeticNode extends LLVMExpressionNode {
         @Specialization
         protected LLVM80BitFloat sub(LLVM80BitFloat left, LLVM80BitFloat right,
                         @Cached("createFP80SubNode()") LLVMArithmeticOpNode node) {
-            return (LLVM80BitFloat) node.execute(left, right);
+            try {
+                return (LLVM80BitFloat) node.execute(left, right);
+            } catch (InteropException e) {
+                CompilerDirectives.transferToInterpreter();
+                throw e.raise();
+            }
         }
     }
 
@@ -258,7 +274,12 @@ public abstract class LLVMArithmeticNode extends LLVMExpressionNode {
         @Specialization
         protected LLVM80BitFloat div(LLVM80BitFloat left, LLVM80BitFloat right,
                         @Cached("createFP80DivNode()") LLVMArithmeticOpNode node) {
-            return (LLVM80BitFloat) node.execute(left, right);
+            try {
+                return (LLVM80BitFloat) node.execute(left, right);
+            } catch (InteropException e) {
+                CompilerDirectives.transferToInterpreter();
+                throw e.raise();
+            }
         }
     }
 
@@ -351,7 +372,12 @@ public abstract class LLVMArithmeticNode extends LLVMExpressionNode {
         @Specialization
         protected LLVM80BitFloat rem(LLVM80BitFloat left, LLVM80BitFloat right,
                         @Cached("createFP80RemNode()") LLVMArithmeticOpNode node) {
-            return (LLVM80BitFloat) node.execute(left, right);
+            try {
+                return (LLVM80BitFloat) node.execute(left, right);
+            } catch (InteropException e) {
+                CompilerDirectives.transferToInterpreter();
+                throw e.raise();
+            }
         }
     }
 
