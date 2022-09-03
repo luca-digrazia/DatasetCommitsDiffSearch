@@ -22,14 +22,11 @@
  */
 package com.oracle.truffle.espresso.runtime;
 
-import static com.oracle.truffle.espresso.meta.Meta.meta;
-
 import java.util.HashMap;
 import java.util.Map;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.interop.ForeignAccess;
-import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.impl.FieldInfo;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.meta.Meta;
@@ -154,11 +151,7 @@ public class StaticObjectImpl implements StaticObject {
     @CompilerDirectives.TruffleBoundary
     @Override
     public String toString() {
-        Meta meta = EspressoLanguage.getCurrentContext().getMeta();
-        if (getKlass() == meta.STRING.rawKlass()) {
-            return Meta.toHost((StaticObject) meta(this).method("toString", String.class).invokeDirect());
-        }
-        return getKlass().getName();
+        return Meta.toHost((StaticObject) Meta.meta(this).method("toString", String.class).invokeDirect());
     }
 
     public void setFieldByName(String name, Object value) {

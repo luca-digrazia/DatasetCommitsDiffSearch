@@ -1,3 +1,26 @@
+/*
+ * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.
+ *
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ *
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
+ */
+
 package com.oracle.truffle.espresso.bytecode;
 
 import static com.oracle.truffle.espresso.meta.Meta.meta;
@@ -5,6 +28,7 @@ import static com.oracle.truffle.espresso.meta.Meta.meta;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Array;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.util.Arrays;
@@ -13,10 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.RootCallTarget;
-import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.EspressoOptions;
@@ -25,12 +46,10 @@ import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.impl.MethodInfo;
 import com.oracle.truffle.espresso.intrinsics.EspressoIntrinsics;
 import com.oracle.truffle.espresso.intrinsics.Intrinsic;
-import com.oracle.truffle.espresso.intrinsics.Target_java_io_FileDescriptor;
-import com.oracle.truffle.espresso.intrinsics.Target_java_io_FileInputStream;
-import com.oracle.truffle.espresso.intrinsics.Target_java_io_FileOutputStream;
-import com.oracle.truffle.espresso.intrinsics.Target_java_io_UnixFileSystem;
+import com.oracle.truffle.espresso.intrinsics.Surrogate;
 import com.oracle.truffle.espresso.intrinsics.Target_java_lang_Class;
 import com.oracle.truffle.espresso.intrinsics.Target_java_lang_ClassLoader;
+import com.oracle.truffle.espresso.intrinsics.Target_java_lang_ClassLoader_NativeLibrary;
 import com.oracle.truffle.espresso.intrinsics.Target_java_lang_Double;
 import com.oracle.truffle.espresso.intrinsics.Target_java_lang_Float;
 import com.oracle.truffle.espresso.intrinsics.Target_java_lang_Object;
@@ -45,14 +64,13 @@ import com.oracle.truffle.espresso.intrinsics.Target_java_lang_reflect_Array;
 import com.oracle.truffle.espresso.intrinsics.Target_java_security_AccessController;
 import com.oracle.truffle.espresso.intrinsics.Target_java_util_concurrent_atomic_AtomicLong;
 import com.oracle.truffle.espresso.intrinsics.Target_java_util_jar_JarFile;
-import com.oracle.truffle.espresso.intrinsics.Target_java_util_zip_ZipFile;
-import com.oracle.truffle.espresso.intrinsics.Target_sun_launcher_LauncherHelper;
 import com.oracle.truffle.espresso.intrinsics.Target_sun_misc_Perf;
 import com.oracle.truffle.espresso.intrinsics.Target_sun_misc_Signal;
 import com.oracle.truffle.espresso.intrinsics.Target_sun_misc_URLClassPath;
 import com.oracle.truffle.espresso.intrinsics.Target_sun_misc_Unsafe;
 import com.oracle.truffle.espresso.intrinsics.Target_sun_misc_VM;
 import com.oracle.truffle.espresso.intrinsics.Target_sun_reflect_NativeConstructorAccessorImpl;
+import com.oracle.truffle.espresso.intrinsics.Target_sun_reflect_NativeMethodAccessorImpl;
 import com.oracle.truffle.espresso.intrinsics.Target_sun_reflect_Reflection;
 import com.oracle.truffle.espresso.intrinsics.Type;
 import com.oracle.truffle.espresso.meta.EspressoError;
@@ -61,22 +79,32 @@ import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.meta.MetaUtil;
 import com.oracle.truffle.espresso.nodes.IntrinsicReflectionRootNode;
 import com.oracle.truffle.espresso.nodes.IntrinsicRootNode;
-import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.runtime.StaticObjectArray;
 import com.oracle.truffle.espresso.runtime.StaticObjectImpl;
 
+import sun.misc.Unsafe;
+
 public class InterpreterToVM {
 
-    private final Map<MethodKey, CallTarget> intrinsics = new HashMap<>();
+    private static Unsafe hostUnsafe;
+
+    static {
+        try {
+            Field f = Unsafe.class.getDeclaredField("theUnsafe");
+            f.setAccessible(true);
+            hostUnsafe = (Unsafe) f.get(null);
+        } catch (NoSuchFieldException | IllegalAccessException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private final Map<MethodKey, RootNode> intrinsics = new HashMap<>();
 
     public static List<Class<?>> DEFAULTS = Arrays.asList(
-                    Target_java_io_FileDescriptor.class,
-                    Target_java_io_FileInputStream.class,
-                    Target_java_io_FileOutputStream.class,
-                    Target_java_io_UnixFileSystem.class,
                     Target_java_lang_Class.class,
                     Target_java_lang_ClassLoader.class,
+                    Target_java_lang_ClassLoader_NativeLibrary.class,
                     Target_java_lang_Double.class,
                     Target_java_lang_Float.class,
                     Target_java_lang_StrictMath.class,
@@ -91,14 +119,13 @@ public class InterpreterToVM {
                     Target_java_security_AccessController.class,
                     Target_java_util_concurrent_atomic_AtomicLong.class,
                     Target_java_util_jar_JarFile.class,
-                    Target_java_util_zip_ZipFile.class,
-                    Target_sun_launcher_LauncherHelper.class,
                     Target_sun_misc_Perf.class,
                     Target_sun_misc_Signal.class,
                     Target_sun_misc_Unsafe.class,
                     Target_sun_misc_URLClassPath.class,
                     Target_sun_misc_VM.class,
                     Target_sun_reflect_NativeConstructorAccessorImpl.class,
+                    Target_sun_reflect_NativeMethodAccessorImpl.class,
                     Target_sun_reflect_Reflection.class);
 
     private InterpreterToVM(EspressoLanguage language, List<Class<?>> intrinsics) {
@@ -128,7 +155,7 @@ public class InterpreterToVM {
     }
 
     @CompilerDirectives.TruffleBoundary
-    public CallTarget getIntrinsic(MethodInfo method) {
+    public RootNode getIntrinsic(MethodInfo method) {
         assert method != null;
         return intrinsics.get(getMethodKey(method));
     }
@@ -218,16 +245,20 @@ public class InterpreterToVM {
             assert clazz.getSimpleName().startsWith("Target_");
             className = MetaUtil.toInternalName(clazz.getSimpleName().substring("Target_".length()).replace('_', '.'));
         } else {
-            className = MetaUtil.toInternalName(annotatedClass.getName());
+            Surrogate surrogate = annotatedClass.getAnnotation(Surrogate.class);
+            if (surrogate != null) {
+                className = MetaUtil.toInternalName(surrogate.value());
+            } else {
+                className = MetaUtil.toInternalName(annotatedClass.getName());
+            }
         }
-
         for (Method method : clazz.getDeclaredMethods()) {
             Intrinsic intrinsic = method.getAnnotation(Intrinsic.class);
             if (intrinsic == null) {
                 continue;
             }
 
-            RootCallTarget callTarget = Truffle.getRuntime().createCallTarget(createRootNodeForMethod(language, method));
+            RootNode rootNode = createRootNodeForMethod(language, method);
             StringBuilder signature = new StringBuilder("(");
             Parameter[] parameters = method.getParameters();
             for (int i = intrinsic.hasReceiver() ? 1 : 0; i < parameters.length; i++) {
@@ -235,7 +266,12 @@ public class InterpreterToVM {
                 String parameterTypeName;
                 Type annotatedType = parameter.getAnnotatedType().getAnnotation(Type.class);
                 if (annotatedType != null) {
-                    parameterTypeName = annotatedType.value().getName();
+                    Surrogate surrogate = annotatedType.value().getAnnotation(Surrogate.class);
+                    if (surrogate != null) {
+                        parameterTypeName = surrogate.value();
+                    } else {
+                        parameterTypeName = annotatedType.value().getName();
+                    }
                 } else {
                     parameterTypeName = parameter.getType().getName();
                 }
@@ -246,7 +282,12 @@ public class InterpreterToVM {
             Type annotatedReturnType = method.getAnnotatedReturnType().getAnnotation(Type.class);
             String returnTypeName;
             if (annotatedReturnType != null) {
-                returnTypeName = annotatedReturnType.value().getName();
+                Surrogate surrogate = annotatedReturnType.value().getAnnotation(Surrogate.class);
+                if (surrogate != null) {
+                    returnTypeName = surrogate.value();
+                } else {
+                    returnTypeName = annotatedReturnType.value().getName();
+                }
             } else {
                 returnTypeName = method.getReturnType().getName();
             }
@@ -257,12 +298,12 @@ public class InterpreterToVM {
                 methodName = method.getName();
             }
 
-            registerIntrinsic(fixTypeName(className), methodName, signature.toString(), callTarget);
+            registerIntrinsic(fixTypeName(className), methodName, signature.toString(), rootNode);
         }
     }
 
     private static RootNode createRootNodeForMethod(EspressoLanguage language, Method method) {
-        if (EspressoOptions.INTRINSICS_VIA_REFLECTION) {
+        if (language.getContextReference().get().getEnv().getOptions().get(EspressoOptions.IntrinsicsViaReflection)) {
             return new IntrinsicReflectionRootNode(language, method);
         } else {
             MethodHandle handle;
@@ -275,8 +316,7 @@ public class InterpreterToVM {
         }
     }
 
-    public void registerIntrinsic(String clazz, String methodName, String signature, CallTarget intrinsic) {
-
+    public void registerIntrinsic(String clazz, String methodName, String signature, RootNode intrinsic) {
         MethodKey key = new MethodKey(clazz, methodName, signature);
         assert !intrinsics.containsKey(key) : key + " intrinsic is already registered";
         assert intrinsic != null;
@@ -286,90 +326,165 @@ public class InterpreterToVM {
     // region Get (array) operations
 
     public int getArrayInt(int index, Object arr) {
-        return ((int[]) arr)[index];
+        try {
+            return ((int[]) arr)[index];
+        } catch (ArrayIndexOutOfBoundsException e) {
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArrayIndexOutOfBoundsException.class, e.getMessage());
+        }
     }
 
     public Object getArrayObject(int index, Object arr) {
-        return ((StaticObjectArray) arr).getWrapped()[index];
+        try {
+            return ((StaticObjectArray) arr).getWrapped()[index];
+        } catch (ArrayIndexOutOfBoundsException e) {
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArrayIndexOutOfBoundsException.class, e.getMessage());
+        }
     }
 
     public long getArrayLong(int index, Object arr) {
-        return ((long[]) arr)[index];
+        try {
+            return ((long[]) arr)[index];
+        } catch (ArrayIndexOutOfBoundsException e) {
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArrayIndexOutOfBoundsException.class, e.getMessage());
+        }
     }
 
     public float getArrayFloat(int index, Object arr) {
-        return ((float[]) arr)[index];
+        try {
+            return ((float[]) arr)[index];
+        } catch (ArrayIndexOutOfBoundsException e) {
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArrayIndexOutOfBoundsException.class, e.getMessage());
+        }
     }
 
     public double getArrayDouble(int index, Object arr) {
-        return ((double[]) arr)[index];
+        try {
+            return ((double[]) arr)[index];
+        } catch (ArrayIndexOutOfBoundsException e) {
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArrayIndexOutOfBoundsException.class, e.getMessage());
+        }
     }
 
     public byte getArrayByte(int index, Object arr) {
-        if (arr instanceof boolean[]) {
-            return (byte) (((boolean[]) arr)[index] ? 1 : 0);
+        try {
+            if (arr instanceof boolean[]) {
+                return (byte) (((boolean[]) arr)[index] ? 1 : 0);
+            }
+            return ((byte[]) arr)[index];
+        } catch (ArrayIndexOutOfBoundsException e) {
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArrayIndexOutOfBoundsException.class, e.getMessage());
         }
-        return ((byte[]) arr)[index];
     }
 
     public char getArrayChar(int index, Object arr) {
-        return ((char[]) arr)[index];
+        try {
+            return ((char[]) arr)[index];
+        } catch (ArrayIndexOutOfBoundsException e) {
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArrayIndexOutOfBoundsException.class, e.getMessage());
+        }
     }
 
     public short getArrayShort(int index, Object arr) {
-        return ((short[]) arr)[index];
+        try {
+            return ((short[]) arr)[index];
+        } catch (ArrayIndexOutOfBoundsException e) {
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArrayIndexOutOfBoundsException.class, e.getMessage());
+        }
     }
     // endregion
 
     // region Set (array) operations
     public void setArrayInt(int value, int index, Object arr) {
-        ((int[]) arr)[index] = value;
+        try {
+            ((int[]) arr)[index] = value;
+        } catch (ArrayIndexOutOfBoundsException e) {
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArrayIndexOutOfBoundsException.class, e.getMessage());
+        }
     }
 
     public void setArrayLong(long value, int index, Object arr) {
-        ((long[]) arr)[index] = value;
+        try {
+            ((long[]) arr)[index] = value;
+        } catch (ArrayIndexOutOfBoundsException e) {
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArrayIndexOutOfBoundsException.class, e.getMessage());
+        }
     }
 
     public void setArrayFloat(float value, int index, Object arr) {
-        ((float[]) arr)[index] = value;
+        try {
+            ((float[]) arr)[index] = value;
+        } catch (ArrayIndexOutOfBoundsException e) {
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArrayIndexOutOfBoundsException.class, e.getMessage());
+        }
     }
 
     public void setArrayDouble(double value, int index, Object arr) {
-        ((double[]) arr)[index] = value;
+        try {
+            ((double[]) arr)[index] = value;
+        } catch (ArrayIndexOutOfBoundsException e) {
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArrayIndexOutOfBoundsException.class, e.getMessage());
+        }
     }
 
     public void setArrayByte(byte value, int index, Object arr) {
-        if (arr instanceof boolean[]) {
-            assert value == 0 || value == 1;
-            ((boolean[]) arr)[index] = (value != 0);
-        } else {
-            ((byte[]) arr)[index] = value;
+        try {
+            if (arr instanceof boolean[]) {
+                assert value == 0 || value == 1;
+                ((boolean[]) arr)[index] = (value != 0);
+            } else {
+                ((byte[]) arr)[index] = value;
+            }
+        } catch (ArrayIndexOutOfBoundsException e) {
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArrayIndexOutOfBoundsException.class, e.getMessage());
         }
     }
 
     public void setArrayChar(char value, int index, Object arr) {
-        ((char[]) arr)[index] = value;
+        try {
+            ((char[]) arr)[index] = value;
+        } catch (ArrayIndexOutOfBoundsException e) {
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArrayIndexOutOfBoundsException.class, e.getMessage());
+        }
     }
 
     public void setArrayShort(short value, int index, Object arr) {
-        ((short[]) arr)[index] = value;
+        try {
+            ((short[]) arr)[index] = value;
+        } catch (ArrayIndexOutOfBoundsException e) {
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArrayIndexOutOfBoundsException.class, e.getMessage());
+        }
     }
 
-    public void setArrayObject(Object value, int index, Object arr) {
-        // TODO(peterssen): Array store check.
-        ((StaticObjectArray) arr).getWrapped()[index] = value;
+    public void setArrayObject(Object value, int index, StaticObjectArray wrapper) {
+        Object[] array = wrapper.getWrapped();
+        if (index >= 0 && index < array.length) {
+            array[index] = arrayStoreExCheck(value, wrapper.getKlass().getComponentType());
+        } else {
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArrayIndexOutOfBoundsException.class);
+        }
     }
+
+    private Object arrayStoreExCheck(Object value, Klass componentType) {
+        if (value == StaticObject.NULL || instanceOf(value, componentType)) {
+            return value;
+        } else {
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArrayStoreException.class);
+        }
+    }
+
     // endregion
 
     // region Monitor enter/exit
+    @SuppressWarnings({"deprecation"})
     public void monitorEnter(Object obj) {
         // TODO(peterssen): Nop for single-threaded language.
-        // UNSAFE.monitorEnter(obj);
+        hostUnsafe.monitorEnter(obj);
     }
 
+    @SuppressWarnings({"deprecation"})
     public void monitorExit(Object obj) {
         // TODO(peterssen): Nop for single-threaded language.
-        // UNSAFE.monitorExit(obj);
+        hostUnsafe.monitorExit(obj);
     }
     // endregion
 
@@ -463,7 +578,10 @@ public class InterpreterToVM {
     }
 
     public StaticObject newArray(Klass componentType, int length) {
-        assert !componentType.isPrimitive() : "use allocatePrimitiveArray for primitives";
+        if (length < 0) {
+            throw componentType.getContext().getMeta().throwEx(NegativeArraySizeException.class);
+        }
+        assert !componentType.isPrimitive() : "use allocateNativeArray for primitives";
         assert length >= 0;
         Object[] arr = new Object[length];
         Arrays.fill(arr, StaticObject.NULL);
@@ -473,13 +591,17 @@ public class InterpreterToVM {
     public StaticObject newMultiArray(Klass klass, int[] dimensions) {
         assert dimensions.length > 1;
 
+        if (Arrays.stream(dimensions).anyMatch(i -> i < 0)) {
+            throw meta(klass).getMeta().throwEx(NegativeArraySizeException.class);
+        }
+
         Klass componentType = klass.getComponentType();
 
         if (dimensions.length == 2) {
             assert dimensions[0] >= 0;
             if (componentType.getComponentType().isPrimitive()) {
                 return (StaticObject) meta(componentType).allocateArray(dimensions[0],
-                        i -> allocateNativeArray((byte) componentType.getComponentType().getJavaKind().getBasicType(), dimensions[1]));
+                                i -> allocateNativeArray((byte) componentType.getComponentType().getJavaKind().getBasicType(), dimensions[1]));
             }
             return (StaticObject) meta(componentType).allocateArray(dimensions[0], i -> newArray(componentType.getComponentType(), dimensions[1]));
         } else {
@@ -488,9 +610,11 @@ public class InterpreterToVM {
         }
     }
 
-    // TODO(peterssen): Move to InterpreterToVm.
     public static Object allocateNativeArray(byte jvmPrimitiveType, int length) {
         // the constants for the cpi are loosely defined and no real cpi indices.
+        if (length < 0) {
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(NegativeArraySizeException.class);
+        }
         switch (jvmPrimitiveType) {
             case 4:
                 return new boolean[length];
@@ -535,16 +659,13 @@ public class InterpreterToVM {
         if (instance == StaticObject.NULL || instanceOf(instance, klass)) {
             return instance;
         }
-        instanceOf(instance, klass);
         Meta meta = klass.getContext().getMeta();
-        StaticObject ex = meta.exceptionKlass(ClassCastException.class).allocateInstance();
-        meta(ex).method("<init>", void.class).invoke();
-        throw new EspressoException(ex);
+        throw meta.throwEx(ClassCastException.class);
     }
 
     public StaticObject newObject(Klass klass) {
-        klass.initialize();
         assert klass != null && !klass.isArray();
+        klass.initialize();
         return new StaticObjectImpl(klass);
     }
 
@@ -558,4 +679,7 @@ public class InterpreterToVM {
         }
     }
 
+    public int identityHashcode(Object obj) {
+        return System.identityHashCode(MetaUtil.unwrap(obj));
+    }
 }

@@ -31,7 +31,6 @@ import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.espresso.classfile.ConstantPool;
 import com.oracle.truffle.espresso.jni.JniEnv;
@@ -205,7 +204,7 @@ public final class MethodInfo implements ModifiersProvider {
         return sb.toString();
     }
 
-    private static TruffleObject bind(TruffleObject library, Meta.Method m, String mangledName) throws UnknownIdentifierException {
+    private static TruffleObject bind(TruffleObject library, Meta.Method m, String mangledName) {
         String signature = buildJniNativeSignature(m);
         return NativeLibrary.lookupAndBind(library, mangledName, signature);
     }
@@ -237,15 +236,11 @@ public final class MethodInfo implements ModifiersProvider {
                     if (getDeclaringClass().getClassLoader() == null) {
                         // Look in libjava
                         String mangledName = Mangle.mangleMethod(meta(this), false);
-
-                        JniEnv jniEnv = EspressoLanguage.getCurrentContext().getJniEnv();
-
                         try {
-                            TruffleObject nativeMethod = bind(jniEnv.getJavaLibrary(), meta(this), mangledName);
+                            TruffleObject nativeMethod = bind(JniEnv.javaLibrary, meta(this), mangledName);
                             callTarget = Truffle.getRuntime().createCallTarget(new JniNativeNode(getContext().getLanguage(), nativeMethod, meta(this)));
                             return callTarget;
-                        } catch (UnknownIdentifierException e) {
-                            // native method not found in libjava, safe to ignore
+                        } catch (Throwable t) {
                         }
                     }
 
@@ -280,12 +275,7 @@ public final class MethodInfo implements ModifiersProvider {
             return null;
         }
         TruffleObject library = getContext().getNativeLibraries().get(handle);
-        TruffleObject nativeMethod = null;
-        try {
-            nativeMethod = bind(library, meta(this), mangledName);
-        } catch (UnknownIdentifierException e) {
-            return null;
-        }
+        TruffleObject nativeMethod = bind(library, meta(this), mangledName);
         return Truffle.getRuntime().createCallTarget(new JniNativeNode(getContext().getLanguage(), nativeMethod, meta(this)));
     }
 

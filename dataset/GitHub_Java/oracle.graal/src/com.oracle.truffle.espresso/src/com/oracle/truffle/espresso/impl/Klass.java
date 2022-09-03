@@ -49,7 +49,7 @@ public abstract class Klass implements ModifiersProvider {
     private ArrayKlass arrayClass;
 
     @CompilerDirectives.CompilationFinal //
-    private StaticObjectClass mirrorCache;
+    private StaticObject mirrorCache;
 
     Klass(String name) {
         this.name = name;
@@ -66,13 +66,13 @@ public abstract class Klass implements ModifiersProvider {
     public StaticObject mirror() {
         if (mirrorCache == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            mirrorCache = new StaticObjectClass(getContext().getMeta().CLASS.rawKlass());
-            mirrorCache.setMirror(this);
+            mirrorCache = new StaticObjectClass(getContext().getRegistries().resolve(getContext().getTypeDescriptors().CLASS, null));
+            ((StaticObjectClass) mirrorCache).setMirror(this);
         }
         return mirrorCache;
     }
 
-    public abstract StaticObject getClassLoader();
+    public abstract Object getClassLoader();
 
     @Override
     public final boolean equals(Object obj) {

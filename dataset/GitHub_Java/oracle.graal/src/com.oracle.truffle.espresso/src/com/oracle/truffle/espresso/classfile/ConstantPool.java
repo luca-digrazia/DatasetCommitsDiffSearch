@@ -28,7 +28,6 @@ import static com.oracle.truffle.espresso.classfile.ConstantPool.Tag.FIELD_REF;
 import static com.oracle.truffle.espresso.classfile.ConstantPool.Tag.FLOAT;
 import static com.oracle.truffle.espresso.classfile.ConstantPool.Tag.INTEGER;
 import static com.oracle.truffle.espresso.classfile.ConstantPool.Tag.INTERFACE_METHOD_REF;
-import static com.oracle.truffle.espresso.classfile.ConstantPool.Tag.INVOKEDYNAMIC;
 import static com.oracle.truffle.espresso.classfile.ConstantPool.Tag.LONG;
 import static com.oracle.truffle.espresso.classfile.ConstantPool.Tag.METHOD_REF;
 import static com.oracle.truffle.espresso.classfile.ConstantPool.Tag.NAME_AND_TYPE;
@@ -42,7 +41,6 @@ import java.util.List;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
-import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.types.TypeDescriptor;
 
 public final class ConstantPool {
@@ -117,12 +115,12 @@ public final class ConstantPool {
         return context;
     }
 
-    private final StaticObject classLoader;
+    private final Object classLoader;
 
     /**
      * Creates a constant pool from a class file.
      */
-    public ConstantPool(EspressoContext context, StaticObject classLoader, ClassfileStream stream, ClassfileParser parser) {
+    public ConstantPool(EspressoContext context, Object classLoader, ClassfileStream stream, ClassfileParser parser) {
         this.context = context;
         final int length = stream.readU2();
         if (length < 1) {
@@ -252,7 +250,7 @@ public final class ConstantPool {
         constants = entries;
     }
 
-    public StaticObject getClassLoader() {
+    public Object getClassLoader() {
         return classLoader;
     }
 
@@ -444,14 +442,6 @@ public final class ConstantPool {
             return (StringConstant) at(index);
         } catch (ClassCastException e) {
             throw unexpectedEntry(index, null, STRING);
-        }
-    }
-
-    public InvokeDynamicConstant indyAt(int index) {
-        try {
-            return (InvokeDynamicConstant) at(index);
-        } catch (ClassCastException e) {
-            throw unexpectedEntry(index, null, INVOKEDYNAMIC);
         }
     }
 
