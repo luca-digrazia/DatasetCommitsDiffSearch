@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -144,7 +142,7 @@ class HeapChunkProvider {
         assert result.getEnd().equal(HeapChunk.asPointer(result).add(chunkSize));
 
         if (HeapPolicy.getZapProducedHeapChunks()) {
-            zap(result, HeapPolicy.getProducedHeapChunkZapWord());
+            zap(result, HeapPolicy.getProducedHeapChunkZapValue());
         }
 
         HeapPolicy.bytesAllocatedSinceLastCollection.addAndGet(chunkSize);
@@ -191,7 +189,7 @@ class HeapChunkProvider {
     private static void cleanAlignedChunk(AlignedHeader alignedChunk) {
         resetAlignedHeapChunk(alignedChunk);
         if (HeapPolicy.getZapConsumedHeapChunks()) {
-            zap(alignedChunk, HeapPolicy.getConsumedHeapChunkZapWord());
+            zap(alignedChunk, HeapPolicy.getConsumedHeapChunkZapValue());
         }
     }
 
@@ -286,7 +284,7 @@ class HeapChunkProvider {
         assert objectSize.belowOrEqual(HeapChunk.availableObjectMemory(result)) : "UnalignedHeapChunk insufficient for requested object";
 
         if (HeapPolicy.getZapProducedHeapChunks()) {
-            zap(result, HeapPolicy.getProducedHeapChunkZapWord());
+            zap(result, HeapPolicy.getProducedHeapChunkZapValue());
         }
 
         HeapPolicy.bytesAllocatedSinceLastCollection.addAndGet(chunkSize);
@@ -357,21 +355,17 @@ class HeapChunkProvider {
     }
 
     protected Log report(Log log, boolean traceHeapChunks) {
-        log.string("[Unused:").indent(true);
-        log.string("aligned: ").signed(bytesInUnusedAlignedChunks.get())
-                        .string("/")
-                        .signed(bytesInUnusedAlignedChunks.get().unsignedDivide(HeapPolicy.getAlignedHeapChunkSize()));
+        log.string("[Unused:").newline();
+        log.string("  aligned: ").signed(bytesInUnusedAlignedChunks.get()).string("/").signed(bytesInUnusedAlignedChunks.get().unsignedDivide(HeapPolicy.getAlignedHeapChunkSize()));
         if (traceHeapChunks) {
             if (unusedAlignedChunks.get().isNonNull()) {
-                log.newline().string("aligned chunks:").redent(true);
+                log.newline().string("  aligned chunks:");
                 for (AlignedHeapChunk.AlignedHeader aChunk = unusedAlignedChunks.get(); aChunk.isNonNull(); aChunk = aChunk.getNext()) {
-                    log.newline().hex(aChunk)
-                                    .string(" (").hex(AlignedHeapChunk.getAlignedHeapChunkStart(aChunk)).string("-").hex(aChunk.getTop()).string(")");
+                    log.string("  ").hex(aChunk).string(" (").hex(AlignedHeapChunk.getAlignedHeapChunkStart(aChunk)).string("-").hex(aChunk.getTop()).string(")");
                 }
-                log.redent(false);
             }
         }
-        log.redent(false).string("]");
+        log.string("]");
         return log;
     }
 

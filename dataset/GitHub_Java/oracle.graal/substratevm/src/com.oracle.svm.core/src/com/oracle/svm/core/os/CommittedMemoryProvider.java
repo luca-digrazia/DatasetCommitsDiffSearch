@@ -42,7 +42,7 @@ public interface CommittedMemoryProvider {
      * Value for alignment parameters that indicates that no specific alignment is required (other
      * than the {@linkplain #getGranularity() granularity} usually).
      */
-    UnsignedWord UNALIGNED = WordFactory.unsigned(1);
+    UnsignedWord UNALIGNED = WordFactory.zero();
 
     @Fold
     static CommittedMemoryProvider get() {

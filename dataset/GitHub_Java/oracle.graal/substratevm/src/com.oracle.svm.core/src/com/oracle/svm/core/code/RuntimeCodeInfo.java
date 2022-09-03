@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -201,16 +199,6 @@ public class RuntimeCodeInfo {
          * table.
          */
         methodInfos = newMethodInfos;
-
-        if (oldMethodInfos != null) {
-            /*
-             * The old array is in a pinned chunk that probably still contains metadata for other
-             * methods that are still alive. So even though we release our allocator, the old array
-             * is not garbage collected any time soon. By clearing the object array, we make sure
-             * that we do not keep objects alive unnecessarily.
-             */
-            Arrays.fill(oldMethodInfos, null);
-        }
     }
 
     protected void invalidateMethod(RuntimeMethodInfo methodInfo) {
