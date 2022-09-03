@@ -158,7 +158,6 @@ final class ForeignAccessFactoryGenerator {
         imports.add("com.oracle.truffle.api.interop.ForeignAccess.StandardFactory");
         imports.add("com.oracle.truffle.api.interop.Message");
         imports.add("com.oracle.truffle.api.interop.TruffleObject");
-        imports.add("java.util.function.Supplier");
         if (!(messageGenerators.containsKey(Message.IS_BOXED) &&
                         messageGenerators.containsKey(Message.IS_NULL) &&
                         messageGenerators.containsKey(Message.IS_EXECUTABLE) &&
@@ -188,11 +187,11 @@ final class ForeignAccessFactoryGenerator {
     }
 
     private void appendSingletonAndGetter(Writer w) throws IOException {
-        String allocation = "ForeignAccess.create(new " + simpleClassName + "(), ";
+        String allocation;
         if (hasLanguageCheckNode()) {
-            allocation += "new Supplier<RootNode>() { @Override public RootNode get() { return " + languageCheckGenerator.getRootNodeFactoryInvocation() + "; }});";
+            allocation = "ForeignAccess.create(new " + simpleClassName + "(), " + languageCheckGenerator.getRootNodeFactoryInvocation() + ");";
         } else {
-            allocation += "(Supplier<RootNode>) null);";
+            allocation = "ForeignAccess.create(new " + simpleClassName + "(), null);";
         }
         w.append("    public static final ForeignAccess ACCESS = ").append(allocation).append("\n");
         w.append("    @Deprecated public static ForeignAccess createAccess() { return ").append(allocation).append(" }\n");
