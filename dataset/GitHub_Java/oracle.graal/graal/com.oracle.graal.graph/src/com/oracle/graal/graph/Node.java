@@ -74,7 +74,7 @@ public abstract class Node implements Cloneable, Formattable {
 
     /**
      * Denotes that a parameter of an {@linkplain NodeIntrinsic intrinsic} method must be a compile
-     * time constant at all call sites to the intrinsic method.
+     * time constant at all call sites to the intrinic method.
      */
     @Retention(RetentionPolicy.RUNTIME)
     @Target(ElementType.PARAMETER)
@@ -86,6 +86,9 @@ public abstract class Node implements Cloneable, Formattable {
      * annotated method can be replaced with an instance of the node class denoted by
      * {@link #value()}. For this reason, the signature of the annotated method must match the
      * signature of a constructor in the node class.
+     * <p>
+     * All methods annotated with this annotation must be declared native to ensure they throw a
+     * {@link UnsatisfiedLinkError} if called by non-Graal compiled code.
      */
     @Retention(RetentionPolicy.RUNTIME)
     @Target(ElementType.METHOD)
