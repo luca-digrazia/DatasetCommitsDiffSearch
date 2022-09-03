@@ -22,9 +22,10 @@
  */
 package org.graalvm.compiler.nodes.calc;
 
-import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_2;
-
-import org.graalvm.compiler.core.common.calc.CanonicalCondition;
+import jdk.vm.ci.meta.ConstantReflectionProvider;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.TriState;
+import org.graalvm.compiler.core.common.calc.Condition;
 import org.graalvm.compiler.core.common.type.FloatStamp;
 import org.graalvm.compiler.core.common.type.IntegerStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
@@ -41,9 +42,7 @@ import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.util.GraphUtil;
 import org.graalvm.compiler.options.OptionValues;
 
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.TriState;
+import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_2;
 
 @NodeInfo(shortName = "==", cycles = CYCLES_2)
 public final class FloatEqualsNode extends CompareNode implements BinaryCommutative<ValueNode> {
@@ -51,13 +50,13 @@ public final class FloatEqualsNode extends CompareNode implements BinaryCommutat
     private static final FloatEqualsOp OP = new FloatEqualsOp();
 
     public FloatEqualsNode(ValueNode x, ValueNode y) {
-        super(TYPE, CanonicalCondition.EQ, false, x, y);
+        super(TYPE, Condition.EQ, false, x, y);
         assert x.stamp(NodeView.DEFAULT) instanceof FloatStamp && y.stamp(NodeView.DEFAULT) instanceof FloatStamp : x.stamp(NodeView.DEFAULT) + " " + y.stamp(NodeView.DEFAULT);
         assert x.stamp(NodeView.DEFAULT).isCompatible(y.stamp(NodeView.DEFAULT));
     }
 
     public static LogicNode create(ValueNode x, ValueNode y, NodeView view) {
-        LogicNode result = CompareNode.tryConstantFoldPrimitive(CanonicalCondition.EQ, x, y, false, view);
+        LogicNode result = CompareNode.tryConstantFoldPrimitive(Condition.EQ, x, y, false, view);
         if (result != null) {
             return result;
         } else {
@@ -67,7 +66,7 @@ public final class FloatEqualsNode extends CompareNode implements BinaryCommutat
 
     public static LogicNode create(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, OptionValues options, Integer smallestCompareWidth,
                     ValueNode x, ValueNode y, NodeView view) {
-        LogicNode value = OP.canonical(constantReflection, metaAccess, options, smallestCompareWidth, CanonicalCondition.EQ, false, x, y, view);
+        LogicNode value = OP.canonical(constantReflection, metaAccess, options, smallestCompareWidth, Condition.EQ, false, x, y, view);
         if (value != null) {
             return value;
         }
@@ -90,7 +89,7 @@ public final class FloatEqualsNode extends CompareNode implements BinaryCommutat
     @Override
     public Node canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
         NodeView view = NodeView.from(tool);
-        ValueNode value = OP.canonical(tool.getConstantReflection(), tool.getMetaAccess(), tool.getOptions(), tool.smallestCompareWidth(), CanonicalCondition.EQ, unorderedIsTrue, forX, forY, view);
+        ValueNode value = OP.canonical(tool.getConstantReflection(), tool.getMetaAccess(), tool.getOptions(), tool.smallestCompareWidth(), Condition.EQ, unorderedIsTrue, forX, forY, view);
         if (value != null) {
             return value;
         }
@@ -100,7 +99,7 @@ public final class FloatEqualsNode extends CompareNode implements BinaryCommutat
     public static class FloatEqualsOp extends CompareOp {
 
         @Override
-        public LogicNode canonical(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, OptionValues options, Integer smallestCompareWidth, CanonicalCondition condition,
+        public LogicNode canonical(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, OptionValues options, Integer smallestCompareWidth, Condition condition,
                         boolean unorderedIsTrue, ValueNode forX, ValueNode forY, NodeView view) {
             LogicNode result = super.canonical(constantReflection, metaAccess, options, smallestCompareWidth, condition, unorderedIsTrue, forX, forY, view);
             if (result != null) {
