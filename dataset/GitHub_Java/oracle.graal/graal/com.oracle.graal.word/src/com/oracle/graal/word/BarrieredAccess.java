@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +22,8 @@
  */
 package com.oracle.graal.word;
 
-import com.oracle.graal.compiler.common.LocationIdentity;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.word.Word.Opcode;
 import com.oracle.graal.word.Word.Operation;
 
@@ -43,7 +44,7 @@ public final class BarrieredAccess {
      *
      * @param object the base object for the memory access
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the read
+     * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
      */
     @Operation(opcode = Opcode.READ_BARRIERED)
@@ -58,7 +59,7 @@ public final class BarrieredAccess {
      *
      * @param object the base object for the memory access
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the read
+     * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
      */
     @Operation(opcode = Opcode.READ_BARRIERED)
@@ -73,7 +74,7 @@ public final class BarrieredAccess {
      *
      * @param object the base object for the memory access
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the read
+     * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
      */
     @Operation(opcode = Opcode.READ_BARRIERED)
@@ -88,7 +89,7 @@ public final class BarrieredAccess {
      *
      * @param object the base object for the memory access
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the read
+     * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
      */
     @Operation(opcode = Opcode.READ_BARRIERED)
@@ -103,7 +104,7 @@ public final class BarrieredAccess {
      *
      * @param object the base object for the memory access
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the read
+     * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
      */
     @Operation(opcode = Opcode.READ_BARRIERED)
@@ -118,7 +119,7 @@ public final class BarrieredAccess {
      *
      * @param object the base object for the memory access
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the read
+     * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
      */
     @Operation(opcode = Opcode.READ_BARRIERED)
@@ -133,7 +134,7 @@ public final class BarrieredAccess {
      *
      * @param object the base object for the memory access
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the read
+     * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
      */
     @Operation(opcode = Opcode.READ_BARRIERED)
@@ -148,7 +149,7 @@ public final class BarrieredAccess {
      *
      * @param object the base object for the memory access
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the read
+     * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
      */
     @Operation(opcode = Opcode.READ_BARRIERED)
@@ -163,7 +164,7 @@ public final class BarrieredAccess {
      *
      * @param object the base object for the memory access
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the read
+     * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
      */
     @Operation(opcode = Opcode.READ_BARRIERED)
@@ -174,7 +175,7 @@ public final class BarrieredAccess {
      *
      * @param object the base object for the memory access
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the read
+     * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
      */
     @Operation(opcode = Opcode.READ_BARRIERED)
@@ -185,7 +186,7 @@ public final class BarrieredAccess {
      *
      * @param object the base object for the memory access
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the read
+     * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
      */
     @Operation(opcode = Opcode.READ_BARRIERED)
@@ -196,7 +197,7 @@ public final class BarrieredAccess {
      *
      * @param object the base object for the memory access
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the read
+     * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
      */
     @Operation(opcode = Opcode.READ_BARRIERED)
@@ -207,7 +208,7 @@ public final class BarrieredAccess {
      *
      * @param object the base object for the memory access
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the read
+     * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
      */
     @Operation(opcode = Opcode.READ_BARRIERED)
@@ -218,7 +219,7 @@ public final class BarrieredAccess {
      *
      * @param object the base object for the memory access
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the read
+     * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
      */
     @Operation(opcode = Opcode.READ_BARRIERED)
@@ -229,7 +230,7 @@ public final class BarrieredAccess {
      *
      * @param object the base object for the memory access
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the read
+     * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
      */
     @Operation(opcode = Opcode.READ_BARRIERED)
@@ -240,7 +241,7 @@ public final class BarrieredAccess {
      *
      * @param object the base object for the memory access
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the read
+     * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
      */
     @Operation(opcode = Opcode.READ_BARRIERED)
@@ -251,7 +252,7 @@ public final class BarrieredAccess {
      *
      * @param object the base object for the memory access
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the read
+     * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
      */
     @Operation(opcode = Opcode.READ_BARRIERED)
@@ -262,7 +263,7 @@ public final class BarrieredAccess {
      *
      * @param object the base object for the memory access
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the read
+     * @param locationIdentity the identity of the read (see {@link LocationNode})
      * @return the result of the memory access
      */
     @Operation(opcode = Opcode.READ_BARRIERED)
@@ -277,7 +278,7 @@ public final class BarrieredAccess {
      *
      * @param object the base object for the memory access
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the write
+     * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
      */
     @Operation(opcode = Opcode.WRITE_BARRIERED)
@@ -292,7 +293,7 @@ public final class BarrieredAccess {
      *
      * @param object the base object for the memory access
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the write
+     * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
      */
     @Operation(opcode = Opcode.WRITE_BARRIERED)
@@ -307,7 +308,7 @@ public final class BarrieredAccess {
      *
      * @param object the base object for the memory access
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the write
+     * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
      */
     @Operation(opcode = Opcode.WRITE_BARRIERED)
@@ -322,7 +323,7 @@ public final class BarrieredAccess {
      *
      * @param object the base object for the memory access
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the write
+     * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
      */
     @Operation(opcode = Opcode.WRITE_BARRIERED)
@@ -337,7 +338,7 @@ public final class BarrieredAccess {
      *
      * @param object the base object for the memory access
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the write
+     * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
      */
     @Operation(opcode = Opcode.WRITE_BARRIERED)
@@ -352,7 +353,7 @@ public final class BarrieredAccess {
      *
      * @param object the base object for the memory access
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the write
+     * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
      */
     @Operation(opcode = Opcode.WRITE_BARRIERED)
@@ -367,7 +368,7 @@ public final class BarrieredAccess {
      *
      * @param object the base object for the memory access
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the write
+     * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
      */
     @Operation(opcode = Opcode.WRITE_BARRIERED)
@@ -382,7 +383,7 @@ public final class BarrieredAccess {
      *
      * @param object the base object for the memory access
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the write
+     * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
      */
     @Operation(opcode = Opcode.WRITE_BARRIERED)
@@ -397,7 +398,7 @@ public final class BarrieredAccess {
      *
      * @param object the base object for the memory access
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the write
+     * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
      */
     @Operation(opcode = Opcode.WRITE_BARRIERED)
@@ -408,7 +409,7 @@ public final class BarrieredAccess {
      *
      * @param object the base object for the memory access
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the write
+     * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
      */
     @Operation(opcode = Opcode.WRITE_BARRIERED)
@@ -419,7 +420,7 @@ public final class BarrieredAccess {
      *
      * @param object the base object for the memory access
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the write
+     * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
      */
     @Operation(opcode = Opcode.WRITE_BARRIERED)
@@ -430,7 +431,7 @@ public final class BarrieredAccess {
      *
      * @param object the base object for the memory access
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the write
+     * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
      */
     @Operation(opcode = Opcode.WRITE_BARRIERED)
@@ -441,7 +442,7 @@ public final class BarrieredAccess {
      *
      * @param object the base object for the memory access
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the write
+     * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
      */
     @Operation(opcode = Opcode.WRITE_BARRIERED)
@@ -452,7 +453,7 @@ public final class BarrieredAccess {
      *
      * @param object the base object for the memory access
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the write
+     * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
      */
     @Operation(opcode = Opcode.WRITE_BARRIERED)
@@ -463,7 +464,7 @@ public final class BarrieredAccess {
      *
      * @param object the base object for the memory access
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the write
+     * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
      */
     @Operation(opcode = Opcode.WRITE_BARRIERED)
@@ -474,7 +475,7 @@ public final class BarrieredAccess {
      *
      * @param object the base object for the memory access
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the write
+     * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
      */
     @Operation(opcode = Opcode.WRITE_BARRIERED)
@@ -485,7 +486,7 @@ public final class BarrieredAccess {
      *
      * @param object the base object for the memory access
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the write
+     * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
      */
     @Operation(opcode = Opcode.WRITE_BARRIERED)
@@ -496,7 +497,7 @@ public final class BarrieredAccess {
      *
      * @param object the base object for the memory access
      * @param offset the signed offset for the memory access
-     * @param locationIdentity the identity of the write
+     * @param locationIdentity the identity of the write (see {@link LocationNode})
      * @param val the value to be written to memory
      */
     @Operation(opcode = Opcode.WRITE_BARRIERED)
