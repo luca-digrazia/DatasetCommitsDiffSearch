@@ -23,11 +23,20 @@
 package com.oracle.graal.lir.ptx;
 
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
+import static com.oracle.graal.lir.LIRValueUtil.*;
+import static com.oracle.graal.nodes.calc.Condition.*;
 
+import com.oracle.graal.api.code.CompilationResult.JumpTable;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
+import com.oracle.graal.asm.ptx.PTXAssembler.Global;
+import com.oracle.graal.asm.ptx.PTXAssembler.Setp;
 import com.oracle.graal.asm.ptx.*;
+import com.oracle.graal.asm.ptx.PTXMacroAssembler.Mov;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.StandardOp.BlockEndOp;
+import com.oracle.graal.lir.SwitchStrategy.BaseSwitchClosure;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.nodes.calc.*;
 
@@ -42,44 +51,250 @@ public class PTXControlFlow {
         }
 
         @Override
-        public void emitCode(TargetMethodAssembler tasm, PTXAssembler masm) {
-            if (tasm.frameContext != null) {
-                tasm.frameContext.leave(tasm);
-            }
+        public void emitCode(CompilationResultBuilder crb, PTXMacroAssembler masm) {
+            crb.frameContext.leave(crb);
             masm.exit();
+        }
+    }
+
+    public static class ReturnNoValOp extends PTXLIRInstruction implements BlockEndOp {
+
+        public ReturnNoValOp() {
+        }
+
+        @Override
+        public void emitCode(CompilationResultBuilder crb, PTXMacroAssembler masm) {
+            crb.frameContext.leave(crb);
+            masm.ret();
         }
     }
 
     public static class BranchOp extends PTXLIRInstruction implements StandardOp.BranchOp {
 
-        protected Condition condition;
-        protected LabelRef destination;
-        @State protected LIRFrameState state;
+        protected final Condition condition;
+        protected final LabelRef trueDestination;
+        protected final LabelRef falseDestination;
+        protected int predRegNum;
 
-        public BranchOp(Condition condition, LabelRef destination, LIRFrameState state) {
+        public BranchOp(Condition condition, LabelRef trueDestination, LabelRef falseDestination, int predReg) {
             this.condition = condition;
-            this.destination = destination;
-            this.state = state;
+            this.trueDestination = trueDestination;
+            this.falseDestination = falseDestination;
+            this.predRegNum = predReg;
         }
 
         @Override
-        public void emitCode(TargetMethodAssembler tasm, PTXAssembler masm) {
-            masm.at();
-            Label l = destination.label();
-            l.addPatchAt(tasm.asm.codeBuffer.position());
-            String target = l.isBound() ? "L" + l.toString() : AbstractPTXAssembler.UNBOUND_TARGET;
-            masm.bra(target);
+        public void emitCode(CompilationResultBuilder crb, PTXMacroAssembler masm) {
+            if (crb.isSuccessorEdge(trueDestination)) {
+                masm.bra(masm.nameOf(falseDestination.label()), predRegNum, false);
+            } else {
+                masm.bra(masm.nameOf(trueDestination.label()), predRegNum, true);
+                if (!crb.isSuccessorEdge(falseDestination)) {
+                    masm.jmp(falseDestination.label());
+                }
+            }
+        }
+    }
+
+    public static class CondMoveOp extends PTXLIRInstruction {
+
+        @Def({REG, HINT}) protected Value result;
+        @Alive({REG}) protected Value trueValue;
+        @Use({REG, STACK, CONST}) protected Value falseValue;
+        private final Condition condition;
+        private final int predicate;
+
+        public CondMoveOp(Variable result, Condition condition, Variable trueValue, Value falseValue, int predicateRegister) {
+            this.result = result;
+            this.condition = condition;
+            this.trueValue = trueValue;
+            this.falseValue = falseValue;
+            this.predicate = predicateRegister;
         }
 
         @Override
-        public LabelRef destination() {
-            return destination;
+        public void emitCode(CompilationResultBuilder crb, PTXMacroAssembler masm) {
+            cmove(crb, masm, result, false, condition, false, trueValue, falseValue, predicate);
+        }
+    }
+
+    public static class FloatCondMoveOp extends PTXLIRInstruction {
+
+        @Def({REG}) protected Value result;
+        @Alive({REG}) protected Value trueValue;
+        @Alive({REG}) protected Value falseValue;
+        private final Condition condition;
+        private final boolean unorderedIsTrue;
+        private final int predicate;
+
+        public FloatCondMoveOp(Variable result, Condition condition, boolean unorderedIsTrue, Variable trueValue, Variable falseValue, int predicateRegister) {
+            this.result = result;
+            this.condition = condition;
+            this.unorderedIsTrue = unorderedIsTrue;
+            this.trueValue = trueValue;
+            this.falseValue = falseValue;
+            this.predicate = predicateRegister;
         }
 
         @Override
-        public void negate(LabelRef newDestination) {
-            destination = newDestination;
-            condition = condition.negate();
+        public void emitCode(CompilationResultBuilder crb, PTXMacroAssembler masm) {
+            cmove(crb, masm, result, true, condition, unorderedIsTrue, trueValue, falseValue, predicate);
+        }
+    }
+
+    private static void cmove(CompilationResultBuilder crb, PTXMacroAssembler asm, Value result, boolean isFloat, Condition condition, boolean unorderedIsTrue, Value trueValue, Value falseValue,
+                    int predicateRegister) {
+        // check that we don't overwrite an input operand before it is used.
+        assert !result.equals(trueValue);
+
+        PTXMove.move(crb, asm, result, falseValue);
+        cmove(asm, result, trueValue, predicateRegister);
+
+        if (isFloat) {
+            if (unorderedIsTrue && !trueOnUnordered(condition)) {
+                // cmove(crb, masm, result, ConditionFlag.Parity, trueValue);
+                throw GraalInternalError.unimplemented();
+            } else if (!unorderedIsTrue && trueOnUnordered(condition)) {
+                // cmove(crb, masm, result, ConditionFlag.Parity, falseValue);
+                throw GraalInternalError.unimplemented();
+            }
+        }
+    }
+
+    private static boolean trueOnUnordered(Condition condition) {
+        switch (condition) {
+            case NE:
+            case EQ:
+                return false;
+            case LT:
+            case GE:
+                return true;
+            default:
+                throw GraalInternalError.shouldNotReachHere();
+        }
+    }
+
+    private static void cmove(PTXMacroAssembler asm, Value result, Value other, int predicateRegister) {
+        if (isVariable(other)) {
+            assert !asVariable(other).equals(asVariable(result)) : "other already overwritten by previous move";
+
+            switch (other.getKind()) {
+                case Int:
+                    new Mov(asVariable(result), other, predicateRegister).emit(asm);
+                    break;
+                case Long:
+                    new Mov(asVariable(result), other, predicateRegister).emit(asm);
+                    break;
+                default:
+                    throw new InternalError("unhandled: " + other.getKind());
+            }
+        } else {
+            throw GraalInternalError.shouldNotReachHere("cmove: not register");
+        }
+    }
+
+    public static class StrategySwitchOp extends PTXLIRInstruction implements BlockEndOp {
+
+        @Use({CONST}) protected Constant[] keyConstants;
+        private final LabelRef[] keyTargets;
+        private LabelRef defaultTarget;
+        @Alive({REG}) protected Value key;
+        @Temp({REG, ILLEGAL}) protected Value scratch;
+        private final SwitchStrategy strategy;
+        // Number of predicate register that would be set by this instruction.
+        protected int predRegNum;
+
+        public StrategySwitchOp(SwitchStrategy strategy, LabelRef[] keyTargets, LabelRef defaultTarget, Value key, Value scratch, int predReg) {
+            this.strategy = strategy;
+            this.keyConstants = strategy.keyConstants;
+            this.keyTargets = keyTargets;
+            this.defaultTarget = defaultTarget;
+            this.key = key;
+            this.scratch = scratch;
+            assert keyConstants.length == keyTargets.length;
+            assert keyConstants.length == strategy.keyProbabilities.length;
+            assert (scratch.getKind() == Kind.Illegal) == (key.getKind() == Kind.Int || key.getKind() == Kind.Long);
+            predRegNum = predReg;
+        }
+
+        @Override
+        public void emitCode(final CompilationResultBuilder crb, final PTXMacroAssembler masm) {
+            BaseSwitchClosure closure = new BaseSwitchClosure(crb, masm, keyTargets, defaultTarget) {
+                @Override
+                protected void conditionalJump(int index, Condition condition, Label target) {
+                    switch (key.getKind()) {
+                        case Int:
+                        case Long:
+                            if (crb.codeCache.needsDataPatch(keyConstants[index])) {
+                                crb.recordInlineDataInCode(keyConstants[index]);
+                            }
+                            new Setp(EQ, keyConstants[index], key, predRegNum).emit(masm);
+                            break;
+                        case Object:
+                            assert condition == Condition.EQ || condition == Condition.NE;
+                            PTXMove.move(crb, masm, scratch, keyConstants[index]);
+                            new Setp(condition, scratch, key, predRegNum).emit(masm);
+                            break;
+                        default:
+                            throw new GraalInternalError("switch only supported for int, long and object");
+                    }
+                    masm.bra(masm.nameOf(target), predRegNum, true);
+                }
+            };
+            strategy.run(closure);
+        }
+    }
+
+    public static class TableSwitchOp extends PTXLIRInstruction implements BlockEndOp {
+
+        private final int lowKey;
+        private final LabelRef defaultTarget;
+        private final LabelRef[] targets;
+        @Alive protected Value index;
+        @Temp protected Value scratch;
+        // Number of predicate register that would be set by this instruction.
+        protected int predRegNum;
+
+        public TableSwitchOp(final int lowKey, final LabelRef defaultTarget, final LabelRef[] targets, Variable index, Variable scratch, int predReg) {
+            this.lowKey = lowKey;
+            this.defaultTarget = defaultTarget;
+            this.targets = targets;
+            this.index = index;
+            this.scratch = scratch;
+            predRegNum = predReg;
+        }
+
+        @Override
+        public void emitCode(CompilationResultBuilder crb, PTXMacroAssembler masm) {
+            Buffer buf = masm.codeBuffer;
+
+            // Compare index against jump table bounds
+
+            int highKey = lowKey + targets.length - 1;
+            if (lowKey != 0) {
+                // subtract the low value from the switch value
+                // new Sub(value, value, lowKey).emit(masm);
+                new Setp(GT, index, Constant.forInt(highKey - lowKey), predRegNum).emit(masm);
+            } else {
+                new Setp(GT, index, Constant.forInt(highKey), predRegNum).emit(masm);
+            }
+
+            // Jump to default target if index is not within the jump table
+            if (defaultTarget != null) {
+                masm.bra(masm.nameOf(defaultTarget.label()), predRegNum, true);
+            }
+
+            // address of jump table
+            int tablePos = buf.position();
+
+            JumpTable jt = new JumpTable(tablePos, lowKey, highKey, 4);
+            String name = "jumptable" + jt.position;
+
+            new Global(index, name, targets).emit(masm);
+
+            // bra(Value, name);
+
+            crb.compilationResult.addAnnotation(jt);
         }
     }
 }

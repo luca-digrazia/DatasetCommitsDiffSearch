@@ -24,45 +24,33 @@ package com.oracle.graal.compiler.ptx.test;
 
 import org.junit.*;
 
-import java.lang.reflect.Method;
-
-public class ControlPTXTest extends PTXTestBase {
+public class ControlPTXTest extends PTXTest {
 
     @Test
-    public void testControl() {
-        Integer ret = (Integer) invoke(compile("testLoop"), 42);
-        if (ret != null) {
-            printReport("testLoop: " + ret);
-        } else {
-            printReport("testLoop: no VALUE");
-        }
-        ret =  (Integer) invoke(compile("testSwitchDefault1I"), 3);
-        if (ret != null) {
-            printReport("testSwitchDefault1I: " + ret);
-        } else {
-            printReport("testSwitchDefault1I: no VALUE");
-        }
-        ret = (Integer) invoke(compile("testSwitch1I"), 2);
-        if (ret != null) {
-            printReport("testSwitch1I: " + ret);
-        } else {
-            printReport("testSwitch1I: no VALUE");
-        }
-        ret = (Integer) invoke(compile("testIfElse1I"), 222);
-        if (ret != null) {
-            printReport("testIfElse1I: " + ret);
-        } else {
-            printReport("testIfElse1I: no VALUE");
-        }
-        ret = (Integer) invoke(compile("testIfElse2I"), 19, 64);
-        if (ret != null) {
-            printReport("testIfElse2I: " + (char) ret.intValue());
-        } else {
-            printReport("testIfElse2I: no VALUE");
-        }
-        compile("testStatic");
-        compile("testCall");
-        compile("testLookupSwitch1I");
+    public void testControl1() {
+        test("testLoop", 42);
+        test("testSwitchDefault1I", 3);
+        test("testSwitch1I", 2);
+        test("testIfElse1I", 222);
+        test("testIfElse2I", 19, 64);
+    }
+
+    @Test
+    public void testControl2() {
+        compileKernel("testStatic");
+        compileKernel("testCall");
+    }
+
+    @Ignore("[CUDA] Check for malformed PTX kernel or incorrect PTX compilation options")
+    @Test
+    public void testControl3() {
+        // test("testIntegerTestBranch2I", 0xff00, 0x00ff);
+        compileKernel("testIntegerTestBranch2I");
+        compileKernel("testLookupSwitch1I");
+    }
+
+    public static boolean testIntegerTestBranch2I(int x, int y) {
+        return (x & y) == 0;
     }
 
     public static int testLoop(int n) {
@@ -83,12 +71,12 @@ public class ControlPTXTest extends PTXTestBase {
     }
 
     public static int testIfElse2I(int c, int y) {
-        if  (c > 19) {
-            return (int) 'M';    // millenial
+        if (c > 19) {
+            return 'M';    // millenial
         } else if (y > 84) {
-            return (int) 'Y';    // young
+            return 'Y';    // young
         } else {
-            return (int) 'O';    // old
+            return 'O';    // old
         }
     }
 
@@ -157,14 +145,6 @@ public class ControlPTXTest extends PTXTestBase {
     }
 
     public static void main(String[] args) {
-        ControlPTXTest test = new ControlPTXTest();
-        for (Method m : ControlPTXTest.class.getMethods()) {
-            String name = m.getName();
-            if (m.getAnnotation(Test.class) == null && name.startsWith("test")) {
-                // CheckStyle: stop system..print check
-                System.out.println(name + ": \n" + new String(test.compile(name).getTargetCode()));
-                // CheckStyle: resume system..print check
-            }
-        }
+        compileAndPrintCode(new ControlPTXTest());
     }
 }
