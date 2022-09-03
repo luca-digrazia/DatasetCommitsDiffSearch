@@ -124,7 +124,7 @@ final class PolyglotExceptionFrame extends AbstractStackFrameImpl {
             return null;
         }
 
-        PolyglotEngineImpl engine = exception.context.getEngine();
+        PolyglotEngineImpl engine = exception.engine;
         PolyglotLanguage language = engine.idToLanguage.get(info.getId());
         String rootName = targetRoot.getName();
 
@@ -146,7 +146,7 @@ final class PolyglotExceptionFrame extends AbstractStackFrameImpl {
     }
 
     static PolyglotExceptionFrame createHost(PolyglotExceptionImpl exception, StackTraceElement hostStack) {
-        PolyglotLanguage language = exception.context.getEngine().hostLanguage;
+        PolyglotLanguage language = exception.engine.hostLanguage;
 
         // source section for the host language is currently null
         // we should potentially in the future create a source section for the host language
@@ -175,11 +175,10 @@ final class PolyglotExceptionFrame extends AbstractStackFrameImpl {
             return "Unknown";
         }
         StringBuilder b = new StringBuilder();
-        String path = source.getPath();
-        if (path == null) {
+        if (source.getPath() == null) {
             b.append(source.getName());
         } else {
-            Path pathAbsolute = Paths.get(path);
+            Path pathAbsolute = Paths.get(source.getPath());
             Path pathBase = new File("").getAbsoluteFile().toPath();
             try {
                 Path pathRelative = pathBase.relativize(pathAbsolute);
