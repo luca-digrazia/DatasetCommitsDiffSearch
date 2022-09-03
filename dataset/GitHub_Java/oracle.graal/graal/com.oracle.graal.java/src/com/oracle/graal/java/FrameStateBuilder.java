@@ -34,22 +34,19 @@ import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.Node.Verbosity;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
 
 public class FrameStateBuilder {
 
     private static final ValueNode[] EMPTY_ARRAY = new ValueNode[0];
-    private static final MonitorIdNode[] EMPTY_MONITOR_ARRAY = new MonitorIdNode[0];
 
     private final ResolvedJavaMethod method;
     private final StructuredGraph graph;
 
     private final ValueNode[] locals;
     private final ValueNode[] stack;
-    private ValueNode[] lockedObjects;
-    private MonitorIdNode[] monitorIds;
+    private ValueNode[] locks;
 
     private int stackSize;
 
@@ -65,8 +62,7 @@ public class FrameStateBuilder {
         this.locals = new ValueNode[method.getMaxLocals()];
         // we always need at least one stack slot (for exceptions)
         this.stack = new ValueNode[Math.max(1, method.getMaxStackSize())];
-        this.lockedObjects = EMPTY_ARRAY;
-        this.monitorIds = EMPTY_MONITOR_ARRAY;
+        this.locks = EMPTY_ARRAY;
 
         int javaIndex = 0;
         int index = 0;
@@ -104,14 +100,12 @@ public class FrameStateBuilder {
         graph = other.graph;
         locals = other.locals.clone();
         stack = other.stack.clone();
-        lockedObjects = other.lockedObjects == EMPTY_ARRAY ? EMPTY_ARRAY : other.lockedObjects.clone();
-        monitorIds = other.monitorIds == EMPTY_MONITOR_ARRAY ? EMPTY_MONITOR_ARRAY : other.monitorIds.clone();
+        locks = other.locks == EMPTY_ARRAY ? EMPTY_ARRAY : other.locks.clone();
         stackSize = other.stackSize;
         rethrowException = other.rethrowException;
 
         assert locals.length == method.getMaxLocals();
         assert stack.length == Math.max(1, method.getMaxStackSize());
-        assert lockedObjects.length == monitorIds.length;
     }
 
     @Override
@@ -126,8 +120,8 @@ public class FrameStateBuilder {
             sb.append(i == 0 ? "" : ",").append(stack[i] == null ? "_" : stack[i].toString(Verbosity.Id));
         }
         sb.append("] locks: [");
-        for (int i = 0; i < lockedObjects.length; i++) {
-            sb.append(i == 0 ? "" : ",").append(lockedObjects[i].toString(Verbosity.Id)).append(" / ").append(monitorIds[i].toString(Verbosity.Id));
+        for (int i = 0; i < locks.length; i++) {
+            sb.append(i == 0 ? "" : ",").append(locks[i] == null ? "_" : locks[i].toString(Verbosity.Id));
         }
         sb.append("]");
         if (rethrowException) {
@@ -138,7 +132,7 @@ public class FrameStateBuilder {
     }
 
     public FrameState create(int bci) {
-        return graph.add(new FrameState(method, bci, locals, Arrays.asList(stack).subList(0, stackSize), lockedObjects, monitorIds, rethrowException, false));
+        return graph.add(new FrameState(method, bci, locals, Arrays.asList(stack).subList(0, stackSize), locks, rethrowException, false));
     }
 
     public FrameStateBuilder copy() {
@@ -147,7 +141,6 @@ public class FrameStateBuilder {
 
     public boolean isCompatibleWith(FrameStateBuilder other) {
         assert method == other.method && graph == other.graph && localsSize() == other.localsSize() : "Can only compare frame states of the same method";
-        assert lockedObjects.length == monitorIds.length && other.lockedObjects.length == other.monitorIds.length : "mismatch between lockedObjects and monitorIds";
 
         if (stackSize() != other.stackSize()) {
             return false;
@@ -159,11 +152,11 @@ public class FrameStateBuilder {
                 return false;
             }
         }
-        if (lockedObjects.length != other.lockedObjects.length) {
+        if (locks.length != other.locks.length) {
             return false;
         }
-        for (int i = 0; i < lockedObjects.length; i++) {
-            if (GraphUtil.originalValue(lockedObjects[i]) != GraphUtil.originalValue(other.lockedObjects[i]) || monitorIds[i] != other.monitorIds[i]) {
+        for (int i = 0; i < locks.length; i++) {
+            if (GraphUtil.originalValue(locks[i]) != GraphUtil.originalValue(other.locks[i])) {
                 throw new BailoutException("unbalanced monitors");
             }
         }
@@ -179,9 +172,8 @@ public class FrameStateBuilder {
         for (int i = 0; i < stackSize(); i++) {
             storeStack(i, merge(stackAt(i), other.stackAt(i), block));
         }
-        for (int i = 0; i < lockedObjects.length; i++) {
-            lockedObjects[i] = merge(lockedObjects[i], other.lockedObjects[i], block);
-            assert monitorIds[i] == other.monitorIds[i];
+        for (int i = 0; i < locks.length; i++) {
+            locks[i] = merge(locks[i], other.locks[i], block);
         }
     }
 
@@ -242,8 +234,8 @@ public class FrameStateBuilder {
         for (int i = 0; i < stackSize(); i++) {
             storeStack(i, createLoopPhi(loopBegin, stackAt(i)));
         }
-        for (int i = 0; i < lockedObjects.length; i++) {
-            lockedObjects[i] = createLoopPhi(loopBegin, lockedObjects[i]);
+        for (int i = 0; i < locks.length; i++) {
+            locks[i] = createLoopPhi(loopBegin, locks[i]);
         }
     }
 
@@ -262,11 +254,11 @@ public class FrameStateBuilder {
                 storeStack(i, ProxyNode.forValue(value, loopExit, graph));
             }
         }
-        for (int i = 0; i < lockedObjects.length; i++) {
-            ValueNode value = lockedObjects[i];
+        for (int i = 0; i < locks.length; i++) {
+            ValueNode value = locks[i];
             if (value != null && (!loopEntryState.contains(value) || loopExit.loopBegin().isPhiAtMerge(value))) {
                 Debug.log(" inserting proxy for %s", value);
-                lockedObjects[i] = ProxyNode.forValue(value, loopExit, graph);
+                locks[i] = ProxyNode.forValue(value, loopExit, graph);
             }
         }
     }
@@ -286,11 +278,11 @@ public class FrameStateBuilder {
                 storeStack(i, ProxyNode.forValue(value, begin, graph));
             }
         }
-        for (int i = 0; i < lockedObjects.length; i++) {
-            ValueNode value = lockedObjects[i];
+        for (int i = 0; i < locks.length; i++) {
+            ValueNode value = locks[i];
             if (value != null) {
                 Debug.log(" inserting proxy for %s", value);
-                lockedObjects[i] = ProxyNode.forValue(value, begin, graph);
+                locks[i] = ProxyNode.forValue(value, begin, graph);
             }
         }
     }
@@ -381,13 +373,10 @@ public class FrameStateBuilder {
      * 
      * @param object the object whose monitor will be locked.
      */
-    public void pushLock(ValueNode object, MonitorIdNode monitorId) {
+    public void pushLock(ValueNode object) {
         assert object.isAlive() && object.kind() == Kind.Object : "unexpected value: " + object;
-        lockedObjects = Arrays.copyOf(lockedObjects, lockedObjects.length + 1);
-        monitorIds = Arrays.copyOf(monitorIds, monitorIds.length + 1);
-        lockedObjects[lockedObjects.length - 1] = object;
-        monitorIds[monitorIds.length - 1] = monitorId;
-        assert lockedObjects.length == monitorIds.length;
+        locks = Arrays.copyOf(locks, locks.length + 1);
+        locks[locks.length - 1] = object;
     }
 
     /**
@@ -397,23 +386,17 @@ public class FrameStateBuilder {
      */
     public ValueNode popLock() {
         try {
-            return lockedObjects[lockedObjects.length - 1];
+            return locks[locks.length - 1];
         } finally {
-            lockedObjects = lockedObjects.length == 1 ? EMPTY_ARRAY : Arrays.copyOf(lockedObjects, lockedObjects.length - 1);
-            monitorIds = monitorIds.length == 1 ? EMPTY_MONITOR_ARRAY : Arrays.copyOf(monitorIds, monitorIds.length - 1);
+            locks = locks.length == 1 ? EMPTY_ARRAY : Arrays.copyOf(locks, locks.length - 1);
         }
-    }
-
-    public MonitorIdNode peekMonitorId() {
-        return monitorIds[monitorIds.length - 1];
     }
 
     /**
      * @return the current lock depth
      */
     public int lockDepth() {
-        assert lockedObjects.length == monitorIds.length;
-        return lockedObjects.length;
+        return locks.length;
     }
 
     /**
@@ -677,9 +660,8 @@ public class FrameStateBuilder {
                 return true;
             }
         }
-        assert lockedObjects.length == monitorIds.length;
-        for (int i = 0; i < lockedObjects.length; i++) {
-            if (lockedObjects[i] == value || monitorIds[i] == value) {
+        for (int i = 0; i < locks.length; i++) {
+            if (locks[i] == value) {
                 return true;
             }
         }
