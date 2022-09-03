@@ -32,7 +32,7 @@ package com.oracle.truffle.llvm.nodes.op.arith.vector;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI1Vector;
 
 @NodeChildren({@NodeChild("leftNode"), @NodeChild("rightNode")})
@@ -41,56 +41,7 @@ public abstract class LLVMI1VectorArithmeticNode extends LLVMExpressionNode {
     public abstract static class LLVMI1VectorAddNode extends LLVMI1VectorArithmeticNode {
         @Specialization
         protected LLVMI1Vector executeI1Vector(LLVMI1Vector left, LLVMI1Vector right) {
-            return left.add(right);
-        }
-    }
-
-    public abstract static class LLVMI1VectorMulNode extends LLVMI1VectorArithmeticNode {
-
-        @Specialization
-        public LLVMI1Vector executeI1Vector(LLVMI1Vector left, LLVMI1Vector right) {
-            return left.mul(right);
-        }
-
-    }
-
-    public abstract static class LLVMI1VectorSubNode extends LLVMI1VectorArithmeticNode {
-
-        @Specialization
-        protected LLVMI1Vector executeI1Vector(LLVMI1Vector left, LLVMI1Vector right) {
-            return left.sub(right);
-        }
-    }
-
-    public abstract static class LLVMI1VectorDivNode extends LLVMI1VectorArithmeticNode {
-
-        @Specialization
-        protected LLVMI1Vector executeI1Vector(LLVMI1Vector left, LLVMI1Vector right) {
-            return left.div(right);
-        }
-    }
-
-    public abstract static class LLVMI1VectorUDivNode extends LLVMI1VectorArithmeticNode {
-
-        @Specialization
-        protected LLVMI1Vector executeI1Vector(LLVMI1Vector left, LLVMI1Vector right) {
-            return left.divUnsigned(right);
-        }
-    }
-
-    public abstract static class LLVMI1VectorRemNode extends LLVMI1VectorArithmeticNode {
-
-        @Specialization
-        protected LLVMI1Vector executeI1Vector(LLVMI1Vector left, LLVMI1Vector right) {
-            return left.rem(right);
-        }
-    }
-
-    public abstract static class LLVMI1VectorURemNode extends LLVMI1VectorArithmeticNode {
-
-        @Specialization
-        protected LLVMI1Vector executeI1Vector(LLVMI1Vector left, LLVMI1Vector right) {
-            return left.remUnsigned(right);
+            return left.xor(right);
         }
     }
 }

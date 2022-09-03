@@ -32,11 +32,11 @@ package com.oracle.truffle.llvm.parser.factories;
 import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.vector.LLVMExtractElementNodeFactory.LLVMDoubleExtractElementNodeGen;
 import com.oracle.truffle.llvm.nodes.vector.LLVMExtractElementNodeFactory.LLVMFloatExtractElementNodeGen;
-import com.oracle.truffle.llvm.nodes.vector.LLVMExtractElementNodeFactory.LLVMI16ExtractElementNodeGen;
 import com.oracle.truffle.llvm.nodes.vector.LLVMExtractElementNodeFactory.LLVMI1ExtractElementNodeGen;
+import com.oracle.truffle.llvm.nodes.vector.LLVMExtractElementNodeFactory.LLVMI8ExtractElementNodeGen;
+import com.oracle.truffle.llvm.nodes.vector.LLVMExtractElementNodeFactory.LLVMI16ExtractElementNodeGen;
 import com.oracle.truffle.llvm.nodes.vector.LLVMExtractElementNodeFactory.LLVMI32ExtractElementNodeGen;
 import com.oracle.truffle.llvm.nodes.vector.LLVMExtractElementNodeFactory.LLVMI64ExtractElementNodeGen;
-import com.oracle.truffle.llvm.nodes.vector.LLVMExtractElementNodeFactory.LLVMI8ExtractElementNodeGen;
 import com.oracle.truffle.llvm.nodes.vector.LLVMInsertElementNodeFactory.LLVMDoubleInsertElementNodeGen;
 import com.oracle.truffle.llvm.nodes.vector.LLVMInsertElementNodeFactory.LLVMFloatInsertElementNodeGen;
 import com.oracle.truffle.llvm.nodes.vector.LLVMInsertElementNodeFactory.LLVMI16InsertElementNodeGen;
@@ -46,38 +46,37 @@ import com.oracle.truffle.llvm.nodes.vector.LLVMInsertElementNodeFactory.LLVMI64
 import com.oracle.truffle.llvm.nodes.vector.LLVMInsertElementNodeFactory.LLVMI8InsertElementNodeGen;
 import com.oracle.truffle.llvm.nodes.vector.LLVMShuffleVectorNodeFactory.LLVMShuffleI32VectorNodeGen;
 import com.oracle.truffle.llvm.nodes.vector.LLVMShuffleVectorNodeFactory.LLVMShuffleI8VectorNodeGen;
-import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
-import com.oracle.truffle.llvm.runtime.types.VectorType;
+import com.oracle.truffle.llvm.runtime.types.LLVMBaseType;
 
 final class LLVMVectorFactory {
 
     private LLVMVectorFactory() {
     }
 
-    static LLVMExpressionNode createInsertElement(VectorType resultType, LLVMExpressionNode vector, LLVMExpressionNode element,
+    static LLVMExpressionNode createInsertElement(LLVMBaseType resultType, LLVMExpressionNode vector, LLVMExpressionNode element,
                     LLVMExpressionNode index) {
-        switch (resultType.getElementType().getPrimitiveKind()) {
-            case I1:
+        switch (resultType) {
+            case I1_VECTOR:
                 return LLVMI1InsertElementNodeGen.create(vector, element, index);
-            case I8:
+            case I8_VECTOR:
                 return LLVMI8InsertElementNodeGen.create(vector, element, index);
-            case I16:
+            case I16_VECTOR:
                 return LLVMI16InsertElementNodeGen.create(vector, element, index);
-            case I32:
+            case I32_VECTOR:
                 return LLVMI32InsertElementNodeGen.create(vector, element, index);
-            case I64:
+            case I64_VECTOR:
                 return LLVMI64InsertElementNodeGen.create(vector, element, index);
-            case FLOAT:
+            case FLOAT_VECTOR:
                 return LLVMFloatInsertElementNodeGen.create(vector, element, index);
-            case DOUBLE:
+            case DOUBLE_VECTOR:
                 return LLVMDoubleInsertElementNodeGen.create(vector, element, index);
             default:
                 throw new AssertionError("vector type " + resultType + "  not supported!");
         }
     }
 
-    static LLVMExpressionNode createExtractElement(PrimitiveType resultType, LLVMExpressionNode vector, LLVMExpressionNode index) {
-        switch (resultType.getPrimitiveKind()) {
+    static LLVMExpressionNode createExtractElement(LLVMBaseType resultType, LLVMExpressionNode vector, LLVMExpressionNode index) {
+        switch (resultType) {
             case I1:
                 return LLVMI1ExtractElementNodeGen.create(vector, index);
             case I8:
@@ -97,11 +96,11 @@ final class LLVMVectorFactory {
         }
     }
 
-    static LLVMExpressionNode createShuffleVector(VectorType resultType, LLVMExpressionNode vector1, LLVMExpressionNode vector2, LLVMExpressionNode mask) {
-        switch (resultType.getElementType().getPrimitiveKind()) {
-            case I8:
+    static LLVMExpressionNode createShuffleVector(LLVMBaseType resultType, LLVMExpressionNode vector1, LLVMExpressionNode vector2, LLVMExpressionNode mask) {
+        switch (resultType) {
+            case I8_VECTOR:
                 return LLVMShuffleI8VectorNodeGen.create(vector1, vector2, mask);
-            case I32:
+            case I32_VECTOR:
                 return LLVMShuffleI32VectorNodeGen.create(vector1, vector2, mask);
             default:
                 throw new AssertionError(resultType);
