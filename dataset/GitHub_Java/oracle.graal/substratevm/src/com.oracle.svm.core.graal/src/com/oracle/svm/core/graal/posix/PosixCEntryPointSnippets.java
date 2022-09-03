@@ -288,7 +288,7 @@ public final class PosixCEntryPointSnippets extends SubstrateTemplates implement
             return Errors.UNSPECIFIED;
         }
         PosixVMThreads.finishTearDown();
-        return PosixIsolates.tearDownCurrent();
+        return Errors.NO_ERROR;
     }
 
     @Snippet
