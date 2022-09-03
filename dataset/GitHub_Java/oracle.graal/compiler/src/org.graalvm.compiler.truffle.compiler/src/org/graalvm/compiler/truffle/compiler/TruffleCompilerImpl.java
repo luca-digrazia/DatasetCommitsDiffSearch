@@ -523,8 +523,8 @@ public abstract class TruffleCompilerImpl implements TruffleCompiler {
 
         try (DebugCloseable a = CodeInstallationTime.start(debug); DebugCloseable c = CodeInstallationMemUse.start(debug)) {
             InstalledCode installedCode = createInstalledCode(compilable);
-            assert graph.getSpeculationLog() == result.getSpeculationLog();
-            backend.createInstalledCode(debug, graph.method(), compilationRequest, result, installedCode, false);
+
+            backend.createInstalledCode(debug, graph.method(), compilationRequest, result, graph.getSpeculationLog(), installedCode, false);
         } catch (Throwable e) {
             throw debug.handle(e);
         }

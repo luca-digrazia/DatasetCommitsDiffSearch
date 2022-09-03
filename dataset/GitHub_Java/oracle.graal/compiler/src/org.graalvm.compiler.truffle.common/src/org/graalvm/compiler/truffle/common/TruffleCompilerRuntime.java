@@ -230,15 +230,18 @@ public interface TruffleCompilerRuntime {
     /**
      * Gets a plan for inlining in terms of a Truffle AST call graph.
      *
-     * @return the requested plan or {@code null} a plan cannot be created in the calling context
+     * @return {@link TruffleInliningPlan}. It may return {@code null} when called outside of the
+     *         Truffle compilation.
      */
     TruffleInliningPlan createInliningPlan(CompilableTruffleAST compilable, TruffleCompilationTask task);
 
     /**
-     * Gets the {@link CompilableTruffleAST} represented by {@code constant}.
+     * Returns a {@link CompilableTruffleAST} represented by given {@link JavaConstant}.
      *
-     * @return {@code null} if {@code constant} does not represent a {@link CompilableTruffleAST} or
-     *         it cannot be converted to a {@link CompilableTruffleAST} in the calling context
+     * @param constant the {@link JavaConstant} representing {@link CompilableTruffleAST}
+     * @return {@link CompilableTruffleAST} or {@code null} when the object represented by the
+     *         {@link JavaConstant} is not instance of {@link CompilableTruffleAST}.It may also
+     *         return {@code null} when called outside of the Truffle compilation.
      */
     CompilableTruffleAST asCompilableTruffleAST(JavaConstant constant);
 
