@@ -123,7 +123,6 @@ public class PerformanceTruffleInliningTest extends TruffleInliningTest {
         Assert.assertTrue("Took too long: " + TimeUnit.NANOSECONDS.toMillis(duration) + "ms", duration < TimeUnit.MILLISECONDS.toNanos(maxDuration));
     }
 
-    @SuppressWarnings("unused")
     protected long executionTime(OptimizedCallTarget target) {
         long start = System.nanoTime();
         TruffleInlining decisions = new TruffleInlining(target, policy);
