@@ -82,7 +82,7 @@ public class SLLoggerTest {
     }
 
     @After
-    public void tearDown() {
+    public void tearDown() throws IOException {
         if (currentContext != null) {
             currentContext.close();
             currentContext = null;
@@ -98,35 +98,35 @@ public class SLLoggerTest {
     }
 
     @Test
-    public void testLoggerNoConfig() {
+    public void testLoggerNoConfig() throws IOException {
         final Context context = createContext(Collections.emptyMap());
         executeSlScript(context);
         Assert.assertTrue(functionNames(testHandler.getRecords()).isEmpty());
     }
 
     @Test
-    public void testLoggerSlFunctionLevelFine() {
+    public void testLoggerSlFunctionLevelFine() throws IOException {
         final Context context = createContext(createLoggingOptions("sl", "com.oracle.truffle.sl.runtime.SLFunction", "FINE"));
         executeSlScript(context);
         Assert.assertFalse(functionNames(testHandler.getRecords()).isEmpty());
     }
 
     @Test
-    public void testLoggerSlFunctionParentLevelFine() {
+    public void testLoggerSlFunctionParentLevelFine() throws IOException {
         final Context context = createContext(createLoggingOptions("sl", "com.oracle.truffle.sl.runtime", "FINE"));
         executeSlScript(context);
         Assert.assertFalse(functionNames(testHandler.getRecords()).isEmpty());
     }
 
     @Test
-    public void testLoggerSlFunctionSiblingLevelFine() {
+    public void testLoggerSlFunctionSiblingLevelFine() throws IOException {
         final Context context = createContext(createLoggingOptions("sl", "com.oracle.truffle.sl.runtime.SLContext", "FINE"));
         executeSlScript(context);
         Assert.assertTrue(functionNames(testHandler.getRecords()).isEmpty());
     }
 
     @Test
-    public void testMultipleContextsExclusiveFineLevel() {
+    public void testMultipleContextsExclusiveFineLevel() throws IOException {
         final TestHandler handler1 = new TestHandler();
         try (Context ctx = Context.newBuilder("sl").options(createLoggingOptions("sl", "com.oracle.truffle.sl.runtime.SLFunction", "FINE")).logHandler(handler1).build()) {
             executeSlScript(ctx, ADD_SL, 2);
@@ -151,7 +151,7 @@ public class SLLoggerTest {
     }
 
     @Test
-    public void testMultipleContextsExclusiveDifferentLogLevel() {
+    public void testMultipleContextsExclusiveDifferentLogLevel() throws IOException {
         final TestHandler handler1 = new TestHandler();
         try (Context ctx = Context.newBuilder("sl").options(createLoggingOptions("sl", "com.oracle.truffle.sl.runtime.SLFunction", "FINE")).logHandler(handler1).build()) {
             executeSlScript(ctx, ADD_SL, 2);
@@ -175,7 +175,7 @@ public class SLLoggerTest {
     }
 
     @Test
-    public void testMultipleContextsNestedFineLevel() {
+    public void testMultipleContextsNestedFineLevel() throws IOException {
         final TestHandler handler1 = new TestHandler();
         final TestHandler handler2 = new TestHandler();
         final TestHandler handler3 = new TestHandler();
@@ -200,7 +200,7 @@ public class SLLoggerTest {
     }
 
     @Test
-    public void testMultipleContextsNestedDifferentLogLevel() {
+    public void testMultipleContextsNestedDifferentLogLevel() throws IOException {
         final TestHandler handler1 = new TestHandler();
         final TestHandler handler2 = new TestHandler();
         final TestHandler handler3 = new TestHandler();
@@ -223,11 +223,11 @@ public class SLLoggerTest {
         Assert.assertTrue(functionNames.isEmpty());
     }
 
-    private static void executeSlScript(final Context context) {
+    private static void executeSlScript(final Context context) throws IOException {
         executeSlScript(context, ADD_SL, 2);
     }
 
-    private static void executeSlScript(final Context context, final Source src, final int expectedResult) {
+    private static void executeSlScript(final Context context, final Source src, final int expectedResult) throws IOException {
         final Value res = context.eval(src);
         Assert.assertTrue(res.isNumber());
         Assert.assertEquals(expectedResult, res.asInt());

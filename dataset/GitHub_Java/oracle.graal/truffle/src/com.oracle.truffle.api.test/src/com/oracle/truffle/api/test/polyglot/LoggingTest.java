@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -27,39 +25,54 @@ package com.oracle.truffle.api.test.polyglot;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.TruffleLogger;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.interop.ForeignAccess;
-import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.RootNode;
 import java.util.AbstractMap;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
+import java.util.logging.Filter;
 import java.util.logging.Handler;
 import java.util.logging.Level;
 import java.util.logging.LogRecord;
+import java.util.logging.Logger;
 import org.graalvm.polyglot.Context;
 import org.junit.After;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
 
 public class LoggingTest {
 
+    private Map<Handler, Level> rootHandlerLevels;
+
+    @Before
+    public void setUp() {
+        rootHandlerLevels = new IdentityHashMap<>();
+        for (Handler handler : Logger.getLogger("").getHandlers()) {
+            rootHandlerLevels.put(handler, handler.getLevel());
+            handler.setLevel(Level.OFF);
+        }
+    }
+
     @After
     public void tearDown() {
+        for (Handler handler : Logger.getLogger("").getHandlers()) {
+            final Level level = rootHandlerLevels.get(handler);
+            handler.setLevel(level);
+        }
         AbstractLoggingLanguage.action = null;
     }
 
     @Test
     public void testDefaultLogging() {
         final TestHandler handler = new TestHandler();
-        final Level defaultLevel = Level.INFO;
+        final Level defaultLevel = min(Logger.getLogger("").getLevel(), Level.INFO);
         try (Context ctx = Context.newBuilder().logHandler(handler).build()) {
             ctx.eval(LoggingLanguageFirst.ID, "");
             List<Map.Entry<Level, String>> expected = createExpectedLog(LoggingLanguageFirst.ID, defaultLevel, Collections.emptyMap());
@@ -73,7 +86,7 @@ public class LoggingTest {
 
     @Test
     public void testSingleLanguageAllLogging() {
-        final Level defaultLevel = Level.INFO;
+        final Level defaultLevel = min(Logger.getLogger("").getLevel(), Level.INFO);
         TestHandler handler = new TestHandler();
         try (Context ctx = Context.newBuilder().options(createLoggingOptions(LoggingLanguageFirst.ID, null, Level.FINEST.toString())).logHandler(handler).build()) {
             ctx.eval(LoggingLanguageFirst.ID, "");
@@ -125,7 +138,7 @@ public class LoggingTest {
 
     @Test
     public void testFinestOnListLogger() {
-        final Level defaultLevel = Level.INFO;
+        final Level defaultLevel = min(Logger.getLogger("").getLevel(), Level.INFO);
         TestHandler handler = new TestHandler();
         try (Context ctx = Context.newBuilder().options(createLoggingOptions(LoggingLanguageFirst.ID, "a.b", Level.FINEST.toString())).logHandler(handler).build()) {
             ctx.eval(LoggingLanguageFirst.ID, "");
@@ -139,7 +152,7 @@ public class LoggingTest {
 
     @Test
     public void testFinestOnIntermediateLogger() {
-        final Level defaultLevel = Level.INFO;
+        final Level defaultLevel = min(Logger.getLogger("").getLevel(), Level.INFO);
         TestHandler handler = new TestHandler();
         try (Context ctx = Context.newBuilder().options(createLoggingOptions(LoggingLanguageFirst.ID, "a.a", Level.FINEST.toString())).logHandler(handler).build()) {
             ctx.eval(LoggingLanguageFirst.ID, "");
@@ -153,7 +166,7 @@ public class LoggingTest {
 
     @Test
     public void testFinestOnIntermediateNonExistentLogger() {
-        final Level defaultLevel = Level.INFO;
+        final Level defaultLevel = min(Logger.getLogger("").getLevel(), Level.INFO);
         TestHandler handler = new TestHandler();
         try (Context ctx = Context.newBuilder().options(createLoggingOptions(LoggingLanguageFirst.ID, "b.a.a", Level.FINEST.toString())).logHandler(handler).build()) {
             ctx.eval(LoggingLanguageFirst.ID, "");
@@ -167,7 +180,7 @@ public class LoggingTest {
 
     @Test
     public void testDifferentLogLevelOnChildAndParent() {
-        final Level defaultLevel = Level.INFO;
+        final Level defaultLevel = min(Logger.getLogger("").getLevel(), Level.INFO);
         TestHandler handler = new TestHandler();
         try (Context ctx = Context.newBuilder().options(createLoggingOptions(
                         LoggingLanguageFirst.ID, "a", Level.FINE.toString(),
@@ -188,7 +201,7 @@ public class LoggingTest {
 
     @Test
     public void testMultipleContextsExclusive() {
-        final Level defaultLevel = Level.INFO;
+        final Level defaultLevel = min(Logger.getLogger("").getLevel(), Level.INFO);
         TestHandler handler = new TestHandler();
         try (Context ctx = Context.newBuilder().options(createLoggingOptions(LoggingLanguageFirst.ID, "a.a", Level.FINEST.toString())).logHandler(handler).build()) {
             ctx.eval(LoggingLanguageFirst.ID, "");
@@ -220,7 +233,7 @@ public class LoggingTest {
 
     @Test
     public void testMultipleContextsNested() {
-        final Level defaultLevel = Level.INFO;
+        final Level defaultLevel = min(Logger.getLogger("").getLevel(), Level.INFO);
         final TestHandler handler1 = new TestHandler();
         final TestHandler handler2 = new TestHandler();
         final TestHandler handler3 = new TestHandler();
@@ -252,7 +265,7 @@ public class LoggingTest {
 
     @Test
     public void testMultipleContextsNested2() {
-        final Level defaultLevel = Level.INFO;
+        final Level defaultLevel = min(Logger.getLogger("").getLevel(), Level.INFO);
         final TestHandler handler1 = new TestHandler();
         final TestHandler handler2 = new TestHandler();
         try (Context ctx1 = Context.newBuilder().options(createLoggingOptions(LoggingLanguageFirst.ID, "a", Level.FINER.toString())).logHandler(handler1).build()) {
@@ -271,7 +284,7 @@ public class LoggingTest {
 
     @Test
     public void testMultipleContextsNested3() {
-        final Level defaultLevel = Level.INFO;
+        final Level defaultLevel = min(Logger.getLogger("").getLevel(), Level.INFO);
         final TestHandler handler1 = new TestHandler();
         final TestHandler handler2 = new TestHandler();
         final TestHandler handler3 = new TestHandler();
@@ -293,7 +306,7 @@ public class LoggingTest {
 
     @Test
     public void testMultipleContextsNested4() {
-        final Level defaultLevel = Level.INFO;
+        final Level defaultLevel = min(Logger.getLogger("").getLevel(), Level.INFO);
         final TestHandler handler1 = new TestHandler();
         final TestHandler handler2 = new TestHandler();
         final TestHandler handler3 = new TestHandler();
@@ -314,141 +327,49 @@ public class LoggingTest {
     }
 
     @Test
-    public void testLogRecordImmutable() {
-        final TestHandler handler1 = new TestHandler();
-        try (Context ctx1 = Context.newBuilder().logHandler(handler1).build()) {
-            ctx1.eval(LoggingLanguageFirst.ID, "");
-            boolean logged = false;
-            for (LogRecord r : handler1.getRawLog()) {
-                logged = true;
-                assertImmutable(r);
-            }
-            Assert.assertTrue(logged);
-        }
-    }
-
-    @Test
-    public void testParametersPrimitive() {
-        final Object[] expected = new Object[]{1, 1L, null, 1.1, 1.1d, "test", 't', null, true};
-        AbstractLoggingLanguage.action = new Consumer<Collection<TruffleLogger>>() {
+    public void testLoggersImmutable() {
+        AbstractLoggingLanguage.action = new Consumer<Collection<Logger>>() {
             @Override
-            public void accept(final Collection<TruffleLogger> loggers) {
-                for (TruffleLogger logger : loggers) {
-                    logger.log(Level.WARNING, "Parameters", Arrays.copyOf(expected, expected.length));
+            public void accept(Collection<Logger> loggers) {
+                final Logger logger = loggers.iterator().next();
+                try {
+                    logger.setParent(Logger.getGlobal());
+                    Assert.fail("Should not reach here.");
+                } catch (SecurityException se) {
+                    // Expected
+                }
+                try {
+                    logger.setUseParentHandlers(false);
+                    Assert.fail("Should not reach here.");
+                } catch (SecurityException se) {
+                    // Expected
+                }
+                try {
+                    logger.setFilter(new Filter() {
+                        @Override
+                        public boolean isLoggable(LogRecord record) {
+                            return false;
+                        }
+                    });
+                    Assert.fail("Should not reach here.");
+                } catch (SecurityException se) {
+                    // Expected
+                }
+                try {
+                    logger.setLevel(Level.OFF);
+                    Assert.fail("Should not reach here.");
+                } catch (SecurityException se) {
+                    // Expected
                 }
             }
         };
-        final TestHandler handler1 = new TestHandler();
-        try (Context ctx1 = Context.newBuilder().logHandler(handler1).build()) {
-            ctx1.eval(LoggingLanguageFirst.ID, "");
-            boolean logged = false;
-            for (LogRecord r : handler1.getRawLog()) {
-                if ("Parameters".equals(r.getMessage())) {
-                    logged = true;
-                    Assert.assertArrayEquals(expected, r.getParameters());
-                }
-            }
-            Assert.assertTrue(logged);
+        try (Context ctx = Context.newBuilder().build()) {
+            ctx.eval(LoggingLanguageFirst.ID, "");
         }
     }
 
-    @Test
-    public void testParametersObjects() {
-        AbstractLoggingLanguage.action = new Consumer<Collection<TruffleLogger>>() {
-            @Override
-            public void accept(final Collection<TruffleLogger> loggers) {
-                for (TruffleLogger logger : loggers) {
-                    logger.log(Level.WARNING, "Parameters", new LoggingLanguageObject("passed"));
-                }
-            }
-        };
-        final TestHandler handler1 = new TestHandler();
-        try (Context ctx1 = Context.newBuilder().logHandler(handler1).build()) {
-            ctx1.eval(LoggingLanguageFirst.ID, "");
-            boolean logged = false;
-            for (LogRecord r : handler1.getRawLog()) {
-                if ("Parameters".equals(r.getMessage())) {
-                    logged = true;
-                    Assert.assertArrayEquals(new Object[]{"passed"}, r.getParameters());
-                }
-            }
-            Assert.assertTrue(logged);
-        }
-    }
-
-    private static void assertImmutable(final LogRecord r) {
-        try {
-            r.setLevel(Level.FINEST);
-            Assert.fail("Should not reach here.");
-        } catch (UnsupportedOperationException e) {
-            // Expected
-        }
-        try {
-            r.setLoggerName("test");
-            Assert.fail("Should not reach here.");
-        } catch (UnsupportedOperationException e) {
-            // Expected
-        }
-        try {
-            r.setMessage("test");
-            Assert.fail("Should not reach here.");
-        } catch (UnsupportedOperationException e) {
-            // Expected
-        }
-        try {
-            r.setMillis(10);
-            Assert.fail("Should not reach here.");
-        } catch (UnsupportedOperationException e) {
-            // Expected
-        }
-        try {
-            r.setParameters(new Object[0]);
-            Assert.fail("Should not reach here.");
-        } catch (UnsupportedOperationException e) {
-            // Expected
-        }
-        try {
-            r.setResourceBundle(null);
-            Assert.fail("Should not reach here.");
-        } catch (UnsupportedOperationException e) {
-            // Expected
-        }
-        try {
-            r.setResourceBundleName(null);
-            Assert.fail("Should not reach here.");
-        } catch (UnsupportedOperationException e) {
-            // Expected
-        }
-        try {
-            r.setSequenceNumber(10);
-            Assert.fail("Should not reach here.");
-        } catch (UnsupportedOperationException e) {
-            // Expected
-        }
-        try {
-            r.setSourceClassName("Test");
-            Assert.fail("Should not reach here.");
-        } catch (UnsupportedOperationException e) {
-            // Expected
-        }
-        try {
-            r.setSourceMethodName("test");
-            Assert.fail("Should not reach here.");
-        } catch (UnsupportedOperationException e) {
-            // Expected
-        }
-        try {
-            r.setThreadID(10);
-            Assert.fail("Should not reach here.");
-        } catch (UnsupportedOperationException e) {
-            // Expected
-        }
-        try {
-            r.setThrown(new NullPointerException());
-            Assert.fail("Should not reach here.");
-        } catch (UnsupportedOperationException e) {
-            // Expected
-        }
+    private static Level min(Level a, Level b) {
+        return a.intValue() < b.intValue() ? a : b;
     }
 
     private static Map<String, String> createLoggingOptions(final String... kvs) {
@@ -566,29 +487,16 @@ public class LoggingTest {
         }
     }
 
-    private static final class LoggingLanguageObject implements TruffleObject {
-        final String stringValue;
-
-        LoggingLanguageObject(final String stringValue) {
-            this.stringValue = stringValue;
-        }
-
-        @Override
-        public ForeignAccess getForeignAccess() {
-            return null;
-        }
-    }
-
     public abstract static class AbstractLoggingLanguage extends TruffleLanguage<LoggingContext> {
         static final String[] LOGGER_NAMES = {"a", "a.a", "a.b", "a.a.a", "b", "b.a", "b.a.a.a"};
         static final Level[] LOGGER_LEVELS = {Level.FINEST, Level.FINER, Level.FINE, Level.INFO, Level.SEVERE, Level.WARNING};
-        static Consumer<Collection<TruffleLogger>> action;
-        private final Collection<TruffleLogger> allLoggers;
+        static Consumer<Collection<Logger>> action;
+        private final Collection<Logger> allLoggers;
 
         AbstractLoggingLanguage(final String id) {
-            final Collection<TruffleLogger> loggers = new ArrayList<>(LOGGER_NAMES.length);
+            final Collection<Logger> loggers = new ArrayList<>(LOGGER_NAMES.length);
             for (String loggerName : LOGGER_NAMES) {
-                loggers.add(TruffleLogger.getLogger(id, loggerName));
+                loggers.add(Truffle.getLogger(id, loggerName, null));
             }
             allLoggers = loggers;
         }
@@ -600,12 +508,7 @@ public class LoggingTest {
 
         @Override
         protected boolean isObjectOfLanguage(Object object) {
-            return object instanceof LoggingLanguageObject;
-        }
-
-        @Override
-        protected String toString(LoggingContext context, Object value) {
-            return ((LoggingLanguageObject) value).stringValue;
+            return false;
         }
 
         @Override
@@ -625,7 +528,7 @@ public class LoggingTest {
 
         private void doLog() {
             for (Level level : LOGGER_LEVELS) {
-                for (TruffleLogger logger : allLoggers) {
+                for (Logger logger : allLoggers) {
                     logger.log(level, logger.getName());
                 }
             }
@@ -651,7 +554,7 @@ public class LoggingTest {
     }
 
     private static final class TestHandler extends Handler {
-        private final List<LogRecord> logRecords;
+        private final List<Map.Entry<Level, String>> logRecords;
 
         TestHandler() {
             this.logRecords = new ArrayList<>();
@@ -663,7 +566,7 @@ public class LoggingTest {
             Assert.assertNotNull(message);
             final Level level = record.getLevel();
             Assert.assertNotNull(level);
-            logRecords.add(record);
+            logRecords.add(new AbstractMap.SimpleImmutableEntry<>(level, message));
         }
 
         @Override
@@ -676,14 +579,6 @@ public class LoggingTest {
         }
 
         List<Map.Entry<Level, String>> getLog() {
-            final List<Map.Entry<Level, String>> res = new ArrayList<>();
-            for (LogRecord r : logRecords) {
-                res.add(new AbstractMap.SimpleImmutableEntry<>(r.getLevel(), r.getMessage()));
-            }
-            return res;
-        }
-
-        List<LogRecord> getRawLog() {
             return logRecords;
         }
 
