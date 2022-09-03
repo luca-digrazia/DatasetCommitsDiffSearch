@@ -32,8 +32,6 @@ import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.LIRInstruction.OperandFlag;
-import com.oracle.graal.lir.LIRInstruction.OperandMode;
 import com.oracle.graal.lir.StandardOp.MoveOp;
 import com.oracle.graal.lir.constopt.ConstantTree.Flags;
 import com.oracle.graal.lir.constopt.ConstantTree.NodeCost;
@@ -165,7 +163,7 @@ public class ConstantLoadOptimization {
 
             InstructionValueConsumer loadConsumer = new InstructionValueConsumer() {
                 @Override
-                public void visitValue(LIRInstruction instruction, Value value, OperandMode mode, EnumSet<OperandFlag> flags) {
+                public void visitValue(LIRInstruction instruction, Value value) {
                     if (isVariable(value)) {
                         Variable var = (Variable) value;
 
@@ -219,8 +217,8 @@ public class ConstantLoadOptimization {
                 // set instruction id to the index in the lir instruction list
                 inst.setId(opId++);
                 inst.visitEachOutput(loadConsumer);
-                inst.forEachInputPos(useProcedure);
-                inst.forEachAlivePos(useProcedure);
+                inst.forEachInput(useProcedure);
+                inst.forEachAlive(useProcedure);
 
             }
         }
