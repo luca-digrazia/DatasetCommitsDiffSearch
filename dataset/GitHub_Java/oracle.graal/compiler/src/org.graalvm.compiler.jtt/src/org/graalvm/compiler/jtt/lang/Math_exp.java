@@ -22,15 +22,12 @@
  */
 package org.graalvm.compiler.jtt.lang;
 
-import org.graalvm.compiler.jtt.JTTTest;
 import org.graalvm.compiler.options.OptionValues;
 import org.junit.Test;
 
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-
 /*
  */
-public class Math_exp extends JTTTest {
+public class Math_exp extends UnaryMath {
 
     public static double test(double arg) {
         return Math.exp(arg);
@@ -76,29 +73,9 @@ public class Math_exp extends JTTTest {
         runTest("test", -1024D);
     }
 
-    private static final long STEP = Long.MAX_VALUE / 1_000_000;
-
-    /**
-     * Tests a wider range of values.
-     */
     @Test
     public void run8() {
         OptionValues options = getInitialOptions();
-        ResolvedJavaMethod method = getResolvedJavaMethod("test");
-        Object receiver = null;
-        long testIteration = 0;
-        for (long l = Long.MIN_VALUE;; l += STEP) {
-            double d = Double.longBitsToDouble(l);
-            Result expect = executeExpected(method, receiver, d);
-            try {
-                testAgainstExpected(options, method, expect, EMPTY, receiver, d);
-                testIteration++;
-            } catch (AssertionError e) {
-                throw new AssertionError(String.format("%d: While testing %g [long: %d, hex: %x]", testIteration, d, l, l), e);
-            }
-            if (Long.MAX_VALUE - STEP < l) {
-                break;
-            }
-        }
+        testManyValues(options, getResolvedJavaMethod("test"));
     }
 }
