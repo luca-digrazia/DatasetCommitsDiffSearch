@@ -29,14 +29,12 @@ import java.util.Collections;
 public class Graph {
 
     private final ArrayList<Node> nodes;
-    private final StartNode start;
-    private final EndNode end;
+    private final Root root;
     int nextId;
 
     public Graph() {
         nodes = new ArrayList<Node>();
-        start = new StartNode(this);
-        end = new EndNode(this);
+        root = new Root(this);
     }
 
     public Collection<Node> getNodes() {
@@ -53,12 +51,8 @@ public class Graph {
         nodes.set(node.id(), Node.Null);
     }
 
-    public StartNode start() {
-        return start;
-    }
-
-    public EndNode end() {
-        return end;
+    public Root root() {
+        return root;
     }
 
     public NodeBitMap createNodeBitMap() {
