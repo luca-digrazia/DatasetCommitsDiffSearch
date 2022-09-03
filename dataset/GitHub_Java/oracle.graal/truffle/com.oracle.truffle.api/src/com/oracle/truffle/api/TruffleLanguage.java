@@ -38,17 +38,21 @@ import java.util.WeakHashMap;
 import com.oracle.truffle.api.debug.Debugger;
 import com.oracle.truffle.api.debug.SuspendedEvent;
 import com.oracle.truffle.api.frame.FrameInstance;
+import com.oracle.truffle.api.frame.FrameInstance.FrameAccess;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.impl.Accessor;
 import com.oracle.truffle.api.impl.FindContextNode;
 import com.oracle.truffle.api.instrument.ASTProber;
 import com.oracle.truffle.api.instrument.Instrumenter;
+import com.oracle.truffle.api.instrument.KillException;
+import com.oracle.truffle.api.instrument.QuitException;
 import com.oracle.truffle.api.instrument.SyntaxTag;
 import com.oracle.truffle.api.instrument.Visualizer;
 import com.oracle.truffle.api.instrument.WrapperNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
+
 import java.util.Objects;
 
 /**
@@ -385,22 +389,6 @@ public abstract class TruffleLanguage<C> {
         }
 
         /**
-         * Evaluates source of (potentially different) language. The {@link Source#getMimeType()
-         * MIME type) is used to identify the {@link TruffleLanguage} to use to perform the
-         * {@link #parse(com.oracle.truffle.api.source.Source, com.oracle.truffle.api.nodes.Node, java.lang.String...)}
-         * .
-         * 
-         * @param source the source to evaluate
-         * @return the result of the evaluation
-         * @throws IOException if the parsing or evaluation fails for some reason
-         */
-        public Object eval(Source source) throws IOException {
-            TruffleLanguage<?> language = API.findLanguageImpl(vm, null, source.getMimeType());
-            CallTarget call = language.parse(source, null);
-            return call.call();
-        }
-
-        /**
          * Input associated with {@link com.oracle.truffle.api.vm.PolyglotEngine} this language is
          * being executed in.
          *
@@ -467,6 +455,8 @@ public abstract class TruffleLanguage<C> {
             }
             try {
                 return target.call();
+            } catch (KillException | QuitException ex) {
+                throw ex;
             } catch (Throwable ex) {
                 throw new IOException(ex);
             }
@@ -474,14 +464,19 @@ public abstract class TruffleLanguage<C> {
 
         @Override
         protected Object evalInContext(Object vm, SuspendedEvent ev, String code, FrameInstance frame) throws IOException {
-            Node n = frame == null ? ev.getNode() : frame.getCallNode();
+            Node n = ev.getNode();
+            if (n == null && frame != null) {
+                n = frame.getCallNode();
+            }
+            if (n == null) {
+                throw new IOException("Can't determine language for text \"" + code + "\"");
+            }
             RootNode rootNode = n.getRootNode();
             Class<? extends TruffleLanguage> languageType = findLanguage(rootNode);
-            Env env = findLanguage(vm, languageType);
-            TruffleLanguage<?> lang = findLanguage(env);
-            Source source = Source.fromText(code, "eval in context");
-            CallTarget target = lang.parse(source, n);
-            return target.call();
+            final Env env = findLanguage(vm, languageType);
+            final TruffleLanguage<?> lang = findLanguage(env);
+            final Source source = Source.fromText(code, "eval in context");
+            return lang.evalInContext(source, n, frame.getFrame(FrameAccess.READ_ONLY, true).materialize());
         }
 
         @Override
@@ -497,11 +492,6 @@ public abstract class TruffleLanguage<C> {
         @Override
         protected TruffleLanguage<?> findLanguage(Env env) {
             return env.lang;
-        }
-
-        @Override
-        protected TruffleLanguage<?> findLanguageImpl(Object known, Class<? extends TruffleLanguage> languageClass, String mimeType) {
-            return super.findLanguageImpl(known, languageClass, mimeType);
         }
 
         @Override
