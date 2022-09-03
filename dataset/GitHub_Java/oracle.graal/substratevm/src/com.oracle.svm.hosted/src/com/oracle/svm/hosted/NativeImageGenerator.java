@@ -69,6 +69,7 @@ import org.graalvm.compiler.core.common.CompressEncoding;
 import org.graalvm.compiler.core.common.GraalOptions;
 import org.graalvm.compiler.core.common.spi.ForeignCallsProvider;
 import org.graalvm.compiler.core.phases.CommunityCompilerConfiguration;
+import org.graalvm.compiler.core.phases.EconomyCompilerConfiguration;
 import org.graalvm.compiler.core.target.Backend;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.DebugDumpScope;
@@ -87,9 +88,12 @@ import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.BasePhase;
 import org.graalvm.compiler.phases.PhaseSuite;
 import org.graalvm.compiler.phases.common.AddressLoweringPhase;
+import org.graalvm.compiler.phases.common.CanonicalizerPhase;
 import org.graalvm.compiler.phases.common.ConvertDeoptimizeToGuardPhase;
 import org.graalvm.compiler.phases.common.DeoptimizationGroupingPhase;
+import org.graalvm.compiler.phases.common.ExpandLogicPhase;
 import org.graalvm.compiler.phases.common.FixReadsPhase;
+import org.graalvm.compiler.phases.common.FrameStateAssignmentPhase;
 import org.graalvm.compiler.phases.common.LoopSafepointInsertionPhase;
 import org.graalvm.compiler.phases.common.inlining.InliningPhase;
 import org.graalvm.compiler.phases.tiers.HighTierContext;
@@ -705,7 +709,6 @@ public class NativeImageGenerator {
                                 int numMethods = aUniverse.getMethods().size();
                                 int numFields = aUniverse.getFields().size();
 
-                                svmHost.notifyClassReachabilityListener(aUniverse, config);
                                 featureHandler.forEachFeature(feature -> feature.duringAnalysis(config));
 
                                 if (!config.getAndResetRequireAnalysisIteration()) {
@@ -1129,11 +1132,20 @@ public class NativeImageGenerator {
 
     public static Suites createSuites(FeatureHandler featureHandler, RuntimeConfiguration runtimeConfig, SnippetReflectionProvider snippetReflection, boolean hosted) {
         Providers runtimeCallProviders = runtimeConfig.getBackendForNormalMethod().getProviders();
-
         OptionValues options = hosted ? HostedOptionValues.singleton() : RuntimeOptionValues.singleton();
-
         Suites suites = GraalConfiguration.instance().createSuites(options, hosted);
+        return modifySuites(runtimeCallProviders, suites, featureHandler, runtimeConfig, snippetReflection, hosted, false);
+    }
 
+    public static Suites createFirstTierSuites(FeatureHandler featureHandler, RuntimeConfiguration runtimeConfig, SnippetReflectionProvider snippetReflection, boolean hosted) {
+        Providers runtimeCallProviders = runtimeConfig.getBackendForNormalMethod().getProviders();
+        OptionValues options = hosted ? HostedOptionValues.singleton() : RuntimeOptionValues.singleton();
+        Suites suites = GraalConfiguration.instance().createFirstTierSuites(options, hosted);
+        return modifySuites(runtimeCallProviders, suites, featureHandler, runtimeConfig, snippetReflection, hosted, true);
+    }
+
+    private static Suites modifySuites(Providers runtimeCallProviders, Suites suites, FeatureHandler featureHandler, RuntimeConfiguration runtimeConfig,
+                    SnippetReflectionProvider snippetReflection, boolean hosted, boolean firstTier) {
         PhaseSuite<HighTierContext> highTier = suites.getHighTier();
         PhaseSuite<MidTierContext> midTier = suites.getMidTier();
         PhaseSuite<LowTierContext> lowTier = suites.getLowTier();
@@ -1162,7 +1174,11 @@ public class NativeImageGenerator {
         CompressEncoding compressEncoding = ImageSingletons.lookup(CompressEncoding.class);
         SubstrateRegisterConfig registerConfig = (SubstrateRegisterConfig) runtimeCallProviders.getCodeCache().getRegisterConfig();
         SubstrateAMD64AddressLowering addressLowering = new SubstrateAMD64AddressLowering(compressEncoding, registerConfig);
-        lowTier.findPhase(FixReadsPhase.class).add(new AddressLoweringPhase(addressLowering));
+        if (firstTier) {
+            lowTier.findPhase(ExpandLogicPhase.class).add(new AddressLoweringPhase(addressLowering));
+        } else {
+            lowTier.findPhase(FixReadsPhase.class).add(new AddressLoweringPhase(addressLowering));
+        }
 
         if (SubstrateOptions.MultiThreaded.getValue()) {
             /*
@@ -1185,9 +1201,18 @@ public class NativeImageGenerator {
             midTier.findPhase(DeoptimizationGroupingPhase.class).remove();
 
         } else {
-            ListIterator<BasePhase<? super MidTierContext>> it = midTier.findPhase(DeoptimizationGroupingPhase.class);
-            it.previous();
-            it.add(new CollectDeoptimizationSourcePositionsPhase());
+            if (firstTier) {
+                ListIterator<BasePhase<? super MidTierContext>> it = midTier.findPhase(FrameStateAssignmentPhase.class);
+                it.add(new CollectDeoptimizationSourcePositionsPhase());
+
+                // On SVM, the economy configuration requires a canonicalization run at the end of mid tier.
+                it = midTier.findLastPhase();
+                it.add(new CanonicalizerPhase());
+            } else {
+                ListIterator<BasePhase<? super MidTierContext>> it = midTier.findPhase(DeoptimizationGroupingPhase.class);
+                it.previous();
+                it.add(new CollectDeoptimizationSourcePositionsPhase());
+            }
         }
 
         featureHandler.forEachGraalFeature(feature -> feature.registerGraalPhases(runtimeCallProviders, snippetReflection, suites, hosted));
@@ -1198,6 +1223,14 @@ public class NativeImageGenerator {
     @SuppressWarnings("unused")
     public static LIRSuites createLIRSuites(FeatureHandler featureHandler, Providers providers, boolean hosted) {
         LIRSuites lirSuites = Suites.createLIRSuites(new CommunityCompilerConfiguration(), hosted ? HostedOptionValues.singleton() : RuntimeOptionValues.singleton());
+        /* Add phases that just perform assertion checking. */
+        assert addAssertionLIRPhases(lirSuites, hosted);
+        return lirSuites;
+    }
+
+    @SuppressWarnings("unused")
+    public static LIRSuites createFirstTierLIRSuites(FeatureHandler featureHandler, Providers providers, boolean hosted) {
+        LIRSuites lirSuites = Suites.createLIRSuites(new EconomyCompilerConfiguration(), hosted ? HostedOptionValues.singleton() : RuntimeOptionValues.singleton());
         /* Add phases that just perform assertion checking. */
         assert addAssertionLIRPhases(lirSuites, hosted);
         return lirSuites;

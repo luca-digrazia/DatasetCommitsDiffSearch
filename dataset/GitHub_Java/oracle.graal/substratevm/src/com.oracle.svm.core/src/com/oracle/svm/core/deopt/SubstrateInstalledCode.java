@@ -44,6 +44,8 @@ public interface SubstrateInstalledCode {
 
     SubstrateSpeculationLog getSpeculationLog();
 
+    void setTier(int tier);
+
     /**
      * Provides access to a {@link SubstrateInstalledCode}.
      *
