@@ -27,76 +27,94 @@ import java.util.*;
 import javax.lang.model.type.*;
 
 import com.oracle.truffle.codegen.processor.*;
-import com.oracle.truffle.codegen.processor.node.*;
-import com.oracle.truffle.codegen.processor.typesystem.*;
+import com.oracle.truffle.codegen.processor.node.NodeChildData.Cardinality;
+import com.oracle.truffle.codegen.processor.template.MethodSpec.TypeDef;
 
 public class ParameterSpec {
 
-    public enum Cardinality {
-        ONE, MULTIPLE;
+    private final String name;
+    private final List<TypeMirror> allowedTypes;
+
+    /** Cardinality one or multiple. */
+    private Cardinality cardinality = Cardinality.ONE;
+    /** Type is part of the method signature. Relevant for comparisons. */
+    private boolean signature;
+    /** Type must be indexed when parsing. */
+    private boolean indexed;
+    /** Type is bound to local final variable. */
+    private boolean local;
+
+    private TypeDef typeDefinition;
+
+    public ParameterSpec(String name, TypeMirror... allowedTypes) {
+        this(name, Arrays.asList(allowedTypes));
     }
 
-    private final String name;
-    private final TypeMirror[] allowedTypes;
-    private final TypeMirror valueType;
-    private final boolean optional;
-    private final Cardinality cardinality;
-
-    public ParameterSpec(String name, TypeMirror[] allowedTypes, TypeMirror valueType, boolean optional, Cardinality cardinality) {
-        this.valueType = valueType;
-        this.allowedTypes = allowedTypes;
+    public ParameterSpec(String name, List<TypeMirror> allowedTypes) {
         this.name = name;
-        this.optional = optional;
+        this.allowedTypes = allowedTypes;
+    }
+
+    public ParameterSpec(ParameterSpec o, List<TypeMirror> allowedTypes) {
+        this.name = o.name;
+        this.cardinality = o.cardinality;
+        this.signature = o.signature;
+        this.indexed = o.indexed;
+        this.local = o.local;
+        this.typeDefinition = o.typeDefinition;
+        this.allowedTypes = allowedTypes;
+    }
+
+    void setTypeDefinition(TypeDef typeDefinition) {
+        this.typeDefinition = typeDefinition;
+    }
+
+    TypeDef getTypeDefinition() {
+        return typeDefinition;
+    }
+
+    public void setSignature(boolean signature) {
+        this.signature = signature;
+    }
+
+    public void setLocal(boolean local) {
+        this.local = local;
+    }
+
+    public boolean isSignature() {
+        return signature;
+    }
+
+    public boolean isLocal() {
+        return local;
+    }
+
+    public boolean isIndexed() {
+        return indexed;
+    }
+
+    public void setIndexed(boolean indexed) {
+        this.indexed = indexed;
+    }
+
+    public void setCardinality(Cardinality cardinality) {
         this.cardinality = cardinality;
     }
 
-    /** Type constructor. */
-    public ParameterSpec(String name, TypeMirror singleFixedType,  boolean optional) {
-        this(name, new TypeMirror[]{singleFixedType}, singleFixedType, optional, Cardinality.ONE);
-    }
-
-    /** Type system value constructor. */
-    public ParameterSpec(String name, TypeSystemData typeSystem, boolean optional, Cardinality cardinality) {
-        this(name, typeSystem.getPrimitiveTypeMirrors(), typeSystem.getGenericType(), optional, cardinality);
-    }
-
-    /** Node value constructor. */
-    public ParameterSpec(String name, NodeData nodeData, boolean optional, Cardinality cardinality) {
-        this(name, nodeTypeMirrors(nodeData), nodeData.getTypeSystem().getGenericType(), optional, cardinality);
-    }
-
-    private static TypeMirror[] nodeTypeMirrors(NodeData nodeData) {
-        List<TypeMirror> typeMirrors = new ArrayList<>();
-
-        for (ExecutableTypeData typeData : nodeData.getExecutableTypes()) {
-            typeMirrors.add(typeData.getType().getPrimitiveType());
-        }
-
-        typeMirrors.add(nodeData.getTypeSystem().getGenericType());
-
-        return typeMirrors.toArray(new TypeMirror[typeMirrors.size()]);
-    }
-
-
-    public final String getName() {
+    public String getName() {
         return name;
     }
 
-    public final boolean isOptional() {
-        return optional;
-    }
-
-    public final Cardinality getCardinality() {
+    public Cardinality getCardinality() {
         return cardinality;
     }
 
-    public TypeMirror[] getAllowedTypes() {
+    public List<TypeMirror> getAllowedTypes() {
         return allowedTypes;
     }
 
     public boolean matches(TypeMirror actualType) {
-        for (int i = 0; i < allowedTypes.length; i++) {
-            TypeMirror mirror = allowedTypes[i];
+        for (TypeMirror mirror : allowedTypes) {
             if (Utils.typeEquals(actualType, mirror)) {
                 return true;
             }
@@ -104,7 +122,25 @@ public class ParameterSpec {
         return false;
     }
 
-    public TypeMirror getValueType() {
-        return valueType;
+    @Override
+    public String toString() {
+        return toSignatureString(false);
     }
+
+    public String toSignatureString(boolean typeOnly) {
+        StringBuilder builder = new StringBuilder();
+        if (typeDefinition != null) {
+            builder.append("<" + typeDefinition.getName() + ">");
+        } else if (getAllowedTypes().size() >= 1) {
+            builder.append(Utils.getSimpleName(getAllowedTypes().get(0)));
+        } else {
+            builder.append("void");
+        }
+        if (!typeOnly) {
+            builder.append(" ");
+            builder.append(getName());
+        }
+        return builder.toString();
+    }
+
 }
