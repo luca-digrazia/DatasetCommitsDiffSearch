@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -35,32 +35,42 @@ import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.SourceSection;
-import com.oracle.truffle.llvm.context.LLVMLanguage;
-import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.nodes.asm.base.LLVMInlineAssemblyBlockNode;
 import com.oracle.truffle.llvm.nodes.asm.base.LLVMInlineAssemblyPrologueNode;
+import com.oracle.truffle.llvm.runtime.LLVMLanguage;
+import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
 
 public class LLVMInlineAssemblyRootNode extends RootNode {
 
-    @Child LLVMInlineAssemblyPrologueNode prologue;
-    @Child LLVMInlineAssemblyBlockNode block;
+    @Child private LLVMInlineAssemblyPrologueNode prologue;
+    @Child private LLVMInlineAssemblyBlockNode block;
+    private final LLVMSourceLocation source;
 
     private final LLVMExpressionNode result;
 
-    public LLVMInlineAssemblyRootNode(SourceSection sourceSection, FrameDescriptor frameDescriptor,
-                    LLVMNode[] statements, List<LLVMNode> writeNodes, LLVMExpressionNode result) {
-        super(LLVMLanguage.class, sourceSection, frameDescriptor);
+    public LLVMInlineAssemblyRootNode(LLVMLanguage language, LLVMSourceLocation source, FrameDescriptor frameDescriptor,
+                    LLVMStatementNode[] statements, List<LLVMStatementNode> writeNodes, LLVMExpressionNode result) {
+        super(language, frameDescriptor);
+        this.source = source;
         this.prologue = new LLVMInlineAssemblyPrologueNode(writeNodes);
         this.block = new LLVMInlineAssemblyBlockNode(statements);
         this.result = result;
     }
 
     @Override
-    public Object execute(VirtualFrame frame) {
-        prologue.executeVoid(frame);
-        block.executeVoid(frame);
-        return result == null ? 0 : result.executeGeneric(frame);
+    public SourceSection getSourceSection() {
+        if (source != null) {
+            return source.getSourceSection();
+        }
+        return null;
     }
 
+    @Override
+    public Object execute(VirtualFrame frame) {
+        prologue.execute(frame);
+        block.execute(frame);
+        return result == null ? 0 : result.executeGeneric(frame);
+    }
 }

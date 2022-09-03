@@ -29,30 +29,42 @@
  */
 package com.oracle.truffle.llvm.parser.metadata.debuginfo;
 
-import com.oracle.truffle.llvm.parser.metadata.MDBaseNode;
-import com.oracle.truffle.llvm.parser.metadata.MetadataValueList;
-import com.oracle.truffle.llvm.parser.model.SymbolImpl;
-import com.oracle.truffle.llvm.runtime.debug.LLVMSourceStaticMemberType;
-import com.oracle.truffle.llvm.runtime.debug.LLVMSourceSymbol;
-import com.oracle.truffle.llvm.runtime.debug.LLVMSourceType;
-import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
-
 import java.util.HashMap;
 import java.util.Map;
 
+import com.oracle.truffle.llvm.parser.metadata.MDBaseNode;
+import com.oracle.truffle.llvm.parser.metadata.MDKind;
+import com.oracle.truffle.llvm.parser.metadata.MetadataAttachmentHolder;
+import com.oracle.truffle.llvm.parser.metadata.MetadataValueList;
+import com.oracle.truffle.llvm.parser.model.SymbolImpl;
+import com.oracle.truffle.llvm.runtime.LLVMContext;
+import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceStaticMemberType;
+import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceSymbol;
+import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceType;
+import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
+
 final class DebugInfoCache {
+
+    static MDBaseNode getDebugInfo(MetadataAttachmentHolder holder) {
+        if (holder.hasAttachedMetadata()) {
+            return holder.getMetadataAttachment(MDKind.DBG_NAME);
+
+        } else {
+            return null;
+        }
+    }
 
     private final Map<MDBaseNode, LLVMSourceSymbol> parsedVariables;
     private final DIScopeBuilder scopeBuilder;
     private final DITypeExtractor typeExtractor;
 
-    DebugInfoCache(MetadataValueList metadata, Map<LLVMSourceStaticMemberType, SymbolImpl> staticMembers) {
+    DebugInfoCache(MetadataValueList metadata, Map<LLVMSourceStaticMemberType, SymbolImpl> staticMembers, LLVMContext context) {
         this.parsedVariables = new HashMap<>();
-        this.scopeBuilder = new DIScopeBuilder(metadata);
+        this.scopeBuilder = new DIScopeBuilder(metadata, context);
         this.typeExtractor = new DITypeExtractor(scopeBuilder, metadata, staticMembers);
     }
 
-    LLVMSourceSymbol getSourceSymbol(MDBaseNode mdVariable, boolean isGlobal) {
+    LLVMSourceSymbol getSourceSymbol(MDBaseNode mdVariable, boolean isStatic) {
         if (parsedVariables.containsKey(mdVariable)) {
             return parsedVariables.get(mdVariable);
         }
@@ -61,7 +73,7 @@ final class DebugInfoCache {
         final LLVMSourceType type = typeExtractor.parseType(mdVariable);
         final String varName = MDNameExtractor.getName(mdVariable);
 
-        final LLVMSourceSymbol symbol = new LLVMSourceSymbol(varName, location, type, isGlobal);
+        final LLVMSourceSymbol symbol = LLVMSourceSymbol.create(varName, location, type, isStatic);
         parsedVariables.put(mdVariable, symbol);
 
         if (location != null) {
@@ -87,6 +99,10 @@ final class DebugInfoCache {
 
     void endLocalScope() {
         scopeBuilder.clearLocalScopes();
+    }
+
+    void importScope(MDBaseNode node, LLVMSourceLocation importedScope) {
+        scopeBuilder.importScope(node, importedScope);
     }
 
 }

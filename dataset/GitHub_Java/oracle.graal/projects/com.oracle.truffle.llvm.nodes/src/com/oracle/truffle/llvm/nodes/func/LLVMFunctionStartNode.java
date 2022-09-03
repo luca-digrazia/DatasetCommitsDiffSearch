@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,66 +29,121 @@
  */
 package com.oracle.truffle.llvm.nodes.func;
 
-import com.oracle.truffle.api.CompilerAsserts;
+import java.util.HashMap;
+import java.util.Map;
+
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.FrameDescriptor;
+import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
-import com.oracle.truffle.llvm.context.LLVMLanguage;
-import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.nodes.api.LLVMNode;
-import com.oracle.truffle.llvm.nodes.api.LLVMStackFrameNuller;
+import com.oracle.truffle.llvm.nodes.base.LLVMFrameNullerUtil;
+import com.oracle.truffle.llvm.runtime.LLVMLanguage;
+import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
 public class LLVMFunctionStartNode extends RootNode {
 
     @Child private LLVMExpressionNode node;
-    @Children private final LLVMNode[] beforeFunction;
-    @Children private final LLVMNode[] afterFunction;
-    private final String functionName;
-    @CompilationFinal private LLVMStackFrameNuller[] nullers;
+    @CompilationFinal(dimensions = 1) FrameSlot[] frameSlotsToInitialize;
+    private final String name;
+    private final int explicitArgumentsCount;
+    private final DebugInformation debugInformation;
 
-    public LLVMFunctionStartNode(LLVMExpressionNode node, LLVMNode[] beforeFunction, LLVMNode[] afterFunction, SourceSection sourceSection, FrameDescriptor frameDescriptor, String functionName,
-                    LLVMStackFrameNuller[] initNullers) {
-        super(LLVMLanguage.class, sourceSection, frameDescriptor);
+    public LLVMFunctionStartNode(LLVMLanguage language, LLVMExpressionNode node, FrameDescriptor frameDescriptor, String name, int explicitArgumentsCount, String originalName, Source bcSource,
+                    LLVMSourceLocation location) {
+        super(language, frameDescriptor);
+        this.debugInformation = new DebugInformation(originalName, bcSource, location);
+        this.explicitArgumentsCount = explicitArgumentsCount;
         this.node = node;
-        this.beforeFunction = beforeFunction;
-        this.afterFunction = afterFunction;
-        this.functionName = functionName;
-        this.nullers = initNullers;
+        this.name = name;
+        this.frameSlotsToInitialize = frameDescriptor.getSlots().toArray(new FrameSlot[0]);
     }
 
     @Override
-    @ExplodeLoop
+    public SourceSection getSourceSection() {
+        return debugInformation.sourceLocation.getSourceSection();
+    }
+
+    @Override
     public Object execute(VirtualFrame frame) {
-        for (LLVMStackFrameNuller nuller : nullers) {
-            nuller.nullifySlot(frame);
-        }
-        CompilerAsserts.compilationConstant(beforeFunction);
-        for (LLVMNode before : beforeFunction) {
-            before.executeVoid(frame);
-        }
+        nullStack(frame);
         Object result = node.executeGeneric(frame);
-        CompilerAsserts.compilationConstant(afterFunction);
-        for (LLVMNode after : afterFunction) {
-            after.executeVoid(frame);
-        }
         return result;
+    }
+
+    @ExplodeLoop
+    private void nullStack(VirtualFrame frame) {
+        for (FrameSlot frameSlot : frameSlotsToInitialize) {
+            // In LLVM IR, it is possible that SSA values are used *before* they are defined (so
+            // far, we only saw this for @llvm.dbg.value tail calls). So, even in such a case, it
+            // must be possible to read from the frame in a typed way.
+            LLVMFrameNullerUtil.nullFrameSlot(frame, frameSlot, true);
+        }
     }
 
     @Override
     public String toString() {
-        return functionName;
-    }
-
-    public String getFunctionName() {
-        return functionName;
+        return getName();
     }
 
     @Override
     public String getName() {
-        return functionName;
+        if (debugInformation.originalName != null) {
+            return debugInformation.originalName;
+        }
+        return name;
     }
 
+    public int getExplicitArgumentsCount() {
+        return explicitArgumentsCount;
+    }
+
+    public String getOriginalName() {
+        return debugInformation.originalName;
+    }
+
+    public String getBcName() {
+        return name;
+    }
+
+    public Source getBcSource() {
+        return debugInformation.bcSource;
+    }
+
+    @Override
+    @TruffleBoundary
+    public Map<String, Object> getDebugProperties() {
+        final HashMap<String, Object> properties = new HashMap<>();
+        if (debugInformation.originalName != null) {
+            properties.put("originalName", debugInformation.originalName);
+        }
+        if (debugInformation.bcSource != null) {
+            properties.put("bcSource", debugInformation.bcSource);
+        }
+        if (debugInformation.sourceLocation != null) {
+            properties.put("sourceLocation", debugInformation.sourceLocation);
+        }
+        return properties;
+    }
+
+    /*
+     * Encapsulation of these 4 objects keeps memory footprint low in case no debug info is
+     * available.
+     */
+    private static final class DebugInformation {
+        private final String originalName;
+        private final Source bcSource;
+        private final LLVMSourceLocation sourceLocation;
+
+        DebugInformation(String originalName, Source bcSource, LLVMSourceLocation sourceLocation) {
+            this.originalName = originalName;
+            this.bcSource = bcSource;
+            this.sourceLocation = sourceLocation;
+        }
+    }
 }

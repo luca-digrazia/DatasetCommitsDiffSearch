@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,20 +29,19 @@
  */
 package com.oracle.truffle.llvm.parser.metadata.debuginfo;
 
-import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.api.source.SourceSection;
+import java.math.BigInteger;
+import java.util.Map;
+
 import com.oracle.truffle.llvm.parser.metadata.DwarfOpcode;
 import com.oracle.truffle.llvm.parser.metadata.MDBaseNode;
 import com.oracle.truffle.llvm.parser.metadata.MDCompileUnit;
 import com.oracle.truffle.llvm.parser.metadata.MDExpression;
 import com.oracle.truffle.llvm.parser.metadata.MDGlobalVariable;
 import com.oracle.truffle.llvm.parser.metadata.MDGlobalVariableExpression;
-import com.oracle.truffle.llvm.parser.metadata.MDKind;
 import com.oracle.truffle.llvm.parser.metadata.MDLocalVariable;
 import com.oracle.truffle.llvm.parser.metadata.MDNamedNode;
 import com.oracle.truffle.llvm.parser.metadata.MDNode;
 import com.oracle.truffle.llvm.parser.metadata.MDVoidNode;
-import com.oracle.truffle.llvm.parser.metadata.MetadataAttachmentHolder;
 import com.oracle.truffle.llvm.parser.metadata.MetadataValueList;
 import com.oracle.truffle.llvm.parser.metadata.MetadataVisitor;
 import com.oracle.truffle.llvm.parser.model.ModelModule;
@@ -51,64 +50,50 @@ import com.oracle.truffle.llvm.parser.model.functions.FunctionDeclaration;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionDefinition;
 import com.oracle.truffle.llvm.parser.model.symbols.constants.integer.BigIntegerConstant;
 import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalAlias;
-import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalConstant;
 import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalValueSymbol;
 import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalVariable;
 import com.oracle.truffle.llvm.parser.model.visitors.ModelVisitor;
-import com.oracle.truffle.llvm.runtime.debug.LLVMSourceStaticMemberType;
-import com.oracle.truffle.llvm.runtime.debug.LLVMSourceSymbol;
-import com.oracle.truffle.llvm.runtime.debug.LLVMSourceType;
-import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
+import com.oracle.truffle.llvm.runtime.LLVMContext;
+import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceStaticMemberType;
+import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceSymbol;
+import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceType;
 import com.oracle.truffle.llvm.runtime.types.VariableBitWidthType;
-
-import java.math.BigInteger;
-import java.util.Map;
+import static com.oracle.truffle.llvm.parser.metadata.debuginfo.DebugInfoCache.getDebugInfo;
 
 public final class DebugInfoModuleProcessor {
-
-    public static final SourceFunction DEFAULT_FUNCTION = new SourceFunction(LLVMSourceLocation.createUnavailable(LLVMSourceLocation.Kind.FUNCTION, "<unavailable>", "<unavailable>", 0, 0));
 
     private DebugInfoModuleProcessor() {
     }
 
-    public static DebugInfoFunctionProcessor processModule(ModelModule irModel, Source bitcodeSource, MetadataValueList metadata) {
+    public static void processModule(ModelModule irModel, MetadataValueList metadata, LLVMContext context) {
         MDUpgrade.perform(metadata);
 
-        final DebugInfoCache cache = new DebugInfoCache(metadata, irModel.getSourceStaticMembers());
+        final DebugInfoCache cache = new DebugInfoCache(metadata, irModel.getSourceStaticMembers(), context);
+
+        ImportsProcessor.process(metadata, context, cache);
 
         final Map<LLVMSourceSymbol, SymbolImpl> globals = irModel.getSourceGlobals();
         final Map<LLVMSourceStaticMemberType, SymbolImpl> staticMembers = irModel.getSourceStaticMembers();
 
-        irModel.accept(new SymbolProcessor(cache, bitcodeSource, globals, staticMembers));
+        irModel.accept(new SymbolProcessor(cache, globals, staticMembers));
 
-        final MDBaseNode cuNode = metadata.getNamedNode(MDNamedNode.COMPILEUNIT_NAME);
         final MetadataProcessor mdParser = new MetadataProcessor(cache, globals, staticMembers);
+        final MDBaseNode cuNode = metadata.getNamedNode(MDNamedNode.COMPILEUNIT_NAME);
         if (cuNode != null) {
             cuNode.accept(mdParser);
         }
 
-        return new DebugInfoFunctionProcessor(cache);
+        irModel.setFunctionProcessor(new DebugInfoFunctionProcessor(cache));
     }
 
     private static final class SymbolProcessor implements ModelVisitor {
 
-        private static MDBaseNode getDebugInfo(MetadataAttachmentHolder holder) {
-            if (holder.hasAttachedMetadata()) {
-                return holder.getMetadataAttachment(MDKind.DBG_NAME);
-
-            } else {
-                return null;
-            }
-        }
-
         private final DebugInfoCache cache;
-        private final Source bitcodeSource;
         private final Map<LLVMSourceSymbol, SymbolImpl> sourceGlobals;
         private final Map<LLVMSourceStaticMemberType, SymbolImpl> sourceStaticMembers;
 
-        SymbolProcessor(DebugInfoCache cache, Source bitcodeSource, Map<LLVMSourceSymbol, SymbolImpl> sourceGlobals, Map<LLVMSourceStaticMemberType, SymbolImpl> sourceStaticMembers) {
+        SymbolProcessor(DebugInfoCache cache, Map<LLVMSourceSymbol, SymbolImpl> sourceGlobals, Map<LLVMSourceStaticMemberType, SymbolImpl> sourceStaticMembers) {
             this.cache = cache;
-            this.bitcodeSource = bitcodeSource;
             this.sourceGlobals = sourceGlobals;
             this.sourceStaticMembers = sourceStaticMembers;
         }
@@ -119,21 +104,9 @@ public final class DebugInfoModuleProcessor {
 
         @Override
         public void visit(FunctionDefinition function) {
-            final MDBaseNode debugInfo = getDebugInfo(function);
-            LLVMSourceLocation scope = debugInfo != null ? cache.buildLocation(debugInfo) : null;
-
-            if (scope == null) {
-                final String sourceText = String.format("%s:%s", bitcodeSource.getName(), function.getName());
-                final Source irSource = Source.newBuilder(sourceText).mimeType(DIScopeBuilder.getMimeType(null)).name(sourceText).build();
-                final SourceSection simpleSection = irSource.createSection(1);
-                scope = LLVMSourceLocation.createBitcodeFunction(function.getName(), simpleSection);
-            }
-
-            final SourceFunction sourceFunction = new SourceFunction(scope);
-            function.setSourceFunction(sourceFunction);
-            for (SourceVariable local : sourceFunction.getVariables()) {
-                local.processFragments();
-            }
+            // in LLVM 3.9+ function debug information is available only in the corresponding
+            // function block in the *.bc file, we process the function metadata only after it is
+            // actually available
         }
 
         private void visitGlobal(GlobalValueSymbol global) {
@@ -143,6 +116,7 @@ public final class DebugInfoModuleProcessor {
                 final LLVMSourceSymbol symbol = cache.getSourceSymbol(mdGlobal, isGlobal);
                 if (symbol != null) {
                     sourceGlobals.put(symbol, global);
+                    global.setSourceSymbol(symbol);
                 }
 
                 if (mdGlobal instanceof MDGlobalVariableExpression) {
@@ -164,11 +138,6 @@ public final class DebugInfoModuleProcessor {
         @Override
         public void visit(GlobalAlias alias) {
             visitGlobal(alias);
-        }
-
-        @Override
-        public void visit(GlobalConstant constant) {
-            visitGlobal(constant);
         }
 
         @Override

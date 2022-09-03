@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,95 +29,139 @@
  */
 package com.oracle.truffle.llvm;
 
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.ServiceLoader;
-import java.util.function.Consumer;
+
+import com.oracle.truffle.llvm.runtime.debug.LLVMDebuggerValue;
+import org.graalvm.options.OptionDescriptor;
+import org.graalvm.options.OptionDescriptors;
 
 import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.RootCallTarget;
-import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.api.debug.DebuggerTags;
+import com.oracle.truffle.api.frame.Frame;
+import com.oracle.truffle.api.instrumentation.ProvidedTags;
+import com.oracle.truffle.api.instrumentation.StandardTags;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.api.vm.PolyglotEngine;
-import com.oracle.truffle.api.vm.PolyglotEngine.Builder;
-import com.oracle.truffle.llvm.parser.LLVMParserResult;
-import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
-import com.oracle.truffle.llvm.parser.SulongNodeFactory;
+import com.oracle.truffle.api.source.SourceSection;
+import com.oracle.truffle.llvm.Runner.SulongLibrary;
+import com.oracle.truffle.llvm.runtime.Configuration;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
-import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
-import com.oracle.truffle.llvm.runtime.LLVMLogger;
-import com.oracle.truffle.llvm.runtime.options.LLVMOptions;
+import com.oracle.truffle.llvm.runtime.LLVMSymbol;
+import com.oracle.truffle.llvm.runtime.debug.scope.LLVMDebuggerScopeFactory;
+import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
+import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceType;
+import com.oracle.truffle.llvm.runtime.debug.value.LLVMDebugObject;
+import com.oracle.truffle.llvm.runtime.interop.LLVMInternalTruffleObject;
+import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType;
+import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
+import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
-@TruffleLanguage.Registration(name = "Sulong", version = "0.01", mimeType = {Sulong.LLVM_BITCODE_MIME_TYPE, Sulong.LLVM_BITCODE_BASE64_MIME_TYPE,
-                Sulong.SULONG_LIBRARY_MIME_TYPE})
+@TruffleLanguage.Registration(id = "llvm", name = "llvm", version = "6.0.0", internal = false, interactive = false, defaultMimeType = Sulong.LLVM_BITCODE_MIME_TYPE, //
+                byteMimeTypes = {Sulong.LLVM_BITCODE_MIME_TYPE, Sulong.LLVM_ELF_SHARED_MIME_TYPE, Sulong.LLVM_ELF_EXEC_MIME_TYPE}, //
+                characterMimeTypes = {Sulong.LLVM_BITCODE_BASE64_MIME_TYPE, Sulong.LLVM_SULONG_TYPE})
+@ProvidedTags({StandardTags.StatementTag.class, StandardTags.CallTag.class, StandardTags.RootTag.class, DebuggerTags.AlwaysHalt.class})
 public final class Sulong extends LLVMLanguage {
 
-    public interface LLVMLanguageProvider {
-        LLVMContext createContext(com.oracle.truffle.api.TruffleLanguage.Env env);
+    private static final List<Configuration> configurations = new ArrayList<>();
 
-        CallTarget parse(LLVMLanguage language, LLVMContext context, Source code, String... argumentNames) throws IOException;
-
-        void disposeContext(LLVMContext context);
+    static {
+        configurations.add(new BasicConfiguration());
+        for (Configuration f : ServiceLoader.load(Configuration.class)) {
+            configurations.add(f);
+        }
     }
 
-    public static final LLVMLanguageProvider provider = getProvider();
+    @TruffleBoundary
+    @Override
+    public <E> E getCapability(Class<E> type) {
+        return getActiveConfiguration(findLLVMContext().getEnv()).getCapability(type);
+    }
 
-    public static final String MAIN_ARGS_KEY = "Sulong Main Args";
-    public static final String LLVM_SOURCE_FILE_KEY = "Sulong Source File";
-    public static final String PARSE_ONLY_KEY = "Parse only";
-
-    private com.oracle.truffle.api.TruffleLanguage.Env environment;
+    private LLVMContext mainContext = null;
 
     @Override
     protected LLVMContext createContext(com.oracle.truffle.api.TruffleLanguage.Env env) {
-        this.environment = env;
-        return provider.createContext(env);
-    }
-
-    @Override
-    public com.oracle.truffle.api.TruffleLanguage.Env getEnvironment() {
-        return environment;
+        Configuration activeConfiguration = getActiveConfiguration(env);
+        LLVMContext newContext = new LLVMContext(this, env, activeConfiguration, getLanguageHome());
+        if (mainContext == null) {
+            mainContext = newContext;
+        } else {
+            LLVMLanguage.SINGLE_CONTEXT_ASSUMPTION.invalidate();
+        }
+        return newContext;
     }
 
     @Override
     protected void disposeContext(LLVMContext context) {
-        context.printNativeCallStatistic();
-        provider.disposeContext(context);
+        LLVMMemory memory = getCapability(LLVMMemory.class);
+        context.dispose(memory);
     }
 
     @Override
     protected CallTarget parse(com.oracle.truffle.api.TruffleLanguage.ParsingRequest request) throws Exception {
         Source source = request.getSource();
-        return provider.parse(this, findLLVMContext(), source, request.getArgumentNames().toArray(new String[request.getArgumentNames().size()]));
+        LLVMContext context = findLLVMContext();
+        return new Runner(context).parse(source);
     }
 
     @Override
+    @SuppressWarnings("deprecation") // for compatibility, will be removed in a future release
     protected Object findExportedSymbol(LLVMContext context, String globalName, boolean onlyExplicit) {
-        String atname = "@" + globalName; // for interop
-        for (LLVMFunctionDescriptor descr : context.getFunctionDescriptors()) {
-            if (descr != null && descr.getName().equals(globalName)) {
-                return descr;
-            } else if (descr != null && descr.getName().equals(atname)) {
-                return descr;
-            }
+        String atname = globalName.startsWith("@") ? globalName : "@" + globalName; // for interop
+        LLVMSymbol result = null;
+        if (context.getGlobalScope().contains(atname)) {
+            result = context.getGlobalScope().get(atname);
+        } else if (context.getGlobalScope().contains(globalName)) {
+            result = context.getGlobalScope().get(globalName);
         }
-        return null;
+        return dealias(result);
+    }
+
+    private static Object dealias(LLVMSymbol symbol) {
+        if (symbol == null) {
+            return null;
+        } else if (symbol.isFunction()) {
+            return symbol.asFunction();
+        } else if (symbol.isGlobalVariable()) {
+            return symbol.asGlobalVariable();
+        } else {
+            throw new IllegalStateException("Unknown symbol: " + symbol.getClass());
+        }
     }
 
     @Override
-    protected Object getLanguageGlobal(LLVMContext context) {
-        return context;
+    protected Iterable<Scope> findTopScopes(LLVMContext context) {
+        Scope scope = Scope.newBuilder("llvm-global", context.getGlobalScope()).build();
+        return Collections.singleton(scope);
     }
 
     @Override
     protected boolean isObjectOfLanguage(Object object) {
-        throw new AssertionError();
+        return LLVMPointer.isInstance(object) || object instanceof LLVMInternalTruffleObject || object instanceof SulongLibrary ||
+                        object instanceof LLVMDebuggerValue || object instanceof LLVMInteropType;
+    }
+
+    @Override
+    protected String toString(LLVMContext context, Object value) {
+        if (value instanceof SulongLibrary) {
+            return "LLVMLibrary:" + ((SulongLibrary) value).getName();
+        } else if (isObjectOfLanguage(value)) {
+            // our internal objects have safe toString implementations
+            return value.toString();
+        } else if (value instanceof String || value instanceof Number) {
+            // truffle primitives
+            return value.toString();
+        } else {
+            return "<unknown object>";
+        }
     }
 
     @Override
@@ -125,203 +169,69 @@ public final class Sulong extends LLVMLanguage {
         return getContextReference().get();
     }
 
-    private static SulongNodeFactory getNodeFactory() {
-        ServiceLoader<SulongNodeFactory> loader = ServiceLoader.load(SulongNodeFactory.class);
-        if (!loader.iterator().hasNext()) {
-            throw new AssertionError("Could not find a " + SulongNodeFactory.class.getSimpleName() + " for the creation of the Truffle nodes");
+    @Override
+    protected OptionDescriptors getOptionDescriptors() {
+        List<OptionDescriptor> optionDescriptors = new ArrayList<>();
+        for (Configuration c : configurations) {
+            optionDescriptors.addAll(c.getOptionDescriptors());
         }
-        SulongNodeFactory factory = null;
-        String expectedConfigName = LLVMOptions.ENGINE.nodeConfiguration();
-        for (SulongNodeFactory prov : loader) {
-            String configName = prov.getConfigurationName();
-            if (configName != null && configName.equals(expectedConfigName)) {
-                factory = prov;
-            }
-        }
-        if (factory == null) {
-            throw new AssertionError("Could not find a " + SulongNodeFactory.class.getSimpleName() + " with the name " + expectedConfigName);
-        }
-        return factory;
+        return OptionDescriptors.create(optionDescriptors);
     }
 
-    private static Sulong.LLVMLanguageProvider getProvider() {
-        return new Sulong.LLVMLanguageProvider() {
-
-            @Override
-            public CallTarget parse(LLVMLanguage language, LLVMContext context, Source code, String... argumentNames) throws IOException {
-                try {
-                    return parse(language, context, code);
-                } catch (Throwable t) {
-                    throw new IOException("Error while trying to parse " + code.getPath(), t);
-                }
+    @TruffleBoundary
+    private static Configuration getActiveConfiguration(Env env) {
+        String name = env.getOptions().get(SulongEngineOption.CONFIGURATION);
+        for (Configuration config : configurations) {
+            if (name.equals(config.getConfigurationName())) {
+                return config;
             }
-
-            private CallTarget parse(LLVMLanguage language, LLVMContext context, Source code) throws IOException {
-                CallTarget mainFunction = null;
-                if (code.getMimeType().equals(Sulong.LLVM_BITCODE_MIME_TYPE) || code.getMimeType().equals(Sulong.LLVM_BITCODE_BASE64_MIME_TYPE)) {
-                    LLVMParserResult parserResult = parseBitcodeFile(code, language, context);
-                    mainFunction = parserResult.getMainFunction();
-                    handleParserResult(context, parserResult);
-                } else if (code.getMimeType().equals(Sulong.SULONG_LIBRARY_MIME_TYPE)) {
-                    final SulongLibrary library = new SulongLibrary(new File(code.getPath()));
-                    List<Source> sourceFiles = new ArrayList<>();
-                    library.readContents(dependentLibrary -> {
-                        context.addLibraryToNativeLookup(dependentLibrary);
-                    }, source -> {
-                        sourceFiles.add(source);
-                    });
-                    for (Source source : sourceFiles) {
-                        String mimeType = source.getMimeType();
-                        try {
-                            LLVMParserResult parserResult;
-                            if (mimeType.equals(Sulong.LLVM_BITCODE_MIME_TYPE) || mimeType.equals(Sulong.LLVM_BITCODE_BASE64_MIME_TYPE)) {
-                                parserResult = parseBitcodeFile(source, language, context);
-                            } else {
-                                throw new UnsupportedOperationException(mimeType);
-                            }
-                            handleParserResult(context, parserResult);
-                            if (parserResult.getMainFunction() != null) {
-                                mainFunction = parserResult.getMainFunction();
-                            }
-                        } catch (Throwable t) {
-                            throw new IOException("Error while trying to parse " + source.getName(), t);
-                        }
-                    }
-                    if (mainFunction == null) {
-                        mainFunction = Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(null));
-                    }
-                } else {
-                    throw new IllegalArgumentException("undeclared mime type");
-                }
-                parseDynamicBitcodeLibraries(language, context);
-                if (context.isParseOnly()) {
-                    return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(mainFunction));
-                } else {
-                    return mainFunction;
-                }
-            }
-
-            private void visitBitcodeLibraries(Consumer<Source> sharedLibraryConsumer) throws IOException {
-                String[] dynamicLibraryPaths = LLVMOptions.ENGINE.dynamicBitcodeLibraries();
-                if (dynamicLibraryPaths != null && dynamicLibraryPaths.length != 0) {
-                    for (String s : dynamicLibraryPaths) {
-                        addLibrary(s, sharedLibraryConsumer);
-                    }
-                }
-            }
-
-            private void addLibrary(String s, Consumer<Source> sharedLibraryConsumer) throws IOException {
-                File lib = Paths.get(s).toFile();
-                Source source = Source.newBuilder(lib).build();
-                sharedLibraryConsumer.accept(source);
-            }
-
-            private void parseDynamicBitcodeLibraries(LLVMLanguage language, LLVMContext context) throws IOException {
-                if (!context.haveLoadedDynamicBitcodeLibraries()) {
-                    context.setHaveLoadedDynamicBitcodeLibraries();
-                    visitBitcodeLibraries(source -> {
-                        try {
-                            getProvider().parse(language, context, source);
-                        } catch (Throwable t) {
-                            throw new RuntimeException("Error while trying to parse dynamic library " + source.getName(), t);
-                        }
-                    });
-                }
-            }
-
-            private void handleParserResult(LLVMContext context, LLVMParserResult result) {
-                context.registerGlobalVarInit(result.getGlobalVarInits());
-                context.registerGlobalVarDealloc(result.getGlobalVarDeallocs());
-                if (result.getConstructorFunctions() != null) {
-                    for (RootCallTarget constructorFunction : result.getConstructorFunctions()) {
-                        context.registerConstructorFunction(constructorFunction);
-                    }
-                }
-                if (result.getDestructorFunctions() != null) {
-                    for (RootCallTarget destructorFunction : result.getDestructorFunctions()) {
-                        context.registerDestructorFunction(destructorFunction);
-                    }
-                }
-                if (!context.isParseOnly()) {
-                    result.getGlobalVarInits().call();
-                    for (RootCallTarget constructorFunction : result.getConstructorFunctions()) {
-                        constructorFunction.call(result.getConstructorFunctions());
-                    }
-                }
-            }
-
-            @Override
-            public LLVMContext createContext(Env env) {
-                LLVMContext context = new LLVMContext(env);
-                if (env != null) {
-                    Object mainArgs = env.getConfig().get(Sulong.MAIN_ARGS_KEY);
-                    if (mainArgs != null) {
-                        context.setMainArguments((Object[]) mainArgs);
-                    }
-                    Object sourceFile = env.getConfig().get(Sulong.LLVM_SOURCE_FILE_KEY);
-                    if (sourceFile != null) {
-                        context.setMainSourceFile((Source) sourceFile);
-                    }
-                    Object parseOnly = env.getConfig().get(Sulong.PARSE_ONLY_KEY);
-                    if (parseOnly != null) {
-                        context.setParseOnly((boolean) parseOnly);
-                    }
-                }
-                return context;
-            }
-
-            @Override
-            public void disposeContext(LLVMContext context) {
-                for (RootCallTarget destructorFunction : context.getDestructorFunctions()) {
-                    destructorFunction.call(destructorFunction);
-                }
-                for (RootCallTarget destructor : context.getGlobalVarDeallocs()) {
-                    destructor.call();
-                }
-                context.getThreadingStack().freeStacks();
-            }
-        };
-    }
-
-    public static void main(String[] args) throws Exception {
-        if (args.length == 0) {
-            throw new IllegalArgumentException("please provide a file to execute!");
         }
-        File file = new File(args[0]);
-        Object[] otherArgs = new Object[args.length - 1];
-        System.arraycopy(args, 1, otherArgs, 0, otherArgs.length);
-        int status = executeMain(file, otherArgs);
-        System.exit(status);
+        throw new IllegalStateException("Unknown configuration: " + name);
     }
 
-    private static LLVMParserResult parseBitcodeFile(Source source, LLVMLanguage language, LLVMContext context) {
-        SulongNodeFactory nodeFactory = getNodeFactory();
-        context.setNativeIntrinsicsFactory(nodeFactory.getNativeIntrinsicsFactory(language, context));
-        return LLVMParserRuntime.parse(source, language, context, nodeFactory);
+    @Override
+    protected Object findMetaObject(LLVMContext context, Object value) {
+        if (value instanceof LLVMDebuggerValue) {
+            return ((LLVMDebuggerValue) value).getMetaObject();
+        } else if (LLVMPointer.isInstance(value)) {
+            LLVMPointer ptr = LLVMPointer.cast(value);
+            return ptr.getExportType();
+        }
+
+        return super.findMetaObject(context, value);
     }
 
-    public static int executeMain(File file, Object... args) {
-        LLVMLogger.info("current file: " + file.getAbsolutePath());
-        Source fileSource;
-        try {
-            fileSource = Source.newBuilder(file).build();
-            return evaluateFromSource(fileSource, args);
-        } catch (IOException e) {
-            throw new AssertionError(e);
+    @Override
+    protected boolean isThreadAccessAllowed(Thread thread, boolean singleThreaded) {
+        return true;
+    }
+
+    @Override
+    protected void disposeThread(LLVMContext context, Thread thread) {
+        super.disposeThread(context, thread);
+        context.getThreadingStack().freeStack(getCapability(LLVMMemory.class), thread);
+    }
+
+    @Override
+    protected SourceSection findSourceLocation(LLVMContext context, Object value) {
+        LLVMSourceLocation location = null;
+        if (value instanceof LLVMSourceType) {
+            location = ((LLVMSourceType) value).getLocation();
+        } else if (value instanceof LLVMDebugObject) {
+            location = ((LLVMDebugObject) value).getDeclaration();
+        }
+        if (location != null) {
+            return location.getSourceSection();
+        }
+        return null;
+    }
+
+    @Override
+    protected Iterable<Scope> findLocalScopes(LLVMContext context, Node node, Frame frame) {
+        if (context.getEnv().getOptions().get(SulongEngineOption.ENABLE_LVI)) {
+            return LLVMDebuggerScopeFactory.createSourceLevelScope(node, frame, context);
+        } else {
+            return LLVMDebuggerScopeFactory.createIRLevelScope(node, frame, context);
         }
     }
-
-    private static int evaluateFromSource(Source fileSource, Object... args) {
-        Builder engineBuilder = PolyglotEngine.newBuilder();
-        engineBuilder.config(Sulong.LLVM_BITCODE_MIME_TYPE, Sulong.MAIN_ARGS_KEY, args);
-        engineBuilder.config(Sulong.LLVM_BITCODE_MIME_TYPE, Sulong.LLVM_SOURCE_FILE_KEY, fileSource);
-        PolyglotEngine vm = engineBuilder.build();
-        try {
-            Integer result = vm.eval(fileSource).as(Integer.class);
-            return result;
-        } finally {
-            vm.dispose();
-        }
-    }
-
 }
