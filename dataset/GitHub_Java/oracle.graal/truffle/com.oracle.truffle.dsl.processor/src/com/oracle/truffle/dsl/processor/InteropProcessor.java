@@ -141,26 +141,26 @@ public final class InteropProcessor extends AbstractProcessor {
             }
 
             if (currentGenerator == null) {
-                generateErrorClass(e, pkg, fqn, clazzName, null);
+                generateErrorClass(e, pkg, fqn, clazzName);
                 emitError("Unknown message type: " + message.value(), e);
                 continue;
             }
 
             if (isInstanceMissing(receiverTypeFullClassName)) {
-                generateErrorClass(e, pkg, fqn, clazzName, null);
+                generateErrorClass(e, pkg, fqn, clazzName);
                 emitError("Missing isInstance method in class " + receiverTypeFullClassName, e);
                 continue;
             }
 
             if (!e.getModifiers().contains(javax.lang.model.element.Modifier.FINAL)) {
-                generateErrorClass(e, pkg, fqn, clazzName, null);
+                generateErrorClass(e, pkg, fqn, clazzName);
                 emitError("Class must be final", e);
                 continue;
             }
 
             List<ExecutableElement> methods = currentGenerator.getAccessMethods();
-            if (methods.isEmpty()) {
-                generateErrorClass(e, pkg, fqn, clazzName, null);
+            if (methods.size() == 0) {
+                generateErrorClass(e, pkg, fqn, clazzName);
                 emitError("There needs to be at least one access method.", e);
                 continue;
             }
@@ -170,16 +170,15 @@ public final class InteropProcessor extends AbstractProcessor {
             for (ExecutableElement m : methods) {
                 params = m.getParameters();
                 if (argumentSize != params.size()) {
-                    generateErrorClass(e, pkg, fqn, clazzName, methods);
                     emitError("Inconsistent argument length.", e);
-                    continue top;
+                    continue;
                 }
             }
 
             for (ExecutableElement m : methods) {
                 String errorMessage = currentGenerator.checkSignature(m);
                 if (errorMessage != null) {
-                    generateErrorClass(e, pkg, fqn, clazzName, null);
+                    generateErrorClass(e, pkg, fqn, clazzName);
                     emitError(errorMessage, m);
                     continue top;
                 }
@@ -211,7 +210,7 @@ public final class InteropProcessor extends AbstractProcessor {
         return true;
     }
 
-    private void generateErrorClass(Element e, final String pkg, final String fqn, final String clazzName, List<ExecutableElement> methods) {
+    private void generateErrorClass(Element e, final String pkg, final String fqn, final String clazzName) {
         try {
             JavaFileObject file = processingEnv.getFiler().createSourceFile(fqn, e);
             Writer w = file.openWriter();
@@ -219,11 +218,6 @@ public final class InteropProcessor extends AbstractProcessor {
 
             w.append("abstract class ").append(clazzName).append(" {\n");
             w.append("  // An error occured, fix ").append(e.getSimpleName()).append(" first.\n");
-            if (methods != null) {
-                for (ExecutableElement m : methods) {
-                    generateAbstractMethod(w, m, null);
-                }
-            }
             w.append("}\n");
             w.close();
         } catch (IOException ex1) {
@@ -281,19 +275,6 @@ public final class InteropProcessor extends AbstractProcessor {
             return;
         }
         processingEnv.getMessager().printMessage(Kind.ERROR, msg, e);
-    }
-
-    static void generateAbstractMethod(Writer w, ExecutableElement method, String extraName) throws IOException {
-        String methodName = extraName == null ? method.getSimpleName().toString() : extraName;
-        w.append("  protected abstract ").append(method.getReturnType().toString()).append(" ").append(methodName);
-        w.append("(");
-        final List<? extends VariableElement> params = method.getParameters();
-        String sep = "";
-        for (VariableElement p : params) {
-            w.append(sep).append(p.asType().toString()).append(" ").append(p.getSimpleName());
-            sep = ", ";
-        }
-        w.append(");\n");
     }
 
     private abstract static class MessageGenerator {
@@ -371,7 +352,15 @@ public final class InteropProcessor extends AbstractProcessor {
 
         void appendAbstractMethods(Writer w) throws IOException {
             for (ExecutableElement method : getAccessMethods()) {
-                generateAbstractMethod(w, method, ACCESS_METHOD_NAME);
+                w.append("  protected abstract ").append(method.getReturnType().toString()).append(" ").append(ACCESS_METHOD_NAME);
+                w.append("(");
+                final List<? extends VariableElement> params = method.getParameters();
+                String sep = "";
+                for (VariableElement p : params) {
+                    w.append(sep).append(p.asType().toString()).append(" ").append(p.getSimpleName());
+                    sep = ", ";
+                }
+                w.append(");\n");
             }
         }
 
