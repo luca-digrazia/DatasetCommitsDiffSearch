@@ -130,7 +130,7 @@ public class NodeFactoryFacadeAdapter implements NodeFactoryFacade {
     }
 
     @Override
-    public LLVMNode createLLVMIntrinsic(FunctionType declaration, Object[] argNodes, int numberOfExplicitArguments) {
+    public LLVMNode createLLVMIntrinsic(FunctionType declaration, Object[] argNodes, int argCount) {
         return null;
     }
 
