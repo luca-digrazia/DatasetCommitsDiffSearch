@@ -224,8 +224,8 @@ public class LoopEx {
         if (next instanceof IfNode) {
             IfNode ifNode = (IfNode) next;
             boolean negated = false;
-            if (!isCfgLoopExit(ifNode.falseSuccessor())) {
-                if (!isCfgLoopExit(ifNode.trueSuccessor())) {
+            if (!loopBegin.isLoopExit(ifNode.falseSuccessor())) {
+                if (!loopBegin.isLoopExit(ifNode.trueSuccessor())) {
                     return false;
                 }
                 negated = true;
@@ -312,11 +312,6 @@ public class LoopEx {
             return true;
         }
         return false;
-    }
-
-    private boolean isCfgLoopExit(AbstractBeginNode begin) {
-        Block block = data.getCFG().blockFor(begin);
-        return loop.getDepth() > block.getLoopDepth() || loop.getCfgExits().contains(block);
     }
 
     public LoopsData loopsData() {
