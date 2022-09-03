@@ -26,8 +26,6 @@ import java.io.Console;
 import java.nio.charset.Charset;
 import java.util.concurrent.locks.ReentrantLock;
 
-import org.graalvm.nativeimage.Platform;
-import org.graalvm.nativeimage.Platforms;
 import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.annotate.Alias;
@@ -47,7 +45,6 @@ import com.oracle.svm.core.snippets.KnownIntrinsics;
 import com.oracle.svm.core.util.VMError;
 
 @TargetClass(sun.misc.SharedSecrets.class)
-@Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 final class Target_sun_misc_SharedSecrets {
 
     @Alias @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Reset)//
@@ -61,7 +58,7 @@ final class Target_sun_misc_SharedSecrets {
                 public Console console() {
                     if (Target_java_io_Console.istty()) {
                         if (Target_java_lang_System.cons == null) {
-                            Target_java_lang_System.cons = Util_java_io_Console.toConsole(new Target_java_io_Console());
+                            Target_java_lang_System.cons = KnownIntrinsics.unsafeCast(new Target_java_io_Console(), Console.class);
                         }
                         return Target_java_lang_System.cons;
                     }
@@ -78,17 +75,9 @@ final class Target_sun_misc_SharedSecrets {
         }
         return javaIOAccess;
     }
-
-    @Alias private static sun.misc.JavaLangAccess javaLangAccess;
-
-    @Substitute
-    public static sun.misc.JavaLangAccess getJavaLangAccess() {
-        return javaLangAccess;
-    }
 }
 
 @TargetClass(sun.misc.Signal.class)
-@Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 final class Target_sun_misc_Signal {
 
     @Substitute
@@ -374,7 +363,6 @@ final class Util_sun_misc_Signal {
 
 /** Translated from: jdk/src/share/native/sun/misc/NativeSignalHandler.c?v=Java_1.8.0_40_b10. */
 @TargetClass(className = "sun.misc.NativeSignalHandler")
-@Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 final class Target_sun_misc_NativeSignalHandler {
 
     /**
