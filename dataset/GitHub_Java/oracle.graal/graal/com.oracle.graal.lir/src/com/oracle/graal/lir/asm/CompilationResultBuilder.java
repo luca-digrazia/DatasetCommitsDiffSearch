@@ -58,7 +58,6 @@ import com.oracle.graal.code.DataSection.Data;
 import com.oracle.graal.code.DataSection.RawData;
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 import com.oracle.graal.compiler.common.spi.ForeignCallsProvider;
-import com.oracle.graal.compiler.common.type.DataPointerConstant;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.lir.LIR;
 import com.oracle.graal.lir.LIRFrameState;
@@ -146,10 +145,6 @@ public class CompilationResultBuilder {
         compilationResult.setTotalFrameSize(frameSize);
     }
 
-    public void setMaxInterpreterFrameSize(int maxInterpreterFrameSize) {
-        compilationResult.setMaxInterpreterFrameSize(maxInterpreterFrameSize);
-    }
-
     public Mark recordMark(Object id) {
         return compilationResult.recordMark(asm.position(), id);
     }
@@ -234,10 +229,6 @@ public class CompilationResultBuilder {
         DataSectionReference reference = compilationResult.getDataSection().insertData(data);
         compilationResult.recordDataPatch(asm.position(), reference);
         return asm.getPlaceholder();
-    }
-
-    public AbstractAddress recordDataReferenceInCode(DataPointerConstant constant) {
-        return recordDataReferenceInCode(constant, constant.getAlignment());
     }
 
     public AbstractAddress recordDataReferenceInCode(Constant constant, int alignment) {
@@ -406,12 +397,12 @@ public class CompilationResultBuilder {
     }
 
     private void emitBlock(AbstractBlockBase<?> block) {
-        if (Debug.isDumpEnabled(Debug.BASIC_LOG_LEVEL) || PrintLIRWithAssembly.getValue()) {
+        if (Debug.isDumpEnabled() || PrintLIRWithAssembly.getValue()) {
             blockComment(String.format("block B%d %s", block.getId(), block.getLoop()));
         }
 
         for (LIRInstruction op : lir.getLIRforBlock(block)) {
-            if (Debug.isDumpEnabled(Debug.BASIC_LOG_LEVEL) || PrintLIRWithAssembly.getValue()) {
+            if (Debug.isDumpEnabled() || PrintLIRWithAssembly.getValue()) {
                 blockComment(String.format("%d %s", op.id(), op));
             }
 
