@@ -30,13 +30,13 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo(nameTemplate = "VirtualArray {p#componentType/s}[{p#length}]")
-public class VirtualArrayNode extends VirtualObjectNode implements ArrayLengthProvider {
+public class VirtualArrayNode extends VirtualObjectNode {
 
     private final ResolvedJavaType componentType;
     private final int length;
 
     public VirtualArrayNode(ResolvedJavaType componentType, int length) {
-        super(componentType.getArrayClass(), true);
+        super(true);
         this.componentType = componentType;
         this.length = length;
     }
@@ -141,11 +141,7 @@ public class VirtualArrayNode extends VirtualObjectNode implements ArrayLengthPr
     }
 
     @Override
-    public ValueNode getMaterializedRepresentation(FixedNode fixed, ValueNode[] entries, LockState locks) {
+    public ValueNode getMaterializedRepresentation(FixedNode fixed, ValueNode[] entries, int[] locks) {
         return new AllocatedObjectNode(this);
-    }
-
-    public ValueNode length() {
-        return ConstantNode.forInt(length, graph());
     }
 }

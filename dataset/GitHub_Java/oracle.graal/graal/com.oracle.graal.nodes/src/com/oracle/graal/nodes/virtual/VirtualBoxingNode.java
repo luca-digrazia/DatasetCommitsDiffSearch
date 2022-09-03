@@ -23,11 +23,9 @@
 package com.oracle.graal.nodes.virtual;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 
-@NodeInfo
 public class VirtualBoxingNode extends VirtualInstanceNode {
 
     private final Kind boxingKind;
@@ -43,9 +41,9 @@ public class VirtualBoxingNode extends VirtualInstanceNode {
     }
 
     @Override
-    public ValueNode getMaterializedRepresentation(FixedNode fixed, ValueNode[] entries, LockState locks) {
+    public ValueNode getMaterializedRepresentation(FixedNode fixed, ValueNode[] entries, int[] locks) {
         assert entries.length == 1;
-        assert locks == null;
+        assert locks.length == 0;
         return new BoxNode(entries[0], type(), boxingKind);
     }
 }

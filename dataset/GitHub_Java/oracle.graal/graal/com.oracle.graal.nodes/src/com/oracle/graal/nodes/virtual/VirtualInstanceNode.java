@@ -37,7 +37,7 @@ public class VirtualInstanceNode extends VirtualObjectNode {
     }
 
     public VirtualInstanceNode(ResolvedJavaType type, ResolvedJavaField[] fields, boolean hasIdentity) {
-        super(type, hasIdentity);
+        super(hasIdentity);
         this.type = type;
         this.fields = fields;
     }
@@ -77,7 +77,7 @@ public class VirtualInstanceNode extends VirtualObjectNode {
     public int fieldIndex(ResolvedJavaField field) {
         // on average fields.length == ~6, so a linear search is fast enough
         for (int i = 0; i < fields.length; i++) {
-            if (fields[i].equals(field)) {
+            if (fields[i] == field) {
                 return i;
             }
         }
@@ -101,7 +101,7 @@ public class VirtualInstanceNode extends VirtualObjectNode {
     }
 
     @Override
-    public ValueNode getMaterializedRepresentation(FixedNode fixed, ValueNode[] entries, LockState locks) {
+    public ValueNode getMaterializedRepresentation(FixedNode fixed, ValueNode[] entries, int[] locks) {
         return new AllocatedObjectNode(this);
     }
 }
