@@ -23,13 +23,11 @@
 package com.oracle.graal.compiler.alloc;
 
 import static com.oracle.graal.api.code.ValueUtil.*;
-
 import java.util.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.lir.*;
 
 /**
@@ -122,12 +120,6 @@ final class MoveResolver {
         for (i = 0; i < mappingTo.size(); i++) {
             Interval interval = mappingTo.get(i);
             boolean unique = usedRegs.add(interval.location());
-            if (!unique) {
-                DebugScope.dump(this.allocator.ir, "exception");
-                DebugScope.dump(this.allocator.intervals, "exception");
-                DebugScope.dump(interval, "interval");
-                System.err.println(interval);
-            }
             assert unique : "cannot write to same register twice";
         }
 
@@ -207,7 +199,9 @@ final class MoveResolver {
 
         insertionBuffer.append(insertIdx, allocator.ir.spillMoveFactory.createMove(toOpr, fromOpr));
 
-        Debug.log("insert move from %s to %s at %d", fromInterval, toInterval, insertIdx);
+        if (allocator.getTraceLevel() >= 4) {
+            TTY.println("MoveResolver: inserted move from %d (%s) to %d (%s)", fromInterval.operandNumber, fromInterval.location(), toInterval.operandNumber, toInterval.location());
+        }
     }
 
     private void insertMove(Value fromOpr, Interval toInterval) {
@@ -217,7 +211,9 @@ final class MoveResolver {
         AllocatableValue toOpr = toInterval.operand;
         insertionBuffer.append(insertIdx, allocator.ir.spillMoveFactory.createMove(toOpr, fromOpr));
 
-        Debug.log("insert move from value %s to %s at %d", fromOpr, toInterval, insertIdx);
+        if (allocator.getTraceLevel() >= 4) {
+            TTY.print("MoveResolver: inserted move from constant %s to %d (%s)", fromOpr, toInterval.operandNumber, toInterval.location());
+        }
     }
 
     private void resolveMappings() {
@@ -287,7 +283,9 @@ final class MoveResolver {
                 }
                 spillInterval.assignLocation(spillSlot);
 
-                Debug.log("created new Interval for spilling: %s", spillInterval);
+                if (allocator.getTraceLevel() >= 4) {
+                    TTY.println("created new Interval %s for spilling", spillInterval.operand);
+                }
 
                 // insert a move from register to stack and update the mapping
                 insertMove(fromInterval, spillInterval);
@@ -327,18 +325,9 @@ final class MoveResolver {
     }
 
     void addMapping(Interval fromInterval, Interval toInterval) {
-
-        if (isIllegal(toInterval.location()) && toInterval.canMaterialize()) {
-            Debug.log("no store to rematerializable interval %s needed", toInterval);
-            return;
+        if (allocator.getTraceLevel() >= 4) {
+            TTY.println("MoveResolver: adding mapping from interval %d (%s) to interval %d (%s)", fromInterval.operandNumber, fromInterval.location(), toInterval.operandNumber, toInterval.location());
         }
-        if (isIllegal(fromInterval.location()) && fromInterval.canMaterialize()) {
-            // Instead of a reload, re-materialize the value
-            Value rematValue = fromInterval.getMaterializedValue();
-            addMapping(rematValue, toInterval);
-            return;
-        }
-        Debug.log("add move mapping from %s to %s", fromInterval, toInterval);
 
         assert !fromInterval.operand.equals(toInterval.operand) : "from and to interval equal: " + fromInterval;
         assert fromInterval.kind() == toInterval.kind();
@@ -348,8 +337,9 @@ final class MoveResolver {
     }
 
     void addMapping(Value fromOpr, Interval toInterval) {
-        Debug.log("add move mapping from %s to %s", fromOpr, toInterval);
-
+        if (allocator.getTraceLevel() >= 4) {
+            TTY.println("MoveResolver: adding mapping from %s to %d (%s)", fromOpr, toInterval.operandNumber, toInterval.location());
+        }
         assert isConstant(fromOpr) : "only for constants";
 
         mappingFrom.add(null);

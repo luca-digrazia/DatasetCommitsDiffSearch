@@ -39,7 +39,6 @@ import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.StandardOp.FallThroughOp;
 import com.oracle.graal.lir.StandardOp.JumpOp;
 import com.oracle.graal.lir.StandardOp.LabelOp;
 import com.oracle.graal.nodes.*;
@@ -427,12 +426,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
             return false;
         }
         LIRInstruction lirInstruction = instructions.get(instructions.size() - 1);
-        if (lirInstruction instanceof StandardOp.JumpOp) {
-            return true;
-        } else if (lirInstruction instanceof FallThroughOp) {
-            return ((FallThroughOp) lirInstruction).fallThroughTarget() != null;
-        }
-        return false;
+        return lirInstruction instanceof StandardOp.JumpOp;
     }
 
     private void doRoot(ValueNode instr) {

@@ -201,11 +201,22 @@ public class IntervalWalker {
         currentInterval.rewindRange();
     }
 
+    int getTraceLevel() {
+        return allocator.getTraceLevel();
+    }
+
     void walkTo(int toOpId) {
         assert currentPosition <= toOpId : "can not walk backwards";
         while (currentInterval != null) {
             boolean isActive = currentInterval.from() <= toOpId;
             int opId = isActive ? currentInterval.from() : toOpId;
+
+            if (getTraceLevel() >= 2 && !TTY.isSuppressed()) {
+                if (currentPosition < opId) {
+                    TTY.println();
+                    TTY.println("walkTo(%d) *", opId);
+                }
+            }
 
             // set currentPosition prior to call of walkTo
             currentPosition = opId;
@@ -215,15 +226,13 @@ public class IntervalWalker {
             walkTo(State.Inactive, opId);
 
             if (isActive) {
-                try (Indent indent = Debug.logAndIndent("walk to op %d", opId)) {
-                    currentInterval.state = State.Active;
-                    if (activateCurrent()) {
-                        activeLists.addToListSortedByCurrentFromPositions(currentBinding, currentInterval);
-                        intervalMoved(currentInterval, State.Unhandled, State.Active);
-                    }
-
-                    nextInterval();
+                currentInterval.state = State.Active;
+                if (activateCurrent()) {
+                    activeLists.addToListSortedByCurrentFromPositions(currentBinding, currentInterval);
+                    intervalMoved(currentInterval, State.Unhandled, State.Active);
                 }
+
+                nextInterval();
             } else {
                 return;
             }
@@ -233,8 +242,10 @@ public class IntervalWalker {
     private void intervalMoved(Interval interval, State from, State to) {
         // intervalMoved() is called whenever an interval moves from one interval list to another.
         // In the implementation of this method it is prohibited to move the interval to any list.
-        if (Debug.isLogEnabled()) {
-            Debug.log("interval moved from %s to %s: %s", from, to, interval.logString(allocator));
+        if (getTraceLevel() >= 4 && !TTY.isSuppressed()) {
+            TTY.print(from.toString() + " to " + to.toString());
+            TTY.fillTo(23);
+            TTY.out().println(interval.logString(allocator));
         }
     }
 }
