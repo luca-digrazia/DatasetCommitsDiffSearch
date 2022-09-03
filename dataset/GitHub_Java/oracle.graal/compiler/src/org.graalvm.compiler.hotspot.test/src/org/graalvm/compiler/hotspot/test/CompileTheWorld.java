@@ -23,11 +23,10 @@
 package org.graalvm.compiler.hotspot.test;
 
 import static java.util.Collections.singletonList;
-import static org.graalvm.compiler.core.CompilationWrapper.ExceptionAction.Print;
-import static org.graalvm.compiler.core.GraalCompilerOptions.CompilationBailoutAction;
-import static org.graalvm.compiler.core.GraalCompilerOptions.CompilationFailureAction;
+import static org.graalvm.compiler.core.GraalCompilerOptions.ExitVMOnException;
+import static org.graalvm.compiler.core.GraalCompilerOptions.PrintBailout;
+import static org.graalvm.compiler.core.GraalCompilerOptions.PrintStackTraceOnException;
 import static org.graalvm.compiler.core.test.ReflectionOptionDescriptors.extractEntries;
-import static org.graalvm.compiler.debug.MemUseTrackerKey.getCurrentThreadAllocatedBytes;
 import static org.graalvm.compiler.hotspot.test.CompileTheWorld.Options.DESCRIPTORS;
 import static org.graalvm.compiler.serviceprovider.JDK9Method.Java8OrEarlier;
 
@@ -52,10 +51,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Enumeration;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -71,11 +68,14 @@ import java.util.stream.Collectors;
 import org.graalvm.compiler.api.replacements.Snippet;
 import org.graalvm.compiler.bytecode.Bytecodes;
 import org.graalvm.compiler.core.CompilerThreadFactory;
+import org.graalvm.compiler.core.CompilerThreadFactory.DebugConfigAccess;
 import org.graalvm.compiler.core.test.ReflectionOptionDescriptors;
-import org.graalvm.compiler.debug.DebugOptions;
+import org.graalvm.compiler.debug.DebugEnvironment;
+import org.graalvm.compiler.debug.GraalDebugConfig;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.debug.MethodFilter;
 import org.graalvm.compiler.debug.TTY;
+import org.graalvm.compiler.debug.internal.MemUseTrackerImpl;
 import org.graalvm.compiler.hotspot.CompilationTask;
 import org.graalvm.compiler.hotspot.GraalHotSpotVMConfig;
 import org.graalvm.compiler.hotspot.HotSpotGraalCompiler;
@@ -211,12 +211,15 @@ public final class CompileTheWorld {
         EconomicMap<OptionKey<?>, Object> compilationOptionsCopy = EconomicMap.create(initialOptions.getMap());
         compilationOptionsCopy.putAll(compilationOptions);
 
-        // We want to see stack traces when a method fails to compile
-        CompilationBailoutAction.putIfAbsent(compilationOptionsCopy, Print);
-        CompilationFailureAction.putIfAbsent(compilationOptionsCopy, Print);
+        // We don't want the VM to exit when a method fails to compile...
+        ExitVMOnException.putIfAbsent(compilationOptionsCopy, false);
+
+        // ...but we want to see exceptions.
+        PrintBailout.putIfAbsent(compilationOptionsCopy, true);
+        PrintStackTraceOnException.putIfAbsent(compilationOptionsCopy, true);
 
         // By default only report statistics for the CTW threads themselves
-        DebugOptions.MetricsThreadFilter.putIfAbsent(compilationOptionsCopy, "^CompileTheWorld");
+        GraalDebugConfig.Options.DebugValueThreadFilter.putIfAbsent(compilationOptionsCopy, "^CompileTheWorld");
         this.compilationOptions = compilationOptionsCopy;
     }
 
@@ -477,7 +480,6 @@ public final class CompileTheWorld {
     private void compile(String classPath) throws IOException {
         final String[] entries = classPath.split(File.pathSeparator);
         long start = System.currentTimeMillis();
-        Map<Thread, StackTraceElement[]> initialThreads = Thread.getAllStackTraces();
 
         try {
             // compile dummy method to get compiler initialized outside of the
@@ -509,7 +511,13 @@ public final class CompileTheWorld {
 
         OptionValues savedOptions = currentOptions;
         currentOptions = new OptionValues(compilationOptions);
-        threadPool = new ThreadPoolExecutor(threadCount, threadCount, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<Runnable>(), new CompilerThreadFactory("CompileTheWorld"));
+        threadPool = new ThreadPoolExecutor(threadCount, threadCount, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<Runnable>(),
+                        new CompilerThreadFactory("CompileTheWorld", new DebugConfigAccess() {
+                            @Override
+                            public GraalDebugConfig getDebugConfig() {
+                                return DebugEnvironment.ensureInitialized(currentOptions, compiler.getGraalRuntime().getHostProviders().getSnippetReflection());
+                            }
+                        }));
 
         try {
             for (int i = 0; i < entries.length; i++) {
@@ -552,13 +560,7 @@ public final class CompileTheWorld {
 
                     classFileCounter++;
 
-                    if (className.startsWith("jdk.management.") ||
-                                    className.startsWith("jdk.internal.cmm.*") ||
-                                    // GR-5881: The class initializer for
-                                    // sun.tools.jconsole.OutputViewer
-                                    // spawns non-daemon threads for redirecting sysout and syserr.
-                                    // These threads tend to cause deadlock at VM exit
-                                    className.startsWith("sun.tools.jconsole.")) {
+                    if (className.startsWith("jdk.management.") || className.startsWith("jdk.internal.cmm.*")) {
                         continue;
                     }
 
@@ -652,33 +654,6 @@ public final class CompileTheWorld {
         } else {
             TTY.println("CompileTheWorld : Done (%d classes, %d methods, %d ms, %d bytes of memory used)", classFileCounter, compiledMethodsCounter.get(), compileTime.get(), memoryUsed.get());
         }
-
-        // Apart from the main thread, there should be only be daemon threads
-        // alive now. If not, then a class initializer has probably started
-        // a thread that could cause a deadlock while trying to exit the VM.
-        // One known example of this is sun.tools.jconsole.OutputViewer which
-        // spawns threads to redirect sysout and syserr. To help debug such
-        // scenarios, the stacks of potentially problematic threads are dumped.
-        Map<Thread, StackTraceElement[]> suspiciousThreads = new HashMap<>();
-        for (Map.Entry<Thread, StackTraceElement[]> e : Thread.getAllStackTraces().entrySet()) {
-            Thread thread = e.getKey();
-            if (thread != Thread.currentThread() && !initialThreads.containsKey(thread) && !thread.isDaemon() && thread.isAlive()) {
-                suspiciousThreads.put(thread, e.getValue());
-            }
-        }
-        if (!suspiciousThreads.isEmpty()) {
-            TTY.println("--- Non-daemon threads started during CTW ---");
-            for (Map.Entry<Thread, StackTraceElement[]> e : suspiciousThreads.entrySet()) {
-                Thread thread = e.getKey();
-                if (thread.isAlive()) {
-                    TTY.println(thread.toString() + " " + thread.getState());
-                    for (StackTraceElement ste : e.getValue()) {
-                        TTY.println("\tat " + ste);
-                    }
-                }
-            }
-            TTY.println("---------------------------------------------");
-        }
     }
 
     private synchronized void startThreads() {
@@ -728,7 +703,7 @@ public final class CompileTheWorld {
     private void compileMethod(HotSpotResolvedJavaMethod method, int counter) {
         try {
             long start = System.currentTimeMillis();
-            long allocatedAtStart = getCurrentThreadAllocatedBytes();
+            long allocatedAtStart = MemUseTrackerImpl.getCurrentThreadAllocatedBytes();
             int entryBCI = JVMCICompiler.INVOCATION_ENTRY_BCI;
             HotSpotCompilationRequest request = new HotSpotCompilationRequest(method, entryBCI, 0L);
             // For more stable CTW execution, disable use of profiling information
@@ -743,7 +718,7 @@ public final class CompileTheWorld {
                 installedCode.invalidate();
             }
 
-            memoryUsed.getAndAdd(getCurrentThreadAllocatedBytes() - allocatedAtStart);
+            memoryUsed.getAndAdd(MemUseTrackerImpl.getCurrentThreadAllocatedBytes() - allocatedAtStart);
             compileTime.getAndAdd(System.currentTimeMillis() - start);
             compiledMethodsCounter.incrementAndGet();
         } catch (Throwable t) {
