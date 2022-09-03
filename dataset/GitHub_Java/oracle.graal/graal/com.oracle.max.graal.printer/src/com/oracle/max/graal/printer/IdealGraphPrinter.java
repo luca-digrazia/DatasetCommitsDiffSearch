@@ -273,4 +273,5 @@ class IdealGraphPrinter extends BasicIdealGraphPrinter {
             endBlock();
         }
     }
+
 }
