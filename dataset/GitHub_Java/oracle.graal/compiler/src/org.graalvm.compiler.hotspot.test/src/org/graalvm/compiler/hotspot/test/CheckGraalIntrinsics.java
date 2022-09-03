@@ -273,6 +273,8 @@ public class CheckGraalIntrinsics extends GraalTest {
             add(toBeInvestigated,
                             // Some logic and a stub call
                             "com/sun/crypto/provider/CounterMode.implCrypt([BII[BI)I",
+                            // Stub and very little logic
+                            "com/sun/crypto/provider/GHASH.processBlocks([BII[J[J)V",
                             // HotSpot MacroAssembler-based intrinsic
                             "java/lang/Math.fma(DDD)D",
                             // HotSpot MacroAssembler-based intrinsic
@@ -408,7 +410,6 @@ public class CheckGraalIntrinsics extends GraalTest {
                                     "java/lang/StringLatin1.compareToUTF16([B[B)I",
                                     "java/lang/StringUTF16.compareTo([B[B)I",
                                     "java/lang/StringUTF16.compareToLatin1([B[B)I",
-                                    "java/lang/Thread.onSpinWait()V",
                                     "jdk/internal/misc/Unsafe.getAndAddInt(Ljava/lang/Object;JI)I",
                                     "jdk/internal/misc/Unsafe.getAndAddLong(Ljava/lang/Object;JJ)J",
                                     "jdk/internal/misc/Unsafe.getAndSetInt(Ljava/lang/Object;JI)I",
@@ -416,6 +417,7 @@ public class CheckGraalIntrinsics extends GraalTest {
                                     "jdk/internal/misc/Unsafe.getAndSet" + oopName + "(Ljava/lang/Object;JLjava/lang/Object;)Ljava/lang/Object;");
                 }
                 add(toBeInvestigated,
+                                "java/lang/Thread.onSpinWait()V",
                                 "jdk/internal/misc/Unsafe.getCharUnaligned(Ljava/lang/Object;J)C",
                                 "jdk/internal/misc/Unsafe.getIntUnaligned(Ljava/lang/Object;J)I",
                                 "jdk/internal/misc/Unsafe.getLongUnaligned(Ljava/lang/Object;J)J",
