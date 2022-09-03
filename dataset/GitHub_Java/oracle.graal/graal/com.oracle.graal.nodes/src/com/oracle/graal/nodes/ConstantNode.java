@@ -94,8 +94,7 @@ public class ConstantNode extends FloatingNode implements LIRLowerable {
         if (onlyUsedInVirtualState()) {
             gen.setResult(this, value);
         } else {
-            LIRKind kind = gen.getLIRGeneratorTool().getLIRKind(stamp());
-            gen.setResult(this, gen.getLIRGeneratorTool().emitLoadConstant(kind, value));
+            gen.setResult(this, gen.getLIRGeneratorTool().emitLoadConstant(value));
         }
     }
 
