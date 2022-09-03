@@ -99,20 +99,11 @@ public class AArch64ControlFlow {
         private final double trueDestinationProbability;
 
         public BranchOp(AArch64Assembler.ConditionFlag condition, LabelRef trueDestination, LabelRef falseDestination, double trueDestinationProbability) {
-            this(TYPE, condition, trueDestination, falseDestination, trueDestinationProbability);
-        }
-
-        protected BranchOp(LIRInstructionClass<? extends BranchOp> type, AArch64Assembler.ConditionFlag condition,
-                        LabelRef trueDestination, LabelRef falseDestination, double trueDestinationProbability) {
-            super(type);
+            super(TYPE);
             this.condition = condition;
             this.trueDestination = trueDestination;
             this.falseDestination = falseDestination;
             this.trueDestinationProbability = trueDestinationProbability;
-        }
-
-        protected void emitConditionalBranch(AArch64MacroAssembler masm, AArch64Assembler.ConditionFlag cond, Label label) {
-            masm.branchConditionally(cond, label);
         }
 
         @Override
@@ -124,56 +115,18 @@ public class AArch64ControlFlow {
              * executing two instructions instead of one.
              */
             if (crb.isSuccessorEdge(trueDestination)) {
-                emitConditionalBranch(masm, condition.negate(), falseDestination.label());
+                masm.branchConditionally(condition.negate(), falseDestination.label());
             } else if (crb.isSuccessorEdge(falseDestination)) {
-                emitConditionalBranch(masm, condition, trueDestination.label());
+                masm.branchConditionally(condition, trueDestination.label());
             } else if (trueDestinationProbability < 0.5) {
-                emitConditionalBranch(masm, condition.negate(), falseDestination.label());
+                masm.branchConditionally(condition.negate(), falseDestination.label());
                 masm.jmp(trueDestination.label());
             } else {
-                emitConditionalBranch(masm, condition, trueDestination.label());
+                masm.branchConditionally(condition, trueDestination.label());
                 masm.jmp(falseDestination.label());
             }
         }
-    }
 
-    public static class BitTestAndBranchOp extends BranchOp {
-        public static final LIRInstructionClass<BitTestAndBranchOp> TYPE = LIRInstructionClass.create(BitTestAndBranchOp.class);
-
-        @Use protected Value src;
-        private final int index;
-
-        public BitTestAndBranchOp(LabelRef trueDestination, LabelRef falseDestination, Value src, double trueDestinationProbability, int index) {
-            super(TYPE, ConditionFlag.EQ, trueDestination, falseDestination, trueDestinationProbability);
-            this.src = src;
-            this.index = index;
-        }
-
-        @Override
-        protected void emitConditionalBranch(AArch64MacroAssembler masm, AArch64Assembler.ConditionFlag cond, Label label) {
-            assert cond == ConditionFlag.EQ || cond == ConditionFlag.NE;
-            ConditionFlag finalCondition = cond;
-            Label finalLabel = label;
-
-            boolean isFarBranch = false;
-            // TODO Check whether the branch is short or far, and set value to "isFarBranch".
-
-            if (isFarBranch) {
-                finalCondition = cond.negate();
-                finalLabel = new Label();
-            }
-
-            if (finalCondition == ConditionFlag.EQ) {
-                masm.tbz(asRegister(src), index, finalLabel);
-            } else {
-                masm.tbnz(asRegister(src), index, finalLabel);
-            }
-
-            if (isFarBranch) {
-                masm.jmp(label);
-                masm.bind(finalLabel);
-            }
-        }
     }
 
     @Opcode("CMOVE")

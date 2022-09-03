@@ -1052,95 +1052,6 @@ public class AArch64MacroAssembler extends AArch64Assembler {
     }
 
     /**
-     * dst = src1 & shiftType(src2, imm).
-     *
-     * @param size register size. Has to be 32 or 64.
-     * @param dst general purpose register. May not be null or stackpointer.
-     * @param src1 general purpose register. May not be null or stackpointer.
-     * @param src2 general purpose register. May not be null or stackpointer.
-     * @param shiftType all types allowed, may not be null.
-     * @param shiftAmt must be in range 0 to size - 1.
-     */
-    @Override
-    public void and(int size, Register dst, Register src1, Register src2, ShiftType shiftType, int shiftAmt) {
-        super.and(size, dst, src1, src2, shiftType, shiftAmt);
-    }
-
-    /**
-     * dst = src1 ^ shiftType(src2, imm).
-     *
-     * @param size register size. Has to be 32 or 64.
-     * @param dst general purpose register. May not be null or stackpointer.
-     * @param src1 general purpose register. May not be null or stackpointer.
-     * @param src2 general purpose register. May not be null or stackpointer.
-     * @param shiftType all types allowed, may not be null.
-     * @param shiftAmt must be in range 0 to size - 1.
-     */
-    @Override
-    public void eor(int size, Register dst, Register src1, Register src2, ShiftType shiftType, int shiftAmt) {
-        super.eor(size, dst, src1, src2, shiftType, shiftAmt);
-    }
-
-    /**
-     * dst = src1 | shiftType(src2, imm).
-     *
-     * @param size register size. Has to be 32 or 64.
-     * @param dst general purpose register. May not be null or stackpointer.
-     * @param src1 general purpose register. May not be null or stackpointer.
-     * @param src2 general purpose register. May not be null or stackpointer.
-     * @param shiftType all types allowed, may not be null.
-     * @param shiftAmt must be in range 0 to size - 1.
-     */
-    public void or(int size, Register dst, Register src1, Register src2, ShiftType shiftType, int shiftAmt) {
-        super.orr(size, dst, src1, src2, shiftType, shiftAmt);
-    }
-
-    /**
-     * dst = src1 & ~(shiftType(src2, imm)).
-     *
-     * @param size register size. Has to be 32 or 64.
-     * @param dst general purpose register. May not be null or stackpointer.
-     * @param src1 general purpose register. May not be null or stackpointer.
-     * @param src2 general purpose register. May not be null or stackpointer.
-     * @param shiftType all types allowed, may not be null.
-     * @param shiftAmt must be in range 0 to size - 1.
-     */
-    @Override
-    public void bic(int size, Register dst, Register src1, Register src2, ShiftType shiftType, int shiftAmt) {
-        super.bic(size, dst, src1, src2, shiftType, shiftAmt);
-    }
-
-    /**
-     * dst = src1 ^ ~(shiftType(src2, imm)).
-     *
-     * @param size register size. Has to be 32 or 64.
-     * @param dst general purpose register. May not be null or stackpointer.
-     * @param src1 general purpose register. May not be null or stackpointer.
-     * @param src2 general purpose register. May not be null or stackpointer.
-     * @param shiftType all types allowed, may not be null.
-     * @param shiftAmt must be in range 0 to size - 1.
-     */
-    @Override
-    public void eon(int size, Register dst, Register src1, Register src2, ShiftType shiftType, int shiftAmt) {
-        super.eon(size, dst, src1, src2, shiftType, shiftAmt);
-    }
-
-    /**
-     * dst = src1 | ~(shiftType(src2, imm)).
-     *
-     * @param size register size. Has to be 32 or 64.
-     * @param dst general purpose register. May not be null or stackpointer.
-     * @param src1 general purpose register. May not be null or stackpointer.
-     * @param src2 general purpose register. May not be null or stackpointer.
-     * @param shiftType all types allowed, may not be null.
-     * @param shiftAmt must be in range 0 to size - 1.
-     */
-    @Override
-    public void orn(int size, Register dst, Register src1, Register src2, ShiftType shiftType, int shiftAmt) {
-        super.orn(size, dst, src1, src2, shiftType, shiftAmt);
-    }
-
-    /**
      * Sign-extend value from src into dst.
      *
      * @param destSize destination register size. Must be 32 or 64.
@@ -1452,7 +1363,7 @@ public class AArch64MacroAssembler extends AArch64Assembler {
      *
      * @param cmp general purpose register. May not be null, zero-register or stackpointer.
      * @param uimm6 Unsigned 6-bit bit index.
-     * @param label Can only handle 16-bit word-aligned offsets for now. May be unbound. Non null.
+     * @param label Can only handle 21-bit word-aligned offsets for now. May be unbound. Non null.
      */
     public void tbnz(Register cmp, int uimm6, Label label) {
         assert NumUtil.isUnsignedNbit(6, uimm6);
@@ -1472,7 +1383,7 @@ public class AArch64MacroAssembler extends AArch64Assembler {
      *
      * @param cmp general purpose register. May not be null, zero-register or stackpointer.
      * @param uimm6 Unsigned 6-bit bit index.
-     * @param label Can only handle 16-bit word-aligned offsets for now. May be unbound. Non null.
+     * @param label Can only handle 21-bit word-aligned offsets for now. May be unbound. Non null.
      */
     public void tbz(Register cmp, int uimm6, Label label) {
         assert NumUtil.isUnsignedNbit(6, uimm6);
