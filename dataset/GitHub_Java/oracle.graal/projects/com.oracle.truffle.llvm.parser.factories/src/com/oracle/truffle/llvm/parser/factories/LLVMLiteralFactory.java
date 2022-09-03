@@ -87,21 +87,22 @@ public final class LLVMLiteralFactory {
     public static LLVMExpressionNode createUndefinedValue(LLVMParserRuntime runtime, Type resolvedType) {
         LLVMBaseType type = resolvedType.getLLVMBaseType();
         if (LLVMTypeHelper.isVectorType(type)) {
+            LLVMAddressLiteralNode addr = new LLVMAddressLiteralNode(LLVMAddress.createUndefinedAddress());
             switch (type) {
                 case I1_VECTOR:
-                    return LLVMVectorI1LiteralNodeGen.create(new LLVMExpressionNode[0]);
+                    return LLVMVectorI1LiteralNodeGen.create(new LLVMExpressionNode[0], addr);
                 case I8_VECTOR:
-                    return LLVMVectorI8LiteralNodeGen.create(new LLVMExpressionNode[0]);
+                    return LLVMVectorI8LiteralNodeGen.create(new LLVMExpressionNode[0], addr);
                 case I16_VECTOR:
-                    return LLVMVectorI16LiteralNodeGen.create(new LLVMExpressionNode[0]);
+                    return LLVMVectorI16LiteralNodeGen.create(new LLVMExpressionNode[0], addr);
                 case I32_VECTOR:
-                    return LLVMVectorI32LiteralNodeGen.create(new LLVMExpressionNode[0]);
+                    return LLVMVectorI32LiteralNodeGen.create(new LLVMExpressionNode[0], addr);
                 case I64_VECTOR:
-                    return LLVMVectorI64LiteralNodeGen.create(new LLVMExpressionNode[0]);
+                    return LLVMVectorI64LiteralNodeGen.create(new LLVMExpressionNode[0], addr);
                 case FLOAT_VECTOR:
-                    return LLVMVectorFloatLiteralNodeGen.create(new LLVMExpressionNode[0]);
+                    return LLVMVectorFloatLiteralNodeGen.create(new LLVMExpressionNode[0], addr);
                 case DOUBLE_VECTOR:
-                    return LLVMVectorDoubleLiteralNodeGen.create(new LLVMExpressionNode[0]);
+                    return LLVMVectorDoubleLiteralNodeGen.create(new LLVMExpressionNode[0], addr);
                 default:
                     throw new AssertionError(type);
             }
@@ -259,51 +260,51 @@ public final class LLVMLiteralFactory {
         return i1ZeroInits;
     }
 
-    public static LLVMExpressionNode createVectorLiteralNode(List<LLVMExpressionNode> listValues, LLVMBaseType type) {
+    public static LLVMExpressionNode createVectorLiteralNode(List<LLVMExpressionNode> listValues, LLVMExpressionNode target, LLVMBaseType type) {
         LLVMExpressionNode[] vals = listValues.toArray(new LLVMExpressionNode[listValues.size()]);
         switch (type) {
             case I1_VECTOR:
-                return LLVMVectorI1LiteralNodeGen.create(vals);
+                return LLVMVectorI1LiteralNodeGen.create(vals, target);
             case I8_VECTOR:
-                return LLVMVectorI8LiteralNodeGen.create(vals);
+                return LLVMVectorI8LiteralNodeGen.create(vals, target);
             case I16_VECTOR:
-                return LLVMVectorI16LiteralNodeGen.create(vals);
+                return LLVMVectorI16LiteralNodeGen.create(vals, target);
             case I32_VECTOR:
-                return LLVMVectorI32LiteralNodeGen.create(vals);
+                return LLVMVectorI32LiteralNodeGen.create(vals, target);
             case I64_VECTOR:
-                return LLVMVectorI64LiteralNodeGen.create(vals);
+                return LLVMVectorI64LiteralNodeGen.create(vals, target);
             case FLOAT_VECTOR:
-                return LLVMVectorFloatLiteralNodeGen.create(vals);
+                return LLVMVectorFloatLiteralNodeGen.create(vals, target);
             case DOUBLE_VECTOR:
-                return LLVMVectorDoubleLiteralNodeGen.create(vals);
+                return LLVMVectorDoubleLiteralNodeGen.create(vals, target);
             default:
                 throw new AssertionError();
         }
     }
 
-    public static LLVMExpressionNode createZeroVectorInitializer(int nrElements, LLVMBaseType llvmType) {
+    public static LLVMExpressionNode createZeroVectorInitializer(int nrElements, LLVMExpressionNode target, LLVMBaseType llvmType) {
         switch (llvmType) {
             case I1_VECTOR:
                 LLVMExpressionNode[] i1Vals = createI1LiteralNodes(nrElements, false);
-                return LLVMVectorI1LiteralNodeGen.create(i1Vals);
+                return LLVMVectorI1LiteralNodeGen.create(i1Vals, target);
             case I8_VECTOR:
                 LLVMExpressionNode[] i8Vals = createI8LiteralNodes(nrElements, (byte) 0);
-                return LLVMVectorI8LiteralNodeGen.create(i8Vals);
+                return LLVMVectorI8LiteralNodeGen.create(i8Vals, target);
             case I16_VECTOR:
                 LLVMExpressionNode[] i16Vals = createI16LiteralNodes(nrElements, (short) 0);
-                return LLVMVectorI16LiteralNodeGen.create(i16Vals);
+                return LLVMVectorI16LiteralNodeGen.create(i16Vals, target);
             case I32_VECTOR:
                 LLVMExpressionNode[] i32Vals = createI32LiteralNodes(nrElements, 0);
-                return LLVMVectorI32LiteralNodeGen.create(i32Vals);
+                return LLVMVectorI32LiteralNodeGen.create(i32Vals, target);
             case I64_VECTOR:
                 LLVMExpressionNode[] i64Vals = createI64LiteralNodes(nrElements, 0);
-                return LLVMVectorI64LiteralNodeGen.create(i64Vals);
+                return LLVMVectorI64LiteralNodeGen.create(i64Vals, target);
             case FLOAT_VECTOR:
                 LLVMExpressionNode[] floatVals = createFloatLiteralNodes(nrElements, 0.0f);
-                return LLVMVectorFloatLiteralNodeGen.create(floatVals);
+                return LLVMVectorFloatLiteralNodeGen.create(floatVals, target);
             case DOUBLE_VECTOR:
                 LLVMExpressionNode[] doubleVals = createDoubleLiteralNodes(nrElements, 0.0f);
-                return LLVMVectorDoubleLiteralNodeGen.create(doubleVals);
+                return LLVMVectorDoubleLiteralNodeGen.create(doubleVals, target);
             default:
                 throw new AssertionError(llvmType);
         }

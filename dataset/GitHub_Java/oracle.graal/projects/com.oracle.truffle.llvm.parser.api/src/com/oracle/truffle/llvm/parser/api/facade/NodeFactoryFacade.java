@@ -29,6 +29,10 @@
  */
 package com.oracle.truffle.llvm.parser.api.facade;
 
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.dsl.NodeFactory;
 import com.oracle.truffle.api.frame.FrameDescriptor;
@@ -56,10 +60,6 @@ import com.oracle.truffle.llvm.runtime.types.LLVMBaseType;
 import com.oracle.truffle.llvm.runtime.types.LLVMType;
 import com.oracle.truffle.llvm.runtime.types.Type;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-
 /**
  * This interface decouples the parser and the concrete implementation of the nodes by only making
  * {@link LLVMExpressionNode} and {@link LLVMExpressionNode} visible. The parser should not directly
@@ -67,18 +67,19 @@ import java.util.Optional;
  */
 public interface NodeFactoryFacade {
 
-    LLVMExpressionNode createInsertElement(LLVMParserRuntime runtime, LLVMBaseType resultType, LLVMExpressionNode vector, LLVMExpressionNode element, LLVMExpressionNode index);
+    LLVMExpressionNode createInsertElement(LLVMParserRuntime runtime, LLVMBaseType resultType, LLVMExpressionNode vector, Object type, LLVMExpressionNode element, LLVMExpressionNode index);
 
     LLVMExpressionNode createExtractElement(LLVMParserRuntime runtime, LLVMBaseType resultType, LLVMExpressionNode vector, LLVMExpressionNode index);
 
-    LLVMExpressionNode createShuffleVector(LLVMParserRuntime runtime, LLVMBaseType llvmType, LLVMExpressionNode vector1, LLVMExpressionNode vector2,
+    LLVMExpressionNode createShuffleVector(LLVMParserRuntime runtime, LLVMBaseType llvmType, LLVMExpressionNode target, LLVMExpressionNode vector1, LLVMExpressionNode vector2,
                     LLVMExpressionNode mask);
 
     LLVMExpressionNode createLoad(LLVMParserRuntime runtime, Type resolvedResultType, LLVMExpressionNode loadTarget);
 
     LLVMExpressionNode createStore(LLVMParserRuntime runtime, LLVMExpressionNode pointerNode, LLVMExpressionNode valueNode, Type type);
 
-    LLVMExpressionNode createLogicalOperation(LLVMParserRuntime runtime, LLVMExpressionNode left, LLVMExpressionNode right, LLVMLogicalInstructionType opCode, LLVMBaseType llvmType);
+    LLVMExpressionNode createLogicalOperation(LLVMParserRuntime runtime, LLVMExpressionNode left, LLVMExpressionNode right, LLVMLogicalInstructionType opCode, LLVMBaseType llvmType,
+                    LLVMExpressionNode target);
 
     LLVMExpressionNode createUndefinedValue(LLVMParserRuntime runtime, Type t);
 
@@ -86,7 +87,7 @@ public interface NodeFactoryFacade {
 
     LLVMExpressionNode createSimpleConstantNoArray(LLVMParserRuntime runtime, Object constant, LLVMBaseType instructionType, Type type);
 
-    LLVMExpressionNode createVectorLiteralNode(LLVMParserRuntime runtime, List<LLVMExpressionNode> listValues, LLVMBaseType type);
+    LLVMExpressionNode createVectorLiteralNode(LLVMParserRuntime runtime, List<LLVMExpressionNode> listValues, LLVMExpressionNode target, LLVMBaseType type);
 
     /**
      * This method allows to substitute calls to functions with nodes. The implementer is either
@@ -129,7 +130,8 @@ public interface NodeFactoryFacade {
 
     LLVMExpressionNode createCast(LLVMParserRuntime runtime, LLVMExpressionNode fromNode, Type targetType, Type fromType, LLVMConversionType type);
 
-    LLVMExpressionNode createArithmeticOperation(LLVMParserRuntime runtime, LLVMExpressionNode left, LLVMExpressionNode right, LLVMArithmeticInstructionType instr, LLVMBaseType llvmType);
+    LLVMExpressionNode createArithmeticOperation(LLVMParserRuntime runtime, LLVMExpressionNode left, LLVMExpressionNode right, LLVMArithmeticInstructionType instr, LLVMBaseType llvmType,
+                    LLVMExpressionNode target);
 
     LLVMExpressionNode createExtractValue(LLVMParserRuntime runtime, LLVMBaseType type, LLVMExpressionNode targetAddress);
 
@@ -144,29 +146,18 @@ public interface NodeFactoryFacade {
      */
     LLVMExpressionNode createGetElementPtr(LLVMParserRuntime runtime, LLVMBaseType indexType, LLVMExpressionNode aggregateAddress, LLVMExpressionNode index, int indexedTypeLength);
 
-    /**
-     * Creates a pointer to an object of a certain Type.
-     *
-     * @param indexType the integer type of the index parameter.
-     * @param aggregateAddress the address of the aggregate data structure
-     * @param index a multiplicator for indexedTypeLength
-     * @param indexedTypeLength size of the elements in the base object
-     * @return a node representing the element pointer
-     */
-    LLVMExpressionNode createTypedElementPointer(LLVMParserRuntime runtime, LLVMBaseType indexType, LLVMExpressionNode aggregateAddress, LLVMExpressionNode index, int indexedTypeLength,
-                    Type targetType);
-
     LLVMExpressionNode createSelect(LLVMParserRuntime runtime, Type type, LLVMExpressionNode condition, LLVMExpressionNode trueValue, LLVMExpressionNode falseValue);
 
     /**
      * Creates a zero vector initializer.
      *
      * @param nrElements the number of elements of the vector
+     * @param target the allocated result storage
      * @param llvmType the type of the vector
      *
      * @return the zero vector initializer
      */
-    LLVMExpressionNode createZeroVectorInitializer(LLVMParserRuntime runtime, int nrElements, LLVMBaseType llvmType);
+    LLVMExpressionNode createZeroVectorInitializer(LLVMParserRuntime runtime, int nrElements, LLVMExpressionNode target, LLVMBaseType llvmType);
 
     /**
      * Creates a node representing an <code>unreachable</code> instruction.

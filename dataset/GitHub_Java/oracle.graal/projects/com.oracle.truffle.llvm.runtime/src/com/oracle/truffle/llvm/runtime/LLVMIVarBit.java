@@ -35,6 +35,7 @@ import java.nio.ByteOrder;
 import java.util.Arrays;
 import java.util.BitSet;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.CompilerDirectives.ValueType;
 
@@ -48,7 +49,9 @@ public final class LLVMIVarBit {
 
     LLVMIVarBit(int bits, byte[] arr) {
         this.bits = bits;
-        LLVMPerformance.warn(null, "LLVMIVarBit:constructor");
+        if (CompilerDirectives.inInterpreter()) {
+            LLVMLogger.performanceWarning("constructing a variable bit number!");
+        }
         // TODO: what about sign extension?
         this.arr = new byte[getByteSize()];
         if (getByteSize() >= arr.length) {

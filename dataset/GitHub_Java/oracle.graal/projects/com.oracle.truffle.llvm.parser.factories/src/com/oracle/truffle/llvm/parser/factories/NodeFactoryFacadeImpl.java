@@ -98,6 +98,7 @@ import com.oracle.truffle.llvm.runtime.LLVMGlobalVariableDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMLogger;
 import com.oracle.truffle.llvm.runtime.NativeResolver;
 import com.oracle.truffle.llvm.runtime.memory.LLVMHeap;
+import com.oracle.truffle.llvm.runtime.options.LLVMOptions;
 import com.oracle.truffle.llvm.runtime.types.ArrayType;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
 import com.oracle.truffle.llvm.runtime.types.LLVMBaseType;
@@ -148,8 +149,8 @@ public class NodeFactoryFacadeImpl implements NodeFactoryFacade {
     }
 
     @Override
-    public LLVMExpressionNode createSimpleConstantNoArray(LLVMParserRuntime runtime, String stringValue, LLVMBaseType instructionType, Type type) {
-        return LLVMLiteralFactory.createSimpleConstantNoArray(stringValue, instructionType, type);
+    public LLVMExpressionNode createSimpleConstantNoArray(LLVMParserRuntime runtime, Object constant, LLVMBaseType instructionType, Type type) {
+        return LLVMLiteralFactory.createSimpleConstantNoArray(constant, instructionType, type);
     }
 
     @Override
@@ -527,7 +528,9 @@ public class NodeFactoryFacadeImpl implements NodeFactoryFacade {
                  */
                 return new LLVMAddressNuller(slot);
             case Illegal:
-                LLVMLogger.info("illegal frame slot at stack nuller: " + identifier);
+                if (LLVMOptions.DEBUG.debug()) {
+                    LLVMLogger.info("illegal frame slot at stack nuller: " + identifier);
+                }
                 return new LLVMAddressNuller(slot);
             default:
                 throw new AssertionError();
