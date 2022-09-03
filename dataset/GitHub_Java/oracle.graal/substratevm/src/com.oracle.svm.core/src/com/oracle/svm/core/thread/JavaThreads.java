@@ -66,7 +66,6 @@ import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.heap.FeebleReferenceList;
 import com.oracle.svm.core.heap.Heap;
 import com.oracle.svm.core.jdk.StackTraceBuilder;
-import com.oracle.svm.core.jdk.Target_jdk_internal_misc_VM;
 import com.oracle.svm.core.jdk.UninterruptibleUtils.AtomicReference;
 import com.oracle.svm.core.locks.VMMutex;
 import com.oracle.svm.core.log.Log;
@@ -212,6 +211,7 @@ public abstract class JavaThreads {
         }
     }
 
+    @NeverInline("Truffle compilation must not inline this method")
     private static Thread createThread(IsolateThread isolateThread) {
         /*
          * Either the main thread, or VMThread was started a different way. Create a new Thread
@@ -261,7 +261,6 @@ public abstract class JavaThreads {
         return assignJavaThread(CEntryPointContext.getCurrentIsolateThread(), thread, manuallyStarted);
     }
 
-    @NeverInline("Truffle compilation must not inline this method")
     private static boolean assignJavaThread(IsolateThread isolateThread, Thread thread, boolean manuallyStarted) {
         if (!currentThread.compareAndSet(isolateThread, null, thread)) {
             return false;
@@ -752,7 +751,7 @@ final class Target_java_lang_Thread {
             }
         }
 
-        return Target_jdk_internal_misc_VM.toThreadState(threadStatus);
+        return sun.misc.VM.toThreadState(threadStatus);
     }
 
     @Substitute
