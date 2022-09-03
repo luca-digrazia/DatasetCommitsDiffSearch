@@ -51,8 +51,9 @@ public final class CStringNode extends FloatingNode implements Lowerable {
             unsafe.putByte(cstring + i, formatBytes[i]);
         }
         unsafe.putByte(cstring + formatBytes.length, (byte) 0);
-        ConstantNode replacement = ConstantNode.forLong(cstring, graph());
-        graph().replaceFloating(this, replacement);
+        StructuredGraph graph = (StructuredGraph) graph();
+        ConstantNode replacement = ConstantNode.forLong(cstring, graph);
+        graph.replaceFloating(this, replacement);
     }
 
     @NodeIntrinsic

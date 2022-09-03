@@ -34,7 +34,6 @@ import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.Lowerable.*;
 import com.oracle.graal.phases.common.*;
-import com.oracle.graal.phases.tiers.*;
 
 public class PushNodesThroughPiTest extends GraalCompilerTest {
 
@@ -66,7 +65,7 @@ public class PushNodesThroughPiTest extends GraalCompilerTest {
                 StructuredGraph graph = compileTestSnippet(snippet);
 
                 for (ReadNode rn : graph.getNodes().filter(ReadNode.class)) {
-                    Object locId = rn.location().getLocationIdentity();
+                    Object locId = rn.location().locationIdentity();
                     if (locId instanceof ResolvedJavaField) {
                         ResolvedJavaField field = (ResolvedJavaField) locId;
                         if (field.getName().equals("x")) {
@@ -84,11 +83,10 @@ public class PushNodesThroughPiTest extends GraalCompilerTest {
 
     private StructuredGraph compileTestSnippet(final String snippet) {
         StructuredGraph graph = parse(snippet);
-        HighTierContext context = new HighTierContext(runtime(), new Assumptions(false), replacements);
-        new LoweringPhase(LoweringType.BEFORE_GUARDS).apply(graph, context);
-        new CanonicalizerPhase().apply(graph, context);
+        new LoweringPhase(null, runtime(), replacements, new Assumptions(false), LoweringType.BEFORE_GUARDS).apply(graph);
+        new CanonicalizerPhase.Instance(runtime(), null).apply(graph);
         new PushThroughPiPhase().apply(graph);
-        new CanonicalizerPhase().apply(graph, context);
+        new CanonicalizerPhase.Instance(runtime(), null).apply(graph);
 
         return graph;
     }

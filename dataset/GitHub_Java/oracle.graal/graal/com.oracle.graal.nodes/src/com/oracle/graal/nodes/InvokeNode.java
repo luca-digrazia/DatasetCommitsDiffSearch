@@ -27,7 +27,6 @@ import java.util.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.extended.LocationNode.LocationIdentity;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.util.*;
 
@@ -89,8 +88,8 @@ public final class InvokeNode extends AbstractStateSplit implements StateSplit, 
     }
 
     @Override
-    public LocationIdentity[] getLocationIdentities() {
-        return new LocationIdentity[]{LocationNode.ANY_LOCATION};
+    public Object[] getLocationIdentities() {
+        return new Object[]{LocationNode.ANY_LOCATION};
     }
 
     @Override
@@ -145,7 +144,7 @@ public final class InvokeNode extends AbstractStateSplit implements StateSplit, 
         }
         if (node instanceof FixedWithNextNode) {
             ((StructuredGraph) graph()).replaceFixedWithFixed(this, (FixedWithNextNode) node);
-        } else if (node instanceof ControlSinkNode) {
+        } else if (node instanceof DeoptimizeNode) {
             this.replaceAtPredecessor(node);
             this.replaceAtUsages(null);
             GraphUtil.killCFG(this);

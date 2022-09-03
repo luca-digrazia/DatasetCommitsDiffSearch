@@ -27,7 +27,6 @@ import java.util.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.extended.LocationNode.LocationIdentity;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.util.*;
@@ -35,7 +34,7 @@ import com.oracle.graal.nodes.util.*;
 @NodeInfo(nameTemplate = "Invoke!#{p#targetMethod/s}")
 public class InvokeWithExceptionNode extends ControlSplitNode implements Node.IterableNodeType, Invoke, MemoryCheckpoint, LIRLowerable {
 
-    @Successor private AbstractBeginNode next;
+    @Successor private BeginNode next;
     @Successor private DispatchBeginNode exceptionEdge;
     @Input private final CallTargetNode callTarget;
     @Input private FrameState deoptState;
@@ -62,11 +61,11 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
         exceptionEdge = x;
     }
 
-    public AbstractBeginNode next() {
+    public BeginNode next() {
         return next;
     }
 
-    public void setNext(AbstractBeginNode x) {
+    public void setNext(BeginNode x) {
         updatePredecessor(next, x);
         next = x;
     }
@@ -122,7 +121,7 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
     @Override
     public void setNext(FixedNode x) {
         if (x != null) {
-            this.setNext(AbstractBeginNode.begin(x));
+            this.setNext(BeginNode.begin(x));
         } else {
             this.setNext(null);
         }
@@ -152,8 +151,8 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
     }
 
     @Override
-    public LocationIdentity[] getLocationIdentities() {
-        return new LocationIdentity[]{LocationNode.ANY_LOCATION};
+    public Object[] getLocationIdentities() {
+        return new Object[]{LocationNode.ANY_LOCATION};
     }
 
     public FrameState stateDuring() {
@@ -171,7 +170,7 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
     }
 
     public void killExceptionEdge() {
-        AbstractBeginNode edge = exceptionEdge();
+        BeginNode edge = exceptionEdge();
         setExceptionEdge(null);
         GraphUtil.killCFG(edge);
     }
@@ -189,7 +188,7 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
         if (node == null) {
             assert kind() == Kind.Void && usages().isEmpty();
             ((StructuredGraph) graph()).removeSplit(this, next());
-        } else if (node instanceof ControlSinkNode) {
+        } else if (node instanceof DeoptimizeNode) {
             this.replaceAtPredecessor(node);
             this.replaceAtUsages(null);
             GraphUtil.killCFG(this);
@@ -206,7 +205,7 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
     private static final double EXCEPTION_PROBA = 1e-5;
 
     @Override
-    public double probability(AbstractBeginNode successor) {
+    public double probability(BeginNode successor) {
         return successor == next ? 1 - EXCEPTION_PROBA : EXCEPTION_PROBA;
     }
 

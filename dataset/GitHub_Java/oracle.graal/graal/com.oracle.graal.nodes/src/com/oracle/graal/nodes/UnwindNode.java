@@ -28,7 +28,8 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 /**
- * Unwinds the current frame to an exception handler in the caller frame.
+ * Unwind takes an exception object, destroys the current stack frame and passes the exception
+ * object to the system's exception dispatch code.
  */
 public final class UnwindNode extends ControlSinkNode implements Lowerable, LIRLowerable, Node.IterableNodeType {
 

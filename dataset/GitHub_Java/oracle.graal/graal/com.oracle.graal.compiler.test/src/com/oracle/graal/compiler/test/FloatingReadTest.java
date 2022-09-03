@@ -31,7 +31,6 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.Lowerable.*;
 import com.oracle.graal.phases.common.*;
-import com.oracle.graal.phases.tiers.*;
 
 public class FloatingReadTest extends GraphScheduleTest {
 
@@ -59,8 +58,7 @@ public class FloatingReadTest extends GraphScheduleTest {
 
             public void run() {
                 StructuredGraph graph = parse(snippet);
-                PhaseContext context = new PhaseContext(runtime(), new Assumptions(false), replacements);
-                new LoweringPhase(LoweringType.BEFORE_GUARDS).apply(graph, context);
+                new LoweringPhase(null, runtime(), replacements, new Assumptions(false), LoweringType.BEFORE_GUARDS).apply(graph);
                 new FloatingReadPhase().apply(graph);
 
                 ReturnNode returnNode = null;

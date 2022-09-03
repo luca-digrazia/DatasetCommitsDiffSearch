@@ -38,7 +38,6 @@ import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.schedule.*;
-import com.oracle.graal.phases.tiers.*;
 
 /**
  * In these test the FrameStates are explicitly cleared out, so that the scheduling of
@@ -146,7 +145,7 @@ public class MemoryScheduleTest extends GraphScheduleTest {
     @Test
     public void testLoop1() {
         SchedulePhase schedule = getFinalSchedule("testLoop1Snippet", TestMode.WITHOUT_FRAMESTATES);
-        assertEquals(6, schedule.getCFG().getBlocks().length);
+        assertEquals(7, schedule.getCFG().getBlocks().length);
         assertReadWithinStartBlock(schedule, true);
     }
 
@@ -170,7 +169,7 @@ public class MemoryScheduleTest extends GraphScheduleTest {
     @Test
     public void testLoop2() {
         SchedulePhase schedule = getFinalSchedule("testLoop2Snippet", TestMode.WITHOUT_FRAMESTATES);
-        assertEquals(6, schedule.getCFG().getBlocks().length);
+        assertEquals(7, schedule.getCFG().getBlocks().length);
         assertReadWithinStartBlock(schedule, false);
     }
 
@@ -219,13 +218,11 @@ public class MemoryScheduleTest extends GraphScheduleTest {
             @Override
             public SchedulePhase call() throws Exception {
                 StructuredGraph graph = parse(snippet);
-                Assumptions assumptions = new Assumptions(false);
-                new CanonicalizerPhase.Instance(runtime, assumptions).apply(graph);
                 if (mode == TestMode.INLINED_WITHOUT_FRAMESTATES) {
+                    Assumptions assumptions = new Assumptions(false);
                     new InliningPhase(runtime(), null, replacements, assumptions, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL).apply(graph);
                 }
-                HighTierContext context = new HighTierContext(runtime(), assumptions, replacements);
-                new LoweringPhase(LoweringType.BEFORE_GUARDS).apply(graph, context);
+                new LoweringPhase(null, runtime(), replacements, new Assumptions(false), LoweringType.BEFORE_GUARDS).apply(graph);
                 if (mode == TestMode.WITHOUT_FRAMESTATES || mode == TestMode.INLINED_WITHOUT_FRAMESTATES) {
                     for (Node node : graph.getNodes()) {
                         if (node instanceof StateSplit) {

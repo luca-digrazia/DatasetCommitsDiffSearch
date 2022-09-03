@@ -22,40 +22,36 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.cri.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.word.*;
 
 /**
- * Allocates some uninitialized area. This is used for TLAB allocation
- * only. If allocation fails, zero/null is produced by this node.
+ * Allocates some uninitialized area. This is used for TLAB allocation only. If allocation fails,
+ * zero/null is produced by this node.
  */
 public final class TLABAllocateNode extends FixedWithNextNode implements Lowerable {
 
-    private final int size;
+    @Input private ValueNode size;
 
-    public TLABAllocateNode(int size, Kind wordKind) {
-        super(StampFactory.forKind(wordKind));
+    public TLABAllocateNode(ValueNode size) {
+        super(StampFactory.forWord());
         this.size = size;
     }
 
-    public int size() {
+    public ValueNode size() {
         return size;
     }
 
     @Override
-    public void lower(CiLoweringTool tool) {
+    public void lower(LoweringTool tool, LoweringType loweringType) {
         tool.getRuntime().lower(this, tool);
     }
 
     /**
      * @return null if allocation fails
      */
-    @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static Object allocate(@ConstantNodeParameter int size, @ConstantNodeParameter Kind wordKind) {
-        throw new UnsupportedOperationException();
-    }
+    public static native Word allocateVariableSize(int size);
 }

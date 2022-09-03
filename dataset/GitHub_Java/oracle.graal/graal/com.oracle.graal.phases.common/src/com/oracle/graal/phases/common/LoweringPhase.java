@@ -26,6 +26,7 @@ import java.util.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.nodes.*;
@@ -35,47 +36,43 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.spi.Lowerable.LoweringType;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.schedule.*;
-import com.oracle.graal.phases.tiers.*;
 
 /**
  * Processes all {@link Lowerable} nodes to do their lowering.
  */
-public class LoweringPhase extends BasePhase<PhaseContext> {
+public class LoweringPhase extends Phase {
 
     final class LoweringToolImpl implements LoweringTool {
 
-        private final PhaseContext context;
         private final FixedNode guardAnchor;
         private final NodeBitMap activeGuards;
         private FixedWithNextNode lastFixedNode;
         private ControlFlowGraph cfg;
 
-        public LoweringToolImpl(PhaseContext context, FixedNode guardAnchor, NodeBitMap activeGuards, ControlFlowGraph cfg) {
-            this.context = context;
+        public LoweringToolImpl(FixedNode guardAnchor, NodeBitMap activeGuards, ControlFlowGraph cfg) {
             this.guardAnchor = guardAnchor;
             this.activeGuards = activeGuards;
             this.cfg = cfg;
         }
 
         @Override
+        public TargetDescription getTarget() {
+            return target;
+        }
+
+        @Override
         public GraalCodeCacheProvider getRuntime() {
-            return (GraalCodeCacheProvider) context.getRuntime();
+            return runtime;
         }
 
         @Override
         public Replacements getReplacements() {
-            return context.getReplacements();
+            return replacements;
         }
 
         @Override
-        public ValueNode createNullCheckGuard(NodeInputList<ValueNode> list, ValueNode object) {
-            if (object.objectStamp().nonNull()) {
-                // Short cut creation of null check guard if the object is known to be non-null.
-                return null;
-            }
-            ValueNode guard = createGuard(object.graph().unique(new IsNullNode(object)), DeoptimizationReason.NullCheckException, DeoptimizationAction.InvalidateReprofile, true);
-            list.add(guard);
-            return guard;
+        public ValueNode createNullCheckGuard(ValueNode object) {
+            return createGuard(object.graph().unique(new IsNullNode(object)), DeoptimizationReason.NullCheckException, DeoptimizationAction.InvalidateReprofile, true);
         }
 
         @Override
@@ -85,7 +82,7 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
 
         @Override
         public Assumptions assumptions() {
-            return context.getAssumptions();
+            return assumptions;
         }
 
         @Override
@@ -123,9 +120,19 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
         }
     }
 
+    private final TargetDescription target;
+    private final GraalCodeCacheProvider runtime;
+    private final Replacements replacements;
+    private final Assumptions assumptions;
     private final LoweringType loweringType;
 
-    public LoweringPhase(LoweringType loweringType) {
+    private boolean deferred;
+
+    public LoweringPhase(TargetDescription target, GraalCodeCacheProvider runtime, Replacements replacements, Assumptions assumptions, LoweringType loweringType) {
+        this.target = target;
+        this.runtime = runtime;
+        this.replacements = replacements;
+        this.assumptions = assumptions;
         this.loweringType = loweringType;
     }
 
@@ -139,18 +146,20 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
     }
 
     @Override
-    protected void run(final StructuredGraph graph, PhaseContext context) {
+    protected void run(final StructuredGraph graph) {
         int i = 0;
         NodeBitMap processed = graph.createNodeBitMap();
         while (true) {
-            Round round = new Round(i++, context, processed);
             int mark = graph.getMark();
+            final SchedulePhase schedule = new SchedulePhase();
+            schedule.apply(graph, false);
 
-            IncrementalCanonicalizerPhase<PhaseContext> canonicalizer = new IncrementalCanonicalizerPhase<>();
-            canonicalizer.addPhase(round);
-            canonicalizer.apply(graph, context);
+            deferred = false;
+            processBlock(schedule.getCFG().getStartBlock(), graph.createNodeBitMap(), null, schedule, processed);
+            Debug.dump(graph, "Lowering iteration %d", i++);
+            new CanonicalizerPhase.Instance(runtime, assumptions, mark, null).apply(graph);
 
-            if (!round.deferred && !containsLowerable(graph.getNewNodes(mark))) {
+            if (!deferred && !containsLowerable(graph.getNewNodes(mark))) {
                 // No new lowerable nodes - done!
                 break;
             }
@@ -159,98 +168,76 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
         }
     }
 
-    private final class Round extends Phase {
+    private void processBlock(Block block, NodeBitMap activeGuards, FixedNode parentAnchor, SchedulePhase schedule, NodeBitMap processed) {
 
-        private final PhaseContext context;
-        private final NodeBitMap processed;
-        private final SchedulePhase schedule;
-        private boolean deferred = false;
+        FixedNode anchor = parentAnchor;
+        if (anchor == null) {
+            anchor = block.getBeginNode();
+        }
+        process(block, activeGuards, anchor, schedule, processed);
 
-        private Round(int iteration, PhaseContext context, NodeBitMap processed) {
-            super(String.format("Lowering iteration %d", iteration));
-            this.context = context;
-            this.processed = processed;
-            this.schedule = new SchedulePhase();
+        // Process always reached block first.
+        Block alwaysReachedBlock = block.getPostdominator();
+        if (alwaysReachedBlock != null && alwaysReachedBlock.getDominator() == block) {
+            processBlock(alwaysReachedBlock, activeGuards, anchor, schedule, processed);
         }
 
-        @Override
-        public void run(StructuredGraph graph) {
-            schedule.apply(graph, false);
-            processBlock(schedule.getCFG().getStartBlock(), graph.createNodeBitMap(), null);
-        }
-
-        private void processBlock(Block block, NodeBitMap activeGuards, FixedNode parentAnchor) {
-
-            FixedNode anchor = parentAnchor;
-            if (anchor == null) {
-                anchor = block.getBeginNode();
-            }
-            process(block, activeGuards, anchor);
-
-            // Process always reached block first.
-            Block alwaysReachedBlock = block.getPostdominator();
-            if (alwaysReachedBlock != null && alwaysReachedBlock.getDominator() == block) {
-                processBlock(alwaysReachedBlock, activeGuards, anchor);
-            }
-
-            // Now go for the other dominators.
-            for (Block dominated : block.getDominated()) {
-                if (dominated != alwaysReachedBlock) {
-                    assert dominated.getDominator() == block;
-                    processBlock(dominated, activeGuards, null);
-                }
-            }
-
-            if (parentAnchor == null && GraalOptions.OptEliminateGuards) {
-                for (GuardNode guard : anchor.usages().filter(GuardNode.class)) {
-                    activeGuards.clear(guard);
-                }
+        // Now go for the other dominators.
+        for (Block dominated : block.getDominated()) {
+            if (dominated != alwaysReachedBlock) {
+                assert dominated.getDominator() == block;
+                processBlock(dominated, activeGuards, null, schedule, processed);
             }
         }
 
-        private void process(final Block b, final NodeBitMap activeGuards, final FixedNode anchor) {
+        if (parentAnchor == null && GraalOptions.OptEliminateGuards) {
+            for (GuardNode guard : anchor.usages().filter(GuardNode.class)) {
+                activeGuards.clear(guard);
+            }
+        }
+    }
 
-            final LoweringToolImpl loweringTool = new LoweringToolImpl(context, anchor, activeGuards, schedule.getCFG());
+    private void process(final Block b, final NodeBitMap activeGuards, final FixedNode anchor, SchedulePhase schedule, NodeBitMap processed) {
 
-            // Lower the instructions of this block.
-            List<ScheduledNode> nodes = schedule.nodesFor(b);
+        final LoweringToolImpl loweringTool = new LoweringToolImpl(anchor, activeGuards, schedule.getCFG());
 
-            for (Node node : nodes) {
-                FixedNode nextFixedNode = null;
-                if (node instanceof FixedWithNextNode && node.isAlive()) {
-                    FixedWithNextNode fixed = (FixedWithNextNode) node;
-                    nextFixedNode = fixed.next();
-                    loweringTool.setLastFixedNode(fixed);
+        // Lower the instructions of this block.
+        List<ScheduledNode> nodes = schedule.nodesFor(b);
+
+        for (Node node : nodes) {
+            FixedNode nextFixedNode = null;
+            if (node instanceof FixedWithNextNode && node.isAlive()) {
+                FixedWithNextNode fixed = (FixedWithNextNode) node;
+                nextFixedNode = fixed.next();
+                loweringTool.setLastFixedNode(fixed);
+            }
+
+            if (node.isAlive() && !processed.isMarked(node) && node instanceof Lowerable) {
+                if (loweringTool.lastFixedNode() == null) {
+                    /*
+                     * We cannot lower the node now because we don't have a fixed node to anchor the
+                     * replacements. This can happen when previous lowerings in this lowering
+                     * iteration deleted the BeginNode of this block. In the next iteration, we will
+                     * have the new BeginNode available, and we can lower this node.
+                     */
+                    deferred = true;
+                } else {
+                    processed.mark(node);
+                    ((Lowerable) node).lower(loweringTool, loweringType);
                 }
+            }
 
-                if (node.isAlive() && !processed.isMarked(node) && node instanceof Lowerable) {
-                    if (loweringTool.lastFixedNode() == null) {
-                        /*
-                         * We cannot lower the node now because we don't have a fixed node to anchor
-                         * the replacements. This can happen when previous lowerings in this
-                         * lowering iteration deleted the BeginNode of this block. In the next
-                         * iteration, we will have the new BeginNode available, and we can lower
-                         * this node.
-                         */
-                        deferred = true;
+            if (loweringTool.lastFixedNode() == node && !node.isAlive()) {
+                if (nextFixedNode == null || !nextFixedNode.isAlive()) {
+                    loweringTool.setLastFixedNode(null);
+                } else {
+                    Node prev = nextFixedNode.predecessor();
+                    if (prev != node && prev instanceof FixedWithNextNode) {
+                        loweringTool.setLastFixedNode((FixedWithNextNode) prev);
+                    } else if (nextFixedNode instanceof FixedWithNextNode) {
+                        loweringTool.setLastFixedNode((FixedWithNextNode) nextFixedNode);
                     } else {
-                        processed.mark(node);
-                        ((Lowerable) node).lower(loweringTool, loweringType);
-                    }
-                }
-
-                if (loweringTool.lastFixedNode() == node && !node.isAlive()) {
-                    if (nextFixedNode == null || !nextFixedNode.isAlive()) {
                         loweringTool.setLastFixedNode(null);
-                    } else {
-                        Node prev = nextFixedNode.predecessor();
-                        if (prev != node && prev instanceof FixedWithNextNode) {
-                            loweringTool.setLastFixedNode((FixedWithNextNode) prev);
-                        } else if (nextFixedNode instanceof FixedWithNextNode) {
-                            loweringTool.setLastFixedNode((FixedWithNextNode) nextFixedNode);
-                        } else {
-                            loweringTool.setLastFixedNode(null);
-                        }
                     }
                 }
             }

@@ -22,17 +22,19 @@
  */
 package com.oracle.graal.nodes.java;
 
+import java.lang.reflect.*;
+
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
 /**
  * The base class of all instructions that access fields.
  */
 public abstract class AccessFieldNode extends FixedWithNextNode implements Lowerable {
 
-    @OptionalInput private ValueNode object;
+    @Input private ValueNode object;
 
     protected final ResolvedJavaField field;
 
@@ -42,7 +44,7 @@ public abstract class AccessFieldNode extends FixedWithNextNode implements Lower
 
     /**
      * Constructs a new access field object.
-     *
+     * 
      * @param object the instruction producing the receiver object
      * @param field the compiler interface representation of the field
      */
@@ -55,7 +57,7 @@ public abstract class AccessFieldNode extends FixedWithNextNode implements Lower
 
     /**
      * Gets the compiler interface field for this field access.
-     *
+     * 
      * @return the compiler interface field for this field access
      */
     public ResolvedJavaField field() {
@@ -64,25 +66,25 @@ public abstract class AccessFieldNode extends FixedWithNextNode implements Lower
 
     /**
      * Checks whether this field access is an access to a static field.
-     *
+     * 
      * @return {@code true} if this field access is to a static field
      */
     public boolean isStatic() {
-        return field.isStatic();
+        return Modifier.isStatic(field.getModifiers());
     }
 
     /**
      * Checks whether this field is declared volatile.
-     *
+     * 
      * @return {@code true} if the field is resolved and declared volatile
      */
     public boolean isVolatile() {
-        return field.isVolatile();
+        return Modifier.isVolatile(field.getModifiers());
     }
 
     @Override
-    public void lower(LoweringTool tool) {
-        tool.getLowerer().lower(this, tool);
+    public void lower(LoweringTool tool, LoweringType loweringType) {
+        tool.getRuntime().lower(this, tool);
     }
 
     @Override

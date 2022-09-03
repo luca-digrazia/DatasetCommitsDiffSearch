@@ -29,8 +29,7 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 /**
- * Loads an object's {@linkplain Representation#ObjectHub hub}. The object is not null-checked by
- * this operation.
+ * Loads an object's {@linkplain Representation#ObjectHub hub}, null-checking the object first.
  */
 public final class LoadHubNode extends FixedWithNextNode implements Lowerable, Canonicalizable, Virtualizable {
 

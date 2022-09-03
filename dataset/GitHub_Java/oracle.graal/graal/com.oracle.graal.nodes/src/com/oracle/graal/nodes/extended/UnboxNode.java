@@ -79,9 +79,9 @@ public class UnboxNode extends FixedWithNextNode implements Virtualizable, Lower
                     case Long:
                         return ConstantNode.forLong((Long) o, graph());
                     case Float:
-                        return ConstantNode.forFloat((Float) o, graph());
+                        return ConstantNode.forFloat((Long) o, graph());
                     case Double:
-                        return ConstantNode.forDouble((Double) o, graph());
+                        return ConstantNode.forDouble((Long) o, graph());
                     default:
                         ValueNodeUtil.shouldNotReachHere();
                 }

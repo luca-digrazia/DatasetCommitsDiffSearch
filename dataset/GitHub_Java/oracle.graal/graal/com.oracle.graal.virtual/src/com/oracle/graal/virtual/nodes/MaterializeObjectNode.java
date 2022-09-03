@@ -25,70 +25,62 @@ package com.oracle.graal.virtual.nodes;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.virtual.*;
 
 @NodeInfo(nameTemplate = "Materialize {i#virtualObject}")
-public final class MaterializeObjectNode extends FixedWithNextNode implements EscapeAnalyzable, Lowerable, Node.IterableNodeType, Canonicalizable {
+public final class MaterializeObjectNode extends FixedWithNextNode implements VirtualizableAllocation, Lowerable, Node.IterableNodeType, Canonicalizable, ArrayLengthProvider {
 
     @Input private final NodeInputList<ValueNode> values;
     @Input private final VirtualObjectNode virtualObject;
-    private final boolean locked;
+    private final int lockCount;
 
-    public MaterializeObjectNode(VirtualObjectNode virtualObject, boolean locked) {
+    public MaterializeObjectNode(VirtualObjectNode virtualObject, int lockCount) {
         super(StampFactory.exactNonNull(virtualObject.type()));
         this.virtualObject = virtualObject;
-        this.locked = locked;
+        this.lockCount = lockCount;
         this.values = new NodeInputList<>(this, virtualObject.entryCount());
     }
 
-    public NodeInputList<ValueNode> values() {
+    public NodeInputList<ValueNode> getValues() {
         return values;
     }
 
+    public VirtualObjectNode getVirtualObject() {
+        return virtualObject;
+    }
+
+    public int getLockCount() {
+        return lockCount;
+    }
+
     @Override
-    public void lower(LoweringTool tool) {
-        StructuredGraph graph = (StructuredGraph) graph();
-        if (virtualObject instanceof VirtualInstanceNode) {
-            VirtualInstanceNode virtual = (VirtualInstanceNode) virtualObject;
+    public ValueNode length() {
+        assert virtualObject.type().isArray();
+        return ConstantNode.forInt(values.size(), graph());
+    }
 
-            NewInstanceNode newInstance = graph.add(new NewInstanceNode(virtual.type(), false, locked));
-            this.replaceAtUsages(newInstance);
-            graph.addAfterFixed(this, newInstance);
-
-            FixedWithNextNode position = newInstance;
-            for (int i = 0; i < virtual.entryCount(); i++) {
-                StoreFieldNode store = graph.add(new StoreFieldNode(newInstance, virtual.field(i), values.get(i), -1));
-                graph.addAfterFixed(position, store);
-                position = store;
-            }
-
-            graph.removeFixed(this);
+    /**
+     * @return true if the object that will be created is without locks and has only entries that
+     *         are {@link Constant#defaultForKind(Kind)}, false otherwise.
+     */
+    public boolean isDefault() {
+        if (lockCount > 0) {
+            return false;
         } else {
-            assert virtualObject instanceof VirtualArrayNode;
-            VirtualArrayNode virtual = (VirtualArrayNode) virtualObject;
-
-            ResolvedJavaType element = virtual.componentType();
-            NewArrayNode newArray;
-            if (element.kind() == Kind.Object) {
-                newArray = graph.add(new NewObjectArrayNode(element, ConstantNode.forInt(virtual.entryCount(), graph), false, locked));
-            } else {
-                newArray = graph.add(new NewPrimitiveArrayNode(element, ConstantNode.forInt(virtual.entryCount(), graph), false, locked));
+            for (ValueNode value : values) {
+                if (!value.isConstant() || !value.asConstant().isDefaultForKind()) {
+                    return false;
+                }
             }
-            this.replaceAtUsages(newArray);
-            graph.addAfterFixed(this, newArray);
-
-            FixedWithNextNode position = newArray;
-            for (int i = 0; i < virtual.entryCount(); i++) {
-                StoreIndexedNode store = graph.add(new StoreIndexedNode(newArray, ConstantNode.forInt(i, graph), element.kind(), values.get(i), -1));
-                graph.addAfterFixed(position, store);
-                position = store;
-            }
-
-            graph.removeFixed(this);
         }
+        return true;
+    }
+
+    @Override
+    public void lower(LoweringTool tool, LoweringType loweringType) {
+        virtualObject.materializeAt(this, values, isDefault(), lockCount);
     }
 
     @Override
@@ -101,18 +93,8 @@ public final class MaterializeObjectNode extends FixedWithNextNode implements Es
     }
 
     @Override
-    public EscapeOp getEscapeOp() {
-        return new EscapeOp() {
-
-            @Override
-            public ValueNode[] fieldState() {
-                return values.toArray(new ValueNode[values.size()]);
-            }
-
-            @Override
-            public VirtualObjectNode virtualObject(int virtualId) {
-                return virtualObject;
-            }
-        };
+    public void virtualize(VirtualizerTool tool) {
+        tool.createVirtualObject(virtualObject, values.toArray(new ValueNode[values.size()]), lockCount);
+        tool.replaceWithVirtual(virtualObject);
     }
 }
