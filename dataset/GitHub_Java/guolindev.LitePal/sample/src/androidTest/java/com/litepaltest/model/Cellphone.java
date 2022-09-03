@@ -1,12 +1,9 @@
 package com.litepaltest.model;
 
 import org.litepal.annotation.Column;
-import org.litepal.crud.LitePalSupport;
+import org.litepal.crud.DataSupport;
 
-import java.util.ArrayList;
-import java.util.List;
-
-public class Cellphone extends LitePalSupport {
+public class Cellphone extends DataSupport {
 
 	private Long id;
 
@@ -24,8 +21,6 @@ public class Cellphone extends LitePalSupport {
 
     @Column(ignore = true)
     private String uuid;
-
-    private List<WeiboMessage> messages = new ArrayList<>();
 
 	public Long getId() {
 		return id;
@@ -81,13 +76,5 @@ public class Cellphone extends LitePalSupport {
 
     public void setUuid(String uuid) {
         this.uuid = uuid;
-    }
-
-    public List<WeiboMessage> getMessages() {
-        return messages;
-    }
-
-    public void setMessages(List<WeiboMessage> messages) {
-        this.messages = messages;
     }
 }

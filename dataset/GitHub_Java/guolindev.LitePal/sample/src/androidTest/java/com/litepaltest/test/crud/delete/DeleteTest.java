@@ -5,12 +5,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import org.litepal.LitePal;
 import org.litepal.crud.DataSupport;
 import org.litepal.exceptions.DataSupportException;
 import org.litepal.util.DBUtility;
 
-import android.database.Cursor;
 import android.database.sqlite.SQLiteException;
 
 import com.litepaltest.model.Classroom;
@@ -353,14 +351,14 @@ public class DeleteTest extends LitePalTestCase {
 		for (int i = 0; i < 5; i++) {
 			s = new Student();
 			s.setName("Dusting");
-			s.setAge(i + 10086);
+			s.setAge(i + 10);
 			s.save();
 			ids[i] = s.getId();
 		}
 		int affectedRows = DataSupport.deleteAll(Student.class, "name = ? and age = ?", "Dusting",
-				"10088");
+				"13");
 		assertEquals(1, affectedRows);
-		assertNull(getStudent(ids[2]));
+		assertNull(getStudent(ids[3]));
 		affectedRows = DataSupport.deleteAll(Student.class, "name = 'Dusting'");
 		assertEquals(4, affectedRows);
 	}
@@ -432,36 +430,7 @@ public class DeleteTest extends LitePalTestCase {
 		}
 	}
 
-    public void testDeleteWithGenericData() {
-        Classroom classroom = new Classroom();
-        classroom.setName("classroom1");
-        classroom.getNews().add("news1");
-        classroom.getNews().add("news2");
-        classroom.getNews().add("news3");
-        classroom.save();
-        int id = classroom.get_id();
-        String tableName = DBUtility.getGenericTableName(Classroom.class.getName(), "news");
-        String column = DBUtility.getGenericValueIdColumnName(Classroom.class.getName());
-        Cursor c = DataSupport.findBySQL("select * from " + tableName + " where " + column + " = ?", String.valueOf(id));
-        assertEquals(3, c.getCount());
-        c.close();
-        classroom.delete();
-        c = DataSupport.findBySQL("select * from " + tableName + " where " + column + " = ?", String.valueOf(id));
-        assertEquals(0, c.getCount());
-        c.close();
-        assertFalse(classroom.isSaved());
-        classroom.save();
-        assertTrue(classroom.isSaved());
-        c = DataSupport.findBySQL("select * from " + tableName + " where " + column + " = ?", String.valueOf(classroom.get_id()));
-        assertEquals(3, c.getCount());
-        c.close();
-        DataSupport.deleteAll(Classroom.class, "id = ?", String.valueOf(classroom.get_id()));
-        c = DataSupport.findBySQL("select * from " + tableName + " where " + column + " = ?", String.valueOf(classroom.get_id()));
-        assertEquals(0, c.getCount());
-        c.close();
-    }
-
-    private void initGameRoom() {
+	private void initGameRoom() {
 		gameRoom = new Classroom();
 		gameRoom.setName("Game room");
 	}
