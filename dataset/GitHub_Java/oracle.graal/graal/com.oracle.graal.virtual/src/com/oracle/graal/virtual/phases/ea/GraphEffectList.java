@@ -132,14 +132,13 @@ public class GraphEffectList extends EffectList {
     }
 
     /**
-     * Sets the phi node's input at the given index to the given value, adding new phi inputs as
-     * needed.
+     * Sets the phi node's input at the given index to the given value.
      * 
      * @param node The phi node whose input should be changed.
      * @param index The index of the phi input to be changed.
      * @param value The new value for the phi input.
      */
-    public void initializePhiInput(final PhiNode node, final int index, final ValueNode value) {
+    public void setPhiInput(final PhiNode node, final int index, final ValueNode value) {
         add(new Effect() {
 
             @Override
@@ -150,7 +149,7 @@ public class GraphEffectList extends EffectList {
             @Override
             public void apply(StructuredGraph graph, ArrayList<Node> obsoleteNodes) {
                 assert node.isAlive() && value.isAlive() && index >= 0;
-                node.initializeValueAt(index, value);
+                node.setValueAt(index, value);
             }
         });
     }
@@ -179,7 +178,7 @@ public class GraphEffectList extends EffectList {
                         stateAfter.virtualObjectMappings().remove(i);
                     }
                 }
-                stateAfter.addVirtualObjectMapping(graph.unique(state));
+                stateAfter.addVirtualObjectMapping(graph.addWithoutUnique(state));
             }
 
             @Override
@@ -344,7 +343,7 @@ public class GraphEffectList extends EffectList {
                     commit.getLocks().addAll(locks);
 
                     assert commit.usages().filter(AllocatedObjectNode.class).count() == commit.usages().count();
-                    List<AllocatedObjectNode> materializedValues = commit.usages().filter(AllocatedObjectNode.class).snapshot();
+                    HashSet<AllocatedObjectNode> materializedValues = new HashSet<>(commit.usages().filter(AllocatedObjectNode.class).snapshot());
                     for (int i = 0; i < commit.getValues().size(); i++) {
                         if (materializedValues.contains(commit.getValues().get(i))) {
                             commit.getValues().set(i, ((AllocatedObjectNode) commit.getValues().get(i)).getVirtualObject());
