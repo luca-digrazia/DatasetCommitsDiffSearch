@@ -52,23 +52,23 @@ public final class IntegerConstantType implements Type {
     }
 
     @Override
-    public int getAlignment(DataLayoutConverter.DataSpecConverter targetDataLayout) {
+    public int getAlignmentByte(DataLayoutConverter.DataSpecConverter targetDataLayout) {
         if (targetDataLayout != null) {
             return targetDataLayout.getBitAlignment(type.getLLVMBaseType()) / Byte.SIZE;
 
         } else {
-            return type.getAlignment(targetDataLayout);
+            return type.getAlignmentByte(targetDataLayout);
         }
     }
 
     @Override
-    public int getBits() {
-        return type.getBits();
+    public int getSizeByte(DataLayoutConverter.DataSpecConverter targetDataLayout) {
+        return type.getSizeByte(targetDataLayout);
     }
 
     @Override
-    public int getSize(DataLayoutConverter.DataSpecConverter targetDataLayout) {
-        return type.getSize(targetDataLayout);
+    public int sizeof() {
+        return type.sizeof();
     }
 
     @Override

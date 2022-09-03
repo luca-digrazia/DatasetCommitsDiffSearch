@@ -31,7 +31,6 @@ package com.oracle.truffle.llvm.parser.base.model.types;
 
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
 import com.oracle.truffle.llvm.parser.base.datalayout.DataLayoutConverter;
-import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
 
 public class FunctionType implements Type {
 
@@ -105,10 +104,5 @@ public class FunctionType implements Type {
         sb.append(")");
 
         return sb.toString();
-    }
-
-    @Override
-    public LLVMFunctionDescriptor.LLVMRuntimeType getRuntimeType() {
-        return LLVMFunctionDescriptor.LLVMRuntimeType.FUNCTION_ADDRESS;
     }
 }

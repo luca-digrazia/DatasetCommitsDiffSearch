@@ -31,7 +31,6 @@ package com.oracle.truffle.llvm.parser.base.model.types;
 
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
 import com.oracle.truffle.llvm.parser.base.datalayout.DataLayoutConverter;
-import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
 
 public enum FloatingPointType implements Type {
 
@@ -62,22 +61,6 @@ public enum FloatingPointType implements Type {
     @Override
     public LLVMBaseType getLLVMBaseType() {
         return llvmBaseType;
-    }
-
-    @Override
-    public LLVMFunctionDescriptor.LLVMRuntimeType getRuntimeType() {
-        switch (this) {
-            case HALF:
-                return LLVMFunctionDescriptor.LLVMRuntimeType.HALF;
-            case FLOAT:
-                return LLVMFunctionDescriptor.LLVMRuntimeType.FLOAT;
-            case DOUBLE:
-                return LLVMFunctionDescriptor.LLVMRuntimeType.DOUBLE;
-            case X86_FP80:
-                return LLVMFunctionDescriptor.LLVMRuntimeType.X86_FP80;
-            default:
-                throw new UnsupportedOperationException("Unsupported FloatingPointType: " + this);
-        }
     }
 
     @Override

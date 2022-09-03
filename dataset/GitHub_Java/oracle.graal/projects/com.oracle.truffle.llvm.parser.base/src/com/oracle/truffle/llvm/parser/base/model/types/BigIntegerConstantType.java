@@ -59,6 +59,11 @@ public final class BigIntegerConstantType implements Type {
     }
 
     @Override
+    public int sizeof() {
+        return type.sizeof();
+    }
+
+    @Override
     public String toString() {
         if (getType().getBits() == 1) {
             return value.equals(BigInteger.ZERO) ? "i1 false" : "i1 true";
@@ -67,17 +72,17 @@ public final class BigIntegerConstantType implements Type {
     }
 
     @Override
-    public int getAlignment(DataLayoutConverter.DataSpecConverter targetDataLayout) {
+    public int getAlignmentByte(DataLayoutConverter.DataSpecConverter targetDataLayout) {
         if (targetDataLayout != null) {
             return targetDataLayout.getBitAlignment(type.getLLVMBaseType()) / Byte.SIZE;
 
         } else {
-            return type.getAlignment(targetDataLayout);
+            return type.getAlignmentByte(targetDataLayout);
         }
     }
 
     @Override
-    public int getSize(DataLayoutConverter.DataSpecConverter targetDataLayout) {
-        return type.getSize(targetDataLayout);
+    public int getSizeByte(DataLayoutConverter.DataSpecConverter targetDataLayout) {
+        return type.getSizeByte(targetDataLayout);
     }
 }
