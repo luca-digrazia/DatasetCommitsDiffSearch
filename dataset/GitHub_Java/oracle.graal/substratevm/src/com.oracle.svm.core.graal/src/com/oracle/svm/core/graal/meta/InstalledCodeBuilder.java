@@ -247,25 +247,20 @@ public class InstalledCodeBuilder {
     }
 
     static class ObjectConstantsHolder {
-        final SubstrateReferenceMap referenceMap;
         final int[] offsets;
         final Object[] values;
         int count;
 
         ObjectConstantsHolder(CompilationResult compilation) {
             /* Conservative estimate on the maximum number of object constants we might have. */
-            int maxDataRefs = compilation.getDataSection().getSectionSize() / ConfigurationValues.getObjectLayout().getReferenceSize();
-            int maxCodeRefs = compilation.getDataPatches().size();
-            offsets = new int[maxDataRefs + maxCodeRefs];
+            int maxReferences = compilation.getDataSection().getSectionSize() / ConfigurationValues.getObjectLayout().getReferenceSize();
+            offsets = new int[maxReferences];
             values = new Object[offsets.length];
-            referenceMap = new SubstrateReferenceMap();
         }
 
-        void add(int offset, SubstrateObjectConstant constant) {
-            assert constant.isCompressed() == ReferenceAccess.singleton().haveCompressedReferences() : "Object reference constants in code must be compressed";
+        void add(int offset, Object value) {
             offsets[count] = offset;
-            values[count] = KnownIntrinsics.convertUnknownValue(constant.getObject(), Object.class);
-            referenceMap.markReferenceAtOffset(offset, true);
+            values[count] = value;
             count++;
         }
     }
@@ -276,14 +271,10 @@ public class InstalledCodeBuilder {
 
     @SuppressWarnings("try")
     private void installOperation() {
-        /*
-         * Object reference constants are stored in this holder first, then written and made visible
-         * in a single step that is atomic regarding to GC.
-         */
-        ObjectConstantsHolder objectConstants = new ObjectConstantsHolder(compilation);
+        SubstrateReferenceMap referenceMap = new SubstrateReferenceMap();
 
         AMD64InstructionPatcher patcher = new AMD64InstructionPatcher(compilation);
-        patchData(patcher, objectConstants);
+        patchData(patcher, referenceMap);
 
         int updatedCodeSize = patchCalls(patcher);
         assert updatedCodeSize <= constantsOffset;
@@ -293,10 +284,19 @@ public class InstalledCodeBuilder {
             code.writeByte(index, compiledBytes[index]);
         }
 
-        /* Write primitive constants to the buffer, record object constants with offsets */
+        /* Primitive constants are written directly to the code memory. */
         ByteBuffer constantsBuffer = SubstrateUtil.wrapAsByteBuffer(code.add(constantsOffset), compilation.getDataSection().getSectionSize());
+        /*
+         * Object constants are stored in an Object[] array first, because we have to be careful
+         * that they are always exposed as roots to the GC.
+         */
+        ObjectConstantsHolder objectConstants = new ObjectConstantsHolder(compilation);
+
         compilation.getDataSection().buildDataSection(constantsBuffer, (position, constant) -> {
-            objectConstants.add(constantsOffset + position, (SubstrateObjectConstant) constant);
+            objectConstants.add(position, KnownIntrinsics.convertUnknownValue(SubstrateObjectConstant.asObject(constant), Object.class));
+
+            int offset = constantsOffset + position;
+            referenceMap.markReferenceAtOffset(offset, true);
         });
 
         // Open the PinnedAllocator for the meta-information.
@@ -306,9 +306,9 @@ public class InstalledCodeBuilder {
             constantsWalker = metaInfoAllocator.newInstance(ConstantsWalker.class);
 
             ReferenceMapEncoder encoder = new ReferenceMapEncoder();
-            encoder.add(objectConstants.referenceMap);
+            encoder.add(referenceMap);
             constantsWalker.referenceMapEncoding = encoder.encodeAll(metaInfoAllocator);
-            constantsWalker.referenceMapIndex = encoder.lookupEncoding(objectConstants.referenceMap);
+            constantsWalker.referenceMapIndex = encoder.lookupEncoding(referenceMap);
             constantsWalker.baseAddr = code;
             constantsWalker.size = codeSize;
             Heap.getHeap().getGC().registerObjectReferenceWalker(constantsWalker);
@@ -360,8 +360,9 @@ public class InstalledCodeBuilder {
     @Uninterruptible(reason = "Operates on raw pointers to objects")
     private void writeObjectConstantsToCode(ObjectConstantsHolder objectConstants) {
         boolean compressed = ReferenceAccess.singleton().haveCompressedReferences();
+        Pointer constantsStart = code.add(constantsOffset);
         for (int i = 0; i < objectConstants.count; i++) {
-            Pointer address = code.add(objectConstants.offsets[i]);
+            Pointer address = constantsStart.add(objectConstants.offsets[i]);
             ReferenceAccess.singleton().writeObjectAt(address, objectConstants.values[i], compressed);
         }
         /* From now on the constantsWalker will operate on the constants area. */
@@ -380,7 +381,7 @@ public class InstalledCodeBuilder {
         sourcePositionEncoder.install(runtimeMethodInfo);
     }
 
-    private void patchData(AMD64InstructionPatcher patcher, ObjectConstantsHolder objectConstants) {
+    private void patchData(AMD64InstructionPatcher patcher, SubstrateReferenceMap referenceMap) {
         for (DataPatch dataPatch : compilation.getDataPatches()) {
             if (dataPatch.reference instanceof DataSectionReference) {
                 DataSectionReference ref = (DataSectionReference) dataPatch.reference;
@@ -390,22 +391,28 @@ public class InstalledCodeBuilder {
             } else if (dataPatch.reference instanceof ConstantReference) {
                 ConstantReference ref = (ConstantReference) dataPatch.reference;
                 SubstrateObjectConstant refConst = (SubstrateObjectConstant) ref.getConstant();
+                UnsignedWord refBits = ReferenceAccess.singleton().getCompressedRepresentation(refConst.getObject());
 
                 PatchData data = patcher.findPatchData(dataPatch.pcOffset, 0);
-                objectConstants.add(data.operandPosition, refConst);
+                assert data.operandSize >= ConfigurationValues.getObjectLayout().getReferenceSize();
 
-                if (data.operandSize == Long.BYTES && data.operandSize > ConfigurationValues.getObjectLayout().getReferenceSize()) {
+                ByteOrder byteOrder = ConfigurationValues.getTarget().arch.getByteOrder();
+                assert byteOrder == ByteOrder.LITTLE_ENDIAN : "Code below assumes little-endian byte order";
+                ByteBuffer codeBuffer = ByteBuffer.wrap(compiledBytes).order(byteOrder);
+                codeBuffer.position(data.operandPosition);
+                if (data.operandSize == Long.BYTES) {
                     /*
-                     * Some instructions use 8-byte immediates even for narrow (4-byte) compressed
-                     * references. We zero all 8 bytes and patch a narrow reference at the offset,
-                     * which results in the same 8-byte value with little-endian order.
+                     * NOTE: some instructions use 8-byte immediates for constant object references
+                     * even when we use 4-byte narrow references, so we still support patching them.
+                     * Due to little-endian order, the reference map offset is still the same.
                      */
-                    assert ConfigurationValues.getTarget().arch.getByteOrder() == ByteOrder.LITTLE_ENDIAN : "Patching wide references requires little-endian byte order";
-                    ByteBuffer codeBuffer = ByteBuffer.wrap(compiledBytes, data.operandPosition, 8);
-                    codeBuffer.putLong(0L);
+                    codeBuffer.putLong(refBits.rawValue());
+                } else if (data.operandSize == Integer.BYTES) {
+                    codeBuffer.putInt(NumUtil.safeToInt(refBits.rawValue()));
                 } else {
-                    assert data.operandSize == ConfigurationValues.getObjectLayout().getReferenceSize() : "Unsupported reference constant size: " + data.operandSize;
+                    throw VMError.shouldNotReachHere("Unsupported constant reference operand size: " + data.operandSize);
                 }
+                referenceMap.markReferenceAtOffset(data.operandPosition, true);
             }
         }
     }
