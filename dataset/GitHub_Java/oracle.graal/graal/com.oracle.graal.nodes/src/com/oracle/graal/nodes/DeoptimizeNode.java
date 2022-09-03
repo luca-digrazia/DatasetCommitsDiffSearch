@@ -27,7 +27,7 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo(shortName = "Deopt", nameTemplate = "Deopt {p#reason/s}")
-public class DeoptimizeNode extends AbstractDeoptimizeNode implements Lowerable, LIRLowerable {
+public class DeoptimizeNode extends AbstractDeoptimizeNode implements LIRLowerable {
 
     private final DeoptimizationAction action;
     private final DeoptimizationReason reason;
@@ -51,11 +51,6 @@ public class DeoptimizeNode extends AbstractDeoptimizeNode implements Lowerable,
 
     public DeoptimizationReason reason() {
         return reason;
-    }
-
-    @Override
-    public void lower(LoweringTool tool) {
-        tool.getLowerer().lower(this, tool);
     }
 
     @Override
