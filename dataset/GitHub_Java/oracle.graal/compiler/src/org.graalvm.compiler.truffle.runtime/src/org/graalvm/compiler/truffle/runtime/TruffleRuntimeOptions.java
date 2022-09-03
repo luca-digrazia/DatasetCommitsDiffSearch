@@ -151,8 +151,8 @@ public final class TruffleRuntimeOptions {
         final EconomicMap<OptionKey<?>, Object> map = EconomicMap.create();
         for (OptionDescriptor desc : values.getDescriptors()) {
             final OptionKey<?> key = desc.getKey();
-            if (values.hasBeenSet(key)) {
-                map.put(key, values.get(key));
+            if (optionValues.hasBeenSet(key)) {
+                map.put(key, optionValues.get(key));
             }
         }
         return map;
