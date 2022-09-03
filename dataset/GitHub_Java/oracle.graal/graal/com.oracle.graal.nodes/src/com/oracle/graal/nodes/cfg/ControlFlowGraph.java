@@ -123,16 +123,6 @@ public class ControlFlowGraph {
     private void identifyBlock(Block block) {
         Node cur = block.getBeginNode();
         Node last;
-
-        // assign proxies of a loop exit to this block
-        if (cur instanceof AbstractBeginNode) {
-            for (Node usage : cur.usages()) {
-                if (usage instanceof ProxyNode) {
-                    nodeToBlock.set(usage, block);
-                }
-            }
-        }
-
         do {
             assert !cur.isDeleted();
 
