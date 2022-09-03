@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,51 +22,63 @@
  */
 package com.oracle.graal.lir.amd64;
 
-import java.util.*;
+import static com.oracle.graal.lir.amd64.AMD64SaveRegistersOp.prune;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.asm.amd64.*;
-import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.LIRInstruction.Opcode;
-import com.oracle.graal.lir.StandardOp.MoveOp;
-import com.oracle.graal.lir.asm.*;
+import java.util.Set;
+
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.RegisterSaveLayout;
+import jdk.vm.ci.meta.JavaConstant;
+
+import com.oracle.graal.asm.amd64.AMD64MacroAssembler;
+import com.oracle.graal.lir.LIRInstructionClass;
+import com.oracle.graal.lir.Opcode;
+import com.oracle.graal.lir.StandardOp.SaveRegistersOp;
+import com.oracle.graal.lir.asm.CompilationResultBuilder;
+import com.oracle.graal.lir.framemap.FrameMap;
 
 /**
  * Writes well known garbage values to registers.
  */
 @Opcode("ZAP_REGISTER")
-public final class AMD64ZapRegistersOp extends AMD64RegistersPreservationOp {
+public final class AMD64ZapRegistersOp extends AMD64LIRInstruction implements SaveRegistersOp {
+    public static final LIRInstructionClass<AMD64ZapRegistersOp> TYPE = LIRInstructionClass.create(AMD64ZapRegistersOp.class);
 
     /**
-     * The move instructions for zapping the registers.
+     * The registers that are zapped.
      */
-    protected final AMD64LIRInstruction[] zappingMoves;
+    protected final Register[] zappedRegisters;
 
-    public AMD64ZapRegistersOp(AMD64LIRInstruction[] zappingMoves) {
-        this.zappingMoves = zappingMoves;
+    /**
+     * The garbage values that are written to the registers.
+     */
+    protected final JavaConstant[] zapValues;
+
+    public AMD64ZapRegistersOp(Register[] zappedRegisters, JavaConstant[] zapValues) {
+        super(TYPE);
+        this.zappedRegisters = zappedRegisters;
+        this.zapValues = zapValues;
     }
 
     @Override
-    public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-        for (AMD64LIRInstruction zappingMove : zappingMoves) {
-            if (zappingMove != null) {
-                zappingMove.emitCode(tasm, masm);
+    public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
+        for (int i = 0; i < zappedRegisters.length; i++) {
+            Register reg = zappedRegisters[i];
+            if (reg != null) {
+                AMD64Move.const2reg(crb, masm, reg, zapValues[i]);
             }
         }
     }
 
-    /**
-     * Prunes the set of registers zapped by this operation to exclude those in {@code ignored}.
-     */
-    @Override
-    public void update(Set<Register> ignored, DebugInfo debugInfo, FrameMap frameMap) {
-        for (int i = 0; i < zappingMoves.length; i++) {
-            if (zappingMoves[i] != null) {
-                Register register = ValueUtil.asRegister(((MoveOp) zappingMoves[i]).getResult());
-                if (ignored.contains(register)) {
-                    zappingMoves[i] = null;
-                }
-            }
-        }
+    public boolean supportsRemove() {
+        return true;
+    }
+
+    public int remove(Set<Register> doNotSave) {
+        return prune(doNotSave, zappedRegisters);
+    }
+
+    public RegisterSaveLayout getMap(FrameMap frameMap) {
+        return new RegisterSaveLayout(new Register[0], new int[0]);
     }
 }
