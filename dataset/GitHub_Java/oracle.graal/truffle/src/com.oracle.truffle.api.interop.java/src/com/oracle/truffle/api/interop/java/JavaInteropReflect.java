@@ -174,7 +174,7 @@ final class JavaInteropReflect {
 
     @CompilerDirectives.TruffleBoundary
     static <T> T asJavaFunction(Class<T> functionalType, TruffleObject function, Object languageContext) {
-        assert isFunctionalInterface(functionalType);
+        assert JavaInterop.isJavaFunctionInterface(functionalType);
         Method functionalInterfaceMethod = functionalInterfaceMethod(functionalType);
         final FunctionProxyHandler handler = new FunctionProxyHandler(function, functionalInterfaceMethod, languageContext);
         Object obj = Proxy.newProxyInstance(functionalType.getClassLoader(), new Class<?>[]{functionalType}, handler);
@@ -189,25 +189,16 @@ final class JavaInteropReflect {
         return new JavaFunctionObject(SingleMethodDesc.unreflect(method), implementation, languageContext);
     }
 
-    @CompilerDirectives.TruffleBoundary
-    static boolean isFunctionalInterface(Class<?> type) {
-        if (!type.isInterface() || type == TruffleObject.class) {
-            return false;
-        }
-        if (type.getAnnotation(FunctionalInterface.class) != null) {
-            return true;
-        } else if (functionalInterfaceMethod(type) != null) {
-            return true;
-        }
-        return false;
-    }
-
     static Method functionalInterfaceMethod(Class<?> functionalInterface) {
         if (!functionalInterface.isInterface()) {
             return null;
         }
+        final Method[] methods = functionalInterface.getMethods();
+        if (methods.length == 1) {
+            return methods[0];
+        }
         Method found = null;
-        for (Method m : functionalInterface.getMethods()) {
+        for (Method m : methods) {
             if (Modifier.isAbstract(m.getModifiers()) && !JavaClassDesc.isObjectMethodOverride(m)) {
                 if (found != null) {
                     return null;
@@ -402,7 +393,7 @@ class FunctionProxyNode extends HostEntryRootNode<TruffleObject> implements Supp
     }
 
     static CallTarget lookup(Object languageContext, Class<?> receiverClass, Method method) {
-        EngineSupport engine = JavaInteropAccessor.ACCESSOR.engine();
+        EngineSupport engine = JavaInterop.ACCESSOR.engine();
         if (engine == null) {
             return createTarget(new FunctionProxyNode(receiverClass, method));
         }
@@ -534,7 +525,7 @@ class ObjectProxyNode extends HostEntryRootNode<TruffleObject> implements Suppli
     }
 
     static CallTarget lookup(Object languageContext, Class<?> receiverClass, Class<?> interfaceClass) {
-        EngineSupport engine = JavaInteropAccessor.ACCESSOR.engine();
+        EngineSupport engine = JavaInterop.ACCESSOR.engine();
         if (engine == null) {
             return createTarget(new ObjectProxyNode(receiverClass, interfaceClass));
         }
@@ -547,7 +538,6 @@ class ObjectProxyNode extends HostEntryRootNode<TruffleObject> implements Suppli
     }
 }
 
-@SuppressWarnings("deprecation")
 @ImportStatic({Message.class, JavaInteropReflect.class})
 abstract class ProxyInvokeNode extends Node {
 
@@ -623,15 +613,15 @@ abstract class ProxyInvokeNode extends Node {
             return ForeignAccess.sendUnbox(messageNode, obj);
         }
 
-        if (Message.EXECUTE.equals(message)) {
+        if (Message.createExecute(0).equals(message)) {
             return ForeignAccess.sendExecute(messageNode, obj, args);
         }
 
-        if (Message.INVOKE.equals(message)) {
+        if (Message.createInvoke(0).equals(message)) {
             return ForeignAccess.sendInvoke(messageNode, obj, name, args);
         }
 
-        if (Message.NEW.equals(message)) {
+        if (Message.createNew(0).equals(message)) {
             return ForeignAccess.sendNew(messageNode, obj, args);
         }
 
