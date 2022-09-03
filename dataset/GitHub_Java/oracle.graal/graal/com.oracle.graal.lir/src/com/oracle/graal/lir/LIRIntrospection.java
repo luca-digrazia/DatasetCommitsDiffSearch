@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -38,7 +38,7 @@ import com.oracle.graal.lir.LIRInstruction.OperandMode;
 abstract class LIRIntrospection extends FieldIntrospection {
 
     private static final Class<Value> VALUE_CLASS = Value.class;
-    private static final Class<JavaConstant> CONSTANT_CLASS = JavaConstant.class;
+    private static final Class<Constant> CONSTANT_CLASS = Constant.class;
     private static final Class<Variable> VARIABLE_CLASS = Variable.class;
     private static final Class<RegisterValue> REGISTER_VALUE_CLASS = RegisterValue.class;
     private static final Class<StackSlot> STACK_SLOT_CLASS = StackSlot.class;
@@ -96,7 +96,7 @@ abstract class LIRIntrospection extends FieldIntrospection {
      */
     protected Values values;
 
-    protected static class ValueFieldInfo extends FieldsScanner.FieldInfo {
+    protected static class ValueFieldInfo extends FieldInfo {
 
         final EnumSet<OperandFlag> flags;
 
@@ -110,7 +110,7 @@ abstract class LIRIntrospection extends FieldIntrospection {
          * Sorts non-array fields before array fields.
          */
         @Override
-        public int compareTo(FieldsScanner.FieldInfo o) {
+        public int compareTo(FieldInfo o) {
             if (VALUE_ARRAY_CLASS.isAssignableFrom(o.type)) {
                 if (!VALUE_ARRAY_CLASS.isAssignableFrom(type)) {
                     return -1;
@@ -138,12 +138,12 @@ abstract class LIRIntrospection extends FieldIntrospection {
         public final ArrayList<ValueFieldInfo> values = new ArrayList<>();
     }
 
-    protected abstract static class LIRFieldsScanner extends FieldsScanner {
+    protected abstract static class FieldScanner extends BaseFieldScanner {
 
         public final Map<Class<? extends Annotation>, OperandModeAnnotation> valueAnnotations;
-        public final ArrayList<FieldsScanner.FieldInfo> states = new ArrayList<>();
+        public final ArrayList<FieldInfo> states = new ArrayList<>();
 
-        public LIRFieldsScanner(FieldsScanner.CalcOffset calc) {
+        public FieldScanner(CalcOffset calc) {
             super(calc);
             valueAnnotations = new HashMap<>();
         }
@@ -182,7 +182,7 @@ abstract class LIRIntrospection extends FieldIntrospection {
             } else {
                 assert getOperandModeAnnotation(field) == null : "Field must not have operand mode annotation: " + field;
                 assert field.getAnnotation(LIRInstruction.State.class) == null : "Field must not have state annotation: " + field;
-                super.scanField(field, offset);
+                data.add(new FieldInfo(offset, field.getName(), type));
             }
         }
 
@@ -202,7 +202,7 @@ abstract class LIRIntrospection extends FieldIntrospection {
 
     protected static void forEach(LIRInstruction inst, Values values, OperandMode mode, InstructionValueProcedure proc) {
         for (int i = 0; i < values.getCount(); i++) {
-            assert LIRInstructionBase.ALLOWED_FLAGS.get(mode).containsAll(values.getFlags(i));
+            assert LIRInstruction.ALLOWED_FLAGS.get(mode).containsAll(values.getFlags(i));
 
             if (i < values.getDirectCount()) {
                 Value value = values.getValue(inst, i);
@@ -238,7 +238,7 @@ abstract class LIRIntrospection extends FieldIntrospection {
     protected static CompositeValue forEachComponent(LIRInstruction inst, CompositeValue obj, Values values, OperandMode mode, InstructionValueProcedure proc) {
         CompositeValue newCompValue = null;
         for (int i = 0; i < values.getCount(); i++) {
-            assert LIRInstructionBase.ALLOWED_FLAGS.get(mode).containsAll(values.getFlags(i));
+            assert LIRInstruction.ALLOWED_FLAGS.get(mode).containsAll(values.getFlags(i));
 
             if (i < values.getDirectCount()) {
                 Value value = values.getValue(obj, i);
@@ -286,7 +286,7 @@ abstract class LIRIntrospection extends FieldIntrospection {
 
     protected static void forEach(LIRInstruction inst, Object obj, Values values, OperandMode mode, ValuePositionProcedure proc, ValuePosition outerPosition) {
         for (int i = 0; i < values.getCount(); i++) {
-            assert LIRInstructionBase.ALLOWED_FLAGS.get(mode).containsAll(values.getFlags(i));
+            assert LIRInstruction.ALLOWED_FLAGS.get(mode).containsAll(values.getFlags(i));
 
             if (i < values.getDirectCount()) {
                 Value value = values.getValue(obj, i);
@@ -308,6 +308,21 @@ abstract class LIRIntrospection extends FieldIntrospection {
             composite.forEachComponent(inst, mode, proc, position);
         } else {
             proc.doValue(inst, position);
+        }
+    }
+
+    protected static Value getValueForPosition(Object obj, Values values, ValuePosition pos) {
+        if (pos.getIndex() < values.getDirectCount()) {
+            return values.getValue(obj, pos.getIndex());
+        }
+        return values.getValueArray(obj, pos.getIndex())[pos.getSubIndex()];
+    }
+
+    protected static void setValueForPosition(Object obj, Values values, ValuePosition pos, Value value) {
+        if (pos.getIndex() < values.getDirectCount()) {
+            values.setValue(obj, pos.getIndex(), value);
+        } else {
+            values.getValueArray(obj, pos.getIndex())[pos.getSubIndex()] = value;
         }
     }
 
@@ -369,7 +384,7 @@ abstract class LIRIntrospection extends FieldIntrospection {
 
     /**
      * Tests if all values in this string are printable ASCII characters or value \0 (b in
-     * [0x20,0x7F]) or b == 0.
+     * [0x20,0x7F]) or b == 0
      *
      * @param array
      * @return true if there are only printable ASCII characters and \0, false otherwise
