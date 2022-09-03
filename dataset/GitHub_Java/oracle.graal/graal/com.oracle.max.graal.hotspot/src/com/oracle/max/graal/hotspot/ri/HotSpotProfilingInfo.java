@@ -34,7 +34,6 @@ public final class HotSpotProfilingInfo extends CompilerObject implements RiProf
      *
      */
     private static final long serialVersionUID = -8307682725047864875L;
-    private static final DebugMetric metricInsufficentSpace = Debug.metric("InsufficientSpaceForProfilingData");
 
     private int position;
     private int hintPosition;
@@ -112,7 +111,7 @@ public final class HotSpotProfilingInfo extends CompilerObject implements RiProf
 
             if (!methodData.isWithin(currentPosition)) {
                 exceptionPossiblyNotRecorded = true;
-                metricInsufficentSpace.increment();
+                Debug.metric("InsufficientSpaceForProfilingData").increment();
             }
         }
 
