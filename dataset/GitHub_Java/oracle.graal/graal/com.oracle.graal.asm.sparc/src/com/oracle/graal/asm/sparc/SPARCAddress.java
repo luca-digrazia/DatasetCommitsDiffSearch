@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,15 +22,18 @@
  */
 package com.oracle.graal.asm.sparc;
 
-import static jdk.internal.jvmci.sparc.SPARC.STACK_BIAS;
-import static jdk.internal.jvmci.sparc.SPARC.fp;
-import static jdk.internal.jvmci.sparc.SPARC.sp;
-import jdk.internal.jvmci.code.Register;
-import jdk.internal.jvmci.sparc.SPARC;
+import static com.oracle.graal.sparc.SPARC.*;
 
-import com.oracle.graal.asm.AbstractAddress;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.sparc.*;
 
 public class SPARCAddress extends AbstractAddress {
+
+    /**
+     * Stack bias for stack and frame pointer loads.
+     */
+    private static final int STACK_BIAS = 0x7ff;
 
     private final Register base;
     private final Register index;
@@ -39,7 +42,7 @@ public class SPARCAddress extends AbstractAddress {
     /**
      * Creates an {@link SPARCAddress} with given base register, no scaling and a given
      * displacement.
-     *
+     * 
      * @param base the base register
      * @param displacement the displacement
      */
@@ -51,7 +54,7 @@ public class SPARCAddress extends AbstractAddress {
 
     /**
      * Creates an {@link SPARCAddress} with given base register, no scaling and a given index.
-     *
+     * 
      * @param base the base register
      * @param index the index register
      */
@@ -110,12 +113,12 @@ public class SPARCAddress extends AbstractAddress {
     /**
      * This method adds the stack-bias to the displacement if the base register is either
      * {@link SPARC#sp} or {@link SPARC#fp}.
-     *
+     * 
      * @return Optional additive displacement.
      */
     public int getDisplacement() {
         if (hasIndex()) {
-            throw new InternalError("address has index register");
+            throw GraalInternalError.shouldNotReachHere("address has index register");
         }
         // TODO Should we also hide the register save area size here?
         if (getBase().equals(sp) || getBase().equals(fp)) {
