@@ -66,15 +66,14 @@ public class BinaryGraphPrinter implements GraphPrinter {
     private static final int PROPERTY_TRUE = 0x05;
     private static final int PROPERTY_FALSE = 0x06;
     private static final int PROPERTY_ARRAY = 0x07;
-    private static final int PROPERTY_SUBGRAPH = 0x08;
 
     private static final int KLASS = 0x00;
     private static final int ENUM_KLASS = 0x01;
 
-    private static final class ConstantPool extends LinkedHashMap<Object, Character> {
+    private static final class ConstantPool extends LinkedHashMap<Object, Integer> {
 
-        private final LinkedList<Character> availableIds;
-        private char nextId;
+        private final LinkedList<Integer> availableIds;
+        private int nextId;
         private static final long serialVersionUID = -2676889957907285681L;
 
         public ConstantPool() {
@@ -83,7 +82,7 @@ public class BinaryGraphPrinter implements GraphPrinter {
         }
 
         @Override
-        protected boolean removeEldestEntry(java.util.Map.Entry<Object, Character> eldest) {
+        protected boolean removeEldestEntry(java.util.Map.Entry<Object, Integer> eldest) {
             if (size() > CONSTANT_POOL_MAX_SIZE) {
                 availableIds.addFirst(eldest.getValue());
                 return true;
@@ -91,15 +90,15 @@ public class BinaryGraphPrinter implements GraphPrinter {
             return false;
         }
 
-        private Character nextAvailableId() {
+        private Integer nextAvailableId() {
             if (!availableIds.isEmpty()) {
                 return availableIds.removeFirst();
             }
             return nextId++;
         }
 
-        public char add(Object obj) {
-            Character id = nextAvailableId();
+        public int add(Object obj) {
+            Integer id = nextAvailableId();
             put(obj, id);
             return id;
         }
@@ -116,17 +115,6 @@ public class BinaryGraphPrinter implements GraphPrinter {
     }
 
     public void print(Graph graph, String title, SchedulePhase predefinedSchedule) throws IOException {
-        writeByte(BEGIN_GRAPH);
-        writePoolObject(title);
-        writeGraph(graph, predefinedSchedule);
-        flush();
-    }
-
-    private void writeGraph(Graph graph) throws IOException {
-        writeGraph(graph, null);
-    }
-
-    private void writeGraph(Graph graph, SchedulePhase predefinedSchedule) throws IOException {
         SchedulePhase schedule = predefinedSchedule;
         if (schedule == null) {
             try {
@@ -138,8 +126,11 @@ public class BinaryGraphPrinter implements GraphPrinter {
         ControlFlowGraph cfg = schedule == null ? null : schedule.getCFG();
         BlockMap<List<ScheduledNode>> blockToNodes = schedule == null ? null : schedule.getBlockToNodesMap();
         Block[] blocks = cfg == null ? null : cfg.getBlocks();
+        writeByte(BEGIN_GRAPH);
+        writePoolObject(title);
         writeNodes(graph);
         writeBlocks(blocks, blockToNodes);
+        flush();
     }
 
     private void flush() throws IOException {
@@ -149,7 +140,6 @@ public class BinaryGraphPrinter implements GraphPrinter {
     }
 
     private void ensureAvailable(int i) throws IOException {
-        assert buffer.capacity() >= i : "Can not make " + i + " bytes available, buffer is too small";
         while (buffer.remaining() < i) {
             flush();
         }
@@ -187,10 +177,10 @@ public class BinaryGraphPrinter implements GraphPrinter {
 
     private void writeString(String str) throws IOException {
         writeInt(str.length());
-        int sizeInBytes = str.length() * 2;
-        ensureAvailable(sizeInBytes);
-        buffer.asCharBuffer().put(str);
-        buffer.position(buffer.position() + sizeInBytes);
+        ensureAvailable(str.length() * 2);
+        for (int i = 0; i < str.length(); i++) {
+            buffer.putChar(str.charAt(i));
+        }
     }
 
     private void writeBytes(byte[] b) throws IOException {
@@ -208,10 +198,10 @@ public class BinaryGraphPrinter implements GraphPrinter {
             writeInt(-1);
         } else {
             writeInt(b.length);
-            int sizeInBytes = b.length * 4;
-            ensureAvailable(sizeInBytes);
-            buffer.asIntBuffer().put(b);
-            buffer.position(buffer.position() + sizeInBytes);
+            ensureAvailable(b.length * 4);
+            for (int i = 0; i < b.length; i++) {
+                buffer.putInt(b[i]);
+            }
         }
     }
 
@@ -220,10 +210,10 @@ public class BinaryGraphPrinter implements GraphPrinter {
             writeInt(-1);
         } else {
             writeInt(b.length);
-            int sizeInBytes = b.length * 8;
-            ensureAvailable(sizeInBytes);
-            buffer.asDoubleBuffer().put(b);
-            buffer.position(buffer.position() + sizeInBytes);
+            ensureAvailable(b.length * 8);
+            for (int i = 0; i < b.length; i++) {
+                buffer.putDouble(b[i]);
+            }
         }
     }
 
@@ -232,7 +222,7 @@ public class BinaryGraphPrinter implements GraphPrinter {
             writeByte(POOL_NULL);
             return;
         }
-        Character id = constantPool.get(object);
+        Integer id = constantPool.get(object);
         if (id == null) {
             addPoolEntry(object);
         } else {
@@ -251,7 +241,7 @@ public class BinaryGraphPrinter implements GraphPrinter {
             } else {
                 writeByte(POOL_STRING);
             }
-            writeShort(id.charValue());
+            writeInt(id.intValue());
         }
     }
 
@@ -263,9 +253,9 @@ public class BinaryGraphPrinter implements GraphPrinter {
     }
 
     private void addPoolEntry(Object object) throws IOException {
-        char index = constantPool.add(object);
+        int index = constantPool.add(object);
         writeByte(POOL_NEW);
-        writeShort(index);
+        writeInt(index);
         if (object instanceof Class<?>) {
             Class<?> klass = (Class<?>) object;
             writeByte(POOL_CLASS);
@@ -353,9 +343,6 @@ public class BinaryGraphPrinter implements GraphPrinter {
             } else {
                 writeByte(PROPERTY_FALSE);
             }
-        } else if (obj instanceof Graph) {
-            writeByte(PROPERTY_SUBGRAPH);
-            writeGraph((Graph) obj);
         } else if (obj != null && obj.getClass().isArray()) {
             Class<?> componentType = obj.getClass().getComponentType();
             if (componentType.isPrimitive()) {

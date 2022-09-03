@@ -35,7 +35,7 @@ public class NodesToDoubles {
     }
 
     public void put(FixedNode n, double value) {
-        assert value >= 0.0 : value;
+        assert value >= 0.0;
         nodeProbabilities.put(n, value);
     }
 
