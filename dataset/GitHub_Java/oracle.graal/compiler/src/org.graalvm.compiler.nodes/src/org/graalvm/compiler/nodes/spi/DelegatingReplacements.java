@@ -48,6 +48,11 @@ public class DelegatingReplacements implements Replacements {
     }
 
     @Override
+    public OptionValues getOptions() {
+        return delegate.getOptions();
+    }
+
+    @Override
     public GraphBuilderConfiguration.Plugins getGraphBuilderPlugins() {
         return delegate.getGraphBuilderPlugins();
     }
@@ -58,19 +63,23 @@ public class DelegatingReplacements implements Replacements {
     }
 
     @Override
-    public StructuredGraph getSnippet(ResolvedJavaMethod method, ResolvedJavaMethod recursiveEntry, Object[] args, boolean trackNodeSourcePosition, NodeSourcePosition replaceePosition,
-                    OptionValues options) {
-        return delegate.getSnippet(method, recursiveEntry, args, trackNodeSourcePosition, replaceePosition, options);
+    public StructuredGraph getSnippet(ResolvedJavaMethod method, Object[] args, boolean trackNodeSourcePosition, NodeSourcePosition replaceePosition) {
+        return delegate.getSnippet(method, args, trackNodeSourcePosition, replaceePosition);
     }
 
     @Override
-    public void registerSnippet(ResolvedJavaMethod method, ResolvedJavaMethod original, Object receiver, boolean trackNodeSourcePosition, OptionValues options) {
-        delegate.registerSnippet(method, original, receiver, trackNodeSourcePosition, options);
+    public StructuredGraph getSnippet(ResolvedJavaMethod method, ResolvedJavaMethod recursiveEntry, Object[] args, boolean trackNodeSourcePosition, NodeSourcePosition replaceePosition) {
+        return delegate.getSnippet(method, recursiveEntry, args, trackNodeSourcePosition, replaceePosition);
     }
 
     @Override
-    public StructuredGraph getSubstitution(ResolvedJavaMethod method, int invokeBci, boolean trackNodeSourcePosition, NodeSourcePosition replaceePosition, OptionValues options) {
-        return delegate.getSubstitution(method, invokeBci, trackNodeSourcePosition, replaceePosition, options);
+    public void registerSnippet(ResolvedJavaMethod method, ResolvedJavaMethod original, Object receiver, boolean trackNodeSourcePosition) {
+        delegate.registerSnippet(method, original, receiver, trackNodeSourcePosition);
+    }
+
+    @Override
+    public StructuredGraph getSubstitution(ResolvedJavaMethod method, int invokeBci, boolean trackNodeSourcePosition, NodeSourcePosition replaceePosition) {
+        return delegate.getSubstitution(method, invokeBci, trackNodeSourcePosition, replaceePosition);
     }
 
     @Override

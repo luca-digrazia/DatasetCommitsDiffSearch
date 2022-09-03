@@ -63,4 +63,9 @@ public class HotSpotReplacementsImpl extends ReplacementsImpl {
     public void closeSnippetRegistration() {
         snippetRegistrationClosed = true;
     }
+
+    @Override
+    public void reopenSnippetRegistration() {
+        snippetRegistrationClosed = false;
+    }
 }
