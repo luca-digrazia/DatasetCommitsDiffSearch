@@ -26,7 +26,6 @@ package com.oracle.truffle.tools.debug.shell.server;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 
 import com.oracle.truffle.api.debug.Breakpoint;
@@ -355,14 +354,15 @@ public abstract class REPLHandler {
         @Override
         public REPLMessage[] receive(REPLMessage request, REPLServer replServer) {
             final REPLMessage reply = createReply();
-            final Collection<Breakpoint> breakpoints = replServer.getBreakpoints();
-            if (breakpoints.isEmpty()) {
+            int deleteCount = 0;
+            for (Breakpoint breakpoint : replServer.getBreakpoints()) {
+                breakpoint.dispose();
+                deleteCount++;
+            }
+            if (deleteCount == 0) {
                 return finishReplyFailed(reply, "no breakpoints to delete");
             }
-            for (Breakpoint breakpoint : breakpoints) {
-                breakpoint.dispose();
-            }
-            return finishReplySucceeded(reply, Integer.toString(breakpoints.size()) + " breakpoints deleted");
+            return finishReplySucceeded(reply, Integer.toString(deleteCount) + " breakpoints deleted");
         }
     };
 
@@ -581,7 +581,7 @@ public abstract class REPLHandler {
             } catch (IOException ex) {
                 return finishReplyFailed(message, "invalid condition for " + breakpointNumber);
             } catch (UnsupportedOperationException ex) {
-                return finishReplyFailed(message, "conditions not supported by breakpoint " + breakpointNumber);
+                return finishReplyFailed(message, "conditions not unsupported by breakpoint " + breakpointNumber);
             } catch (Exception ex) {
                 return finishReplyFailed(message, ex);
             }

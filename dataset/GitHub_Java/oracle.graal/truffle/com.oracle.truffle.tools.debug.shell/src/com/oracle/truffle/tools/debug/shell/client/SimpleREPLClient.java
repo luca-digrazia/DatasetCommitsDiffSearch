@@ -108,6 +108,13 @@ public class SimpleREPLClient implements REPLClient {
     // Current local context
     ClientContextImpl clientContext;
 
+    // Cheating for the prototype; prototype startup now happens from the language server.
+    // So this isn't used.
+    public static void main(String[] args) {
+        final SimpleREPLClient repl = new SimpleREPLClient(null);
+        repl.start();
+    }
+
     private final ConsoleReader reader;
 
     private final PrintStream writer;
