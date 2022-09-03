@@ -22,15 +22,14 @@
  */
 package com.oracle.graal.lir.stackslotalloc;
 
-import static jdk.internal.jvmci.code.ValueUtil.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
 
 import java.util.*;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.debug.*;
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
@@ -236,7 +235,8 @@ final class FixPointIntervalBuilder {
             if (flags.contains(OperandFlag.HINT)) {
 
                 op.forEachRegisterHint(targetValue, mode, (registerHint, valueMode, valueFlags) -> {
-                    if (isVirtualStackSlot(registerHint)) {
+                    if (isStackSlotValue(registerHint)) {
+                        assert isVirtualStackSlot(registerHint) : "Hint is not a VirtualStackSlot: " + registerHint;
                         StackInterval from = getOrCreateInterval((VirtualStackSlot) registerHint);
                         StackInterval to = getOrCreateInterval(targetValue);
 
