@@ -41,8 +41,8 @@ import com.oracle.truffle.dsl.processor.java.model.*;
 public class DSLExpressionResolver implements DSLExpressionVisitor {
 
     private static final List<String> LOGIC_OPERATORS = Arrays.asList("||");
-    private static final List<String> COMPARABLE_OPERATORS = Arrays.asList("<", "<=", ">", ">=");
-    private static final List<String> IDENTITY_OPERATORS = Arrays.asList("==", "!=");
+    public static final List<String> COMPARABLE_OPERATORS = Arrays.asList("<", "<=", ">", ">=");
+    public static final List<String> IDENTITY_OPERATORS = Arrays.asList("==", "!=");
     private static final String CONSTRUCTOR_KEYWORD = "new";
 
     private final List<VariableElement> variables = new ArrayList<>();
@@ -60,7 +60,7 @@ public class DSLExpressionResolver implements DSLExpressionVisitor {
 
     public DSLExpressionResolver copy(List<? extends Element> prefixElements) {
         DSLExpressionResolver resolver = new DSLExpressionResolver(context);
-        lookup(prefixElements);
+        resolver.lookup(prefixElements);
         resolver.variables.addAll(variables);
         resolver.methods.addAll(methods);
         return resolver;
@@ -104,7 +104,7 @@ public class DSLExpressionResolver implements DSLExpressionVisitor {
         String operator = binary.getOperator();
         TypeMirror leftType = binary.getLeft().getResolvedType();
         TypeMirror rightType = binary.getRight().getResolvedType();
-        if (!ElementUtils.typeEquals(leftType, rightType)) {
+        if (!ElementUtils.areTypesCompatible(leftType, rightType)) {
             throw new InvalidExpressionException(String.format("Incompatible operand types %s and %s.", ElementUtils.getSimpleName(leftType), ElementUtils.getSimpleName(rightType)));
         }
 
@@ -167,8 +167,10 @@ public class DSLExpressionResolver implements DSLExpressionVisitor {
                     if (!ElementUtils.isAssignable(sourceType, targetType)) {
                         continue outer;
                     }
+                    expression.setResolvedTargetType(targetType);
                     parameterIndex++;
                 }
+
                 call.setResolvedMethod(method);
                 break;
             }
@@ -195,27 +197,32 @@ public class DSLExpressionResolver implements DSLExpressionVisitor {
     public void visitVariable(Variable variable) {
         List<VariableElement> lookupVariables;
         DSLExpression receiver = variable.getReceiver();
-        if (receiver == null) {
-            lookupVariables = this.variables;
+        if (variable.getName().equals("null")) {
+            variable.setResolvedVariable(new CodeVariableElement(new CodeTypeMirror(TypeKind.NULL), "null"));
         } else {
-            TypeMirror type = receiver.getResolvedType();
-            if (type.getKind() == TypeKind.DECLARED) {
-                type = context.reloadType(type); // ensure ECJ has the type loaded
-                lookupVariables = new ArrayList<>();
-                variablesIn(lookupVariables, context.getEnvironment().getElementUtils().getAllMembers((TypeElement) ((DeclaredType) type).asElement()), true);
-            } else if (type.getKind() == TypeKind.ARRAY) {
-                lookupVariables = Arrays.<VariableElement> asList(new CodeVariableElement(context.getType(int.class), "length"));
+            if (receiver == null) {
+                lookupVariables = this.variables;
             } else {
-                lookupVariables = Collections.emptyList();
+                TypeMirror type = receiver.getResolvedType();
+                if (type.getKind() == TypeKind.DECLARED) {
+                    type = context.reloadType(type); // ensure ECJ has the type loaded
+                    lookupVariables = new ArrayList<>();
+                    variablesIn(lookupVariables, context.getEnvironment().getElementUtils().getAllMembers((TypeElement) ((DeclaredType) type).asElement()), true);
+                } else if (type.getKind() == TypeKind.ARRAY) {
+                    lookupVariables = Arrays.<VariableElement> asList(new CodeVariableElement(context.getType(int.class), "length"));
+                } else {
+                    lookupVariables = Collections.emptyList();
+                }
+            }
+
+            for (VariableElement variableElement : lookupVariables) {
+                if (variableElement.getSimpleName().toString().equals(variable.getName())) {
+                    variable.setResolvedVariable(variableElement);
+                    break;
+                }
             }
         }
 
-        for (VariableElement variableElement : lookupVariables) {
-            if (variableElement.getSimpleName().toString().equals(variable.getName())) {
-                variable.setResolvedVariable(variableElement);
-                break;
-            }
-        }
         if (variable.getResolvedVariable() == null) {
             throw new InvalidExpressionException(String.format("%s cannot be resolved.", variable.getName()));
         }
@@ -224,7 +231,25 @@ public class DSLExpressionResolver implements DSLExpressionVisitor {
     public void visitIntLiteral(IntLiteral binary) {
         try {
             binary.setResolvedType(context.getType(int.class));
-            binary.setResolvedValueInt(Integer.parseInt(binary.getLiteral()));
+
+            final int base;
+            final String literal;
+
+            if (binary.getLiteral().startsWith("0x")) {
+                base = 16;
+                literal = binary.getLiteral().substring(2);
+            } else if (binary.getLiteral().startsWith("0b")) {
+                base = 2;
+                literal = binary.getLiteral().substring(2);
+            } else if (binary.getLiteral().startsWith("0")) {
+                base = 8;
+                literal = binary.getLiteral();
+            } else {
+                base = 10;
+                literal = binary.getLiteral();
+            }
+
+            binary.setResolvedValueInt(Integer.parseInt(literal, base));
         } catch (NumberFormatException e) {
             throw new InvalidExpressionException(String.format("Type mismatch: cannot convert from String '%s' to int", binary.getLiteral()));
         }
