@@ -22,14 +22,8 @@
  */
 package com.oracle.graal.compiler.target;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.code.stack.*;
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.meta.*;
-
 import com.oracle.graal.asm.*;
 import com.oracle.graal.compiler.common.alloc.*;
-import com.oracle.graal.compiler.common.spi.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
@@ -39,6 +33,10 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.phases.util.*;
+import com.oracle.jvmci.code.*;
+import com.oracle.jvmci.code.stack.*;
+import com.oracle.jvmci.common.*;
+import com.oracle.jvmci.meta.*;
 
 /**
  * Represents a compiler backend for Graal.

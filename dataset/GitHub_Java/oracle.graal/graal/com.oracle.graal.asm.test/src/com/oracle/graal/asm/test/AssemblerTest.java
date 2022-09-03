@@ -26,13 +26,14 @@ import java.lang.reflect.*;
 
 import org.junit.*;
 
-import com.oracle.graal.code.*;
+import com.oracle.graal.api.runtime.*;
+import com.oracle.graal.phases.util.*;
+import com.oracle.graal.runtime.*;
 import com.oracle.graal.test.*;
 import com.oracle.jvmci.code.*;
 import com.oracle.jvmci.debug.*;
 import com.oracle.jvmci.debug.Debug.Scope;
 import com.oracle.jvmci.meta.*;
-import com.oracle.jvmci.runtime.*;
 import com.oracle.jvmci.service.*;
 
 public abstract class AssemblerTest extends GraalTest {
@@ -45,7 +46,7 @@ public abstract class AssemblerTest extends GraalTest {
     }
 
     public AssemblerTest() {
-        JVMCIBackend providers = JVMCI.getRuntime().getHostJVMCIBackend();
+        Providers providers = Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend().getProviders();
         this.metaAccess = providers.getMetaAccess();
         this.codeCache = providers.getCodeCache();
     }
@@ -68,10 +69,8 @@ public abstract class AssemblerTest extends GraalTest {
             InstalledCode code = codeCache.addMethod(method, compResult, null, null);
 
             for (DisassemblerProvider dis : Services.load(DisassemblerProvider.class)) {
-                String disasm1 = dis.disassembleCompiledCode(codeCache, compResult);
-                Assert.assertTrue(compResult.toString(), disasm1 == null || disasm1.length() > 0);
-                String disasm2 = dis.disassembleInstalledCode(codeCache, compResult, code);
-                Assert.assertTrue(code.toString(), disasm2 == null || disasm2.length() > 0);
+                String disasm = dis.disassemble(code);
+                Assert.assertTrue(code.toString(), disasm == null || disasm.length() > 0);
             }
             return code;
         } catch (Throwable e) {

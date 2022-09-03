@@ -22,15 +22,15 @@
  */
 package com.oracle.graal.hotspot.meta;
 
-import jdk.internal.jvmci.hotspot.*;
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.jvmci.meta.MetaAccessProvider;
+import com.oracle.jvmci.meta.ConstantReflectionProvider;
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import com.oracle.graal.hotspot.word.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.phases.util.*;
+import com.oracle.jvmci.hotspot.*;
 
 /**
  * Extends {@link Providers} to include a number of extra capabilities used by the HotSpot parts of
@@ -47,7 +47,7 @@ public class HotSpotProviders extends Providers {
     public HotSpotProviders(MetaAccessProvider metaAccess, HotSpotCodeCacheProvider codeCache, ConstantReflectionProvider constantReflection, HotSpotForeignCallsProvider foreignCalls,
                     LoweringProvider lowerer, Replacements replacements, SuitesProvider suites, HotSpotRegistersProvider registers, SnippetReflectionProvider snippetReflection,
                     HotSpotWordTypes wordTypes, Plugins graphBuilderPlugins) {
-        super(metaAccess, codeCache, constantReflection, foreignCalls, lowerer, replacements, new HotSpotStampProvider(codeCache.getTarget().wordKind));
+        super(metaAccess, codeCache, constantReflection, foreignCalls, lowerer, replacements, new HotSpotStampProvider());
         this.suites = suites;
         this.registers = registers;
         this.snippetReflection = snippetReflection;

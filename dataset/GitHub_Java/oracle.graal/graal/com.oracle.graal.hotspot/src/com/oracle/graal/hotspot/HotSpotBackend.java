@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,12 +26,6 @@ import static com.oracle.graal.hotspot.stubs.StubUtil.*;
 
 import java.util.*;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.code.stack.*;
-import jdk.internal.jvmci.hotspot.*;
-import jdk.internal.jvmci.meta.*;
-import jdk.internal.jvmci.options.*;
-
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.hotspot.meta.*;
@@ -48,11 +42,16 @@ import com.oracle.graal.lir.framemap.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.word.*;
+import com.oracle.jvmci.code.*;
+import com.oracle.jvmci.code.stack.*;
+import com.oracle.jvmci.hotspot.*;
+import com.oracle.jvmci.meta.*;
+import com.oracle.jvmci.options.*;
 
 /**
  * HotSpot specific backend.
  */
-public abstract class HotSpotBackend extends Backend implements FrameMap.ReferenceMapBuilderFactory {
+public abstract class HotSpotBackend extends Backend {
 
     public static class Options {
         // @formatter:off
@@ -241,10 +240,5 @@ public abstract class HotSpotBackend extends Backend implements FrameMap.Referen
         if (HotSpotBackend.Options.ASMInstructionProfiling.getValue() != null) {
             HotSpotInstructionProfiling.countInstructions(lir, crb.asm);
         }
-    }
-
-    @Override
-    public ReferenceMapBuilder newReferenceMapBuilder(int totalFrameSize) {
-        return new HotSpotReferenceMapBuilder(getTarget(), totalFrameSize);
     }
 }
