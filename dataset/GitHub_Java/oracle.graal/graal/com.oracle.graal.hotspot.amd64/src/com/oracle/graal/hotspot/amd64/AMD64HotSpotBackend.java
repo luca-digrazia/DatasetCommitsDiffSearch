@@ -25,7 +25,6 @@ package com.oracle.graal.hotspot.amd64;
 import static com.oracle.graal.amd64.AMD64.*;
 import static com.oracle.graal.api.code.CallingConvention.Type.*;
 import static com.oracle.graal.api.code.ValueUtil.*;
-import static com.oracle.graal.phases.GraalOptions.*;
 
 import java.lang.reflect.*;
 
@@ -41,7 +40,6 @@ import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
-import com.oracle.graal.hotspot.stubs.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.amd64.*;
 import com.oracle.graal.lir.amd64.AMD64Move.CompareAndSwapOp;
@@ -75,22 +73,11 @@ public class AMD64HotSpotBackend extends HotSpotBackend {
         }
 
         @Override
-        protected boolean needOnlyOopMaps() {
-            // Stubs only need oop maps
-            return runtime().asStub(method) != null;
-        }
-
-        @Override
         protected CallingConvention createCallingConvention() {
-            Stub stub = runtime().asStub(method);
-            if (stub != null) {
-                return stub.getLinkage().getCallingConvention();
-            }
-
             if (graph.getEntryBCI() == StructuredGraph.INVOCATION_ENTRY_BCI) {
                 return super.createCallingConvention();
             } else {
-                return frameMap.registerConfig.getCallingConvention(JavaCallee, method.getSignature().getReturnType(null), new JavaType[]{runtime.lookupJavaType(long.class)}, target, false);
+                return frameMap.registerConfig.getCallingConvention(JavaCallee, method.getSignature().getReturnKind(), new Kind[]{Kind.Long}, target, false);
             }
         }
 
@@ -98,6 +85,19 @@ public class AMD64HotSpotBackend extends HotSpotBackend {
         public void visitSafepointNode(SafepointNode i) {
             LIRFrameState info = state();
             append(new AMD64SafepointOp(info, runtime().config));
+        }
+
+        @Override
+        public void visitBreakpointNode(BreakpointNode i) {
+            Kind[] sig = new Kind[i.arguments.size()];
+            int pos = 0;
+            for (ValueNode arg : i.arguments) {
+                sig[pos++] = arg.kind();
+            }
+
+            CallingConvention cc = frameMap.registerConfig.getCallingConvention(CallingConvention.Type.JavaCall, Kind.Void, sig, target(), false);
+            Value[] parameters = visitInvokeArguments(cc, i.arguments);
+            append(new AMD64BreakpointOp(parameters));
         }
 
         @Override
@@ -125,7 +125,6 @@ public class AMD64HotSpotBackend extends HotSpotBackend {
             Address address;
             Value index = operand(x.offset());
             if (ValueUtil.isConstant(index) && NumUtil.isInt(ValueUtil.asConstant(index).asLong() + disp)) {
-                assert !runtime.needsDataPatch(asConstant(index));
                 disp += (int) ValueUtil.asConstant(index).asLong();
                 address = new Address(kind, load(operand(x.object())), disp);
             } else {
@@ -213,16 +212,13 @@ public class AMD64HotSpotBackend extends HotSpotBackend {
                 // detects this case - see the definition of frame::should_be_deoptimized()
 
                 Register scratch = regConfig.getScratchRegister();
-                int offset = SafepointPollOffset % target.pageSize;
                 if (config.isPollingPageFar) {
-                    asm.movq(scratch, config.safepointPollingAddress + offset);
+                    asm.movq(scratch, config.safepointPollingAddress);
                     tasm.recordMark(Marks.MARK_POLL_RETURN_FAR);
                     asm.movq(scratch, new Address(tasm.target.wordKind, scratch.asValue()));
                 } else {
                     tasm.recordMark(Marks.MARK_POLL_RETURN_NEAR);
-                    // The C++ code transforms the polling page offset into an RIP displacement
-                    // to the real address at that offset in the polling page.
-                    asm.movq(scratch, new Address(tasm.target.wordKind, rip.asValue(), offset));
+                    asm.movq(scratch, new Address(tasm.target.wordKind, rip.asValue()));
                 }
             }
         }
@@ -235,14 +231,14 @@ public class AMD64HotSpotBackend extends HotSpotBackend {
         //  - has no callee-saved registers
         //  - has no incoming arguments passed on the stack
         //  - has no instructions with debug info
-        boolean omitFrame = GraalOptions.CanOmitFrame &&
+        boolean canOmitFrame = GraalOptions.CanOmitFrame &&
             frameMap.frameSize() == frameMap.initialFrameSize &&
             frameMap.registerConfig.getCalleeSaveLayout().registers.length == 0 &&
             !lir.hasArgInCallerFrame() &&
             !lir.hasDebugInfo();
 
         AbstractAssembler masm = new AMD64MacroAssembler(target, frameMap.registerConfig);
-        HotSpotFrameContext frameContext = omitFrame ? null : new HotSpotFrameContext();
+        HotSpotFrameContext frameContext = canOmitFrame ? null : new HotSpotFrameContext();
         TargetMethodAssembler tasm = new TargetMethodAssembler(target, runtime(), frameMap, masm, frameContext, lir.stubs);
         tasm.setFrameSize(frameMap.frameSize());
         tasm.targetMethod.setCustomStackAreaOffset(frameMap.offsetToCustomArea());
@@ -255,14 +251,14 @@ public class AMD64HotSpotBackend extends HotSpotBackend {
         FrameMap frameMap = tasm.frameMap;
         RegisterConfig regConfig = frameMap.registerConfig;
         HotSpotVMConfig config = runtime().config;
-        boolean isStatic = Modifier.isStatic(method.getModifiers());
-        Label unverifiedStub = isStatic ? null : new Label();
+        Label unverifiedStub = new Label();
 
         // Emit the prefix
 
+        boolean isStatic = Modifier.isStatic(method.getModifiers());
         if (!isStatic) {
             tasm.recordMark(Marks.MARK_UNVERIFIED_ENTRY);
-            CallingConvention cc = regConfig.getCallingConvention(JavaCallee, null, new JavaType[] {runtime().lookupJavaType(Object.class)}, target, false);
+            CallingConvention cc = regConfig.getCallingConvention(JavaCallee, Kind.Void, new Kind[] {Kind.Object}, target, false);
             Register inlineCacheKlass = rax; // see definition of IC_Klass in c1_LIRAssembler_x86.cpp
             Register receiver = asRegister(cc.getArgument(0));
             Address src = new Address(target.wordKind, receiver.asValue(), config.hubOffset);
@@ -293,7 +289,7 @@ public class AMD64HotSpotBackend extends HotSpotBackend {
             assert !frameMap.accessesCallerFrame();
         }
 
-        if (unverifiedStub != null) {
+        if (!isStatic) {
             asm.bind(unverifiedStub);
             AMD64Call.directJmp(tasm, asm, config.inlineCacheMissStub);
         }
@@ -301,6 +297,5 @@ public class AMD64HotSpotBackend extends HotSpotBackend {
         for (int i = 0; i < GraalOptions.MethodEndBreakpointGuards; ++i) {
             asm.int3();
         }
-
     }
 }

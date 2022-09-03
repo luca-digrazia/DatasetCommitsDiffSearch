@@ -43,8 +43,7 @@ public final class GraalOptions {
            static boolean InlineMonomorphicCalls             = true;
            static boolean InlinePolymorphicCalls             = true;
            static boolean InlineMegamorphicCalls             = ____;
-    public static int     InliningPolicy                     = 1;
-    public static int     InliningDecision                   = 4;
+    public static int     InliningPolicy                     = 4;
     public static int     WeightComputationPolicy            = 2;
     public static int     MaximumTrivialSize                 = 10;
     public static int     MaximumInlineLevel                 = 30;
@@ -171,9 +170,10 @@ public final class GraalOptions {
     public static boolean GenAssertionCode                   = ____;
     public static boolean AlignCallsForPatching              = true;
     public static boolean ResolveClassBeforeStaticInvoke     = true;
+    public static boolean CanOmitFrame                       = true;
 
     // Translating tableswitch instructions
-    public static int     MinimumJumpTableSize               = 5;
+    public static int     SequentialSwitchLimit              = 4;
     public static int     RangeTestsSwitchDensity            = 5;
     public static double  MinTableSwitchDensity              = 0.5;
 
