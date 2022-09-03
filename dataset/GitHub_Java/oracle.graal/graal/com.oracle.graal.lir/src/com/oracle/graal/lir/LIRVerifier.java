@@ -34,8 +34,6 @@ import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
-import com.oracle.graal.lir.framemap.*;
-import com.oracle.graal.lir.ssa.*;
 
 public final class LIRVerifier {
 
@@ -47,11 +45,11 @@ public final class LIRVerifier {
     private final BitSet[] blockLiveOut;
     private final Object[] variableDefinitions;
 
-    private BitSet liveOutFor(AbstractBlockBase<?> block) {
+    private BitSet liveOutFor(AbstractBlock<?> block) {
         return blockLiveOut[block.getId()];
     }
 
-    private void setLiveOutFor(AbstractBlockBase<?> block, BitSet liveOut) {
+    private void setLiveOutFor(AbstractBlock<?> block, BitSet liveOut) {
         blockLiveOut[block.getId()] = liveOut;
     }
 
@@ -92,7 +90,7 @@ public final class LIRVerifier {
     private BitSet curVariablesLive;
     private Value[] curRegistersLive;
 
-    private AbstractBlockBase<?> curBlock;
+    private AbstractBlock<?> curBlock;
     private Object curInstruction;
     private BitSet curRegistersDefined;
 
@@ -114,7 +112,7 @@ public final class LIRVerifier {
 
         int maxRegisterNum = maxRegisterNum();
         curRegistersDefined = new BitSet();
-        for (AbstractBlockBase<?> block : lir.linearScanOrder()) {
+        for (AbstractBlock<?> block : lir.linearScanOrder()) {
             curBlock = block;
             curVariablesLive = new BitSet();
             curRegistersLive = new Value[maxRegisterNum];
@@ -128,9 +126,6 @@ public final class LIRVerifier {
             if (block.getSuccessorCount() > 0) {
                 LIRInstruction last = lir.getLIRforBlock(block).get(lir.getLIRforBlock(block).size() - 1);
                 assert last instanceof StandardOp.JumpOp : "block with successor must end with unconditional jump";
-            }
-            if (block.getPredecessorCount() > 1) {
-                SSAUtils.verifyPhi(lir, block);
             }
 
             for (LIRInstruction op : lir.getLIRforBlock(block)) {

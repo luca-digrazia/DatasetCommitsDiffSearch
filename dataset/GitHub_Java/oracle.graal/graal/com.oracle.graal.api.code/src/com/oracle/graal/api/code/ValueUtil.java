@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,12 +22,18 @@
  */
 package com.oracle.graal.api.code;
 
+import java.util.*;
+
 import com.oracle.graal.api.meta.*;
 
-public class ValueUtil {
+/**
+ * Utility class for working with the {@link Value} class and its subclasses.
+ */
+public final class ValueUtil {
+
     public static boolean isIllegal(Value value) {
         assert value != null;
-        return value == Value.IllegalValue;
+        return value.equals(Value.ILLEGAL);
     }
 
     public static boolean isLegal(Value value) {
@@ -46,14 +52,23 @@ public class ValueUtil {
 
     public static boolean isConstant(Value value) {
         assert value != null;
-        return value instanceof Constant;
+        return value instanceof JavaConstant;
     }
 
-    public static Constant asConstant(Value value) {
+    public static JavaConstant asConstant(Value value) {
         assert value != null;
-        return (Constant) value;
+        return (JavaConstant) value;
     }
 
+    public static boolean isAllocatableValue(Value value) {
+        assert value != null;
+        return value instanceof AllocatableValue;
+    }
+
+    public static AllocatableValue asAllocatableValue(Value value) {
+        assert value != null;
+        return (AllocatableValue) value;
+    }
 
     public static boolean isStackSlot(Value value) {
         assert value != null;
@@ -65,16 +80,25 @@ public class ValueUtil {
         return (StackSlot) value;
     }
 
-    public static boolean isAddress(Value value) {
+    public static boolean isStackSlotValue(Value value) {
         assert value != null;
-        return value instanceof Address;
+        return value instanceof StackSlotValue;
     }
 
-    public static Address asAddress(Value value) {
+    public static StackSlotValue asStackSlotValue(Value value) {
         assert value != null;
-        return (Address) value;
+        return (StackSlotValue) value;
     }
 
+    public static boolean isVirtualStackSlot(Value value) {
+        assert value != null;
+        return value instanceof VirtualStackSlot;
+    }
+
+    public static VirtualStackSlot asVirtualStackSlot(Value value) {
+        assert value != null;
+        return (VirtualStackSlot) value;
+    }
 
     public static boolean isRegister(Value value) {
         assert value != null;
@@ -87,44 +111,77 @@ public class ValueUtil {
     }
 
     public static Register asIntReg(Value value) {
-        assert value.kind == Kind.Int || value.kind == Kind.Jsr;
-        return asRegister(value);
+        if (value.getKind().getStackKind() != Kind.Int) {
+            throw new InternalError("needed Int got: " + value.getKind());
+        } else {
+            return asRegister(value);
+        }
     }
 
     public static Register asLongReg(Value value) {
-        assert value.kind == Kind.Long : value.kind;
-        return asRegister(value);
+        if (value.getKind() != Kind.Long) {
+            throw new InternalError("needed Long got: " + value.getKind());
+        } else {
+            return asRegister(value);
+        }
     }
 
     public static Register asObjectReg(Value value) {
-        assert value.kind == Kind.Object;
+        assert value.getKind() == Kind.Object : value.getKind();
         return asRegister(value);
     }
 
     public static Register asFloatReg(Value value) {
-        assert value.kind == Kind.Float;
+        assert value.getKind() == Kind.Float : value.getKind();
         return asRegister(value);
     }
 
     public static Register asDoubleReg(Value value) {
-        assert value.kind == Kind.Double;
+        assert value.getKind() == Kind.Double : value.getKind();
         return asRegister(value);
     }
 
-
     public static boolean sameRegister(Value v1, Value v2) {
-        return isRegister(v1) && isRegister(v2) && asRegister(v1) == asRegister(v2);
+        return isRegister(v1) && isRegister(v2) && asRegister(v1).equals(asRegister(v2));
     }
 
     public static boolean sameRegister(Value v1, Value v2, Value v3) {
         return sameRegister(v1, v2) && sameRegister(v1, v3);
     }
 
-    public static boolean differentRegisters(Value v1, Value v2) {
-        return !isRegister(v1) || !isRegister(v2) || asRegister(v1) != asRegister(v2);
+    /**
+     * Checks if all the provided values are different physical registers. The parameters can be
+     * either {@link Register registers}, {@link Value values} or arrays of them. All values that
+     * are not {@link RegisterValue registers} are ignored.
+     */
+    public static boolean differentRegisters(Object... values) {
+        List<Register> registers = collectRegisters(values, new ArrayList<Register>());
+        for (int i = 1; i < registers.size(); i++) {
+            Register r1 = registers.get(i);
+            for (int j = 0; j < i; j++) {
+                Register r2 = registers.get(j);
+                if (r1.equals(r2)) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
-    public static boolean differentRegisters(Value v1, Value v2, Value v3) {
-        return differentRegisters(v1, v2) && differentRegisters(v1, v3) && differentRegisters(v2, v3);
+    private static List<Register> collectRegisters(Object[] values, List<Register> registers) {
+        for (Object o : values) {
+            if (o instanceof Register) {
+                registers.add((Register) o);
+            } else if (o instanceof Value) {
+                if (isRegister((Value) o)) {
+                    registers.add(asRegister((Value) o));
+                }
+            } else if (o instanceof Object[]) {
+                collectRegisters((Object[]) o, registers);
+            } else {
+                throw new IllegalArgumentException("Not a Register or Value: " + o);
+            }
+        }
+        return registers;
     }
 }
