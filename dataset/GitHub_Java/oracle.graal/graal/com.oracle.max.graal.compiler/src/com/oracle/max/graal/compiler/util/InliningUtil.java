@@ -24,14 +24,12 @@ package com.oracle.max.graal.compiler.util;
 
 import java.lang.reflect.*;
 import java.util.*;
-import java.util.concurrent.*;
 
 import com.oracle.max.cri.ci.*;
 import com.oracle.max.cri.ri.*;
 import com.oracle.max.criutils.*;
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.cri.*;
-import com.oracle.max.graal.debug.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.*;
 import com.oracle.max.graal.nodes.DeoptimizeNode.DeoptAction;
@@ -110,13 +108,19 @@ public class InliningUtil {
         }
 
         @Override
-        public Node inline(StructuredGraph compilerGraph, GraalRuntime runtime, final InliningCallback callback) {
-            StructuredGraph graph = Debug.scope("Inlining", concrete, new Callable<StructuredGraph>() {
-                @Override
-                public StructuredGraph call() throws Exception {
-                    return callback.buildGraph(concrete);
+        public Node inline(StructuredGraph compilerGraph, GraalRuntime runtime, InliningCallback callback) {
+            StructuredGraph graph = null; // TODO: Solve graph caching differently! GraphBuilderPhase.cachedGraphs.get(concrete);
+//            if (graph != null) {
+//                if (GraalOptions.TraceInlining) {
+//                    TTY.println("Reusing graph for %s", methodName(concrete, invoke));
+//                }
+//            } else {
+                if (GraalOptions.TraceInlining) {
+                    TTY.println("Building graph for %s, locals: %d, stack: %d", methodName(concrete, invoke), concrete.maxLocals(), concrete.maxStackSize());
                 }
-            });
+                graph = callback.buildGraph(concrete);
+//            }
+
             return InliningUtil.inline(invoke, graph, true);
         }
 
@@ -151,7 +155,8 @@ public class InliningUtil {
             IsTypeNode isType = graph.unique(new IsTypeNode(invoke.callTarget().receiver(), type));
             FixedGuardNode guard = graph.add(new FixedGuardNode(isType));
             assert invoke.predecessor() != null;
-            graph.addBeforeFixed(invoke.node(), guard);
+            invoke.predecessor().replaceFirstSuccessor(invoke.node(), guard);
+            guard.setNext(invoke.node());
 
             if (GraalOptions.TraceInlining) {
                 TTY.println("inlining with type check, type probability: %5.3f", probability);
@@ -342,7 +347,7 @@ public class InliningUtil {
      */
     public static Node inline(Invoke invoke, StructuredGraph inlineGraph, boolean receiverNullCheck) {
         NodeInputList<ValueNode> parameters = invoke.callTarget().arguments();
-        StructuredGraph graph = (StructuredGraph) invoke.node().graph();
+        Graph graph = invoke.node().graph();
 
         FrameState stateAfter = invoke.stateAfter();
         assert stateAfter.isAlive();
@@ -377,11 +382,16 @@ public class InliningUtil {
         Map<Node, Node> duplicates = graph.addDuplicates(nodes, replacements);
 
         FixedNode firstCFGNodeDuplicate = (FixedNode) duplicates.get(firstCFGNode);
+        FixedNode invokeReplacement;
         MethodCallTargetNode callTarget = invoke.callTarget();
-        if (!callTarget.isStatic() && receiverNullCheck && parameters.get(0).kind() == CiKind.Object && !parameters.get(0).stamp().nonNull()) {
-            graph.addBeforeFixed(invoke.node(), graph.add(new FixedGuardNode(graph.unique(new NullCheckNode(parameters.get(0), false)))));
+        if (callTarget.isStatic() || !receiverNullCheck || parameters.get(0).kind() != CiKind.Object || parameters.get(0).stamp().nonNull()) {
+            invokeReplacement = firstCFGNodeDuplicate;
+        } else {
+            FixedGuardNode guard = graph.add(new FixedGuardNode(graph.unique(new NullCheckNode(parameters.get(0), false))));
+            guard.setNext(firstCFGNodeDuplicate);
+            invokeReplacement = guard;
         }
-        invoke.node().replaceAtPredecessors(firstCFGNodeDuplicate);
+        invoke.node().replaceAtPredecessors(invokeReplacement);
 
         FrameState stateAtExceptionEdge = null;
         if (invoke instanceof InvokeWithExceptionNode) {

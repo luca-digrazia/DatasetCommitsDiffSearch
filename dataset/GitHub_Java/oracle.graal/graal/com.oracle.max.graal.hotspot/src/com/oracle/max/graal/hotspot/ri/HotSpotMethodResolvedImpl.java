@@ -55,10 +55,8 @@ public final class HotSpotMethodResolvedImpl extends HotSpotMethod implements Ho
     private Boolean hasBalancedMonitors;
     private Map<Object, Object> compilerStorage;
     private RiResolvedType holder;
-    private HotSpotMethodData methodData;
     private byte[] code;
     private boolean canBeInlined;
-    private CiGenericCallback callback;
 
     private HotSpotMethodResolvedImpl() {
         super(null);
@@ -188,22 +186,24 @@ public final class HotSpotMethodResolvedImpl extends HotSpotMethod implements Ho
         return null;
     }
 
-    @Override
     public int invocationCount() {
         return compiler.getVMEntries().RiMethod_invocationCount(this);
     }
 
-    @Override
-    public RiProfilingInfo profilingInfo() {
-        if (methodData == null) {
-            methodData = compiler.getVMEntries().RiMethod_methodData(this);
-        }
+    public int exceptionProbability(int bci) {
+        return compiler.getVMEntries().RiMethod_exceptionProbability(this, bci);
+    }
 
-        if (methodData == null || !methodData.isMature()) {
-            return new HotSpotNoProfilingInfo(compiler);
-        } else {
-            return new HotSpotProfilingInfo(compiler, methodData);
-        }
+    public RiTypeProfile typeProfile(int bci) {
+        return compiler.getVMEntries().RiMethod_typeProfile(this, bci);
+    }
+
+    public double branchProbability(int bci) {
+        return compiler.getVMEntries().RiMethod_branchProbability(this, bci);
+    }
+
+    public double[] switchProbability(int bci) {
+        return compiler.getVMEntries().RiMethod_switchProbability(this, bci);
     }
 
     @Override
@@ -223,40 +223,25 @@ public final class HotSpotMethodResolvedImpl extends HotSpotMethod implements Ho
         TTY.println("profile info for %s", this);
         TTY.println("canBeStaticallyBound: " + canBeStaticallyBound());
         TTY.println("invocationCount: " + invocationCount());
-        RiProfilingInfo profilingInfo = this.profilingInfo();
         for (int i = 0; i < codeSize(); i++) {
-            if (profilingInfo.getExecutionCount(i) != -1) {
-                TTY.println("  executionCount@%d: %d", i, profilingInfo.getExecutionCount(i));
+            if (branchProbability(i) != -1) {
+                TTY.println("  branchProbability@%d: %f", i, branchProbability(i));
             }
-
-            if (profilingInfo.getBranchTakenProbability(i) != -1) {
-                TTY.println("  branchProbability@%d: %f", i, profilingInfo.getBranchTakenProbability(i));
+            if (exceptionProbability(i) > 0) {
+                TTY.println("  exceptionProbability@%d: %d", i, exceptionProbability(i));
             }
-
-            double[] switchProbabilities = profilingInfo.getSwitchProbabilities(i);
-            if (switchProbabilities != null) {
-                TTY.print("  switchProbabilities@%d:", i);
-                for (int j = 0; j < switchProbabilities.length; j++) {
-                    TTY.print(" %f", switchProbabilities[j]);
+            RiTypeProfile profile = typeProfile(i);
+            if (profile != null && profile.count > 0) {
+                TTY.print("  profile@%d: count: %d, morphism: %d", i, profile.count, profile.morphism);
+                if (profile.types != null) {
+                    TTY.print(", types:");
+                    for (int i2 = 0; i2 < profile.types.length; i2++) {
+                        TTY.print(" %s (%f)", profile.types[i2], profile.probabilities[i2]);
+                    }
                 }
                 TTY.println();
-            }
-
-            if (profilingInfo.getExceptionSeen(i) != RiExceptionSeen.FALSE) {
-                TTY.println("  exceptionSeen@%d: %s", i, profilingInfo.getExceptionSeen(i).name());
-            }
-
-            RiTypeProfile typeProfile = profilingInfo.getTypeProfile(i);
-            if (typeProfile != null) {
-                RiResolvedType[] types = typeProfile.getTypes();
-                double[] probabilities = typeProfile.getProbabilities();
-                if (types != null && probabilities != null) {
-                    assert types.length == probabilities.length : "length must match";
-                    TTY.print("  types@%d:", i);
-                    for (int j = 0; j < types.length; j++) {
-                        TTY.print(" %s (%f)", types[j], probabilities[j]);
-                    }
-                    TTY.println(" not recorded (%f)", typeProfile.getNotRecordedProbability());
+                if (exceptionProbability(i) > 0) {
+                    TTY.println("  exceptionProbability@%d: %d", i, exceptionProbability(i));
                 }
             }
         }
@@ -321,16 +306,10 @@ public final class HotSpotMethodResolvedImpl extends HotSpotMethod implements Ho
 
     @Override
     public boolean canBeInlined() {
-        return canBeInlined && callback == null;
-    }
-    public void neverInline() {
-        this.canBeInlined = false;
+        return canBeInlined;
     }
 
-    public CiGenericCallback callback() {
-        return callback;
-    }
-    public void setCallback(CiGenericCallback callback) {
-        this.callback = callback;
+    public void setCanBeInlined(boolean canBeInlined) {
+        this.canBeInlined = canBeInlined;
     }
 }
