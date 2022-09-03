@@ -44,14 +44,8 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleLanguage.Env;
-import com.oracle.truffle.api.Scope;
-import com.oracle.truffle.api.interop.ForeignAccess;
-import com.oracle.truffle.api.interop.InteropException;
-import com.oracle.truffle.api.interop.KeyInfo;
-import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
-import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.vm.PolyglotImpl.VMObject;
 
 final class PolyglotLanguageContext implements VMObject {
@@ -64,15 +58,13 @@ final class PolyglotLanguageContext implements VMObject {
     final Map<Class<?>, PolyglotValue> valueCache = new ConcurrentHashMap<>();
     final Map<String, Object> config;
     final PolyglotValue defaultValueCache;
-    OptionValuesImpl optionValues;  // effectively final
+    final OptionValuesImpl optionValues;
     final Value nullValue;
-    String[] applicationArguments;  // effectively final
+    final String[] applicationArguments;
     final Set<PolyglotThread> activePolyglotThreads = new HashSet<>();
     volatile boolean creating; // true when context is currently being created.
     volatile boolean finalized;
     volatile Env env;
-    private final Node keyInfoNode = Message.KEY_INFO.createNode();
-    private final Node readNode = Message.READ.createNode();
 
     PolyglotLanguageContext(PolyglotContextImpl context, PolyglotLanguage language, OptionValuesImpl optionValues, String[] applicationArguments, Map<String, Object> config) {
         this.context = context;
@@ -185,10 +177,6 @@ final class PolyglotLanguageContext implements VMObject {
     }
 
     boolean ensureInitialized(PolyglotLanguage accessingLanguage) {
-        return ensureInitialized(accessingLanguage, false);
-    }
-
-    private boolean ensureInitialized(PolyglotLanguage accessingLanguage, boolean preInitialization) {
         language.ensureInitialized();
 
         if (creating) {
@@ -222,23 +210,19 @@ final class PolyglotLanguageContext implements VMObject {
                     } finally {
                         creating = false;
                     }
-                    if (!preInitialization) {
-                        LANGUAGE.initializeThread(env, Thread.currentThread());
-                    }
+                    LANGUAGE.initializeThread(env, Thread.currentThread());
 
                     LANGUAGE.postInitEnv(env);
 
-                    if (!preInitialization) {
-                        if (!singleThreaded) {
-                            LANGUAGE.initializeMultiThreading(env);
-                        }
+                    if (!singleThreaded) {
+                        LANGUAGE.initializeMultiThreading(env);
+                    }
 
-                        for (PolyglotThreadInfo threadInfo : context.getSeenThreads().values()) {
-                            if (threadInfo.thread == Thread.currentThread()) {
-                                continue;
-                            }
-                            LANGUAGE.initializeThread(env, threadInfo.thread);
+                    for (PolyglotThreadInfo threadInfo : context.getSeenThreads().values()) {
+                        if (threadInfo.thread == Thread.currentThread()) {
+                            continue;
                         }
+                        LANGUAGE.initializeThread(env, threadInfo.thread);
                     }
 
                     return true;
@@ -292,21 +276,6 @@ final class PolyglotLanguageContext implements VMObject {
 
     ToGuestValuesNode createToGuestValues() {
         return new ToGuestValuesNode();
-    }
-
-    void preInitialize() {
-        ensureInitialized(null, true);
-    }
-
-    boolean patch(OptionValuesImpl values, String[] applicationArguments) {
-        this.optionValues = values;
-        this.applicationArguments = applicationArguments;
-        final Env newEnv = LANGUAGE.patchEnvContext(env, context.out, context.err, context.in, config, getOptionValues(), applicationArguments);
-        if (newEnv != null) {
-            env = newEnv;
-            return true;
-        }
-        return false;
     }
 
     final class ToGuestValuesNode {
@@ -564,20 +533,7 @@ final class PolyglotLanguageContext implements VMObject {
 
     Object lookupGuest(String symbolName) {
         ensureInitialized(null);
-        Iterable<?> topScopes = VMAccessor.instrumentAccess().findTopScopes(env);
-        for (Object topScope : topScopes) {
-            Scope scope = (Scope) topScope;
-            TruffleObject variables = (TruffleObject) scope.getVariables();
-            int symbolInfo = ForeignAccess.sendKeyInfo(keyInfoNode, variables, symbolName);
-            if (KeyInfo.isExisting(symbolInfo) && KeyInfo.isReadable(symbolInfo)) {
-                try {
-                    return ForeignAccess.sendRead(readNode, variables, symbolName);
-                } catch (InteropException ex) {
-                    throw new AssertionError(symbolName, ex);
-                }
-            }
-        }
-        return null;
+        return LANGUAGE.lookupSymbol(env, symbolName);
     }
 
     Value lookupHost(String symbolName) {
