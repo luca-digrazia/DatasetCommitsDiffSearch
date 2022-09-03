@@ -896,7 +896,7 @@ public abstract class GraalCompilerTest extends GraalTest {
      * The default implementation in {@link GraalCompilerTest} is to call
      * {@link #parseEager(ResolvedJavaMethod, AllowAssumptions)}.
      */
-    protected final StructuredGraph parseForCompile(ResolvedJavaMethod method) {
+    protected StructuredGraph parseForCompile(ResolvedJavaMethod method) {
         return parseEager(method, AllowAssumptions.YES);
     }
 
@@ -912,7 +912,7 @@ public abstract class GraalCompilerTest extends GraalTest {
      *            be obtained from {@code installedCodeOwner} via
      *            {@link #parseForCompile(ResolvedJavaMethod)}.
      */
-    protected final CompilationResult compile(ResolvedJavaMethod installedCodeOwner, StructuredGraph graph) {
+    protected CompilationResult compile(ResolvedJavaMethod installedCodeOwner, StructuredGraph graph) {
         return compile(installedCodeOwner, graph, getOrCreateCompilationId(installedCodeOwner, graph));
     }
 
@@ -1011,7 +1011,7 @@ public abstract class GraalCompilerTest extends GraalTest {
      * Parses a Java method in {@linkplain GraphBuilderConfiguration#getDefault default} mode to
      * produce a graph.
      */
-    protected final StructuredGraph parseProfiled(ResolvedJavaMethod m, AllowAssumptions allowAssumptions) {
+    protected StructuredGraph parseProfiled(ResolvedJavaMethod m, AllowAssumptions allowAssumptions) {
         return parseProfiled(m, allowAssumptions, getCompilationId(m));
     }
 
@@ -1025,7 +1025,7 @@ public abstract class GraalCompilerTest extends GraalTest {
      *
      * @param methodName the name of the method in {@code this.getClass()} to be parsed
      */
-    protected final StructuredGraph parseEager(String methodName, AllowAssumptions allowAssumptions) {
+    protected StructuredGraph parseEager(String methodName, AllowAssumptions allowAssumptions) {
         return parseEager(getResolvedJavaMethod(methodName), allowAssumptions);
     }
 
@@ -1033,7 +1033,7 @@ public abstract class GraalCompilerTest extends GraalTest {
      * Parses a Java method with {@linkplain GraphBuilderConfiguration#withEagerResolving(boolean)}
      * set to true to produce a graph.
      */
-    protected final StructuredGraph parseEager(ResolvedJavaMethod m, AllowAssumptions allowAssumptions) {
+    protected StructuredGraph parseEager(ResolvedJavaMethod m, AllowAssumptions allowAssumptions) {
         return parseEager(m, allowAssumptions, getCompilationId(m));
     }
 
@@ -1045,7 +1045,7 @@ public abstract class GraalCompilerTest extends GraalTest {
      * Parses a Java method using {@linkplain GraphBuilderConfiguration#withFullInfopoints(boolean)
      * full debug} set to true to produce a graph.
      */
-    protected final StructuredGraph parseDebug(ResolvedJavaMethod m, AllowAssumptions allowAssumptions) {
+    protected StructuredGraph parseDebug(ResolvedJavaMethod m, AllowAssumptions allowAssumptions) {
         return parseDebug(m, allowAssumptions, getCompilationId(m));
     }
 
