@@ -53,8 +53,6 @@ import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.virtual.*;
 import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.common.*;
-import com.oracle.graal.phases.common.inlining.*;
 import com.oracle.graal.phases.schedule.*;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.phases.util.*;
@@ -87,81 +85,19 @@ public abstract class GraalCompilerTest extends GraalTest {
     private final Backend backend;
     private final Suites suites;
 
-    /**
-     * Can be overridden by unit tests to verify properties of the graph.
-     *
-     * @param graph the graph at the end of HighTier
-     */
-    protected boolean checkHighTierGraph(StructuredGraph graph) {
-        return true;
-    }
-
-    /**
-     * Can be overridden by unit tests to verify properties of the graph.
-     *
-     * @param graph the graph at the end of MidTier
-     */
-    protected boolean checkMidTierGraph(StructuredGraph graph) {
-        return true;
-    }
-
-    /**
-     * Can be overridden by unit tests to verify properties of the graph.
-     *
-     * @param graph the graph at the end of LowTier
-     */
-    protected boolean checkLowTierGraph(StructuredGraph graph) {
-        return true;
-    }
-
     private static boolean substitutionsInstalled;
 
     private void installSubstitutions() {
         if (!substitutionsInstalled) {
-            this.providers.getReplacements().registerSubstitutions(GraalCompilerTest.class, InjectProfileDataSubstitutions.class);
+            this.providers.getReplacements().registerSubstitutions(InjectProfileDataSubstitutions.class);
             substitutionsInstalled = true;
         }
-    }
-
-    protected Suites createSuites() {
-        Suites ret = backend.getSuites().createSuites();
-        ListIterator<BasePhase<? super HighTierContext>> iter = ret.getHighTier().findPhase(InliningPhase.class);
-        PhaseSuite.findNextPhase(iter, CanonicalizerPhase.class);
-        iter.add(new Phase("ComputeLoopFrequenciesPhase") {
-
-            @Override
-            protected void run(StructuredGraph graph) {
-                ComputeLoopFrequenciesClosure.compute(graph);
-            }
-        });
-        ret.getHighTier().appendPhase(new Phase("CheckGraphPhase") {
-
-            @Override
-            protected void run(StructuredGraph graph) {
-                assert checkHighTierGraph(graph);
-            }
-        });
-        ret.getMidTier().appendPhase(new Phase("CheckGraphPhase") {
-
-            @Override
-            protected void run(StructuredGraph graph) {
-                assert checkMidTierGraph(graph);
-            }
-        });
-        ret.getLowTier().appendPhase(new Phase("CheckGraphPhase") {
-
-            @Override
-            protected void run(StructuredGraph graph) {
-                assert checkLowTierGraph(graph);
-            }
-        });
-        return ret;
     }
 
     public GraalCompilerTest() {
         this.backend = Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend();
         this.providers = getBackend().getProviders();
-        this.suites = createSuites();
+        this.suites = backend.getSuites().createSuites();
         installSubstitutions();
     }
 
@@ -181,7 +117,7 @@ public abstract class GraalCompilerTest extends GraalTest {
             this.backend = runtime.getHostBackend();
         }
         this.providers = backend.getProviders();
-        this.suites = createSuites();
+        this.suites = backend.getSuites().createSuites();
         installSubstitutions();
     }
 
@@ -592,7 +528,7 @@ public abstract class GraalCompilerTest extends GraalTest {
                 actual.exception.printStackTrace();
                 Assert.fail("expected " + expect.returnValue + " but got an exception");
             }
-            assertDeepEquals(expect.returnValue, actual.returnValue);
+            assertEquals(expect.returnValue, actual.returnValue);
         }
     }
 
