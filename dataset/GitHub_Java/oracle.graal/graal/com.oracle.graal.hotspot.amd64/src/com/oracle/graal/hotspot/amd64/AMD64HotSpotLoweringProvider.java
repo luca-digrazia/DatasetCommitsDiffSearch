@@ -24,10 +24,8 @@ package com.oracle.graal.hotspot.amd64;
 
 import static com.oracle.graal.hotspot.HotSpotBackend.Options.GraalArithmeticStubs;
 import static com.oracle.graal.hotspot.amd64.AMD64HotSpotForeignCallsProvider.ARITHMETIC_COS_STUB;
-import static com.oracle.graal.hotspot.amd64.AMD64HotSpotForeignCallsProvider.ARITHMETIC_EXP_STUB;
 import static com.oracle.graal.hotspot.amd64.AMD64HotSpotForeignCallsProvider.ARITHMETIC_LOG10_STUB;
 import static com.oracle.graal.hotspot.amd64.AMD64HotSpotForeignCallsProvider.ARITHMETIC_LOG_STUB;
-import static com.oracle.graal.hotspot.amd64.AMD64HotSpotForeignCallsProvider.ARITHMETIC_POW_STUB;
 import static com.oracle.graal.hotspot.amd64.AMD64HotSpotForeignCallsProvider.ARITHMETIC_SIN_STUB;
 import static com.oracle.graal.hotspot.amd64.AMD64HotSpotForeignCallsProvider.ARITHMETIC_TAN_STUB;
 
@@ -43,7 +41,6 @@ import com.oracle.graal.nodes.calc.FloatConvertNode;
 import com.oracle.graal.nodes.spi.LoweringTool;
 import com.oracle.graal.replacements.amd64.AMD64ConvertSnippets;
 import com.oracle.graal.replacements.nodes.UnaryMathIntrinsicNode.UnaryOperation;
-import com.oracle.graal.replacements.nodes.BinaryMathIntrinsicNode.BinaryOperation;
 
 import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.hotspot.HotSpotConstantReflectionProvider;
@@ -74,7 +71,7 @@ public class AMD64HotSpotLoweringProvider extends DefaultHotSpotLoweringProvider
     }
 
     @Override
-    protected ForeignCallDescriptor foreignCallForUnaryOperation(UnaryOperation operation) {
+    protected ForeignCallDescriptor toForeignCall(UnaryOperation operation) {
         if (GraalArithmeticStubs.getValue()) {
             switch (operation) {
                 case LOG:
@@ -87,21 +84,10 @@ public class AMD64HotSpotLoweringProvider extends DefaultHotSpotLoweringProvider
                     return ARITHMETIC_COS_STUB;
                 case TAN:
                     return ARITHMETIC_TAN_STUB;
-                case EXP:
-                    return ARITHMETIC_EXP_STUB;
             }
         }
-        // Lower only using LIRGenerator
-        return null;
-    }
-
-    @Override
-    protected ForeignCallDescriptor foreignCallForBinaryOperation(BinaryOperation operation) {
-        if (GraalArithmeticStubs.getValue()) {
-            switch (operation) {
-                case POW:
-                    return ARITHMETIC_POW_STUB;
-            }
+        if (operation == UnaryOperation.EXP) {
+            return operation.foreignCallDescriptor;
         }
         // Lower only using LIRGenerator
         return null;
