@@ -66,11 +66,6 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
 
     class BinutilsCCLinkerInvocation extends CCLinkerInvocation {
 
-        BinutilsCCLinkerInvocation() {
-            additionalPreOptions.add("-z");
-            additionalPreOptions.add("noexecstack");
-        }
-
         @Override
         protected void addOneSymbolAliasOption(List<String> cmd, Entry<String, String> ent) {
             cmd.add("-Wl,--defsym");
