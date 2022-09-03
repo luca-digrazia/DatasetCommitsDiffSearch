@@ -24,41 +24,37 @@ package com.oracle.truffle.api.frame;
 
 import java.util.*;
 
-import com.oracle.truffle.api.*;
-import com.oracle.truffle.api.impl.*;
-
 /**
  * Descriptor of the slots of frame objects. Multiple frame instances are associated with one such
  * descriptor.
  */
-public final class FrameDescriptor implements Cloneable {
+public final class FrameDescriptor {
 
-    private final FrameTypeConversion typeConversion;
+    protected final TypeConversion typeConversion;
     private final ArrayList<FrameSlotImpl> slots;
+    private FrameVersionImpl lastVersion;
     private final HashMap<Object, FrameSlotImpl> identifierToSlotMap;
-    private Assumption version;
 
     public FrameDescriptor() {
-        this(DefaultFrameTypeConversion.getInstance());
+        this(DefaultTypeConversion.getInstance());
     }
 
-    public FrameDescriptor(FrameTypeConversion typeConversion) {
+    public FrameDescriptor(TypeConversion typeConversion) {
         this.typeConversion = typeConversion;
         slots = new ArrayList<>();
         identifierToSlotMap = new HashMap<>();
-        version = createVersion();
+        lastVersion = new FrameVersionImpl();
     }
 
     public FrameSlot addFrameSlot(Object identifier) {
-        return addFrameSlot(identifier, null);
+        return addFrameSlot(identifier, typeConversion.getTopType());
     }
 
-    public FrameSlot addFrameSlot(Object identifier, FrameSlotKind kind) {
+    public FrameSlot addFrameSlot(Object identifier, Class<?> type) {
         assert !identifierToSlotMap.containsKey(identifier);
-        FrameSlotImpl slot = new FrameSlotImpl(this, identifier, slots.size(), kind);
+        FrameSlotImpl slot = new FrameSlotImpl(this, identifier, slots.size(), type);
         slots.add(slot);
         identifierToSlotMap.put(identifier, slot);
-        updateVersion();
         return slot;
     }
 
@@ -74,12 +70,8 @@ public final class FrameDescriptor implements Cloneable {
         return addFrameSlot(identifier);
     }
 
-    public FrameSlot findOrAddFrameSlot(Object identifier, FrameSlotKind kind) {
-        FrameSlot result = findFrameSlot(identifier);
-        if (result != null) {
-            return result;
-        }
-        return addFrameSlot(identifier, kind);
+    public FrameVersion getCurrentVersion() {
+        return lastVersion;
     }
 
     public int getSize() {
@@ -90,42 +82,121 @@ public final class FrameDescriptor implements Cloneable {
         return Collections.unmodifiableList(slots);
     }
 
-    /**
-     * (db) to retrieve the list of all the identifiers associated with this frame descriptor.
-     * 
-     * @return the list of all the identifiers in this frame descriptor
-     */
-    public Set<Object> getIdentifiers() {
-        return Collections.unmodifiableSet(identifierToSlotMap.keySet());
+    protected void appendVersion(FrameVersionImpl newVersion) {
+        lastVersion.next = newVersion;
+        lastVersion = newVersion;
+    }
+}
+
+class FrameVersionImpl implements FrameVersion {
+
+    protected FrameVersionImpl next;
+
+    @Override
+    public final FrameVersion getNext() {
+        return next;
+    }
+}
+
+class TypeChangeFrameVersionImpl extends FrameVersionImpl implements FrameVersion.TypeChange {
+
+    private final FrameSlotImpl slot;
+    private final Class<?> oldType;
+    private final Class<?> newType;
+
+    protected TypeChangeFrameVersionImpl(FrameSlotImpl slot, Class<?> oldType, Class<?> newType) {
+        this.slot = slot;
+        this.oldType = oldType;
+        this.newType = newType;
     }
 
-    /**
-     * (db): this method is used for creating a clone of the {@link FrameDescriptor} object ready
-     * for parallel execution.
-     */
-    public FrameDescriptor copy() {
-        FrameDescriptor clonedFrameDescriptor = new FrameDescriptor(this.typeConversion);
-        for (int i = 0; i < this.getSlots().size(); i++) {
-            Object identifier = this.getSlots().get(i).getIdentifier();
-            clonedFrameDescriptor.addFrameSlot(identifier);
+    @Override
+    public final void applyTransformation(Frame frame) {
+        Object value = slot.getValue(oldType, frame);
+        slot.setValue(newType, frame, value);
+    }
+}
+
+class FrameSlotImpl implements FrameSlot {
+
+    private final FrameDescriptor descriptor;
+    private final Object identifier;
+    private final int index;
+    private Class<?> type;
+    private ArrayList<FrameSlotTypeListener> listeners;
+
+    protected FrameSlotImpl(FrameDescriptor descriptor, Object identifier, int index, Class<?> type) {
+        this.descriptor = descriptor;
+        this.identifier = identifier;
+        this.index = index;
+        this.type = type;
+        assert type != null;
+    }
+
+    public Object getIdentifier() {
+        return identifier;
+    }
+
+    public int getIndex() {
+        return index;
+    }
+
+    public Class<?> getType() {
+        return type;
+    }
+
+    protected Object getValue(Class<?> accessType, Frame frame) {
+        if (accessType == Integer.class) {
+            return frame.getInt(this);
+        } else if (accessType == Long.class) {
+            return frame.getLong(this);
+        } else if (accessType == Float.class) {
+            return frame.getFloat(this);
+        } else if (accessType == Double.class) {
+            return frame.getDouble(this);
+        } else {
+            return frame.getObject(this);
         }
-        return clonedFrameDescriptor;
     }
 
-    void updateVersion() {
-        version.invalidate();
-        version = createVersion();
+    protected void setValue(Class<?> accessType, Frame frame, Object value) {
+        Object newValue = descriptor.typeConversion.convertTo(accessType, value);
+        if (accessType == Integer.class) {
+            frame.setInt(this, (Integer) newValue);
+        } else if (accessType == Long.class) {
+            frame.setLong(this, (Long) newValue);
+        } else if (accessType == Float.class) {
+            frame.setFloat(this, (Float) newValue);
+        } else if (accessType == Double.class) {
+            frame.setDouble(this, (Double) newValue);
+        } else {
+            frame.setObject(this, newValue);
+        }
     }
 
-    public Assumption getVersion() {
-        return version;
+    public void setType(final Class<?> type) {
+        final Class<?> oldType = this.type;
+        this.type = type;
+        ArrayList<FrameSlotTypeListener> oldListeners = this.listeners;
+        this.listeners = null;
+        if (oldListeners != null) {
+            for (FrameSlotTypeListener listener : oldListeners) {
+                listener.typeChanged(this, oldType);
+            }
+        }
+        descriptor.appendVersion(new TypeChangeFrameVersionImpl(this, oldType, type));
     }
 
-    private static Assumption createVersion() {
-        return Truffle.getRuntime().createAssumption("frame version");
+    @Override
+    public String toString() {
+        return "[" + index + "," + identifier + "]";
     }
 
-    public FrameTypeConversion getTypeConversion() {
-        return typeConversion;
+    @Override
+    public void registerOneShotTypeListener(FrameSlotTypeListener listener) {
+        if (listeners == null) {
+            listeners = new ArrayList<>();
+        }
+        listeners.add(listener);
     }
 }
