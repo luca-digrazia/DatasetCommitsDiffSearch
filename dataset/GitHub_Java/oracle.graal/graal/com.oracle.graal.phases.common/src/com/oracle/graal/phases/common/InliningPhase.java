@@ -89,21 +89,21 @@ public class InliningPhase extends Phase {
         return inliningCount;
     }
 
-    public static void storeStatisticsAfterInlining(StructuredGraph graph) {
-        ResolvedJavaMethod method = graph.method();
-        if (method != null) {
-            CompiledMethodInfo info = compiledMethodInfo(method);
-            double summedUpProbabilityOfRemainingInvokes = sumUpInvokeProbabilities(graph);
-            info.setSummedUpProbabilityOfRemainingInvokes(summedUpProbabilityOfRemainingInvokes);
-        }
+    public static void storeHighLevelStatistics(StructuredGraph graph) {
+        CompiledMethodInfo info = compiledMethodInfo(graph.method());
+        double summedUpProbabilityOfRemainingInvokes = sumUpInvokeProbabilities(graph);
+        info.setSummedUpProbabilityOfRemainingInvokes(summedUpProbabilityOfRemainingInvokes);
+        info.setHighLevelNodeCount(graph.getNodeCount());
     }
 
-    public static void storeStatisticsAfterLowTier(StructuredGraph graph) {
-        ResolvedJavaMethod method = graph.method();
-        if (method != null) {
-            CompiledMethodInfo info = compiledMethodInfo(graph.method());
-            info.setLowLevelNodeCount(graph.getNodeCount());
-        }
+    public static void storeMidLevelStatistics(StructuredGraph graph) {
+        CompiledMethodInfo info = compiledMethodInfo(graph.method());
+        info.setMidLevelNodeCount(graph.getNodeCount());
+    }
+
+    public static void storeLowLevelStatistics(StructuredGraph graph) {
+        CompiledMethodInfo info = compiledMethodInfo(graph.method());
+        info.setLowLevelNodeCount(graph.getNodeCount());
     }
 
     @Override
@@ -176,7 +176,7 @@ public class InliningPhase extends Phase {
         InlineInfo callee = calleeInfo.callee();
         try {
             List<Node> invokeUsages = callee.invoke().asNode().usages().snapshot();
-            callee.inline(runtime, callerAssumptions, replacements);
+            callee.inline(runtime, callerAssumptions);
             callerAssumptions.record(calleeInfo.assumptions());
             metricInliningRuns.increment();
             Debug.dump(callerGraph, "after %s", callee);
@@ -244,31 +244,33 @@ public class InliningPhase extends Phase {
                     parseBytecodes(newGraph, assumptions);
                 }
 
-                boolean callerHasMoreInformationAboutArguments = false;
-                NodeInputList<ValueNode> args = invoke.callTarget().arguments();
-                for (LocalNode localNode : newGraph.getNodes(LocalNode.class).snapshot()) {
-                    ValueNode arg = args.get(localNode.index());
-                    if (arg.isConstant()) {
-                        Constant constant = arg.asConstant();
-                        newGraph.replaceFloating(localNode, ConstantNode.forConstant(constant, runtime, newGraph));
-                        callerHasMoreInformationAboutArguments = true;
-                    } else {
-                        Stamp joinedStamp = localNode.stamp().join(arg.stamp());
-                        if (!joinedStamp.equals(localNode.stamp())) {
-                            localNode.setStamp(joinedStamp);
+                if (GraalOptions.PropagateArgumentsDuringInlining) {
+                    boolean callerHasMoreInformationAboutArguments = false;
+                    NodeInputList<ValueNode> args = invoke.callTarget().arguments();
+                    for (LocalNode localNode : newGraph.getNodes(LocalNode.class).snapshot()) {
+                        ValueNode arg = args.get(localNode.index());
+                        if (arg.isConstant()) {
+                            Constant constant = arg.asConstant();
+                            newGraph.replaceFloating(localNode, ConstantNode.forConstant(constant, runtime, newGraph));
                             callerHasMoreInformationAboutArguments = true;
+                        } else {
+                            Stamp joinedStamp = localNode.stamp().join(arg.stamp());
+                            if (!joinedStamp.equals(localNode.stamp())) {
+                                localNode.setStamp(joinedStamp);
+                                callerHasMoreInformationAboutArguments = true;
+                            }
                         }
                     }
-                }
 
-                if (!callerHasMoreInformationAboutArguments) {
-                    // TODO (chaeubl): if args are not more concrete, inlining should be avoided
-                    // in most cases or we could at least use the previous graph size + invoke
-                    // probability to check the inlining
-                }
+                    if (!callerHasMoreInformationAboutArguments) {
+                        // TODO (chaeubl): if args are not more concrete, inlining should be avoided
+                        // in most cases or we could at least use the previous graph size + invoke
+                        // probability to check the inlining
+                    }
 
-                if (GraalOptions.OptCanonicalizer) {
-                    new CanonicalizerPhase.Instance(runtime, assumptions).apply(newGraph);
+                    if (GraalOptions.OptCanonicalizer) {
+                        new CanonicalizerPhase.Instance(runtime, assumptions).apply(newGraph);
+                    }
                 }
 
                 return newGraph;
@@ -376,6 +378,22 @@ public class InliningPhase extends Phase {
             return true;
         }
 
+        protected static int previousHighLevelGraphSize(InlineInfo info) {
+            int size = 0;
+            for (int i = 0; i < info.numberOfMethods(); i++) {
+                size += compiledMethodInfo(info.methodAt(i)).highLevelNodeCount();
+            }
+            return size;
+        }
+
+        protected static int previousMidLevelGraphSize(InlineInfo info) {
+            int size = 0;
+            for (int i = 0; i < info.numberOfMethods(); i++) {
+                size += compiledMethodInfo(info.methodAt(i)).midLevelNodeCount();
+            }
+            return size;
+        }
+
         protected static int previousLowLevelGraphSize(InlineInfo info) {
             int size = 0;
             for (int i = 0; i < info.numberOfMethods(); i++) {
@@ -439,6 +457,16 @@ public class InliningPhase extends Phase {
             }
 
             double inliningBonus = getInliningBonus(info);
+
+            int highLevelGraphSize = previousHighLevelGraphSize(info);
+            if (GraalOptions.SmallCompiledHighLevelGraphSize > 0 && highLevelGraphSize > GraalOptions.SmallCompiledHighLevelGraphSize * inliningBonus) {
+                return InliningUtil.logNotInlinedMethod(info, "too large previous high-level graph: %d", highLevelGraphSize);
+            }
+
+            int midLevelGraphSize = previousMidLevelGraphSize(info);
+            if (GraalOptions.SmallCompiledMidLevelGraphSize > 0 && midLevelGraphSize > GraalOptions.SmallCompiledMidLevelGraphSize * inliningBonus) {
+                return InliningUtil.logNotInlinedMethod(info, "too large previous mid-level graph: %d", midLevelGraphSize);
+            }
 
             int lowLevelGraphSize = previousLowLevelGraphSize(info);
             if (GraalOptions.SmallCompiledLowLevelGraphSize > 0 && lowLevelGraphSize > GraalOptions.SmallCompiledLowLevelGraphSize * inliningBonus) {
@@ -546,7 +574,7 @@ public class InliningPhase extends Phase {
             return result;
         }
 
-        private void queueMerge(AbstractEndNode end) {
+        private void queueMerge(EndNode end) {
             MergeNode merge = end.merge();
             if (!queuedNodes.isMarked(merge) && visitedAllEnds(merge)) {
                 queuedNodes.mark(merge);
@@ -780,10 +808,28 @@ public class InliningPhase extends Phase {
 
     private static class CompiledMethodInfo {
 
+        private int highLevelNodes;
+        private int midLevelNodes;
         private int lowLevelNodes;
         private double summedUpProbabilityOfRemainingInvokes;
 
         public CompiledMethodInfo() {
+        }
+
+        public int highLevelNodeCount() {
+            return highLevelNodes;
+        }
+
+        public void setHighLevelNodeCount(int highLevelNodes) {
+            this.highLevelNodes = highLevelNodes;
+        }
+
+        public int midLevelNodeCount() {
+            return midLevelNodes;
+        }
+
+        public void setMidLevelNodeCount(int midLevelNodes) {
+            this.midLevelNodes = midLevelNodes;
         }
 
         public int lowLevelNodeCount() {

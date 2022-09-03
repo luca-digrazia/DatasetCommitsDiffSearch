@@ -34,13 +34,9 @@ public final class GraalOptions {
     private static final boolean ____ = false;
     // Checkstyle: resume
 
-    public static int     Threads;
-    static {
-        Threads = Runtime.getRuntime().availableProcessors();
-    }
+    public static int     Threads                            = 4;
 
     public static String  CompilerConfiguration              = "basic";
-    public static String  GraalRuntime                       = "basic";
 
     // inlining settings
     public static boolean Inline                             = true;
@@ -48,8 +44,7 @@ public final class GraalOptions {
     public static boolean Intrinsify                         = true;
            static boolean InlineMonomorphicCalls             = true;
            static boolean InlinePolymorphicCalls             = true;
-           static boolean InlineMegamorphicCalls             = true;
-    public static double  MegamorphicInliningMinMethodProbability = 0.33;
+           static boolean InlineMegamorphicCalls             = ____;
     public static int     MaximumDesiredSize                 = 5000;
     public static int     MaximumRecursiveInlining           = 1;
     public static float   BoostInliningForEscapeAnalysis     = 2f;
@@ -58,9 +53,12 @@ public final class GraalOptions {
     public static boolean IterativeInlining                  = ____;
 
     public static int     TrivialInliningSize                = 10;
-    public static int     MaximumInliningSize                = 300;
-    public static int     SmallCompiledLowLevelGraphSize     = 300;
+    public static int     MaximumInliningSize                = 180;
+    public static int     SmallCompiledHighLevelGraphSize    = 0;
+    public static int     SmallCompiledMidLevelGraphSize     = 0;
+    public static int     SmallCompiledLowLevelGraphSize     = 250;
     public static double  LimitInlinedInvokes                = 10.0;
+    public static boolean PropagateArgumentsDuringInlining   = true;
 
     // escape analysis settings
     public static boolean PartialEscapeAnalysis              = true;
@@ -105,7 +103,6 @@ public final class GraalOptions {
     public static int     LoopMaxUnswitch                    = 3;
     public static int     LoopUnswitchMaxIncrease            = 50;
     public static int     LoopUnswitchUncertaintyBoost       = 5;
-    public static boolean UseLoopLimitChecks                 = true;
 
     // debugging settings
     public static boolean ZapStackOnMethodEntry              = ____;
@@ -222,7 +219,6 @@ public final class GraalOptions {
     public static boolean IntrinsifyUnsafeMethods            = true;
     public static boolean IntrinsifyMathMethods              = true;
     public static boolean IntrinsifyAESMethods               = true;
-    public static boolean IntrinsifyReflectionMethods        = true;
     public static boolean IntrinsifyInstalledCodeMethods     = true;
     public static boolean IntrinsifyCallSiteTarget           = true;
     /**
