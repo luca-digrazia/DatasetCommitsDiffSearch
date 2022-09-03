@@ -243,18 +243,14 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
         return true;
     }
 
-    private void createInstruments(final Map<PolyglotInstrument, Map<String, String>> instrumentsOptions) {
+    private static void createInstruments(final Map<PolyglotInstrument, Map<String, String>> instrumentsOptions) {
         for (PolyglotInstrument instrument : instrumentsOptions.keySet()) {
             instrument.getOptionValues().putAll(instrumentsOptions.get(instrument));
         }
 
-        try {
-            for (PolyglotInstrument instrument : instrumentsOptions.keySet()) {
-                // we got options for this instrument -> create it.
-                instrument.ensureCreated();
-            }
-        } catch (Throwable e) {
-            throw PolyglotImpl.wrapGuestException(this, e);
+        for (PolyglotInstrument instrument : instrumentsOptions.keySet()) {
+            // we got options for this instrument -> create it.
+            instrument.ensureCreated();
         }
     }
 
@@ -632,16 +628,6 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
             }
 
             contexts.clear();
-            for (Instrument instrument : idToPublicInstrument.values()) {
-                PolyglotInstrument instrumentImpl = (PolyglotInstrument) getAPIAccess().getImpl(instrument);
-                try {
-                    instrumentImpl.notifyClosing();
-                } catch (Throwable e) {
-                    if (!ignoreCloseFailure) {
-                        throw e;
-                    }
-                }
-            }
             for (Instrument instrument : idToPublicInstrument.values()) {
                 PolyglotInstrument instrumentImpl = (PolyglotInstrument) getAPIAccess().getImpl(instrument);
                 try {

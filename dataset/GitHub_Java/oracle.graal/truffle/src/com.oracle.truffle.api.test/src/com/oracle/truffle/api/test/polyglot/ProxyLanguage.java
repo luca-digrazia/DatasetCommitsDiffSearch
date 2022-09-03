@@ -22,8 +22,6 @@
  */
 package com.oracle.truffle.api.test.polyglot;
 
-import java.util.function.Consumer;
-
 import org.graalvm.options.OptionDescriptors;
 
 import com.oracle.truffle.api.CallTarget;
@@ -58,16 +56,9 @@ public class ProxyLanguage extends TruffleLanguage<LanguageContext> {
     private boolean wrapper = true;
     protected ProxyLanguage languageInstance;
 
-    private Consumer<LanguageContext> onCreate;
-
-    public static <T extends ProxyLanguage> T setDelegate(T delegate) {
-        ((ProxyLanguage) delegate).wrapper = false;
+    public static void setDelegate(ProxyLanguage delegate) {
+        delegate.wrapper = false;
         ProxyLanguage.delegate = delegate;
-        return delegate;
-    }
-
-    public void setOnCreate(Consumer<LanguageContext> onCreate) {
-        this.onCreate = onCreate;
     }
 
     public static LanguageContext getCurrentContext() {
@@ -84,11 +75,7 @@ public class ProxyLanguage extends TruffleLanguage<LanguageContext> {
             delegate.languageInstance = this;
             return delegate.createContext(env);
         } else {
-            LanguageContext c = new LanguageContext(env);
-            if (onCreate != null) {
-                onCreate.accept(c);
-            }
-            return c;
+            return new LanguageContext(env);
         }
     }
 
@@ -172,16 +159,6 @@ public class ProxyLanguage extends TruffleLanguage<LanguageContext> {
             super.initializeContext(context);
         }
 
-    }
-
-    @Override
-    protected boolean initializeMultiContext() {
-        if (wrapper) {
-            delegate.languageInstance = this;
-            return delegate.initializeMultiContext();
-        } else {
-            return super.initializeMultiContext();
-        }
     }
 
     @Override
