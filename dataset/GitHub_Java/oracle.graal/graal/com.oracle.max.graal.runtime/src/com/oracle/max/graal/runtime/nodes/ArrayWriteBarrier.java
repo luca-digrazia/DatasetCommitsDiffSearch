@@ -30,41 +30,30 @@ import com.sun.cri.ci.*;
 
 
 public final class ArrayWriteBarrier extends WriteBarrier {
-    private static final int INPUT_COUNT = 2;
-    private static final int INPUT_OBJECT = 0;
-    private static final int INPUT_LOCATION = 1;
 
-    private static final int SUCCESSOR_COUNT = 0;
+    @Input private Value object;
+    @Input private LocationNode location;
 
-    @Override
-    protected int inputCount() {
-        return super.inputCount() + INPUT_COUNT;
+    public Value object() {
+        return object;
     }
 
-    /**
-     * The instruction that produces the object tested against null.
-     */
-     public Value object() {
-        return (Value) inputs().get(super.inputCount() + INPUT_OBJECT);
+    public void setObject(Value x) {
+        updateUsages(this.object, x);
+        this.object = x;
     }
 
-    public void setObject(Value n) {
-        inputs().set(super.inputCount() + INPUT_OBJECT, n);
+    public LocationNode location() {
+        return location;
     }
 
-    /**
-     * The instruction that produces the object tested against null.
-     */
-     public LocationNode location() {
-        return (LocationNode) inputs().get(super.inputCount() + INPUT_LOCATION);
-    }
-
-    public void setLocation(LocationNode n) {
-        inputs().set(super.inputCount() + INPUT_LOCATION, n);
+    public void setLocation(LocationNode x) {
+        updateUsages(location, x);
+        location = x;
     }
 
     public ArrayWriteBarrier(Value object, LocationNode index, Graph graph) {
-        super(INPUT_COUNT, SUCCESSOR_COUNT, graph);
+        super(graph);
         this.setObject(object);
         this.setLocation(index);
     }
@@ -90,12 +79,5 @@ public final class ArrayWriteBarrier extends WriteBarrier {
     @Override
     public void print(LogStream out) {
         out.print("field write barrier ").print(object());
-    }
-
-    @Override
-    public Node copy(Graph into) {
-        ArrayWriteBarrier x = new ArrayWriteBarrier(null, null, into);
-        super.copyInto(x);
-        return x;
     }
 }

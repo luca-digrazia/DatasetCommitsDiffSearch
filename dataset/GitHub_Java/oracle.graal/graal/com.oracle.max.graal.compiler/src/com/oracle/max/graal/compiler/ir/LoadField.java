@@ -23,8 +23,10 @@
 package com.oracle.max.graal.compiler.ir;
 
 import com.oracle.max.graal.compiler.debug.*;
-import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.Canonicalizable;
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.CanonicalizerOp;
+import com.oracle.max.graal.compiler.phases.*;
 import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.NotifyReProcess;
+import com.oracle.max.graal.compiler.phases.LoweringPhase.LoweringOp;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
@@ -32,11 +34,11 @@ import com.sun.cri.ri.*;
 /**
  * The {@code LoadField} instruction represents a read of a static or instance field.
  */
-public final class LoadField extends AccessField implements Canonicalizable {
+public final class LoadField extends AccessField {
+    private static final LoadFieldCanonicalizerOp CANONICALIZER = new LoadFieldCanonicalizerOp();
 
     /**
      * Creates a new LoadField instance.
-     *
      * @param object the receiver object
      * @param field the compiler interface field
      * @param isStatic indicates if the field is static
@@ -50,7 +52,6 @@ public final class LoadField extends AccessField implements Canonicalizable {
 
     /**
      * Gets the declared type of the field being accessed.
-     *
      * @return the declared type of the field being accessed.
      */
     @Override
@@ -59,9 +60,9 @@ public final class LoadField extends AccessField implements Canonicalizable {
     }
 
     /**
-     * Gets the exact type of the field being accessed. If the field type is a primitive array or an instance class and
-     * the class is loaded and final, then the exact type is the same as the declared type. Otherwise it is {@code null}
-     *
+     * Gets the exact type of the field being accessed. If the field type is
+     * a primitive array or an instance class and the class is loaded and final,
+     * then the exact type is the same as the declared type. Otherwise it is {@code null}
      * @return the exact type of the field if known; {@code null} otherwise
      */
     @Override
@@ -77,7 +78,12 @@ public final class LoadField extends AccessField implements Canonicalizable {
 
     @Override
     public void print(LogStream out) {
-        out.print(object()).print(".").print(field.name()).print(" [field: ").print(CiUtil.format("%h.%n:%t", field, false)).print("]");
+        out.print(object()).
+        print(".").
+        print(field.name()).
+        print(" [field: ").
+        print(CiUtil.format("%h.%n:%t", field, false)).
+        print("]");
     }
 
     @Override
@@ -99,17 +105,35 @@ public final class LoadField extends AccessField implements Canonicalizable {
         return null;
     }
 
+    @SuppressWarnings("unchecked")
     @Override
-    public Node canonical(NotifyReProcess reProcess) {
-        CiConstant constant = null;
-        if (isStatic()) {
-            constant = field().constantValue(null);
-        } else if (object().isConstant()) {
-            constant = field().constantValue(object().asConstant());
+    public <T extends Op> T lookup(Class<T> clazz) {
+        if (clazz == CanonicalizerOp.class) {
+            return (T) CANONICALIZER;
+        } else if (clazz == LoweringOp.class) {
+            return (T) LoweringPhase.DELEGATE_TO_RUNTIME;
         }
-        if (constant != null) {
-            return new Constant(constant, graph());
+        return super.lookup(clazz);
+    }
+
+    private static class LoadFieldCanonicalizerOp implements CanonicalizerOp {
+        @Override
+        public Node canonical(Node node, NotifyReProcess reProcess) {
+            LoadField loadField = (LoadField) node;
+            Graph graph = node.graph();
+            CiConstant constant = null;
+            if (loadField.isStatic()) {
+                    constant = loadField.field().constantValue(null);
+            } else {
+                Value object = loadField.object();
+                if (object.isConstant()) {
+                    constant = loadField.field().constantValue(object.asConstant());
+                }
+            }
+            if (constant != null) {
+                return new Constant(constant, graph);
+            }
+            return loadField;
         }
-        return this;
     }
 }

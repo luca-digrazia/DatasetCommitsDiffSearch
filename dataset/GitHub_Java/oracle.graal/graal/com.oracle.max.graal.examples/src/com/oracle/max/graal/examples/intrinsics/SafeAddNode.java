@@ -28,10 +28,15 @@ import com.oracle.max.graal.graph.*;
 import com.sun.cri.bytecode.*;
 import com.sun.cri.ci.*;
 
-@NodeInfo(shortName = "[+]")
+
 public final class SafeAddNode extends IntegerArithmeticNode {
     public SafeAddNode(Value x, Value y, Graph graph) {
         super(CiKind.Int, Bytecodes.LADD, x, y, graph);
+    }
+
+    @Override
+    public String shortName() {
+        return "[+]";
     }
 
     @SuppressWarnings("unchecked")

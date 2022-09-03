@@ -22,7 +22,11 @@
  */
 package com.oracle.max.graal.compiler.ir;
 
+import java.util.*;
+
 import com.oracle.max.graal.compiler.debug.*;
+import com.oracle.max.graal.compiler.phases.EscapeAnalysisPhase.EscapeField;
+import com.oracle.max.graal.compiler.phases.EscapeAnalysisPhase.EscapeOp;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
@@ -30,10 +34,7 @@ import com.sun.cri.ri.*;
 /**
  * The {@code NewInstance} instruction represents the allocation of an instance class object.
  */
-public final class NewInstance extends FloatingNode {
-
-    private static final int INPUT_COUNT = 0;
-    private static final int SUCCESSOR_COUNT = 0;
+public final class NewInstance extends FixedNodeWithNext {
 
     final RiType instanceClass;
     public final int cpi;
@@ -46,7 +47,7 @@ public final class NewInstance extends FloatingNode {
      * @param graph
      */
     public NewInstance(RiType type, int cpi, RiConstantPool constantPool, Graph graph) {
-        super(CiKind.Object, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+        super(CiKind.Object, graph);
         this.instanceClass = type;
         this.cpi = cpi;
         this.constantPool = constantPool;
@@ -81,8 +82,95 @@ public final class NewInstance extends FloatingNode {
     }
 
     @Override
-    public Node copy(Graph into) {
-        NewInstance x = new NewInstance(instanceClass, cpi, constantPool, into);
-        return x;
+    public Map<Object, Object> getDebugProperties() {
+        Map<Object, Object> properties = super.getDebugProperties();
+        properties.put("instanceClass", instanceClass);
+        properties.put("cpi", cpi);
+        return properties;
     }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <T extends Op> T lookup(Class<T> clazz) {
+        if (clazz == EscapeOp.class) {
+            return (T) ESCAPE;
+        }
+        return super.lookup(clazz);
+    }
+
+    private static final EscapeOp ESCAPE = new EscapeOp() {
+
+        @Override
+        public boolean canAnalyze(Node node) {
+            return ((NewInstance) node).instanceClass().isResolved();
+        }
+
+        @Override
+        public boolean escape(Node node, Node usage) {
+            if (usage instanceof LoadField) {
+                LoadField x = (LoadField) usage;
+                assert x.object() == node;
+                return x.field().isResolved() == false;
+            } else if (usage instanceof StoreField) {
+                StoreField x = (StoreField) usage;
+                return x.value() == node && x.object() != node;
+            } else if (usage instanceof StoreIndexed) {
+                StoreIndexed x = (StoreIndexed) usage;
+                assert x.value() == node;
+                return true;
+            } else if (usage instanceof VirtualObjectField) {
+                return false;
+            } else if (usage instanceof RegisterFinalizer) {
+                RegisterFinalizer x = (RegisterFinalizer) usage;
+                assert x.object() == node;
+                return false;
+            } else {
+                return super.escape(node, usage);
+            }
+        }
+
+        @Override
+        public EscapeField[] fields(Node node) {
+            NewInstance x = (NewInstance) node;
+            RiField[] riFields = x.instanceClass().fields();
+            EscapeField[] fields = new EscapeField[riFields.length];
+            for (int i = 0; i < riFields.length; i++) {
+                RiField field = riFields[i];
+                fields[i] = new EscapeField(field.name(), field, field.kind().stackKind());
+            }
+            return fields;
+        }
+
+        @Override
+        public void beforeUpdate(Node node, Node usage) {
+            if (usage instanceof RegisterFinalizer) {
+                RegisterFinalizer x = (RegisterFinalizer) usage;
+                x.replaceAndDelete(x.next());
+            } else {
+                super.beforeUpdate(node, usage);
+            }
+        }
+
+        @Override
+        public int updateState(Node node, Node current, Map<Object, Integer> fieldIndex, Value[] fieldState) {
+            if (current instanceof AccessField) {
+                AccessField x = (AccessField) current;
+                if (x.object() == node) {
+                    int field = fieldIndex.get(((AccessField) current).field());
+                    if (current instanceof LoadField) {
+                        assert fieldState[field] != null : field + ", " + ((AccessField) current).field();
+                        x.replaceAtUsages(fieldState[field]);
+                        assert x.usages().size() == 0;
+                        x.replaceAndDelete(x.next());
+                    } else if (current instanceof StoreField) {
+                        fieldState[field] = ((StoreField) x).value();
+                        assert x.usages().size() == 0;
+                        x.replaceAndDelete(x.next());
+                        return field;
+                    }
+                }
+            }
+            return -1;
+        }
+    };
 }

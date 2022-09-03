@@ -29,17 +29,14 @@ import com.sun.cri.ci.*;
 /**
  * The {@code ExceptionObject} instruction represents the incoming exception object to an exception handler.
  */
-public final class ExceptionObject extends FixedNodeWithNext {
-
-    private static final int INPUT_COUNT = 0;
-    private static final int SUCCESSOR_COUNT = 0;
+public final class ExceptionObject extends StateSplit {
 
     /**
      * Constructs a new ExceptionObject instruction.
      * @param graph
      */
     public ExceptionObject(Graph graph) {
-        super(CiKind.Object, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+        super(CiKind.Object, graph);
     }
 
     @Override
@@ -50,11 +47,5 @@ public final class ExceptionObject extends FixedNodeWithNext {
     @Override
     public void print(LogStream out) {
         out.print("incoming exception");
-    }
-
-    @Override
-    public Node copy(Graph into) {
-        ExceptionObject x = new ExceptionObject(into);
-        return x;
     }
 }

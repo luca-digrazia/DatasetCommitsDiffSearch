@@ -22,6 +22,8 @@
  */
 package com.oracle.max.graal.compiler.ir;
 
+import java.util.*;
+
 import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
@@ -33,16 +35,24 @@ import com.sun.cri.ri.*;
  */
 public final class Local extends FloatingNode {
 
-    private static final int INPUT_COUNT = 1;
+    @Input    private StartNode start;
 
-    private static final int SUCCESSOR_COUNT = 0;
+    public StartNode start() {
+        return start;
+    }
+
+    public void setStart(StartNode x) {
+        updateUsages(start, x);
+        start = x;
+    }
 
     private final int index;
     private RiType declaredType;
 
     public Local(CiKind kind, int javaIndex, Graph graph) {
-        super(kind, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+        super(kind, graph);
         this.index = javaIndex;
+        setStart(graph.start());
     }
 
     /**
@@ -81,19 +91,9 @@ public final class Local extends FloatingNode {
     }
 
     @Override
-    protected int inputCount() {
-        return super.inputCount() + INPUT_COUNT;
-    }
-
-    @Override
-    protected int successorCount() {
-        return super.successorCount() + SUCCESSOR_COUNT;
-    }
-
-    @Override
-    public Node copy(Graph into) {
-        Local x = new Local(kind, index, into);
-        x.setDeclaredType(declaredType());
-        return x;
+    public Map<Object, Object> getDebugProperties() {
+        Map<Object, Object> properties = super.getDebugProperties();
+        properties.put("index", index());
+        return properties;
     }
 }

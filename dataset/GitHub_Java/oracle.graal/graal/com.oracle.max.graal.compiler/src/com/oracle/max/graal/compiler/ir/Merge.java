@@ -260,6 +260,11 @@ public class Merge extends StateSplit{
         return sb.toString();
     }
 
+    @Override
+    public String shortName() {
+        return "Merge #" + id();
+    }
+
     public void removeEnd(EndNode pred) {
         int predIndex = ends.indexOf(pred);
         assert predIndex != -1;

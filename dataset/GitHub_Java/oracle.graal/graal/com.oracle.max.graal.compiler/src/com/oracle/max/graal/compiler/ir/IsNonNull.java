@@ -23,7 +23,7 @@
 package com.oracle.max.graal.compiler.ir;
 
 import com.oracle.max.graal.compiler.debug.*;
-import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.Canonicalizable;
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.CanonicalizerOp;
 import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.NotifyReProcess;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
@@ -32,9 +32,9 @@ import com.sun.cri.ri.*;
 /**
  * The {@code NullCheck} class represents an explicit null check instruction.
  */
-public final class IsNonNull extends BooleanNode implements Canonicalizable {
+public final class IsNonNull extends BooleanNode {
 
-    @Input private Value object;
+    @Input    private Value object;
 
     public Value object() {
         return object;
@@ -47,7 +47,6 @@ public final class IsNonNull extends BooleanNode implements Canonicalizable {
 
     /**
      * Constructs a new NullCheck instruction.
-     *
      * @param object the instruction producing the object to check against null
      * @param graph
      */
@@ -79,16 +78,29 @@ public final class IsNonNull extends BooleanNode implements Canonicalizable {
         out.print("null_check(").print(object()).print(')');
     }
 
+    @SuppressWarnings("unchecked")
     @Override
-    public Node canonical(NotifyReProcess reProcess) {
-        if (object() instanceof NewInstance || object() instanceof NewArray) {
-            return Constant.forBoolean(true, graph());
+    public <T extends Op> T lookup(Class<T> clazz) {
+        if (clazz == CanonicalizerOp.class) {
+            return (T) CANONICALIZER;
         }
-        CiConstant constant = object().asConstant();
-        if (constant != null) {
-            assert constant.kind == CiKind.Object;
-            return Constant.forBoolean(constant.isNonNull(), graph());
-        }
-        return this;
+        return super.lookup(clazz);
     }
+
+    private static CanonicalizerOp CANONICALIZER = new CanonicalizerOp() {
+        @Override
+        public Node canonical(Node node, NotifyReProcess reProcess) {
+            IsNonNull isNonNull = (IsNonNull) node;
+            Value object = isNonNull.object();
+            if (object instanceof NewInstance || object instanceof NewArray) {
+                return Constant.forBoolean(true, node.graph());
+            }
+            CiConstant constant = object.asConstant();
+            if (constant != null) {
+                assert constant.kind == CiKind.Object;
+                return Constant.forBoolean(constant.isNonNull(), node.graph());
+            }
+            return isNonNull;
+        }
+    };
 }

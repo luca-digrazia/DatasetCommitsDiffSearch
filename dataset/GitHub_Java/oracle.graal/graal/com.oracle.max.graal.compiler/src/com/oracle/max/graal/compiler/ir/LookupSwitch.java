@@ -48,8 +48,8 @@ public final class LookupSwitch extends Switch {
      * @param stateAfter the state after the switch
      * @param graph
      */
-    public LookupSwitch(Value value, List<? extends FixedNode> successors, int[] keys, Graph graph) {
-        super(value, successors, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+    public LookupSwitch(Value value, List<? extends FixedNode> successors, int[] keys, double[] probability, Graph graph) {
+        super(value, successors, probability, INPUT_COUNT, SUCCESSOR_COUNT, graph);
         this.keys = keys;
     }
 
@@ -82,11 +82,5 @@ public final class LookupSwitch extends Switch {
         }
         INSTRUCTION.advance(out);
         out.print("default   : ").print(defaultSuccessor());
-    }
-
-    @Override
-    public Node copy(Graph into) {
-        LookupSwitch x = new LookupSwitch(null, Arrays.asList(new FixedNodeWithNext[numberOfCases() + 1]), keys.clone(), into);
-        return x;
     }
 }

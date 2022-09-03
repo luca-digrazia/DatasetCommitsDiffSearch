@@ -28,7 +28,6 @@ import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
 
-@NodeInfo(shortName = "Deopt")
 public class Deoptimize extends FixedNode {
 
     public static enum DeoptAction {
@@ -67,6 +66,11 @@ public class Deoptimize extends FixedNode {
     @Override
     public void print(LogStream out) {
         out.print("deoptimize");
+    }
+
+    @Override
+    public String shortName() {
+        return message == null ? "Deopt " : "Deopt " + message;
     }
 
     @Override

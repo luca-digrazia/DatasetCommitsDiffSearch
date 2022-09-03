@@ -32,9 +32,6 @@ import com.sun.cri.ri.*;
  */
 public final class NewObjectArray extends NewArray {
 
-    private static final int INPUT_COUNT = 0;
-    private static final int SUCCESSOR_COUNT = 0;
-
     final RiType elementClass;
 
     /**
@@ -44,7 +41,7 @@ public final class NewObjectArray extends NewArray {
      * @param graph
      */
     public NewObjectArray(RiType elementClass, Value length, Graph graph) {
-        super(length, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+        super(length, graph);
         this.elementClass = elementClass;
     }
 
@@ -52,8 +49,13 @@ public final class NewObjectArray extends NewArray {
      * Gets the type of the elements of the array.
      * @return the element type of the array
      */
-    public RiType elementClass() {
+    public RiType elementType() {
         return elementClass;
+    }
+
+    @Override
+    public CiKind elementKind() {
+        return elementClass.kind();
     }
 
     @Override
@@ -73,12 +75,6 @@ public final class NewObjectArray extends NewArray {
 
     @Override
     public void print(LogStream out) {
-        out.print("new object array [").print(length()).print("] ").print(CiUtil.toJavaName(elementClass()));
-    }
-
-    @Override
-    public Node copy(Graph into) {
-        NewObjectArray x = new NewObjectArray(elementClass, null, into);
-        return x;
+        out.print("new object array [").print(length()).print("] ").print(CiUtil.toJavaName(elementType()));
     }
 }

@@ -22,21 +22,22 @@
  */
 package com.oracle.max.graal.compiler.ir;
 
+import java.util.*;
+
 import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
 
 
-public final class EndNode extends Instruction {
-    public static final int SUCCESSOR_COUNT = 0;
-    public static final int INPUT_COUNT = 0;
+public final class EndNode extends FixedNode {
+
     public EndNode(Graph graph) {
-        super(CiKind.Illegal, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+        super(CiKind.Illegal, graph);
     }
 
     @Override
     public void accept(ValueVisitor v) {
-        // Do nothing. Maybe moveToPhi?
+        v.visitEndNode(this);
     }
 
     @Override
@@ -44,17 +45,32 @@ public final class EndNode extends Instruction {
         out.print("end");
     }
 
-    @Override
-    public Node copy(Graph into) {
-        return new EndNode(into);
-    }
-
     public Merge merge() {
         if (usages().size() == 0) {
             return null;
         } else {
             assert usages().size() == 1;
-            return (Merge) usages().get(0);
+            return (Merge) usages().iterator().next();
         }
+    }
+
+    @Override
+    public boolean verify() {
+        assertTrue(usages().size() <= 1, "at most one usage");
+        return true;
+    }
+
+    @Override
+    public Iterable< ? extends Node> dataUsages() {
+        return Collections.emptyList();
+    }
+
+    @Override
+    public Iterable< ? extends Node> cfgSuccessors() {
+        Merge merge = this.merge();
+        if (merge == null) {
+            return Collections.emptyList();
+        }
+        return Arrays.asList(merge);
     }
 }

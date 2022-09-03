@@ -30,7 +30,7 @@ import com.sun.cri.ci.*;
 /**
  * The {@code Convert} class represents a conversion between primitive types.
  */
-public final class Convert extends FloatingNode {
+public final class Convert extends FloatingNode implements Node.GlobalValueNumberable {
     @Input private Value value;
 
     @Data public final int opcode;

@@ -47,8 +47,8 @@ public final class TableSwitch extends Switch {
      * @param stateAfter the state after the switch
      * @param graph
      */
-    public TableSwitch(Value value, List<? extends FixedNode> successors, int lowKey, Graph graph) {
-        super(value, successors, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+    public TableSwitch(Value value, List<? extends FixedNode> successors, int lowKey, double[] probability, Graph graph) {
+        super(value, successors, probability, INPUT_COUNT, SUCCESSOR_COUNT, graph);
         this.lowKey = lowKey;
     }
 
@@ -84,11 +84,5 @@ public final class TableSwitch extends Switch {
         }
         INSTRUCTION.advance(out);
         out.print("default   : ").print(defaultSuccessor());
-    }
-
-    @Override
-    public Node copy(Graph into) {
-        TableSwitch x = new TableSwitch(null, Arrays.asList(new FixedNodeWithNext[numberOfCases() + 1]), lowKey, into);
-        return x;
     }
 }

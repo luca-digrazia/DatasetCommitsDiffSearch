@@ -29,24 +29,19 @@ import com.sun.cri.ci.*;
 
 
 public final class CastNode extends FloatingNode {
-    private static final int INPUT_COUNT = 1;
-    private static final int INPUT_NODE = 0;
+    @Input private Value value;
 
-    private static final int SUCCESSOR_COUNT = 0;
-
-    /**
-     * The instruction that produces the object tested against null.
-     */
     public Value value() {
-        return (Value) inputs().get(super.inputCount() + INPUT_NODE);
+        return value;
     }
 
-    public void setValue(Value n) {
-        inputs().set(super.inputCount() + INPUT_NODE, n);
+    public void setValue(Value x) {
+        updateUsages(value, x);
+        value = x;
     }
 
     public CastNode(CiKind kind, Value n, Graph graph) {
-        super(kind, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+        super(kind, graph);
         setValue(n);
     }
 
@@ -73,10 +68,5 @@ public final class CastNode extends FloatingNode {
     @Override
     public void print(LogStream out) {
         out.print("cast node ").print(value().toString());
-    }
-
-    @Override
-    public Node copy(Graph into) {
-        return new CastNode(kind, null, into);
     }
 }

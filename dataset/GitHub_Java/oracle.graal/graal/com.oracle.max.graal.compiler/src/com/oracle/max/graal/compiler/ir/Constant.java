@@ -22,7 +22,7 @@
  */
 package com.oracle.max.graal.compiler.ir;
 
-import static com.oracle.max.graal.compiler.C1XCompilation.*;
+import static com.oracle.max.graal.compiler.GraalCompilation.*;
 
 import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.graph.*;
@@ -33,12 +33,9 @@ import com.sun.cri.ri.*;
  * The {@code Constant} instruction represents a constant such as an integer value,
  * long, float, object reference, address, etc.
  */
-public final class Constant extends FloatingNode {
+public final class Constant extends BooleanNode {
 
-    private static final int INPUT_COUNT = 0;
-    private static final int SUCCESSOR_COUNT = 0;
-
-    public final CiConstant value;
+    @Data public final CiConstant value;
 
     /**
      * Constructs a new instruction representing the specified constant.
@@ -46,7 +43,7 @@ public final class Constant extends FloatingNode {
      * @param graph
      */
     public Constant(CiConstant value, Graph graph) {
-        super(value.kind.stackKind(), INPUT_COUNT, SUCCESSOR_COUNT, graph);
+        super(value.kind.stackKind(), graph);
         this.value = value;
     }
 
@@ -163,15 +160,10 @@ public final class Constant extends FloatingNode {
     }
 
     @Override
-    public boolean valueEqual(Node i) {
-        return i instanceof Constant && ((Constant) i).value.equivalent(this.value);
-    }
-
-    @Override
     public RiType declaredType() {
         RiRuntime runtime = compilation().runtime;
         if (kind.isPrimitive()) {
-            runtime.asRiType(kind);
+            return runtime.asRiType(kind);
         }
         return runtime.getTypeOf(asConstant());
     }
@@ -189,11 +181,5 @@ public final class Constant extends FloatingNode {
     @Override
     public String shortName() {
         return value.name();
-    }
-
-    @Override
-    public Node copy(Graph into) {
-        Constant x = new Constant(value, into);
-        return x;
     }
 }

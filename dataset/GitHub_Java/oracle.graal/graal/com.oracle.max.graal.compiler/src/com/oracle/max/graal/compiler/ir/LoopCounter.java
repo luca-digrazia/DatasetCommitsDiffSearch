@@ -28,9 +28,12 @@ import com.sun.cri.ci.*;
 
 
 public final class LoopCounter extends FloatingNode {
-    @Input private Value init;
-    @Input private Value stride;
-    @Input private LoopBegin loopBegin;
+
+    @Input    private Value init;
+
+    @Input    private Value stride;
+
+    @Input    private LoopBegin loopBegin;
 
     public Value init() {
         return init;
@@ -75,5 +78,7 @@ public final class LoopCounter extends FloatingNode {
     @Override
     public void print(LogStream out) {
         out.print("loopcounter [").print(init()).print(",+").print(stride()).print("]");
+
     }
+
 }

@@ -23,14 +23,14 @@
 package com.oracle.max.graal.compiler.ir;
 
 import com.oracle.max.graal.compiler.debug.*;
-import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.Canonicalizable;
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.CanonicalizerOp;
 import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.NotifyReProcess;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
 
-public final class NegateBooleanNode extends BooleanNode implements Canonicalizable {
+public final class NegateBooleanNode extends BooleanNode {
 
-    @Input private BooleanNode value;
+    @Input    private BooleanNode value;
 
     public BooleanNode value() {
         return value;
@@ -55,13 +55,26 @@ public final class NegateBooleanNode extends BooleanNode implements Canonicaliza
         out.print(value()).print("!");
     }
 
+    @SuppressWarnings("unchecked")
     @Override
-    public Node canonical(NotifyReProcess reProcess) {
-        if (value() instanceof NegateBooleanNode) {
-            return ((NegateBooleanNode) value()).value();
-        } else if (value() instanceof Constant) {
-            return Constant.forBoolean(!value().asConstant().asBoolean(), graph());
+    public <T extends Op> T lookup(Class<T> clazz) {
+        if (clazz == CanonicalizerOp.class) {
+            return (T) CANONICALIZER;
         }
-        return this;
+        return super.lookup(clazz);
     }
+
+    private static final CanonicalizerOp CANONICALIZER = new CanonicalizerOp() {
+        @Override
+        public Node canonical(Node node, NotifyReProcess reProcess) {
+            NegateBooleanNode negateNode = (NegateBooleanNode) node;
+            Value value = negateNode.value();
+            if (value instanceof NegateBooleanNode) {
+                return ((NegateBooleanNode) value).value();
+            } else if (value instanceof Constant) {
+                return Constant.forBoolean(!value.asConstant().asBoolean(), node.graph());
+            }
+            return negateNode;
+        }
+    };
 }

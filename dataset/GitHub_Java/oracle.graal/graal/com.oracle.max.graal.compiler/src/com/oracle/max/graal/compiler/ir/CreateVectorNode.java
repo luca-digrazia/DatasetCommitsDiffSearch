@@ -32,7 +32,7 @@ import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
 
 
-public final class CreateVectorNode extends AbstractVectorNode {
+public final class CreateVectorNode extends AbstractVectorNode implements Node.GlobalValueNumberable {
     @Input private Value length;
 
     public Value length() {

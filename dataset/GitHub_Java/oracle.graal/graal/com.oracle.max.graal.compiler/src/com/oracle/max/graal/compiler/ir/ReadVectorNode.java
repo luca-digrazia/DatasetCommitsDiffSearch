@@ -30,11 +30,9 @@ import com.sun.cri.ci.*;
 
 
 public final class ReadVectorNode extends AccessVectorNode {
-    private static final int INPUT_COUNT = 0;
-    private static final int SUCCESSOR_COUNT = 0;
 
     public ReadVectorNode(AbstractVectorNode vector, Value object, LocationNode location, Graph graph) {
-        super(CiKind.Illegal, INPUT_COUNT, SUCCESSOR_COUNT, vector, object, location, graph);
+        super(CiKind.Illegal, vector, object, location, graph);
     }
 
     @Override
@@ -44,12 +42,6 @@ public final class ReadVectorNode extends AccessVectorNode {
         }
         return super.lookup(clazz);
     }
-
-    @Override
-    public Node copy(Graph into) {
-        return new ReadVectorNode(null, null, null, into);
-    }
-
 
     @Override
     public void addToLoop(LoopBegin loop, IdentityHashMap<AbstractVectorNode, Value> nodes) {

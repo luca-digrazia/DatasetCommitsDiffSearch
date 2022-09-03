@@ -109,6 +109,11 @@ public final class If extends ControlSplit {
         print(falseSuccessor());
     }
 
+    @Override
+    public String shortName() {
+        return "If";
+    }
+
     @SuppressWarnings("unchecked")
     @Override
     public <T extends Op> T lookup(Class<T> clazz) {

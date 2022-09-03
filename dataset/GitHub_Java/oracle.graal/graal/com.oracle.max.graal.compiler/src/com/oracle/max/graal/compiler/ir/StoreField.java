@@ -23,6 +23,8 @@
 package com.oracle.max.graal.compiler.ir;
 
 import com.oracle.max.graal.compiler.debug.*;
+import com.oracle.max.graal.compiler.phases.*;
+import com.oracle.max.graal.compiler.phases.LoweringPhase.LoweringOp;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
@@ -32,30 +34,15 @@ import com.sun.cri.ri.*;
  */
 public final class StoreField extends AccessField {
 
-    private static final int INPUT_COUNT = 1;
-    private static final int INPUT_VALUE = 0;
+    @Input    private Value value;
 
-    private static final int SUCCESSOR_COUNT = 0;
-
-    @Override
-    protected int inputCount() {
-        return super.inputCount() + INPUT_COUNT;
+    public Value value() {
+        return value;
     }
 
-    @Override
-    protected int successorCount() {
-        return super.successorCount() + SUCCESSOR_COUNT;
-    }
-
-    /**
-     * The value that is written to the field.
-     */
-     public Value value() {
-        return (Value) inputs().get(super.inputCount() + INPUT_VALUE);
-    }
-
-    public Value setValue(Value n) {
-        return (Value) inputs().set(super.inputCount() + INPUT_VALUE, n);
+    public void setValue(Value x) {
+        updateUsages(value, x);
+        value = x;
     }
 
     /**
@@ -67,7 +54,7 @@ public final class StoreField extends AccessField {
      * @param graph
      */
     public StoreField(Value object, RiField field, Value value, Graph graph) {
-        super(CiKind.Void, object, field, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+        super(CiKind.Void, object, field, graph);
         setValue(value);
     }
 
@@ -75,6 +62,15 @@ public final class StoreField extends AccessField {
     public void accept(ValueVisitor v) {
         v.visitStoreField(this);
     }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <T extends Op> T lookup(java.lang.Class<T> clazz) {
+        if (clazz == LoweringOp.class) {
+            return (T) LoweringPhase.DELEGATE_TO_RUNTIME;
+        }
+        return super.lookup(clazz);
+    };
 
     @Override
     public void print(LogStream out) {
@@ -85,11 +81,5 @@ public final class StoreField extends AccessField {
         print(value()).
         print(" [type: ").print(CiUtil.format("%h.%n:%t", field(), false)).
         print(']');
-    }
-
-    @Override
-    public Node copy(Graph into) {
-        StoreField x = new StoreField(null, field, null, into);
-        return x;
     }
 }

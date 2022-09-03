@@ -23,6 +23,8 @@
 package com.oracle.max.graal.compiler.ir;
 
 import com.oracle.max.graal.compiler.debug.*;
+import com.oracle.max.graal.compiler.phases.*;
+import com.oracle.max.graal.compiler.phases.LoweringPhase.LoweringOp;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
@@ -31,9 +33,6 @@ import com.sun.cri.ri.*;
  * The {@code LoadIndexed} instruction represents a read from an element of an array.
  */
 public final class LoadIndexed extends AccessIndexed {
-
-    private static final int INPUT_COUNT = 0;
-    private static final int SUCCESSOR_COUNT = 0;
 
     /**
      * Creates a new LoadIndexed instruction.
@@ -44,7 +43,7 @@ public final class LoadIndexed extends AccessIndexed {
      * @param graph
      */
     public LoadIndexed(Value array, Value index, Value length, CiKind elementKind, Graph graph) {
-        super(elementKind.stackKind(), array, index, length, elementKind, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+        super(elementKind.stackKind(), array, index, length, elementKind, graph);
     }
 
     /**
@@ -85,9 +84,13 @@ public final class LoadIndexed extends AccessIndexed {
         return false;
     }
 
+
+    @SuppressWarnings("unchecked")
     @Override
-    public Node copy(Graph into) {
-        LoadIndexed x = new LoadIndexed(null, null, null, elementKind(), into);
-        return x;
+    public <T extends Op> T lookup(Class<T> clazz) {
+        if (clazz == LoweringOp.class) {
+            return (T) LoweringPhase.DELEGATE_TO_RUNTIME;
+        }
+        return super.lookup(clazz);
     }
 }

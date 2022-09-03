@@ -34,57 +34,42 @@ import com.sun.cri.ri.*;
 /**
  * The {@code Invoke} instruction represents all kinds of method calls.
  */
-public final class Invoke extends StateSplit implements ExceptionEdgeInstruction {
+public final class Invoke extends AbstractMemoryCheckpointNode implements ExceptionEdgeInstruction {
+
+    @Successor    private FixedNode exceptionEdge;
+
+    @Input    private final NodeInputList<Value> arguments;
+
+    @Override
+    public FixedNode exceptionEdge() {
+        return exceptionEdge;
+    }
+
+    public void setExceptionEdge(FixedNode x) {
+        updatePredecessors(exceptionEdge, x);
+        exceptionEdge = x;
+    }
 
     private final int argumentCount;
 
-    private static final int SUCCESSOR_COUNT = 1;
-    private static final int SUCCESSOR_EXCEPTION_EDGE = 0;
+    private boolean canInline = true;
 
-    @Override
-    protected int inputCount() {
-        return super.inputCount() + argumentCount;
+    public boolean canInline() {
+        return canInline;
     }
 
-    @Override
-    protected int successorCount() {
-        return super.successorCount() + SUCCESSOR_COUNT;
+    public void setCanInline(boolean b) {
+        canInline = b;
     }
 
-    /**
-     * The list of instructions that produce input for this instruction.
-     */
-    public Value argument(int index) {
-        assert index >= 0 && index < argumentCount;
-        return (Value) inputs().get(super.inputCount() + index);
-    }
-
-    public Value setArgument(int index, Value n) {
-        assert index >= 0 && index < argumentCount;
-        return (Value) inputs().set(super.inputCount() + index, n);
-    }
-
-    public int argumentCount() {
-        return argumentCount;
-    }
-
-    /**
-     * The entry to the exception dispatch chain for this invoke.
-     */
-    @Override
-    public Instruction exceptionEdge() {
-        return (Instruction) successors().get(super.successorCount() + SUCCESSOR_EXCEPTION_EDGE);
-    }
-
-    public Instruction setExceptionEdge(Instruction n) {
-        return (Instruction) successors().set(super.successorCount() + SUCCESSOR_EXCEPTION_EDGE, n);
+    public NodeInputList<Value> arguments() {
+        return arguments;
     }
 
     public final int opcode;
     public final RiMethod target;
     public final RiType returnType;
     public final int bci; // XXX needed because we can not compute the bci from the sateBefore bci of this Invoke was optimized from INVOKEINTERFACE to INVOKESPECIAL
-    public final RiTypeProfile profile;
 
     /**
      * Constructs a new Invoke instruction.
@@ -95,17 +80,17 @@ public final class Invoke extends StateSplit implements ExceptionEdgeInstruction
      * @param isStatic {@code true} if this call is static (no receiver object)
      * @param target the target method being called
      */
-    public Invoke(int bci, int opcode, CiKind result, Value[] args, RiMethod target, RiType returnType, RiTypeProfile profile, Graph graph) {
-        super(result, args.length, SUCCESSOR_COUNT, graph);
+    public Invoke(int bci, int opcode, CiKind result, Value[] args, RiMethod target, RiType returnType, Graph graph) {
+        super(result, graph);
+        arguments = new NodeInputList<Value>(this, args.length);
         this.opcode = opcode;
         this.target = target;
         this.returnType = returnType;
         this.bci = bci;
-        this.profile = profile;
 
         this.argumentCount = args.length;
         for (int i = 0; i < args.length; i++) {
-            setArgument(i, args[i]);
+            arguments().set(i, args[i]);
         }
     }
 
@@ -137,7 +122,7 @@ public final class Invoke extends StateSplit implements ExceptionEdgeInstruction
      */
     public Value receiver() {
         assert !isStatic();
-        return argument(0);
+        return arguments().get(0);
     }
 
     /**
@@ -146,10 +131,6 @@ public final class Invoke extends StateSplit implements ExceptionEdgeInstruction
      */
     public RiMethod target() {
         return target;
-    }
-
-    public RiTypeProfile profile() {
-        return profile;
     }
 
     /**
@@ -185,9 +166,14 @@ public final class Invoke extends StateSplit implements ExceptionEdgeInstruction
             if (i > argStart) {
                 out.print(", ");
             }
-            out.print(argument(i));
+            out.print(arguments().get(i));
         }
         out.print(CiUtil.format(") [method: %H.%n(%p):%r]", target, false));
+    }
+
+    @Override
+    public String toString() {
+        return super.toString() + target;
     }
 
     @Override
@@ -197,11 +183,5 @@ public final class Invoke extends StateSplit implements ExceptionEdgeInstruction
         properties.put("target", CiUtil.format("%H.%n(%p):%r", target, false));
         properties.put("bci", bci);
         return properties;
-    }
-
-    @Override
-    public Node copy(Graph into) {
-        Invoke x = new Invoke(bci, opcode, kind, new Value[argumentCount], target, returnType, profile, into);
-        return x;
     }
 }

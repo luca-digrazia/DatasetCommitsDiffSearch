@@ -33,11 +33,9 @@ import com.sun.cri.ci.*;
  */
 public class UnsafeLoad extends StateSplit {
 
-    @NodeInput
-    private Value object;
+    @Input    private Value object;
 
-    @NodeInput
-    private Value offset;
+    @Input    private Value offset;
 
     public Value object() {
         return object;
@@ -71,12 +69,4 @@ public class UnsafeLoad extends StateSplit {
         }
         return super.lookup(clazz);
     }
-
-    @Override
-    public Node copy(Graph into) {
-        UnsafeLoad x = new UnsafeLoad(null, null, kind, into);
-        super.copyInto(x);
-        return x;
-    }
-
 }
