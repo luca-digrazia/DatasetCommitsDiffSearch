@@ -89,7 +89,7 @@ public class AMD64FrameMap extends FrameMap {
 
     @Override
     protected int alignFrameSize(int size) {
-        return NumUtil.roundUp(size + returnAddressSize(), getTarget().stackAlignment) - returnAddressSize();
+        return NumUtil.roundUp(size + returnAddressSize(), target.stackAlignment) - returnAddressSize();
     }
 
     @Override
@@ -98,7 +98,7 @@ public class AMD64FrameMap extends FrameMap {
     }
 
     @Override
-    protected StackSlot allocateNewSpillSlot(LIRKind kind, int additionalOffset) {
+    protected StackSlot allocateNewSpillSlot(PlatformKind kind, int additionalOffset) {
         return StackSlot.get(kind, -spillSize + additionalOffset, true);
     }
 }
