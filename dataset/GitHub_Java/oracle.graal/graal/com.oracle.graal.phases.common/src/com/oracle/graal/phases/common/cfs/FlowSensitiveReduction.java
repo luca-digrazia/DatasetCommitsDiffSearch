@@ -234,7 +234,7 @@ public class FlowSensitiveReduction extends FixedGuardReduction {
                 return;
             }
             // it's unwarranted to assume loadHub.object() to be non-null
-            state.trackCC(loadHub.getValue(), type, begin);
+            state.trackCC(loadHub.object(), type, begin);
         }
     }
 
@@ -594,7 +594,7 @@ public class FlowSensitiveReduction extends FixedGuardReduction {
         if (type == null) {
             return;
         }
-        ResolvedJavaMethod method = type.resolveMethod(callTarget.targetMethod(), invoke.getContextType());
+        ResolvedJavaMethod method = type.resolveMethod(callTarget.targetMethod());
         if (method == null) {
             return;
         }
