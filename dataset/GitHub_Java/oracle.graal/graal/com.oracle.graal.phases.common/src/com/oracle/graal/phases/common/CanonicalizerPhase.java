@@ -178,7 +178,7 @@ public class CanonicalizerPhase extends BasePhase<PhaseContext> {
                 }
                 StructuredGraph graph = (StructuredGraph) node.graph();
                 Mark mark = graph.getMark();
-                if (!GraphUtil.tryKillUnused(node)) {
+                if (!tryKillUnused(node)) {
                     if (!tryCanonicalize(node, nodeClass)) {
                         if (node instanceof ValueNode) {
                             ValueNode valueNode = (ValueNode) node;
@@ -198,6 +198,14 @@ public class CanonicalizerPhase extends BasePhase<PhaseContext> {
                     workList.add(newNode);
                 }
             }
+        }
+
+        private static boolean tryKillUnused(Node node) {
+            if (node.isAlive() && GraphUtil.isFloatingNode().apply(node) && node.recordsUsages() && node.usages().isEmpty()) {
+                GraphUtil.killWithUnusedFloatingInputs(node);
+                return true;
+            }
+            return false;
         }
 
         public static boolean tryGlobalValueNumbering(Node node, NodeClass nodeClass) {
@@ -265,10 +273,10 @@ public class CanonicalizerPhase extends BasePhase<PhaseContext> {
 // @formatter:on
         private boolean performReplacement(final Node node, Node canonical) {
             if (canonical == node) {
-                Debug.log("Canonicalizer: work on %1s", node);
+                Debug.log("Canonicalizer: work on %s", node);
                 return false;
             } else {
-                Debug.log("Canonicalizer: replacing %1s with %1s", node, canonical);
+                Debug.log("Canonicalizer: replacing %s with %s", node, canonical);
                 METRIC_CANONICALIZED_NODES.increment();
                 StructuredGraph graph = (StructuredGraph) node.graph();
                 if (node instanceof FloatingNode) {
@@ -375,7 +383,7 @@ public class CanonicalizerPhase extends BasePhase<PhaseContext> {
 
             @Override
             public void removeIfUnused(Node node) {
-                GraphUtil.tryKillUnused(node);
+                tryKillUnused(node);
             }
 
             @Override
