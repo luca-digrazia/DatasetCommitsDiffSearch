@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -99,15 +97,15 @@ public final class CompilationPrinter {
     public void finish(CompilationResult result) {
         if (id != null) {
             final long stop = System.nanoTime();
-            final long duration = (stop - start) / 1000;
+            final long duration = (stop - start) / 1000000;
             final int targetCodeSize = result != null ? result.getTargetCodeSize() : -1;
             final int bytecodeSize = result != null ? result.getBytecodeSize() : 0;
             if (allocatedBytesBefore == -1) {
-                TTY.println(getMethodDescription() + String.format(" | %4dus %5dB bytecodes %5dB codesize", duration, bytecodeSize, targetCodeSize));
+                TTY.println(getMethodDescription() + String.format(" | %4dms %5dB %5dB", duration, bytecodeSize, targetCodeSize));
             } else {
                 final long allocatedBytesAfter = getCurrentThreadAllocatedBytes();
                 final long allocatedKBytes = (allocatedBytesAfter - allocatedBytesBefore) / 1024;
-                TTY.println(getMethodDescription() + String.format(" | %4dus %5dB bytecodes %5dB codesize %5dkB allocated", duration, bytecodeSize, targetCodeSize, allocatedKBytes));
+                TTY.println(getMethodDescription() + String.format(" | %4dms %5dB %5dB %5dkB", duration, bytecodeSize, targetCodeSize, allocatedKBytes));
             }
         }
     }
