@@ -132,7 +132,7 @@ public abstract class SLREPLHandler extends REPLHandler {
             vm.eval(Source.fromFileName(file.getPath()));
             PolyglotEngine.Value main = vm.findGlobalSymbol("main");
             if (main != null) {
-                main.execute();
+                main.invoke(null);
             }
             final String path = file.getCanonicalPath();
             reply.put(REPLMessage.FILE_PATH, path);
@@ -142,7 +142,7 @@ public abstract class SLREPLHandler extends REPLHandler {
         } catch (KillException ex) {
             return finishReplySucceeded(reply, fileName + " killed");
         } catch (Exception ex) {
-            return finishReplyFailed(reply, "error loading file \"" + fileName + "\": " + ex.getMessage());
+            return finishReplyFailed(reply, ex);
         }
     }
 }
