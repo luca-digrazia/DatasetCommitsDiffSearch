@@ -33,31 +33,31 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.LoopNode;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RepeatingNode;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64WriteValueNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
 
-public class LLVMAMD64RepNode extends LLVMStatementNode {
+public class LLVMAMD64RepNode extends LLVMExpressionNode {
     @Child private LoopNode loop;
 
-    public LLVMAMD64RepNode(LLVMAMD64WriteValueNode writeRCX, LLVMExpressionNode rcx, LLVMStatementNode body) {
+    public LLVMAMD64RepNode(LLVMAMD64WriteValueNode writeRCX, LLVMExpressionNode rcx, LLVMExpressionNode body) {
         this.loop = Truffle.getRuntime().createLoopNode(new LLVMAMD64RepLoopNode(writeRCX, rcx, body));
     }
 
     @Override
-    public void execute(VirtualFrame frame) {
+    public Object executeGeneric(VirtualFrame frame) {
         loop.executeLoop(frame);
+        return null;
     }
 
-    private static class LLVMAMD64RepLoopNode extends LLVMNode implements RepeatingNode {
+    private static class LLVMAMD64RepLoopNode extends Node implements RepeatingNode {
         @Child private LLVMAMD64WriteValueNode writeRCX;
         @Child private LLVMExpressionNode rcx;
-        @Child private LLVMStatementNode body;
+        @Child private LLVMExpressionNode body;
 
-        LLVMAMD64RepLoopNode(LLVMAMD64WriteValueNode writeRCX, LLVMExpressionNode rcx, LLVMStatementNode body) {
+        LLVMAMD64RepLoopNode(LLVMAMD64WriteValueNode writeRCX, LLVMExpressionNode rcx, LLVMExpressionNode body) {
             this.writeRCX = writeRCX;
             this.rcx = rcx;
             this.body = body;
@@ -70,7 +70,7 @@ public class LLVMAMD64RepNode extends LLVMStatementNode {
                 if (rcxValue == 0) {
                     return false;
                 } else {
-                    body.execute(frame);
+                    body.executeGeneric(frame);
                     writeRCX.execute(frame, rcxValue - 1);
                     return true;
                 }
