@@ -295,8 +295,8 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
   }
 
   @Override
-  public Iterable<? extends Map.Entry<SkyKey, ? extends NodeEntry>> getGraphEntries() {
-    return graph.getAllValuesMutable().entrySet();
+  public Map<SkyKey, ? extends NodeEntry> getGraphMap() {
+    return graph.getAllValuesMutable();
   }
 
   @Override
