@@ -13,13 +13,17 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.cpp;
 
+
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
+import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
 import com.google.devtools.build.lib.analysis.actions.AbstractFileWriteAction;
+import com.google.devtools.build.lib.analysis.actions.DeterministicWriter;
+import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -29,6 +33,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import javax.annotation.Nullable;
 
 /**
  * Action for generating an umbrella header. All the headers are #included in the umbrella header.
@@ -50,9 +55,11 @@ public final class UmbrellaHeaderAction extends AbstractFileWriteAction {
       Iterable<PathFragment> additionalExportedHeaders) {
     super(
         owner,
-        ImmutableList.copyOf(Iterables.filter(publicHeaders, Artifact.IS_TREE_ARTIFACT)),
+        NestedSetBuilder.<Artifact>stableOrder()
+            .addAll(Iterables.filter(publicHeaders, Artifact::isTreeArtifact))
+            .build(),
         umbrellaHeader,
-        /*makeExecutable=*/false);
+        /*makeExecutable=*/ false);
     this.umbrellaHeader = umbrellaHeader;
     this.publicHeaders = ImmutableList.copyOf(publicHeaders);
     this.additionalExportedHeaders = ImmutableList.copyOf(additionalExportedHeaders);
@@ -107,18 +114,19 @@ public final class UmbrellaHeaderAction extends AbstractFileWriteAction {
   }
 
   @Override
-  protected String computeKey() {
-    Fingerprint f = new Fingerprint();
-    f.addString(GUID);
-    f.addPath(umbrellaHeader.getExecPath());
-    f.addInt(publicHeaders.size());
+  protected void computeKey(
+      ActionKeyContext actionKeyContext,
+      @Nullable Artifact.ArtifactExpander artifactExpander,
+      Fingerprint fp) {
+    fp.addString(GUID);
+    fp.addPath(umbrellaHeader.getExecPath());
+    fp.addInt(publicHeaders.size());
     for (Artifact artifact : publicHeaders) {
-      f.addPath(artifact.getExecPath());
+      fp.addPath(artifact.getExecPath());
     }
-    f.addInt(additionalExportedHeaders.size());
+    fp.addInt(additionalExportedHeaders.size());
     for (PathFragment path : additionalExportedHeaders) {
-      f.addPath(path);
+      fp.addPath(path);
     }
-    return f.hexDigestAndReset();
   }
 }

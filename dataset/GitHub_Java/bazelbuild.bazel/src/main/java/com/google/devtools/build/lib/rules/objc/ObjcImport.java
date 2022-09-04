@@ -61,11 +61,15 @@ public class ObjcImport implements RuleConfiguredTargetFactory {
         .registerGenerateModuleMapAction(moduleMap, publicHeaders)
         .validateAttributes();
 
+    ObjcProvider objcProvider = common.getObjcProviderBuilder().build();
+
     return ObjcRuleClasses.ruleConfiguredTarget(ruleContext, filesToBuild.build())
-        .addNativeDeclaredProvider(common.getObjcProvider())
+        .addNativeDeclaredProvider(objcProvider)
         .addNativeDeclaredProvider(
-            CcInfo.builder().setCcCompilationContext(common.getCcCompilationContext()).build())
-        .addStarlarkTransitiveInfo(ObjcProvider.STARLARK_NAME, common.getObjcProvider())
+            CcInfo.builder()
+                .setCcCompilationContext(objcProvider.getCcCompilationContext())
+                .build())
+        .addStarlarkTransitiveInfo(ObjcProvider.STARLARK_NAME, objcProvider)
         .build();
   }
 }
