@@ -50,12 +50,12 @@ import static com.google.common.base.MoreObjects.firstNonNull;
  *
  * <p>A resource method with a view would looks something like this:</p>
  *
- * <pre>
- * &#64;GET
+ * <pre><code>
+ * @GET
  * public PersonView getPerson(@PathParam("id") String id) {
  *     return new PersonView(dao.find(id));
  * }
- * </pre>
+ * </code></pre>
  *
  * <p>Freemarker templates look something like this:</p>
  *
