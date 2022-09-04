@@ -29,9 +29,9 @@ import com.google.devtools.build.lib.actions.ActionGraph;
 import com.google.devtools.build.lib.actions.ActionInputPrefetcher;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
 import com.google.devtools.build.lib.actions.BuildFailedException;
-import com.google.devtools.build.lib.actions.DynamicStrategyRegistry;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.ExecutorInitException;
+import com.google.devtools.build.lib.actions.LocalHostCapacity;
 import com.google.devtools.build.lib.actions.PackageRoots;
 import com.google.devtools.build.lib.actions.ResourceManager;
 import com.google.devtools.build.lib.actions.ResourceSet;
@@ -65,7 +65,6 @@ import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.exec.ExecutorBuilder;
 import com.google.devtools.build.lib.exec.ExecutorLifecycleListener;
 import com.google.devtools.build.lib.exec.ModuleActionContextRegistry;
-import com.google.devtools.build.lib.exec.RemoteLocalFallbackRegistry;
 import com.google.devtools.build.lib.exec.SpawnActionContextMaps;
 import com.google.devtools.build.lib.exec.SpawnStrategyRegistry;
 import com.google.devtools.build.lib.exec.SpawnStrategyResolver;
@@ -81,7 +80,7 @@ import com.google.devtools.build.lib.runtime.BlazeModule;
 import com.google.devtools.build.lib.runtime.BlazeRuntime;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.skyframe.AspectValue;
-import com.google.devtools.build.lib.skyframe.AspectValueKey.AspectKey;
+import com.google.devtools.build.lib.skyframe.AspectValue.AspectKey;
 import com.google.devtools.build.lib.skyframe.Builder;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
@@ -143,11 +142,10 @@ public class ExecutionTool {
 
     ExecutorBuilder executorBuilder = new ExecutorBuilder();
     ModuleActionContextRegistry.Builder actionContextRegistryBuilder =
-        executorBuilder.asModuleActionContextRegistryBuilder(ModuleActionContextRegistry.builder());
-    SpawnStrategyRegistry.Builder spawnStrategyRegistryBuilder =
-        executorBuilder.asSpawnStrategyRegistryBuilder(SpawnStrategyRegistry.builder());
+        executorBuilder.asModuleActionContextRegistryBuilder();
     actionContextRegistryBuilder.register(SpawnStrategyResolver.class, new SpawnStrategyResolver());
-    executorBuilder.addStrategyByContext(SpawnStrategyResolver.class, "");
+    SpawnStrategyRegistry.Builder spawnStrategyRegistryBuilder =
+        executorBuilder.asSpawnStrategyRegistryBuilder();
 
     for (BlazeModule module : runtime.getBlazeModules()) {
       try (SilentCloseable ignored = Profiler.instance().profile(module + ".executorInit")) {
@@ -185,19 +183,6 @@ public class ExecutionTool {
     // TODO(jmmv): This should live in some testing-related Blaze module, not here.
     actionContextRegistryBuilder.restrictTo(TestActionContext.class, options.testStrategy);
 
-    SpawnStrategyRegistry spawnStrategyRegistry = spawnStrategyRegistryBuilder.build();
-    actionContextRegistryBuilder.register(SpawnStrategyRegistry.class, spawnStrategyRegistry);
-    actionContextRegistryBuilder.register(DynamicStrategyRegistry.class, spawnStrategyRegistry);
-    actionContextRegistryBuilder.register(RemoteLocalFallbackRegistry.class, spawnStrategyRegistry);
-
-    executorBuilder.addActionContext(SpawnStrategyRegistry.class, spawnStrategyRegistry);
-    executorBuilder.addStrategyByContext(SpawnStrategyRegistry.class, "");
-
-    ModuleActionContextRegistry moduleActionContextRegistry = actionContextRegistryBuilder.build();
-    executorBuilder.addActionContext(
-        ModuleActionContextRegistry.class, moduleActionContextRegistry);
-    executorBuilder.addStrategyByContext(ModuleActionContextRegistry.class, "");
-
     spawnActionContextMaps = executorBuilder.getSpawnActionContextMaps();
 
     if (options.availableResources != null && options.removeLocalResources) {
@@ -205,6 +190,7 @@ public class ExecutionTool {
           "--local_resources is deprecated. Please use "
               + "--local_ram_resources and/or --local_cpu_resources");
     }
+
     if (options.removeRamUtilizationFactor && options.ramUtilizationPercentage != 0) {
       throw new ExecutorInitException(
           "--ram_utilization_factor is deprecated. "
@@ -763,9 +749,20 @@ public class ExecutionTool {
           "--local_resources will be deprecated. Please use --local_ram_resources "
               + "and/or --local_cpu_resources.");
       resources = options.availableResources;
+      resourceMgr.setRamUtilizationPercentage(100);
+    } else if (options.ramUtilizationPercentage != 0) {
+      logger.warning(
+          "--ram_utilization_factor will soon be deprecated. Please use "
+              + "--local_ram_resources=HOST_RAM*<float>, where <float> is the percentage of "
+              + "available RAM you want to devote to Bazel.");
+      resources =
+          ResourceSet.createWithRamCpu(
+              LocalHostCapacity.getLocalHostCapacity().getMemoryMb(), options.localCpuResources);
+      resourceMgr.setRamUtilizationPercentage(options.ramUtilizationPercentage);
     } else {
       resources =
           ResourceSet.createWithRamCpu(options.localRamResources, options.localCpuResources);
+      resourceMgr.setRamUtilizationPercentage(100);
     }
     resourceMgr.setUseLocalMemoryEstimate(options.localMemoryEstimate);
 
