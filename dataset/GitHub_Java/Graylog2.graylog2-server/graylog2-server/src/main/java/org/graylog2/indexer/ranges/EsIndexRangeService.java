@@ -25,7 +25,6 @@ import com.google.common.eventbus.AllowConcurrentEvents;
 import com.google.common.eventbus.EventBus;
 import com.google.common.eventbus.Subscribe;
 import com.google.common.util.concurrent.UncheckedExecutionException;
-import org.bson.types.ObjectId;
 import org.elasticsearch.action.NoShardAvailableActionException;
 import org.elasticsearch.action.get.GetRequest;
 import org.elasticsearch.action.get.GetResponse;
@@ -37,7 +36,6 @@ import org.graylog2.indexer.esplugin.IndicesDeletedEvent;
 import org.graylog2.metrics.CacheStatsSet;
 import org.graylog2.shared.metrics.MetricUtils;
 import org.joda.time.DateTime;
-import org.mongojack.WriteResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -132,8 +130,7 @@ public class EsIndexRangeService implements IndexRangeService {
                     parseFromDateString((String) fields.get(EsIndexRange.FIELD_BEGIN)),
                     parseFromDateString((String) fields.get(EsIndexRange.FIELD_END)),
                     parseFromDateString((String) fields.get(EsIndexRange.FIELD_CALCULATED_AT)),
-                    (int) fields.get(EsIndexRange.FIELD_TOOK_MS),
-                    null
+                    (int) fields.get(EsIndexRange.FIELD_TOOK_MS)
             );
         } catch (Exception e) {
             LOG.debug("Couldn't create index range from fields: " + fields);
@@ -187,12 +184,7 @@ public class EsIndexRangeService implements IndexRangeService {
     }
 
     @Override
-    public WriteResult<MongoIndexRange, ObjectId> save(IndexRange indexRange) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public boolean remove(String index) {
+    public void save(IndexRange indexRange) {
         throw new UnsupportedOperationException();
     }
 
