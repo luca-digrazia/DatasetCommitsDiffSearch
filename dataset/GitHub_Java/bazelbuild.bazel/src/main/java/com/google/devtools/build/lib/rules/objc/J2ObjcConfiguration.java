@@ -1,4 +1,4 @@
-// Copyright 2015 Google Inc. All rights reserved.
+// Copyright 2015 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,77 +15,104 @@
 package com.google.devtools.build.lib.rules.objc;
 
 import com.google.common.base.Joiner;
-import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
+import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.ConfigurationEnvironment;
-import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
+import com.google.devtools.build.lib.analysis.config.Fragment;
+import com.google.devtools.build.lib.analysis.config.RequiresOptions;
+import com.google.devtools.build.lib.analysis.starlark.annotations.StarlarkConfigurationField;
+import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
-
+import com.google.devtools.build.lib.starlarkbuildapi.apple.J2ObjcConfigurationApi;
 import java.util.Collections;
-import java.util.Set;
+import javax.annotation.Nullable;
 
 /**
- * A J2ObjC transpiler configuration containing J2ObjC translation flags.
+ * A J2ObjC transpiler configuration fragment containing J2ObjC translation flags. This
+ * configuration fragment is used by Java rules that can be transpiled (specifically, J2ObjCAspects
+ * thereof).
  */
-public class J2ObjcConfiguration extends Fragment {
+@Immutable
+@RequiresOptions(options = {J2ObjcCommandLineOptions.class})
+public class J2ObjcConfiguration extends Fragment implements J2ObjcConfigurationApi {
   /**
-   * Always-on flags for J2ObjC translation. These flags will always be used for invoking the J2ObjC
-   * transpiler. See https://github.com/google/j2objc/wiki/j2objc for flag documentation.
+   * Always-on flags for J2ObjC translation. These flags are always used when invoking the J2ObjC
+   * transpiler, and cannot be overridden by user-specified flags in {@link
+   * J2ObjcCommandLineOptions}. See https://j2objc.org/reference/j2objc.html for flag documentation.
    */
-  private static final Set<String> J2OBJC_ALWAYS_ON_TRANSLATION_FLAGS = ImmutableSet.of(
-      "--doc-comments",
-      "--extract-unsequenced",
-      "--final-methods-as-functions",
-      "--hide-private-members",
-      "--segmented-headers",
-      "-XcombineJars");
+  private static final ImmutableList<String> J2OBJC_ALWAYS_ON_TRANSLATION_FLAGS =
+      ImmutableList.of(
+          "-encoding", "UTF-8", "--doc-comments", "-XcombineJars", "-XDinjectLogSites=true");
 
   /**
-   * Allowed flags for J2ObjC translation. See https://github.com/google/j2objc/wiki/j2objc for flag
+   * Default flags for J2ObjC translation. These flags are used by default when invoking the J2ObjC
+   * transpiler, but can be overridden by user-specified flags in {@link J2ObjcCommandLineOptions}.
+   * See https://j2objc.org/reference/j2objc.html for flag documentation.
+   */
+  private static final ImmutableList<String> J2OBJC_DEFAULT_TRANSLATION_FLAGS =
+      ImmutableList.of("-g");
+
+  /** The j2objc flag to generate ARC-compatible code. */
+  private static final String J2OBJC_USE_ARC_FLAG = "-use-arc";
+
+  /**
+   * Disallowed flags for J2ObjC translation. See https://j2objc.org/reference/j2objc.html for flag
    * documentation.
    */
-  static final Set<String> J2OBJC_BLACKLISTED_TRANSLATION_FLAGS =
-      ImmutableSet.of("--prefixes", "--prefix", "-x");
+  static final ImmutableList<String> J2OBJC_BLACKLISTED_TRANSLATION_FLAGS =
+      ImmutableList.of("--prefixes", "--prefix", "-x");
 
   static final String INVALID_TRANSLATION_FLAGS_MSG_TEMPLATE =
       "J2Objc translation flags: %s not supported. Unsupported flags are: %s";
 
-  /**
-   * Configuration loader for {@link J2ObjcConfiguration}.
-   */
-  public static class Loader implements ConfigurationFragmentFactory {
-    @Override
-    public Fragment create(ConfigurationEnvironment env, BuildOptions buildOptions) {
-      return new J2ObjcConfiguration(buildOptions.get(J2ObjcCommandLineOptions.class));
-    }
-
-    @Override
-    public Class<? extends Fragment> creates() {
-      return J2ObjcConfiguration.class;
-    }
-  }
-
-  private final Set<String> translationFlags;
+  private final ImmutableList<String> translationFlags;
   private final boolean removeDeadCode;
+  private final boolean experimentalJ2ObjcHeaderMap;
+  private final boolean experimentalShorterHeaderPath;
+  @Nullable private final Label deadCodeReport;
 
-  J2ObjcConfiguration(J2ObjcCommandLineOptions j2ObjcOptions) {
+  public J2ObjcConfiguration(BuildOptions buildOptions) {
+    J2ObjcCommandLineOptions j2ObjcOptions = buildOptions.get(J2ObjcCommandLineOptions.class);
+    this.translationFlags =
+        ImmutableList.<String>builder()
+            .addAll(J2OBJC_DEFAULT_TRANSLATION_FLAGS)
+            .addAll(j2ObjcOptions.translationFlags)
+            .addAll(J2OBJC_ALWAYS_ON_TRANSLATION_FLAGS)
+            .build();
     this.removeDeadCode = j2ObjcOptions.removeDeadCode;
-    this.translationFlags = ImmutableSet.<String>builder()
-        .addAll(j2ObjcOptions.translationFlags)
-        .addAll(J2OBJC_ALWAYS_ON_TRANSLATION_FLAGS)
-        .build();
+    this.experimentalJ2ObjcHeaderMap = j2ObjcOptions.experimentalJ2ObjcHeaderMap;
+    this.experimentalShorterHeaderPath = j2ObjcOptions.experimentalShorterHeaderPath;
+    this.deadCodeReport = j2ObjcOptions.deadCodeReport;
   }
 
   /**
    * Returns the translation flags used to invoke the J2ObjC transpiler. The returned flags contain
-   * both the always-on flags from {@link #J2OBJC_ALWAYS_ON_TRANSLATION_FLAGS} and user-specified
-   * flags from {@link J2ObjcCommandLineOptions}. The set of valid flags can be found at
+   * the default flags from {@link #J2OBJC_DEFAULT_TRANSLATION_FLAGS}, user-specified flags from
+   * {@link J2ObjcCommandLineOptions}, and always-on flags from {@link
+   * #J2OBJC_ALWAYS_ON_TRANSLATION_FLAGS}. The set of disallowed flags can be found at
    * {@link #J2OBJC_BLACKLISTED_TRANSLATION_FLAGS}.
    */
-  public Iterable<String> getTranslationFlags() {
+  @Override
+  public ImmutableList<String> getTranslationFlags() {
     return translationFlags;
+  }
+
+  /**
+   * Returns the label of the dead code report generated by ProGuard for J2ObjC to eliminate dead
+   * code. The dead Java code in the report will not be translated to Objective-C code.
+   *
+   * <p>Returns null if no such report was requested.
+   */
+  @Nullable
+  @StarlarkConfigurationField(
+      name = "dead_code_report",
+      doc =
+          "The label of the dead code report generated by ProGuard for dead code elimination, "
+              + "or <code>None</code> if no such report was requested.",
+      defaultLabel = "")
+  public Label deadCodeReport() {
+    return deadCodeReport;
   }
 
   /**
@@ -98,14 +125,24 @@ public class J2ObjcConfiguration extends Fragment {
     return removeDeadCode;
   }
 
-  @Override
-  public String getName() {
-    return "J2ObjC";
+  /**
+   * Returns whether to generate J2ObjC header map in a separate action in parallel of the J2ObjC
+   * transpilation action.
+   */
+  public boolean experimentalJ2ObjcHeaderMap() {
+    return experimentalJ2ObjcHeaderMap;
   }
 
-  @Override
-  public String cacheKey() {
-    return Joiner.on(" ").join(translationFlags) + "-" + String.valueOf(removeDeadCode);
+  /**
+   * Returns whether to use a shorter path for generated header files.
+   */
+  public boolean experimentalShorterHeaderPath() {
+    return experimentalShorterHeaderPath;
+  }
+
+  /** Returns whether objc_library should build generated files using ARC (-fobjc-arc). */
+  public boolean compileWithARC() {
+    return translationFlags.contains(J2OBJC_USE_ARC_FLAG);
   }
 
   @Override
