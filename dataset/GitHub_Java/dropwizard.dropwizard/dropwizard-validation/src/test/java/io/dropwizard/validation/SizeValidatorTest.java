@@ -60,7 +60,7 @@ public class SizeValidatorTest {
     private final Validator validator = BaseValidator.newValidator();
 
     @Test
-    void returnsASetOfErrorsForAnObject() throws Exception {
+    public void returnsASetOfErrorsForAnObject() throws Exception {
         assumeTrue("en".equals(Locale.getDefault().getLanguage()),
                 "This test executes when the defined language is English ('en'). If not, it is skipped.");
 
@@ -75,7 +75,7 @@ public class SizeValidatorTest {
     }
 
     @Test
-    void returnsAnEmptySetForAValidObject() throws Exception {
+    public void returnsAnEmptySetForAValidObject() throws Exception {
         final Example example = new Example();
         example.setTooBig(Size.bytes(10));
         example.setTooSmall(Size.megabytes(10));

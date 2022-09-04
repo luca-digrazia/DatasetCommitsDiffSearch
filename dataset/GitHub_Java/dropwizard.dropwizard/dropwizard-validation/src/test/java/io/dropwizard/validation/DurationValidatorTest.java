@@ -73,7 +73,7 @@ public class DurationValidatorTest {
     private final Validator validator = BaseValidator.newValidator();
 
     @Test
-    void returnsASetOfErrorsForAnObject() throws Exception {
+    public void returnsASetOfErrorsForAnObject() throws Exception {
         assumeTrue("en".equals(Locale.getDefault().getLanguage()),
                 "This test executes when the defined language is English ('en'). If not, it is skipped.");
 
@@ -94,7 +94,7 @@ public class DurationValidatorTest {
     }
 
     @Test
-    void returnsAnEmptySetForAValidObject() throws Exception {
+    public void returnsAnEmptySetForAValidObject() throws Exception {
         final Example example = new Example();
         example.setTooBig(Duration.seconds(10));
         example.setTooBigExclusive(Duration.seconds(29));
