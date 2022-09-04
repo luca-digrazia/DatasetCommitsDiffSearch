@@ -34,6 +34,7 @@ import com.google.devtools.build.lib.analysis.Util;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector.LocalMetadataCollector;
+import com.google.devtools.build.lib.analysis.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -95,8 +96,8 @@ public final class PyCommon {
   }
 
   public void initCommon(PythonVersion defaultVersion) {
-    this.sourcesVersion =
-        getPythonVersionAttr(ruleContext, "srcs_version", PythonVersion.getAllValues());
+    this.sourcesVersion = getPythonVersionAttr(
+        ruleContext, "srcs_version", PythonVersion.getAllVersions());
 
     this.version = ruleContext.getFragment(PythonConfiguration.class)
         .getPythonVersion(defaultVersion);
@@ -162,13 +163,13 @@ public final class PyCommon {
       NestedSet<String> imports) {
 
     builder
-        .addNativeDeclaredProvider(
+        .add(
+            InstrumentedFilesProvider.class,
             InstrumentedFilesCollector.collect(
                 ruleContext,
                 semantics.getCoverageInstrumentationSpec(),
                 METADATA_COLLECTOR,
-                filesToBuild,
-                /* reportedToActualSources= */ NestedSetBuilder.create(Order.STABLE_ORDER)))
+                filesToBuild))
         .addSkylarkTransitiveInfo(
             PYTHON_SKYLARK_PROVIDER_NAME,
             createSourceProvider(this.transitivePythonSources, usesSharedLibraries(), imports))
@@ -217,7 +218,7 @@ public final class PyCommon {
     ruleContext.attributeError(attrName,
         "'" + stringAttr + "' is not a valid value. Expected one of: " + Joiner.on(", ")
             .join(allowed));
-    return PythonVersion.getDefaultTargetValue();
+    return PythonVersion.defaultTargetPythonVersion();
   }
 
   /**
