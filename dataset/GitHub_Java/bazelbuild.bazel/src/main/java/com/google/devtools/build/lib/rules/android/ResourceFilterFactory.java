@@ -34,7 +34,6 @@ import com.google.devtools.build.lib.analysis.config.PatchTransition;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
-import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.common.options.EnumConverter;
 import com.google.devtools.common.options.OptionsParsingException;
@@ -198,22 +197,16 @@ public class ResourceFilterFactory {
     return ImmutableList.sortedCopyOf(builder.build());
   }
 
-  static ResourceFilterFactory fromRuleContext(RuleContext ruleContext) throws RuleErrorException {
+  static ResourceFilterFactory fromRuleContext(RuleContext ruleContext) {
     Preconditions.checkNotNull(ruleContext);
 
     if (!ruleContext.isLegalFragment(AndroidConfiguration.class)) {
-      return empty();
+      return empty(DEFAULT_BEHAVIOR);
     }
 
-    ResourceFilterFactory base;
-    if (AndroidAaptVersion.chooseTargetAaptVersion(ruleContext) == AndroidAaptVersion.AAPT2) {
-      // aapt2 must have access to all of the resources in execution, so don't filter in analysis.
-      base = empty(FilterBehavior.FILTER_IN_EXECUTION);
-    } else {
-      base = ruleContext.getFragment(AndroidConfiguration.class).getResourceFilterFactory();
-    }
-
-    return forBaseAndAttrs(base, ruleContext.attributes());
+    return forBaseAndAttrs(
+        ruleContext.getFragment(AndroidConfiguration.class).getResourceFilterFactory(),
+        ruleContext.attributes());
   }
 
   @VisibleForTesting
@@ -231,7 +224,7 @@ public class ResourceFilterFactory {
    */
   ResourceFilterFactory withAttrsFrom(AttributeMap attrs) {
     if (!hasFilters(attrs)) {
-      return this;
+      return new ResourceFilterFactory(configFilters, densities, filterBehavior);
     }
 
     return new ResourceFilterFactory(
@@ -389,8 +382,8 @@ public class ResourceFilterFactory {
     }
   }
 
-  static ResourceFilterFactory empty() {
-    return empty(DEFAULT_BEHAVIOR);
+  static ResourceFilterFactory empty(RuleContext ruleContext) {
+    return empty(fromRuleContext(ruleContext).filterBehavior);
   }
 
   @VisibleForTesting

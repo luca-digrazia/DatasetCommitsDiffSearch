@@ -374,8 +374,8 @@ public final class ResourceDependencies {
 
   @VisibleForTesting
   ResourceDependencies withResources(
-      NestedSet<ResourceContainer> transitiveResourceContainers,
       NestedSet<ResourceContainer> directResourceContainers,
+      NestedSet<ResourceContainer> transitiveResourceContainers,
       NestedSet<Artifact> transitiveResources) {
     return new ResourceDependencies(
         neverlink,
