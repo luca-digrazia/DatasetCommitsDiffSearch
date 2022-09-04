@@ -85,8 +85,6 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
 
     protected float mDownY; //触摸的Y
 
-    protected float mMoveY;
-
     protected float mBrightnessData = -1; //亮度
 
     protected int mDownPosition; //手指放下的位置
@@ -101,10 +99,11 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
 
     protected int mSeekToInAdvance = -1; //// TODO: 2016/11/13 跳过广告
 
+    protected int mSeekOnStart = -1; //从哪个开始播放
+
+    protected int mRotate = 0; //针对某些视频的旋转信息做了旋转处理
 
     protected int mSeekTimePosition; //手动改变滑动的位置
-
-    protected long mSeekOnStart = -1; //从哪个开始播放
 
     protected long mPauseTime; //保存暂停时的时间
 
@@ -178,9 +177,9 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
     /**
      * 设置播放URL
      *
-     * @param url           播放url
+     * @param url
      * @param cacheWithPlay 是否边播边缓存
-     * @param objects       object[0]目前为title
+     * @param objects
      * @return
      */
     public boolean setUp(String url, boolean cacheWithPlay, Object... objects) {
@@ -191,11 +190,11 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
     /**
      * 设置播放URL
      *
-     * @param url           播放url
+     * @param url
      * @param cacheWithPlay 是否边播边缓存
-     * @param cachePath     缓存路径，如果是M3U8或者HLS，请设置为false
-     * @param mapHeadData   头部信息
-     * @param objects       object[0]目前为title
+     * @param cachePath     缓存路径
+     * @param mapHeadData
+     * @param objects
      * @return
      */
     @Override
@@ -212,10 +211,10 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
     /**
      * 设置播放URL
      *
-     * @param url           播放url
+     * @param url
      * @param cacheWithPlay 是否边播边缓存
-     * @param cachePath     缓存路径，如果是M3U8或者HLS，请设置为false
-     * @param objects       object[0]目前为title
+     * @param cachePath     缓存路径
+     * @param objects
      * @return
      */
     @Override
@@ -231,9 +230,6 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
             HttpProxyCacheServer proxy = GSYVideoManager.getProxy(getContext().getApplicationContext(), cachePath);
             url = proxy.getProxyUrl(url);
             mCacheFile = (!url.startsWith("http"));
-            if (!mCacheFile) {
-                proxy.registerCacheListener(GSYVideoManager.instance(), mOriginUrl);
-            }
         }
         this.mUrl = url;
         this.mObjects = objects;
@@ -527,7 +523,6 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
                     mTouchingProgressBar = true;
                     mDownX = x;
                     mDownY = y;
-                    mMoveY = 0;
                     mChangeVolume = false;
                     mChangePosition = false;
                     mBrightness = false;
@@ -577,11 +572,8 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
 
                         showVolumeDialog(-deltaY, volumePercent);
                     } else if (!mChangePosition && mBrightness) {
-                        if (Math.abs(deltaY) > mThreshold) {
-                            float percent = (-deltaY / mScreenHeight);
-                            onBrightnessSlide(percent);
-                            mDownY = y;
-                        }
+                        float percent = (-deltaY / mScreenHeight) / 4;
+                        onBrightnessSlide(percent);
                     }
 
                     break;
@@ -650,7 +642,6 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
         try {
             if (mCurrentState == CURRENT_STATE_PAUSE && mFullPauseBitmap != null
                     && !mFullPauseBitmap.isRecycled()) {
-                mCoverImageView.setRotation(mRotate);
                 mCoverImageView.setImageBitmap(mFullPauseBitmap);
                 mCoverImageView.setVisibility(VISIBLE);
             }
@@ -777,7 +768,6 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
 
         if (GSYVideoManager.instance().getMediaPlayer() != null && mSeekOnStart > 0) {
             GSYVideoManager.instance().getMediaPlayer().seekTo(mSeekOnStart);
-            mSeekOnStart = 0;
         }
 
         mHadPlay = true;
@@ -1006,7 +996,7 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
         if (!mTouchingProgressBar) {
             if (progress != 0) mProgressBar.setProgress(progress);
         }
-        if (secProgress > 94) secProgress = 100;
+        if (secProgress > 95) secProgress = 100;
         if (secProgress != 0 && !mCacheFile) {
             mProgressBar.setSecondaryProgress(secProgress);
         }
@@ -1069,12 +1059,12 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
      */
     private void onBrightnessSlide(float percent) {
         //if (mBrightnessData < 0) {
-        mBrightnessData = ((Activity) (mContext)).getWindow().getAttributes().screenBrightness;
-        if (mBrightnessData <= 0.00f) {
-            mBrightnessData = 0.50f;
-        } else if (mBrightnessData < 0.01f) {
-            mBrightnessData = 0.01f;
-        }
+            mBrightnessData = ((Activity) (mContext)).getWindow().getAttributes().screenBrightness;
+            if (mBrightnessData <= 0.00f) {
+                mBrightnessData = 0.50f;
+            } else if (mBrightnessData < 0.01f) {
+                mBrightnessData = 0.01f;
+            }
         //}
         WindowManager.LayoutParams lpa = ((Activity) (mContext)).getWindow().getAttributes();
         lpa.screenBrightness = mBrightnessData + percent;
@@ -1210,7 +1200,7 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
         return getTextSpeed(speed);
     }
 
-    public long getSeekOnStart() {
+    public int getSeekOnStart() {
         return mSeekOnStart;
     }
 
@@ -1218,7 +1208,7 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
      * 从哪里开始播放
      * 目前有时候前几秒有跳动问题
      */
-    public void setSeekOnStart(long seekOnStart) {
+    public void setSeekOnStart(int seekOnStart) {
         this.mSeekOnStart = seekOnStart;
     }
 }
