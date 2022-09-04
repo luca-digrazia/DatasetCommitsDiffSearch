@@ -14,19 +14,17 @@
 
 package com.google.devtools.build.lib.rules.repository;
 
-import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.actions.FileValue;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.LabelValidator;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.rules.repository.RepositoryFunction.RepositoryFunctionException;
+import com.google.devtools.build.lib.skyframe.FileValue;
 import com.google.devtools.build.lib.skyframe.PackageLookupValue;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
@@ -184,7 +182,7 @@ public class NewRepositoryFileHandler {
       Label label;
       try {
         // Parse a label
-        label = Label.parseAbsolute(getFileAttributeValue(rule), ImmutableMap.of());
+        label = Label.parseAbsolute(getFileAttributeValue(rule));
       } catch (LabelSyntaxException ex) {
         throw new RepositoryFunctionException(
             new EvalException(
@@ -218,7 +216,7 @@ public class NewRepositoryFileHandler {
         }
 
         // And now for the file
-        Root packageRoot = pkgLookupValue.getRoot();
+        Path packageRoot = pkgLookupValue.getRoot();
         rootedFile = RootedPath.toRootedPath(packageRoot, label.toPathFragment());
       } else {
         // TODO(dmarting): deprecate using a path for the workspace_file attribute.
@@ -238,10 +236,9 @@ public class NewRepositoryFileHandler {
         if (file.isAbsolute()) {
           rootedFile =
               RootedPath.toRootedPath(
-                  Root.fromPath(fileTarget.getParentDirectory()),
-                  PathFragment.create(fileTarget.getBaseName()));
+                  fileTarget.getParentDirectory(), PathFragment.create(fileTarget.getBaseName()));
         } else {
-          rootedFile = RootedPath.toRootedPath(Root.fromPath(workspacePath), file);
+          rootedFile = RootedPath.toRootedPath(workspacePath, file);
         }
       }
       SkyKey fileKey = FileValue.key(rootedFile);

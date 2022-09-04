@@ -107,8 +107,7 @@ public class SkylarkRepositoryContext {
             val == null
                 ? Runtime.NONE
                 // Attribute values should be type safe
-                : SkylarkType.convertToSkylark(val,
-                    (com.google.devtools.build.lib.syntax.Environment) null));
+                : SkylarkType.convertToSkylark(val, null));
       }
     }
     attrObject = NativeProvider.STRUCT.create(attrBuilder.build(), "No such attribute '%s'");

@@ -23,7 +23,6 @@ import com.google.common.io.BaseEncoding;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.cache.Md5Digest;
 import com.google.devtools.build.lib.actions.cache.Metadata;
@@ -193,7 +192,7 @@ public class ActionMetadataHandler implements MetadataHandler {
       checkInconsistentData(artifact, oldValue, value);
       return metadataFromValue(value);
     } else if (artifact.isTreeArtifact()) {
-      TreeArtifactValue setValue = getTreeArtifactValue((SpecialArtifact) artifact);
+      TreeArtifactValue setValue = getTreeArtifactValue(artifact);
       if (setValue != null && setValue != TreeArtifactValue.MISSING_TREE_ARTIFACT) {
         return setValue.getMetadata();
       }
@@ -291,7 +290,7 @@ public class ActionMetadataHandler implements MetadataHandler {
     return contents;
   }
 
-  private TreeArtifactValue getTreeArtifactValue(SpecialArtifact artifact) throws IOException {
+  private TreeArtifactValue getTreeArtifactValue(Artifact artifact) throws IOException {
     TreeArtifactValue value = outputTreeArtifactData.get(artifact);
     if (value != null) {
       return value;
@@ -385,7 +384,7 @@ public class ActionMetadataHandler implements MetadataHandler {
     return TreeArtifactValue.create(values);
   }
 
-  private TreeArtifactValue constructTreeArtifactValueFromFilesystem(SpecialArtifact artifact)
+  private TreeArtifactValue constructTreeArtifactValueFromFilesystem(Artifact artifact)
       throws IOException {
     Preconditions.checkState(artifact.isTreeArtifact(), artifact);
 
@@ -555,7 +554,7 @@ public class ActionMetadataHandler implements MetadataHandler {
       throws IOException {
     Path path = artifact.getPath();
     RootedPath rootedPath =
-        RootedPath.toRootedPath(artifact.getRoot().getRoot(), artifact.getRootRelativePath());
+        RootedPath.toRootedPath(artifact.getRoot().getPath(), artifact.getRootRelativePath());
     if (statNoFollow == null) {
       statNoFollow = FileStatusWithDigestAdapter.adapt(path.statIfFound(Symlinks.NOFOLLOW));
       if (statNoFollow == null) {
@@ -574,9 +573,8 @@ public class ActionMetadataHandler implements MetadataHandler {
         throw new IOException("symlink cycle");
       }
     }
-    RootedPath realRootedPath =
-        RootedPath.toRootedPathMaybeUnderRoot(
-            realPath, ImmutableList.of(artifact.getRoot().getRoot()));
+    RootedPath realRootedPath = RootedPath.toRootedPathMaybeUnderRoot(realPath,
+        ImmutableList.of(artifact.getRoot().getPath()));
     FileStateValue fileStateValue =
         FileStateValue.createWithStatNoFollow(rootedPath, statNoFollow, tsgm);
     // TODO(bazel-team): consider avoiding a 'stat' here when the symlink target hasn't changed
@@ -601,7 +599,7 @@ public class ActionMetadataHandler implements MetadataHandler {
     }
   }
 
-  private void setTreeReadOnlyAndExecutable(SpecialArtifact parent, PathFragment subpath)
+  private void setTreeReadOnlyAndExecutable(Artifact parent, PathFragment subpath)
       throws IOException {
     Path path = parent.getPath().getRelative(subpath);
     if (path.isDirectory()) {

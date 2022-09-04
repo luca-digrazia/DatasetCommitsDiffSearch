@@ -23,7 +23,6 @@ import com.google.devtools.build.lib.skyframe.InconsistentFilesystemException;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import com.google.devtools.build.skyframe.SkyFunctionException;
@@ -57,7 +56,7 @@ public class NewLocalRepositoryFunction extends RepositoryFunction {
     FileSystem fs = directories.getOutputBase().getFileSystem();
     Path path = fs.getPath(pathFragment);
 
-    RootedPath dirPath = RootedPath.toRootedPath(Root.absoluteRoot(fs), path);
+    RootedPath dirPath = RootedPath.toRootedPath(fs.getRootDirectory(), path);
 
     try {
       FileValue dirFileValue =

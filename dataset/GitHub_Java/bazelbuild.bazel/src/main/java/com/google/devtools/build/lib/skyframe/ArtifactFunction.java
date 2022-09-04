@@ -214,8 +214,8 @@ class ArtifactFunction implements SkyFunction {
 
   private FileArtifactValue createSourceValue(Artifact artifact, boolean mandatory, Environment env)
       throws MissingInputFileException, InterruptedException {
-    SkyKey fileSkyKey =
-        FileValue.key(RootedPath.toRootedPath(artifact.getRoot().getRoot(), artifact.getPath()));
+    SkyKey fileSkyKey = FileValue.key(RootedPath.toRootedPath(artifact.getRoot().getPath(),
+        artifact.getPath()));
     FileValue fileValue;
     try {
       fileValue = (FileValue) env.getValueOrThrow(fileSkyKey, IOException.class);
@@ -268,7 +268,7 @@ class ArtifactFunction implements SkyFunction {
     // Directories are special-cased because their mtimes are used, so should have been constructed
     // during execution of the action (in ActionMetadataHandler#maybeStoreAdditionalData).
     Preconditions.checkState(data.isFile(), "Unexpected not file %s (%s)", artifact, data);
-    return FileArtifactValue.createNormalFile(data);
+    return FileArtifactValue.createNormalFile(data.getDigest(), data.getSize());
   }
 
   private static AggregatingArtifactValue createAggregatingValue(

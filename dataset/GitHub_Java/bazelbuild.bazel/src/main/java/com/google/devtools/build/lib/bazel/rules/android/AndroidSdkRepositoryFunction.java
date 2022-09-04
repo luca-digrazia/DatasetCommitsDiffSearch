@@ -38,7 +38,6 @@ import com.google.devtools.build.lib.vfs.Dirent;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
@@ -105,7 +104,7 @@ public class AndroidSdkRepositoryFunction extends AndroidRepositoryFunction {
           new EvalException(
               rule.getLocation(),
               "Either the path attribute of android_sdk_repository or the ANDROID_HOME environment "
-                  + "variable must be set."),
+                  + " variable must be set."),
           Transience.PERSISTENT);
     }
 
@@ -304,8 +303,8 @@ public class AndroidSdkRepositoryFunction extends AndroidRepositoryFunction {
     Path sourcePropertiesFilePath = directory.getRelative(
         "build-tools/" + buildToolsDirectory + "/source.properties");
 
-    SkyKey releaseFileKey =
-        FileValue.key(RootedPath.toRootedPath(Root.fromPath(directory), sourcePropertiesFilePath));
+    SkyKey releaseFileKey = FileValue.key(
+        RootedPath.toRootedPath(directory, sourcePropertiesFilePath));
 
     try {
       env.getValueOrThrow(releaseFileKey, IOException.class);
@@ -402,8 +401,7 @@ public class AndroidSdkRepositoryFunction extends AndroidRepositoryFunction {
                     input ->
                         DirectoryListingValue.key(
                             RootedPath.toRootedPath(
-                                Root.fromPath(root),
-                                root.getRelative(path).getRelative(input.getName())))));
+                                root, root.getRelative(path).getRelative(input.getName())))));
 
     Map<SkyKey, ValueOrException<InconsistentFilesystemException>> values =
         env.getValuesOrThrow(

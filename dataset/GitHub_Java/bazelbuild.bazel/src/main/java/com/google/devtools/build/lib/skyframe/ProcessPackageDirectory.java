@@ -13,8 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import static com.google.common.collect.ImmutableSet.toImmutableSet;
-
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
@@ -27,8 +25,8 @@ import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.vfs.Dirent;
 import com.google.devtools.build.lib.vfs.Dirent.Type;
+import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyKey;
@@ -169,7 +167,7 @@ public class ProcessPackageDirectory {
       RootedPath rootedPath,
       RepositoryName repositoryName,
       Set<PathFragment> excludedPaths) {
-    Root root = rootedPath.getRoot();
+    Path root = rootedPath.getRoot();
     PathFragment rootRelativePath = rootedPath.getRelativePath();
     boolean followSymlinks = shouldFollowSymlinksWhenTraversing(dirListingValue.getDirents());
     List<SkyKey> childDeps = new ArrayList<>();
@@ -211,10 +209,7 @@ public class ProcessPackageDirectory {
       // TODO(bazel-team): Replace the excludedPaths set with a trie or a SortedSet for better
       // efficiency.
       ImmutableSet<PathFragment> excludedSubdirectoriesBeneathThisSubdirectory =
-          excludedPaths
-              .stream()
-              .filter(pathFragment -> pathFragment.startsWith(subdirectory))
-              .collect(toImmutableSet());
+          PathFragment.filterPathsStartingWith(excludedPaths, subdirectory);
       RootedPath subdirectoryRootedPath = RootedPath.toRootedPath(root, subdirectory);
       childDeps.add(
           skyKeyTransformer.makeSkyKey(

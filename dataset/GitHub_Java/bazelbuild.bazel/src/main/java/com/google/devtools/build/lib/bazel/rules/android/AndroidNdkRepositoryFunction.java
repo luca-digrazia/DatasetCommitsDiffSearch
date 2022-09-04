@@ -39,7 +39,6 @@ import com.google.devtools.build.lib.util.ResourceFileLoader;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CToolchain;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CrosstoolRelease;
@@ -175,21 +174,17 @@ public class AndroidNdkRepositoryFunction extends AndroidRepositoryFunction {
       String warningMessage =
           String.format(
               "The revision of the Android NDK referenced by android_ndk_repository rule '%s' "
-                  + "could not be determined (the revision string found is '%s'). "
-                  + "Bazel will attempt to treat the NDK as if it was r%s. This may cause "
-                  + "compilation and linkage problems. Please download a supported NDK version.\n",
-              ruleName,
-              ndkRelease.rawRelease,
-              AndroidNdkCrosstools.LATEST_KNOWN_REVISION.getKey());
+                  + "could not be determined (the revision string found is '%s'). Defaulting to "
+                  + "revision %s.",
+              ruleName, ndkRelease.rawRelease, AndroidNdkCrosstools.LATEST_KNOWN_REVISION.getKey());
       env.getListener().handle(Event.warn(warningMessage));
       ndkMajorRevision = AndroidNdkCrosstools.LATEST_KNOWN_REVISION.getValue();
     } else if (!AndroidNdkCrosstools.isKnownNDKRevision(ndkRelease)) {
       String warningMessage =
           String.format(
               "The major revision of the Android NDK referenced by android_ndk_repository rule "
-                  + "'%s' is %s. The major revisions supported by Bazel are %s. Bazel will attempt "
-                  + "to treat the NDK as if it was r%s. This may cause compilation and linkage "
-                  + "problems. Please download a supported NDK version.\n",
+                  + "'%s' is %s. The major revisions supported by Bazel are %s. Defaulting to "
+                  + "revision %s.",
               ruleName,
               ndkRelease.majorRevision,
               AndroidNdkCrosstools.KNOWN_NDK_MAJOR_REVISIONS.keySet(),
@@ -363,8 +358,7 @@ public class AndroidNdkRepositoryFunction extends AndroidRepositoryFunction {
       releaseFilePath = directory.getRelative("RELEASE.TXT");
     }
 
-    SkyKey releaseFileKey =
-        FileValue.key(RootedPath.toRootedPath(Root.fromPath(directory), releaseFilePath));
+    SkyKey releaseFileKey = FileValue.key(RootedPath.toRootedPath(directory, releaseFilePath));
 
     String releaseFileContent = "";
     try {
