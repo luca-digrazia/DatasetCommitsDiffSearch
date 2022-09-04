@@ -1,6 +1,6 @@
 package io.dropwizard.jetty;
 
-import io.dropwizard.util.Maps;
+import com.google.common.collect.ImmutableMap;
 import org.eclipse.jetty.server.Connector;
 import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.server.HttpChannel;
@@ -9,14 +9,15 @@ import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.handler.ContextHandler;
 import org.eclipse.jetty.server.session.SessionHandler;
 import org.eclipse.jetty.servlet.ServletContextHandler;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -30,13 +31,13 @@ public class RoutingHandlerTest {
     private final Handler handler1 = spy(new ContextHandler());
     private final Handler handler2 = spy(new ContextHandler());
 
-    private final RoutingHandler handler = new RoutingHandler(Maps.of(connector1,
-                                                                      handler1,
-                                                                      connector2,
-                                                                      handler2));
+    private final RoutingHandler handler = new RoutingHandler(ImmutableMap.of(connector1,
+                                                                              handler1,
+                                                                              connector2,
+                                                                              handler2));
 
     @Test
-    void startsAndStopsAllHandlers() throws Exception {
+    public void startsAndStopsAllHandlers() throws Exception {
         handler1.setServer(mock(Server.class));
         handler2.setServer(mock(Server.class));
         handler.start();
@@ -56,7 +57,8 @@ public class RoutingHandlerTest {
     }
 
     @Test
-    void routesRequestsToTheConnectorSpecificHandler() throws Exception {
+    @SuppressWarnings({ "rawtypes", "unchecked" })
+    public void routesRequestsToTheConnectorSpecificHandler() throws Exception {
         final HttpChannel channel = mock(HttpChannel.class);
         when(channel.getConnector()).thenReturn(connector1);
 
@@ -72,12 +74,12 @@ public class RoutingHandlerTest {
     }
 
     @Test
-    void withSessionHandler() throws Exception {
+    public void withSessionHandler() throws Exception {
         final ContextHandler handler1 = new ContextHandler();
         final ServletContextHandler handler2 = new ServletContextHandler();
         final SessionHandler childHandler1 = new SessionHandler();
         handler2.setSessionHandler(childHandler1);
-        final RoutingHandler handler = new RoutingHandler(Maps.of(connector1, handler1, connector2, handler2));
+        final RoutingHandler handler = new RoutingHandler(ImmutableMap.of(connector1, handler1, connector2, handler2));
         new Server().setHandler(handler);
 
         handler.start();
@@ -89,7 +91,7 @@ public class RoutingHandlerTest {
     }
 
     @Test
-    void withoutSessionHandler() throws Exception {
+    public void withoutSessionHandler() throws Exception {
         new Server().setHandler(handler);
 
         handler.start();
