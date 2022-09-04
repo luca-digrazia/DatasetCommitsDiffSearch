@@ -40,7 +40,6 @@ import org.graylog2.database.MongoConnectionRule;
 import org.graylog2.database.ObjectIdSerializer;
 import org.graylog2.plugin.system.NodeId;
 import org.graylog2.shared.jackson.SizeSerializer;
-import org.graylog2.shared.plugins.ChainingClassLoader;
 import org.graylog2.shared.rest.RangeJsonSerializer;
 import org.graylog2.system.debug.DebugEvent;
 import org.joda.time.DateTime;
@@ -111,7 +110,6 @@ public class ClusterEventPeriodicalTest {
                 mongoRule.getMongoConnection(),
                 nodeId,
                 objectMapper,
-                new ChainingClassLoader(getClass().getClassLoader()),
                 serverEventBus,
                 clusterEventBus
         );
@@ -298,7 +296,7 @@ public class ClusterEventPeriodicalTest {
 
     @Test
     public void prepareCollectionCreatesIndexesOnExistingCollection() throws Exception {
-        DBCollection original = mongoConnection.getDatabase().getCollection(ClusterEventPeriodical.COLLECTION_NAME);
+        DBCollection original = mongoConnection.getDatabase().createCollection(ClusterEventPeriodical.COLLECTION_NAME, null);
         original.dropIndexes();
         assertThat(original.getName()).isEqualTo(ClusterEventPeriodical.COLLECTION_NAME);
         assertThat(original.getIndexInfo()).hasSize(1);
@@ -306,7 +304,7 @@ public class ClusterEventPeriodicalTest {
         DBCollection collection = ClusterEventPeriodical.prepareCollection(mongoConnection);
         assertThat(collection.getName()).isEqualTo(ClusterEventPeriodical.COLLECTION_NAME);
         assertThat(collection.getIndexInfo()).hasSize(2);
-        assertThat(collection.getWriteConcern()).isEqualTo(WriteConcern.JOURNALED);
+        assertThat(collection.getWriteConcern()).isEqualTo(WriteConcern.FSYNCED);
     }
 
     @Test
@@ -317,7 +315,7 @@ public class ClusterEventPeriodicalTest {
 
         assertThat(collection.getName()).isEqualTo(ClusterEventPeriodical.COLLECTION_NAME);
         assertThat(collection.getIndexInfo()).hasSize(2);
-        assertThat(collection.getWriteConcern()).isEqualTo(WriteConcern.JOURNALED);
+        assertThat(collection.getWriteConcern()).isEqualTo(WriteConcern.FSYNCED);
     }
 
     public static class SimpleEventHandler {
