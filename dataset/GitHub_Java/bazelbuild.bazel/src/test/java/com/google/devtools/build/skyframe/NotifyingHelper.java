@@ -148,7 +148,6 @@ public class NotifyingHelper {
   public enum EventType {
     CREATE_IF_ABSENT,
     ADD_REVERSE_DEP,
-    ADD_EXTERNAL_DEP,
     REMOVE_REVERSE_DEP,
     GET_TEMPORARY_DIRECT_DEPS,
     SIGNAL,
@@ -234,12 +233,6 @@ public class NotifyingHelper {
     }
 
     @Override
-    public void addExternalDep() {
-      super.addExternalDep();
-      graphListener.accept(myKey, EventType.ADD_EXTERNAL_DEP, Order.AFTER, null);
-    }
-
-    @Override
     public void removeReverseDep(SkyKey reverseDep) throws InterruptedException {
       graphListener.accept(myKey, EventType.REMOVE_REVERSE_DEP, Order.BEFORE, reverseDep);
       super.removeReverseDep(reverseDep);
@@ -261,11 +254,9 @@ public class NotifyingHelper {
     }
 
     @Override
-    public Set<SkyKey> setValue(
-        SkyValue value, Version version, DepFingerprintList depFingerprintList)
-        throws InterruptedException {
+    public Set<SkyKey> setValue(SkyValue value, Version version) throws InterruptedException {
       graphListener.accept(myKey, EventType.SET_VALUE, Order.BEFORE, value);
-      Set<SkyKey> result = super.setValue(value, version, depFingerprintList);
+      Set<SkyKey> result = super.setValue(value, version);
       graphListener.accept(myKey, EventType.SET_VALUE, Order.AFTER, value);
       return result;
     }

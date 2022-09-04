@@ -38,7 +38,6 @@ import com.google.devtools.build.skyframe.SkyFunction.Restart;
 import com.google.devtools.build.skyframe.SkyFunctionEnvironment.UndonePreviouslyRequestedDep;
 import com.google.devtools.build.skyframe.SkyFunctionException.ReifiedSkyFunctionException;
 import com.google.devtools.build.skyframe.ThinNodeEntry.DirtyType;
-import java.math.BigInteger;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.Iterator;
@@ -317,21 +316,7 @@ public abstract class AbstractParallelEvaluator {
               skyKey, reverseDeps, state.getVersion(), EnqueueParentBehavior.ENQUEUE);
           return DirtyOutcome.ALREADY_PROCESSED;
         case NEEDS_REBUILDING:
-          if (state.canPruneDepsByFingerprint()) {
-            Iterable<SkyKey> lastDirectDepsKeys =
-                state.getLastDirectDepsGroupWhenPruningDepsByFingerprint();
-            if (lastDirectDepsKeys != null) {
-              BigInteger groupFingerprint =
-                  composeDepFingerprints(
-                      lastDirectDepsKeys,
-                      evaluatorContext.getBatchValues(
-                          skyKey, Reason.DEP_REQUESTED, lastDirectDepsKeys));
-              if (state.unmarkNeedsRebuildingIfGroupUnchangedUsingFingerprint(groupFingerprint)) {
-                return maybeHandleDirtyNode(state);
-              }
-            }
-          }
-          state.markRebuilding();
+          maybeMarkRebuilding(state);
           return DirtyOutcome.NEEDS_EVALUATION;
         case NEEDS_FORCED_REBUILDING:
           state.forceRebuild();
@@ -821,18 +806,8 @@ public abstract class AbstractParallelEvaluator {
     // removeUndoneNewlyRequestedDeps() just above this loop. However, with intra-evaluation
     // dirtying, a dep may not be done.
     boolean dirtyDepFound = false;
-    Map<SkyKey, ? extends NodeEntry> previouslyRegisteredEntries =
-        graph.getBatch(skyKey, Reason.SIGNAL_DEP, previouslyRegisteredNewDeps);
-    if (previouslyRegisteredEntries.size() != previouslyRegisteredNewDeps.size()) {
-      throw new IllegalStateException(
-          "Missing entries that were already known about: "
-              + Sets.difference(previouslyRegisteredNewDeps, previouslyRegisteredEntries.keySet())
-              + " for "
-              + skyKey
-              + " with entry "
-              + entry);
-    }
-    for (Map.Entry<SkyKey, ? extends NodeEntry> newDep : previouslyRegisteredEntries.entrySet()) {
+    for (Map.Entry<SkyKey, ? extends NodeEntry> newDep :
+        graph.getBatch(skyKey, Reason.SIGNAL_DEP, previouslyRegisteredNewDeps).entrySet()) {
       DependencyState triState = newDep.getValue().checkIfDoneForDirtyReverseDep(skyKey);
       if (maybeHandleUndoneDepForDoneEntry(entry, triState, skyKey, newDep.getKey())) {
         dirtyDepFound = true;
@@ -878,31 +853,6 @@ public abstract class AbstractParallelEvaluator {
       evaluatorContext.getVisitor().enqueueEvaluation(depKey, Integer.MAX_VALUE);
     }
     return true;
-  }
-
-  static BigInteger composeDepFingerprints(
-      Iterable<SkyKey> directDepGroup, Map<SkyKey, ? extends NodeEntry> depEntries)
-      throws InterruptedException {
-    BigInteger groupFingerprint = BigInteger.ZERO;
-    for (SkyKey dep : directDepGroup) {
-      NodeEntry depEntry = depEntries.get(dep);
-      if (!isDoneForBuild(depEntry)) {
-        // Something weird happened: maybe something fell out of graph or was restarted?
-        return null;
-      }
-      SkyValue depValue = depEntry.getValue();
-      if (depValue == null) {
-        return null;
-      }
-      BigInteger depFingerprint = depValue.getValueFingerprint();
-      if (depFingerprint == null) {
-        // TODO(janakr): Use transitive data here.
-        return null;
-      }
-      groupFingerprint =
-          BigIntegerFingerprintUtils.composeOrdered(groupFingerprint, depFingerprint);
-    }
-    return groupFingerprint;
   }
 
   /**

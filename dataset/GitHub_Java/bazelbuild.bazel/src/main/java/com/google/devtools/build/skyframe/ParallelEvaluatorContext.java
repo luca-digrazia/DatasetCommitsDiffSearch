@@ -34,7 +34,6 @@ import javax.annotation.Nullable;
  * <p>Also used during cycle detection.
  */
 class ParallelEvaluatorContext {
-
   enum EnqueueParentBehavior {
     ENQUEUE,
     SIGNAL,
@@ -199,10 +198,6 @@ class ParallelEvaluatorContext {
 
   EvaluationVersionBehavior getEvaluationVersionBehavior() {
     return evaluationVersionBehavior;
-  }
-
-  boolean restartPermitted() {
-    return graphInconsistencyReceiver.restartPermitted();
   }
 
   /** Receives the events from the NestedSet and delegates to the reporter. */
