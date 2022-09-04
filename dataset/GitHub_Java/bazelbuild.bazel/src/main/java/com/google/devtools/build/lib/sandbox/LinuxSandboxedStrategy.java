@@ -40,7 +40,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 /** Strategy that uses sandboxing to execute a process. */
 @ExecutionStrategy(
-  name = {"sandboxed", "linux-sandbox"},
+  name = {"sandboxed"},
   contextType = SpawnActionContext.class
 )
 public class LinuxSandboxedStrategy extends SandboxStrategy {

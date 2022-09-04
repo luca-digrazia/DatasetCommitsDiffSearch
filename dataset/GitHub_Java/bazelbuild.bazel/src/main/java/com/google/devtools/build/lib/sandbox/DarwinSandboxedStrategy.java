@@ -56,7 +56,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 /** Strategy that uses sandboxing to execute a process, for Darwin */
 @ExecutionStrategy(
-  name = {"sandboxed", "darwin-sandbox"},
+  name = {"sandboxed"},
   contextType = SpawnActionContext.class
 )
 public class DarwinSandboxedStrategy extends SandboxStrategy {
