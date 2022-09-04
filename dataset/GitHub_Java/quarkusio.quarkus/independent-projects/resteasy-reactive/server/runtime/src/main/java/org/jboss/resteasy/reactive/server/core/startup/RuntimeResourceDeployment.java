@@ -27,7 +27,6 @@ import org.jboss.resteasy.reactive.common.ResteasyReactiveConfig;
 import org.jboss.resteasy.reactive.common.model.MethodParameter;
 import org.jboss.resteasy.reactive.common.model.ParameterType;
 import org.jboss.resteasy.reactive.common.model.ResourceClass;
-import org.jboss.resteasy.reactive.common.util.MediaTypeHelper;
 import org.jboss.resteasy.reactive.common.util.QuarkusMultivaluedHashMap;
 import org.jboss.resteasy.reactive.common.util.ServerMediaType;
 import org.jboss.resteasy.reactive.common.util.types.TypeSignatureParser;
@@ -251,10 +250,7 @@ public class RuntimeResourceDeployment {
         }
         ServerMediaType serverMediaType = null;
         if (method.getProduces() != null && method.getProduces().length > 0) {
-            // when negotiating a media type, we want to use the proper subtype to locate a ResourceWriter,
-            // hence the 'true' for 'useSuffix'
-            serverMediaType = new ServerMediaType(ServerMediaType.mediaTypesFromArray(method.getProduces()),
-                    StandardCharsets.UTF_8.name(), false, true);
+            serverMediaType = new ServerMediaType(method.getProduces(), StandardCharsets.UTF_8.name());
         }
         if (method.getHttpMethod() == null) {
             //this is a resource locator method
@@ -274,8 +270,7 @@ public class RuntimeResourceDeployment {
                     } else if (rawNonAsyncReturnType != Void.class
                             && rawNonAsyncReturnType != void.class) {
                         List<MessageBodyWriter<?>> buildTimeWriters = serialisers.findBuildTimeWriters(rawNonAsyncReturnType,
-                                RuntimeType.SERVER, Collections.singletonList(
-                                        MediaTypeHelper.withSuffixAsSubtype(MediaType.valueOf(method.getProduces()[0]))));
+                                RuntimeType.SERVER, method.getProduces());
                         if (buildTimeWriters == null) {
                             //if this is null this means that the type cannot be resolved at build time
                             //this happens when the method returns a generic type (e.g. Object), so there
