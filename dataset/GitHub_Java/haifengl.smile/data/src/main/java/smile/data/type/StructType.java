@@ -1,28 +1,26 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010 Haifeng Li
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
-
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 package smile.data.type;
 
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-
 import smile.data.Tuple;
+import smile.data.measure.DiscreteMeasure;
+import smile.data.measure.Measure;
 
 /**
  * Struct data type is determined by the fixed order of the fields
@@ -37,20 +35,23 @@ public class StructType implements DataType {
     private final StructField[] fields;
     /** Field name to index map. */
     private final Map<String, Integer> index;
+    /** Optional scale of measurement of fields. */
+    private final Map<String, Measure> measure;
 
     /**
      * Constructor.
      */
-    public StructType(List<StructField> fields) {
+    StructType(List<StructField> fields) {
         this(fields.toArray(new StructField[fields.size()]));
     }
 
     /**
      * Constructor.
      */
-    public StructType(StructField... fields) {
+    StructType(StructField... fields) {
         this.fields = fields;
         index = new HashMap<>(fields.length * 4 / 3);
+        measure = new HashMap<>(fields.length * 4 / 3);
         for (int i = 0; i < fields.length; i++) {
             index.put(fields[i].name, i);
         }
@@ -81,16 +82,23 @@ public class StructType implements DataType {
         return index.get(field);
     }
 
-    /** Returns the name of a field. */
-    public String fieldName(int i) {
-        return fields[i].name;
+    /** Returns the map of field name to its (optional) scale of measure. */
+    public Map<String, Measure> measure() {
+        return measure;
     }
 
     /** Returns the lambda functions that parse field values. */
     public List<Function<String, Object>> parser() {
         List<Function<String, Object>> parser = new ArrayList<>();
-        for (StructField field : fields) {
-            parser.add(field::valueOf);
+        for (int i = 0; i < fields.length; i++) {
+            StructField field = fields[i];
+            Measure scale = measure.get(field.name);
+            if (scale != null) {
+                parser.add(s -> scale.valueOf(s));
+            } else {
+                final DataType type = field.type;
+                parser.add(s -> type.valueOf(s));
+            }
         }
         return parser;
     }
@@ -101,31 +109,17 @@ public class StructType implements DataType {
      *
      * @param rows a set of tuples.
      */
-    public StructType boxed(Collection<Tuple> rows) {
-        return new StructType(IntStream.range(0, length()).mapToObj(i -> {
+    public void boxed(Collection<Tuple> rows) {
+        for (int i = 0; i < fields.length; i++) {
             StructField field = fields[i];
             if (field.type.isPrimitive()) {
                 final int idx = i;
                 boolean missing = rows.stream().filter(t -> t.isNullAt(idx)).findAny().isPresent();
                 if (missing) {
-                    field = new StructField(field.name, field.type.boxed(), field.measure);
+                    fields[i] = new StructField(field.name, field.type.boxed());
                 }
             }
-            return field;
-        }).toArray(StructField[]::new));
-    }
-
-    /**
-     * Updates the field type to the primitive one.
-     */
-    public StructType unboxed() {
-        return new StructType(IntStream.range(0, length()).mapToObj(i -> {
-            StructField field = fields[i];
-            if (field.type.isObject()) {
-                field = new StructField(field.name, field.type.unboxed(), field.measure);
-            }
-            return field;
-        }).toArray(StructField[]::new));
+        }
     }
 
     @Override
@@ -151,7 +145,8 @@ public class StructType implements DataType {
         return Arrays.stream(fields)
                 .map(field -> {
                     Object v = t.get(field.name);
-                    String value = v == null ? "null" : field.toString(v);
+                    Measure m = measure().get(field.name);
+                    String value = v == null ? "null" : ((m != null) ? m.toString(v) : field.type.toString(v));
                     return String.format("  %s: %s", field.name, value);
                 })
                 .collect(Collectors.joining(",\n", "{\n", "\n}"));
@@ -165,7 +160,13 @@ public class StructType implements DataType {
         for (String element : elements) {
             String[] pair = element.split(":");
             int i = index.get(pair[0]);
-            row[i] = fields[i].valueOf(pair[1]);
+            StructField field = fields[i];
+            Measure scale = measure.get(field.name);
+            if (scale != null) {
+                row[i] = scale.valueOf(pair[1]);
+            } else {
+                row[i] = field.type.valueOf(pair[1]);
+            }
         }
 
         return Tuple.of(row, this);

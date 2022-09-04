@@ -1,18 +1,17 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
 
 package smile.data;
@@ -23,9 +22,6 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Time;
 import java.sql.Timestamp;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-
 import smile.data.measure.DiscreteMeasure;
 import smile.data.measure.Measure;
 import smile.data.type.StructType;
@@ -48,15 +44,6 @@ public interface Tuple extends Serializable {
     /** Number of elements in the Tuple. */
     default int length() {
         return schema().length();
-    }
-
-    /** Returns the tuple as an array of doubles. */
-    default double[] toArray() {
-        double[] x = new double[length()];
-        for (int i = 0; i < x.length; i++) {
-            x[i] = getDouble(i);
-        }
-        return x;
     }
 
     /**
@@ -93,11 +80,6 @@ public interface Tuple extends Serializable {
     /** Checks whether the field value is null. */
     default boolean isNullAt(String field) {
         return get(field) == null;
-    }
-
-    /** Returns true if the tuple has null/missing values. */
-    default boolean hasNull() {
-        return IntStream.range(0, length()).anyMatch(i -> isNullAt(i));
     }
 
     /**
@@ -290,7 +272,8 @@ public interface Tuple extends Serializable {
         if (o instanceof String) {
             return (String) o;
         } else {
-            return schema().field(i).toString(o);
+            Measure scale = schema().measure().get(schema().field(i).name);
+            return scale != null ? scale.toString(o) : schema().field(i).type.toString(o);
         }
     }
 
@@ -375,9 +358,11 @@ public interface Tuple extends Serializable {
 
     /**
      * Returns the value at position i of NominalScale or OrdinalScale.
+     *
+     * @throws ClassCastException when the data is not nominal or ordinal.
      */
     default String getScale(int i) {
-        return schema().field(i).measure.map(m -> ((DiscreteMeasure) m).toString(getInt(i))).orElseGet(() -> String.valueOf(getInt(i)));
+        return ((DiscreteMeasure) schema().measure().get(schema().field(i).name)).toString(getInt(i));
     }
 
     /**
@@ -469,29 +454,9 @@ public interface Tuple extends Serializable {
 
     /** Returns an object array based tuple. */
     static Tuple of(Object[] row, StructType schema) {
-        return new AbstractTuple() {
+        return new Tuple() {
             @Override
             public Object get(int i) {
-                return row[i];
-            }
-
-            @Override
-            public StructType schema() {
-                return schema;
-            }
-        };
-    }
-
-    /** Returns a double array based tuple. */
-    static Tuple of(double[] row, StructType schema) {
-        return new AbstractTuple() {
-            @Override
-            public Object get(int i) {
-                return row[i];
-            }
-
-            @Override
-            public double getDouble(int i) {
                 return row[i];
             }
 

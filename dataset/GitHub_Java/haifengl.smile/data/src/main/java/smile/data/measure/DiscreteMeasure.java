@@ -1,35 +1,32 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010 Haifeng Li
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
-
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 package smile.data.measure;
 
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.IntStream;
-
 import smile.data.type.DataType;
 import smile.data.type.DataTypes;
 
 /**
  * Discrete data can only take particular values. There may potentially
  * be an infinite number of those values, but each is distinct.
- * <p>
+ * The integer encoding of values starts with zero.
+ *
  * Both integer and string variables can be made into discrete measure,
  * but a discrete measure's levels will always be string values.
  *
@@ -37,83 +34,42 @@ import smile.data.type.DataTypes;
  */
 public abstract class DiscreteMeasure implements Measure {
     /**
-     * The valid values.
-     */
-    final int[] values;
-    /**
-     * The levels of measurement.
+     * The string values of the discrete scale.
      */
     final String[] levels;
     /**
-     * Map an integer to string.
-     */
-    final Map<Number, String> value2level;
-    /**
      * Map a string to an integer level.
      */
-    final Map<String, Number> level2value;
+    final Map<String, Number> map;
 
     /**
      * Constructor.
-     * @param levels the levels of discrete values.
+     * @param values the levels of discrete values.
      */
-    public DiscreteMeasure(String... levels) {
-        this(IntStream.range(0, levels.length).toArray(), levels);
-    }
-
-    /**
-     * Constructor.
-     * @param levels the levels of discrete values.
-     */
-    public DiscreteMeasure(List<String> levels) {
-        this(levels.toArray(new String[levels.size()]));
-    }
-
-    /**
-     * Constructor.
-     * @param values the valid values.
-     * @param levels the levels of discrete values.
-     */
-    public DiscreteMeasure(int[] values, String[] levels) {
-        if (values.length != levels.length) {
-            throw new IllegalArgumentException("The size of values and levels don't match");
-        }
-
-        this.values = values;
-        this.levels = levels;
-        this.value2level = new HashMap<>();
-        this.level2value = new HashMap<>();
-
-        if (levels.length <= Byte.MAX_VALUE + 1) {
-            for (int i = 0; i < values.length; i++) {
-                value2level.put(values[i], levels[i]);
-                level2value.put(levels[i], (byte) values[i]);
+    public DiscreteMeasure(String... values) {
+        this.levels = values;
+        map = new HashMap<>();
+        if (values.length <= Byte.MAX_VALUE + 1) {
+            for (byte i = 0; i < values.length; i++) {
+                map.put(values[i], i);
             }
-        } else if (levels.length <= Short.MAX_VALUE + 1) {
-            for (int i = 0; i < values.length; i++) {
-                value2level.put(values[i], levels[i]);
-                level2value.put(levels[i], (short) values[i]);
+        } else if (values.length <= Short.MAX_VALUE + 1) {
+            for (short i = 0; i < values.length; i++) {
+                map.put(values[i], i);
             }
         } else {
             for (int i = 0; i < values.length; i++) {
-                value2level.put(values[i], levels[i]);
-                level2value.put(levels[i], values[i]);
+                map.put(values[i], i);
             }
         }
     }
 
-    /** Returns the ordinal values of an enum. */
-    static int[] values(Class<? extends Enum> clazz) {
-        return Arrays.stream(clazz.getEnumConstants())
-                .mapToInt(e -> ((Enum) e).ordinal())
-                .toArray();
-    }
-
-    /** Returns the string values of an enum. */
-    static String[] levels(Class<? extends Enum> clazz) {
-        return Arrays.stream(clazz.getEnumConstants())
-                .map(Object::toString)
-                .toArray(String[]::new);
+    /**
+     * Constructor.
+     * @param values the levels of discrete values.
+     */
+    public DiscreteMeasure(List<String> values) {
+        this(values.toArray(new String[values.size()]));
     }
 
     /** Returns the number of levels. */
@@ -121,19 +77,9 @@ public abstract class DiscreteMeasure implements Measure {
         return levels.length;
     }
 
-    /** Returns the valid value set. */
-    public int[] values() {
-        return values;
-    }
-
     /** Returns the levels. */
     public String[] levels() {
         return levels;
-    }
-
-    /** Returns the level string representation. */
-    public String level(int i) {
-        return value2level.get(i);
     }
 
     /** Returns the data type that is suitable for this measure scale. */
@@ -149,24 +95,24 @@ public abstract class DiscreteMeasure implements Measure {
 
     /** Returns the string value of a level. */
     public String toString(int level) {
-        return level(level);
+        return levels[level];
     }
 
     @Override
     public String toString(Object o) {
-        return level(((Number) o).intValue());
+        return levels[((Number) o).intValue()];
     }
 
     @Override
     public Number valueOf(String s) {
-        return level2value.get(s);
+        return map.get(s);
     }
 
     @Override
     public boolean equals(Object o) {
         if (o instanceof DiscreteMeasure) {
             DiscreteMeasure measure = (DiscreteMeasure) o;
-            return Arrays.equals(levels, measure.levels) && Arrays.equals(values, values);
+            return Arrays.equals(levels, measure.levels);
         }
 
         return false;
