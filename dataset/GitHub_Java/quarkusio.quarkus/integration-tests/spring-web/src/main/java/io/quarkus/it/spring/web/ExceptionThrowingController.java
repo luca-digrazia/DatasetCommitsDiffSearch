@@ -35,18 +35,8 @@ public class ExceptionThrowingController {
         throw new IllegalStateException("bad state");
     }
 
-    @GetMapping("/responseEntityFromVoidReturningMethod")
-    public void handledByResponseEntityFromVoidReturningMethod() {
-        throw new IllegalStateException("bad state");
-    }
-
     @GetMapping("/pojo")
     public Greeting greetingWithIllegalArgumentException() {
-        throw new IllegalArgumentException("hello from error");
-    }
-
-    @GetMapping("/pojoWithVoidReturnType")
-    public void greetingWithIllegalArgumentExceptionAndVoidReturnType() {
         throw new IllegalArgumentException("hello from error");
     }
 
