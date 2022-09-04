@@ -38,6 +38,7 @@ import com.google.devtools.build.lib.rules.java.JavaRuntimeJarProvider;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.rules.java.JavaSkylarkApiProvider;
 import com.google.devtools.build.lib.rules.java.JavaToolchainProvider;
+import com.google.devtools.build.lib.rules.java.Jvm;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
 /**
@@ -182,7 +183,7 @@ public class AarImport implements RuleConfiguredTargetFactory {
     return new SpawnAction.Builder()
         .setExecutable(ruleContext.getExecutablePrerequisite("$zipper", Mode.HOST))
         .setMnemonic("AarFileExtractor")
-        .setProgressMessage("Extracting %s from %s", filename, aar.getFilename())
+        .setProgressMessage("Extracting " + filename + " from " + aar.getFilename())
         .addArgument("x")
         .addInputArgument(aar)
         .addArgument("-d")
@@ -212,7 +213,7 @@ public class AarImport implements RuleConfiguredTargetFactory {
         .setExecutable(
             ruleContext.getExecutablePrerequisite("$aar_embedded_jars_extractor", Mode.HOST))
         .setMnemonic("AarEmbeddedJarsExtractor")
-        .setProgressMessage("Extracting classes.jar and libs/*.jar from %s", aar.getFilename())
+        .setProgressMessage("Extracting classes.jar and libs/*.jar from " + aar.getFilename())
         .addArgument("--input_aar")
         .addInputArgument(aar)
         .addArgument("--output_dir")
@@ -282,7 +283,7 @@ public class AarImport implements RuleConfiguredTargetFactory {
     if (singleJar.getFilename().endsWith(".jar")) {
       builder
           .setJarExecutable(
-              JavaCommon.getHostJavaExecutable(ruleContext),
+              ruleContext.getHostConfiguration().getFragment(Jvm.class).getJavaExecutable(),
               singleJar,
               JavaToolchainProvider.fromRuleContext(ruleContext).getJvmOptions())
           .addTransitiveInputs(JavaHelper.getHostJavabaseInputs(ruleContext));

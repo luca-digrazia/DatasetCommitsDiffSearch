@@ -16,7 +16,7 @@ package com.google.devtools.build.lib.rules.android;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Predicates.in;
 import static com.google.common.base.Predicates.not;
-import static com.google.common.collect.ImmutableList.toImmutableList;
+import static com.google.common.collect.Iterables.filter;
 import static com.google.devtools.build.lib.analysis.OutputGroupProvider.INTERNAL_SUFFIX;
 
 import com.google.common.base.Function;
@@ -29,7 +29,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.MultimapBuilder;
-import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.FailAction;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
@@ -533,13 +532,11 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     Artifact zipAlignedApk =
         ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_BINARY_APK);
     Artifact signingKey = androidSemantics.getApkDebugSigningKey(ruleContext);
-    FilesToRunProvider resourceExtractor =
-        ruleContext.getExecutablePrerequisite("$resource_extractor", Mode.HOST);
 
     ApkActionsBuilder.create("apk")
         .setClassesDex(finalDexes)
         .addInputZip(resourceApk.getArtifact())
-        .setJavaResourceZip(dexingOutput.javaResourceJar, resourceExtractor)
+        .setJavaResourceZip(dexingOutput.javaResourceJar)
         .addInputZips(nativeLibsZips)
         .setNativeLibs(nativeLibs)
         .setUnsignedApk(unsignedApk)
@@ -601,7 +598,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         ApkActionsBuilder.create("incremental apk")
             .setClassesDex(stubDex)
             .addInputZip(incrementalResourceApk.getArtifact())
-            .setJavaResourceZip(dexingOutput.javaResourceJar, resourceExtractor)
+            .setJavaResourceZip(dexingOutput.javaResourceJar)
             .addInputZips(nativeLibsZips)
             .setJavaResourceFile(stubData)
             .setSignedApk(incrementalApk)
@@ -696,7 +693,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     Artifact javaSplitApk = getDxArtifact(ruleContext, "java_resources.apk");
     ApkActionsBuilder.create("split Java resource apk")
         .addInputZip(javaSplitApkResources)
-        .setJavaResourceZip(dexingOutput.javaResourceJar, resourceExtractor)
+        .setJavaResourceZip(dexingOutput.javaResourceJar)
         .setSignedApk(javaSplitApk)
         .setSigningKey(signingKey)
         .registerActions(ruleContext);
@@ -981,10 +978,8 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     }
     NestedSet<Artifact> libraryResourceJars = libraryResourceJarsBuilder.build();
 
-    Iterable<Artifact> filteredJars =
-        Streams.stream(jars)
-            .filter(not(in(libraryResourceJars.toSet())))
-            .collect(toImmutableList());
+    Iterable<Artifact> filteredJars = ImmutableList.copyOf(
+        filter(jars, not(in(libraryResourceJars.toSet()))));
 
     AndroidSdkProvider sdk = AndroidSdkProvider.fromRuleContext(ruleContext);
 
