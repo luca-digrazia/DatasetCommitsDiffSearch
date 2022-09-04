@@ -37,8 +37,6 @@ import io.quarkus.hibernate.orm.runtime.recording.RecordedState;
 import io.quarkus.hibernate.reactive.runtime.boot.FastBootReactiveEntityManagerFactoryBuilder;
 import io.quarkus.hibernate.reactive.runtime.boot.registry.PreconfiguredReactiveServiceRegistryBuilder;
 import io.quarkus.hibernate.reactive.runtime.customized.QuarkusReactiveConnectionPoolInitiator;
-import io.quarkus.hibernate.reactive.runtime.customized.VertxInstanceInitiator;
-import io.vertx.core.Vertx;
 import io.vertx.sqlclient.Pool;
 
 /**
@@ -175,7 +173,7 @@ public final class FastBootHibernateReactivePersistenceProvider implements Persi
         PreconfiguredReactiveServiceRegistryBuilder serviceRegistryBuilder = new PreconfiguredReactiveServiceRegistryBuilder(
                 rs);
 
-        registerVertxAndPool(persistenceUnitName, runtimeSettings, serviceRegistryBuilder);
+        registerVertxPool(persistenceUnitName, runtimeSettings, serviceRegistryBuilder);
 
         runtimeSettings.getSettings().forEach((key, value) -> {
             serviceRegistryBuilder.applySetting(key, value);
@@ -217,7 +215,7 @@ public final class FastBootHibernateReactivePersistenceProvider implements Persi
                 || "org.hibernate.jpa.HibernatePersistenceProvider".equals(requestedProviderName);
     }
 
-    private void registerVertxAndPool(String persistenceUnitName,
+    private void registerVertxPool(String persistenceUnitName,
             RuntimeSettings runtimeSettings,
             PreconfiguredReactiveServiceRegistryBuilder serviceRegistry) {
         if (runtimeSettings.isConfigured(AvailableSettings.URL)) {
@@ -232,12 +230,6 @@ public final class FastBootHibernateReactivePersistenceProvider implements Persi
         }
 
         serviceRegistry.addInitiator(new QuarkusReactiveConnectionPoolInitiator(poolHandle.get()));
-
-        InstanceHandle<Vertx> vertxHandle = Arc.container().instance(Vertx.class);
-        if (!vertxHandle.isAvailable()) {
-            throw new IllegalStateException("No Vert.x instance has been registered in ArC ?");
-        }
-        serviceRegistry.addInitiator(new VertxInstanceInitiator(vertxHandle.get()));
     }
 
     private static void injectRuntimeConfiguration(String persistenceUnitName,

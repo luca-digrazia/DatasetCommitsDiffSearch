@@ -25,7 +25,7 @@ import io.quarkus.datasource.common.runtime.DataSourceUtil;
 import io.quarkus.hibernate.orm.runtime.RuntimeSettings.Builder;
 import io.quarkus.hibernate.orm.runtime.boot.FastBootEntityManagerFactoryBuilder;
 import io.quarkus.hibernate.orm.runtime.boot.registry.PreconfiguredServiceRegistryBuilder;
-import io.quarkus.hibernate.orm.runtime.integration.HibernateOrmIntegrationRuntimeDescriptor;
+import io.quarkus.hibernate.orm.runtime.integration.HibernateOrmIntegrationRuntimeInitListener;
 import io.quarkus.hibernate.orm.runtime.recording.PrevalidatedQuarkusMetadata;
 import io.quarkus.hibernate.orm.runtime.recording.RecordedState;
 
@@ -42,12 +42,12 @@ public final class FastBootHibernatePersistenceProvider implements PersistencePr
     private final ProviderUtil providerUtil = new ProviderUtil();
 
     private final HibernateOrmRuntimeConfig hibernateOrmRuntimeConfig;
-    private final Map<String, List<HibernateOrmIntegrationRuntimeDescriptor>> integrationRuntimeDescriptors;
+    private final Map<String, List<HibernateOrmIntegrationRuntimeInitListener>> integrationRuntimeInitListeners;
 
     public FastBootHibernatePersistenceProvider(HibernateOrmRuntimeConfig hibernateOrmRuntimeConfig,
-            Map<String, List<HibernateOrmIntegrationRuntimeDescriptor>> integrationRuntimeDescriptors) {
+            Map<String, List<HibernateOrmIntegrationRuntimeInitListener>> integrationRuntimeInitListeners) {
         this.hibernateOrmRuntimeConfig = hibernateOrmRuntimeConfig;
-        this.integrationRuntimeDescriptors = integrationRuntimeDescriptors;
+        this.integrationRuntimeInitListeners = integrationRuntimeInitListeners;
     }
 
     @SuppressWarnings("rawtypes")
@@ -176,9 +176,12 @@ public final class FastBootHibernatePersistenceProvider implements PersistencePr
                 injectRuntimeConfiguration(persistenceUnitName, hibernateOrmRuntimeConfig, runtimeSettingsBuilder);
             }
 
-            for (HibernateOrmIntegrationRuntimeDescriptor descriptor : integrationRuntimeDescriptors
+            for (HibernateOrmIntegrationRuntimeInitListener listener : integrationRuntimeInitListeners
                     .getOrDefault(persistenceUnitName, Collections.emptyList())) {
-                descriptor.getInitListener().ifPresent(l -> l.contributeRuntimeProperties(runtimeSettingsBuilder::put));
+                if (listener == null) {
+                    continue;
+                }
+                listener.contributeRuntimeProperties(runtimeSettingsBuilder::put);
             }
 
             // Allow detection of driver/database capabilities on runtime init (was disabled during static init)

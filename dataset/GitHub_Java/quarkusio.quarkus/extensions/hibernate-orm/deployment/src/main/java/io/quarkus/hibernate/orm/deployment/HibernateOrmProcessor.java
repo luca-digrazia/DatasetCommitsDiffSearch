@@ -688,7 +688,7 @@ public final class HibernateOrmProcessor {
                 && (!hibernateOrmConfig.defaultPersistenceUnit.datasource.isPresent()
                         || DataSourceUtil.isDefault(hibernateOrmConfig.defaultPersistenceUnit.datasource.get()))
                 && !defaultJdbcDataSource.isPresent()) {
-            throw new ConfigurationException(
+            LOG.warn(
                     "Model classes are defined for the default persistence unit but no default datasource found: the default EntityManagerFactory will not be created.");
         }
 
