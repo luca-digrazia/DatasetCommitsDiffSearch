@@ -171,7 +171,7 @@ public class DefaultServerFactoryTest {
             return CharStreams.toString(new InputStreamReader(connection.getInputStream()));
         });
 
-        requestReceived.await(10, TimeUnit.SECONDS);
+        requestReceived.await();
 
         Future<Void> serverStopped = executor.submit((Callable<Void>) () -> {
             server.stop();
