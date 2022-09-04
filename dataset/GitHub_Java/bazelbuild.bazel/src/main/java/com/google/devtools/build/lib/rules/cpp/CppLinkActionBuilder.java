@@ -47,7 +47,6 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables.LibraryToLinkValue;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables.SequenceBuilder;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables.VariablesExtension;
-import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
 import com.google.devtools.build.lib.rules.cpp.CppLinkAction.Context;
 import com.google.devtools.build.lib.rules.cpp.CppLinkAction.LinkArtifactFactory;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkStaticness;
@@ -929,9 +928,9 @@ public class CppLinkActionBuilder {
           linkArtifactFactory.create(ruleContext, configuration, thinltoMergedObjectFileRootPath);
     }
 
-    final ImmutableSet<Artifact> actionOutputs;
+    final ImmutableList<Artifact> actionOutputs;
     if (isLtoIndexing) {
-      ImmutableSet.Builder<Artifact> builder = ImmutableSet.builder();
+      ImmutableList.Builder<Artifact> builder = ImmutableList.builder();
       for (LtoBackendArtifacts ltoA : allLtoArtifacts) {
         ltoA.addIndexingOutputs(builder);
       }
@@ -1254,9 +1253,7 @@ public class CppLinkActionBuilder {
         configuration.getLocalShellEnvironment(),
         toolchainEnv,
         executionRequirements.build(),
-        toolchain.getToolPathFragment(Tool.LD),
-        toolchain.getHostSystemName(),
-        toolchain.getTargetCpu());
+        toolchain);
   }
 
   private boolean shouldUseLinkDynamicLibraryTool() {
@@ -1283,9 +1280,9 @@ public class CppLinkActionBuilder {
         && sharedLinkopts;
   }
 
-  private static ImmutableSet<Artifact> constructOutputs(
+  private static ImmutableList<Artifact> constructOutputs(
       Artifact primaryOutput, Iterable<Artifact> outputList, Artifact... outputs) {
-    return new ImmutableSet.Builder<Artifact>()
+    return new ImmutableList.Builder<Artifact>()
         .add(primaryOutput)
         .addAll(outputList)
         .addAll(CollectionUtils.asSetWithoutNulls(outputs))

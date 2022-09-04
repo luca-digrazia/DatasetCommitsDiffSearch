@@ -41,6 +41,7 @@ import com.google.devtools.build.lib.rules.cpp.CppConfigurationLoader.CppConfigu
 import com.google.devtools.build.lib.rules.cpp.CrosstoolConfigurationLoader.CrosstoolFile;
 import com.google.devtools.build.lib.rules.cpp.transitions.ContextCollectorOwnerTransition;
 import com.google.devtools.build.lib.rules.cpp.transitions.DisableLipoTransition;
+import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
@@ -66,6 +67,8 @@ import javax.annotation.Nullable;
 )
 @Immutable
 public final class CppConfiguration extends BuildConfiguration.Fragment {
+  public static final ObjectCodec<CppConfiguration> CODEC = new CppConfiguration_AutoCodec();
+
   /**
    * String indicating a Mac system, for example when used in a crosstool configuration's host or
    * target system name.
@@ -197,6 +200,8 @@ public final class CppConfiguration extends BuildConfiguration.Fragment {
 
   private final boolean shouldProvideMakeVariables;
 
+  private final boolean fixLinkstampInputsBug;
+
   /**
    * If true, the ConfiguredTarget is only used to get the necessary cross-referenced {@code
    * CcCompilationInfo}s, but registering build actions is disabled.
@@ -312,6 +317,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment {
         ImmutableList.copyOf(cppOptions.ltoindexoptList),
         cppOptions,
         params.cpuTransformer,
+        cppOptions.fixLinkstampInputsBug,
         (cppOptions.stripBinaries == StripMode.ALWAYS
             || (cppOptions.stripBinaries == StripMode.SOMETIMES
                 && compilationMode == CompilationMode.FASTBUILD)),
@@ -348,6 +354,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment {
       ImmutableList<String> ltoindexOptions,
       CppOptions cppOptions,
       CpuTransformer cpuTransformerEnum,
+      boolean fixLinkstampInputsBug,
       boolean stripBinaries,
       CompilationMode compilationMode,
       boolean shouldProvideMakeVariables,
@@ -378,6 +385,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment {
     this.ltoindexOptions = ltoindexOptions;
     this.cppOptions = cppOptions;
     this.cpuTransformerEnum = cpuTransformerEnum;
+    this.fixLinkstampInputsBug = fixLinkstampInputsBug;
     this.stripBinaries = stripBinaries;
     this.compilationMode = compilationMode;
     this.shouldProvideMakeVariables = shouldProvideMakeVariables;
@@ -416,6 +424,10 @@ public final class CppConfiguration extends BuildConfiguration.Fragment {
   /** Returns the transformer that should be applied to cpu names in toolchain selection. */
   public Function<String, String> getCpuTransformer() {
     return cpuTransformerEnum.getTransformer();
+  }
+
+  public boolean shouldFixLinkstampInputsBug() {
+    return fixLinkstampInputsBug;
   }
 
   /**

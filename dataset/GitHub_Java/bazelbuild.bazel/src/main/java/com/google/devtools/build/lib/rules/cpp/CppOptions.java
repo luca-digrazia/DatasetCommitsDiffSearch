@@ -25,6 +25,7 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.DynamicMode;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.StripMode;
+import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.OptionsUtils;
@@ -46,6 +47,8 @@ import javax.annotation.Nullable;
 /** Command-line options for C++. */
 @AutoCodec(strategy = AutoCodec.Strategy.PUBLIC_FIELDS)
 public class CppOptions extends FragmentOptions {
+  public static final ObjectCodec<CppOptions> CODEC = new CppOptions_AutoCodec();
+
   /**
    * Converts a comma-separated list of compilation mode settings to a properly typed List.
    */
@@ -884,6 +887,24 @@ public class CppOptions extends FragmentOptions {
             + "gcov when collect_code_coverage is enabled."
   )
   public boolean useLLVMCoverageMapFormat;
+
+  @Option(
+      name = "experimental_fix_linkstamp_inputs_bug",
+      defaultValue = "false",
+      category = "experimental",
+      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+      effectTags = {
+          OptionEffectTag.CHANGES_INPUTS,
+          OptionEffectTag.AFFECTS_OUTPUTS,
+          OptionEffectTag.LOADING_AND_ANALYSIS
+      },
+      metadataTags = {OptionMetadataTag.EXPERIMENTAL},
+      help =
+          "If set to true, bazel will add all inputs of the C++ linking action as inputs to the "
+              + "C++ linkstamp compile action too. This is a migration-only flag and will be "
+              + "removed as soon as g3 is fixed."
+  )
+  public boolean fixLinkstampInputsBug;
 
   @Override
   public FragmentOptions getHost() {
