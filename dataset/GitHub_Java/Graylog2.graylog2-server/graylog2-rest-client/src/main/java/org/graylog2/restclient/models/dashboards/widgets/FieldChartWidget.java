@@ -1,21 +1,18 @@
 /**
- * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.restclient.models.dashboards.widgets;
 
@@ -23,66 +20,54 @@ import com.google.common.collect.Maps;
 import org.graylog2.restclient.lib.timeranges.RelativeRange;
 import org.graylog2.restclient.lib.timeranges.TimeRange;
 import org.graylog2.restclient.models.dashboards.Dashboard;
-import play.mvc.Call;
 
 import java.util.Map;
 
-/**
- * @author Lennart Koopmann <lennart@torch.sh>
- */
-public class FieldChartWidget extends DashboardWidget {
+public class FieldChartWidget extends ChartWidget {
 
-    private static final int WIDTH = 2;
-    private static final int HEIGHT = 1;
-
-    private final String streamId;
-    private final Map<String, Object> config;
+    private final String field;
+    private final String statisticalFunction;
+    private final String renderer;
+    private final String interpolation;
 
     public FieldChartWidget(Dashboard dashboard, String query, TimeRange timerange, String description, String streamId, Map<String, Object> config) {
         this(dashboard, null, description, 0, query, timerange, streamId, config, null);
     }
 
     public FieldChartWidget(Dashboard dashboard, String id, String description, int cacheTime, String query, TimeRange timerange, String streamId, Map<String, Object> config, String creatorUserId) {
-        super(Type.FIELD_CHART, id, description, cacheTime, dashboard, creatorUserId, query, timerange);
+        super(Type.FIELD_CHART, id, description, cacheTime, dashboard, creatorUserId, query, timerange, streamId, (String) config.get("interval"));
 
-        this.config = config;
-
-        if (streamId != null && !streamId.isEmpty()) {
-            this.streamId = streamId;
-        } else {
-            this.streamId = null;
-        }
+        this.field = (String) config.get("field");
+        this.statisticalFunction = (String) config.get("valuetype");
+        this.renderer = (String) config.get("renderer");
+        this.interpolation = (String) config.get("interpolation");
     }
 
     @Override
     public Map<String, Object> getConfig() {
-        Map<String, Object> c = Maps.newHashMap();
-        c.putAll(getTimerange().getQueryParams());
-        c.put("query", getQuery());
-        c.put("stream_id", streamId);
+        Map<String, Object> config = Maps.newHashMap();
+        config.putAll(super.getConfig());
+        config.putAll(getTimerange().getQueryParams());
+        config.put("query", getQuery());
 
-        c.put("field", config.get("field"));
-        c.put("valuetype", config.get("valuetype"));
-        c.put("renderer", config.get("renderer"));
-        c.put("interpolation", config.get("interpolation"));
-        c.put("interval", config.get("interval"));
+        config.put("field", field);
+        config.put("valuetype", statisticalFunction);
+        config.put("renderer", renderer);
+        config.put("interpolation", interpolation);
 
-        return c;
+        return config;
     }
 
     @Override
     public int getWidth() {
-        return WIDTH;
+        int storedWidth = super.getWidth();
+        return storedWidth == 0 ? DEFAULT_WIDTH : storedWidth;
     }
 
     @Override
     public int getHeight() {
-        return HEIGHT;
-    }
-
-    @Override
-    public String getStreamId() {
-        return streamId;
+        int storedHeight = super.getHeight();
+        return storedHeight == 0 ? DEFAULT_HEIGHT : storedHeight;
     }
 
     @Override

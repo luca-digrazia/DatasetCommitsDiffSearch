@@ -88,8 +88,8 @@ public class FieldChartWidget extends ChartWidget {
                     field,
                     Searches.DateHistogramInterval.valueOf(interval.toString().toUpperCase()),
                     filter,
-                    timeRange,
-                    "cardinality".equalsIgnoreCase(statisticalFunction));
+                    timeRange
+            );
 
             return new ComputationResult(histogramResult.getResults(), histogramResult.took().millis(), histogramResult.getHistogramBoundaries());
         } catch (Searches.FieldTypeException e) {
