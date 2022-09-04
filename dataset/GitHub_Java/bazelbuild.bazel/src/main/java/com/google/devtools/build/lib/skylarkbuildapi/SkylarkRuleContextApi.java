@@ -688,7 +688,7 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
       useLocation = true,
       useStarlarkThread = true)
   public Runtime.NoneType action(
-      SkylarkList<?> outputs,
+      SkylarkList outputs,
       Object inputs,
       Object executableUnchecked,
       Object toolsUnchecked,
@@ -736,8 +736,7 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
       useLocation = true,
       useStarlarkThread = true)
   public String expandLocation(
-      String input, SkylarkList<?> targets, Location loc, StarlarkThread thread)
-      throws EvalException;
+      String input, SkylarkList targets, Location loc, StarlarkThread thread) throws EvalException;
 
   @SkylarkCallable(
       name = "file_action",
@@ -898,7 +897,7 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
       },
       useLocation = true)
   public RunfilesApi runfiles(
-      SkylarkList<?> files,
+      SkylarkList files,
       Object transitiveFiles,
       Boolean collectData,
       Boolean collectDefault,
@@ -986,7 +985,7 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
       Object attributeUnchecked,
       Boolean expandLocations,
       Object makeVariablesUnchecked,
-      SkylarkList<?> tools,
+      SkylarkList tools,
       SkylarkDict<?, ?> labelDictUnchecked,
       SkylarkDict<?, ?> executionRequirementsUnchecked,
       Location loc,
@@ -1014,5 +1013,5 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
       },
       useLocation = false,
       useStarlarkThread = false)
-  public Tuple<Object> resolveTools(SkylarkList<?> tools) throws EvalException;
+  public Tuple<Object> resolveTools(SkylarkList tools) throws EvalException;
 }
