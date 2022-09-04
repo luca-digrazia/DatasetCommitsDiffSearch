@@ -22,7 +22,9 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.analysis.MiddlemanProvider;
 import com.google.devtools.build.lib.analysis.RuleContext;
+import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.StrictDepsMode;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -143,9 +145,8 @@ public final class JavaLibraryHelper {
   /**
    * When in strict mode, compiling the source-jars passed to this JavaLibraryHelper will break if
    * they depend on classes not in any of the {@link
-   * JavaCompilationArgsProvider#getJavaCompilationArgs()} passed in {@link #addDep}, even if they
-   * do appear in
-   * {@link JavaCompilationArgsProvider#getRecursiveJavaCompilationArgs()}. That is, depending
+   * JavaCompilationArgsProvider#javaCompilationArgs} passed in {@link #addDep}, even if they do
+   * appear in {@link JavaCompilationArgsProvider#recursiveJavaCompilationArgs}. That is, depending
    * on a class requires a direct dependency on it.
    *
    * <p>Contrast this with the strictness-parameter to {@link #buildCompilationArgsProvider}, which
@@ -172,7 +173,7 @@ public final class JavaLibraryHelper {
   public JavaCompilationArtifacts build(
       JavaSemantics semantics,
       JavaToolchainProvider javaToolchainProvider,
-      JavaRuntimeInfo hostJavabase,
+      TransitiveInfoCollection hostJavabase,
       Iterable<Artifact> jacocoInstrumental,
       JavaRuleOutputJarsProvider.Builder outputJarsBuilder,
       boolean createOutputSourceJar,
@@ -200,26 +201,28 @@ public final class JavaLibraryHelper {
           attributes, deps);
     }
 
+    NestedSet<Artifact> hostJavabaseArtifacts = getJavaBaseMiddleman(hostJavabase);
     JavaCompilationArtifacts.Builder artifactsBuilder = new JavaCompilationArtifacts.Builder();
     JavaCompilationHelper helper =
         new JavaCompilationHelper(ruleContext, semantics, javacOpts, attributes,
             javaToolchainProvider,
-            hostJavabase,
+            hostJavabaseArtifacts,
             jacocoInstrumental);
     Artifact outputDepsProto = helper.createOutputDepsProtoArtifact(output, artifactsBuilder);
     helper.createCompileAction(
         output,
-        /* manifestProtoOutput= */ null,
-        /* gensrcOutputJar= */ null,
+        null /* manifestProtoOutput */,
+        null /* gensrcOutputJar */,
         outputDepsProto,
-        /* instrumentationMetadataJar= */ null,
-        /* nativeHeaderOutput= */ null);
+        null /* outputMetadata */);
 
     artifactsBuilder.addRuntimeJar(output);
     Artifact iJar = helper.createCompileTimeJarAction(output, artifactsBuilder);
 
     if (createOutputSourceJar) {
-      helper.createSourceJarAction(outputSourceJar, null, javaToolchainProvider, hostJavabase);
+      helper.createSourceJarAction(outputSourceJar, null,
+          javaToolchainProvider, hostJavabaseArtifacts,
+          JavaCommon.getHostJavaExecutable(ruleContext, hostJavabase));
     }
     ImmutableList<Artifact> outputSourceJars =
         outputSourceJar == null ? ImmutableList.of() : ImmutableList.of(outputSourceJar);
@@ -228,6 +231,28 @@ public final class JavaLibraryHelper {
         .setJdeps(outputDepsProto);
 
     return artifactsBuilder.build();
+  }
+
+  static NestedSet<Artifact> getJavaBaseMiddleman(TransitiveInfoCollection prereq) {
+    if (prereq == null) {
+      return NestedSetBuilder.emptySet(Order.STABLE_ORDER);
+    }
+
+    JavaRuntimeInfo javaRuntimeInfo = prereq.get(JavaRuntimeInfo.PROVIDER);
+    if (javaRuntimeInfo != null) {
+      return javaRuntimeInfo.javaBaseInputsMiddleman();
+    }
+
+    MiddlemanProvider middlemanProvider = prereq.getProvider(MiddlemanProvider.class);
+    if (middlemanProvider != null) {
+      // This branch is necessary so that we support the legacy case when the javabase is set to
+      // a filegroup (e.g. //tools/defaults:jdk).
+      // TODO(lberki): Remove when we have migrated everyone from //tools/defaults:jdk to
+      // //tools/jdk:current_{host_,}java_runtime.
+      return middlemanProvider.getMiddlemanArtifact();
+    }
+
+    return NestedSetBuilder.emptySet(Order.STABLE_ORDER);
   }
 
   /**

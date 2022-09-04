@@ -71,9 +71,8 @@ public class JavaRuntime implements RuleConfiguredTargetFactory {
             .addTransitiveArtifacts(filesToBuild)
             .build();
 
-    JavaRuntimeInfo javaRuntime =
-        JavaRuntimeInfo.create(
-            filesToBuild, middleman, javaHome, javaBinaryExecPath, javaBinaryRunfilesPath);
+    JavaRuntimeInfo javaRuntime = new JavaRuntimeInfo(
+        filesToBuild, middleman, javaHome, javaBinaryExecPath, javaBinaryRunfilesPath);
 
     TemplateVariableInfo templateVariableInfo = new TemplateVariableInfo(ImmutableMap.of(
         "JAVA", javaBinaryExecPath.getPathString(),
@@ -83,7 +82,6 @@ public class JavaRuntime implements RuleConfiguredTargetFactory {
         .addProvider(RunfilesProvider.class, RunfilesProvider.simple(runfiles))
         .setFilesToBuild(filesToBuild)
         .addNativeDeclaredProvider(javaRuntime)
-        .addNativeDeclaredProvider(new JavaRuntimeToolchainInfo(javaRuntime))
         .addNativeDeclaredProvider(templateVariableInfo)
         .build();
   }

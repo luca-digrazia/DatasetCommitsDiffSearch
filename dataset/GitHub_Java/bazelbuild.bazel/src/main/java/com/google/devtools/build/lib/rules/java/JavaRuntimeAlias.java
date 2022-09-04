@@ -17,6 +17,7 @@ package com.google.devtools.build.lib.rules.java;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 
+import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FileProvider;
@@ -29,6 +30,8 @@ import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.TemplateVariableInfo;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
+import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.RuleClass;
 
 /**
@@ -42,12 +45,35 @@ public class JavaRuntimeAlias implements RuleConfiguredTargetFactory {
     TransitiveInfoCollection runtime = ruleContext.getPrerequisite(":jvm", Mode.TARGET);
     // Sadly, we can't use an AliasConfiguredTarget here because we need to be prepared for the case
     // when --javabase is not a label. For the time being.
-    return new RuleConfiguredTargetBuilder(ruleContext)
-        .addNativeDeclaredProvider(runtime.get(JavaRuntimeInfo.PROVIDER))
-        .addNativeDeclaredProvider(runtime.get(TemplateVariableInfo.PROVIDER))
-        .addProvider(RunfilesProvider.class, runtime.getProvider(RunfilesProvider.class))
-        .setFilesToBuild(runtime.getProvider(FileProvider.class).getFilesToBuild())
-        .build();
+    RuleConfiguredTargetBuilder builder = new RuleConfiguredTargetBuilder(ruleContext);
+
+    if (runtime != null) {
+      builder
+          .addNativeDeclaredProvider(runtime.get(JavaRuntimeInfo.PROVIDER))
+          .addNativeDeclaredProvider(runtime.get(TemplateVariableInfo.PROVIDER))
+          .addProvider(RunfilesProvider.class, runtime.getProvider(RunfilesProvider.class))
+          .setFilesToBuild(runtime.getProvider(FileProvider.class).getFilesToBuild());
+    } else {
+      // This happens when --javabase is an absolute path (as opposed to a label). In this case,
+      // we don't have a java_runtime rule we can proxy, thus we synthesize all its providers.
+      // This can go away once --javabase=<absolute path> is not supported anymore.
+      Jvm jvm = ruleContext.getFragment(Jvm.class);
+      JavaRuntimeInfo runtimeInfo = new JavaRuntimeInfo(
+          NestedSetBuilder.emptySet(Order.STABLE_ORDER),
+          NestedSetBuilder.emptySet(Order.STABLE_ORDER),
+          jvm.getJavaHome(),
+          jvm.getJavaExecutable(),
+          jvm.getJavaExecutable());
+      builder
+          .setFilesToBuild(NestedSetBuilder.emptySet(Order.STABLE_ORDER))
+          .addProvider(RunfilesProvider.class, RunfilesProvider.EMPTY)
+          .addNativeDeclaredProvider(runtimeInfo)
+          .addNativeDeclaredProvider(new TemplateVariableInfo(ImmutableMap.of(
+              "JAVABASE", jvm.getJavaHome().getPathString(),
+              "JAVA", jvm.getJavaExecutable().getPathString())));
+    }
+
+    return builder.build();
   }
 
   /**
@@ -61,9 +87,7 @@ public class JavaRuntimeAlias implements RuleConfiguredTargetFactory {
           .requiresConfigurationFragments(JavaConfiguration.class, Jvm.class)
           .removeAttribute("licenses")
           .removeAttribute("distribs")
-          .add(attr(":jvm", LABEL)
-              .value(JavaSemantics.jvmAttribute(environment))
-              .mandatoryProviders(JavaRuntimeInfo.PROVIDER.id()))
+          .add(attr(":jvm", LABEL).value(JavaSemantics.jvmAttribute(environment)))
           .build();
     }
 
