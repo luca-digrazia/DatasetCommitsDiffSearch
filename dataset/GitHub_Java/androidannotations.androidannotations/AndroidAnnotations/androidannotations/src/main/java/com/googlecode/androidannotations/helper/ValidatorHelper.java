@@ -15,6 +15,8 @@
  */
 package com.googlecode.androidannotations.helper;
 
+import static javax.lang.model.element.ElementKind.CONSTRUCTOR;
+
 import java.lang.annotation.Annotation;
 import java.lang.annotation.IncompleteAnnotationException;
 import java.util.ArrayList;
@@ -33,14 +35,12 @@ import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.ErrorType;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
-import javax.lang.model.util.ElementFilter;
 import javax.lang.model.util.Elements;
 
 import android.util.Log;
 
 import com.googlecode.androidannotations.annotations.EActivity;
 import com.googlecode.androidannotations.annotations.EViewGroup;
-import com.googlecode.androidannotations.annotations.Enhanced;
 import com.googlecode.androidannotations.annotations.Extra;
 import com.googlecode.androidannotations.annotations.Trace;
 import com.googlecode.androidannotations.annotations.ViewById;
@@ -84,7 +84,7 @@ public class ValidatorHelper {
 	private static final Collection<Integer> VALID_LOG_LEVELS = Arrays.asList(Log.VERBOSE, Log.DEBUG, Log.INFO, Log.WARN, Log.ERROR);
 
 	@SuppressWarnings("unchecked")
-	private static final List<Class<? extends Annotation>> VALID_EBEAN_ANNOTATIONS = Arrays.asList(EActivity.class, EViewGroup.class, Enhanced.class);
+	private static final List<Class<? extends Annotation>> VALID_EBEAN_ANNOTATIONS = Arrays.asList(EActivity.class, EViewGroup.class);
 
 	protected final TargetAnnotationHelper annotationHelper;
 
@@ -792,27 +792,23 @@ public class ValidatorHelper {
 		}
 	}
 
-	public void hasEmptyConstructor(Element element, IsValid valid) {
+	public void hasOneConstructorWithContextAndAttributSet(Element element, IsValid valid) {
+		List<ExecutableElement> constructors = new ArrayList<ExecutableElement>();
+		for (Element e : element.getEnclosedElements()) {
+			if (e.getKind() == CONSTRUCTOR) {
+				constructors.add((ExecutableElement) e);
+			}
+		}
 
-		List<ExecutableElement> constructors = ElementFilter.constructorsIn(element.getEnclosedElements());
+		for (ExecutableElement e : constructors) {
+			List<? extends VariableElement> typeParameters = e.getParameters();
 
-		if (constructors.size() == 1) {
-			
-			ExecutableElement constructor = constructors.get(0);
-			
-			if (!annotationHelper.isPrivate(constructor)) {
-				if (constructor.getParameters().size() != 0) {
-					annotationHelper.printError(element, "%s annotated element should have an empty constructor");
-					valid.invalidate();
-				}
-			} else {
-				annotationHelper.printError(element, "%s annotated element should not have a private constructor");
+			if (!(typeParameters.size() == 2 && typeParameters.get(0).asType().toString().equals("android.content.Context") && typeParameters.get(1).asType().toString().equals("android.util.AttributeSet"))) {
+				annotationHelper.printError(e, "You should have only one constructor with Context and AttributeSet parameters.");
 				valid.invalidate();
 			}
-		} else {
-			annotationHelper.printError(element, "%s annotated element should have only one constructor");
-			valid.invalidate();
 		}
+
 	}
 
 	public void hasValidLogLevel(Element element, IsValid isValid) {
