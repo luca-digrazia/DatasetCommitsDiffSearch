@@ -33,6 +33,8 @@ import org.graylog2.bindings.providers.MongoConnectionProvider;
 import org.graylog2.bindings.providers.SystemJobFactoryProvider;
 import org.graylog2.bindings.providers.SystemJobManagerProvider;
 import org.graylog2.cluster.ClusterConfigServiceImpl;
+import org.graylog2.dashboards.widgets.WidgetCacheTime;
+import org.graylog2.dashboards.widgets.WidgetEventsListener;
 import org.graylog2.database.MongoConnection;
 import org.graylog2.events.ClusterEventBus;
 import org.graylog2.grok.GrokModule;
@@ -89,7 +91,6 @@ import org.graylog2.users.RoleServiceImpl;
 import org.graylog2.users.StartPageCleanupListener;
 import org.graylog2.users.UserImpl;
 import org.graylog2.users.UserPermissionsCleanupListener;
-import org.graylog2.utilities.GRNRegistry;
 
 import javax.ws.rs.container.DynamicFeature;
 import javax.ws.rs.ext.ExceptionMapper;
@@ -111,7 +112,6 @@ public class ServerBindings extends Graylog2Module {
         bindExceptionMappers();
         bindAdditionalJerseyComponents();
         bindEventBusListeners();
-        bindGRNRegistry();
         install(new AuthenticatingRealmModule(configuration));
         install(new AuthorizationOnlyRealmModule());
         bindSearchResponseDecorators();
@@ -140,6 +140,7 @@ public class ServerBindings extends Graylog2Module {
         install(new FactoryModuleBuilder().build(SetIndexReadOnlyAndCalculateRangeJob.Factory.class));
 
         install(new FactoryModuleBuilder().build(LdapSettingsImpl.Factory.class));
+        install(new FactoryModuleBuilder().build(WidgetCacheTime.Factory.class));
         install(new FactoryModuleBuilder().build(UserImpl.Factory.class));
 
         install(new FactoryModuleBuilder().build(EmailRecipients.Factory.class));
@@ -211,15 +212,12 @@ public class ServerBindings extends Graylog2Module {
         bind(LocalDebugEventListener.class).asEagerSingleton();
         bind(ClusterDebugEventListener.class).asEagerSingleton();
         bind(StartPageCleanupListener.class).asEagerSingleton();
+        bind(WidgetEventsListener.class).asEagerSingleton();
         bind(UserPermissionsCleanupListener.class).asEagerSingleton();
     }
 
     private void bindSearchResponseDecorators() {
         // only triggering an initialize to make sure that the binding exists
         searchResponseDecoratorBinder();
-    }
-
-    private void bindGRNRegistry() {
-        bind(GRNRegistry.class).toInstance(GRNRegistry.createWithBuiltinTypes());
     }
 }
