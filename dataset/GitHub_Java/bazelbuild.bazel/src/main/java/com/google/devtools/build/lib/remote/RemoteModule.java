@@ -62,7 +62,6 @@ import com.google.devtools.build.lib.exec.SpawnStrategyRegistry;
 import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.remote.RemoteServerCapabilities.ServerCapabilitiesRequirement;
 import com.google.devtools.build.lib.remote.common.RemoteCacheClient;
-import com.google.devtools.build.lib.remote.common.RemoteExecutionClient;
 import com.google.devtools.build.lib.remote.downloader.GrpcRemoteDownloader;
 import com.google.devtools.build.lib.remote.logging.LoggingInterceptor;
 import com.google.devtools.build.lib.remote.options.RemoteOptions;
@@ -508,27 +507,14 @@ public final class RemoteModule extends BlazeModule {
         TracingMetadataUtils.contextWithMetadata(buildRequestId, invocationId, "repository_rule");
 
     if (enableRemoteExecution) {
-      RemoteExecutionClient remoteExecutor;
-      if (remoteOptions.remoteExecutionKeepalive) {
-        RemoteRetrier execRetrier =
-            new RemoteRetrier(
-                remoteOptions,
-                RemoteRetrier.RETRIABLE_GRPC_ERRORS, // Handle NOT_FOUND internally
-                retryScheduler,
-                Retrier.ALLOW_ALL_CALLS);
-        remoteExecutor =
-            new ExperimentalGrpcRemoteExecutor(
-                remoteOptions, execChannel.retain(), callCredentialsProvider, execRetrier);
-      } else {
-        RemoteRetrier execRetrier =
-            new RemoteRetrier(
-                remoteOptions,
-                RemoteRetrier.RETRIABLE_GRPC_EXEC_ERRORS,
-                retryScheduler,
-                Retrier.ALLOW_ALL_CALLS);
-        remoteExecutor =
-            new GrpcRemoteExecutor(execChannel.retain(), callCredentialsProvider, execRetrier);
-      }
+      RemoteRetrier execRetrier =
+          new RemoteRetrier(
+              remoteOptions,
+              RemoteRetrier.RETRIABLE_GRPC_EXEC_ERRORS,
+              retryScheduler,
+              Retrier.ALLOW_ALL_CALLS);
+      GrpcRemoteExecutor remoteExecutor =
+          new GrpcRemoteExecutor(execChannel.retain(), callCredentialsProvider, execRetrier);
       execChannel.release();
       RemoteExecutionCache remoteCache =
           new RemoteExecutionCache(cacheClient, remoteOptions, digestUtil);
@@ -1019,9 +1005,7 @@ public final class RemoteModule extends BlazeModule {
         env.getReporter().handle(Event.warn(e.getMessage()));
       }
 
-      if (creds != null
-          && remoteOptions.remoteCache != null
-          && Ascii.toLowerCase(remoteOptions.remoteCache).startsWith("http://")) {
+      if (creds != null && Ascii.toLowerCase(remoteOptions.remoteCache).startsWith("http://")) {
         env.getReporter()
             .handle(
                 Event.warn(

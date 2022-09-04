@@ -41,6 +41,7 @@ import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
 import com.google.devtools.build.lib.server.FailureDetails.Filesystem;
 import com.google.devtools.build.lib.server.FailureDetails.Filesystem.Code;
 import com.google.devtools.build.lib.server.FailureDetails.GrpcServer;
+import com.google.devtools.build.lib.server.FailureDetails.Interrupted;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.lib.util.ExitCode;
@@ -64,7 +65,6 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.Optional;
 import java.util.concurrent.Executor;
@@ -388,7 +388,13 @@ public class GrpcServerImpl extends CommandServerGrpc.CommandServerImplBase impl
         throw new IOException("ipv6 is not preferred on the system.");
       }
       server =
-          NettyServerBuilder.forAddress(address).addService(this).directExecutor().build().start();
+          NettyServerBuilder.forAddress(address)
+              .addService(this)
+              .directExecutor()
+              // disable auto flow control https://github.com/bazelbuild/bazel/issues/12264
+              .flowControlWindow(NettyServerBuilder.DEFAULT_FLOW_CONTROL_WINDOW)
+              .build()
+              .start();
     } catch (IOException ipv6Exception) {
       address = new InetSocketAddress("127.0.0.1", port);
       try {
@@ -396,6 +402,8 @@ public class GrpcServerImpl extends CommandServerGrpc.CommandServerImplBase impl
             NettyServerBuilder.forAddress(address)
                 .addService(this)
                 .directExecutor()
+                // disable auto flow control https://github.com/bazelbuild/bazel/issues/12264
+                .flowControlWindow(NettyServerBuilder.DEFAULT_FLOW_CONTROL_WINDOW)
                 .build()
                 .start();
       } catch (IOException ipv4Exception) {
@@ -474,7 +482,7 @@ public class GrpcServerImpl extends CommandServerGrpc.CommandServerImplBase impl
   }
 
   private void executeCommand(RunRequest request, BlockingStreamObserver<RunResponse> observer) {
-    boolean badCookie = !isValidRequestCookie(request.getCookie());
+    boolean badCookie = !request.getCookie().equals(requestCookie);
     if (badCookie || request.getClientDescription().isEmpty()) {
       try {
         FailureDetail failureDetail =
@@ -513,12 +521,7 @@ public class GrpcServerImpl extends CommandServerGrpc.CommandServerImplBase impl
           option.getOption().toString(StandardCharsets.ISO_8859_1)));
     }
 
-    commandManager.preemptEligibleCommands();
-
-    try (RunningCommand command =
-        request.getPreemptible()
-            ? commandManager.createPreemptibleCommand()
-            : commandManager.createCommand()) {
+    try (RunningCommand command = commandManager.create()) {
       commandId = command.getId();
 
       try {
@@ -553,8 +556,7 @@ public class GrpcServerImpl extends CommandServerGrpc.CommandServerImplBase impl
                 request.getBlockForLock() ? LockingMode.WAIT : LockingMode.ERROR_OUT,
                 request.getClientDescription(),
                 clock.currentTimeMillis(),
-                Optional.of(startupOptions.build()),
-                request.getCommandExtensionsList());
+                Optional.of(startupOptions.build()));
       } catch (OptionsParsingException e) {
         rpcOutErr.printErrLn(e.getMessage());
         result =
@@ -570,7 +572,8 @@ public class GrpcServerImpl extends CommandServerGrpc.CommandServerImplBase impl
     } catch (InterruptedException e) {
       result =
           BlazeCommandResult.detailedExitCode(
-              InterruptedFailureDetails.detailedExitCode("Command dispatch interrupted"));
+              InterruptedFailureDetails.detailedExitCode(
+                  "Command dispatch interrupted", Interrupted.Code.COMMAND_DISPATCH));
       commandId = ""; // The default value, the client will ignore it
     }
     RunResponse.Builder response = RunResponse.newBuilder()
@@ -590,7 +593,7 @@ public class GrpcServerImpl extends CommandServerGrpc.CommandServerImplBase impl
     }
 
     try {
-      observer.onNext(response.addAllCommandExtensions(result.getResponseExtensions()).build());
+      observer.onNext(response.build());
       observer.onCompleted();
     } catch (StatusRuntimeException e) {
       logger.atInfo().withCause(e).log(
@@ -615,9 +618,9 @@ public class GrpcServerImpl extends CommandServerGrpc.CommandServerImplBase impl
 
   @Override
   public void ping(PingRequest pingRequest, StreamObserver<PingResponse> streamObserver) {
-    try (RunningCommand command = commandManager.createCommand()) {
+    try (RunningCommand command = commandManager.create()) {
       PingResponse.Builder response = PingResponse.newBuilder();
-      if (isValidRequestCookie(pingRequest.getCookie())) {
+      if (pingRequest.getCookie().equals(requestCookie)) {
         response.setCookie(responseCookie);
       }
 
@@ -630,7 +633,7 @@ public class GrpcServerImpl extends CommandServerGrpc.CommandServerImplBase impl
   public void cancel(
       final CancelRequest request, final StreamObserver<CancelResponse> streamObserver) {
     logger.atInfo().log("Got CancelRequest for command id %s", request.getCommandId());
-    if (!isValidRequestCookie(request.getCookie())) {
+    if (!request.getCookie().equals(requestCookie)) {
       streamObserver.onCompleted();
       return;
     }
@@ -650,17 +653,6 @@ public class GrpcServerImpl extends CommandServerGrpc.CommandServerImplBase impl
       logger.atInfo().log(
           "Client cancelled RPC of cancellation request for %s", request.getCommandId());
     }
-  }
-
-  /**
-   * Returns whether or not the provided cookie is valid for this server using a constant-time
-   * comparison in order to guard against timing attacks.
-   */
-  private boolean isValidRequestCookie(String incomingRequestCookie) {
-    // Note that cookie file was written as latin-1, so use that here.
-    return MessageDigest.isEqual(
-        incomingRequestCookie.getBytes(StandardCharsets.ISO_8859_1),
-        requestCookie.getBytes(StandardCharsets.ISO_8859_1));
   }
 
   private static AbruptExitException createFilesystemFailureException(

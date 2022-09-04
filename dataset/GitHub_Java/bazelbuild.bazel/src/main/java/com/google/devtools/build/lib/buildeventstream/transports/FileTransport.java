@@ -302,12 +302,7 @@ abstract class FileTransport implements BuildEventTransport {
                   return options;
                 }
               };
-          try {
-            return event.asStreamProto(context);
-          } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return null;
-          }
+          return event.asStreamProto(context);
         },
         MoreExecutors.directExecutor());
   }

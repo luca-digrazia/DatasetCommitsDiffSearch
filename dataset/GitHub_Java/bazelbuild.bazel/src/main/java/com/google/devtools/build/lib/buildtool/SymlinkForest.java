@@ -392,7 +392,10 @@ public class SymlinkForest {
         }
       } else {
         plantSymlinkForExternalRepo(
-            plantedSymlinks, repository, entry.getValue().asPath(), externalRepoLinks);
+            plantedSymlinks,
+            repository,
+            entry.getValue().getRelative(repository.getSourceRoot()),
+            externalRepoLinks);
       }
     }
 

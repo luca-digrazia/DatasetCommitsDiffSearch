@@ -1239,7 +1239,6 @@ public class PackageFunction implements SkyFunction {
                 env,
                 bzlLoadFunctionForInlining);
       } catch (NoSuchPackageException e) {
-        fileSyntaxCache.invalidate(packageId);
         throw new PackageFunctionException(e, Transience.PERSISTENT);
       } catch (InterruptedException e) {
         fileSyntaxCache.invalidate(packageId);

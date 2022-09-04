@@ -29,6 +29,7 @@ import com.google.devtools.build.lib.server.FailureDetails;
 import com.google.devtools.build.lib.server.FailureDetails.CanonicalizeFlags;
 import com.google.devtools.build.lib.server.FailureDetails.CanonicalizeFlags.Code;
 import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
+import com.google.devtools.build.lib.server.FailureDetails.Interrupted;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.lib.util.InterruptedFailureDetails;
@@ -50,8 +51,8 @@ import java.util.logging.Level;
 @Command(
     name = "canonicalize-flags",
     options = {CanonicalizeCommand.Options.class, PackageOptions.class},
-    // inherits from build to get proper package loading options and rc flag aliases.
-    inherits = {BuildCommand.class},
+    // inherits from query to get proper package loading options.
+    inherits = {QueryCommand.class},
     allowResidue = true,
     mustRunInWorkspace = false,
     shortDescription = "Canonicalizes a list of %{product} options.",
@@ -171,7 +172,8 @@ public final class CanonicalizeCommand implements BlazeCommand {
       String message = "canonicalization interrupted";
       env.getReporter().handle(Event.error(message));
       return BlazeCommandResult.detailedExitCode(
-          InterruptedFailureDetails.detailedExitCode(message));
+          InterruptedFailureDetails.detailedExitCode(
+              message, Interrupted.Code.PACKAGE_LOADING_SYNC));
     } catch (AbruptExitException e) {
       env.getReporter().handle(Event.error(null, "Unknown error: " + e.getMessage()));
       return BlazeCommandResult.detailedExitCode(e.getDetailedExitCode());
