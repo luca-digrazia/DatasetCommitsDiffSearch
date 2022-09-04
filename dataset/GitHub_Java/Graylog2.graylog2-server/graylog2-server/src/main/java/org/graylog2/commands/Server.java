@@ -16,7 +16,6 @@
  */
 package org.graylog2.commands;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.util.concurrent.ServiceManager;
 import com.google.inject.Injector;
 import com.google.inject.Module;
@@ -33,7 +32,6 @@ import org.graylog2.bindings.PasswordAlgorithmBindings;
 import org.graylog2.bindings.PeriodicalBindings;
 import org.graylog2.bindings.PersistenceServicesBindings;
 import org.graylog2.bindings.ServerBindings;
-import org.graylog2.bindings.WebInterfaceModule;
 import org.graylog2.bindings.WidgetStrategyBindings;
 import org.graylog2.bootstrap.Main;
 import org.graylog2.bootstrap.ServerBootstrap;
@@ -54,6 +52,7 @@ import org.graylog2.plugin.Tools;
 import org.graylog2.shared.UI;
 import org.graylog2.shared.bindings.ObjectMapperModule;
 import org.graylog2.shared.bindings.RestApiBindings;
+import org.graylog2.shared.plugins.ChainingClassLoader;
 import org.graylog2.shared.system.activities.Activity;
 import org.graylog2.shared.system.activities.ActivityWriter;
 import org.graylog2.system.shutdown.GracefulShutdown;
@@ -78,6 +77,7 @@ public class Server extends ServerBootstrap {
     private final MongoDbConfiguration mongoDbConfiguration = new MongoDbConfiguration();
     private final VersionCheckConfiguration versionCheckConfiguration = new VersionCheckConfiguration();
     private final KafkaJournalConfiguration kafkaJournalConfiguration = new KafkaJournalConfiguration();
+    private final ChainingClassLoader classLoader = new ChainingClassLoader(Server.class.getClassLoader());
 
     public Server() {
         super("server", configuration);
@@ -106,30 +106,23 @@ public class Server extends ServerBootstrap {
 
     @Override
     protected List<Module> getCommandBindings() {
-        final ImmutableList.Builder<Module> modules = ImmutableList.builder();
-        modules.add(
-            new ServerBindings(configuration),
-            new PersistenceServicesBindings(),
-            new MessageFilterBindings(),
-            new MessageProcessorModule(),
-            new AlarmCallbackBindings(),
-            new InitializerBindings(),
-            new MessageOutputBindings(configuration),
-            new RotationStrategyBindings(),
-            new RetentionStrategyBindings(),
-            new PeriodicalBindings(),
-            new ObjectMapperModule(chainingClassLoader),
-            new RestApiBindings(),
-            new PasswordAlgorithmBindings(),
-            new WidgetStrategyBindings(),
-            new DashboardBindings()
+        return Arrays.<Module>asList(
+                new ServerBindings(configuration),
+                new PersistenceServicesBindings(),
+                new MessageFilterBindings(),
+                new MessageProcessorModule(),
+                new AlarmCallbackBindings(),
+                new InitializerBindings(),
+                new MessageOutputBindings(configuration),
+                new RotationStrategyBindings(),
+                new RetentionStrategyBindings(),
+                new PeriodicalBindings(),
+                new ObjectMapperModule(classLoader),
+                new RestApiBindings(),
+                new PasswordAlgorithmBindings(),
+                new WidgetStrategyBindings(),
+                new DashboardBindings()
         );
-
-        if (configuration.isWebEnable()) {
-            modules.add(new WebInterfaceModule());
-        }
-
-        return modules.build();
     }
 
     @Override
