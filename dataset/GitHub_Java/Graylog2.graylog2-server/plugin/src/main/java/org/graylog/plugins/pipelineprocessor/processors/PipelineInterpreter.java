@@ -16,6 +16,8 @@
  */
 package org.graylog.plugins.pipelineprocessor.processors;
 
+import com.codahale.metrics.Meter;
+import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSetMultimap;
@@ -24,17 +26,11 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.common.eventbus.EventBus;
 import com.google.common.eventbus.Subscribe;
-
-import com.codahale.metrics.Meter;
-import com.codahale.metrics.MetricRegistry;
-
 import org.graylog.plugins.pipelineprocessor.EvaluationContext;
 import org.graylog.plugins.pipelineprocessor.ast.Pipeline;
 import org.graylog.plugins.pipelineprocessor.ast.Rule;
 import org.graylog.plugins.pipelineprocessor.ast.Stage;
 import org.graylog.plugins.pipelineprocessor.ast.statements.Statement;
-import org.graylog.plugins.pipelineprocessor.codegen.GeneratedRule;
-import org.graylog.plugins.pipelineprocessor.parser.PipelineRuleParser;
 import org.graylog.plugins.pipelineprocessor.processors.listeners.InterpreterListener;
 import org.graylog.plugins.pipelineprocessor.processors.listeners.NoopInterpreterListener;
 import org.graylog2.plugin.Message;
@@ -48,13 +44,12 @@ import org.jooq.lambda.tuple.Tuple2;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.inject.Inject;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
-
-import javax.inject.Inject;
 
 import static com.codahale.metrics.MetricRegistry.name;
 import static org.jooq.lambda.tuple.Tuple.tuple;
@@ -98,7 +93,6 @@ public class PipelineInterpreter implements MessageProcessor {
     public void handleStateUpdate(State newState) {
         log.debug("Updated pipeline state to {}", newState);
         state.set(newState);
-        StageIterator.clearCache();
     }
 
     /*
@@ -145,6 +139,9 @@ public class PipelineInterpreter implements MessageProcessor {
 
             for (Message message : currentSet) {
                 final String msgId = message.getId();
+
+                // 1. for each message, determine which pipelines are supposed to be executed, based on their streams
+                //    null is the default stream, the other streams are identified by their id
 
                 // this makes a copy of the list, which is mutated later in updateStreamBlacklist
                 // it serves as a worklist, to keep track of which <msg, stream> tuples need to be re-run again
@@ -217,17 +214,34 @@ public class PipelineInterpreter implements MessageProcessor {
                                                    Set<String> initialStreamIds,
                                                    ImmutableSetMultimap<String, Pipeline> streamConnection) {
         final String msgId = message.getId();
-
-        // if a message-stream combination has already been processed (is in the set), skip that execution
-        final Set<String> streamsIds = initialStreamIds.stream()
-                .filter(streamId -> !processingBlacklist.contains(tuple(msgId, streamId)))
-                .filter(streamConnection::containsKey)
-                .collect(Collectors.toSet());
-        final ImmutableSet<Pipeline> pipelinesToRun = ImmutableSet.copyOf(streamsIds.stream()
-                .flatMap(streamId -> streamConnection.get(streamId).stream())
-                .collect(Collectors.toSet()));
-        interpreterListener.processStreams(message, pipelinesToRun, streamsIds);
-        log.debug("[{}] running pipelines {} for streams {}", msgId, pipelinesToRun, streamsIds);
+        ImmutableSet<Pipeline> pipelinesToRun;
+        if (initialStreamIds.isEmpty()) {
+            if (processingBlacklist.contains(tuple(msgId, "default"))) {
+                // already processed default pipeline for this message
+                pipelinesToRun = ImmutableSet.of();
+                log.debug("[{}] already processed default stream, skipping", msgId);
+            } else {
+                // get the default stream pipeline connections for this message
+                pipelinesToRun = streamConnection.get("default");
+                interpreterListener.processDefaultStream(message, pipelinesToRun);
+                if (log.isDebugEnabled()) {
+                    log.debug("[{}] running default stream pipelines: [{}]",
+                              msgId,
+                              pipelinesToRun.stream().map(Pipeline::name).toArray());
+                }
+            }
+        } else {
+            // 2. if a message-stream combination has already been processed (is in the set), skip that execution
+            final Set<String> streamsIds = initialStreamIds.stream()
+                    .filter(streamId -> !processingBlacklist.contains(tuple(msgId, streamId)))
+                    .filter(streamConnection::containsKey)
+                    .collect(Collectors.toSet());
+            pipelinesToRun = ImmutableSet.copyOf(streamsIds.stream()
+                    .flatMap(streamId -> streamConnection.get(streamId).stream())
+                    .collect(Collectors.toSet()));
+            interpreterListener.processStreams(message, pipelinesToRun, streamsIds);
+            log.debug("[{}] running pipelines {} for streams {}", msgId, pipelinesToRun, streamsIds);
+        }
         return pipelinesToRun;
     }
 
@@ -352,27 +366,10 @@ public class PipelineInterpreter implements MessageProcessor {
         rule.markExecution();
         interpreterListener.executeRule(rule, pipeline);
         log.debug("[{}] rule `{}` matched running actions", msgId, rule.name());
-        final GeneratedRule generatedRule = rule.generatedRule();
-        if (generatedRule != null) {
-            try {
-                generatedRule.then(context);
-                return true;
-            } catch (Exception ignored) {
-                final EvaluationContext.EvalError lastError = Iterables.getLast(context.evaluationErrors());
-                appendProcessingError(rule, message, lastError.toString());
-                log.debug("Encountered evaluation error, skipping rest of the rule: {}", lastError);
-                rule.markFailure();
+        for (Statement statement : rule.then()) {
+            if (!evaluateStatement(message, interpreterListener, pipeline, context, rule, statement)) {
+                // statement raised an error, skip the rest of the rule
                 return false;
-            }
-        } else {
-            if (PipelineRuleParser.isAllowCodeGeneration()) {
-                throw new IllegalStateException("Should have generated code and not interpreted the tree");
-            }
-            for (Statement statement : rule.then()) {
-                if (!evaluateStatement(message, interpreterListener, pipeline, context, rule, statement)) {
-                    // statement raised an error, skip the rest of the rule
-                    return false;
-                }
             }
         }
         return true;
@@ -403,9 +400,7 @@ public class PipelineInterpreter implements MessageProcessor {
                                           EvaluationContext context,
                                           ArrayList<Rule> rulesToRun, InterpreterListener interpreterListener) {
         interpreterListener.evaluateRule(rule, pipeline);
-        final GeneratedRule generatedRule = rule.generatedRule();
-        boolean matched = generatedRule != null ? generatedRule.when(context) : rule.when().evaluateBool(context);
-        if (matched) {
+        if (rule.when().evaluateBool(context)) {
             rule.markMatch();
 
             if (context.hasEvaluationErrors()) {
