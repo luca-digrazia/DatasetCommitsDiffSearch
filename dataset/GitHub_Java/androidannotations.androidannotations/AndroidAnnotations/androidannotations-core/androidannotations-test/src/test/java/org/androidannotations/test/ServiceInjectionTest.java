@@ -61,7 +61,6 @@ public class ServiceInjectionTest {
 		assertThat(activity.dropBoxManager).isNotNull();
 		// assertThat(activity.ethernetManager).isNotNull(); // hidden API
 		// assertThat(activity.fingerprintManager).isNotNull(); // TODO API 23
-		// assertThat(activity.hardwarePropertiesManager).isNotNull(); // TODO API 24
 		// assertThat(activity.hdmiControlManager).isNotNull(); // hidden API
 		// assertThat(activity.inputManager).isNotNull(); // TODO no support yet in Robolectric
 		assertThat(activity.inputMethodManager).isNotNull();
@@ -92,7 +91,6 @@ public class ServiceInjectionTest {
 		// assertThat(activity.statusBarManager).isNotNull(); // hidden API
 		assertThat(activity.storageManager).isNotNull();
 		// assertThat(activity.subscriptionManager).isNotNull(); // TODO API 22
-		// assertThat(activity.systemHealthManager).isNotNull(); // TODO API 24
 		// assertThat(activity.telecomManager).isNotNull(); // TODO API 21
 		assertThat(activity.telephonyManager).isNotNull();
 		assertThat(activity.textServicesManager).isNotNull();
