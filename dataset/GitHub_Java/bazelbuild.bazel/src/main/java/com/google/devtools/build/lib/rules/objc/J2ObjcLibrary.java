@@ -91,6 +91,9 @@ public class J2ObjcLibrary implements RuleConfiguredTargetFactory {
         .setIntermediateArtifacts(ObjcRuleClasses.intermediateArtifacts(ruleContext))
         .doNotUsePch()
         .build()
+        .registerFullyLinkAction(
+            objcProvider,
+            ruleContext.getImplicitOutputArtifact(CompilationSupport.FULLY_LINKED_LIB))
         .registerGenerateModuleMapAction(moduleMapCompilationArtifacts)
         .validateAttributes();
 

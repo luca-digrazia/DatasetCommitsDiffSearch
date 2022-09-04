@@ -444,7 +444,7 @@ public final class ObjcCommon {
       }
 
       if (hasModuleMap) {
-        CppModuleMap moduleMap = intermediateArtifacts.swiftModuleMap();
+        CppModuleMap moduleMap = intermediateArtifacts.moduleMap();
         Optional<Artifact> umbrellaHeader = moduleMap.getUmbrellaHeader();
         if (umbrellaHeader.isPresent()) {
           objcProvider.add(UMBRELLA_HEADER, umbrellaHeader.get());
