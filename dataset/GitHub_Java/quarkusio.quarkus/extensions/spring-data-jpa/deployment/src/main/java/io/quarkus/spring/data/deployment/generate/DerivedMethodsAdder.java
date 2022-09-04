@@ -1,6 +1,5 @@
 package io.quarkus.spring.data.deployment.generate;
 
-import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -20,7 +19,6 @@ import io.quarkus.gizmo.MethodCreator;
 import io.quarkus.gizmo.MethodDescriptor;
 import io.quarkus.gizmo.ResultHandle;
 import io.quarkus.hibernate.orm.panache.PanacheQuery;
-import io.quarkus.hibernate.orm.panache.runtime.AdditionalJpaOperations;
 import io.quarkus.hibernate.orm.panache.runtime.JpaOperations;
 import io.quarkus.spring.data.deployment.DotNames;
 import io.quarkus.spring.data.deployment.MethodNameParser;
@@ -43,10 +41,6 @@ public class DerivedMethodsAdder extends AbstractMethodsAdder {
             }
 
             if (classCreator.getExistingMethods().contains(GenerationUtil.toMethodDescriptor(generatedClassName, method))) {
-                continue;
-            }
-
-            if (!Modifier.isAbstract(method.flags())) { // skip defaults methods
                 continue;
             }
 
@@ -133,7 +127,7 @@ public class DerivedMethodsAdder extends AbstractMethodsAdder {
                             methodCreator.load(finalQuery), sort, paramsArray);
 
                     generateFindQueryResultHandling(methodCreator, panacheQuery, pageableParameterIndex, repositoryClassInfo,
-                            entityClassInfo, returnType.name(), parseResult.getTopCount(), method.name(), null);
+                            entityClassInfo, returnType.name(), parseResult.getTopCount(), method.name());
 
                 } else if (parseResult.getQueryType() == MethodNameParser.QueryType.COUNT) {
                     if (!DotNames.PRIMITIVE_LONG.equals(returnType.name()) && !DotNames.LONG.equals(returnType.name())) {
@@ -196,7 +190,7 @@ public class DerivedMethodsAdder extends AbstractMethodsAdder {
 
                     // call JpaOperations.delete()
                     ResultHandle delete = methodCreator.invokeStaticMethod(
-                            MethodDescriptor.ofMethod(AdditionalJpaOperations.class, "deleteWithCascade", long.class,
+                            MethodDescriptor.ofMethod(JpaOperations.class, "delete", long.class,
                                     Class.class, String.class, Object[].class),
                             methodCreator.readInstanceField(entityClassFieldDescriptor, methodCreator.getThis()),
                             methodCreator.load(parseResult.getQuery()), paramsArray);

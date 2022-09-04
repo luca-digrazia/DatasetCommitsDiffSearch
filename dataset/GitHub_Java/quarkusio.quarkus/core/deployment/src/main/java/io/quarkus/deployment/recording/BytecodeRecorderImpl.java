@@ -1609,7 +1609,7 @@ public class BytecodeRecorderImpl implements RecorderContext {
      * class responsible for splitting the bytecode into smaller methods, to make sure that even large objects and large
      * numbers of invocations do not put us over the method limit.
      */
-    static class SplitMethodContext implements Closeable, MethodContext {
+    class SplitMethodContext implements Closeable, MethodContext {
         final ResultHandle deferredParameterArray;
         final MethodCreator mainMethod;
         final ClassCreator classCreator;
@@ -1662,7 +1662,7 @@ public class BytecodeRecorderImpl implements RecorderContext {
         }
     }
 
-    static final class FixedMethodContext implements MethodContext {
+    final class FixedMethodContext implements MethodContext {
         final SplitMethodContext parent;
         final MethodCreator currentMethod;
         final Map<Integer, ResultHandle> currentMethodCache;

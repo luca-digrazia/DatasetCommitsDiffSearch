@@ -461,10 +461,7 @@ public final class RunTimeConfigurationGenerator {
                 FieldDescriptor rootFieldDescriptor = root.getDescriptor();
 
                 // Get or generate group init method
-                MethodDescriptor initGroup = null;
-                if (root.getConfigPhase() != ConfigPhase.BUILD_TIME) {
-                    initGroup = generateInitGroup(root);
-                }
+                MethodDescriptor initGroup = generateInitGroup(root);
 
                 final MethodDescriptor ctor = accessorFinder
                         .getConstructorFor(MethodDescriptor.ofConstructor(configurationClass));
