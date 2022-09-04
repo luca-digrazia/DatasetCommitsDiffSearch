@@ -72,8 +72,7 @@ public class RegressionValidation<M> implements Serializable {
         double[] prediction = model.predict(testx);
         double scoreTime = (System.nanoTime() - start) / 1E6;
 
-        RegressionMetrics metrics = new RegressionMetrics(
-                fitTime, scoreTime, testy.length,
+        RegressionMetrics metrics = new RegressionMetrics(fitTime, scoreTime,
                 RSS.of(testy, prediction),
                 MSE.of(testy, prediction),
                 RMSE.of(testy, prediction),
@@ -120,8 +119,7 @@ public class RegressionValidation<M> implements Serializable {
         }
         double scoreTime = (System.nanoTime() - start) / 1E6;
 
-        RegressionMetrics metrics = new RegressionMetrics(
-                fitTime, scoreTime, testy.length,
+        RegressionMetrics metrics = new RegressionMetrics(fitTime, scoreTime,
                 RSS.of(testy, prediction),
                 MSE.of(testy, prediction),
                 RMSE.of(testy, prediction),
