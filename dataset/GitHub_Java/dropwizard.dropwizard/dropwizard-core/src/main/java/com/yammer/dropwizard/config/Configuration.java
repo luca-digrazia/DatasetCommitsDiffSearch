@@ -45,12 +45,12 @@ public class Configuration {
     @Valid
     @NotNull
     @JsonProperty
-    protected HttpConfiguration http = new HttpConfiguration();
+    private HttpConfiguration http = new HttpConfiguration();
 
     @Valid
     @NotNull
     @JsonProperty
-    protected LoggingConfiguration logging = new LoggingConfiguration();
+    private LoggingConfiguration logging = new LoggingConfiguration();
 
     /**
      * Returns the HTTP-specific section of the configuration file.
