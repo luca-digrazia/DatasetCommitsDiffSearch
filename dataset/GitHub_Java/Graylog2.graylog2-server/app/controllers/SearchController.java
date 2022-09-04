@@ -38,6 +38,7 @@ import org.graylog2.restclient.models.*;
 import org.graylog2.restclient.models.api.results.DateHistogramResult;
 import org.graylog2.restclient.models.api.results.SearchResult;
 import org.joda.time.DateTime;
+import org.joda.time.DateTimeConstants;
 import org.joda.time.Minutes;
 import play.mvc.Result;
 import views.helpers.Permissions;
@@ -88,13 +89,9 @@ public class SearchController extends AuthenticatedController {
                         int displayWidth) {
         SearchSort sort = buildSearchSort(sortField, sortOrder);
 
-        return renderSearch(q, rangeType, relative, from, to, keyword, interval, page, savedSearchId, fields, displayWidth, sort, null, null);
-    }
-
-    protected Result renderSearch(String q, String rangeType, int relative, String from, String to, String keyword, String interval, int page, String savedSearchId, String fields, int displayWidth, SearchSort sort, Stream stream, String filter) {
         UniversalSearch search;
         try {
-            search = getSearch(q, filter, rangeType, relative, from, to, keyword, page, sort);
+            search = getSearch(q, null, rangeType, relative, from, to, keyword, page, sort);
         } catch(InvalidRangeParametersException e2) {
             return status(400, views.html.errors.error.render("Invalid range parameters provided.", e2, request()));
         } catch(IllegalArgumentException e1) {
@@ -106,7 +103,6 @@ public class SearchController extends AuthenticatedController {
         SavedSearch savedSearch;
         Set<String> selectedFields = getSelectedFields(fields);
         String formattedHistogramResults;
-
         try {
             if(savedSearchId != null && !savedSearchId.isEmpty()) {
                 savedSearch = savedSearchService.get(savedSearchId);
@@ -116,7 +112,7 @@ public class SearchController extends AuthenticatedController {
 
             searchResult = search.search();
             if (searchResult.getError() != null) {
-                return ok(views.html.search.queryerror.render(currentUser(), q, searchResult, savedSearch, fields, stream));
+                return ok(views.html.search.queryerror.render(currentUser(), q, searchResult, savedSearch, fields, null));
             }
             searchResult.setAllFields(getAllFields());
 
@@ -134,20 +130,19 @@ public class SearchController extends AuthenticatedController {
         }
 
         if (searchResult.getTotalResultCount() > 0) {
-            return ok(views.html.search.results.render(currentUser(), search, searchResult, histogramResult, formattedHistogramResults, q, page, savedSearch, selectedFields, serverNodes.asMap(), stream));
+            return ok(views.html.search.results.render(currentUser(), search, searchResult, histogramResult, formattedHistogramResults, q, page, savedSearch, selectedFields, serverNodes.asMap(), null));
         } else {
-            return ok(views.html.search.noresults.render(currentUser(), q, searchResult, savedSearch, selectedFields, stream));
+            return ok(views.html.search.noresults.render(currentUser(), q, searchResult, savedSearch, selectedFields, null));
         }
     }
-
 
     protected String determineHistogramResolution(final SearchResult searchResult) {
         final String interval;
         final int queryRangeInMinutes = Minutes.minutesBetween(searchResult.getFromDateTime(), searchResult.getToDateTime()).getMinutes();
-        final int HOUR = 60;
-        final int DAY = HOUR * 24;
-        final int WEEK = DAY * 7;
-        final int MONTH = HOUR * 24 * 30;
+        final int HOUR = DateTimeConstants.MINUTES_PER_HOUR;
+        final int DAY = DateTimeConstants.MINUTES_PER_DAY;
+        final int WEEK = DateTimeConstants.MINUTES_PER_WEEK;
+        final int MONTH = DAY * 30;
         final int YEAR = MONTH * 12;
 
         if (queryRangeInMinutes < DAY / 2) {
