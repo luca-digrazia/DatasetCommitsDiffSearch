@@ -1,5 +1,5 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * Copyright 2012 Lennart Koopmann <lennart@socketfeed.com>
  *
  * This file is part of Graylog2.
  *
@@ -15,22 +15,20 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 
 package org.graylog2.outputs;
 
 import com.codahale.metrics.Meter;
-import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 import com.google.common.base.Joiner;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Ordering;
-import com.google.inject.Inject;
-import org.graylog2.indexer.Indexer;
+import org.graylog2.Core;
+import org.graylog2.plugin.GraylogServer;
 import org.graylog2.plugin.Message;
-import org.graylog2.plugin.configuration.Configuration;
-import org.graylog2.plugin.configuration.ConfigurationRequest;
 import org.graylog2.plugin.outputs.MessageOutput;
 import org.graylog2.plugin.outputs.MessageOutputConfigurationException;
 import org.graylog2.plugin.outputs.OutputStreamConfiguration;
@@ -53,29 +51,26 @@ public class ElasticSearchOutput implements MessageOutput {
     private static final String NAME = "ElasticSearch Output";
     
     private static final Logger LOG = LoggerFactory.getLogger(ElasticSearchOutput.class);
-    private final Indexer indexer;
 
-    @Inject
-    public ElasticSearchOutput(MetricRegistry metricRegistry,
-                               Indexer indexer) {
-        this.indexer = indexer;
+    public ElasticSearchOutput(Core core) {
         // Only constructing metrics here. write() get's another Core reference. (because this technically is a plugin)
-        this.writes = metricRegistry.meter(name(ElasticSearchOutput.class, "writes"));
-        this.processTime = metricRegistry.timer(name(ElasticSearchOutput.class, "processTime"));
+        this.writes = core.metrics().meter(name(ElasticSearchOutput.class, "writes"));
+        this.processTime = core.metrics().timer(name(ElasticSearchOutput.class, "processTime"));
     }
 
     @Override
-    public void write(List<Message> messages, OutputStreamConfiguration streamConfig) throws Exception {
+    public void write(List<Message> messages, OutputStreamConfiguration streamConfig, GraylogServer server) throws Exception {
         LOG.debug("Writing <{}> messages.", messages.size());
         if (LOG.isTraceEnabled()) {
-            final List<String> sortedIds = Ordering.natural().sortedCopy(Lists.transform(messages, Message.ID_FUNCTION));
+            final List<String> sortedIds = Ordering.natural().sortedCopy(Lists.transform(messages,  Message.ID_FUNCTION));
             LOG.trace("Writing message ids to [{}]: <{}>", getName(), Joiner.on(", ").join(sortedIds));
         }
-
+        Core serverImpl = (Core) server;
+        
         writes.mark();
 
         Timer.Context tcx = processTime.time();
-        indexer.bulkIndex(messages);
+        serverImpl.getIndexer().bulkIndex(messages);
         tcx.stop();
     }
 
@@ -85,14 +80,14 @@ public class ElasticSearchOutput implements MessageOutput {
     }
 
     @Override
-    public void initialize(Configuration config) throws MessageOutputConfigurationException {
+    public void initialize(Map<String, String> config) throws MessageOutputConfigurationException {
         // Built in output. This is just for plugin compat. Nothing to initialize.
     }
 
     @Override
-    public ConfigurationRequest getRequestedConfiguration() {
+    public Map<String, String> getRequestedConfiguration() {
         // Built in output. This is just for plugin compat. No special configuration required.
-        return new ConfigurationRequest();
+        return Maps.newHashMap();
     }
     
     @Override
