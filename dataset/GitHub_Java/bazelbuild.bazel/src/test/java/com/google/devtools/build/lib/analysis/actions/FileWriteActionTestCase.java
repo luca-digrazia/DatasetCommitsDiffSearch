@@ -36,7 +36,6 @@ import com.google.devtools.build.lib.exec.util.TestExecutorBuilder;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.lib.vfs.UnixGlob;
 import java.util.Collection;
 import org.junit.Before;
 
@@ -80,8 +79,7 @@ public abstract class FileWriteActionTestCase extends BuildViewTestCase {
             /*artifactExpander=*/ null,
             /*actionFileSystem=*/ null,
             /*skyframeDepsResult=*/ null,
-            NestedSetExpander.DEFAULT,
-            UnixGlob.DEFAULT_SYSCALLS);
+            NestedSetExpander.DEFAULT);
   }
 
   protected void checkNoInputsByDefault() {

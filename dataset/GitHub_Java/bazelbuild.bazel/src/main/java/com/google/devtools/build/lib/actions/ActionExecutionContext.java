@@ -239,9 +239,11 @@ public class ActionExecutionContext implements Closeable, ActionContext.ActionCo
     return pathResolver;
   }
 
-  /** Returns whether failures for {@code failedLabel} should have verbose error messages. */
-  public boolean showVerboseFailures(Label failedLabel) {
-    return executor.getVerboseFailuresPredicate().test(failedLabel);
+  /**
+   * Returns whether failures should have verbose error messages.
+   */
+  public boolean getVerboseFailures() {
+    return executor.getVerboseFailures();
   }
 
   /**
@@ -293,21 +295,18 @@ public class ActionExecutionContext implements Closeable, ActionContext.ActionCo
       return;
     }
 
-    StringBuilder reason = new StringBuilder();
+    String reason;
     ActionOwner owner = spawn.getResourceOwner().getOwner();
     if (owner == null) {
-      reason.append(spawn.getResourceOwner().prettyPrint());
+      reason = spawn.getResourceOwner().prettyPrint();
     } else {
-      reason.append(Label.print(owner.getLabel()));
-      reason.append(" [");
-      reason.append(spawn.getResourceOwner().prettyPrint());
-      reason.append(", configuration: ");
-      reason.append(owner.getConfigurationChecksum());
-      if (owner.getExecutionPlatform() != null) {
-        reason.append(", execution platform: ");
-        reason.append(owner.getExecutionPlatform().label());
-      }
-      reason.append("]");
+      reason =
+          Label.print(owner.getLabel())
+              + " ["
+              + spawn.getResourceOwner().prettyPrint()
+              + ", configuration: "
+              + owner.getConfigurationChecksum()
+              + "]";
     }
     String message = Spawns.asShellCommand(spawn, getExecRoot(), showSubcommands.prettyPrintArgs);
     getEventHandler().handle(Event.of(EventKind.SUBCOMMAND, null, "# " + reason + "\n" + message));

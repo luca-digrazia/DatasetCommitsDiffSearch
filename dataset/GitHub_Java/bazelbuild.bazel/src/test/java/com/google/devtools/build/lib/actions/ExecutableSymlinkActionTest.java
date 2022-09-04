@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.actions.util.DummyExecutor;
 import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetExpander;
 import com.google.devtools.build.lib.exec.SingleBuildFileCache;
-import com.google.devtools.build.lib.skyframe.serialization.testutils.SerializationDepsUtils;
 import com.google.devtools.build.lib.skyframe.serialization.testutils.SerializationTester;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.testutil.TestFileOutErr;
@@ -53,11 +52,10 @@ public class ExecutableSymlinkActionTest {
   public final void createExecutor() throws Exception  {
     final Path inputDir = scratch.dir("/in");
     execRoot = scratch.getFileSystem().getPath("/");
-    inputRoot =
-        ArtifactRoot.asDerivedRoot(execRoot, false, inputDir.relativeTo(execRoot).getPathString());
+    inputRoot = ArtifactRoot.asDerivedRoot(execRoot, inputDir.relativeTo(execRoot).getPathString());
     String outSegment = "out";
     execRoot.getChild(outSegment).createDirectoryAndParents();
-    outputRoot = ArtifactRoot.asDerivedRoot(execRoot, false, outSegment);
+    outputRoot = ArtifactRoot.asDerivedRoot(execRoot, outSegment);
     outErr = new TestFileOutErr();
     executor = new DummyExecutor(scratch.getFileSystem(), inputDir);
   }
@@ -146,7 +144,6 @@ public class ExecutableSymlinkActionTest {
         .addDependency(
             Root.RootCodecDependencies.class,
             new Root.RootCodecDependencies(Root.absoluteRoot(scratch.getFileSystem())))
-        .addDependencies(SerializationDepsUtils.SERIALIZATION_DEPS_FOR_TEST)
         .setVerificationFunction(
             (in, out) -> {
               SymlinkAction inAction = (SymlinkAction) in;

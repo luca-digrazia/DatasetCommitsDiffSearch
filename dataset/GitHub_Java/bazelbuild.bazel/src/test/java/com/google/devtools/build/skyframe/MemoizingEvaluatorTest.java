@@ -5375,7 +5375,7 @@ public class MemoizingEvaluatorTest {
           EvaluationContext.newBuilder()
               .setKeepGoing(keepGoing)
               .setNumThreads(numThreads)
-              .setEventHandler(reporter)
+              .setEventHander(reporter)
               .build();
       return driver.evaluate(ImmutableList.copyOf(keys), evaluationContext);
     }

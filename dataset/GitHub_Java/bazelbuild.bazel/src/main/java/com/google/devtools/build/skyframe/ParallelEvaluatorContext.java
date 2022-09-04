@@ -43,7 +43,7 @@ class ParallelEvaluatorContext {
 
   private final QueryableGraph graph;
   private final Version graphVersion;
-  private final ImmutableMap<SkyFunctionName, SkyFunction> skyFunctions;
+  private final ImmutableMap<SkyFunctionName, ? extends SkyFunction> skyFunctions;
   private final ExtendedEventHandler reporter;
   private final NestedSetVisitor<TaggedEvents> replayingNestedSetEventVisitor;
   private final NestedSetVisitor<Postable> replayingNestedSetPostableVisitor;
@@ -77,11 +77,11 @@ class ParallelEvaluatorContext {
   public ParallelEvaluatorContext(
       QueryableGraph graph,
       Version graphVersion,
-      ImmutableMap<SkyFunctionName, SkyFunction> skyFunctions,
+      ImmutableMap<SkyFunctionName, ? extends SkyFunction> skyFunctions,
       ExtendedEventHandler reporter,
       EmittedEventState emittedEventState,
       boolean keepGoing,
-      DirtyTrackingProgressReceiver progressReceiver,
+      final DirtyTrackingProgressReceiver progressReceiver,
       EventFilter storedEventFilter,
       ErrorInfoManager errorInfoManager,
       GraphInconsistencyReceiver graphInconsistencyReceiver,
@@ -185,7 +185,7 @@ class ParallelEvaluatorContext {
     return reporter;
   }
 
-  ImmutableMap<SkyFunctionName, SkyFunction> getSkyFunctions() {
+  ImmutableMap<SkyFunctionName, ? extends SkyFunction> getSkyFunctions() {
     return skyFunctions;
   }
 

@@ -198,7 +198,8 @@ public interface SpawnRunner {
     /** The files to which to write stdout and stderr. */
     FileOutErr getFileOutErr();
 
-    SortedMap<PathFragment, ActionInput> getInputMapping() throws IOException;
+    SortedMap<PathFragment, ActionInput> getInputMapping(boolean expandTreeArtifactsInRunfiles)
+        throws IOException;
 
     /** Reports a progress update to the Spawn strategy. */
     void report(ProgressStatus state, String name);
@@ -256,9 +257,6 @@ public interface SpawnRunner {
 
   /** Returns whether this SpawnRunner supports executing the given Spawn. */
   boolean canExec(Spawn spawn);
-
-  /** Returns whether this SpawnRunner handles caching of actions internally. */
-  boolean handlesCaching();
 
   /** Returns the name of the SpawnRunner. */
   String getName();

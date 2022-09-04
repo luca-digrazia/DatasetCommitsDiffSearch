@@ -17,7 +17,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.skyframe.QueryableGraph.Reason;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -73,12 +72,6 @@ public class QueryableGraphBackedSkyFunctionEnvironment extends AbstractSkyFunct
       result.put(dep, toUntypedValue(resultMap.get(dep)));
     }
     return result;
-  }
-
-  @Override
-  protected List<ValueOrUntypedException> getOrderedValueOrUntypedExceptions(
-      Iterable<? extends SkyKey> depKeys) {
-    throw new UnsupportedOperationException();
   }
 
   @Override

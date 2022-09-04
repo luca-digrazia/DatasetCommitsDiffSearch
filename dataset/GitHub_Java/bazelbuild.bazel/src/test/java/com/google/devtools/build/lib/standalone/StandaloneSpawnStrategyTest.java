@@ -95,8 +95,7 @@ public class StandaloneSpawnStrategyTest {
 
   private Path createTestRoot() throws IOException {
     fileSystem = FileSystems.getNativeFileSystem();
-    Path testRoot = fileSystem.getPath(TestUtils.tmpDir()).getRelative("test");
-    testRoot.createDirectoryAndParents();
+    Path testRoot = fileSystem.getPath(TestUtils.tmpDir());
     try {
       testRoot.deleteTreesBelow();
     } catch (IOException e) {
@@ -151,9 +150,7 @@ public class StandaloneSpawnStrategyTest {
                 resourceManager,
                 (env, binTools1, fallbackTmpDir) -> ImmutableMap.copyOf(env),
                 binTools,
-                /*processWrapper=*/ null,
-                Mockito.mock(RunfilesTreeUpdater.class)),
-            /*verboseFailures=*/ false);
+                Mockito.mock(RunfilesTreeUpdater.class)));
     this.executor =
         new TestExecutorBuilder(fileSystem, directories, binTools)
             .addStrategy(strategy, "standalone")
@@ -316,7 +313,7 @@ public class StandaloneSpawnStrategyTest {
   public void testVerboseFailures() {
     ExecException e = assertThrows(ExecException.class, () -> run(createSpawn(getFalseCommand())));
     ActionExecutionException actionExecutionException =
-        e.toActionExecutionException("messagePrefix", null);
+        e.toActionExecutionException("", /* verboseFailures= */ true, null);
     assertWithMessage("got: " + actionExecutionException.getMessage())
         .that(actionExecutionException.getMessage().contains("failed: error executing command"))
         .isTrue();

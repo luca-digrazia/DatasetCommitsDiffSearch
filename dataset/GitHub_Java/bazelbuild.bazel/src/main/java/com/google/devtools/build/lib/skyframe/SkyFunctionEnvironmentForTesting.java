@@ -25,7 +25,6 @@ import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import com.google.devtools.build.skyframe.ValueOrUntypedException;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -60,12 +59,6 @@ public class SkyFunctionEnvironmentForTesting extends AbstractSkyFunctionEnviron
   @Override
   public ExtendedEventHandler getListener() {
     return eventHandler;
-  }
-
-  @Override
-  protected List<ValueOrUntypedException> getOrderedValueOrUntypedExceptions(
-      Iterable<? extends SkyKey> depKeys) throws InterruptedException {
-    throw new UnsupportedOperationException();
   }
 
   @Override
