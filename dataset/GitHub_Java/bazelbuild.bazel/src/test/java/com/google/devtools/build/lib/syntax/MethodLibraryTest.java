@@ -21,6 +21,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.util.EvaluationTestCase;
 import org.junit.Before;
 import org.junit.Test;
@@ -176,7 +177,7 @@ public class MethodLibraryTest extends EvaluationTestCase {
   }
 
   @SkylarkModule(name = "AStruct", documented = false, doc = "")
-  static final class AStruct implements ClassObject, StarlarkValue {
+  static final class AStruct implements ClassObject, SkylarkValue {
     @Override
     public Object getValue(String name) {
       switch (name) {
@@ -519,23 +520,7 @@ public class MethodLibraryTest extends EvaluationTestCase {
         .testExpression("str(list(range(1, 10, 2)))", "[1, 3, 5, 7, 9]")
         .testExpression("str(range(1, 10, 2)[:99])", "range(1, 11, 2)")
         .testExpression("range(1, 10, 2) == range(1, 11, 2)", true)
-        .testExpression("range(1, 10, 2) == range(1, 12, 2)", false)
-        // x in range(...), +ve step
-        .testExpression("2          in range(3, 0x7ffffffd, 2)", false) // too low
-        .testExpression("3          in range(3, 0x7ffffffd, 2)", true) // in range
-        .testExpression("4          in range(3, 0x7ffffffd, 2)", false) // even
-        .testExpression("5          in range(3, 0x7ffffffd, 2)", true) // in range
-        .testExpression("0x7ffffffb in range(3, 0x7ffffffd, 2)", true) // in range
-        .testExpression("0x7ffffffc in range(3, 0x7ffffffd, 2)", false) // even
-        .testExpression("0x7ffffffd in range(3, 0x7ffffffd, 2)", false) // too high
-        // x in range(...), -ve step
-        .testExpression("0x7ffffffe in range(0x7ffffffd, 3, -2)", false) // too high
-        .testExpression("0x7ffffffd in range(0x7ffffffd, 3, -2)", true) // in range
-        .testExpression("0x7ffffffc in range(0x7ffffffd, 3, -2)", false) // even
-        .testExpression("0x7ffffffb in range(0x7ffffffd, 3, -2)", true) // in range
-        .testExpression("5          in range(0x7ffffffd, 3, -2)", true) // in range
-        .testExpression("4          in range(0x7ffffffd, 3, -2)", false) // even
-        .testExpression("3          in range(0x7ffffffd, 3, -2)", false); // too low
+        .testExpression("range(1, 10, 2) == range(1, 12, 2)", false);
   }
 
   @Test
@@ -550,7 +535,7 @@ public class MethodLibraryTest extends EvaluationTestCase {
 
   @Test
   public void testEnumerateBadArg() throws Exception {
-    new BothModesTest().testIfErrorContains("type 'string' is not iterable", "enumerate('a')");
+    new BothModesTest().testIfErrorContains("type 'string' is not a collection", "enumerate('a')");
   }
 
   @Test

@@ -157,8 +157,6 @@ public abstract class StarlarkSemantics {
 
   public abstract boolean experimentalRepoRemoteExec();
 
-  public abstract boolean incompatibleAlwaysCheckDepsetElements();
-
   public abstract boolean incompatibleBzlDisallowLoadAfterStatement();
 
   public abstract boolean incompatibleDepsetUnion();
@@ -194,6 +192,8 @@ public abstract class StarlarkSemantics {
   public abstract boolean incompatibleRemapMainRepo();
 
   public abstract boolean incompatibleRemoveEnabledToolchainTypes();
+
+  public abstract boolean incompatibleRemoveNativeMavenJar();
 
   public abstract boolean incompatibleRestrictNamedParams();
 
@@ -262,7 +262,6 @@ public abstract class StarlarkSemantics {
           .experimentalStarlarkUnusedInputsList(true)
           .experimentalCcSharedLibrary(false)
           .experimentalRepoRemoteExec(false)
-          .incompatibleAlwaysCheckDepsetElements(false)
           .incompatibleBzlDisallowLoadAfterStatement(true)
           .incompatibleDepsetUnion(true)
           .incompatibleDisableTargetProviderFields(false)
@@ -281,6 +280,7 @@ public abstract class StarlarkSemantics {
           .incompatibleNoTargetOutputGroup(true)
           .incompatibleRemapMainRepo(true)
           .incompatibleRemoveEnabledToolchainTypes(false)
+          .incompatibleRemoveNativeMavenJar(true)
           .incompatibleRunShellCommandString(false)
           .incompatibleRestrictNamedParams(true)
           .incompatibleVisibilityPrivateAttributesAtDefinition(false)
@@ -326,8 +326,6 @@ public abstract class StarlarkSemantics {
 
     public abstract Builder experimentalRepoRemoteExec(boolean value);
 
-    public abstract Builder incompatibleAlwaysCheckDepsetElements(boolean value);
-
     public abstract Builder incompatibleBzlDisallowLoadAfterStatement(boolean value);
 
     public abstract Builder incompatibleDepsetUnion(boolean value);
@@ -363,6 +361,8 @@ public abstract class StarlarkSemantics {
     public abstract Builder incompatibleRemapMainRepo(boolean value);
 
     public abstract Builder incompatibleRemoveEnabledToolchainTypes(boolean value);
+
+    public abstract Builder incompatibleRemoveNativeMavenJar(boolean value);
 
     public abstract Builder incompatibleRestrictNamedParams(boolean value);
 

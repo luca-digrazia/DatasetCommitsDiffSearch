@@ -981,7 +981,7 @@ class MethodLibrary {
             named = true,
             positional = false,
             type = Sequence.class,
-            generic1 = Depset.class,
+            generic1 = SkylarkNestedSet.class,
             noneable = true,
             doc = "A list of depsets whose elements will become indirect elements of the depset.",
             defaultValue = "None"),
@@ -999,41 +999,43 @@ class MethodLibrary {
             valueWhenDisabled = "[]",
             named = true),
       },
+      useLocation = true,
       useStarlarkSemantics = true)
-  public Depset depset(
+  public SkylarkNestedSet depset(
       Object x,
       String orderString,
       Object direct,
       Object transitive,
       Object items,
+      Location loc,
       StarlarkSemantics semantics)
       throws EvalException {
     Order order;
-    Depset result;
+    SkylarkNestedSet result;
     try {
       order = Order.parse(orderString);
     } catch (IllegalArgumentException ex) {
-      throw new EvalException(null, ex);
+      throw new EvalException(loc, ex);
     }
 
     if (semantics.incompatibleDisableDepsetItems()) {
       if (x != Starlark.NONE) {
         if (direct != Starlark.NONE) {
           throw new EvalException(
-              null, "parameter 'direct' cannot be specified both positionally and by keyword");
+              loc, "parameter 'direct' cannot be specified both positionally and by keyword");
         }
         direct = x;
       }
-      result = depsetConstructor(direct, order, transitive);
+      result = depsetConstructor(direct, order, transitive, loc);
     } else {
       if (x != Starlark.NONE) {
         if (!isEmptySkylarkList(items)) {
           throw new EvalException(
-              null, "parameter 'items' cannot be specified both positionally and by keyword");
+              loc, "parameter 'items' cannot be specified both positionally and by keyword");
         }
         items = x;
       }
-      result = legacyDepsetConstructor(items, order, direct, transitive);
+      result = legacyDepsetConstructor(items, order, direct, transitive, loc);
     }
 
     if (semantics.debugDepsetDepth()) {
@@ -1050,22 +1052,23 @@ class MethodLibrary {
     return result;
   }
 
-  private static Depset depsetConstructor(Object direct, Order order, Object transitive)
-      throws EvalException {
+  private static SkylarkNestedSet depsetConstructor(
+      Object direct, Order order, Object transitive, Location loc) throws EvalException {
 
-    if (direct instanceof Depset) {
+    if (direct instanceof SkylarkNestedSet) {
       throw new EvalException(
-          null,
+          loc,
           "parameter 'direct' must contain a list of elements, and may "
               + "no longer accept a depset. The deprecated behavior may be temporarily re-enabled "
               + "by setting --incompatible_disable_depset_inputs=false");
     }
 
-    Depset.Builder builder = Depset.builder(order);
+    SkylarkNestedSet.Builder builder = SkylarkNestedSet.builder(order, loc);
     for (Object directElement : listFromNoneable(direct, Object.class, "direct")) {
       builder.addDirect(directElement);
     }
-    for (Depset transitiveSet : listFromNoneable(transitive, Depset.class, "transitive")) {
+    for (SkylarkNestedSet transitiveSet :
+        listFromNoneable(transitive, SkylarkNestedSet.class, "transitive")) {
       builder.addTransitive(transitiveSet);
     }
     return builder.build();
@@ -1081,17 +1084,18 @@ class MethodLibrary {
     }
   }
 
-  private static Depset legacyDepsetConstructor(
-      Object items, Order order, Object direct, Object transitive) throws EvalException {
+  private static SkylarkNestedSet legacyDepsetConstructor(
+      Object items, Order order, Object direct, Object transitive, Location loc)
+      throws EvalException {
 
     if (transitive == Starlark.NONE && direct == Starlark.NONE) {
       // Legacy behavior.
-      return Depset.legacyOf(order, items);
+      return SkylarkNestedSet.of(order, items, loc);
     }
 
     if (direct != Starlark.NONE && !isEmptySkylarkList(items)) {
       throw new EvalException(
-          null, "Do not pass both 'direct' and 'items' argument to depset constructor.");
+          loc, "Do not pass both 'direct' and 'items' argument to depset constructor.");
     }
 
     // Non-legacy behavior: either 'transitive' or 'direct' were specified.
@@ -1104,18 +1108,18 @@ class MethodLibrary {
       directElements = ((Sequence<?>) items).getContents(Object.class, "items");
     }
 
-    Iterable<Depset> transitiveList;
+    Iterable<SkylarkNestedSet> transitiveList;
     if (transitive != Starlark.NONE) {
       SkylarkType.checkType(transitive, Sequence.class, "transitive");
-      transitiveList = ((Sequence<?>) transitive).getContents(Depset.class, "transitive");
+      transitiveList = ((Sequence<?>) transitive).getContents(SkylarkNestedSet.class, "transitive");
     } else {
       transitiveList = ImmutableList.of();
     }
-    Depset.Builder builder = Depset.builder(order);
+    SkylarkNestedSet.Builder builder = SkylarkNestedSet.builder(order, loc);
     for (Object directElement : directElements) {
       builder.addDirect(directElement);
     }
-    for (Depset transitiveSet : transitiveList) {
+    for (SkylarkNestedSet transitiveSet : transitiveList) {
       builder.addTransitive(transitiveSet);
     }
     return builder.build();

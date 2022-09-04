@@ -249,22 +249,6 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
   public boolean incompatibleDepsetUnion;
 
   @Option(
-      name = "incompatible_always_check_depset_elements",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
-      effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
-      metadataTags = {
-        OptionMetadataTag.INCOMPATIBLE_CHANGE,
-        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-      },
-      help =
-          "Check the validity of elements added to depsets, in all constructors. Elements must be"
-              + " immutable, but historically the depset(direct=...) constructor forgot to check."
-              + " Use tuples instead of lists in depset elements."
-              + " See https://github.com/bazelbuild/bazel/issues/10313 for details.")
-  public boolean incompatibleAlwaysCheckDepsetElements;
-
-  @Option(
       name = "incompatible_disable_target_provider_fields",
       defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
@@ -532,6 +516,22 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
   public boolean incompatibleRemoveEnabledToolchainTypes;
 
   @Option(
+      name = "incompatible_remove_native_maven_jar",
+      defaultValue = "true",
+      documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
+      effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
+      metadataTags = {
+        OptionMetadataTag.INCOMPATIBLE_CHANGE,
+        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
+      },
+      help =
+          "If set to true, the native maven_jar rule is disabled. Use rules_jvm_external to "
+              + "manage your Maven dependencies transitively. rules_jvm_external also includes "
+              + "a migration tool to automatically convert maven_jar usages to rules_jvm_external "
+              + "Visit https://github.com/bazelbuild/rules_jvm_external for more information.")
+  public boolean incompatibleRemoveNativeMavenJar;
+
+  @Option(
       name = "incompatible_run_shell_command_string",
       defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
@@ -655,7 +655,6 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
             .incompatibleDisableThirdPartyLicenseChecking(
                 incompatibleDisableThirdPartyLicenseChecking)
             .incompatibleDisableDeprecatedAttrParams(incompatibleDisableDeprecatedAttrParams)
-            .incompatibleAlwaysCheckDepsetElements(incompatibleAlwaysCheckDepsetElements)
             .incompatibleDisableDepsetItems(incompatibleDisableDepsetItems)
             .incompatibleDisallowEmptyGlob(incompatibleDisallowEmptyGlob)
             .incompatibleDisallowStructProviderSyntax(incompatibleDisallowStructProviderSyntax)
@@ -670,6 +669,7 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
             .incompatibleNoTargetOutputGroup(incompatibleNoTargetOutputGroup)
             .incompatibleRemapMainRepo(incompatibleRemapMainRepo)
             .incompatibleRemoveEnabledToolchainTypes(incompatibleRemoveEnabledToolchainTypes)
+            .incompatibleRemoveNativeMavenJar(incompatibleRemoveNativeMavenJar)
             .incompatibleRestrictNamedParams(incompatibleRestrictNamedParams)
             .incompatibleRunShellCommandString(incompatibleRunShellCommandString)
             .incompatibleVisibilityPrivateAttributesAtDefinition(
