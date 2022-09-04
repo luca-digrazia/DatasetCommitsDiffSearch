@@ -12,8 +12,7 @@ import com.codahale.metrics.logback.InstrumentedAppender;
 import org.slf4j.LoggerFactory;
 import org.slf4j.bridge.SLF4JBridgeHandler;
 
-import javax.management.MBeanServer;
-import javax.management.ObjectName;
+import javax.management.*;
 import java.lang.management.ManagementFactory;
 import java.util.Map;
 import java.util.TimeZone;
@@ -24,6 +23,12 @@ import java.util.TimeZone;
 public class LoggingFactory {
     // initially configure for WARN+ console logging
     public static void bootstrap() {
+        bootstrap(Level.WARN);
+    }
+
+    public static void bootstrap(Level level) {
+        hijackJDKLogging();
+
         final Logger root = getCleanRoot();
 
         final LogFormatter formatter = new LogFormatter(root.getLoggerContext(),
@@ -31,7 +36,7 @@ public class LoggingFactory {
         formatter.start();
 
         final ThresholdFilter filter = new ThresholdFilter();
-        filter.setLevel(Level.WARN.toString());
+        filter.setLevel(level.toString());
         filter.start();
 
         final ConsoleAppender<ILoggingEvent> appender = new ConsoleAppender<>();
@@ -41,6 +46,11 @@ public class LoggingFactory {
         appender.start();
 
         root.addAppender(appender);
+    }
+
+    private static void hijackJDKLogging() {
+        SLF4JBridgeHandler.removeHandlersForRootLogger();
+        SLF4JBridgeHandler.install();
     }
 
     private final String name;
@@ -76,7 +86,8 @@ public class LoggingFactory {
                                                          objectName),
                                      objectName);
             }
-        } catch (Exception e) {
+        } catch (MalformedObjectNameException | InstanceAlreadyExistsException |
+                 NotCompliantMBeanException | MBeanRegistrationException e) {
             throw new RuntimeException(e);
         }
 
@@ -88,11 +99,6 @@ public class LoggingFactory {
         appender.setContext(root.getLoggerContext());
         appender.start();
         root.addAppender(appender);
-    }
-
-    private void hijackJDKLogging() {
-        SLF4JBridgeHandler.removeHandlersForRootLogger();
-        SLF4JBridgeHandler.install();
     }
 
     private Logger configureLevels() {
