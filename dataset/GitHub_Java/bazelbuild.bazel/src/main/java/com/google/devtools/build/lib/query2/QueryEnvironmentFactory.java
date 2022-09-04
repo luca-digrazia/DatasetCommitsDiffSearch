@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.pkgcache.TransitivePackageLoader;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.QueryFunction;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.Setting;
 import com.google.devtools.build.lib.query2.query.BlazeQueryEnvironment;
-import com.google.devtools.build.lib.query2.query.GraphlessBlazeQueryEnvironment;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.WalkableGraph.WalkableGraphFactory;
 import java.util.List;
@@ -55,8 +54,7 @@ public class QueryEnvironmentFactory {
       Iterable<QueryFunction> extraFunctions,
       @Nullable PathPackageLocator packagePath,
       boolean blockUniverseEvaluationErrors,
-      boolean useForkJoinPool,
-      boolean useGraphlessQuery) {
+      boolean useForkJoinPool) {
     Preconditions.checkNotNull(universeScope);
     if (canUseSkyQuery(orderedResults, universeScope, packagePath, strictScope, labelFilter)) {
       return new SkyQueryEnvironment(
@@ -70,21 +68,6 @@ public class QueryEnvironmentFactory {
           universeScope,
           packagePath,
           blockUniverseEvaluationErrors);
-    } else if (useGraphlessQuery) {
-      return new GraphlessBlazeQueryEnvironment(
-          transitivePackageLoader,
-          targetProvider,
-          cachingPackageLocator,
-          targetPatternPreloader,
-          relativeWorkingDirectory,
-          keepGoing,
-          strictScope,
-          loadingPhaseThreads,
-          labelFilter,
-          eventHandler,
-          settings,
-          extraFunctions,
-          useForkJoinPool);
     } else {
       return new BlazeQueryEnvironment(
           transitivePackageLoader,

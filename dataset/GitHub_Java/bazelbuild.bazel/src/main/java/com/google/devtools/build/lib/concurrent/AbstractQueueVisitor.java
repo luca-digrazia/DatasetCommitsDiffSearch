@@ -17,7 +17,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import com.google.common.collect.Sets;
-import com.google.common.flogger.GoogleLogger;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
@@ -36,6 +35,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /** A {@link QuiescingExecutor} implementation that wraps an {@link ExecutorService}. */
 public class AbstractQueueVisitor implements QuiescingExecutor {
@@ -103,6 +104,8 @@ public class AbstractQueueVisitor implements QuiescingExecutor {
 
   private final ExecutorService executorService;
 
+  private final boolean usingPriorityQueue;
+
   /**
    * Flag used to record when the main thread (the thread which called {@link #awaitQuiescence}) is
    * interrupted.
@@ -128,7 +131,7 @@ public class AbstractQueueVisitor implements QuiescingExecutor {
 
   private final ErrorClassifier errorClassifier;
 
-  private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
+  private static final Logger logger = Logger.getLogger(AbstractQueueVisitor.class.getName());
 
   /**
    * Default function for constructing {@link ThreadPoolExecutor}s. The {@link ThreadPoolExecutor}s
@@ -233,10 +236,25 @@ public class AbstractQueueVisitor implements QuiescingExecutor {
       boolean shutdownOnCompletion,
       boolean failFastOnException,
       ErrorClassifier errorClassifier) {
+    this(
+        executorService,
+        shutdownOnCompletion,
+        failFastOnException,
+        errorClassifier,
+        /*usingPriorityQueue=*/ false);
+  }
+
+  private AbstractQueueVisitor(
+      ExecutorService executorService,
+      boolean shutdownOnCompletion,
+      boolean failFastOnException,
+      ErrorClassifier errorClassifier,
+      boolean usingPriorityQueue) {
     this.failFastOnException = failFastOnException;
     this.ownExecutorService = shutdownOnCompletion;
     this.executorService = Preconditions.checkNotNull(executorService);
     this.errorClassifier = Preconditions.checkNotNull(errorClassifier);
+    this.usingPriorityQueue = usingPriorityQueue;
   }
 
   @Override
@@ -261,10 +279,9 @@ public class AbstractQueueVisitor implements QuiescingExecutor {
   /** Schedules a call. Called in a worker thread. */
   @Override
   public final void execute(Runnable runnable) {
-    executeWithExecutorService(runnable, executorService);
-  }
-
-  protected void executeWithExecutorService(Runnable runnable, ExecutorService executorService) {
+    if (usingPriorityQueue) {
+      Preconditions.checkState(runnable instanceof Comparable);
+    }
     WrappedRunnable wrappedRunnable = new WrappedRunnable(runnable);
     try {
       // It's impossible for this increment to result in remainingTasks.get <= 0 because
@@ -274,7 +291,7 @@ public class AbstractQueueVisitor implements QuiescingExecutor {
       Preconditions.checkState(
           tasks > 0,
           "Incrementing remaining tasks counter resulted in impossible non-positive number.");
-      executeWrappedRunnable(wrappedRunnable, executorService);
+      executeRunnable(wrappedRunnable);
     } catch (Throwable e) {
       if (!wrappedRunnable.ran) {
         // Note that keeping track of ranTask is necessary to disambiguate the case where
@@ -286,7 +303,7 @@ public class AbstractQueueVisitor implements QuiescingExecutor {
     }
   }
 
-  protected void executeWrappedRunnable(WrappedRunnable runnable, ExecutorService executorService) {
+  protected void executeRunnable(WrappedRunnable runnable) {
     executorService.execute(runnable);
   }
 
@@ -297,7 +314,7 @@ public class AbstractQueueVisitor implements QuiescingExecutor {
       case AS_CRITICAL_AS_POSSIBLE:
       case CRITICAL_AND_LOG:
         critical = true;
-        logger.atWarning().withCause(e).log("Found critical error in queue visitor");
+        logger.log(Level.WARNING, "Found critical error in queue visitor", e);
         break;
       case CRITICAL:
         critical = true;
@@ -460,10 +477,6 @@ public class AbstractQueueVisitor implements QuiescingExecutor {
     return remainingTasks.get();
   }
 
-  protected ExecutorService getExecutorService() {
-    return executorService;
-  }
-
   @Override
   public void dependOnFuture(ListenableFuture<?> future) throws InterruptedException {
     outstandingFuturesLock.readLock().lock();
@@ -563,11 +576,6 @@ public class AbstractQueueVisitor implements QuiescingExecutor {
     }
 
     if (ownExecutorService) {
-      shutdownExecutorService(catastrophe);
-    }
-  }
-
-  protected void shutdownExecutorService(Throwable catastrophe) {
       executorService.shutdown();
       for (; ; ) {
         try {
@@ -578,6 +586,7 @@ public class AbstractQueueVisitor implements QuiescingExecutor {
           setInterrupted();
         }
       }
+    }
   }
 
   private void interruptInFlightTasks() {
