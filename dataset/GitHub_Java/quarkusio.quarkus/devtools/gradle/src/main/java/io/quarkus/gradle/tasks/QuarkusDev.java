@@ -431,14 +431,8 @@ public class QuarkusDev extends QuarkusTask {
     }
 
     private void addGradlePluginDeps(StringBuilder classPathManifest, DevModeContext context) {
-        List<ResolvedDependency> buildScriptDeps = new ArrayList<>();
-        Project prj = getProject();
-        while (prj != null) {
-            buildScriptDeps.addAll(prj.getBuildscript().getConfigurations().getByName("classpath")
-                    .getResolvedConfiguration().getFirstLevelModuleDependencies());
-            prj = prj.getParent();
-        }
-        ResolvedDependency quarkusDep = buildScriptDeps.stream()
+        Configuration conf = getProject().getBuildscript().getConfigurations().getByName("classpath");
+        ResolvedDependency quarkusDep = conf.getResolvedConfiguration().getFirstLevelModuleDependencies().stream()
                 .filter(rd -> "io.quarkus.gradle.plugin".equals(rd.getModuleName()))
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("Unable to find quarkus-gradle-plugin dependency"));
