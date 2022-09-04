@@ -17,10 +17,9 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.io.BaseEncoding;
 import com.google.devtools.build.lib.buildeventstream.BuildEventContext;
-import com.google.devtools.build.lib.buildeventstream.BuildEventIdUtil;
+import com.google.devtools.build.lib.buildeventstream.BuildEventId;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos.BuildEvent;
-import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos.BuildEventId;
 import com.google.devtools.build.lib.buildeventstream.BuildEventWithOrderConstraint;
 import com.google.devtools.build.lib.buildeventstream.GenericBuildEvent;
 import com.google.devtools.build.lib.runtime.proto.CommandLineOuterClass.ChunkList;
@@ -42,7 +41,6 @@ import com.google.protobuf.InvalidProtocolBufferException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
@@ -57,7 +55,7 @@ public abstract class CommandLineEvent implements BuildEventWithOrderConstraint 
 
   @Override
   public Collection<BuildEventId> postedAfter() {
-    return ImmutableList.of(BuildEventIdUtil.buildStartedId());
+    return ImmutableList.of(BuildEventId.buildStartedId());
   }
 
   /** A CommandLineEvent that stores functions and values common to both Bazel command lines. */
@@ -223,7 +221,7 @@ public abstract class CommandLineEvent implements BuildEventWithOrderConstraint 
 
     @Override
     public BuildEventId getEventId() {
-      return BuildEventIdUtil.structuredCommandlineId(LABEL);
+      return BuildEventId.structuredCommandlineId(LABEL);
     }
 
     /**
@@ -317,7 +315,7 @@ public abstract class CommandLineEvent implements BuildEventWithOrderConstraint 
 
     @Override
     public BuildEventId getEventId() {
-      return BuildEventIdUtil.structuredCommandlineId(LABEL);
+      return BuildEventId.structuredCommandlineId(LABEL);
     }
 
     /**
@@ -386,22 +384,6 @@ public abstract class CommandLineEvent implements BuildEventWithOrderConstraint 
           .build();
     }
 
-    public long getExplicitCommandLineHash() {
-      long hash = 0;
-      for (Entry<String, Object> starlarkOption : commandOptions.getStarlarkOptions().entrySet()) {
-        hash = hash * 31 + starlarkOption.toString().hashCode();
-      }
-      for (ParsedOptionDescription canonicalOptionDesc :
-          commandOptions.asListOfCanonicalOptions()) {
-        if (canonicalOptionDesc.isHidden()
-            || !canonicalOptionDesc.getSource().equals("command line options")) {
-          continue;
-        }
-        hash = hash * 31 + canonicalOptionDesc.getCanonicalForm().hashCode();
-      }
-      return hash;
-    }
-
     @Override
     public BuildEventStreamProtos.BuildEvent asStreamProto(BuildEventContext converters) {
       return GenericBuildEvent.protoChaining(this)
@@ -443,7 +425,7 @@ public abstract class CommandLineEvent implements BuildEventWithOrderConstraint 
      */
     @Override
     public BuildEventId getEventId() {
-      return BuildEventIdUtil.structuredCommandlineId(LABEL);
+      return BuildEventId.structuredCommandlineId(LABEL);
     }
 
     /**
