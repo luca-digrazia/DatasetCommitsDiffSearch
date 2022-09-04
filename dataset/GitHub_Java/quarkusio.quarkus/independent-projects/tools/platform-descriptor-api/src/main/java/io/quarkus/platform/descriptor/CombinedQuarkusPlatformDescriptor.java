@@ -5,10 +5,7 @@ import io.quarkus.dependencies.Extension;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import org.apache.maven.model.Dependency;
 
@@ -21,7 +18,7 @@ public class CombinedQuarkusPlatformDescriptor implements QuarkusPlatformDescrip
 
     public static class Builder {
 
-        private final List<QuarkusPlatformDescriptor> platforms = new ArrayList<>();
+        private List<QuarkusPlatformDescriptor> platforms = new ArrayList<>();
 
         private Builder() {
         }
@@ -40,9 +37,6 @@ public class CombinedQuarkusPlatformDescriptor implements QuarkusPlatformDescrip
         }
 
         public QuarkusPlatformDescriptor build() {
-            if (platforms.size() == 1) {
-                return platforms.get(0);
-            }
             return new CombinedQuarkusPlatformDescriptor(this);
         }
     }
@@ -53,9 +47,9 @@ public class CombinedQuarkusPlatformDescriptor implements QuarkusPlatformDescrip
 
     private final QuarkusPlatformDescriptor master;
     private final List<QuarkusPlatformDescriptor> platforms;
+    private List<Dependency> managedDeps;
     private List<Extension> extensions;
     private List<Category> categories;
-    private Map<String, Object> metadata;
 
     private CombinedQuarkusPlatformDescriptor(Builder builder) {
         if (builder.platforms.isEmpty()) {
@@ -86,15 +80,20 @@ public class CombinedQuarkusPlatformDescriptor implements QuarkusPlatformDescrip
     }
 
     @Override
-    public Map<String, Object> getMetadata() {
-        if (this.metadata != null) {
-            return this.metadata;
+    public List<Dependency> getManagedDependencies() {
+        if (managedDeps != null) {
+            return managedDeps;
         }
-        Map<String, Object> metadata = new LinkedHashMap<>();
-        for (int i = platforms.size() - 1; i >= 0; i--) {
-            metadata.putAll(platforms.get(i).getMetadata());
+        final List<Dependency> deps = new ArrayList<>();
+        final Set<DepKey> depKeys = new HashSet<>();
+        for (QuarkusPlatformDescriptor platform : platforms) {
+            for (Dependency dep : platform.getManagedDependencies()) {
+                if (depKeys.add(new DepKey(dep))) {
+                    deps.add(dep);
+                }
+            }
         }
-        return this.metadata = metadata;
+        return managedDeps = deps;
     }
 
     @Override
@@ -154,18 +153,6 @@ public class CombinedQuarkusPlatformDescriptor implements QuarkusPlatformDescrip
         throw new IOException("Failed to locate resource " + name);
     }
 
-    @Override
-    public <T> T loadResourceAsPath(String name, ResourcePathConsumer<T> consumer) throws IOException {
-        for (QuarkusPlatformDescriptor platform : platforms) {
-            try {
-                return platform.loadResourceAsPath(name, consumer);
-            } catch (IOException e) {
-                // ignore
-            }
-        }
-        throw new IOException("Failed to locate resource " + name);
-    }
-
     private static class DepKey {
         final String groupId;
         final String artifactId;
@@ -188,23 +175,46 @@ public class CombinedQuarkusPlatformDescriptor implements QuarkusPlatformDescrip
         }
 
         @Override
-        public boolean equals(Object o) {
-            if (this == o) {
-                return true;
-            }
-            if (!(o instanceof DepKey)) {
-                return false;
-            }
-            DepKey depKey = (DepKey) o;
-            return Objects.equals(groupId, depKey.groupId) &&
-                    Objects.equals(artifactId, depKey.artifactId) &&
-                    Objects.equals(classifier, depKey.classifier) &&
-                    Objects.equals(type, depKey.type);
+        public int hashCode() {
+            final int prime = 31;
+            int result = 1;
+            result = prime * result + ((artifactId == null) ? 0 : artifactId.hashCode());
+            result = prime * result + ((classifier == null) ? 0 : classifier.hashCode());
+            result = prime * result + ((groupId == null) ? 0 : groupId.hashCode());
+            result = prime * result + ((type == null) ? 0 : type.hashCode());
+            return result;
         }
 
         @Override
-        public int hashCode() {
-            return Objects.hash(groupId, artifactId, classifier, type);
+        public boolean equals(Object obj) {
+            if (this == obj)
+                return true;
+            if (obj == null)
+                return false;
+            if (getClass() != obj.getClass())
+                return false;
+            DepKey other = (DepKey) obj;
+            if (artifactId == null) {
+                if (other.artifactId != null)
+                    return false;
+            } else if (!artifactId.equals(other.artifactId))
+                return false;
+            if (classifier == null) {
+                if (other.classifier != null)
+                    return false;
+            } else if (!classifier.equals(other.classifier))
+                return false;
+            if (groupId == null) {
+                if (other.groupId != null)
+                    return false;
+            } else if (!groupId.equals(other.groupId))
+                return false;
+            if (type == null) {
+                if (other.type != null)
+                    return false;
+            } else if (!type.equals(other.type))
+                return false;
+            return true;
         }
     }
 }
