@@ -27,6 +27,7 @@ import com.google.devtools.build.skyframe.AbstractSkyKey;
 import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
+import java.math.BigInteger;
 import javax.annotation.Nullable;
 
 /**
@@ -50,6 +51,10 @@ public abstract class PackageLookupValue implements SkyValue {
   public static final DeletedPackageLookupValue DELETED_PACKAGE_VALUE =
       new DeletedPackageLookupValue();
 
+  @AutoCodec
+  public static final NoRepositoryPackageLookupValue NO_SUCH_REPOSITORY_VALUE =
+      new NoRepositoryPackageLookupValue();
+
   enum ErrorReason {
     /** There is no BUILD file. */
     NO_BUILD_FILE,
@@ -64,7 +69,8 @@ public abstract class PackageLookupValue implements SkyValue {
     REPOSITORY_NOT_FOUND
   }
 
-  protected PackageLookupValue() {}
+  protected PackageLookupValue() {
+  }
 
   public static PackageLookupValue success(
       RepositoryValue repository, Root root, BuildFileName buildFileName) {
@@ -153,11 +159,10 @@ public abstract class PackageLookupValue implements SkyValue {
   public static class SuccessfulPackageLookupValue extends PackageLookupValue {
     /**
      * The repository value the meaning of the path depends on (e.g., an external repository
-     * controlling a symbolic link the path goes trough). Can be {@code null}, if does not depend on
-     * such a repository; will always be {@code null} for packages in the main repository.
+     * controlling a symbolic link the path goes trough). Can be {@code null}, if does not depend
+     * on such a repository; will always be {@code null} for packages in the main repository.
      */
     @Nullable private final RepositoryValue repository;
-
     private final Root root;
     private final BuildFileName buildFileName;
 
@@ -198,6 +203,18 @@ public abstract class PackageLookupValue implements SkyValue {
       throw new IllegalStateException();
     }
 
+    @Nullable
+    @Override
+    public BigInteger getValueFingerprint() {
+      if (repository != null) {
+        return null;
+      }
+      if (buildFileName != BuildFileName.BUILD) {
+        return null;
+      }
+      return root.getFingerprint();
+    }
+
     @Override
     public boolean equals(Object obj) {
       if (!(obj instanceof SuccessfulPackageLookupValue)) {
@@ -235,12 +252,19 @@ public abstract class PackageLookupValue implements SkyValue {
 
   /** Marker value for no build file found. */
   public static class NoBuildFilePackageLookupValue extends UnsuccessfulPackageLookupValue {
+    private static final BigInteger FINGERPRINT = new BigInteger("14769240659748016902");
 
     private NoBuildFilePackageLookupValue() {}
 
     @Override
     ErrorReason getErrorReason() {
       return ErrorReason.NO_BUILD_FILE;
+    }
+
+    @Nullable
+    @Override
+    public BigInteger getValueFingerprint() {
+      return FINGERPRINT;
     }
 
     @Override
@@ -352,7 +376,8 @@ public abstract class PackageLookupValue implements SkyValue {
 
   /** Marker value for a deleted package. */
   public static class DeletedPackageLookupValue extends UnsuccessfulPackageLookupValue {
-    private DeletedPackageLookupValue() {}
+    private DeletedPackageLookupValue() {
+    }
 
     @Override
     ErrorReason getErrorReason() {
@@ -366,15 +391,11 @@ public abstract class PackageLookupValue implements SkyValue {
   }
 
   /**
-   * Value for repository we could not find. This can happen when looking for a label that specifies
-   * a non-existent repository.
+   * Marker value for repository we could not find. This can happen when looking for a label that
+   * specifies a non-existent repository.
    */
   public static class NoRepositoryPackageLookupValue extends UnsuccessfulPackageLookupValue {
-    private final String repositoryName;
-
-    NoRepositoryPackageLookupValue(String repositoryName) {
-      this.repositoryName = repositoryName;
-    }
+    private NoRepositoryPackageLookupValue() {}
 
     @Override
     ErrorReason getErrorReason() {
@@ -383,7 +404,7 @@ public abstract class PackageLookupValue implements SkyValue {
 
     @Override
     public String getErrorMsg() {
-      return String.format("The repository '%s' could not be resolved", repositoryName);
+      return "The repository could not be resolved";
     }
   }
 }
