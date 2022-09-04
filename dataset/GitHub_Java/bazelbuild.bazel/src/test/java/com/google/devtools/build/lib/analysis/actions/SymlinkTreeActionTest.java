@@ -35,7 +35,6 @@ public class SymlinkTreeActionTest extends BuildViewTestCase {
   private enum KeyAttributes {
     FILESET,
     RUNFILES_FLAG,
-    INPROCESS,
     FIXED_ENVIRONMENT,
     VARIABLE_ENVIRONMENT
   }
@@ -53,7 +52,6 @@ public class SymlinkTreeActionTest extends BuildViewTestCase {
           public Action generate(ImmutableSet<KeyAttributes> attributesToFlip) {
             boolean filesetTree = attributesToFlip.contains(KeyAttributes.FILESET);
             boolean enableRunfiles = attributesToFlip.contains(KeyAttributes.RUNFILES_FLAG);
-            boolean inprocessSymlinkCreation = attributesToFlip.contains(KeyAttributes.INPROCESS);
 
             ActionEnvironment env =
                 ActionEnvironment.create(
@@ -79,8 +77,7 @@ public class SymlinkTreeActionTest extends BuildViewTestCase {
                 outputManifest,
                 filesetTree,
                 env,
-                enableRunfiles,
-                inprocessSymlinkCreation);
+                enableRunfiles);
           }
         },
         actionKeyContext);
