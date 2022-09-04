@@ -200,7 +200,7 @@ public abstract class AndroidSkylarkData
       AndroidResourcesInfo resourcesInfo,
       AndroidAssetsInfo assetsInfo,
       Artifact libraryClassJar,
-      SkylarkList<Artifact> localProguardSpecs,
+      SkylarkList<ConfiguredTarget> proguardSpecs,
       SkylarkList<AndroidLibraryAarInfo> deps,
       boolean neverlink)
       throws EvalException, InterruptedException {
@@ -257,7 +257,7 @@ public abstract class AndroidSkylarkData
             resourcesInfo.getManifest(),
             resourcesInfo.getRTxt(),
             libraryClassJar,
-            localProguardSpecs.getImmutableList())
+            filesFromConfiguredTargets(proguardSpecs))
         .toProvider(deps, definesLocalResources);
   }
 
@@ -273,7 +273,7 @@ public abstract class AndroidSkylarkData
       Object customPackage,
       boolean neverlink,
       boolean enableDataBinding,
-      SkylarkList<Artifact> localProguardSpecs,
+      SkylarkList<ConfiguredTarget> proguardSpecs,
       SkylarkList<ConfiguredTarget> deps,
       Location location,
       Environment env)
@@ -333,7 +333,7 @@ public abstract class AndroidSkylarkData
             resourcesInfo,
             assetsInfo,
             libraryClassJar,
-            localProguardSpecs,
+            proguardSpecs,
             getProviders(deps, AndroidLibraryAarInfo.PROVIDER),
             neverlink);
 
