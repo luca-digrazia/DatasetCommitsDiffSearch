@@ -90,6 +90,10 @@ public @interface OnActivityResult {
 	 * Use on any native, {@link android.os.Parcelable} or
 	 * {@link java.io.Serializable} parameter of an {@link OnActivityResult}
 	 * annotated method to bind it with the value from the Intent.
+	 * If <a href="http://parceler.org">Parceler</a> is on the classpath, extras
+	 * annotated with &#064;Parcel, or collections supported by Parceler will be
+	 * automatically marshaled using a {@link android.os.Parcelable Parcelable}
+	 * through the Parcels utility class.
 	 * </p>
 	 * <p>
 	 * The annotation value is the key used for the result data. If not set, the
@@ -102,15 +106,15 @@ public @interface OnActivityResult {
 	 *
 	 * <pre>
 	 * &#064;OnActivityResult(REQUEST_CODE)
-	 * void onResult(int resultCode, Intent data, <b>@Extra String value</b>) {
+	 * void onResult(int resultCode, Intent data, <b>@OnActivityResult.Extra String value</b>) {
 	 * }
 	 * 
 	 * &#064;OnActivityResult(REQUEST_CODE)
-	 * void onResult(int resultCode, <b>@Extra(value = "key") String value</b>) {
+	 * void onResult(int resultCode, <b>@OnActivityResult.Extra(value = "key") String value</b>) {
 	 * }
 	 * 
 	 * &#064;OnActivityResult(REQUEST_CODE)
-	 * void onResult(<b>@Extra String strVal</b>, <b>@Extra int intVal</b>) {
+	 * void onResult(<b>@OnActivityResult.Extra String strVal</b>, <b>@OnActivityResult.Extra int intVal</b>) {
 	 * }
 	 * </pre>
 	 *
