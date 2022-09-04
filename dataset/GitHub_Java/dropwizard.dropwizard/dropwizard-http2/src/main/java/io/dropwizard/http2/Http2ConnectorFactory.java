@@ -17,7 +17,7 @@ import javax.validation.constraints.Max;
 import javax.validation.constraints.Min;
 
 /**
- * Builds HTTP/2 over TLS (h2) connectors.
+ * Builds HTTP/2 over TLS connectors.
  * <p/>
  * <b>Configuration Parameters:</b>
  * <table>
@@ -48,7 +48,7 @@ import javax.validation.constraints.Min;
  *
  * @see HttpsConnectorFactory
  */
-@JsonTypeName("h2")
+@JsonTypeName("http2")
 public class Http2ConnectorFactory extends HttpsConnectorFactory {
 
     /**
@@ -100,7 +100,7 @@ public class Http2ConnectorFactory extends HttpsConnectorFactory {
         final HttpConnectionFactory http1 = buildHttpConnectionFactory(httpConfig);
         final HTTP2ServerConnectionFactory http2 = new HTTP2ServerConnectionFactory(httpConfig);
         http2.setMaxConcurrentStreams(maxConcurrentStreams);
-        http2.setInitialStreamRecvWindow(initialStreamSendWindow);
+        http2.setInitialStreamSendWindow(initialStreamSendWindow);
 
         final NegotiatingServerConnectionFactory alpn = new ALPNServerConnectionFactory(H2, H2_17);
         alpn.setDefaultProtocol(HTTP_1_1); // Speak HTTP 1.1 over TLS if negotiation fails
