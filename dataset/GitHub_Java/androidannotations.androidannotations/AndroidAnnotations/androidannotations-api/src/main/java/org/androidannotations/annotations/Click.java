@@ -28,7 +28,7 @@ import java.lang.annotation.Target;
  * The annotation value should be one of R.id.* fields. If not set, the method
  * name will be used as the R.id.* field name.
  * <p/>
- * The method MAY have one parameter:
+ * The method MAY one parameter:
  * <ul>
  * <li>A {@link android.view.View} parameter to know which view has been clicked
  * </ul>
@@ -50,11 +50,6 @@ import java.lang.annotation.Target;
  * </pre>
  * 
  * </blockquote>
- * 
- * @see LongClick
- * @see ItemClick
- * @see ItemLongClick
- * @see ItemSelect
  */
 @Retention(RetentionPolicy.CLASS)
 @Target(ElementType.METHOD)
