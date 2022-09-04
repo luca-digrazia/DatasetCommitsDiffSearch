@@ -54,16 +54,12 @@ public class LoggingSetupRecorder {
 
     @SuppressWarnings("unused") //called via reflection, as it is in an isolated CL
     public static void handleFailedStart() {
-        handleFailedStart(new RuntimeValue<>(Optional.empty()));
-    }
-
-    public static void handleFailedStart(RuntimeValue<Optional<Supplier<String>>> banner) {
         LogConfig config = new LogConfig();
         ConfigInstantiator.handleObject(config);
         LogBuildTimeConfig buildConfig = new LogBuildTimeConfig();
         ConfigInstantiator.handleObject(buildConfig);
         new LoggingSetupRecorder().initializeLogging(config, buildConfig, Collections.emptyList(), Collections.emptyList(),
-                Collections.emptyList(), banner);
+                Collections.emptyList(), null);
     }
 
     public void initializeLogging(LogConfig config, LogBuildTimeConfig buildConfig,
