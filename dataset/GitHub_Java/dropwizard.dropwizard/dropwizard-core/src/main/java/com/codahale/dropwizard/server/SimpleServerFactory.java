@@ -34,10 +34,10 @@ public class SimpleServerFactory extends AbstractServerFactory {
     private ConnectorFactory connector = HttpConnectorFactory.application();
 
     @NotEmpty
-    private String serviceContextPath = "/service";
+    private String serviceRoot = "/service";
 
     @NotEmpty
-    private String adminContextPath = "/admin";
+    private String adminRoot = "/admin";
 
     @JsonProperty
     public ConnectorFactory getConnector() {
@@ -50,23 +50,23 @@ public class SimpleServerFactory extends AbstractServerFactory {
     }
 
     @JsonProperty
-    public String getServiceContextPath() {
-        return serviceContextPath;
+    public String getServiceRoot() {
+        return serviceRoot;
     }
 
     @JsonProperty
-    public void setServiceContextPath(String contextPath) {
-        this.serviceContextPath = contextPath;
+    public void setServiceRoot(String root) {
+        this.serviceRoot = root;
     }
 
     @JsonProperty
-    public String getAdminContextPath() {
-        return adminContextPath;
+    public String getAdminRoot() {
+        return adminRoot;
     }
 
     @JsonProperty
-    public void setAdminContextPath(String contextPath) {
-        this.adminContextPath = contextPath;
+    public void setAdminRoot(String root) {
+        this.adminRoot = root;
     }
 
     @Override
@@ -80,6 +80,7 @@ public class SimpleServerFactory extends AbstractServerFactory {
                         JerseyEnvironment jersey,
                         ObjectMapper objectMapper,
                         Validator validator) {
+
         final ThreadPool threadPool = createThreadPool(metricRegistry);
         final Server server = buildServer(lifecycle, threadPool);
 
@@ -88,12 +89,12 @@ public class SimpleServerFactory extends AbstractServerFactory {
                                                                                validator,
                                                                                applicationContext,
                                                                                jerseyContainer);
-        applicationHandler.setContextPath(serviceContextPath);
+        applicationHandler.setContextPath(serviceRoot);
 
         final ServletContextHandler adminHandler = createInternalServlet(adminContext,
                                                                          metricRegistry,
                                                                          healthChecks);
-        adminHandler.setContextPath(adminContextPath);
+        adminHandler.setContextPath(adminRoot);
 
         final Connector conn = connector.build(server, metricRegistry, name, server.getThreadPool());
         server.addConnector(conn);

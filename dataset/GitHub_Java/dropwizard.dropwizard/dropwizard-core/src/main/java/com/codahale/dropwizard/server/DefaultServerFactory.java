@@ -107,25 +107,30 @@ public class DefaultServerFactory extends AbstractServerFactory {
                         Validator validator) {
         final ThreadPool threadPool = createThreadPool(metricRegistry);
         final Server server = buildServer(lifecycle, threadPool);
-        final Handler applicationHandler = createExternalServlet(jersey,
-                                                                 objectMapper,
-                                                                 validator,
-                                                                 applicationContext,
-                                                                 jerseyContainer,
-                                                                 metricRegistry);
-        final Handler adminHandler = createInternalServlet(adminContext, metricRegistry, healthChecks);
+
+        final ServletContextHandler applicationHandler = createExternalServlet(jersey,
+                                                                               objectMapper,
+                                                                               validator,
+                                                                               applicationContext,
+                                                                               jerseyContainer);
+        final ServletContextHandler adminHandler = createInternalServlet(adminContext,
+                                                                         metricRegistry,
+                                                                         healthChecks);
+
         final RoutingHandler routingHandler = buildRoutingHandler(metricRegistry,
                                                                   server,
                                                                   applicationHandler,
                                                                   adminHandler);
-        server.setHandler(addGzipAndRequestLog(routingHandler, name));
+
+        server.setHandler(wrapAndInstrument(routingHandler, metricRegistry, name));
+
         return server;
     }
 
     private RoutingHandler buildRoutingHandler(MetricRegistry metricRegistry,
                                                Server server,
-                                               Handler applicationHandler,
-                                               Handler adminHandler) {
+                                               ServletContextHandler applicationHandler,
+                                               ServletContextHandler adminHandler) {
         final List<Connector> appConnectors = buildAppConnectors(metricRegistry, server);
 
         final List<Connector> adConnectors = buildAdminConnectors(metricRegistry, server);
