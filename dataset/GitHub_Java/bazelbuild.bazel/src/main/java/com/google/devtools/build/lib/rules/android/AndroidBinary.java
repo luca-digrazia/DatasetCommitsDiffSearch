@@ -320,7 +320,6 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
             ruleContext.getConfiguration().isCodeCoverageEnabled(),
             /* collectJavaCompilationArgs= */ true,
             /* isBinary= */ true,
-            shouldCompileJavaSrcs,
             excludedRuntimeArtifacts,
             /* generateExtensionRegistry= */ true);
     ruleContext.assertNoErrors();
