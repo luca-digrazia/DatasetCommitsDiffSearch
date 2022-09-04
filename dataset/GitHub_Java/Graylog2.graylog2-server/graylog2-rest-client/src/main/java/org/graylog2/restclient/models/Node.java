@@ -1,35 +1,37 @@
-/*
- * Copyright 2013 TORCH UG
+/**
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.restclient.models;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.net.MediaType;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
+import org.graylog2.rest.models.system.buffers.responses.BufferClasses;
+import org.graylog2.rest.models.system.inputs.requests.InputLaunchRequest;
 import org.graylog2.restclient.lib.APIException;
 import org.graylog2.restclient.lib.ApiClient;
+import org.graylog2.restclient.lib.DateTools;
 import org.graylog2.restclient.lib.ExclusiveInputException;
 import org.graylog2.restclient.lib.metrics.Metric;
-import org.graylog2.restclient.models.api.requests.InputLaunchRequest;
 import org.graylog2.restclient.models.api.responses.BufferClassesResponse;
 import org.graylog2.restclient.models.api.responses.BuffersResponse;
+import org.graylog2.restclient.models.api.responses.JournalInfo;
 import org.graylog2.restclient.models.api.responses.SystemOverviewResponse;
 import org.graylog2.restclient.models.api.responses.cluster.NodeSummaryResponse;
 import org.graylog2.restclient.models.api.responses.metrics.MetricsListResponse;
@@ -54,10 +56,13 @@ import play.mvc.Http;
 
 import java.io.IOException;
 import java.net.URI;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import static com.google.common.base.MoreObjects.firstNonNull;
 
 public class Node extends ClusterEntity {
 
@@ -87,10 +92,9 @@ public class Node extends ClusterEntity {
 
     private AtomicInteger failureCount = new AtomicInteger(0);
 
-    /* for initial set up in test */
-    public Node(NodeSummaryResponse r) {
-        this(null, null, null, r);
-    }
+    private BufferInfo bufferInfo;
+    private BufferClasses bufferClasses;
+    private JournalInfo journalInfo;
 
     @AssistedInject
     public Node(ApiClient api,
@@ -103,7 +107,7 @@ public class Node extends ClusterEntity {
 
         transportAddress = normalizeUriPath(r.transportAddress);
         lastSeen = new DateTime(r.lastSeen, DateTimeZone.UTC);
-        nodeId = r.id;
+        nodeId = r.nodeId;
         shortNodeId = r.shortNodeId;
         isMaster = r.isMaster;
         fromConfiguration = false;
@@ -126,35 +130,62 @@ public class Node extends ClusterEntity {
         fromConfiguration = true;
     }
 
-    public BufferInfo getBufferInfo() {
+    public synchronized BufferInfo getBufferInfo() {
+        if (this.bufferInfo == null) {
+            this.bufferInfo = loadBufferInfo();
+        }
+        return this.bufferInfo;
+    }
+    
+    public BufferInfo loadBufferInfo() {
         try {
             return new BufferInfo(
-                    api.path(routes.BufferResource().utilization(), BuffersResponse.class)
+                    api.path(routes.BuffersResource().utilization(), BuffersResponse.class)
                             .node(this)
                             .execute());
-        } catch (APIException e) {
+        } catch (Exception e) {
             LOG.error("Unable to read buffer info from node " + this, e);
-        } catch (IOException e) {
-            LOG.error("Unexpected exception", e);
         }
-        return null;
+        return BufferInfo.buildEmpty();
     }
 
-    public BufferClassesResponse getBufferClasses() {
-        try {
-            return api.path(routes.BufferResource().getBufferClasses(), BufferClassesResponse.class).node(this).execute();
-        } catch (APIException e) {
-            LOG.error("Unable to read buffer class names from node " + this, e);
-        } catch (IOException e) {
-            LOG.error("Unexpected exception", e);
+    public synchronized BufferClasses getBufferClasses() {
+        if (this.bufferClasses == null) {
+            final BufferClassesResponse response = loadBufferClasses();
+            this.bufferClasses = BufferClasses.create(response.inputBufferClass, response.processBufferClass, response.outputBufferClass);
         }
-        return null;
+        return this.bufferClasses;
+    }
+    
+    public BufferClassesResponse loadBufferClasses() {
+        try {
+            return api.path(routes.BuffersResource().getBufferClasses(), BufferClassesResponse.class).node(this).execute();
+        } catch (Exception e) {
+            LOG.error("Unable to read buffer class names from node " + this, e);
+        }
+        return BufferClassesResponse.buildEmpty();
+    }
+
+    public synchronized JournalInfo getJournalInfo() {
+        if (this.journalInfo == null) {
+            this.journalInfo = loadJournalInfo();
+        }
+        return this.journalInfo;
+    }
+    
+    public JournalInfo loadJournalInfo() {
+        try {
+            return api.path(routes.JournalResource().show(), JournalInfo.class).node(this).execute();
+        } catch (Exception e) {
+            LOG.error("Unable to read journal info from node " + this, e);
+        }
+        return JournalInfo.buildEmpty();
     }
 
     public Map<String, InternalLoggerSubsystem> allLoggerSubsystems() {
         Map<String, InternalLoggerSubsystem> subsystems = Maps.newHashMap();
         try {
-            LoggerSubsystemsResponse response = api.path(routes.LoggersResource().subsytems(), LoggerSubsystemsResponse.class)
+            LoggerSubsystemsResponse response = api.path(routes.LoggersResource().subsystems(), LoggerSubsystemsResponse.class)
                     .node(this)
                     .execute();
 
@@ -165,7 +196,7 @@ public class Node extends ClusterEntity {
                         ss.getValue().levelSyslog
                 ));
             }
-        } catch (APIException|IOException e) {
+        } catch (Exception e) {
             LOG.error("Unable to load subsystems for node " + this, e);
         }
         return subsystems;
@@ -181,7 +212,7 @@ public class Node extends ClusterEntity {
             for (Map.Entry<String, LoggerSummary> logger : response.loggers.entrySet()) {
                 loggers.add(new InternalLogger(logger.getKey(), logger.getValue().level, logger.getValue().syslogLevel));
             }
-        } catch (APIException|IOException e) {
+        } catch (Exception e) {
             LOG.error("Unable to load loggers for node " + this, e);
         }
         return loggers;
@@ -200,6 +231,7 @@ public class Node extends ClusterEntity {
                 .execute();
     }
 
+    @JsonIgnore
     public List<InputState> getInputStates() {
         List<InputState> inputStates = Lists.newArrayList();
         for (InputStateSummaryResponse issr : inputs().inputs) {
@@ -227,8 +259,23 @@ public class Node extends ClusterEntity {
         return inputs().total;
     }
 
+    public InputLaunchResponse updateInput(String inputId, String title, String type, boolean global, Map<String, Object> configuration, String node) {
+        final InputLaunchRequest request = InputLaunchRequest.create(title, type, global, configuration, node);
+
+        try {
+            return api.path(routes.InputsResource().update(inputId), InputLaunchResponse.class)
+                    .node(this)
+                    .body(request)
+                    .expect(Http.Status.CREATED)
+                    .execute();
+        } catch (APIException | IOException e) {
+            LOG.error("Could not update input " + title, e);
+            return null;
+        }
+    }
+
     @Override
-    public InputLaunchResponse launchInput(String title, String type, Boolean global, Map<String, Object> configuration, User creator, boolean isExclusive) throws ExclusiveInputException {
+    public InputLaunchResponse launchInput(String title, String type, Boolean global, Map<String, Object> configuration, boolean isExclusive, String nodeId) throws ExclusiveInputException {
         if (isExclusive) {
             for (Input input : getInputs()) {
                 if (input.getType().equals(type)) {
@@ -237,26 +284,21 @@ public class Node extends ClusterEntity {
             }
         }
 
-        InputLaunchRequest request = new InputLaunchRequest();
-        request.title = title;
-        request.type = type;
-        request.global = global;
-        request.configuration = configuration;
-        request.creatorUserId = creator.getId();
+        final InputLaunchRequest request = InputLaunchRequest.create(title, type, global, configuration, nodeId);
 
-        InputLaunchResponse ilr = null;
         try {
-            ilr = api.path(routes.InputsResource().create(), InputLaunchResponse.class)
+            return api.path(routes.InputsResource().create(), InputLaunchResponse.class)
                     .node(this)
                     .body(request)
                     .expect(Http.Status.ACCEPTED)
                     .execute();
-        } catch (APIException|IOException e) {
+        } catch (Exception e) {
             LOG.error("Could not launch input " + title, e);
+            return null;
         }
-        return ilr;
     }
 
+    @Override
     public boolean launchExistingInput(String inputId) {
         try {
             api.path(routes.InputsResource().launchExisting(inputId))
@@ -264,7 +306,7 @@ public class Node extends ClusterEntity {
                     .expect(Http.Status.ACCEPTED)
                     .execute();
             return true;
-        } catch (APIException|IOException e) {
+        } catch (Exception e) {
             LOG.error("Could not launch input " + inputId, e);
         }
 
@@ -279,7 +321,7 @@ public class Node extends ClusterEntity {
                     .expect(Http.Status.ACCEPTED)
                     .execute();
             return true;
-        } catch (APIException|IOException e) {
+        } catch (Exception e) {
             LOG.error("Could not terminate input " + inputId, e);
         }
 
@@ -287,13 +329,14 @@ public class Node extends ClusterEntity {
     }
 
     public Map<String, String> getInputTypes() throws IOException, APIException {
-        return api.path(routes.InputsResource().types(), InputTypesResponse.class).node(this).execute().types;
+        return api.path(routes.InputTypesResource().types(), InputTypesResponse.class).node(this).execute().types;
     }
 
     public InputTypeSummaryResponse getInputTypeInformation(String type) throws IOException, APIException {
-        return api.path(routes.InputsResource().info(type), InputTypeSummaryResponse.class).node(this).execute();
+        return api.path(routes.InputTypesResource().info(type), InputTypeSummaryResponse.class).node(this).execute();
     }
 
+    @JsonIgnore
     public Map<String, InputTypeSummaryResponse> getAllInputTypeInformation() throws IOException, APIException {
         Map<String, InputTypeSummaryResponse> types = Maps.newHashMap();
 
@@ -306,25 +349,26 @@ public class Node extends ClusterEntity {
     }
 
     // TODO nodes should not have state beyond their activity status
-    public synchronized void loadSystemInformation() {
+    public synchronized SystemOverviewResponse loadSystemInformation() {
         try {
-            this.systemInfo = api.path(routes.SystemResource().system(), SystemOverviewResponse.class)
+            return api.path(routes.SystemResource().system(), SystemOverviewResponse.class)
                     .node(this)
                     .execute();
-        } catch (APIException | IOException e) {
+        } catch (Exception e) {
             LOG.error("Unable to load system information for node " + this, e);
+            return null;
         }
     }
 
-    public synchronized void loadJVMInformation() {
+    public synchronized NodeJVMStats loadJVMInformation() {
         try {
-            jvmInfo = new NodeJVMStats(
-                    api.path(routes.SystemResource().jvm(), ClusterEntityJVMStatsResponse.class)
-                            .node(this)
-                            .execute()
+            return new NodeJVMStats(api.path(routes.SystemResource().jvm(), ClusterEntityJVMStatsResponse.class)
+                    .node(this)
+                    .execute()
             );
-        } catch (APIException | IOException e) {
+        } catch (Exception e) {
             LOG.error("Unable to load JVM information for node " + this, e);
+            return null;
         }
     }
 
@@ -411,7 +455,7 @@ public class Node extends ClusterEntity {
                 .expect(200)
                 .execute();
         if (response == null) {
-            return Maps.newHashMap();
+            return Collections.emptyMap();
         }
         return response.getMetrics();
     }
@@ -421,13 +465,13 @@ public class Node extends ClusterEntity {
     }
 
     public void pause() throws IOException, APIException {
-        api.path(routes.SystemResource().pauseProcessing())
+        api.path(routes.SystemProcessingResource().pauseProcessing())
                 .node(this)
                 .execute();
     }
 
     public void resume() throws IOException, APIException {
-        api.path(routes.SystemResource().resumeProcessing())
+        api.path(routes.SystemProcessingResource().resumeProcessing())
                 .node(this)
                 .execute();
     }
@@ -441,7 +485,7 @@ public class Node extends ClusterEntity {
     public int getThroughput() {
         try {
             return api.path(routes.ThroughputResource().total(), NodeThroughputResponse.class).node(this).execute().throughput;
-        } catch (APIException | IOException e) {
+        } catch (Exception e) {
             LOG.error("Could not load throughput for node " + this, e);
         }
         return 0;
@@ -491,7 +535,7 @@ public class Node extends ClusterEntity {
 
     @Override
     public void touch() {
-        this.lastContact = DateTime.now(DateTimeZone.UTC);
+        this.lastContact = DateTools.nowInUTC();
         setActive(true);
     }
 
@@ -504,7 +548,7 @@ public class Node extends ClusterEntity {
     }
 
     public void shutdown() throws APIException, IOException {
-        api.path(routes.SystemResource().shutdown())
+        api.path(routes.SystemShutdownResource().shutdown())
                 .node(this)
                 .expect(Http.Status.ACCEPTED)
                 .execute();
@@ -565,11 +609,15 @@ public class Node extends ClusterEntity {
     }
 
     public void requireSystemInfo() {
-        loadSystemInformation();
+        if (this.systemInfo == null) {
+            this.systemInfo = firstNonNull(loadSystemInformation(), SystemOverviewResponse.buildEmpty());
+        }
     }
 
     public void requireJVMInfo() {
-        loadJVMInformation();
+        if (this.jvmInfo == null) {
+            this.jvmInfo = firstNonNull(loadJVMInformation(), NodeJVMStats.buildEmpty());
+        }
     }
 
     @Override
