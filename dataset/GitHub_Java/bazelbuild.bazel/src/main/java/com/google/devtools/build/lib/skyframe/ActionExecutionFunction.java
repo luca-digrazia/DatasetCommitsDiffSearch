@@ -151,14 +151,6 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
     // this action; downstream consumers of action events reasonably don't expect them.
     env = getProgressEventSuppressingEnvironmentIfPreviouslyCompleted(action, env);
 
-    if (action.discoversInputs()) {
-      // If this action previously failed due to a lost input found during input discovery, ensure
-      // that the input is regenerated before attempting discovery again.
-      if (declareDepsOnLostDiscoveredInputsIfAny(env, action)) {
-        return null;
-      }
-    }
-
     ContinuationState state;
     if (action.discoversInputs()) {
       state = getState(action);
@@ -266,22 +258,10 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
         runfilesDepOwners = ActionInputDepOwners.EMPTY_INSTANCE;
       }
 
-      ImmutableList<Artifact> lostDiscoveredInputs = ImmutableList.of();
-      Iterable<? extends SkyKey> failedActionDeps;
-      if (e.isFromInputDiscovery()) {
-        // Lost inputs found during input discovery are necessarily artifacts, and already Skyframe
-        // deps of this action.
-        lostDiscoveredInputs =
-            e.getLostInputs().stream()
-                .map(i -> (Artifact) i)
-                .collect(ImmutableList.toImmutableList());
-        failedActionDeps = lostDiscoveredInputs;
-      } else if (state.discoveredInputs != null) {
-        failedActionDeps = Iterables.concat(inputDepKeys, state.discoveredInputs);
-      } else {
-        failedActionDeps = inputDepKeys;
-      }
-
+      Iterable<SkyKey> failedActionDeps =
+          state.discoveredInputs != null
+              ? Iterables.concat(inputDepKeys, state.discoveredInputs)
+              : inputDepKeys;
       RewindPlan rewindPlan;
       try {
         rewindPlan =
@@ -306,9 +286,9 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
                     e.getFileOutErr(),
                     ActionExecutedEvent.ErrorTiming.AFTER_EXECUTION)));
       }
-      skyframeActionExecutor.resetFailedActionExecution(action, lostDiscoveredInputs);
+      skyframeActionExecutor.resetActionExecution(action, /*previouslyCompleted=*/ false);
       for (Action actionToRestart : rewindPlan.getAdditionalActionsToRestart()) {
-        skyframeActionExecutor.resetPreviouslyCompletedActionExecution(actionToRestart);
+        skyframeActionExecutor.resetActionExecution(actionToRestart, /*previouslyCompleted=*/ true);
       }
       return rewindPlan.getNodesToRestart();
     } catch (ActionExecutionException e) {
@@ -340,39 +320,6 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
       return new ProgressEventSuppressingEnvironment(env);
     }
     return env;
-  }
-
-  private boolean declareDepsOnLostDiscoveredInputsIfAny(Environment env, Action action)
-      throws InterruptedException, ActionExecutionFunctionException {
-    ImmutableList<Artifact> previouslyLostDiscoveredInputs =
-        skyframeActionExecutor.getLostDiscoveredInputs(action);
-    if (previouslyLostDiscoveredInputs != null) {
-      Map<SkyKey, ValueOrException2<MissingInputFileException, ActionExecutionException>>
-          lostInputValues =
-              env.getValuesOrThrow(
-                  previouslyLostDiscoveredInputs,
-                  MissingInputFileException.class,
-                  ActionExecutionException.class);
-      if (env.valuesMissing()) {
-        return true;
-      }
-      for (Map.Entry<SkyKey, ValueOrException2<MissingInputFileException, ActionExecutionException>>
-          lostInput : lostInputValues.entrySet()) {
-        try {
-          lostInput.getValue().get();
-        } catch (MissingInputFileException e) {
-          // MissingInputFileException comes from problems with source artifact construction.
-          // Rewinding never invalidates source artifacts.
-          throw new IllegalStateException(
-              "MissingInputFileException unexpected from rewound generated discovered input. key="
-                  + lostInput.getKey(),
-              e);
-        } catch (ActionExecutionException e) {
-          throw new ActionExecutionFunctionException(e);
-        }
-      }
-    }
-    return false;
   }
 
   static Action getActionForLookupData(Environment env, ActionLookupData actionLookupData)

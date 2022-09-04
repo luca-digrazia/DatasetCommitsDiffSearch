@@ -166,14 +166,6 @@ public final class SkyframeActionExecutor {
   // those events per action.
   private Set<OwnerlessArtifactWrapper> completedAndResetActions;
 
-  // We also keep track of actions that failed due to lost discovered inputs. In some circumstances
-  // the input discovery process will use a discovered input before requesting it as a dep. If that
-  // input was generated but is lost, and action rewinding resets it and its generating action, then
-  // the lost input's generating action must be rerun before the failed action tries input discovery
-  // again. A previously failed action satisfies that requirement by requesting the deps in this map
-  // at the start of its next attempt,
-  private ConcurrentMap<OwnerlessArtifactWrapper, ImmutableList<Artifact>> lostDiscoveredInputsMap;
-
   // Errors found when examining all actions in the graph are stored here, so that they can be
   // thrown when execution of the action is requested. This field is set during each call to
   // findAndStoreArtifactConflicts, and is preserved across builds otherwise.
@@ -385,7 +377,6 @@ public final class SkyframeActionExecutor {
     // Start with a new map each build so there's no issue with internal resizing.
     this.buildActionMap = Maps.newConcurrentMap();
     this.completedAndResetActions = Sets.newConcurrentHashSet();
-    this.lostDiscoveredInputsMap = Maps.newConcurrentMap();
     this.hadExecutionError = false;
     this.actionCacheChecker = Preconditions.checkNotNull(actionCacheChecker);
     // Don't cache possibly stale data from the last build.
@@ -446,7 +437,6 @@ public final class SkyframeActionExecutor {
     this.outputService = null;
     this.buildActionMap = null;
     this.completedAndResetActions = null;
-    this.lostDiscoveredInputsMap = null;
     this.actionCacheChecker = null;
   }
 
@@ -459,24 +449,12 @@ public final class SkyframeActionExecutor {
         new OwnerlessArtifactWrapper(action.getPrimaryOutput()));
   }
 
-  void resetPreviouslyCompletedActionExecution(Action action) {
+  void resetActionExecution(Action action, boolean previouslyCompleted) {
     OwnerlessArtifactWrapper ownerlessArtifactWrapper =
         new OwnerlessArtifactWrapper(action.getPrimaryOutput());
     buildActionMap.remove(ownerlessArtifactWrapper);
-    completedAndResetActions.add(ownerlessArtifactWrapper);
-  }
-
-  @Nullable
-  ImmutableList<Artifact> getLostDiscoveredInputs(Action action) {
-    return lostDiscoveredInputsMap.get(new OwnerlessArtifactWrapper(action.getPrimaryOutput()));
-  }
-
-  void resetFailedActionExecution(Action action, ImmutableList<Artifact> lostDiscoveredInputs) {
-    OwnerlessArtifactWrapper ownerlessArtifactWrapper =
-        new OwnerlessArtifactWrapper(action.getPrimaryOutput());
-    buildActionMap.remove(ownerlessArtifactWrapper);
-    if (!lostDiscoveredInputs.isEmpty()) {
-      lostDiscoveredInputsMap.put(ownerlessArtifactWrapper, lostDiscoveredInputs);
+    if (previouslyCompleted) {
+      completedAndResetActions.add(ownerlessArtifactWrapper);
     }
   }
 
@@ -723,11 +701,6 @@ public final class SkyframeActionExecutor {
     try {
       return action.discoverInputs(actionExecutionContext);
     } catch (ActionExecutionException e) {
-      if (e instanceof LostInputsActionExecutionException) {
-        // If inputs were lost during input discovery, then enrich the exception, informing action
-        // rewinding machinery that these lost inputs are now Skyframe deps of the action.
-        ((LostInputsActionExecutionException) e).setFromInputDiscovery();
-      }
       throw processAndGetExceptionToThrow(
           env.getListener(),
           actionExecutionContext.getInputPath(action.getPrimaryOutput()),

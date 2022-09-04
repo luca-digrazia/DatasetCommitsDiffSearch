@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.actions.ActionStartedEvent;
 import com.google.devtools.build.lib.actions.ActionStatusMessage;
 import com.google.devtools.build.lib.analysis.AnalysisPhaseCompleteEvent;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.bugreport.BugReport;
 import com.google.devtools.build.lib.buildeventstream.AnnounceBuildEventTransportsEvent;
 import com.google.devtools.build.lib.buildeventstream.BuildEventTransport;
 import com.google.devtools.build.lib.buildeventstream.BuildEventTransportClosedEvent;
@@ -119,8 +118,6 @@ class ExperimentalStateTracker {
   private int failedTests;
   private boolean ok;
   private boolean buildComplete;
-  private String defaultStatus = "Loading";
-  private String defaultActivity = "loading...";
 
   private ExecutionProgressReceiver executionProgressReceiver;
   private PackageProgressReceiver packageProgressReceiver;
@@ -202,8 +199,6 @@ class ExperimentalStateTracker {
     status = null;
     packageProgressReceiver = null;
     configuredTargetProgressReceiver = null;
-    defaultStatus = "Building";
-    defaultActivity = "checking cached actions";
     return workDone;
   }
 
@@ -852,7 +847,7 @@ class ExperimentalStateTracker {
     if (executionProgressReceiver != null) {
       terminalWriter.okStatus().append(executionProgressReceiver.getProgressString());
     } else {
-      terminalWriter.okStatus().append(defaultStatus).append(":");
+      terminalWriter.okStatus().append("Building:");
     }
     if (completedTests > 0) {
       terminalWriter.normal().append(" " + completedTests + " / " + totalTests + " tests");
@@ -865,7 +860,7 @@ class ExperimentalStateTracker {
     // might not be one.
     ActionState oldestAction = getOldestAction();
     if (actionsCount == 0 || oldestAction == null) {
-      terminalWriter.normal().append(" ").append(defaultActivity);
+      terminalWriter.normal().append(" no action");
       maybeShowRecentTest(terminalWriter, shortVersion, targetWidth - terminalWriter.getPosition());
     } else if (actionsCount == 1) {
       if (maybeShowRecentTest(null, shortVersion, targetWidth - terminalWriter.getPosition())) {
