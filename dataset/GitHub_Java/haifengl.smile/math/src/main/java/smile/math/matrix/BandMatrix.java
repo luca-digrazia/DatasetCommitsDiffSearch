@@ -145,7 +145,7 @@ public class BandMatrix implements IMatrix {
         return A[i][j-i+m1];
     }
 
-    public BandMatrix set(int i, int j, double x) {
+    private BandMatrix set(int i, int j, double x) {
         A[i][j-i+m1] = x;
         return this;
     }
@@ -484,7 +484,7 @@ public class BandMatrix implements IMatrix {
         // Solve for the error term.
         solve(r);
 
-        // Subtract the error from the old solution.
+        // Subtract the error from the old soluiton.
         for (int i = 0; i < n; i++) {
             x[i] -= r[i];
         }

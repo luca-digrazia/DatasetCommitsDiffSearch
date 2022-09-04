@@ -21,44 +21,34 @@ package smile.math.matrix;
  *
  * @author Haifeng Li
  */
-public interface DenseMatrix extends Matrix, LinearSolver {
-    
+public interface DenseMatrix extends IMatrix {
     /**
      * Set the entry value at row i and column j.
      */
-    public DenseMatrix set(int i, int j, double x);
+    public IMatrix set(int i, int j, double x);
 
     /**
      * Set the entry value at row i and column j. For Scala users.
      */
-    default public DenseMatrix update(int i, int j, double x) {
-        return set(i, j, x);
-    }
+    public IMatrix update(int i, int j, double x);
 
     /**
      * A[i][j] += x
      */
-    public DenseMatrix add(int i, int j, double x);
+    public IMatrix add(int i, int j, double x);
 
     /**
      * A[i][j] -= x
      */
-    public DenseMatrix sub(int i, int j, double x);
+    public IMatrix sub(int i, int j, double x);
 
     /**
      * A[i][j] *= x
      */
-    public DenseMatrix mul(int i, int j, double x);
+    public IMatrix mul(int i, int j, double x);
 
     /**
      * A[i][j] /= x
      */
-    public DenseMatrix div(int i, int j, double x);
-
-    @Override
-    default public double solve(double[] b, double[] x) {
-        LUDecomposition lu = new LUDecomposition(this);
-        lu.solve(b, x);
-        return 0.0;
-    }
+    public IMatrix div(int i, int j, double x);
 }

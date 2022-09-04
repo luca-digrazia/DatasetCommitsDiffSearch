@@ -131,13 +131,17 @@ public class QRDecomposition {
      * Returns the Householder vectors.
      * @return  Lower trapezoidal matrix whose columns define the reflections
      */
-    public DenseMatrix getH() {
+    public double[][] getH() {
         int m = QR.nrows();
         int n = QR.ncols();
-        DenseMatrix H = new ColumnMajorMatrix(m, n);
+        double[][] H = new double[m][n];
         for (int i = 0; i < m; i++) {
-            for (int j = 0; j <= i; j++) {
-                H.set(i, j, QR.get(i, j));
+            for (int j = 0; j < n; j++) {
+                if (i >= j) {
+                    H[i][j] = QR.get(i, j);
+                } else {
+                    H[i][j] = 0.0;
+                }
             }
         }
         return H;
@@ -165,14 +169,19 @@ public class QRDecomposition {
     /**
      * Returns the upper triangular factor.
      */
-    public DenseMatrix getR() {
+    public double[][] getR() {
         int m = QR.nrows();
         int n = QR.ncols();
-        DenseMatrix R = new ColumnMajorMatrix(m, n);
+        double[][] R = new double[m][n];
         for (int i = 0; i < n; i++) {
-            R.set(i, i, Rdiagonal[i]);
-            for (int j = i; j < n; j++) {
-                R.set(i, j, QR.get(i, j));
+            for (int j = 0; j < n; j++) {
+                if (i < j) {
+                    R[i][j] = QR.get(i, j);
+                } else if (i == j) {
+                    R[i][j] = Rdiagonal[i];
+                } else {
+                    R[i][j] = 0.0;
+                }
             }
         }
         return R;
@@ -181,21 +190,24 @@ public class QRDecomposition {
     /**
      * Returns the orthogonal factor.
      */
-    public DenseMatrix getQ() {
+    public double[][] getQ() {
         int m = QR.nrows();
         int n = QR.ncols();
-        DenseMatrix Q = new ColumnMajorMatrix(m, n);
+        double[][] Q = new double[m][n];
         for (int k = n - 1; k >= 0; k--) {
-            Q.set(k, k, 1.0);
+            for (int i = 0; i < m; i++) {
+                Q[i][k] = 0.0;
+            }
+            Q[k][k] = 1.0;
             for (int j = k; j < n; j++) {
                 if (QR.get(k, k) != 0) {
                     double s = 0.0;
                     for (int i = k; i < m; i++) {
-                        s += QR.get(i, k) * Q.get(i, j);
+                        s += QR.get(i, k) * Q[i][j];
                     }
                     s = -s / QR.get(k, k);
                     for (int i = k; i < m; i++) {
-                        Q.add(i, j, s * QR.get(i, k));
+                        Q[i][j] += s * QR.get(i, k);
                     }
                 }
             }
@@ -206,10 +218,25 @@ public class QRDecomposition {
     /**
      * Returns the matrix pseudo inverse.
      */
-    public DenseMatrix inverse() {
-        DenseMatrix inv = ColumnMajorMatrix.eye(QR.ncols(), QR.nrows());
-        solve(inv);
-        return inv;
+    public double[][] inverse() {
+        double[][] I = Math.eye(QR.ncols(), QR.nrows());
+        solve(I);
+        return I;
+    }
+
+    /**
+     * Solve the least squares A * x = b. On output, b will be overwritten with
+     * the solution vector.
+     * @param b   right hand side of linear system. On output, b will be
+     * overwritten with the solution vector.
+     * @exception  RuntimeException  if matrix is rank deficient.
+     */
+    public void solve(double[] b) {
+        if (QR.nrows() != QR.ncols()) {
+            throw new UnsupportedOperationException("In-place solver supports only square matrix.");
+        }
+
+        solve(b, b);
     }
 
     /**
@@ -267,7 +294,7 @@ public class QRDecomposition {
      * the solution matrix on output.
      * @exception  RuntimeException  Matrix is rank deficient.
      */
-    public void solve(DenseMatrix B) {
+    public void solve(double[][] B) {
         if (QR.nrows() != QR.ncols()) {
             throw new UnsupportedOperationException("In-place solver supports only square matrix.");
         }
@@ -281,50 +308,47 @@ public class QRDecomposition {
      * @param X    the solution matrix that minimizes the L2 norm of Q*R*X - B.
      * @exception  RuntimeException  Matrix is rank deficient.
      */
-    public void solve(DenseMatrix B, DenseMatrix X) {
-        if (B.nrows() != QR.nrows()) {
-            throw new IllegalArgumentException(String.format("Row dimensions do not agree: A is %d x %d, but B is %d x %d", QR.nrows(), QR.nrows(), B.nrows(), B.ncols()));
+    public void solve(double[][] B, double[][] X) {
+        if (B.length != QR.nrows()) {
+            throw new IllegalArgumentException(String.format("Row dimensions do not agree: A is %d x %d, but B is %d x %d", QR.nrows(), QR.nrows(), B.length, B[0].length));
         }
 
-        if (X.nrows() != QR.ncols()) {
-            throw new IllegalArgumentException(String.format("Row dimensions do not agree: A is %d x %d, but X is %d x %d", QR.nrows(), QR.nrows(), X.nrows(), X.ncols()));
+        if (X.length != QR.ncols()) {
+            throw new IllegalArgumentException(String.format("Row dimensions do not agree: A is %d x %d, but X is %d x %d", QR.nrows(), QR.nrows(), X.length, X[0].length));
         }
 
-        if (B.ncols() != X.ncols()) {
-            throw new IllegalArgumentException(String.format("B and X column dimension do not agree: B is %d x %d, but X is %d x %d", B.nrows(), B.ncols(), X.nrows(), X.ncols()));
+        if (B[0].length != X[0].length) {
+            throw new IllegalArgumentException(String.format("B and X column dimension do not agree: B is %d x %d, but X is %d x %d", B.length, B[0].length, X.length, X[0].length));
         }
 
         if (!isFullColumnRank()) {
             throw new RuntimeException("Matrix is rank deficient.");
         }
 
-        if (X.ncols() != B.ncols()) {
+        if (X[0].length != B[0].length) {
             throw new IllegalArgumentException("B and X dimensions do not agree.");
         }
 
         // Copy right hand side
         int m = QR.nrows();
         int n = QR.ncols();
-        int nx = B.ncols();
+        int nx = B[0].length;
 
         // Compute Y = transpose(Q)*B
+        double[][] Y = B;
         if (B != X) {
-            for (int i = 0; i < n; i++) {
-                for (int j = 0; j < nx; j++) {
-                    X.set(i, j, B.get(i, j));
-                }
-            }
+            Y = Math.clone(B);
         }
         
         for (int k = 0; k < n; k++) {
             for (int j = 0; j < nx; j++) {
                 double s = 0.0;
                 for (int i = k; i < m; i++) {
-                    s += QR.get(i, k) * X.get(i, j);
+                    s += QR.get(i, k) * Y[i][j];
                 }
                 s = -s / QR.get(k, k);
                 for (int i = k; i < m; i++) {
-                    X.add(i, j, s * QR.get(i, k));
+                    Y[i][j] += s * QR.get(i, k);
                 }
             }
         }
@@ -332,12 +356,12 @@ public class QRDecomposition {
         // Solve R*X = Y;
         for (int k = n - 1; k >= 0; k--) {
             for (int j = 0; j < nx; j++) {
-                X.set(k, j, X.get(k, j) / Rdiagonal[k]);
+                X[k][j] = Y[k][j] / Rdiagonal[k];
             }
             
             for (int i = 0; i < k; i++) {
                 for (int j = 0; j < nx; j++) {
-                    X.sub(i, j, X.get(k, j) * QR.get(i, k));
+                    Y[i][j] -= X[k][j] * QR.get(i, k);
                 }
             }
         }
