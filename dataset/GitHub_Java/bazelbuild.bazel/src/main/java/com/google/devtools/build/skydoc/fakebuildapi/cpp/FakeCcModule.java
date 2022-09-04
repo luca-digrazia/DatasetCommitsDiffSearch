@@ -22,14 +22,12 @@ import com.google.devtools.build.lib.skylarkbuildapi.cpp.BazelCcModuleApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcCompilationContextApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcCompilationOutputsApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcInfoApi;
-import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcLinkingContextApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcLinkingInfoApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcModuleApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcToolchainProviderApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcToolchainVariablesApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CompilationInfoApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.FeatureConfigurationApi;
-import com.google.devtools.build.lib.skylarkbuildapi.cpp.LibraryToLinkWrapperApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.LinkingInfoApi;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
@@ -47,8 +45,6 @@ public class FakeCcModule
         CcCompilationOutputsApi,
         LinkingInfoApi,
         CcLinkingInfoApi,
-        CcLinkingContextApi,
-        LibraryToLinkWrapperApi,
         CcToolchainVariablesApi> {
 
   @Override
@@ -116,7 +112,7 @@ public class FakeCcModule
   }
 
   @Override
-  public LibraryToLinkWrapperApi createLibraryLinkerInput(
+  public Object createLibraryLinkerInput(
       Object actions,
       Object featureConfiguration,
       Object ccToolchainProvider,
@@ -131,7 +127,7 @@ public class FakeCcModule
   }
 
   @Override
-  public CcLinkingContextApi createCcLinkingInfo(
+  public Object createCcLinkingInfo(
       Object librariesToLinkObject,
       Object userLinkFlagsObject,
       Location location,
