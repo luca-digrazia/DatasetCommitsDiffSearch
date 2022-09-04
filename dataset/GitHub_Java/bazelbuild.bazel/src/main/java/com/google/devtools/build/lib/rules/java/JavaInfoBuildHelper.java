@@ -529,6 +529,7 @@ final class JavaInfoBuildHelper {
     NestedSetBuilder<Artifact> transitiveSourceJars =
         NestedSetBuilder.<Artifact>stableOrder().addAll(outputSourceJars);
     Stream.concat(deps.stream(), exports.stream())
+        .filter(javaInfo -> !javaInfo.isNeverlink())
         .filter(javaInfo -> javaInfo.getProvider(JavaSourceJarsProvider.class) != null)
         .map(javaInfo -> javaInfo.getProvider(JavaSourceJarsProvider.class))
         .forEach(
