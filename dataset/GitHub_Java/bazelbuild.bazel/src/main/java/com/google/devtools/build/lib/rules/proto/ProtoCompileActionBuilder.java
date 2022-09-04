@@ -32,11 +32,11 @@ import com.google.devtools.build.lib.actions.ParamFileInfo;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.TransitionMode;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.VectorArg;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
+import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.analysis.stringtemplate.ExpansionException;
 import com.google.devtools.build.lib.analysis.stringtemplate.TemplateContext;
 import com.google.devtools.build.lib.analysis.stringtemplate.TemplateExpander;
@@ -165,24 +165,23 @@ public class ProtoCompileActionBuilder {
     public String toString() {
       try {
         return TemplateExpander.expand(
-                template,
-                new TemplateContext() {
-                  @Override
-                  public String lookupVariable(String name) throws ExpansionException {
-                    CharSequence value = variableValues.get(name);
-                    if (value == null) {
-                      throw new ExpansionException(String.format("$(%s) not defined", name));
-                    }
-                    return value.toString();
-                  }
+            template,
+            new TemplateContext() {
+              @Override
+              public String lookupVariable(String name)
+                  throws ExpansionException {
+                CharSequence value = variableValues.get(name);
+                if (value == null) {
+                  throw new ExpansionException(String.format("$(%s) not defined", name));
+                }
+                return value.toString();
+              }
 
-                  @Override
-                  public String lookupFunction(String name, String param)
-                      throws ExpansionException {
-                    throw new ExpansionException(String.format("$(%s) not defined", name));
-                  }
-                })
-            .expansion();
+              @Override
+              public String lookupFunction(String name, String param) throws ExpansionException {
+                throw new ExpansionException(String.format("$(%s) not defined", name));
+              }
+            });
       } catch (ExpansionException e) {
         // Squeelch. We don't throw this exception in the lookupMakeVariable implementation above,
         // and we can't report it here anyway, because this code will typically execute in the
@@ -268,7 +267,7 @@ public class ProtoCompileActionBuilder {
     boolean siblingRepositoryLayout =
         ruleContext
             .getAnalysisEnvironment()
-            .getStarlarkSemantics()
+            .getSkylarkSemantics()
             .experimentalSiblingRepositoryLayout();
 
     // Add include maps
@@ -326,11 +325,8 @@ public class ProtoCompileActionBuilder {
       RuleContext ruleContext, ProtoInfo protoInfo, Services allowServices)
       throws InterruptedException {
     Artifact output = protoInfo.getDirectDescriptorSet();
-    ImmutableList<ProtoInfo> protoDeps =
-        ImmutableList.copyOf(
-            ruleContext.getPrerequisites("deps", TransitionMode.TARGET, ProtoInfo.PROVIDER));
     NestedSet<Artifact> dependenciesDescriptorSets =
-        ProtoCommon.computeDependenciesDescriptorSets(protoDeps);
+        ProtoCommon.computeDependenciesDescriptorSets(ruleContext);
     if (protoInfo.getDirectProtoSources().isEmpty()) {
       ruleContext.registerAction(
           FileWriteAction.createEmptyWithInputs(
@@ -462,7 +458,7 @@ public class ProtoCompileActionBuilder {
     }
 
     FilesToRunProvider compilerTarget =
-        ruleContext.getExecutablePrerequisite(":proto_compiler", TransitionMode.HOST);
+        ruleContext.getExecutablePrerequisite(":proto_compiler", RuleConfiguredTarget.Mode.HOST);
     if (compilerTarget == null) {
       return null;
     }
@@ -470,7 +466,7 @@ public class ProtoCompileActionBuilder {
     boolean siblingRepositoryLayout =
         ruleContext
             .getAnalysisEnvironment()
-            .getStarlarkSemantics()
+            .getSkylarkSemantics()
             .experimentalSiblingRepositoryLayout();
 
     result
