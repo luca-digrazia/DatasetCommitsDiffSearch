@@ -47,7 +47,6 @@ public final class MethodDescriptor {
   private final boolean useAst;
   private final boolean useEnvironment;
   private final boolean useSkylarkSemantics;
-  private final boolean useContext;
 
   private MethodDescriptor(
       Method method,
@@ -64,8 +63,7 @@ public final class MethodDescriptor {
       boolean useLocation,
       boolean useAst,
       boolean useEnvironment,
-      boolean useSkylarkSemantics,
-      boolean useContext) {
+      boolean useSkylarkSemantics) {
     this.method = method;
     this.annotation = annotation;
     this.name = name;
@@ -81,7 +79,6 @@ public final class MethodDescriptor {
     this.useAst = useAst;
     this.useEnvironment = useEnvironment;
     this.useSkylarkSemantics = useSkylarkSemantics;
-    this.useContext = useContext;
   }
 
   /** Returns the SkylarkCallable annotation corresponding to this method. */
@@ -90,8 +87,7 @@ public final class MethodDescriptor {
   }
 
   /** @return Skylark method descriptor for provided Java method and signature annotation. */
-  public static MethodDescriptor of(
-      Method method, SkylarkCallable annotation, StarlarkSemantics semantics) {
+  public static MethodDescriptor of(Method method, SkylarkCallable annotation) {
     // This happens when the interface is public but the implementation classes
     // have reduced visibility.
     method.setAccessible(true);
@@ -103,17 +99,16 @@ public final class MethodDescriptor {
         annotation.documented(),
         annotation.structField(),
         Arrays.stream(annotation.parameters())
-            .map(param -> ParamDescriptor.of(param, semantics))
+            .map(ParamDescriptor::of)
             .collect(ImmutableList.toImmutableList()),
-        ParamDescriptor.of(annotation.extraPositionals(), semantics),
-        ParamDescriptor.of(annotation.extraKeywords(), semantics),
+        ParamDescriptor.of(annotation.extraPositionals()),
+        ParamDescriptor.of(annotation.extraKeywords()),
         annotation.selfCall(),
         annotation.allowReturnNones(),
         annotation.useLocation(),
         annotation.useAst(),
         annotation.useEnvironment(),
-        annotation.useSkylarkSemantics(),
-        annotation.useContext());
+        annotation.useSkylarkSemantics());
   }
 
   /** @return The result of this method invocation on the {@code obj} as a target. */
@@ -130,54 +125,46 @@ public final class MethodDescriptor {
   public Object call(Object obj, Object[] args, Location loc, Environment env)
       throws EvalException, InterruptedException {
     Preconditions.checkNotNull(obj);
-    Object result;
     try {
-      result = method.invoke(obj, args);
+      Object result = method.invoke(obj, args);
+      if (method.getReturnType().equals(Void.TYPE)) {
+        return Runtime.NONE;
+      }
+      if (result == null) {
+        if (isAllowReturnNones()) {
+          return Runtime.NONE;
+        } else {
+          throw new EvalException(
+              loc,
+              "method invocation returned None, please file a bug report: "
+                  + getName()
+                  + Printer.printAbbreviatedList(ImmutableList.copyOf(args), "(", ", ", ")", null));
+        }
+      }
+      // TODO(bazel-team): get rid of this, by having everyone use the Skylark data structures
+      result = SkylarkType.convertToSkylark(result, method, env);
+      if (result != null && !EvalUtils.isSkylarkAcceptable(result.getClass())) {
+        throw new EvalException(
+            loc,
+            Printer.format(
+                "method '%s' returns an object of invalid type %r", getName(), result.getClass()));
+      }
+      return result;
     } catch (IllegalAccessException e) {
       // TODO(bazel-team): Print a nice error message. Maybe the method exists
       // and an argument is missing or has the wrong type.
       throw new EvalException(loc, "Method invocation failed: " + e);
-    } catch (InvocationTargetException x) {
-      Throwable e = x.getCause();
-      if (e == null) {
-        // This is unlikely to happen.
-        throw new IllegalStateException(
-            String.format(
-                "causeless InvocationTargetException when calling %s with arguments %s at %s",
-                obj, Arrays.toString(args), loc),
-            x);
-      }
-      Throwables.propagateIfPossible(e, InterruptedException.class);
-      if (e instanceof FuncallExpression.FuncallException) {
-        throw new EvalException(loc, e.getMessage());
-      }
-      if (e instanceof EvalException) {
-        throw ((EvalException) e).ensureLocation(loc);
-      }
-      throw new EvalException.EvalExceptionWithJavaCause(loc, e);
-    }
-    if (method.getReturnType().equals(Void.TYPE)) {
-      return Runtime.NONE;
-    }
-    if (result == null) {
-      if (isAllowReturnNones()) {
-        return Runtime.NONE;
+    } catch (InvocationTargetException e) {
+      if (e.getCause() instanceof FuncallExpression.FuncallException) {
+        throw new EvalException(loc, e.getCause().getMessage());
+      } else if (e.getCause() != null) {
+        Throwables.throwIfInstanceOf(e.getCause(), InterruptedException.class);
+        throw new EvalException.EvalExceptionWithJavaCause(loc, e.getCause());
       } else {
-        throw new IllegalStateException(
-            "method invocation returned None "
-                + getName()
-                + Printer.printAbbreviatedList(ImmutableList.copyOf(args), "(", ", ", ")", null));
+        // This is unlikely to happen
+        throw new EvalException(loc, "method invocation failed: " + e);
       }
     }
-    // TODO(bazel-team): get rid of this, by having everyone use the Skylark data structures
-    result = SkylarkType.convertToSkylark(result, method, env);
-    if (result != null && !EvalUtils.isSkylarkAcceptable(result.getClass())) {
-      throw new EvalException(
-          loc,
-          Printer.format(
-              "method '%s' returns an object of invalid type %r", getName(), result.getClass()));
-    }
-    return result;
   }
 
   /** @see SkylarkCallable#name() */
@@ -198,11 +185,6 @@ public final class MethodDescriptor {
   /** @see SkylarkCallable#useSkylarkSemantics() */
   boolean isUseSkylarkSemantics() {
     return useSkylarkSemantics;
-  }
-
-  /** See {@link SkylarkCallable#useContext()}. */
-  boolean isUseContext() {
-    return useContext;
   }
 
   /** @see SkylarkCallable#useLocation() */

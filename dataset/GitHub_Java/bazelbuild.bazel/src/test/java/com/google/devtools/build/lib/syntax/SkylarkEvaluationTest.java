@@ -1272,7 +1272,7 @@ public class SkylarkEvaluationTest extends EvaluationTest {
     new SkylarkTest()
         .update("mock", new Mock())
         .testIfErrorContains(
-            "expected value of type 'string' for parameter 'pos', in call to MockFn(int)",
+            "expected string for 'pos' while calling MockFn but got int instead: 1",
             "v = mock(1)");
   }
 
@@ -2175,11 +2175,19 @@ public class SkylarkEvaluationTest extends EvaluationTest {
   }
 
   @Test
+  public void testStructFieldDefinedInValuesAndSkylarkCallable() throws Exception {
+    new SkylarkTest()
+        .update("val", new SkylarkClassObjectWithSkylarkCallables())
+        .setUp("v = val.collision_field")
+        .testLookup("v", "fromSkylarkCallable");
+  }
+
+  @Test
   public void testStructMethodDefinedInValuesAndSkylarkCallable() throws Exception {
     new SkylarkTest()
         .update("val", new SkylarkClassObjectWithSkylarkCallables())
         .setUp("v = val.collision_method()")
-        .testLookup("v", "fromSkylarkCallable");
+        .testLookup("v", "fromValues");
   }
 
   @Test
