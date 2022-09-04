@@ -20,10 +20,7 @@ import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionCompletionEvent;
 import com.google.devtools.build.lib.actions.ActionStartedEvent;
-import com.google.devtools.build.lib.actions.AnalyzingActionEvent;
-import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.RunningActionEvent;
-import com.google.devtools.build.lib.actions.SchedulingActionEvent;
+import com.google.devtools.build.lib.actions.ActionStatusMessage;
 import com.google.devtools.build.lib.analysis.AnalysisPhaseCompleteEvent;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.bugreport.BugReport;
@@ -100,20 +97,19 @@ class ExperimentalStateTracker {
     }
   }
 
-  private final Map<Artifact, ActionState> activeActions;
-  private final Map<Artifact, String> notStartedActionStatus;
+  private final Map<String, ActionState> activeActions;
+  private final Map<String, String> notStartedActionStatus;
 
   // running downloads are identified by the original URL they were trying to access.
   private final Deque<String> runningDownloads;
   private final Map<String, Long> downloadNanoStartTimes;
   private final Map<String, FetchProgress> downloads;
 
-  /**
-   * For each test, the list of actions (as identified by the primary output artifact) currently
-   * running for that test (identified by its label), in the order they got started. A key is
-   * present in the map if and only if that was discovered as a test.
-   */
-  private final Map<Label, Set<Artifact>> testActions;
+  // For each test, the list of actions (again identified by the path of the
+  // primary output) currently running for that test (identified by its label),
+  // in order they got started. A key is present in the map if and only if that
+  // was discovered as a test.
+  private final Map<Label, Set<String>> testActions;
 
   private final AtomicInteger actionsCompleted;
   private int totalTests;
@@ -188,11 +184,11 @@ class ExperimentalStateTracker {
   }
 
   /**
-   * Make the state tracker aware of the fact that the analysis has finished. Return a summary of
-   * the work done in the analysis phase.
+   * Make the state tracker aware of the fact that the analyis has finished. Return a summary of the
+   * work done in the analysis phase.
    */
   synchronized String analysisComplete(AnalysisPhaseCompleteEvent event) {
-    String workDone = "Analyzed " + additionalMessage;
+    String workDone = "Analysed " + additionalMessage;
     if (packageProgressReceiver != null) {
       Pair<String, String> progress = packageProgressReceiver.progressState();
       workDone += " (" + progress.getFirst();
@@ -264,67 +260,56 @@ class ExperimentalStateTracker {
 
   void actionStarted(ActionStartedEvent event) {
     Action action = event.getAction();
-    Artifact actionId = action.getPrimaryOutput();
+    String name = action.getPrimaryOutput().getPath().getPathString();
     long nanoStartTime = event.getNanoTimeStart();
 
-    String status = notStartedActionStatus.remove(actionId);
+    String status = notStartedActionStatus.remove(name);
     boolean nowExecuting = status != null;
     activeActions.put(
-        actionId,
+        name,
         new ActionState(action, nanoStartTime, nowExecuting, nowExecuting ? status : null));
 
     if (action.getOwner() != null) {
       Label owner = action.getOwner().getLabel();
       if (owner != null) {
-        Set<Artifact> testActionsForOwner = testActions.get(owner);
+        Set<String> testActionsForOwner = testActions.get(owner);
         if (testActionsForOwner != null) {
-          testActionsForOwner.add(actionId);
+          testActionsForOwner.add(name);
         }
       }
     }
   }
 
-  void analyzingAction(AnalyzingActionEvent event) {
-    Artifact actionId = event.getActionMetadata().getPrimaryOutput();
-    ActionState state = activeActions.remove(actionId);
-    if (state != null) {
-      activeActions.put(
-          actionId,
-          new ActionState(state.action, clock.nanoTime(), /*executing=*/ false, "Analyzing"));
-    }
-    notStartedActionStatus.remove(actionId);
-  }
-
-  void schedulingAction(SchedulingActionEvent event) {
-    Artifact actionId = event.getActionMetadata().getPrimaryOutput();
-    ActionState state = activeActions.remove(actionId);
-    if (state != null) {
-      activeActions.put(
-          actionId,
-          new ActionState(state.action, clock.nanoTime(), /*executing=*/ false, "Scheduling"));
-    }
-    notStartedActionStatus.remove(actionId);
-  }
-
-  void runningAction(RunningActionEvent event) {
-    Artifact actionId = event.getActionMetadata().getPrimaryOutput();
+  void actionStatusMessage(ActionStatusMessage event) {
     String strategy = event.getStrategy();
+    String name = event.getActionMetadata().getPrimaryOutput().getPath().getPathString();
 
-    ActionState state = activeActions.remove(actionId);
-    if (state != null) {
-      activeActions.put(
-          actionId, new ActionState(state.action, clock.nanoTime(), /*executing=*/ true, strategy));
+    ActionState state = activeActions.remove(name);
+
+    if (strategy != null) {
+      if (state != null) {
+        activeActions.put(
+            name, new ActionState(state.action, clock.nanoTime(), /*executing=*/ true, strategy));
+      } else {
+        notStartedActionStatus.put(name, strategy);
+      }
     } else {
-      notStartedActionStatus.put(actionId, strategy);
+      if (state != null) {
+        activeActions.put(
+            name,
+            new ActionState(
+                state.action, clock.nanoTime(), /*executing=*/ false, event.getMessage()));
+      }
+      notStartedActionStatus.remove(name);
     }
   }
 
   void actionCompletion(ActionCompletionEvent event) {
     actionsCompleted.incrementAndGet();
     Action action = event.getAction();
-    Artifact actionId = action.getPrimaryOutput();
-    activeActions.remove(actionId);
-    boolean removed = notStartedActionStatus.containsKey(actionId);
+    String name = action.getPrimaryOutput().getPath().getPathString();
+    activeActions.remove(name);
+    boolean removed = notStartedActionStatus.containsKey(name);
     if (removed && !action.discoversInputs()) {
       BugReport.sendBugReport(
           new IllegalStateException(
@@ -336,9 +321,9 @@ class ExperimentalStateTracker {
     if (action.getOwner() != null) {
       Label owner = action.getOwner().getLabel();
       if (owner != null) {
-        Set<Artifact> testActionsForOwner = testActions.get(owner);
+        Set<String> testActionsForOwner = testActions.get(owner);
         if (testActionsForOwner != null) {
-          testActionsForOwner.remove(actionId);
+          testActionsForOwner.remove(name);
         }
       }
     }
@@ -403,7 +388,7 @@ class ExperimentalStateTracker {
 
   // Describe a group of actions running for the same test.
   private String describeTestGroup(
-      Label owner, long nanoTime, int desiredWidth, Set<Artifact> allActions) {
+      Label owner, long nanoTime, int desiredWidth, Set<String> allActions) {
     String prefix = "Testing ";
     String labelSep = " [";
     String postfix = " (" + allActions.size() + " actions)]";
@@ -422,8 +407,8 @@ class ExperimentalStateTracker {
 
     String sep = "";
     boolean allReported = true;
-    for (Artifact actionId : allActions) {
-      ActionState actionState = activeActions.get(actionId);
+    for (String action : allActions) {
+      ActionState actionState = activeActions.get(action);
       if (actionState == null) {
         // This action must have completed while we were constructing this output. Skip it.
         continue;
@@ -447,12 +432,12 @@ class ExperimentalStateTracker {
   // describing other actions, add those to the to set of actions to skip in further samples of
   // actions.
   private String describeAction(
-      ActionState actionState, long nanoTime, int desiredWidth, Set<Artifact> toSkip) {
+      ActionState actionState, long nanoTime, int desiredWidth, Set<String> toSkip) {
     Action action = actionState.action;
     if (action.getOwner() != null) {
       Label owner = action.getOwner().getLabel();
       if (owner != null) {
-        Set<Artifact> allRelatedActions = testActions.get(owner);
+        Set<String> allRelatedActions = testActions.get(owner);
         if (allRelatedActions != null && allRelatedActions.size() > 1) {
           if (toSkip != null) {
             toSkip.addAll(allRelatedActions);
@@ -582,13 +567,12 @@ class ExperimentalStateTracker {
     int totalCount = 0;
     long nanoTime = clock.nanoTime();
     int actionCount = activeActions.size();
-    Set<Artifact> toSkip = new TreeSet<>();
-    ArrayList<Map.Entry<Artifact, ActionState>> copy = new ArrayList<>(activeActions.entrySet());
+    Set<String> toSkip = new TreeSet<>();
+    ArrayList<Map.Entry<String, ActionState>> copy = new ArrayList<>(activeActions.entrySet());
     copy.sort(
-        Comparator.comparing(
-                (Map.Entry<Artifact, ActionState> entry) -> !entry.getValue().executing)
+        Comparator.comparing((Map.Entry<String, ActionState> entry) -> !entry.getValue().executing)
             .thenComparing(entry -> entry.getValue().nanoStartTime));
-    for (Map.Entry<Artifact, ActionState> entry : copy) {
+    for (Map.Entry<String, ActionState> entry : copy) {
       totalCount++;
       if (toSkip.contains(entry.getKey())) {
         continue;
@@ -665,12 +649,12 @@ class ExperimentalStateTracker {
   }
 
   /**
-   * Maybe add a note about the last test that passed. Return true, if the note was added (and hence
-   * a line break is appropriate if more data is to come. If a null value is provided for the
-   * terminal writer, only return whether a note would be added.
+   * Maybe add a note about the last test that passed. Return true, if the note was added (and
+   * hence a line break is appropriate if more data is to come. If a null value is provided for
+   * the terminal writer, only return wether a note would be added.
    *
-   * <p>The width parameter gives advice on to which length the description of the test should the
-   * shortened to, if possible.
+   * The width parameter gives advice on to which length the the description of the test should
+   * the shortened to, if possible.
    */
   private boolean maybeShowRecentTest(
       AnsiTerminalWriter terminalWriter, boolean shortVersion, int width) throws IOException {

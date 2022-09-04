@@ -15,14 +15,13 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.auto.value.AutoValue;
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ConcurrentHashMultiset;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionInput;
@@ -50,13 +49,11 @@ import javax.annotation.Nullable;
  */
 public class ActionRewindStrategy {
   private static final Logger logger = Logger.getLogger(ActionRewindStrategy.class.getName());
-  @VisibleForTesting public static final int MAX_REPEATED_LOST_INPUTS = 20;
 
   // Note that this reference is mutated only outside of Skyframe evaluations, and accessed only
   // inside of them. Its visibility piggybacks on Skyframe evaluation synchronizations, like
   // ActionExecutionFunction's stateMap does.
-  private ConcurrentHashMultiset<LostInputRecord> lostInputRecords =
-      ConcurrentHashMultiset.create();
+  private Set<LostInputRecord> lostInputRecords = Sets.newConcurrentHashSet();
 
   /**
    * Returns a {@link RewindPlan} specifying:
@@ -84,7 +81,7 @@ public class ActionRewindStrategy {
       ActionInputDepOwners runfilesDepOwners,
       Environment env)
       throws ActionExecutionException, InterruptedException {
-    checkIfActionLostInputTooManyTimes(actionLookupData, failedAction, lostInputsException);
+    checkIfActionLostInputTwice(actionLookupData, failedAction, lostInputsException);
 
     ImmutableList<ActionInput> lostInputs = lostInputsException.getLostInputs().values().asList();
 
@@ -131,47 +128,34 @@ public class ActionRewindStrategy {
 
   /** Clear the history of failed actions' lost inputs. */
   void reset() {
-    lostInputRecords = ConcurrentHashMultiset.create();
+    lostInputRecords = Sets.newConcurrentHashSet();
   }
 
-  private void checkIfActionLostInputTooManyTimes(
+  private void checkIfActionLostInputTwice(
       ActionLookupData actionLookupData,
       Action failedAction,
       LostInputsActionExecutionException lostInputsException)
       throws ActionExecutionException {
     ImmutableMap<String, ActionInput> lostInputsByDigest = lostInputsException.getLostInputs();
     for (String digest : lostInputsByDigest.keySet()) {
-      // The same action losing the same input more than once is unexpected [*]. The action should
-      // have waited until the depended-on action which generates the lost input is (re)run before
-      // trying again.
+      // The same action losing the same input twice is unexpected. The action should have waited
+      // until the depended-on action which generates the lost input is (re)run before trying
+      // again.
       //
       // Note that we could enforce a stronger check: if action A, which depends on an input N
       // previously detected as lost (by any action, not just A), discovers that N is still lost,
       // and action A started after the re-evaluation of N's generating action, then something has
       // gone wrong. Administering that check would be more complex (e.g., the start/completion
       // times of actions would need tracking), so we punt on it for now.
-      //
-      // [*], TODO(b/123993876): To mitigate a race condition (believed to be) caused by
-      // non-topological Skyframe dirtying of depended-on nodes, this check fails the build only if
-      // the same input is repeatedly lost.
-      int priorLosses =
-          lostInputRecords.add(
-              LostInputRecord.create(actionLookupData, digest), /*occurrences=*/ 1);
-      if (MAX_REPEATED_LOST_INPUTS <= priorLosses) {
+      if (!lostInputRecords.add(LostInputRecord.create(actionLookupData, digest))) {
         BugReport.sendBugReport(
             new IllegalStateException(
                 String.format(
-                    "lost input too many times (#%s) for the same action. lostInput: %s, "
-                        + "lostInput digest: %s, failedAction: %.10000s",
-                    priorLosses + 1, lostInputsByDigest.get(digest), digest, failedAction)));
+                    "lost input twice for the same action. lostInput: %s, lostInput digest: %s, "
+                        + "failedAction: %s",
+                    lostInputsByDigest.get(digest), digest, failedAction)));
         throw new ActionExecutionException(
             lostInputsException, failedAction, /*catastrophe=*/ false);
-      } else if (0 < priorLosses) {
-        logger.info(
-            String.format(
-                "lost input again (#%s) for the same action. lostInput: %s, "
-                    + "lostInput digest: %s, failedAction: %.10000s",
-                priorLosses + 1, lostInputsByDigest.get(digest), digest, failedAction));
       }
     }
   }
@@ -189,7 +173,7 @@ public class ActionRewindStrategy {
       logger.info(
           String.format(
               "lostArtifact unexpectedly source. lostArtifact: %s, lostInputs for artifact: %s, "
-                  + "failedAction: %.10000s",
+                  + "failedAction: %s",
               lostArtifact, associatedLostInputs, failedAction));
       // Launder the LostInputs exception as a plain ActionExecutionException so that it may be
       // processed by SkyframeActionExecutor without short-circuiting.
@@ -226,7 +210,7 @@ public class ActionRewindStrategy {
         Preconditions.checkState(
             lostInput instanceof Artifact,
             "unexpected non-artifact lostInput which is a dep of the current action. "
-                + "lostInput: %s, failedAction: %.10000s",
+                + "lostInput: %s, failedAction: %s",
             lostInput,
             failedActionForLogging);
         lostInputsByDepOwners.put((Artifact) lostInput, lostInput);
@@ -272,7 +256,7 @@ public class ActionRewindStrategy {
           String.format(
               "lostInput not a dep of the failed action, and can't be associated with such a dep. "
                   + "lostInput: %s, owner: %s, runfilesDepOwner: %s, runfilesDepTransitiveOwner: %s"
-                  + ", failedAction: %.10000s",
+                  + ", failedAction: %s",
               lostInput,
               owner,
               runfilesDepOwner,
