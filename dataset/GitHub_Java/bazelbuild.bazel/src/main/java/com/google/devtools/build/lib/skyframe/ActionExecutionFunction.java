@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.skyframe;
 
 import static com.google.common.base.Preconditions.checkNotNull;
-import static com.google.common.collect.ImmutableSet.toImmutableSet;
 
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
@@ -146,16 +145,6 @@ public class ActionExecutionFunction implements SkyFunction {
 
   @Override
   public SkyValue compute(SkyKey skyKey, Environment env)
-      throws ActionExecutionFunctionException, InterruptedException {
-    try {
-      return computeInternal(skyKey, env);
-    } catch (ActionExecutionFunctionException | InterruptedException e) {
-      skyframeActionExecutor.recordExecutionError();
-      throw e;
-    }
-  }
-
-  private SkyValue computeInternal(SkyKey skyKey, Environment env)
       throws ActionExecutionFunctionException, InterruptedException {
     ActionLookupData actionLookupData = (ActionLookupData) skyKey.argument();
     Action action = ActionUtils.getActionForLookupData(env, actionLookupData);
@@ -453,24 +442,23 @@ public class ActionExecutionFunction implements SkyFunction {
       // Collect the set of direct deps of this action which may be responsible for the lost inputs,
       // some of which may be discovered.
       ImmutableList<SkyKey> lostDiscoveredInputs = ImmutableList.of();
-      ImmutableSet<SkyKey> failedActionDeps;
+      Iterable<? extends SkyKey> failedActionDeps;
       if (e.isFromInputDiscovery()) {
         // Lost inputs found during input discovery are necessarily ordinary derived artifacts.
         // Their keys may not be direct deps yet, but the next time this Skyframe node is evaluated
         // they will be. See SkyframeActionExecutor's lostDiscoveredInputsMap.
-        failedActionDeps =
+        lostDiscoveredInputs =
             e.getLostInputs().values().stream()
-                .map(input -> Artifact.key((Artifact) input))
-                .collect(toImmutableSet());
-        lostDiscoveredInputs = failedActionDeps.asList();
+                .map(i -> (Artifact) i)
+                .map(Artifact::key)
+                .collect(ImmutableList.toImmutableList());
+        failedActionDeps = lostDiscoveredInputs;
       } else if (state.discoveredInputs != null) {
         failedActionDeps =
-            ImmutableSet.<SkyKey>builder()
-                .addAll(depKeys)
-                .addAll(Lists.transform(state.discoveredInputs.toList(), Artifact::key))
-                .build();
+            Iterables.concat(
+                depKeys, Iterables.transform(state.discoveredInputs.toList(), Artifact::key));
       } else {
-        failedActionDeps = ImmutableSet.copyOf(depKeys);
+        failedActionDeps = depKeys;
       }
 
       try {
@@ -928,12 +916,13 @@ public class ActionExecutionFunction implements SkyFunction {
         }
 
         skyframeActionExecutor.printError(
-            ArtifactFunction.makeIOExceptionInputFileMessage(input, e), actionForError);
+            ArtifactFunction.makeIOExceptionInputFileMessage(input, e), actionForError, null);
         // We don't create a specific cause for the artifact as we do in #handleMissingFile because
         // it likely has no label, so we'd have to use the Action's label anyway. Just use the
         // default ActionFailed event constructed by ActionExecutionException.
         String message = "discovered input file does not exist";
-        DetailedExitCode code = createDetailedExitCodeForMissingDiscoveredInput(message);
+        DetailedExitCode code =
+            createDetailedExitCode(message, Code.DISCOVERED_INPUT_DOES_NOT_EXIST);
         throw new ActionExecutionException(message, actionForError, false, code);
       }
       if (retrievedMetadata == null) {
@@ -1231,7 +1220,7 @@ public class ActionExecutionFunction implements SkyFunction {
 
     if (!missingArtifactCauses.isEmpty()) {
       for (LabelCause missingInput : missingArtifactCauses) {
-        skyframeActionExecutor.printError(missingInput.getMessage(), action);
+        skyframeActionExecutor.printError(missingInput.getMessage(), action, null);
       }
     }
     // We need to rethrow first exception because it can contain useful error message
@@ -1296,7 +1285,12 @@ public class ActionExecutionFunction implements SkyFunction {
 
     ActionExecutionFunctionExceptionHandler actionExecutionFunctionExceptionHandler =
         new ActionExecutionFunctionExceptionHandler(
-            skyKeyToArtifactSet, inputDeps, action, mandatoryInputs, requestedSkyKeys);
+            skyKeyToArtifactSet,
+            inputDeps,
+            action,
+            mandatoryInputs,
+            requestedSkyKeys,
+            skyframeActionExecutor);
 
     actionExecutionFunctionExceptionHandler.accumulateAndThrowExceptions();
 
@@ -1505,7 +1499,7 @@ public class ActionExecutionFunction implements SkyFunction {
   }
 
   /** Helper subclass for the error-handling logic for ActionExecutionFunction#accumulateInputs. */
-  private final class ActionExecutionFunctionExceptionHandler {
+  private static final class ActionExecutionFunctionExceptionHandler {
     private final Multimap<SkyKey, Artifact> skyKeyToDerivedArtifactSet;
     private final List<
             ValueOrException3<
@@ -1514,6 +1508,7 @@ public class ActionExecutionFunction implements SkyFunction {
     private final Action action;
     private final Set<Artifact> mandatoryInputs;
     private final Iterable<SkyKey> requestedSkyKeys;
+    private final SkyframeActionExecutor skyframeActionExecutor;
     List<LabelCause> missingArtifactCauses = Lists.newArrayListWithCapacity(0);
     List<NestedSet<Cause>> transitiveCauses = Lists.newArrayListWithCapacity(0);
     private ActionExecutionException firstActionExecutionException;
@@ -1526,12 +1521,14 @@ public class ActionExecutionFunction implements SkyFunction {
             inputDeps,
         Action action,
         Set<Artifact> mandatoryInputs,
-        Iterable<SkyKey> requestedSkyKeys) {
+        Iterable<SkyKey> requestedSkyKeys,
+        SkyframeActionExecutor skyframeActionExecutor) {
       this.skyKeyToDerivedArtifactSet = skyKeyToDerivedArtifactSet;
       this.inputDeps = inputDeps;
       this.action = action;
       this.mandatoryInputs = mandatoryInputs;
       this.requestedSkyKeys = requestedSkyKeys;
+      this.skyframeActionExecutor = skyframeActionExecutor;
     }
 
     /**
@@ -1627,7 +1624,7 @@ public class ActionExecutionFunction implements SkyFunction {
 
       if (!missingArtifactCauses.isEmpty()) {
         for (LabelCause missingInput : missingArtifactCauses) {
-          skyframeActionExecutor.printError(missingInput.getMessage(), action);
+          skyframeActionExecutor.printError(missingInput.getMessage(), action, null);
         }
         throw createMissingInputsException(action, missingArtifactCauses);
       }
@@ -1683,11 +1680,11 @@ public class ActionExecutionFunction implements SkyFunction {
         prioritizedDetailedExitCode);
   }
 
-  private static DetailedExitCode createDetailedExitCodeForMissingDiscoveredInput(String message) {
+  private static DetailedExitCode createDetailedExitCode(String message, Code detailedCode) {
     return DetailedExitCode.of(
         FailureDetail.newBuilder()
             .setMessage(message)
-            .setExecution(Execution.newBuilder().setCode(Code.DISCOVERED_INPUT_DOES_NOT_EXIST))
+            .setExecution(Execution.newBuilder().setCode(detailedCode))
             .build());
   }
 }

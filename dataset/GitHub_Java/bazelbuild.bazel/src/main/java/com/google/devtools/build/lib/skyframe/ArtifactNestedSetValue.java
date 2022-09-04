@@ -13,33 +13,21 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
-import com.google.devtools.build.skyframe.ValueOrException2;
-import java.io.IOException;
-import java.util.Map;
 
 /**
  * Represent a "promise" that the Artifacts under a NestedSet is evaluated by Skyframe and the
- * ValueOrException is available in {@link ArtifactNestedSetFunction#artifactToSkyValueMap}
+ * ValueOrException is available in {@link ArtifactNestedSetFunction#artifactToSkyValueMap}.
  */
 @Immutable
 @ThreadSafe
-public class ArtifactNestedSetValue implements SkyValue {
+public final class ArtifactNestedSetValue implements SkyValue {
 
-  private static ArtifactNestedSetValue singleton = null;
-
-  static ArtifactNestedSetValue createOrGetInstance() {
-    if (singleton == null) {
-      singleton = new ArtifactNestedSetValue();
-    }
-    return singleton;
-  }
-
-  Map<SkyKey, ValueOrException2<IOException, ActionExecutionException>> getArtifactToSkyValueMap() {
-    return ArtifactNestedSetFunction.getInstance().getArtifactToSkyValueMap();
+  @Override
+  public boolean dataIsShareable() {
+    // This is just a promise that data is available in memory. Not meant for cross-server sharing.
+    return false;
   }
 }
