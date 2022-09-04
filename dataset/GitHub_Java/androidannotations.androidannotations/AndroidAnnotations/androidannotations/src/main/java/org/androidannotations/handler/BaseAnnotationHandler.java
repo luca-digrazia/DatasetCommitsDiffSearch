@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -19,7 +19,6 @@ import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.type.TypeMirror;
 
-import org.androidannotations.helper.APTCodeModelHelper;
 import org.androidannotations.helper.AndroidManifest;
 import org.androidannotations.helper.IdAnnotationHelper;
 import org.androidannotations.helper.IdValidatorHelper;
@@ -43,7 +42,6 @@ public abstract class BaseAnnotationHandler<T extends GeneratedClassHolder> impl
 	protected AndroidManifest androidManifest;
 	protected AnnotationElements validatedModel;
 	protected ProcessHolder processHolder;
-	protected APTCodeModelHelper codeModelHelper = new APTCodeModelHelper();
 
 	public BaseAnnotationHandler(Class<?> targetClass, ProcessingEnvironment processingEnvironment) {
 		this(targetClass.getCanonicalName(), processingEnvironment);

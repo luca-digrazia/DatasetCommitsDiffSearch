@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -266,7 +266,7 @@ public class ValidatorHelper {
 	}
 
 	private void hasClassAnnotation(Element reportElement, Element element, AnnotationElements validatedElements, Class<? extends Annotation> validAnnotation, IsValid valid) {
-		List<Class<? extends Annotation>> validAnnotations = new ArrayList<Class<? extends Annotation>>();
+		ArrayList<Class<? extends Annotation>> validAnnotations = new ArrayList<Class<? extends Annotation>>();
 		validAnnotations.add(validAnnotation);
 		hasOneOfClassAnnotations(reportElement, element, validatedElements, validAnnotations, valid);
 	}
@@ -715,12 +715,7 @@ public class ValidatorHelper {
 
 		if (elementUtils.getTypeElement(CanonicalNameConstants.ROBO_APPLICATION) != null) {
 			valid.invalidate();
-			annotationHelper.printAnnotationError(element, "It seems you are using an old version of RoboGuice. Be sure to use version 3.0!");
-		}
-
-		if (elementUtils.getTypeElement(CanonicalNameConstants.ON_START_EVENT_OLD) != null) {
-			valid.invalidate();
-			annotationHelper.printAnnotationError(element, "It seems you are using an old version of RoboGuice. Be sure to use version 3.0!");
+			annotationHelper.printAnnotationError(element, "It seems you are using an old version of RoboGuice. Be sure to use version 2.0!");
 		}
 	}
 
@@ -1079,7 +1074,7 @@ public class ValidatorHelper {
 	}
 
 	private boolean isKnownBundleCompatibleType(String type) {
-		return BundleHelper.METHOD_SUFFIX_BY_TYPE_NAME.containsKey(type);
+		return BundleHelper.methodSuffixNameByTypeName.containsKey(type);
 	}
 
 	public void componentRegistered(Element element, AndroidManifest androidManifest, IsValid valid) {
@@ -1121,9 +1116,8 @@ public class ValidatorHelper {
 		TypeMirror httpMessageConverterTypeErased = annotationHelper.getTypeUtils().erasure(httpMessageConverterType);
 		List<DeclaredType> converters = annotationHelper.extractAnnotationClassArrayParameter(element, annotationHelper.getTarget(), "converters");
 
-		if (converters == null || converters.isEmpty()) {
+		if (converters == null) {
 			valid.invalidate();
-			annotationHelper.printAnnotationError(element, "At least one converter is required");
 			return;
 		}
 
