@@ -290,6 +290,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     @Option(
       name = "android_crosstool_top",
       defaultValue = "//external:android/crosstool",
+      category = "semantics",
       converter = EmptyToNullLabelConverter.class,
       documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
       effectTags = {
@@ -305,6 +306,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     @Option(
       name = "android_cpu",
       defaultValue = "armeabi-v7a",
+      category = "semantics",
       documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
       effectTags = {
         OptionEffectTag.AFFECTS_OUTPUTS,
@@ -318,6 +320,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     @Option(
       name = "android_compiler",
       defaultValue = "null",
+      category = "semantics",
       documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
       effectTags = {
         OptionEffectTag.AFFECTS_OUTPUTS,
@@ -332,6 +335,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       name = "android_grte_top",
       defaultValue = "null",
       converter = LibcTopLabelConverter.class,
+      category = "semantics",
       documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
       effectTags = {
         OptionEffectTag.CHANGES_INPUTS,
@@ -365,6 +369,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     @Option(
       name = "android_sdk",
       defaultValue = "@bazel_tools//tools/android:sdk",
+      category = "version",
       converter = LabelConverter.class,
       documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
       effectTags = {
@@ -381,6 +386,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       name = "fat_apk_cpu",
       converter = Converters.CommaSeparatedOptionListConverter.class,
       defaultValue = "armeabi-v7a",
+      category = "semantics",
       documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
       effectTags = {
         OptionEffectTag.AFFECTS_OUTPUTS,
@@ -443,6 +449,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     @Option(
       name = "incremental_dexing",
       defaultValue = "true",
+      category = "semantics",
       documentationCategory = OptionDocumentationCategory.BUILD_TIME_OPTIMIZATION,
       effectTags = {
         OptionEffectTag.AFFECTS_OUTPUTS,
@@ -506,6 +513,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
 
     @Option(
       name = "experimental_android_use_parallel_dex2oat",
+      category = "experimental",
       defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.TESTING,
       effectTags = {
@@ -523,6 +531,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       name = "non_incremental_per_target_dexopts",
       converter = Converters.CommaSeparatedOptionListConverter.class,
       defaultValue = "--positions",
+      category = "semantics",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
       effectTags = {
         OptionEffectTag.LOADING_AND_ANALYSIS,
@@ -620,6 +629,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     @Option(
       name = "android_resource_shrinking",
       defaultValue = "false",
+      category = "semantics",
       documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
       effectTags = {
         OptionEffectTag.AFFECTS_OUTPUTS,
@@ -632,6 +642,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     @Option(
       name = "experimental_android_resource_cycle_shrinking",
       defaultValue = "false",
+      category = "semantics",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
       effectTags = {
         OptionEffectTag.AFFECTS_OUTPUTS,
@@ -647,6 +658,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     @Option(
       name = "android_manifest_merger",
       defaultValue = "android",
+      category = "semantics",
       converter = AndroidManifestMergerConverter.class,
       documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
       effectTags = {
@@ -663,6 +675,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     @Option(
       name = "android_aapt",
       defaultValue = "aapt",
+      category = "semantics",
       documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
       effectTags = {
         OptionEffectTag.AFFECTS_OUTPUTS,
