@@ -5,7 +5,6 @@ import java.util.concurrent.ExecutorService;
 
 import org.eclipse.microprofile.context.spi.ContextManager;
 import org.eclipse.microprofile.context.spi.ContextManager.Builder;
-import org.eclipse.microprofile.context.spi.ContextManagerExtension;
 import org.eclipse.microprofile.context.spi.ContextManagerProvider;
 import org.eclipse.microprofile.context.spi.ThreadContextProvider;
 import org.jboss.logging.Logger;
@@ -22,14 +21,12 @@ public class SmallRyeContextPropagationTemplate {
 
     private static ContextManager builtManager;
 
-    public void configureStaticInit(List<ThreadContextProvider> discoveredProviders,
-            List<ContextManagerExtension> discoveredExtensions) {
+    public void configureStaticInit(List<ThreadContextProvider> discoveredProviders) {
         // build the manager at static init time
         ContextManagerProvider contextManagerProvider = new SmallRyeContextManagerProvider();
         ContextManagerProvider.register(contextManagerProvider);
         Builder builder = contextManagerProvider.getContextManagerBuilder();
         builder.withThreadContextProviders(discoveredProviders.toArray(new ThreadContextProvider[0]));
-        builder.withContextManagerExtensions(discoveredExtensions.toArray(new ContextManagerExtension[0]));
 
         // now store it for runtime
         builtManager = builder.build();
