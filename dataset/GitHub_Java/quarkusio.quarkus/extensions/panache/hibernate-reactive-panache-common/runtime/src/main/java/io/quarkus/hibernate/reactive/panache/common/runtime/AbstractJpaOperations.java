@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
@@ -14,7 +13,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
-import javax.enterprise.inject.spi.Bean;
 import javax.persistence.LockModeType;
 
 import org.hibernate.internal.util.LockModeConverter;
@@ -33,7 +31,7 @@ import io.vertx.core.Vertx;
 public abstract class AbstractJpaOperations<PanacheQueryType> {
 
     // FIXME: make it configurable?
-    static final long TIMEOUT_MS = 5000;
+    private static final long TIMEOUT_MS = 5000;
 
     protected abstract PanacheQueryType createPanacheQuery(Uni<Mutiny.Session> session, String query, String orderBy,
             Object paramsArrayOrMap);
@@ -149,10 +147,7 @@ public abstract class AbstractJpaOperations<PanacheQueryType> {
     }
 
     private static boolean isInRequestContext(Class<?> klass) {
-        Set<Bean<?>> beans = Arc.container().beanManager().getBeans(klass);
-        if (beans.isEmpty())
-            return false;
-        return Arc.container().requestContext().get(beans.iterator().next()) != null;
+        return Arc.container().requestContext().get(Arc.container().beanManager().getBeans(klass).iterator().next()) != null;
     }
 
     public static Mutiny.Query<?> bindParameters(Mutiny.Query<?> query, Object[] params) {

@@ -23,7 +23,6 @@ import org.junit.jupiter.api.Assertions;
 
 import io.quarkus.hibernate.reactive.panache.Panache;
 import io.quarkus.hibernate.reactive.panache.PanacheQuery;
-import io.quarkus.hibernate.reactive.panache.common.runtime.ReactiveTransactional;
 import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Parameters;
 import io.quarkus.panache.common.Sort;
@@ -41,11 +40,10 @@ public class TestEndpoint {
     @Inject
     MockablePersonRepository mockablePersonRepository;
 
-    @ReactiveTransactional
     @GET
     @Path("model")
     public Uni<String> testModel() {
-        return Person.findAll().list()
+        return Panache.withTransaction(() -> Person.findAll().list()
                 .flatMap(persons -> {
                     Assertions.assertEquals(0, persons.size());
 
@@ -377,7 +375,7 @@ public class TestEndpoint {
                     //                            () -> person2.persistAndFlush(),
                     //                            "Should have failed");
                 }).flatMap(v -> Person.deleteAll())
-                .map(v -> "OK");
+                .map(v -> "OK"));
     }
 
     private <T> Uni<List<T>> collect(Multi<T> stream) {
@@ -757,11 +755,10 @@ public class TestEndpoint {
     @Inject
     NamedQueryWith2QueriesRepository namedQueryWith2QueriesRepository;
 
-    @ReactiveTransactional
     @GET
     @Path("model-dao")
     public Uni<String> testModelDao() {
-        return personDao.findAll().list()
+        return Panache.withTransaction(() -> personDao.findAll().list()
                 .flatMap(persons -> {
                     Assertions.assertEquals(0, persons.size());
 
@@ -1102,7 +1099,7 @@ public class TestEndpoint {
                 .map(v -> {
                     System.err.println("deleted " + v);
                     return "OK";
-                });
+                }));
     }
 
     enum PersistTest {
@@ -1350,11 +1347,10 @@ public class TestEndpoint {
         Assertions.assertEquals(returnType, method.getReturnType());
     }
 
-    @ReactiveTransactional
     @GET
     @Path("model1")
     public Uni<String> testModel1() {
-        return Person.count()
+        return Panache.withTransaction(() -> Person.count()
                 .flatMap(count -> {
                     Assertions.assertEquals(0, count);
 
@@ -1375,14 +1371,13 @@ public class TestEndpoint {
                     Assertions.assertEquals(1, count);
 
                     return "OK";
-                });
+                }));
     }
 
-    @ReactiveTransactional
     @GET
     @Path("model2")
     public Uni<String> testModel2() {
-        return Person.count()
+        return Panache.withTransaction(() -> Person.count()
                 .flatMap(count -> {
                     Assertions.assertEquals(1, count);
 
@@ -1392,14 +1387,13 @@ public class TestEndpoint {
 
                     person.name = "2";
                     return "OK";
-                });
+                }));
     }
 
-    @ReactiveTransactional
     @GET
     @Path("projection")
     public Uni<String> testProjection() {
-        return Person.count()
+        return Panache.withTransaction(() -> Person.count()
                 .flatMap(count -> {
                     Assertions.assertEquals(1, count);
 
@@ -1436,14 +1430,13 @@ public class TestEndpoint {
 
                                 return "OK";
                             });
-                });
+                }));
     }
 
-    @ReactiveTransactional
     @GET
     @Path("model3")
     public Uni<String> testModel3() {
-        return Person.count()
+        return Panache.withTransaction(() -> Person.count()
                 .flatMap(count -> {
                     Assertions.assertEquals(1, count);
 
@@ -1460,7 +1453,7 @@ public class TestEndpoint {
                     Assertions.assertEquals(0, count);
 
                     return "OK";
-                });
+                }));
     }
 
     @GET
@@ -1502,57 +1495,58 @@ public class TestEndpoint {
                 .map(v -> "OK");
     }
 
-    @ReactiveTransactional
     @GET
     @Path("composite")
     public Uni<String> testCompositeKey() {
-        ObjectWithCompositeId obj = new ObjectWithCompositeId();
-        obj.part1 = "part1";
-        obj.part2 = "part2";
-        obj.description = "description";
-        return obj.persist()
-                .flatMap(v -> {
-                    ObjectWithCompositeId.ObjectKey key = new ObjectWithCompositeId.ObjectKey("part1", "part2");
-                    return ObjectWithCompositeId.findById(key)
-                            .flatMap(result -> {
-                                assertNotNull(result);
+        return Panache.withTransaction(() -> {
+            ObjectWithCompositeId obj = new ObjectWithCompositeId();
+            obj.part1 = "part1";
+            obj.part2 = "part2";
+            obj.description = "description";
+            return obj.persist()
+                    .flatMap(v -> {
+                        ObjectWithCompositeId.ObjectKey key = new ObjectWithCompositeId.ObjectKey("part1", "part2");
+                        return ObjectWithCompositeId.findById(key)
+                                .flatMap(result -> {
+                                    assertNotNull(result);
 
-                                return ObjectWithCompositeId.deleteById(key);
-                            }).flatMap(deleted -> {
-                                assertTrue(deleted);
+                                    return ObjectWithCompositeId.deleteById(key);
+                                }).flatMap(deleted -> {
+                                    assertTrue(deleted);
 
-                                ObjectWithCompositeId.ObjectKey notExistingKey = new ObjectWithCompositeId.ObjectKey(
-                                        "notexist1",
-                                        "notexist2");
-                                return ObjectWithCompositeId.deleteById(key);
-                            }).flatMap(deleted -> {
-                                assertFalse(deleted);
+                                    ObjectWithCompositeId.ObjectKey notExistingKey = new ObjectWithCompositeId.ObjectKey(
+                                            "notexist1",
+                                            "notexist2");
+                                    return ObjectWithCompositeId.deleteById(key);
+                                }).flatMap(deleted -> {
+                                    assertFalse(deleted);
 
-                                ObjectWithEmbeddableId.ObjectKey embeddedKey = new ObjectWithEmbeddableId.ObjectKey("part1",
-                                        "part2");
-                                ObjectWithEmbeddableId embeddable = new ObjectWithEmbeddableId();
-                                embeddable.key = embeddedKey;
-                                embeddable.description = "description";
-                                return embeddable.persist()
-                                        .flatMap(v2 -> ObjectWithEmbeddableId.findById(embeddedKey))
-                                        .flatMap(embeddableResult -> {
-                                            assertNotNull(embeddableResult);
+                                    ObjectWithEmbeddableId.ObjectKey embeddedKey = new ObjectWithEmbeddableId.ObjectKey("part1",
+                                            "part2");
+                                    ObjectWithEmbeddableId embeddable = new ObjectWithEmbeddableId();
+                                    embeddable.key = embeddedKey;
+                                    embeddable.description = "description";
+                                    return embeddable.persist()
+                                            .flatMap(v2 -> ObjectWithEmbeddableId.findById(embeddedKey))
+                                            .flatMap(embeddableResult -> {
+                                                assertNotNull(embeddableResult);
 
-                                            return ObjectWithEmbeddableId.deleteById(embeddedKey);
-                                        }).flatMap(deleted2 -> {
-                                            assertTrue(deleted2);
+                                                return ObjectWithEmbeddableId.deleteById(embeddedKey);
+                                            }).flatMap(deleted2 -> {
+                                                assertTrue(deleted2);
 
-                                            ObjectWithEmbeddableId.ObjectKey notExistingEmbeddedKey = new ObjectWithEmbeddableId.ObjectKey(
-                                                    "notexist1",
-                                                    "notexist2");
-                                            return ObjectWithEmbeddableId.deleteById(notExistingEmbeddedKey);
-                                        }).map(deleted2 -> {
-                                            assertFalse(deleted2);
+                                                ObjectWithEmbeddableId.ObjectKey notExistingEmbeddedKey = new ObjectWithEmbeddableId.ObjectKey(
+                                                        "notexist1",
+                                                        "notexist2");
+                                                return ObjectWithEmbeddableId.deleteById(notExistingEmbeddedKey);
+                                            }).map(deleted2 -> {
+                                                assertFalse(deleted2);
 
-                                            return "OK";
-                                        });
-                            });
-                });
+                                                return "OK";
+                                            });
+                                });
+                    });
+        });
     }
 
     @GET
@@ -1564,12 +1558,11 @@ public class TestEndpoint {
                 .map(v -> "OK"));
     }
 
-    @ReactiveTransactional
     @GET
     @Path("8254")
     public Uni<String> testBug8254() {
         CatOwner owner = new CatOwner("8254");
-        return owner.persist()
+        return Panache.withTransaction(() -> owner.persist()
                 .flatMap(v -> new Cat(owner).persist())
                 .flatMap(v -> new Cat(owner).persist())
                 .flatMap(v -> new Cat(owner).persist())
@@ -1605,10 +1598,9 @@ public class TestEndpoint {
                     assertEquals(1L, count);
 
                     return "OK";
-                });
+                }));
     }
 
-    @ReactiveTransactional
     @GET
     @Path("9025")
     public Uni<String> testBug9025() {
@@ -1616,7 +1608,7 @@ public class TestEndpoint {
         Fruit orange = new Fruit("orange", "orange");
         Fruit banana = new Fruit("banana", "yellow");
 
-        return Fruit.persist(apple, orange, banana)
+        return Panache.withTransaction(() -> Fruit.persist(apple, orange, banana)
                 .flatMap(v -> {
                     PanacheQuery<Fruit> query = Fruit.find(
                             "select name, color from Fruit").page(Page.ofSize(1));
@@ -1624,14 +1616,13 @@ public class TestEndpoint {
                     return query.list()
                             .flatMap(v2 -> query.pageCount())
                             .map(v2 -> "OK");
-                });
+                }));
     }
 
-    @ReactiveTransactional
     @GET
     @Path("9036")
     public Uni<String> testBug9036() {
-        return Person.deleteAll()
+        return Panache.withTransaction(() -> Person.deleteAll()
                 .flatMap(v -> new Person().persist())
                 .flatMap(v -> {
                     Person deadPerson = new Person();
@@ -1690,6 +1681,6 @@ public class TestEndpoint {
 
                                 return Person.deleteAll();
                             }).map(v -> "OK");
-                });
+                }));
     }
 }
