@@ -305,7 +305,7 @@ public class SubclassGenerator extends AbstractGenerator {
         ResultHandle ctxParamsHandle = funcBytecode.invokeInterfaceMethod(
                 MethodDescriptor.ofMethod(InvocationContext.class, "getParameters", Object[].class),
                 ctxHandle);
-        // autoboxing is handled inside Gizmo
+        // TODO autoboxing?
         for (int i = 0; i < superParamHandles.length; i++) {
             superParamHandles[i] = funcBytecode.readArrayValue(ctxParamsHandle, i);
         }
