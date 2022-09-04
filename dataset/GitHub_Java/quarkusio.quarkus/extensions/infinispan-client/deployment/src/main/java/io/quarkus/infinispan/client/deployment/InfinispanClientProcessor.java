@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.infinispan.client.deployment;
 
 import java.io.File;
@@ -14,7 +30,6 @@ import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 
-import org.infinispan.client.hotrod.annotation.ClientListener;
 import org.infinispan.client.hotrod.configuration.NearCacheMode;
 import org.infinispan.client.hotrod.exceptions.HotRodClientException;
 import org.infinispan.client.hotrod.impl.ConfigurationProperties;
@@ -22,11 +37,6 @@ import org.infinispan.client.hotrod.logging.Log;
 import org.infinispan.client.hotrod.logging.LogFactory;
 import org.infinispan.client.hotrod.marshall.ProtoStreamMarshaller;
 import org.infinispan.commons.util.Util;
-import org.infinispan.protostream.BaseMarshaller;
-import org.infinispan.protostream.EnumMarshaller;
-import org.infinispan.protostream.FileDescriptorSource;
-import org.infinispan.protostream.MessageMarshaller;
-import org.infinispan.protostream.RawProtobufMarshaller;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.DotName;
@@ -44,13 +54,13 @@ import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
 import io.quarkus.deployment.builditem.ApplicationIndexBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
-import io.quarkus.deployment.builditem.HotDeploymentWatchedFileBuildItem;
+import io.quarkus.deployment.builditem.HotDeploymentConfigFileBuildItem;
 import io.quarkus.deployment.builditem.SystemPropertyBuildItem;
 import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import io.quarkus.infinispan.client.runtime.InfinispanClientBuildTimeConfig;
 import io.quarkus.infinispan.client.runtime.InfinispanClientProducer;
 import io.quarkus.infinispan.client.runtime.InfinispanClientRuntimeConfig;
-import io.quarkus.infinispan.client.runtime.InfinispanRecorder;
+import io.quarkus.infinispan.client.runtime.InfinispanTemplate;
 
 class InfinispanClientProcessor {
     private static final Log log = LogFactory.getLog(InfinispanClientProcessor.class);
@@ -67,7 +77,7 @@ class InfinispanClientProcessor {
     @BuildStep
     InfinispanPropertiesBuildItem setup(ApplicationArchivesBuildItem applicationArchivesBuildItem,
             BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
-            BuildProducer<HotDeploymentWatchedFileBuildItem> hotDeployment,
+            BuildProducer<HotDeploymentConfigFileBuildItem> hotDeployment,
             BuildProducer<SystemPropertyBuildItem> systemProperties,
             BuildProducer<FeatureBuildItem> feature,
             BuildProducer<AdditionalBeanBuildItem> additionalBeans,
@@ -76,7 +86,7 @@ class InfinispanClientProcessor {
         feature.produce(new FeatureBuildItem(FeatureBuildItem.INFINISPAN_CLIENT));
         additionalBeans.produce(AdditionalBeanBuildItem.unremovableOf(InfinispanClientProducer.class));
         systemProperties.produce(new SystemPropertyBuildItem("io.netty.noUnsafe", "true"));
-        hotDeployment.produce(new HotDeploymentWatchedFileBuildItem(HOTROD_CLIENT_PROPERTIES));
+        hotDeployment.produce(new HotDeploymentConfigFileBuildItem(HOTROD_CLIENT_PROPERTIES));
 
         ClassLoader cl = Thread.currentThread().getContextClassLoader();
         InputStream stream = cl.getResourceAsStream(HOTROD_CLIENT_PROPERTIES);
@@ -139,7 +149,7 @@ class InfinispanClientProcessor {
         // Add any user project listeners to allow reflection in native code
         Index index = applicationIndexBuildItem.getIndex();
         List<AnnotationInstance> listenerInstances = index.getAnnotations(
-                DotName.createSimple(ClientListener.class.getName()));
+                DotName.createSimple("org.infinispan.client.hotrod.annotation.ClientListener"));
         for (AnnotationInstance instance : listenerInstances) {
             AnnotationTarget target = instance.target();
             if (target.kind() == AnnotationTarget.Kind.CLASS) {
@@ -174,7 +184,7 @@ class InfinispanClientProcessor {
 
     @BuildStep
     @Record(ExecutionTime.STATIC_INIT)
-    BeanContainerListenerBuildItem build(InfinispanRecorder recorder, InfinispanPropertiesBuildItem builderBuildItem) {
+    BeanContainerListenerBuildItem build(InfinispanTemplate template, InfinispanPropertiesBuildItem builderBuildItem) {
         Properties properties = builderBuildItem.getProperties();
         InfinispanClientBuildTimeConfig conf = infinispanClient;
         if (log.isDebugEnabled()) {
@@ -188,23 +198,20 @@ class InfinispanClientProcessor {
             properties.putIfAbsent(ConfigurationProperties.NEAR_CACHE_MAX_ENTRIES, maxEntries);
         }
 
-        return new BeanContainerListenerBuildItem(recorder.configureInfinispan(properties));
+        return new BeanContainerListenerBuildItem(template.configureInfinispan(properties));
     }
 
     @Record(ExecutionTime.RUNTIME_INIT)
     @BuildStep
-    void configureRuntimeProperties(InfinispanRecorder recorder,
+    void configureRuntimeProperties(InfinispanTemplate template,
             InfinispanClientRuntimeConfig infinispanClientRuntimeConfig) {
-        recorder.configureRuntimeProperties(infinispanClientRuntimeConfig);
+        template.configureRuntimeProperties(infinispanClientRuntimeConfig);
     }
 
     private static final Set<DotName> UNREMOVABLE_BEANS = Collections.unmodifiableSet(
             new HashSet<>(Arrays.asList(
-                    DotName.createSimple(BaseMarshaller.class.getName()),
-                    DotName.createSimple(EnumMarshaller.class.getName()),
-                    DotName.createSimple(MessageMarshaller.class.getName()),
-                    DotName.createSimple(RawProtobufMarshaller.class.getName()),
-                    DotName.createSimple(FileDescriptorSource.class.getName()))));
+                    DotName.createSimple("org.infinispan.protostream.MessageMarshaller"),
+                    DotName.createSimple("org.infinispan.protostream.FileDescriptorSource"))));
 
     @BuildStep
     UnremovableBeanBuildItem ensureBeanLookupAvailable() {
