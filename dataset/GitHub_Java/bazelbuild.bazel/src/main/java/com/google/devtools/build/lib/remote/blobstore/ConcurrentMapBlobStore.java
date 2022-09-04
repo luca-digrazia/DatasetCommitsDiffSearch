@@ -13,6 +13,11 @@
 // limitations under the License.
 package com.google.devtools.build.lib.remote.blobstore;
 
+import com.google.common.io.ByteStreams;
+import com.google.devtools.build.lib.util.Preconditions;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.concurrent.ConcurrentMap;
 
 /** A {@link SimpleBlobStore} implementation using a {@link ConcurrentMap}. */
@@ -29,13 +34,31 @@ public final class ConcurrentMapBlobStore implements SimpleBlobStore {
   }
 
   @Override
-  public byte[] get(String key) {
-    return map.get(key);
+  public boolean get(String key, OutputStream out) throws IOException {
+    byte[] data = map.get(key);
+    if (data == null) {
+      return false;
+    }
+    out.write(data);
+    return true;
   }
 
   @Override
-  public void put(String key, byte[] value) {
+  public boolean getActionResult(String key, OutputStream out)
+      throws IOException, InterruptedException {
+    return get(key, out);
+  }
+
+  @Override
+  public void put(String key, long length, InputStream in) throws IOException {
+    byte[] value = ByteStreams.toByteArray(in);
+    Preconditions.checkState(value.length == length);
     map.put(key, value);
+  }
+
+  @Override
+  public void putActionResult(String key, byte[] in) throws IOException, InterruptedException {
+    map.put(key, in);
   }
 
   @Override
