@@ -64,7 +64,6 @@ import io.quarkus.arc.deployment.BeanContainerBuildItem;
 import io.quarkus.arc.deployment.GeneratedBeanBuildItem;
 import io.quarkus.arc.runtime.BeanContainer;
 import io.quarkus.arc.runtime.ClientProxyUnwrapper;
-import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.Capability;
 import io.quarkus.deployment.Feature;
 import io.quarkus.deployment.GeneratedClassGizmoAdaptor;
@@ -175,7 +174,7 @@ public class QuarkusRestProcessor {
 
     @BuildStep
     @Record(ExecutionTime.STATIC_INIT)
-    public void setupEndpoints(Capabilities capabilities, BeanArchiveIndexBuildItem beanArchiveIndexBuildItem,
+    public void setupEndpoints(BeanArchiveIndexBuildItem beanArchiveIndexBuildItem,
             BeanContainerBuildItem beanContainerBuildItem,
             QuarkusRestConfig config,
             Optional<ResourceScanningResultBuildItem> resourceScanningResultBuildItem,
@@ -204,11 +203,6 @@ public class QuarkusRestProcessor {
         if (!resourceScanningResultBuildItem.isPresent()) {
             // no detected @Path, bail out
             return;
-        }
-
-        if (capabilities.isPresent(Capability.RESTEASY)) {
-            throw new IllegalStateException(
-                    "The 'quarkus-rest' and 'quarkus-resteasy' extensions cannot be used at the same time.");
         }
 
         recorderContext.registerNonDefaultConstructor(
@@ -435,11 +429,10 @@ public class QuarkusRestProcessor {
                     .setFactoryCreator(recorder.factoryCreator(beanContainerBuildItem.getValue()))
                     .setDynamicFeatures(dynamicFeats)
                     .setSerialisers(serialisers)
-                    .setApplicationPath(applicationPath)
                     .setResourceClasses(resourceClasses)
                     .setLocatableResourceClasses(subResourceClasses)
                     .setParamConverterProviders(converterProviders),
-                    beanContainerBuildItem.getValue(), shutdownContext, vertxConfig,
+                    beanContainerBuildItem.getValue(), shutdownContext, vertxConfig, applicationPath,
                     initClassFactory);
 
             String deploymentPath = sanitizeApplicationPath(applicationPath);

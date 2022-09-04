@@ -8,7 +8,7 @@ import javax.ws.rs.core.Response;
 import javax.ws.rs.ext.ExceptionMapper;
 import org.jboss.logging.Logger;
 import org.jboss.resteasy.reactive.common.model.ResourceExceptionMapper;
-import org.jboss.resteasy.reactive.server.spi.ResteasyReactiveExceptionMapper;
+import org.jboss.resteasy.reactive.server.spi.QuarkusRestExceptionMapper;
 
 public class ExceptionMapping {
 
@@ -29,8 +29,8 @@ public class ExceptionMapping {
         // we match superclasses only if not a WebApplicationException according to spec 3.3.4 Exceptions
         ExceptionMapper exceptionMapper = getExceptionMapper((Class<Throwable>) klass, context);
         if (exceptionMapper != null) {
-            if (exceptionMapper instanceof ResteasyReactiveExceptionMapper) {
-                return ((ResteasyReactiveExceptionMapper) exceptionMapper).toResponse(throwable, context);
+            if (exceptionMapper instanceof QuarkusRestExceptionMapper) {
+                return ((QuarkusRestExceptionMapper) exceptionMapper).toResponse(throwable, context);
             }
             return exceptionMapper.toResponse(throwable);
         }
@@ -41,7 +41,7 @@ public class ExceptionMapping {
         if (throwable instanceof IOException) {
             log.debugf(throwable,
                     "IOError processing HTTP request to %s failed, the client likely terminated the connection.",
-                    context.serverRequest().getRequestAbsoluteUri());
+                    context.context.request().uri());
         } else {
             log.error("Request failed ", throwable);
         }
