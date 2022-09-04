@@ -33,7 +33,7 @@ public class TaskServlet extends HttpServlet {
     public TaskServlet(Iterable<Task> tasks) {
         final ImmutableMap.Builder<String, Task> builder = ImmutableMap.builder();
         for (Task task : tasks) {
-            builder.put("/" + task.getName(), task);
+            builder.put("/tasks/" + task.getName(), task);
         }
         this.tasks = builder.build();
     }
@@ -41,7 +41,7 @@ public class TaskServlet extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest req,
                           HttpServletResponse resp) throws ServletException, IOException {
-        final Task task = tasks.get(req.getPathInfo());
+        final Task task = tasks.get(req.getServletPath());
         if (task != null) {
             try {
                 resp.setContentType(MediaType.TEXT_PLAIN);
