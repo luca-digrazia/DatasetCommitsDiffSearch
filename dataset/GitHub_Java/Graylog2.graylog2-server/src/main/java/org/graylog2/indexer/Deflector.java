@@ -159,7 +159,7 @@ public class Deflector {
             }
         }
         
-        return indices.toArray(new String[0]);
+        return indices.toArray(new String[indices.size()]);
     }
     
     public String getCurrentTargetName() throws NoTargetIndexException {
