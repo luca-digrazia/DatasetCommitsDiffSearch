@@ -73,16 +73,19 @@ public class ApiExporter {
     Value.Builder field = Value.newBuilder();
     field.setName(meth.getName());
     field.setDoc(meth.getDocumentation());
-    Callable.Builder callable = Callable.newBuilder();
-    for (SkylarkParamDoc par : meth.getParams()) {
-      Param.Builder param = Param.newBuilder();
-      param.setName(par.getName());
-      param.setType(par.getType());
-      param.setDoc(par.getDocumentation());
-      callable.addParam(param);
+    // TODO(andreeabican): Add type string.
+    if (!meth.getParams().isEmpty()) {
+      Callable.Builder callable = Callable.newBuilder();
+      for (SkylarkParamDoc par : meth.getParams()) {
+        Param.Builder param = Param.newBuilder();
+        param.setName(par.getName());
+        param.setType(par.getType());
+        param.setDoc(par.getDocumentation());
+        callable.addParam(param);
+      }
+      callable.setReturnType(meth.getReturnType());
+      field.setCallable(callable);
     }
-    callable.setReturnType(meth.getReturnType());
-    field.setCallable(callable);
     return field;
   }
 
