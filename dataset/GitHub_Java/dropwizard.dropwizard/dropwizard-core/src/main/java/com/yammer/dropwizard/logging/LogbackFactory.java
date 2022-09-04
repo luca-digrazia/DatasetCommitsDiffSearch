@@ -7,6 +7,7 @@ import ch.qos.logback.classic.net.SyslogAppender;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.ConsoleAppender;
 import ch.qos.logback.core.FileAppender;
+import ch.qos.logback.core.Appender;
 import ch.qos.logback.core.rolling.DefaultTimeBasedFileNamingAndTriggeringPolicy;
 import ch.qos.logback.core.rolling.RollingFileAppender;
 import ch.qos.logback.core.rolling.TimeBasedRollingPolicy;
@@ -79,8 +80,8 @@ public class LogbackFactory {
             triggeringPolicy.setTimeBasedRollingPolicy(rollingPolicy);
             rollingPolicy.setMaxHistory(file.getArchivedFileCount());
 
-            ((RollingFileAppender<ILoggingEvent>) appender).setRollingPolicy(rollingPolicy);
-            ((RollingFileAppender<ILoggingEvent>) appender).setTriggeringPolicy(triggeringPolicy);
+            ((RollingFileAppender) appender).setRollingPolicy(rollingPolicy);
+            ((RollingFileAppender) appender).setTriggeringPolicy(triggeringPolicy);
 
             rollingPolicy.setParent(appender);
             rollingPolicy.start();
