@@ -958,6 +958,7 @@ public interface CcModuleApi<
             positional = false,
             named = true,
             defaultValue = "[]",
+            noneable = true,
             type = SkylarkList.class),
         @Param(
             name = "linking_contexts",
@@ -966,6 +967,7 @@ public interface CcModuleApi<
                     + "artifact of the link() call, be it a binary or a library.",
             positional = false,
             named = true,
+            noneable = true,
             defaultValue = "[]",
             type = SkylarkList.class),
         @Param(
@@ -981,6 +983,7 @@ public interface CcModuleApi<
             doc = "Only C++ supported for now. Do not use this parameter.",
             positional = false,
             named = true,
+            noneable = true,
             defaultValue = "'c++'",
             type = String.class),
         @Param(
@@ -988,6 +991,7 @@ public interface CcModuleApi<
             doc = "Whether this library should always be linked.",
             positional = false,
             named = true,
+            noneable = true,
             defaultValue = "False",
             type = Boolean.class),
         @Param(

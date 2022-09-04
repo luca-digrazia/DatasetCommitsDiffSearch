@@ -250,7 +250,6 @@ public class FakeCcModule
       String outputType,
       boolean linkDepsStatically,
       SkylarkList<?> additionalInputs,
-      Object grepIncludes,
       Location location,
       StarlarkThread thread)
       throws InterruptedException, EvalException {
