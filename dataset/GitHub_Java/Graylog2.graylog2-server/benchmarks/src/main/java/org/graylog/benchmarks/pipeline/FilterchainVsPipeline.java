@@ -16,26 +16,31 @@
  */
 package org.graylog.benchmarks.pipeline;
 
-import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.common.eventbus.EventBus;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.google.inject.Provider;
+
+import com.codahale.metrics.MetricRegistry;
+
 import org.graylog.plugins.pipelineprocessor.ast.functions.Function;
-import org.graylog.plugins.pipelineprocessor.db.mongodb.MongoDbPipelineStreamConnectionsService;
-import org.graylog.plugins.pipelineprocessor.db.mongodb.MongoDbRuleService;
-import org.graylog.plugins.pipelineprocessor.db.mongodb.MongoDbPipelineService;
+import org.graylog.plugins.pipelineprocessor.codegen.CodeGenerator;
 import org.graylog.plugins.pipelineprocessor.db.PipelineDao;
 import org.graylog.plugins.pipelineprocessor.db.PipelineService;
 import org.graylog.plugins.pipelineprocessor.db.PipelineStreamConnectionsService;
 import org.graylog.plugins.pipelineprocessor.db.RuleDao;
 import org.graylog.plugins.pipelineprocessor.db.RuleService;
+import org.graylog.plugins.pipelineprocessor.db.mongodb.MongoDbPipelineService;
+import org.graylog.plugins.pipelineprocessor.db.mongodb.MongoDbPipelineStreamConnectionsService;
+import org.graylog.plugins.pipelineprocessor.db.mongodb.MongoDbRuleService;
 import org.graylog.plugins.pipelineprocessor.functions.conversion.StringConversion;
 import org.graylog.plugins.pipelineprocessor.functions.messages.SetField;
 import org.graylog.plugins.pipelineprocessor.parser.FunctionRegistry;
 import org.graylog.plugins.pipelineprocessor.parser.PipelineRuleParser;
+import org.graylog.plugins.pipelineprocessor.processors.ConfigurationStateUpdater;
 import org.graylog.plugins.pipelineprocessor.processors.PipelineInterpreter;
 import org.graylog.plugins.pipelineprocessor.rest.PipelineConnections;
 import org.graylog2.Configuration;
@@ -54,6 +59,7 @@ import org.graylog2.plugin.Messages;
 import org.graylog2.plugin.ServerStatus;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.filters.MessageFilter;
+import org.graylog2.plugin.streams.Stream;
 import org.graylog2.rules.DroolsEngine;
 import org.graylog2.shared.journal.Journal;
 import org.graylog2.streams.StreamFaultManager;
@@ -132,24 +138,26 @@ public class FilterchainVsPipeline {
             functions.put(SetField.NAME, new SetField());
             functions.put(StringConversion.NAME, new StringConversion());
 
-            final PipelineRuleParser parser = setupParser(functions);
+            final FunctionRegistry functionRegistry = new FunctionRegistry(functions);
+            final PipelineRuleParser parser = new PipelineRuleParser(functionRegistry, new CodeGenerator());
 
             final MetricRegistry metricRegistry = new MetricRegistry();
-            interpreter = new PipelineInterpreter(
-                    ruleService,
+            final ConfigurationStateUpdater stateUpdater = new ConfigurationStateUpdater(ruleService,
                     pipelineService,
                     pipelineStreamConnectionsService,
                     parser,
+                    new MetricRegistry(),
+                    functionRegistry,
+                    Executors.newScheduledThreadPool(1),
+                    mock(EventBus.class),
+                    (currentPipelines, streamPipelineConnections, classLoader) -> new PipelineInterpreter.State(currentPipelines, streamPipelineConnections, null, metricRegistry, 1, true),
+                    false);
+            interpreter = new PipelineInterpreter(
                     mock(Journal.class),
                     metricRegistry,
-                    Executors.newScheduledThreadPool(1),
-                    mock(EventBus.class)
+                    mock(EventBus.class),
+                    stateUpdater
             );
-        }
-
-        private PipelineRuleParser setupParser(Map<String, org.graylog.plugins.pipelineprocessor.ast.functions.Function<?>> functions) {
-            final FunctionRegistry functionRegistry = new FunctionRegistry(functions);
-            return new PipelineRuleParser(functionRegistry);
         }
 
     }
@@ -205,9 +213,10 @@ public class FilterchainVsPipeline {
                         true).build());
                 when(engineFactory.create(any(), any())).thenReturn(
                         new StreamRouterEngine(Collections.emptyList(),
-                                               daemonExecutor,
-                                               streamFaultManager,
-                                               streamMetrics)
+                                daemonExecutor,
+                                streamFaultManager,
+                                streamMetrics,
+                                (Provider<Stream>) () -> null)
                 );
                 final StreamRouter streamRouter = new StreamRouter(streamService,
                                                                    serverStatus,
