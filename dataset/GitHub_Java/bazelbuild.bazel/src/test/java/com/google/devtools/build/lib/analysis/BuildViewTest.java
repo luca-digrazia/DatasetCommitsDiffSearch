@@ -167,24 +167,6 @@ public class BuildViewTest extends BuildViewTestBase {
   }
 
   @Test
-  public void testGetArtifactOwnerInStarlark() throws Exception {
-    scratch.file(
-        "foo/rule.bzl",
-        "def _impl(ctx):",
-        "  f = ctx.actions.declare_file('rule_output')",
-        "  print('f owner is ' + str(f.owner))",
-        "  ctx.actions.write(",
-        "    output = f,",
-        "    content = 'foo',",
-        "  )",
-        "gen = rule(implementation = _impl)");
-    scratch.file("foo/BUILD", "load(':rule.bzl', 'gen')", "gen(name = 'a')");
-
-    update("//foo:a");
-    assertContainsEvent("DEBUG /workspace/foo/rule.bzl:3:3: f owner is //foo:a");
-  }
-
-  @Test
   public void testSyntaxErrorInDepPackage() throws Exception {
     // Check that a loading error in a dependency is properly reported.
     scratch.file("a/BUILD",
@@ -466,7 +448,7 @@ public class BuildViewTest extends BuildViewTestBase {
         "java/b/rules.bzl",
         "def _impl(ctx):",
         "  print('debug in b')",
-        "  ctx.actions.write(",
+        "  ctx.file_action(",
         "    output = ctx.outputs.my_output,",
         "    content = 'foo',",
         "  )",

@@ -661,7 +661,7 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
         "glob()",
         "insufficient arguments received by glob(include: sequence of strings, "
             + "*, exclude: sequence of strings = [], exclude_directories: int = 1, "
-            + "allow_empty: bool = <unbound>) (got 0, expected at least 1)");
+            + "allow_empty: bool = True) (got 0, expected at least 1)");
   }
 
   @Test
@@ -671,7 +671,7 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
         "glob(['a'], ['b'])",
         "too many (2) positional arguments in call to glob(include: sequence of strings, "
             + "*, exclude: sequence of strings = [], exclude_directories: int = 1, "
-            + "allow_empty: bool = <unbound>)");
+            + "allow_empty: bool = True)");
   }
 
   @Test
@@ -681,7 +681,7 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
         "glob(1,2,3,4)",
         "too many (4) positional arguments in call to glob(include: sequence of strings, "
             + "*, exclude: sequence of strings = [], exclude_directories: int = 1, "
-            + "allow_empty: bool = <unbound>)");
+            + "allow_empty: bool = True)");
   }
 
   @Test

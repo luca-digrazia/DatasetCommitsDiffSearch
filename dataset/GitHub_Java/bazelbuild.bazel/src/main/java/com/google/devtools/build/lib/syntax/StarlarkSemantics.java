@@ -157,6 +157,8 @@ public abstract class StarlarkSemantics {
 
   public abstract boolean incompatibleDisallowNativeInBuildFile();
 
+  public abstract boolean incompatibleDisallowOldOctalNotation();
+
   public abstract boolean incompatibleDisallowOldStyleArgsAdd();
 
   public abstract boolean incompatibleDisallowRuleExecutionPlatformConstraintsAllowed();
@@ -232,6 +234,7 @@ public abstract class StarlarkSemantics {
           .incompatibleDisallowLegacyJavaInfo(false)
           .incompatibleDisallowLoadLabelsToCrossPackageBoundaries(true)
           .incompatibleDisallowNativeInBuildFile(true)
+          .incompatibleDisallowOldOctalNotation(true)
           .incompatibleDisallowOldStyleArgsAdd(true)
           .incompatibleDisallowRuleExecutionPlatformConstraintsAllowed(false)
           .incompatibleDisallowStructProviderSyntax(false)
@@ -296,6 +299,8 @@ public abstract class StarlarkSemantics {
     public abstract Builder incompatibleDisallowLegacyJavaInfo(boolean value);
 
     public abstract Builder incompatibleDisallowLoadLabelsToCrossPackageBoundaries(boolean value);
+
+    public abstract Builder incompatibleDisallowOldOctalNotation(boolean value);
 
     public abstract Builder incompatibleDisallowOldStyleArgsAdd(boolean value);
 
