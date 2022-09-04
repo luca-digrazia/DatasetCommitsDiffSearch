@@ -40,7 +40,5 @@ public class GSYApplication extends Application {
         //GSYVideoType.setRenderType(GSYVideoType.GLSURFACE);
 
         //GSYVideoManager.instance().setLogLevel(IjkMediaPlayer.IJK_LOG_SILENT);
-
-        //GSYVideoType.setShowType(GSYVideoType.SCREEN_MATCH_FULL);
     }
 }

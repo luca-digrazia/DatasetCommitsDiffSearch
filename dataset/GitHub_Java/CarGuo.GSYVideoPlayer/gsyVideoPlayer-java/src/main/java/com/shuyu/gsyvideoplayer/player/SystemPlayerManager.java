@@ -6,7 +6,6 @@ import android.net.Uri;
 import android.os.Message;
 import android.view.Surface;
 
-import com.shuyu.gsyvideoplayer.cache.ICacheManager;
 import com.shuyu.gsyvideoplayer.model.GSYModel;
 import com.shuyu.gsyvideoplayer.model.VideoOptionModel;
 import com.shuyu.gsyvideoplayer.utils.Debuger;
@@ -17,7 +16,7 @@ import tv.danmaku.ijk.media.player.AndroidMediaPlayer;
 import tv.danmaku.ijk.media.player.IMediaPlayer;
 
 /**
- * 系统播放器，总觉得不好用
+ * 系统播放器
  * Created by guoshuyu on 2018/1/11.
  */
 
@@ -35,19 +34,14 @@ public class SystemPlayerManager implements IPlayerManager {
     }
 
     @Override
-    public void initVideoPlayer(Context context, Message msg, List<VideoOptionModel> optionModelList, ICacheManager cacheManager) {
+    public void initVideoPlayer(Context context, Message msg, List<VideoOptionModel> optionModelList) {
         mediaPlayer = new AndroidMediaPlayer();
         mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
         release = false;
-        GSYModel gsyModel = (GSYModel) msg.obj;
         try {
-            if (gsyModel.isCache() && cacheManager != null) {
-                cacheManager.doCacheLogic(context, mediaPlayer, gsyModel.getUrl(), gsyModel.getMapHeadData(), gsyModel.getCachePath());
-            } else {
-                mediaPlayer.setDataSource(context, Uri.parse(gsyModel.getUrl()), ((GSYModel) msg.obj).getMapHeadData());
-            }
-            mediaPlayer.setLooping(gsyModel.isLooping());
-            if (gsyModel.getSpeed() != 1 && gsyModel.getSpeed() > 0) {
+            mediaPlayer.setDataSource(context, Uri.parse(((GSYModel) msg.obj).getUrl()), ((GSYModel) msg.obj).getMapHeadData());
+            mediaPlayer.setLooping(((GSYModel) msg.obj).isLooping());
+            if (((GSYModel) msg.obj).getSpeed() != 1 && ((GSYModel) msg.obj).getSpeed() > 0) {
 
             }
         } catch (Exception e) {
