@@ -48,8 +48,6 @@ class EventImpl<T> implements Event<T> {
 
     private final ConcurrentMap<Class<?>, Notifier<? super T>> notifiers;
 
-    private transient volatile Notifier<? super T> lastNotifier;
-
     public EventImpl(Type eventType, Set<Annotation> qualifiers) {
         if (eventType instanceof ParameterizedType) {
             eventType = ((ParameterizedType) eventType).getActualTypeArguments()[0];
@@ -64,7 +62,7 @@ class EventImpl<T> implements Event<T> {
 
     @Override
     public void fire(T event) {
-        getNotifier(event.getClass()).notify(event, ObserverExceptionHandler.IMMEDIATE_HANDLER, false);
+        notifiers.computeIfAbsent(event.getClass(), this::createNotifier).notify(event, ObserverExceptionHandler.IMMEDIATE_HANDLER, false);
     }
 
     @Override
@@ -77,7 +75,7 @@ class EventImpl<T> implements Event<T> {
         Objects.requireNonNull(options);
 
         @SuppressWarnings("unchecked")
-        Notifier<U> notifier = (Notifier<U>) getNotifier(event.getClass());
+        Notifier<U> notifier = (Notifier<U>) notifiers.computeIfAbsent(event.getClass(), this::createNotifier);
 
         Executor executor = options.getExecutor();
         if (executor == null) {
@@ -99,14 +97,6 @@ class EventImpl<T> implements Event<T> {
         return new AsyncEventDeliveryStage<>(completableFuture, executor);
     }
 
-    private Notifier<? super T> getNotifier(Class<?> runtimeType) {
-        Notifier<? super T> notifier = this.lastNotifier;
-        if (notifier != null && notifier.runtimeType.equals(runtimeType)) {
-            return notifier;
-        }
-        return this.lastNotifier = notifiers.computeIfAbsent(runtimeType, this::createNotifier);
-    }
-
     @Override
     public Event<T> select(Annotation... qualifiers) {
         throw new UnsupportedOperationException();
@@ -124,16 +114,16 @@ class EventImpl<T> implements Event<T> {
 
     private Notifier<? super T> createNotifier(Class<?> runtimeType) {
         Type eventType = getEventType(runtimeType);
-        return createNotifier(runtimeType, eventType, qualifiers, ArcContainerImpl.unwrap(Arc.container()));
+        return createNotifier(eventType, qualifiers, ArcContainerImpl.unwrap(Arc.container()));
     }
 
-    static <T> Notifier<T> createNotifier(Class<?> runtimeType, Type eventType, Set<Annotation> qualifiers, ArcContainerImpl container) {
+    static <T> Notifier<T> createNotifier(Type eventType, Set<Annotation> qualifiers, ArcContainerImpl container) {
         EventMetadata metadata = new EventMetadataImpl(qualifiers, eventType);
         List<ObserverMethod<? super T>> notifierObserverMethods = new ArrayList<>();
         for (ObserverMethod<? super T> observerMethod : container.resolveObservers(eventType, qualifiers)) {
             notifierObserverMethods.add(observerMethod);
         }
-        return new Notifier<>(runtimeType, notifierObserverMethods, metadata);
+        return new Notifier<>(notifierObserverMethods, metadata);
     }
 
     private Type getEventType(Class<?> runtimeType) {
@@ -176,14 +166,11 @@ class EventImpl<T> implements Event<T> {
 
     static class Notifier<T> {
 
-        private final Class<?> runtimeType;
-
         private final List<ObserverMethod<? super T>> observerMethods;
 
         private final EventMetadata eventMetadata;
 
-        Notifier(Class<?> runtimeType, List<ObserverMethod<? super T>> observerMethods, EventMetadata eventMetadata) {
-            this.runtimeType = runtimeType;
+        Notifier(List<ObserverMethod<? super T>> observerMethods, EventMetadata eventMetadata) {
             this.observerMethods = observerMethods;
             this.eventMetadata = eventMetadata;
         }
