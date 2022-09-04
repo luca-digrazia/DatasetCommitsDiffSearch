@@ -22,8 +22,8 @@ import java.util.Arrays;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import static smile.util.Regex.BOOLEAN_REGEX;
-import static smile.util.Regex.DOUBLE_REGEX;
+import static smile.util.Strings.bool;
+import static smile.util.Strings.number;
 
 /**
  * A time-dependent function. When training a neural network model,
@@ -325,7 +325,8 @@ public interface TimeFunction extends Serializable {
     static TimeFunction of(String time) {
         time = time.trim().toLowerCase(Locale.ROOT);
 
-        Pattern linear = Pattern.compile(String.format("linear(?:decay)?\\((%s),\\s*(%s),\\s*(%s)\\)", DOUBLE_REGEX, DOUBLE_REGEX, DOUBLE_REGEX));
+        Pattern linear = Pattern.compile(
+                String.format("linear(?:decay)?\\((%s),\\s*(%s),\\s*(%s)\\)", number, number, number));
         Matcher m = linear.matcher(time);
         if (m.matches()) {
             double initLearningRate = Double.parseDouble(m.group(1));
@@ -334,8 +335,9 @@ public interface TimeFunction extends Serializable {
             return linear(initLearningRate, decaySteps, endLearningRate);
         }
 
-        Pattern polynomial = Pattern.compile(String.format("polynomial(?:decay)?\\((%s),\\s*(%s),\\s*(%s),\\s*(%s)(,\\s*%s)?\\)", DOUBLE_REGEX, DOUBLE_REGEX, DOUBLE_REGEX, DOUBLE_REGEX, BOOLEAN_REGEX));
-        m = polynomial.matcher(time);
+        Pattern polynominal = Pattern.compile(
+                String.format("polynomial(?:decay)?\\((%s),\\s*(%s),\\s*(%s),\\s*(%s)(,\\s*%s)?\\)", number, number, number, number, bool));
+        m = polynominal.matcher(time);
         if (m.matches()) {
             double degree = Double.parseDouble(m.group(1));
             double initLearningRate = Double.parseDouble(m.group(2));
@@ -354,7 +356,8 @@ public interface TimeFunction extends Serializable {
             }
         }
 
-        Pattern inverse = Pattern.compile(String.format("inverse(?:timedecay)?\\((%s),\\s*(%s)(?:,\\s*(%s))?(?:,\\s*%s)?\\)", DOUBLE_REGEX, DOUBLE_REGEX, DOUBLE_REGEX, BOOLEAN_REGEX));
+        Pattern inverse = Pattern.compile(
+                String.format("inverse(?:timedecay)?\\((%s),\\s*(%s)(?:,\\s*(%s))?(?:,\\s*%s)?\\)", number, number, number, bool));
         m = inverse.matcher(time);
         if (m.matches()) {
             double initLearningRate = Double.parseDouble(m.group(1));
@@ -368,7 +371,8 @@ public interface TimeFunction extends Serializable {
             }
         }
 
-        Pattern exp = Pattern.compile(String.format("exp(?:onentialdecay)?\\((%s),\\s*(%s)(?:,\\s*(%s))?(?:,\\s*%s)?\\)", DOUBLE_REGEX, DOUBLE_REGEX, DOUBLE_REGEX, BOOLEAN_REGEX));
+        Pattern exp = Pattern.compile(
+                String.format("exp(?:onentialdecay)?\\((%s),\\s*(%s)(?:,\\s*(%s))?(?:,\\s*%s)?\\)", number, number, number, bool));
         m = exp.matcher(time);
         if (m.matches()) {
             double initLearningRate = Double.parseDouble(m.group(1));
