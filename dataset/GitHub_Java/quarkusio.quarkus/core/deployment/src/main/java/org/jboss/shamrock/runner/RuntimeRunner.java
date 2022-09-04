@@ -5,17 +5,8 @@ import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.file.Path;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.function.BiFunction;
-import java.util.function.Function;
 
-import org.jboss.shamrock.deployment.ArchiveContextBuilder;
 import org.jboss.shamrock.deployment.BuildTimeGenerator;
-import org.jboss.shamrock.runtime.Timing;
-import org.objectweb.asm.ClassVisitor;
 
 /**
  * Class that can be used to run shamrock directly, ececuting the build and runtime
@@ -26,12 +17,15 @@ public class RuntimeRunner implements Runnable, Closeable {
     private final Path target;
     private final RuntimeClassLoader loader;
     private Closeable closeTask;
-    private final ArchiveContextBuilder archiveContextBuilder;
 
-    public RuntimeRunner(ClassLoader classLoader, Path target, Path frameworkClassesPath, ArchiveContextBuilder archiveContextBuilder) {
+    public RuntimeRunner(Path target) {
         this.target = target;
-        this.archiveContextBuilder = archiveContextBuilder;
-        this.loader = new RuntimeClassLoader(classLoader, target, frameworkClassesPath);
+        this.loader = new RuntimeClassLoader(getClass().getClassLoader(), target);
+    }
+
+    public RuntimeRunner(Path target, ClassLoader cl) {
+        this.target = target;
+        this.loader = new RuntimeClassLoader(cl, target);
     }
 
     @Override
@@ -44,31 +38,9 @@ public class RuntimeRunner implements Runnable, Closeable {
     @Override
     public void run() {
         try {
-            BuildTimeGenerator buildTimeGenerator = new BuildTimeGenerator(loader, loader, false, archiveContextBuilder);
+            BuildTimeGenerator buildTimeGenerator = new BuildTimeGenerator(loader, loader, false);
             buildTimeGenerator.run(target);
-            loader.accept(buildTimeGenerator.getByteCodeTransformers());
-            if(!buildTimeGenerator.getByteCodeTransformers().isEmpty()) {
-                //transformation can be slow, and classes that are transformed are generally always loaded on startup
-                //to speed this along we eagerly load the classes in parallel
-
-                ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
-                for(Map.Entry<String, List<BiFunction<String, ClassVisitor, ClassVisitor>>> entry : buildTimeGenerator.getByteCodeTransformers().entrySet()) {
-                    executorService.submit(new Runnable() {
-                        @Override
-                        public void run() {
-                            try {
-                                loader.loadClass(entry.getKey(), true);
-                            } catch (ClassNotFoundException e) {
-                                //ignore
-                                //this will show up at runtime anyway
-                            }
-                        }
-                    });
-                }
-                executorService.shutdown();
-
-            }
-
+            loader.accept(buildTimeGenerator.getBytecodeTransformers());
             Class<?> mainClass = loader.findClass(BuildTimeGenerator.MAIN_CLASS);
             ClassLoader old = Thread.currentThread().getContextClassLoader();
             try {

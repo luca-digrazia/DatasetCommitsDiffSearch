@@ -63,8 +63,7 @@ public class UndertowDeploymentTemplate {
     }
 
     public AtomicReference<ServletInfo> registerServlet(@ContextObject("deploymentInfo") DeploymentInfo info,
-                                                        String name,
-                                                        Class<?> servletClass,
+                                                        String name, Class<?> servletClass,
                                                         boolean asyncSupported,
                                                         int loadOnStartup,
                                                         InstanceFactory<? extends Servlet> instanceFactory) throws Exception {
