@@ -342,9 +342,7 @@ public class GenRuleBaseRule implements RuleDefinition {
     return RuleDefinition.Metadata.builder()
         .name("$genrule_base")
         .type(RuleClassType.ABSTRACT)
-        .ancestors(
-            BaseRuleClasses.NativeActionCreatingRule.class,
-            BaseRuleClasses.MakeVariableExpandingRule.class)
+        .ancestors(BaseRuleClasses.RuleBase.class, BaseRuleClasses.MakeVariableExpandingRule.class)
         .build();
   }
 }
