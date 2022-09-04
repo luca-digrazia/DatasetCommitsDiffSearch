@@ -126,6 +126,8 @@ import com.google.devtools.build.lib.rules.objc.IosApplicationRule;
 import com.google.devtools.build.lib.rules.objc.IosDeviceRule;
 import com.google.devtools.build.lib.rules.objc.IosExtensionBinaryRule;
 import com.google.devtools.build.lib.rules.objc.IosExtensionRule;
+import com.google.devtools.build.lib.rules.objc.IosFrameworkBinaryRule;
+import com.google.devtools.build.lib.rules.objc.IosFrameworkRule;
 import com.google.devtools.build.lib.rules.objc.IosTestRule;
 import com.google.devtools.build.lib.rules.objc.J2ObjcAspect;
 import com.google.devtools.build.lib.rules.objc.J2ObjcCommandLineOptions;
@@ -569,6 +571,8 @@ public class BazelRuleClassProvider {
           builder.addRuleDefinition(new IosDeviceRule());
           builder.addRuleDefinition(new IosExtensionBinaryRule());
           builder.addRuleDefinition(new IosExtensionRule());
+          builder.addRuleDefinition(new IosFrameworkBinaryRule());
+          builder.addRuleDefinition(new IosFrameworkRule());
           builder.addRuleDefinition(new IosTestRule());
           builder.addRuleDefinition(new ObjcBinaryRule());
           builder.addRuleDefinition(new ObjcBundleRule());

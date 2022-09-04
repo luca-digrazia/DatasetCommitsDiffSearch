@@ -20,8 +20,6 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
 import com.google.devtools.build.lib.packages.PackageGroup;
-import com.google.devtools.build.lib.packages.RawAttributeMapper;
-import com.google.devtools.build.lib.packages.RequiredProviders;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.rules.AliasProvider;
@@ -50,51 +48,37 @@ public class BazelPrerequisiteValidator
             .getPackageIdentifier()
             .equals(AliasProvider.getDependencyLabel(prerequisite).getPackageIdentifier())
         && !context.isVisible(prerequisite)) {
-      String errorMessage;
       if (!context.getConfiguration().checkVisibility()) {
-        errorMessage =
+        context.ruleWarning(
             String.format(
                 "Target '%s' violates visibility of target "
                     + "%s. Continuing because --nocheck_visibility is active",
-                rule.getLabel(), AliasProvider.printLabelWithAliasChain(prerequisite));
-        context.ruleWarning(errorMessage);
+                rule.getLabel(), AliasProvider.printLabelWithAliasChain(prerequisite)));
       } else {
         // Oddly enough, we use reportError rather than ruleError here.
-        errorMessage =
+        context.reportError(
+            rule.getLocation(),
             String.format(
                 "Target %s is not visible from target '%s'. Check "
                     + "the visibility declaration of the former target if you think "
                     + "the dependency is legitimate",
-                AliasProvider.printLabelWithAliasChain(prerequisite), rule.getLabel());
-        context.reportError(rule.getLocation(), errorMessage);
+                AliasProvider.printLabelWithAliasChain(prerequisite), rule.getLabel()));
       }
-      // We can always post the visibility error as, regardless of the value of keep going,
-      // that target will not be built.
-      context.post(
-          new VisibilityErrorEvent(context.getConfiguration(), rule.getLabel(), errorMessage));
     }
 
-    if (prerequisiteTarget instanceof PackageGroup) {
-      RequiredProviders requiredProviders = RawAttributeMapper.of(rule)
-          .getAttributeDefinition(attrName)
-          .getRequiredProviders();
-      boolean containsPackageSpecificationProvider =
-          requiredProviders.getDescription().contains("PackageSpecificationProvider");
-      // TODO(plf): Add the PackageSpecificationProvider to the 'visibility' attribute.
-      if (!attrName.equals("visibility") && !containsPackageSpecificationProvider) {
-        context.reportError(
-            rule.getAttributeLocation(attrName),
-            "in "
-                + attrName
-                + " attribute of "
-                + rule.getRuleClass()
-                + " rule "
-                + rule.getLabel()
-                + ": package group "
-                + AliasProvider.printLabelWithAliasChain(prerequisite)
-                + " is misplaced here "
-                + "(they are only allowed in the visibility attribute)");
-      }
+    if (prerequisiteTarget instanceof PackageGroup && !attrName.equals("visibility")) {
+      context.reportError(
+          rule.getAttributeLocation(attrName),
+          "in "
+              + attrName
+              + " attribute of "
+              + rule.getRuleClass()
+              + " rule "
+              + rule.getLabel()
+              + ": package group "
+              + AliasProvider.printLabelWithAliasChain(prerequisite)
+              + " is misplaced here "
+              + "(they are only allowed in the visibility attribute)");
     }
   }
 
