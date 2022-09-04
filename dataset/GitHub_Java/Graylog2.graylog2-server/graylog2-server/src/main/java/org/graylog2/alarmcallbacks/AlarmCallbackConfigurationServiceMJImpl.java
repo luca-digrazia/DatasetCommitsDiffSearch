@@ -17,6 +17,7 @@
 package org.graylog2.alarmcallbacks;
 
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import com.mongodb.DBCollection;
 import org.bson.types.ObjectId;
 import org.graylog2.bindings.providers.MongoJackObjectMapperProvider;
@@ -25,12 +26,13 @@ import org.graylog2.database.MongoConnection;
 import org.graylog2.plugin.database.ValidationException;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.rest.models.alarmcallbacks.requests.CreateAlarmCallbackRequest;
+import org.mongojack.DBCursor;
 import org.mongojack.DBQuery;
-import org.mongojack.DBUpdate;
 import org.mongojack.JacksonDBCollection;
 
 import javax.inject.Inject;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -62,7 +64,7 @@ public class AlarmCallbackConfigurationServiceMJImpl implements AlarmCallbackCon
 
     @Override
     public AlarmCallbackConfiguration create(String streamId, CreateAlarmCallbackRequest request, String userId) {
-        return AlarmCallbackConfigurationAVImpl.create(new ObjectId().toHexString(), streamId, request.type, request.configuration, new Date(), userId);
+        return AlarmCallbackConfigurationAVImpl.create(new ObjectId().toHexString(), streamId, request.type(), request.configuration(), new Date(), userId);
     }
 
     @Override
@@ -71,12 +73,19 @@ public class AlarmCallbackConfigurationServiceMJImpl implements AlarmCallbackCon
     }
 
     @Override
-    public AlarmCallbackConfiguration update(String streamId, String alarmCallbackId, Map<String, Object> deltas) {
-        DBUpdate.Builder update = new DBUpdate.Builder();
-        for (Map.Entry<String, Object> fields : deltas.entrySet())
-            update = update.set(fields.getKey(), fields.getValue());
+    public Map<String, Long> countPerType() {
+        final HashMap<String, Long> result = Maps.newHashMap();
 
-        return coll.findAndModify(DBQuery.is("_id", alarmCallbackId), update);
+        final DBCursor<AlarmCallbackConfigurationAVImpl> avs = coll.find();
+        for (AlarmCallbackConfigurationAVImpl av : avs) {
+            Long count = result.get(av.getType());
+            if (count == null) {
+                count = 0L;
+            }
+            result.put(av.getType(), count + 1);
+        }
+
+        return result;
     }
 
     @Override

@@ -219,8 +219,6 @@ public class StreamResource extends RestResource {
                                  @ApiParam(name = "JSON body", required = true)
                                  @Valid @NotNull UpdateStreamRequest cr) throws NotFoundException, ValidationException {
         checkPermission(RestPermissions.STREAMS_EDIT, streamId);
-        checkNotDefaultStream(streamId, "The default stream cannot be edited.");
-
         final Stream stream = streamService.load(streamId);
 
         if (!Strings.isNullOrEmpty(cr.title())) {
@@ -240,17 +238,6 @@ public class StreamResource extends RestResource {
             }
         }
 
-        final Boolean removeMatchesFromDefaultStream = cr.removeMatchesFromDefaultStream();
-        if(removeMatchesFromDefaultStream != null) {
-            stream.setRemoveMatchesFromDefaultStream(removeMatchesFromDefaultStream);
-        }
-
-        // Apparently we are sending partial resources sometimes so do not overwrite the index set
-        // id if it's null/empty in the update request.
-        if (!Strings.isNullOrEmpty(cr.indexSetId())) {
-            stream.setIndexSetId(cr.indexSetId());
-        }
-
         streamService.save(stream);
         clusterEventBus.post(StreamsChangedEvent.create(stream.getId()));
 
@@ -268,7 +255,6 @@ public class StreamResource extends RestResource {
     @AuditEvent(type = AuditEventTypes.STREAM_DELETE)
     public void delete(@ApiParam(name = "streamId", required = true) @PathParam("streamId") String streamId) throws NotFoundException {
         checkPermission(RestPermissions.STREAMS_EDIT, streamId);
-        checkNotDefaultStream(streamId, "The default stream cannot be deleted.");
 
         final Stream stream = streamService.load(streamId);
         streamService.destroy(stream);
@@ -288,7 +274,6 @@ public class StreamResource extends RestResource {
     public void pause(@ApiParam(name = "streamId", required = true)
                       @PathParam("streamId") @NotEmpty String streamId) throws NotFoundException, ValidationException {
         checkAnyPermission(new String[]{RestPermissions.STREAMS_CHANGESTATE, RestPermissions.STREAMS_EDIT}, streamId);
-        checkNotDefaultStream(streamId, "The default stream cannot be paused.");
 
         final Stream stream = streamService.load(streamId);
         streamService.pause(stream);
@@ -307,7 +292,6 @@ public class StreamResource extends RestResource {
     public void resume(@ApiParam(name = "streamId", required = true)
                        @PathParam("streamId") @NotEmpty String streamId) throws NotFoundException, ValidationException {
         checkAnyPermission(new String[]{RestPermissions.STREAMS_CHANGESTATE, RestPermissions.STREAMS_EDIT}, streamId);
-        checkNotDefaultStream(streamId, "The default stream cannot be resumed.");
 
         final Stream stream = streamService.load(streamId);
         streamService.resume(stream);
@@ -370,7 +354,6 @@ public class StreamResource extends RestResource {
                                 @ApiParam(name = "JSON body", required = true) @Valid @NotNull CloneStreamRequest cr) throws ValidationException, NotFoundException {
         checkPermission(RestPermissions.STREAMS_CREATE);
         checkPermission(RestPermissions.STREAMS_READ, streamId);
-        checkNotDefaultStream(streamId, "The default stream cannot be cloned.");
 
         final Stream sourceStream = streamService.load(streamId);
 
@@ -381,8 +364,6 @@ public class StreamResource extends RestResource {
         streamData.put(StreamImpl.FIELD_CREATOR_USER_ID, getCurrentUser().getName());
         streamData.put(StreamImpl.FIELD_CREATED_AT, Tools.nowUTC());
         streamData.put(StreamImpl.FIELD_MATCHING_TYPE, sourceStream.getMatchingType().toString());
-        streamData.put(StreamImpl.FIELD_REMOVE_MATCHES_FROM_DEFAULT_STREAM, cr.removeMatchesFromDefaultStream());
-        streamData.put(StreamImpl.FIELD_INDEX_SET_ID, cr.indexSetId());
 
         final Stream stream = streamService.create(streamData);
         streamService.pause(stream);
@@ -412,6 +393,12 @@ public class StreamResource extends RestResource {
             final CreateAlarmCallbackRequest request = CreateAlarmCallbackRequest.create(alarmCallbackConfiguration);
             final AlarmCallbackConfiguration alarmCallback = alarmCallbackConfigurationService.create(stream.getId(), request, getCurrentUser().getName());
             alarmCallbackConfigurationService.save(alarmCallback);
+        }
+
+        for (Map.Entry<String, List<String>> entry : sourceStream.getAlertReceivers().entrySet()) {
+            for (String receiver : entry.getValue()) {
+                streamService.addAlertReceiver(stream, entry.getKey(), receiver);
+            }
         }
 
         for (Output output : sourceStream.getOutputs()) {
@@ -444,7 +431,7 @@ public class StreamResource extends RestResource {
             .collect(Collectors.toList());
         return StreamResponse.create(
             stream.getId(),
-            (String) stream.getFields().get(StreamImpl.FIELD_CREATOR_USER_ID),
+            (String)stream.getFields().get(StreamImpl.FIELD_CREATOR_USER_ID),
             outputsToSummaries(stream.getOutputs()),
             stream.getMatchingType().name(),
             stream.getDescription(),
@@ -453,14 +440,12 @@ public class StreamResource extends RestResource {
             stream.getStreamRules(),
             alertConditions,
             AlertReceivers.create(
-                firstNonNull(emailAlertReceivers, Collections.emptyList()),
-                firstNonNull(usersAlertReceivers, Collections.emptyList())
+                emailAlertReceivers == null ? Collections.emptyList() : emailAlertReceivers,
+                usersAlertReceivers == null ? Collections.emptyList() : usersAlertReceivers
             ),
             stream.getTitle(),
             stream.getContentPack(),
-            stream.isDefaultStream(),
-            stream.getRemoveMatchesFromDefaultStream(),
-            stream.getIndexSetId()
+            stream.isDefaultStream()
         );
     }
 
@@ -469,11 +454,5 @@ public class StreamResource extends RestResource {
             .map((output) -> OutputSummary.create(output.getId(),output.getTitle(), output.getType(),
                 output.getCreatorUserId(), new DateTime(output.getCreatedAt()), output.getConfiguration(), output.getContentPack()))
             .collect(Collectors.toSet());
-    }
-
-    private void checkNotDefaultStream(String streamId, String message) {
-        if (Stream.DEFAULT_STREAM_ID.equals(streamId)) {
-            throw new BadRequestException(message);
-        }
     }
 }
