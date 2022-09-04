@@ -84,10 +84,10 @@ import com.google.devtools.build.lib.packages.util.MockProtoSupport;
 import com.google.devtools.build.lib.rules.apple.AppleCommandLineOptions;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration.ConfigurationDistinguisher;
-import com.google.devtools.build.lib.rules.apple.ApplePlatform;
-import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.apple.DottedVersion;
+import com.google.devtools.build.lib.rules.apple.Platform;
+import com.google.devtools.build.lib.rules.apple.Platform.PlatformType;
 import com.google.devtools.build.lib.rules.apple.XcodeVersionProperties;
 import com.google.devtools.build.lib.rules.cpp.CppCompileAction;
 import com.google.devtools.build.lib.rules.cpp.CppLinkAction;
@@ -292,7 +292,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
     return frameworkDir(configuration.getSingleArchPlatform());
   }
 
-  protected static String frameworkDir(ApplePlatform platform) {
+  protected static String frameworkDir(Platform platform) {
     return AppleToolchain.platformDir(
         platform.getNameInPlist()) + AppleToolchain.DEVELOPER_FRAMEWORK_PATH;
   }
@@ -578,28 +578,29 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
       frameworkPathBaseNames.add(importedFramework.getBaseName());
     }
 
-    ImmutableList<String> expectedCommandLineFragments =
-        ImmutableList.<String>builder()
-            .add("-mios-simulator-version-min=" + DEFAULT_IOS_SDK_VERSION)
-            .add("-arch " + arch)
-            .add("-isysroot " + AppleToolchain.sdkDir())
-            .add(AppleToolchain.sdkDir() + AppleToolchain.DEVELOPER_FRAMEWORK_PATH)
-            .add(frameworkDir(ApplePlatform.forTarget(PlatformType.IOS, arch)))
-            .addAll(frameworkPathFragmentParents.build())
-            .add("-Xlinker -objc_abi_version -Xlinker 2")
-            .add("-Xlinker -rpath -Xlinker @executable_path/Frameworks")
-            .add("-fobjc-link-runtime")
-            .add("-ObjC")
-            .addAll(
-                Interspersing.beforeEach(
-                    "-framework", SdkFramework.names(AUTOMATIC_SDK_FRAMEWORKS)))
-            .addAll(Interspersing.beforeEach("-framework", frameworkPathBaseNames.build()))
-            .add("-filelist")
-            .add(filelistArtifact.getExecPathString())
-            .add("-o")
-            .addAll(Artifact.toExecPaths(binAction.getOutputs()))
-            .addAll(extraLinkArgs)
-            .build();
+    ImmutableList<String> expectedCommandLineFragments = ImmutableList.<String>builder()
+        .add("-mios-simulator-version-min=" + DEFAULT_IOS_SDK_VERSION)
+        .add("-arch " + arch)
+        .add("-isysroot " + AppleToolchain.sdkDir())
+        .add(AppleToolchain.sdkDir() + AppleToolchain.DEVELOPER_FRAMEWORK_PATH)
+        .add(frameworkDir(Platform.forTarget(PlatformType.IOS, arch)))
+        .addAll(frameworkPathFragmentParents.build())
+        .add("-Xlinker -objc_abi_version -Xlinker 2")
+        .add("-Xlinker -rpath -Xlinker @executable_path/Frameworks")
+        .add("-fobjc-link-runtime")
+        .add("-ObjC")
+        .addAll(
+            Interspersing.beforeEach(
+            "-framework", SdkFramework.names(AUTOMATIC_SDK_FRAMEWORKS)))
+        .addAll(
+            Interspersing.beforeEach(
+                "-framework", frameworkPathBaseNames.build()))
+        .add("-filelist")
+        .add(filelistArtifact.getExecPathString())
+        .add("-o")
+        .addAll(Artifact.toExecPaths(binAction.getOutputs()))
+        .addAll(extraLinkArgs)
+        .build();
 
     String linkArgs = Joiner.on(" ").join(binAction.getArguments());
     for (String expectedCommandLineFragment : expectedCommandLineFragments) {
@@ -1050,6 +1051,22 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
         getSourceArtifact("fx/fx1.framework/b"),
         getSourceArtifact("fx/fx2.framework/c"),
         getSourceArtifact("fx/fx2.framework/d"));
+  }
+
+  protected void checkLinkIncludeOrderFrameworksAndSystemLibsFirst(RuleType ruleType)
+      throws Exception {
+    useConfiguration("--noobjc_includes_prioritize_static_libs");
+    scratch.file("fx/fx1.framework");
+    scratch.file("fx/BUILD", "objc_framework(name = 'fx')");
+    scratch.file("x/a.m");
+    ruleType.scratchTarget(
+        scratch, "srcs", "['a.m']", "sdk_frameworks", "['fx']", "sdk_dylibs", "['libdy1']");
+
+    CommandAction linkAction = linkAction("//x:x");
+    String linkActionArgs = Joiner.on(" ").join(linkAction.getArguments());
+
+    assertThat(linkActionArgs.indexOf("-F")).isLessThan(linkActionArgs.indexOf("-filelist"));
+    assertThat(linkActionArgs.indexOf("-l")).isLessThan(linkActionArgs.indexOf("-filelist"));
   }
 
   protected void checkLinkIncludeOrderStaticLibsFirst(RuleType ruleType) throws Exception {

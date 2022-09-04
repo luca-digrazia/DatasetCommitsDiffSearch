@@ -66,9 +66,9 @@ import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SafeImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
-import com.google.devtools.build.lib.rules.apple.ApplePlatform;
-import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
+import com.google.devtools.build.lib.rules.apple.Platform;
+import com.google.devtools.build.lib.rules.apple.Platform.PlatformType;
 import com.google.devtools.build.lib.rules.cpp.CcToolchain;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
 import com.google.devtools.build.lib.rules.cpp.CppFileTypes;
@@ -271,7 +271,7 @@ public abstract class CompilationSupport {
   /** Returns a list of frameworks for clang actions. */
   static Iterable<String> commonFrameworkNames(
       ObjcProvider provider, AppleConfiguration appleConfiguration) {
-    ApplePlatform platform = appleConfiguration.getSingleArchPlatform();
+    Platform platform = appleConfiguration.getSingleArchPlatform();
 
     ImmutableList.Builder<String> frameworkNames =
         new ImmutableList.Builder<String>()
@@ -875,7 +875,7 @@ public abstract class CompilationSupport {
       }
     }
 
-    if (attributes.enableModules() && !getCustomModuleMap(ruleContext).isPresent()) {
+    if (attributes.enableModules()) {
       copts.add("-fmodules");
     }
     if (copts.contains("-fmodules")) {
@@ -1483,12 +1483,5 @@ public abstract class CompilationSupport {
     } else {
       return null;
     }
-  }
-
-  public static Optional<Artifact> getCustomModuleMap(RuleContext ruleContext) {
-    if (ruleContext.attributes().has("module_map", BuildType.LABEL)) {
-      return Optional.fromNullable(ruleContext.getPrerequisiteArtifact("module_map", Mode.TARGET));
-    }
-    return Optional.absent();
   }
 }

@@ -21,7 +21,6 @@ import static com.google.devtools.build.lib.rules.objc.ObjcProvider.HEADER;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.IMPORTED_LIBRARY;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.INCLUDE;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.INCLUDE_SYSTEM;
-import static com.google.devtools.build.lib.rules.objc.ObjcProvider.LINK_INPUTS;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.STATIC_FRAMEWORK_FILE;
 import static java.util.Comparator.naturalOrder;
 
@@ -249,12 +248,7 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
             .addVariableCategory(VariableCategory.FULLY_LINK_VARIABLES)
             .build();
     CppLinkAction fullyLinkAction =
-        new CppLinkActionBuilder(
-                ruleContext,
-                outputArchive,
-                ccToolchain,
-                fdoSupport,
-                getFeatureConfiguration(ruleContext, ccToolchain, buildConfiguration))
+        new CppLinkActionBuilder(ruleContext, outputArchive, ccToolchain, fdoSupport)
             .addActionInputs(objcProvider.getObjcLibraries())
             .addActionInputs(objcProvider.getCcLibraries())
             .addActionInputs(objcProvider.get(IMPORTED_LIBRARY).toSet())
@@ -263,6 +257,8 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
             .setLinkStaticness(LinkStaticness.FULLY_STATIC)
             .setLibraryIdentifier(libraryIdentifier)
             .addVariablesExtension(extension)
+            .setFeatureConfiguration(
+                getFeatureConfiguration(ruleContext, ccToolchain, buildConfiguration))
             .build();
     ruleContext.registerAction(fullyLinkAction);
 
@@ -325,26 +321,22 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
     FdoSupportProvider fdoSupport =
         CppHelper.getFdoSupportUsingDefaultCcToolchainAttribute(ruleContext);
     CppLinkActionBuilder executableLinkAction =
-        new CppLinkActionBuilder(
-                ruleContext,
-                binaryToLink,
-                toolchain,
-                fdoSupport,
-                getFeatureConfiguration(ruleContext, toolchain, buildConfiguration))
+        new CppLinkActionBuilder(ruleContext, binaryToLink, toolchain, fdoSupport)
             .setMnemonic("ObjcLink")
             .addActionInputs(bazelBuiltLibraries)
             .addActionInputs(objcProvider.getCcLibraries())
             .addTransitiveActionInputs(objcProvider.get(IMPORTED_LIBRARY))
             .addTransitiveActionInputs(objcProvider.get(STATIC_FRAMEWORK_FILE))
             .addTransitiveActionInputs(objcProvider.get(DYNAMIC_FRAMEWORK_FILE))
-            .addTransitiveActionInputs(objcProvider.get(LINK_INPUTS))
             .setCrosstoolInputs(toolchain.getLink())
             .addActionInputs(prunedJ2ObjcArchives)
             .addActionInputs(extraLinkInputs)
             .addActionInput(inputFileList)
             .setLinkType(linkType)
             .setLinkStaticness(LinkStaticness.FULLY_STATIC)
-            .addLinkopts(ImmutableList.copyOf(extraLinkArgs));
+            .addLinkopts(ImmutableList.copyOf(extraLinkArgs))
+            .setFeatureConfiguration(
+                getFeatureConfiguration(ruleContext, toolchain, buildConfiguration));
 
     if (objcConfiguration.generateDsym()) {
       Artifact dsymBundleZip = intermediateArtifacts.tempDsymBundleZip(dsymOutputType);

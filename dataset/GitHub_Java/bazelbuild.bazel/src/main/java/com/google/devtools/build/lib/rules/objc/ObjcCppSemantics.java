@@ -22,6 +22,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.rules.cpp.CppCompilationContext.Builder;
 import com.google.devtools.build.lib.rules.cpp.CppCompileActionBuilder;
@@ -46,6 +47,7 @@ public class ObjcCppSemantics implements CppSemantics {
   private final ObjcConfiguration config;
   private final boolean isHeaderThinningEnabled;
   private final IntermediateArtifacts intermediateArtifacts;
+  private final BuildConfiguration buildConfiguration;
 
   /**
    * Set of {@link com.google.devtools.build.lib.util.FileType} of source artifacts that are
@@ -69,18 +71,21 @@ public class ObjcCppSemantics implements CppSemantics {
    * @param isHeaderThinningEnabled true if headers_list artifacts should be generated and added as
    *     input to compiling actions
    * @param intermediateArtifacts used to create headers_list artifacts
+   * @param buildConfiguration the build configuration for this build
    */
   public ObjcCppSemantics(
       ObjcProvider objcProvider,
       IncludeProcessing includeProcessing,
       ObjcConfiguration config,
       boolean isHeaderThinningEnabled,
-      IntermediateArtifacts intermediateArtifacts) {
+      IntermediateArtifacts intermediateArtifacts,
+      BuildConfiguration buildConfiguration) {
     this.objcProvider = objcProvider;
     this.includeProcessing = includeProcessing;
     this.config = config;
     this.isHeaderThinningEnabled = isHeaderThinningEnabled;
     this.intermediateArtifacts = intermediateArtifacts;
+    this.buildConfiguration = buildConfiguration;
   }
 
   @Override
@@ -107,8 +112,10 @@ public class ObjcCppSemantics implements CppSemantics {
 
     // TODO(b/62060839): Identify the mechanism used to add generated headers in c++, and recycle
     // it here.
+    PathFragment genfilesSegment =
+        ruleContext.getConfiguration().getGenfilesDirectory().getExecPath().getLastSegment();
     for (Artifact header : objcProvider.get(HEADER)) {
-      if (!header.isSourceArtifact()) {
+      if (genfilesSegment.equals(header.getRoot().getExecPath().getLastSegment())) {
         generatedHeaders.add(header);
       }
     }
@@ -132,6 +139,14 @@ public class ObjcCppSemantics implements CppSemantics {
         ObjcCommon.userHeaderSearchPaths(objcProvider, ruleContext.getConfiguration())) {
       contextBuilder.addQuoteIncludeDir(iquotePath);
     }
+
+    // ProtoSupport creates multiple compilation contexts for a single rule, potentially multiple
+    // archives per build configuration. This covers that worst case.
+    contextBuilder.setPurpose(
+        "ObjcCppSemantics_build_arch_"
+            + buildConfiguration.getMnemonic()
+            + "_with_suffix_"
+            + intermediateArtifacts.archiveFileNameSuffix());
   }
 
   @Override
