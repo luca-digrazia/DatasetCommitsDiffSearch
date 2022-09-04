@@ -1100,26 +1100,19 @@ public final class CcLibraryHelper {
       archiveFile.add(
           CppHelper.getLinuxLinkedArtifact(
               ruleContext,
-              configuration,
               Link.LinkTargetType.ALWAYS_LINK_STATIC_LIBRARY,
               linkedArtifactNameSuffix));
     } else {
       archiveFile.add(
           CppHelper.getLinuxLinkedArtifact(
-              ruleContext,
-              configuration,
-              Link.LinkTargetType.STATIC_LIBRARY,
-              linkedArtifactNameSuffix));
+              ruleContext, Link.LinkTargetType.STATIC_LIBRARY, linkedArtifactNameSuffix));
     }
 
     if (!ruleContext.attributes().get("linkstatic", Type.BOOLEAN)
         && !ccOutputs.isEmpty()) {
       dynamicLibrary.add(
           CppHelper.getLinuxLinkedArtifact(
-              ruleContext,
-              configuration,
-              Link.LinkTargetType.DYNAMIC_LIBRARY,
-              linkedArtifactNameSuffix));
+              ruleContext, Link.LinkTargetType.DYNAMIC_LIBRARY, linkedArtifactNameSuffix));
     }
 
     outputGroups.put("archive", archiveFile.build());
