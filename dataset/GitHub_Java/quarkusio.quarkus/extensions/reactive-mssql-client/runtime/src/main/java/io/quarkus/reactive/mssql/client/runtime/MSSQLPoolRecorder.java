@@ -95,6 +95,10 @@ public class MSSQLPoolRecorder {
             mssqlConnectOptions = new MSSQLConnectOptions();
         }
 
+        if (dataSourceReactiveMSSQLConfig.packetSize.isPresent()) {
+            mssqlConnectOptions.setPacketSize(dataSourceReactiveMSSQLConfig.packetSize.getAsInt());
+        }
+
         if (dataSourceRuntimeConfig.username.isPresent()) {
             mssqlConnectOptions.setUser(dataSourceRuntimeConfig.username.get());
         }
@@ -122,12 +126,6 @@ public class MSSQLPoolRecorder {
         mssqlConnectOptions.setReconnectAttempts(dataSourceReactiveRuntimeConfig.reconnectAttempts);
 
         mssqlConnectOptions.setReconnectInterval(dataSourceReactiveRuntimeConfig.reconnectInterval.toMillis());
-
-        if (dataSourceReactiveRuntimeConfig.hostnameVerificationAlgorithm.isPresent()) {
-            mssqlConnectOptions.setHostnameVerificationAlgorithm(
-                    dataSourceReactiveRuntimeConfig.hostnameVerificationAlgorithm.get());
-        }
-
         return mssqlConnectOptions;
     }
 
