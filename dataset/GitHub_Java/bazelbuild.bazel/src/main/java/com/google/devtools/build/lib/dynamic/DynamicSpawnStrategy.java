@@ -33,7 +33,6 @@ import com.google.devtools.build.lib.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.actions.SandboxedSpawnStrategy;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnResult;
-import com.google.devtools.build.lib.actions.SpawnResult.Status;
 import com.google.devtools.build.lib.actions.SpawnStrategy;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.exec.ExecutionPolicy;
@@ -43,7 +42,6 @@ import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.Path;
 import java.io.IOException;
-import java.util.Optional;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
@@ -90,8 +88,6 @@ public class DynamicSpawnStrategy implements SpawnStrategy {
    */
   private final AtomicBoolean delayLocalExecution = new AtomicBoolean(false);
 
-  private final Function<Spawn, Optional<Spawn>> getExtraSpawnForLocalExecution;
-
   /**
    * Constructs a {@code DynamicSpawnStrategy}.
    *
@@ -100,12 +96,10 @@ public class DynamicSpawnStrategy implements SpawnStrategy {
   public DynamicSpawnStrategy(
       ExecutorService executorService,
       DynamicExecutionOptions options,
-      Function<Spawn, ExecutionPolicy> getExecutionPolicy,
-      Function<Spawn, Optional<Spawn>> getPostProcessingSpawnForLocalExecution) {
+      Function<Spawn, ExecutionPolicy> getExecutionPolicy) {
     this.executorService = MoreExecutors.listeningDecorator(executorService);
     this.options = options;
     this.getExecutionPolicy = getExecutionPolicy;
-    this.getExtraSpawnForLocalExecution = getPostProcessingSpawnForLocalExecution;
   }
 
   /**
@@ -230,43 +224,37 @@ public class DynamicSpawnStrategy implements SpawnStrategy {
    * <p>This guarantees that the two branches are stopped both on successful termination and on an
    * exception.
    *
-   * @param localBranch the future running the local side of the spawn. This future must cancel
-   *     {@code remoteBranch} at some point during its successful execution to guarantee
-   *     termination. If we encounter an execution error, or if we are interrupted, then we handle
-   *     such cancellation here.
-   * @param remoteBranch the future running the remote side of the spawn. Same restrictions apply as
-   *     in {@code localBranch}, but in the symmetric direction.
+   * @param branch1 the future running one side of the spawn (e.g. local). This future must cancel
+   *     {@code branch2} at some point during its successful execution to guarantee termination. If
+   *     we encounter an execution error, or if we are interrupted, then we handle such cancellation
+   *     here.
+   * @param branch2 the future running the other side of the spawn (e.g. remote). Same restrictions
+   *     apply as in {@code branch1}, but in the symmetric direction.
    * @return the result of the branch that terminates first
    * @throws ExecException the execution error of the spawn that terminated first
    * @throws InterruptedException if we get interrupted while waiting for completion
    */
   private static ImmutableList<SpawnResult> waitBranches(
-      Future<ImmutableList<SpawnResult>> localBranch,
-      Future<ImmutableList<SpawnResult>> remoteBranch)
+      Future<ImmutableList<SpawnResult>> branch1, Future<ImmutableList<SpawnResult>> branch2)
       throws ExecException, InterruptedException {
-    ImmutableList<SpawnResult> localResult;
+    ImmutableList<SpawnResult> result1;
     try {
-      localResult = waitBranch(localBranch);
+      result1 = waitBranch(branch1);
     } catch (ExecException | InterruptedException | RuntimeException e) {
-      remoteBranch.cancel(true);
+      branch2.cancel(true);
       throw e;
     }
 
-    ImmutableList<SpawnResult> remoteResult = waitBranch(remoteBranch);
+    ImmutableList<SpawnResult> result2 = waitBranch(branch2);
 
-    if (remoteResult != null && localResult != null) {
+    if (result2 != null && result1 != null) {
       throw new AssertionError("One branch did not cancel the other one");
-    } else if (remoteResult != null) {
-      return remoteResult;
-    } else if (localResult != null) {
-      return localResult;
+    } else if (result2 != null) {
+      return result2;
+    } else if (result1 != null) {
+      return result1;
     } else {
-      throw new AssertionError(
-          "Neither branch completed. Local was "
-              + (localBranch.isCancelled() ? "" : "not ")
-              + "cancelled and remote was "
-              + (remoteBranch.isCancelled() ? "" : "not ")
-              + "cancelled");
+      throw new AssertionError("No branch completed, which might mean they cancelled each other");
     }
   }
 
@@ -475,34 +463,7 @@ public class DynamicSpawnStrategy implements SpawnStrategy {
         outDir.getChild(outBaseName + suffix), errDir.getChild(errBaseName + suffix));
   }
 
-  private ImmutableList<SpawnResult> runLocally(
-      Spawn spawn,
-      ActionExecutionContext actionExecutionContext,
-      @Nullable SandboxedSpawnStrategy.StopConcurrentSpawns stopConcurrentSpawns)
-      throws ExecException, InterruptedException {
-    ImmutableList<SpawnResult> spawnResult =
-        runSpawnLocally(spawn, actionExecutionContext, stopConcurrentSpawns);
-    if (spawnResult.stream().anyMatch(result -> result.status() != Status.SUCCESS)) {
-      return spawnResult;
-    }
-
-    Optional<Spawn> extraSpawn = getExtraSpawnForLocalExecution.apply(spawn);
-    if (!extraSpawn.isPresent()) {
-      return spawnResult;
-    }
-
-    // The remote branch was already cancelled -- we are holding the output lock during the
-    // execution of the extra spawn.
-    ImmutableList<SpawnResult> extraSpawnResult =
-        runSpawnLocally(extraSpawn.get(), actionExecutionContext, null);
-    return ImmutableList.<SpawnResult>builderWithExpectedSize(
-            spawnResult.size() + extraSpawnResult.size())
-        .addAll(spawnResult)
-        .addAll(extraSpawnResult)
-        .build();
-  }
-
-  private static ImmutableList<SpawnResult> runSpawnLocally(
+  private static ImmutableList<SpawnResult> runLocally(
       Spawn spawn,
       ActionExecutionContext actionExecutionContext,
       @Nullable SandboxedSpawnStrategy.StopConcurrentSpawns stopConcurrentSpawns)
