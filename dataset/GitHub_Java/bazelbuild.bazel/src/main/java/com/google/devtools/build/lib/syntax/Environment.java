@@ -28,6 +28,7 @@ import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.SpellChecker;
+import com.google.devtools.common.options.Options;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -420,7 +421,7 @@ public final class Environment implements Freezable {
   /**
    * The semantics options that affect how Skylark code is evaluated.
    */
-  private final SkylarkSemantics semantics;
+  private final SkylarkSemanticsOptions semantics;
 
   /**
    * An EventHandler for errors and warnings. This is not used in the BUILD language,
@@ -592,7 +593,7 @@ public final class Environment implements Freezable {
   private Environment(
       Frame globalFrame,
       Frame dynamicFrame,
-      SkylarkSemantics semantics,
+      SkylarkSemanticsOptions semantics,
       EventHandler eventHandler,
       Map<String, Extension> importedExtensions,
       @Nullable String fileContentHashCode,
@@ -618,7 +619,7 @@ public final class Environment implements Freezable {
     private final Mutability mutability;
     private Phase phase = Phase.ANALYSIS;
     @Nullable private Frame parent;
-    @Nullable private SkylarkSemantics semantics;
+    @Nullable private SkylarkSemanticsOptions semantics;
     @Nullable private EventHandler eventHandler;
     @Nullable private Map<String, Extension> importedExtensions;
     @Nullable private String fileContentHashCode;
@@ -650,7 +651,7 @@ public final class Environment implements Freezable {
       return this;
     }
 
-    public Builder setSemantics(SkylarkSemantics semantics) {
+    public Builder setSemantics(SkylarkSemanticsOptions semantics) {
       this.semantics = semantics;
       return this;
     }
@@ -684,7 +685,7 @@ public final class Environment implements Freezable {
       Frame globalFrame = new Frame(mutability, parent);
       Frame dynamicFrame = new Frame(mutability, null);
       if (semantics == null) {
-        semantics = SkylarkSemantics.DEFAULT_SEMANTICS;
+        semantics = Options.getDefaults(SkylarkSemanticsOptions.class);
       }
       if (importedExtensions == null) {
         importedExtensions = ImmutableMap.of();
@@ -863,7 +864,7 @@ public final class Environment implements Freezable {
     return knownGlobalVariables != null && knownGlobalVariables.contains(varname);
   }
 
-  public SkylarkSemantics getSemantics() {
+  public SkylarkSemanticsOptions getSemantics() {
     return semantics;
   }
 
