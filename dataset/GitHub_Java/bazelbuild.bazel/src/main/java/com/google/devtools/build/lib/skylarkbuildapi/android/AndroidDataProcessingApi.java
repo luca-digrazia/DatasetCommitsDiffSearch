@@ -365,9 +365,9 @@ public interface AndroidDataProcessingApi<
             type = FileApi.class,
             doc = "The library class jar."),
         @Param(
-            name = "local_proguard_specs",
+            name = "proguard_specs",
             type = SkylarkList.class,
-            generic1 = FileApi.class,
+            generic1 = TransitiveInfoCollectionApi.class,
             defaultValue = "[]",
             positional = false,
             named = true,
@@ -402,7 +402,7 @@ public interface AndroidDataProcessingApi<
       AndroidResourcesInfoT resourcesInfo,
       AndroidAssetsInfoT assetsInfo,
       FileT libraryClassJar,
-      SkylarkList<FileT> localProguardSpecs,
+      SkylarkList<TransitiveInfoCollectionT> proguardSpecs,
       SkylarkList<AndroidLibraryAarInfoT> deps,
       boolean neverlink)
       throws EvalException, InterruptedException;
@@ -504,9 +504,9 @@ public interface AndroidDataProcessingApi<
                 "Defaults to False. If True, processes data binding expressions in layout"
                     + " resources."),
         @Param(
-            name = "local_proguard_specs",
+            name = "proguard_specs",
             type = SkylarkList.class,
-            generic1 = FileApi.class,
+            generic1 = TransitiveInfoCollectionApi.class,
             defaultValue = "[]",
             positional = false,
             named = true,
@@ -541,7 +541,7 @@ public interface AndroidDataProcessingApi<
       Object customPackage,
       boolean neverlink,
       boolean enableDataBinding,
-      SkylarkList<FileT> localProguardSpecs,
+      SkylarkList<TransitiveInfoCollectionT> proguardSpecs,
       SkylarkList<TransitiveInfoCollectionT> deps,
       Location location,
       Environment env)

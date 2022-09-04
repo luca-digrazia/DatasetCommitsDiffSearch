@@ -341,7 +341,7 @@ public abstract class AndroidSkylarkData
     // Expose the updated manifest that was changed by resource processing
     // TODO(b/30817309): Use the base manifest once manifests are no longer changed in resource
     // processing
-    AndroidManifestInfo manifestInfo = resourcesInfo.getManifest();
+    AndroidManifestInfo manifestInfo = resourcesInfo.getManifest().toProvider();
 
     return SkylarkDict.copyOf(
         /* env = */ null,
