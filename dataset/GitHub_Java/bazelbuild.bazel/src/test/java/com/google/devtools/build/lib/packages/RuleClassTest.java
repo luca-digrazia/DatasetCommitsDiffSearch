@@ -403,11 +403,8 @@ public class RuleClassTest extends PackageLoadingTestCase {
       attributes.get("my-labellist-attr", Type.STRING); // wrong type
       fail();
     } catch (IllegalArgumentException e) {
-      assertThat(e)
-          .hasMessageThat()
-          .isEqualTo(
-              "Attribute my-labellist-attr is of type list(label) "
-                  + "and not of type string in ruleA rule //testpackage:my-rule-A");
+      assertThat(e).hasMessage("Attribute my-labellist-attr is of type list(label) "
+          + "and not of type string in ruleA rule //testpackage:my-rule-A");
     }
   }
 
@@ -550,7 +547,7 @@ public class RuleClassTest extends PackageLoadingTestCase {
           + "declaration errors");
     } catch (IllegalArgumentException e) {
       // Expected outcome.
-      assertThat(e).hasMessageThat().isEqualTo(expectedMessage);
+      assertThat(e).hasMessage(expectedMessage);
     }
   }
 
@@ -804,11 +801,8 @@ public class RuleClassTest extends PackageLoadingTestCase {
       childRuleClassBuilder.override(attr("attr", INTEGER));
       fail();
     } catch (IllegalStateException e) {
-      assertThat(e)
-          .hasMessageThat()
-          .isEqualTo(
-              "The type of the new attribute 'int' is different from "
-                  + "the original one 'string'.");
+      assertThat(e).hasMessage("The type of the new attribute 'int' is different from "
+          + "the original one 'string'.");
     }
   }
 
