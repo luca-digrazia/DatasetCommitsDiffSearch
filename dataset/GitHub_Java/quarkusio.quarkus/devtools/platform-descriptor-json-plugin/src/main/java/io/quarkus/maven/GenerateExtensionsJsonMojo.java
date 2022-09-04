@@ -12,10 +12,8 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import javax.json.Json;
 import javax.json.JsonArray;
@@ -50,19 +48,16 @@ import org.eclipse.aether.resolution.ArtifactRequest;
 import org.eclipse.aether.resolution.ArtifactResolutionException;
 import org.eclipse.aether.resolution.ArtifactResult;
 
-import com.fasterxml.jackson.core.json.JsonReadFeature;
+import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.PropertyNamingStrategies;
+import com.fasterxml.jackson.databind.PropertyNamingStrategy;
 import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 
 import io.quarkus.bootstrap.BootstrapConstants;
-import io.quarkus.bootstrap.resolver.maven.workspace.LocalWorkspace;
 import io.quarkus.bootstrap.resolver.maven.workspace.ModelUtils;
-import io.quarkus.bootstrap.util.IoUtils;
 import io.quarkus.bootstrap.util.ZipUtils;
 import io.quarkus.dependencies.Extension;
 import io.quarkus.platform.tools.ToolsConstants;
@@ -88,7 +83,7 @@ public class GenerateExtensionsJsonMojo extends AbstractMojo {
     @Parameter(property = "overridesFile", defaultValue = "${project.basedir}/src/main/resources/extensions-overrides.json")
     private String overridesFile;
 
-    @Parameter(property = "outputFile", defaultValue = "${project.build.directory}/${project.artifactId}-${project.version}-${project.version}.json")
+    @Parameter(property = "outputFile", defaultValue = "${project.build.directory}/extensions.json")
     private File outputFile;
 
     @Component
@@ -105,58 +100,22 @@ public class GenerateExtensionsJsonMojo extends AbstractMojo {
     @Component
     private MavenProjectHelper projectHelper;
 
-    /**
-     * Group ID's that we know don't contain extensions. This can speed up the process
-     * by preventing the download of artifacts that are not required.
-     */
-    @Parameter
-    private Set<String> ignoredGroupIds = new HashSet<>(0);
-
-    @Parameter
-    private boolean skipArtifactIdCheck;
-
-    @Parameter(property = "skipBomCheck")
-    private boolean skipBomCheck;
-
-    @Parameter(property = "resolveDependencyManagement")
-    boolean resolveDependencyManagement;
+    public GenerateExtensionsJsonMojo() {
+        MojoLogger.logSupplier = this::getLog;
+    }
 
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
-
-        final Artifact jsonArtifact = new DefaultArtifact(project.getGroupId(), project.getArtifactId(), project.getVersion(),
-                "json", project.getVersion());
-        if (!skipArtifactIdCheck) {
-            final String expectedArtifactId = bomArtifactId + BootstrapConstants.PLATFORM_DESCRIPTOR_ARTIFACT_ID_SUFFIX;
-            if (!jsonArtifact.getArtifactId().equals(expectedArtifactId)) {
-                throw new MojoExecutionException(
-                        "The project's artifactId " + project.getArtifactId() + " is expected to be " + expectedArtifactId);
-            }
-            if (!jsonArtifact.getGroupId().equals(bomGroupId)) {
-                throw new MojoExecutionException("The project's groupId " + project.getGroupId()
-                        + " is expected to match the groupId of the BOM which is " + bomGroupId);
-            }
-            if (!jsonArtifact.getVersion().equals(bomVersion)) {
-                throw new MojoExecutionException("The project's version " + project.getVersion()
-                        + " is expected to match the version of the BOM which is " + bomVersion);
-            }
-        }
 
         // Get the BOM artifact
         final DefaultArtifact bomArtifact = new DefaultArtifact(bomGroupId, bomArtifactId, "", "pom", bomVersion);
         info("Generating catalog of extensions for %s", bomArtifact);
 
         // if the BOM is generated and has replaced the original one, to pick up the generated content
-        // we should read the dependencyManagement from the generated pom.xml
-        List<Dependency> deps;
-        if (resolveDependencyManagement) {
-            getLog().debug("Resolving dependencyManagement from the artifact descriptor");
-            deps = dependencyManagementFromDescriptor(bomArtifact);
-        } else {
-            deps = dependencyManagementFromProject();
-            if (deps == null) {
-                deps = dependencyManagementFromResolvedPom(bomArtifact);
-            }
+        // we are first trying to read the dependencies from the project's POM file
+        List<Dependency> deps = readManagedDepsFromPom();
+        if (deps == null) {
+            deps = resolveManagedDeps(bomArtifact);
         }
         if (deps.isEmpty()) {
             getLog().warn("BOM " + bomArtifact + " does not include any dependency");
@@ -174,26 +133,14 @@ public class GenerateExtensionsJsonMojo extends AbstractMojo {
         // Create a JSON array of extension descriptors
         final JsonArrayBuilder extListJson = Json.createArrayBuilder();
         String quarkusCoreVersion = null;
-        boolean jsonFoundInBom = false;
         for (Dependency dep : deps) {
             final Artifact artifact = dep.getArtifact();
-
-            if (!skipBomCheck && !jsonFoundInBom) {
-                jsonFoundInBom = artifact.getArtifactId().equals(jsonArtifact.getArtifactId())
-                        && artifact.getGroupId().equals(jsonArtifact.getGroupId())
-                        && artifact.getExtension().equals(jsonArtifact.getExtension())
-                        && artifact.getClassifier().equals(jsonArtifact.getClassifier())
-                        && artifact.getVersion().equals(jsonArtifact.getVersion());
-            }
-
-            if (ignoredGroupIds.contains(artifact.getGroupId())
-                    || !artifact.getExtension().equals("jar")
+            if (!artifact.getExtension().equals("jar")
                     || "javadoc".equals(artifact.getClassifier())
                     || "tests".equals(artifact.getClassifier())
                     || "sources".equals(artifact.getClassifier())) {
                 continue;
             }
-
             if (artifact.getArtifactId().equals(ToolsConstants.QUARKUS_CORE_ARTIFACT_ID)
                     && artifact.getGroupId().equals(ToolsConstants.QUARKUS_CORE_GROUP_ID)) {
                 quarkusCoreVersion = artifact.getVersion();
@@ -221,10 +168,6 @@ public class GenerateExtensionsJsonMojo extends AbstractMojo {
             }
         }
 
-        if (!skipBomCheck && !jsonFoundInBom) {
-            throw new MojoExecutionException(
-                    "Failed to locate " + jsonArtifact + " in the dependencyManagement section of " + bomArtifact);
-        }
         if (quarkusCoreVersion == null) {
             throw new MojoExecutionException("Failed to determine the Quarkus Core version for " + bomArtifact);
         }
@@ -273,19 +216,10 @@ public class GenerateExtensionsJsonMojo extends AbstractMojo {
         }
         info("Extensions file written to %s", outputFile);
 
-        // this is necessary to sometimes be able to resolve the artifacts from the workspace
-        final File published = new File(project.getBuild().getDirectory(), LocalWorkspace.getFileName(jsonArtifact));
-        if (!outputDir.equals(published)) {
-            try {
-                IoUtils.copy(outputFile.toPath(), published.toPath());
-            } catch (IOException e) {
-                throw new MojoExecutionException("Failed to copy " + outputFile + " to " + published);
-            }
-        }
-        projectHelper.attachArtifact(project, jsonArtifact.getExtension(), jsonArtifact.getClassifier(), published);
+        projectHelper.attachArtifact(project, "json", null, outputFile);
     }
 
-    private List<Dependency> dependencyManagementFromDescriptor(Artifact bomArtifact) throws MojoExecutionException {
+    private List<Dependency> resolveManagedDeps(Artifact bomArtifact) throws MojoExecutionException {
         try {
             return repoSystem
                     .readArtifactDescriptor(repoSession,
@@ -296,19 +230,7 @@ public class GenerateExtensionsJsonMojo extends AbstractMojo {
         }
     }
 
-    private List<Dependency> dependencyManagementFromResolvedPom(Artifact bomArtifact) throws MojoExecutionException {
-        final Path pomXml;
-        try {
-            pomXml = repoSystem
-                    .resolveArtifact(repoSession, new ArtifactRequest().setArtifact(bomArtifact).setRepositories(repos))
-                    .getArtifact().getFile().toPath();
-        } catch (ArtifactResolutionException e) {
-            throw new MojoExecutionException("Failed to resolve " + bomArtifact, e);
-        }
-        return readDependencyManagement(pomXml);
-    }
-
-    private List<Dependency> dependencyManagementFromProject() throws MojoExecutionException {
+    private List<Dependency> readManagedDepsFromPom() throws MojoExecutionException {
         // if the configured BOM coordinates are not matching the current project
         // the current project's POM isn't the right source
         if (!project.getArtifact().getArtifactId().equals(bomArtifactId)
@@ -317,24 +239,17 @@ public class GenerateExtensionsJsonMojo extends AbstractMojo {
                 || !project.getFile().exists()) {
             return null;
         }
-        return readDependencyManagement(project.getFile().toPath());
-    }
 
-    private List<Dependency> readDependencyManagement(Path pomXml) throws MojoExecutionException {
-        if (getLog().isDebugEnabled()) {
-            getLog().debug("Reading dependencyManagement from " + pomXml);
-        }
         final Model bomModel;
         try {
-            bomModel = ModelUtils.readModel(pomXml);
+            bomModel = ModelUtils.readModel(project.getFile().toPath());
         } catch (IOException e) {
             throw new MojoExecutionException("Failed to parse " + project.getFile(), e);
         }
 
         // if the POM has a parent then we better resolve the descriptor
         if (bomModel.getParent() != null) {
-            throw new MojoExecutionException(pomXml
-                    + " has a parent, in which case it is recommended to set 'resolveDependencyManagement' parameter to true");
+            return null;
         }
 
         if (bomModel.getDependencyManagement() == null) {
@@ -440,14 +355,11 @@ public class GenerateExtensionsJsonMojo extends AbstractMojo {
         if (yaml) {
             YAMLFactory yf = new YAMLFactory();
             return new ObjectMapper(yf)
-                    .setPropertyNamingStrategy(PropertyNamingStrategies.KEBAB_CASE);
+                    .setPropertyNamingStrategy(PropertyNamingStrategy.KEBAB_CASE);
         } else {
-            return JsonMapper.builder()
-                    .enable(SerializationFeature.INDENT_OUTPUT)
-                    .enable(JsonReadFeature.ALLOW_JAVA_COMMENTS)
-                    .enable(JsonReadFeature.ALLOW_LEADING_ZEROS_FOR_NUMBERS)
-                    .propertyNamingStrategy(PropertyNamingStrategies.KEBAB_CASE)
-                    .build();
+            return new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT)
+                    .enable(JsonParser.Feature.ALLOW_COMMENTS).enable(JsonParser.Feature.ALLOW_NUMERIC_LEADING_ZEROS)
+                    .setPropertyNamingStrategy(PropertyNamingStrategy.KEBAB_CASE);
         }
     }
 
