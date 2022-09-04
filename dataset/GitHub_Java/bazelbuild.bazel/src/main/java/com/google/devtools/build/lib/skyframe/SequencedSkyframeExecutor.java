@@ -168,12 +168,13 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
       Iterable<? extends DiffAwareness.Factory> diffAwarenessFactories,
       ImmutableMap<SkyFunctionName, SkyFunction> extraSkyFunctions,
       Iterable<SkyValueDirtinessChecker> customDirtinessCheckers,
-      SkyFunction ignoredPackagePrefixesFunction,
+      SkyFunction blacklistedPackagePrefixesFunction,
       CrossRepositoryLabelViolationStrategy crossRepositoryLabelViolationStrategy,
       ImmutableList<BuildFileName> buildFilesByPriority,
       ExternalPackageHelper externalPackageHelper,
       ActionOnIOExceptionReadingBuildFile actionOnIOExceptionReadingBuildFile,
       BuildOptions defaultBuildOptions,
+      MutableArtifactFactorySupplier mutableArtifactFactorySupplier,
       @Nullable ManagedDirectoriesKnowledge managedDirectoriesKnowledge) {
     super(
         skyframeExecutorConsumerOnInit,
@@ -185,7 +186,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
         workspaceStatusActionFactory,
         extraSkyFunctions,
         ExternalFileAction.DEPEND_ON_EXTERNAL_PKG_FOR_EXTERNAL_REPO_PATHS,
-        ignoredPackagePrefixesFunction,
+        blacklistedPackagePrefixesFunction,
         crossRepositoryLabelViolationStrategy,
         buildFilesByPriority,
         externalPackageHelper,
@@ -194,6 +195,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
         GraphInconsistencyReceiver.THROWING,
         defaultBuildOptions,
         new PackageProgressReceiver(),
+        mutableArtifactFactorySupplier,
         new ConfiguredTargetProgressReceiver(),
         /*nonexistentFileReceiver=*/ null,
         managedDirectoriesKnowledge);
@@ -283,7 +285,9 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
     }
 
     return ArtifactNestedSetFunction.sizeThresholdUpdated(
-        buildRequestOptions.nestedSetAsSkyKeyThreshold);
+            buildRequestOptions.nestedSetAsSkyKeyThreshold)
+        || ArtifactNestedSetFunction.evalKeysAsOneGroupUpdated(
+            buildRequestOptions.nsosEvalKeysAsOneGroup);
   }
 
   /**
@@ -1052,11 +1056,11 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
    * constructed (if the default value can be provided for the new argument in Builder).
    */
   public static final class Builder {
-    PackageFactory pkgFactory;
-    FileSystem fileSystem;
-    BlazeDirectories directories;
-    ActionKeyContext actionKeyContext;
-    BuildOptions defaultBuildOptions;
+    protected PackageFactory pkgFactory;
+    protected FileSystem fileSystem;
+    protected BlazeDirectories directories;
+    protected ActionKeyContext actionKeyContext;
+    protected BuildOptions defaultBuildOptions;
     private CrossRepositoryLabelViolationStrategy crossRepositoryLabelViolationStrategy;
     private ImmutableList<BuildFileName> buildFilesByPriority;
     private ExternalPackageHelper externalPackageHelper;
@@ -1068,8 +1072,10 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
     private Factory workspaceStatusActionFactory;
     private Iterable<? extends DiffAwareness.Factory> diffAwarenessFactories = ImmutableList.of();
     private Iterable<SkyValueDirtinessChecker> customDirtinessCheckers = ImmutableList.of();
+    private MutableArtifactFactorySupplier mutableArtifactFactorySupplier =
+        new MutableArtifactFactorySupplier();
     private Consumer<SkyframeExecutor> skyframeExecutorConsumerOnInit = skyframeExecutor -> {};
-    private SkyFunction ignoredPackagePrefixesFunction;
+    private SkyFunction blacklistedPackagePrefixesFunction;
 
     private Builder() {}
 
@@ -1084,7 +1090,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
       Preconditions.checkNotNull(buildFilesByPriority);
       Preconditions.checkNotNull(externalPackageHelper);
       Preconditions.checkNotNull(actionOnIOExceptionReadingBuildFile);
-      Preconditions.checkNotNull(ignoredPackagePrefixesFunction);
+      Preconditions.checkNotNull(blacklistedPackagePrefixesFunction);
 
       SequencedSkyframeExecutor skyframeExecutor =
           new SequencedSkyframeExecutor(
@@ -1098,12 +1104,13 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
               diffAwarenessFactories,
               extraSkyFunctions,
               customDirtinessCheckers,
-              ignoredPackagePrefixesFunction,
+              blacklistedPackagePrefixesFunction,
               crossRepositoryLabelViolationStrategy,
               buildFilesByPriority,
               externalPackageHelper,
               actionOnIOExceptionReadingBuildFile,
               defaultBuildOptions,
+              mutableArtifactFactorySupplier,
               managedDirectoriesKnowledge);
       skyframeExecutor.init();
       return skyframeExecutor;
@@ -1134,8 +1141,9 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
       return this;
     }
 
-    public Builder setIgnoredPackagePrefixesFunction(SkyFunction ignoredPackagePrefixesFunction) {
-      this.ignoredPackagePrefixesFunction = ignoredPackagePrefixesFunction;
+    public Builder setBlacklistedPackagePrefixesFunction(
+        SkyFunction blacklistedPackagePrefixesFunction) {
+      this.blacklistedPackagePrefixesFunction = blacklistedPackagePrefixesFunction;
       return this;
     }
 
@@ -1184,6 +1192,11 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
       return this;
     }
 
+    public Builder setMutableArtifactFactorySupplier(
+        MutableArtifactFactorySupplier mutableArtifactFactorySupplier) {
+      this.mutableArtifactFactorySupplier = mutableArtifactFactorySupplier;
+      return this;
+    }
     public Builder setSkyframeExecutorConsumerOnInit(
         Consumer<SkyframeExecutor> skyframeExecutorConsumerOnInit) {
       this.skyframeExecutorConsumerOnInit = skyframeExecutorConsumerOnInit;

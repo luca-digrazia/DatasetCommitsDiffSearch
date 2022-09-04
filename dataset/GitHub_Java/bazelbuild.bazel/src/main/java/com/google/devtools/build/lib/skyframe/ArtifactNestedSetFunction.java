@@ -18,7 +18,6 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.MapMaker;
 import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
-import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.util.Pair;
@@ -28,7 +27,6 @@ import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import com.google.devtools.build.skyframe.ValueOrException3;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentMap;
@@ -103,11 +101,10 @@ final class ArtifactNestedSetFunction implements SkyFunction {
    * Maps the NestedSets' underlying objects to the corresponding SkyKey. This is to avoid
    * re-creating SkyKey for the same nested set upon reevaluation because of e.g. a missing value.
    *
-   * <p>The map weakly references its values: when the ArtifactNestedSetKey becomes otherwise
-   * unreachable, the map entry is collected.
+   * <p>The map has weak references to keys to prevent memory leaks: if a nested set no longer
+   * exists, its entry would be automatically removed from the map by the GC.
    */
-  private final ConcurrentMap<NestedSet.Node, ArtifactNestedSetKey>
-      nestedSetToSkyKey; // note: weak values!
+  private final ConcurrentMap<Object, SkyKey> nestedSetToSkyKey;
 
   private static ArtifactNestedSetFunction singleton = null;
 
@@ -118,7 +115,7 @@ final class ArtifactNestedSetFunction implements SkyFunction {
   private ArtifactNestedSetFunction() {
     artifactSkyKeyToSkyValue = Maps.newConcurrentMap();
     artifactSkyKeyToValueOrException = Maps.newConcurrentMap();
-    nestedSetToSkyKey = new MapMaker().weakValues().makeMap();
+    nestedSetToSkyKey = new MapMaker().weakKeys().makeMap();
   }
 
   @Override
@@ -129,25 +126,24 @@ final class ArtifactNestedSetFunction implements SkyFunction {
       return evalDepsInOneGroup(skyKey, env);
     }
 
-    ArtifactNestedSetKey key = (ArtifactNestedSetKey) skyKey;
+    ArtifactNestedSetKey artifactNestedSetKey = (ArtifactNestedSetKey) skyKey;
     Map<
             SkyKey,
             ValueOrException3<
                 IOException, ActionExecutionException, ArtifactNestedSetEvalException>>
         directArtifactsEvalResult =
             env.getValuesOrThrow(
-                Iterables.transform(key.getSet().getLeaves(), Artifact::key),
+                artifactNestedSetKey.directKeys(),
                 IOException.class,
                 ActionExecutionException.class,
                 ArtifactNestedSetEvalException.class);
 
     // Evaluate all children.
-    List<NestedSet<Artifact>> nonleaves = key.getSet().getNonLeaves();
-    List<SkyKey> transitiveKeys = Lists.newArrayListWithCapacity(nonleaves.size());
-    for (NestedSet<Artifact> nonleaf : nonleaves) {
+    List<Object> transitiveMembers = artifactNestedSetKey.transitiveMembers();
+    List<SkyKey> transitiveKeys = Lists.newArrayListWithCapacity(transitiveMembers.size());
+    for (Object transitiveMember : transitiveMembers) {
       transitiveKeys.add(
-          nestedSetToSkyKey.computeIfAbsent(
-              nonleaf.toNode(), (node) -> new ArtifactNestedSetKey(nonleaf, node)));
+          nestedSetToSkyKey.computeIfAbsent(transitiveMember, ArtifactNestedSetKey::new));
     }
     env.getValues(transitiveKeys);
 
@@ -163,15 +159,13 @@ final class ArtifactNestedSetFunction implements SkyFunction {
   /** The main path with --experimental_nsos_eval_keys_as_one_group. */
   private SkyValue evalDepsInOneGroup(SkyKey skyKey, Environment env)
       throws InterruptedException, ArtifactNestedSetFunctionException {
-    NestedSet<Artifact> set = ((ArtifactNestedSetKey) skyKey).getSet();
-    List<SkyKey> keys = new ArrayList<>();
-    for (Artifact file : set.getLeaves()) {
-      keys.add(Artifact.key(file));
-    }
-    for (NestedSet<Artifact> nonleaf : set.getNonLeaves()) {
-      keys.add(
-          nestedSetToSkyKey.computeIfAbsent(
-              nonleaf.toNode(), (node) -> new ArtifactNestedSetKey(nonleaf, node)));
+    ArtifactNestedSetKey artifactNestedSetKey = (ArtifactNestedSetKey) skyKey;
+    Iterable<SkyKey> directKeys = artifactNestedSetKey.directKeys();
+    List<Object> transitiveMembers = artifactNestedSetKey.transitiveMembers();
+    List<SkyKey> transitiveKeys = Lists.newArrayListWithCapacity(transitiveMembers.size());
+    for (Object transitiveMember : transitiveMembers) {
+      transitiveKeys.add(
+          nestedSetToSkyKey.computeIfAbsent(transitiveMember, ArtifactNestedSetKey::new));
     }
     Map<
             SkyKey,
@@ -179,7 +173,7 @@ final class ArtifactNestedSetFunction implements SkyFunction {
                 IOException, ActionExecutionException, ArtifactNestedSetEvalException>>
         depsEvalResult =
             env.getValuesOrThrow(
-                keys,
+                Iterables.concat(directKeys, transitiveKeys),
                 IOException.class,
                 ActionExecutionException.class,
                 ArtifactNestedSetEvalException.class);
@@ -211,14 +205,10 @@ final class ArtifactNestedSetFunction implements SkyFunction {
 
     if (!transitiveExceptionsBuilder.isEmpty()) {
       NestedSet<Pair<SkyKey, Exception>> transitiveExceptions = transitiveExceptionsBuilder.build();
-      // The NestedSet of exceptions is usually small, hence flattening won't be too costly.
-      Pair<SkyKey, Exception> firstSkyKeyAndException = transitiveExceptions.toList().get(0);
       throw new ArtifactNestedSetFunctionException(
           new ArtifactNestedSetEvalException(
-              "Error evaluating artifact nested set. First exception: "
-                  + firstSkyKeyAndException.getSecond()
-                  + ", SkyKey: "
-                  + firstSkyKeyAndException.getFirst(),
+              transitiveExceptions.memoizedFlattenAndGetSize()
+                  + " error(s) encountered while evaluating NestedSet.",
               transitiveExceptions),
           skyKey);
     }
