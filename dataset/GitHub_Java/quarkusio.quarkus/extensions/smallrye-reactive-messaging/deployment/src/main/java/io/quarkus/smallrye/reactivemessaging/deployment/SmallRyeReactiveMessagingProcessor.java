@@ -17,6 +17,7 @@ package io.quarkus.smallrye.reactivemessaging.deployment;
 
 import static io.quarkus.deployment.annotations.ExecutionTime.STATIC_INIT;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -25,9 +26,7 @@ import java.util.stream.Collectors;
 
 import org.eclipse.microprofile.reactive.messaging.Incoming;
 import org.eclipse.microprofile.reactive.messaging.Outgoing;
-import org.jboss.jandex.AnnotationInstance;
-import org.jboss.jandex.DotName;
-import org.jboss.jandex.MethodInfo;
+import org.jboss.jandex.*;
 import org.jboss.logging.Logger;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
@@ -38,7 +37,6 @@ import io.quarkus.arc.deployment.UnremovableBeanBuildItem.BeanClassAnnotationExc
 import io.quarkus.arc.processor.AnnotationStore;
 import io.quarkus.arc.processor.BeanDeploymentValidator;
 import io.quarkus.arc.processor.BeanInfo;
-import io.quarkus.arc.processor.InjectionPointInfo;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.Record;
@@ -69,7 +67,7 @@ public class SmallRyeReactiveMessagingProcessor {
 
     @BuildStep
     BeanDeploymentValidatorBuildItem beanDeploymentValidator(BuildProducer<MediatorBuildItem> mediatorMethods,
-            BuildProducer<EmitterBuildItem> emitters,
+            BuildProducer<EmitterBuildItem> emitterFields,
             BuildProducer<FeatureBuildItem> feature) {
 
         feature.produce(new FeatureBuildItem(FeatureBuildItem.SMALLRYE_REACTIVE_MESSAGING));
@@ -85,7 +83,9 @@ public class SmallRyeReactiveMessagingProcessor {
                 for (BeanInfo bean : validationContext.get(Key.BEANS)) {
                     if (bean.isClassBean()) {
                         // TODO: add support for inherited business methods
-                        for (MethodInfo method : bean.getTarget().get().asClass().methods()) {
+                        ClassInfo ci = bean.getTarget()
+                                .orElseThrow(() -> new IllegalStateException("Target expected")).asClass();
+                        for (MethodInfo method : ci.methods()) {
                             if (annotationStore.hasAnnotation(method, NAME_INCOMING)
                                     || annotationStore.hasAnnotation(method, NAME_OUTGOING)) {
                                 // TODO: validate method params and return type?
@@ -93,18 +93,15 @@ public class SmallRyeReactiveMessagingProcessor {
                                 LOGGER.debugf("Found mediator business method %s declared on %s", method, bean);
                             }
                         }
-                    }
-                }
 
-                for (InjectionPointInfo injectionPoint : validationContext.get(Key.INJECTION_POINTS)) {
-                    if (injectionPoint.getRequiredType().name().equals(NAME_EMITTER)) {
-                        AnnotationInstance stream = injectionPoint.getRequiredQualifier(NAME_STREAM);
-                        if (stream != null) {
-                            // Stream.value() is mandatory
-                            String name = stream.value().asString();
-                            LOGGER.debugf("Emitter injection point '%s' detected, stream name: '%s'",
-                                    injectionPoint.getTargetInfo(), name);
-                            emitters.produce(new EmitterBuildItem(name));
+                        for (FieldInfo field : ci.fields()) {
+                            if (annotationStore.hasAnnotation(field, NAME_STREAM)) {
+                                if (field.type().name().equals(NAME_EMITTER)) {
+                                    String name = annotationStore.getAnnotation(field, NAME_STREAM).value().asString();
+                                    LOGGER.debugf("Emitter field '%s'  detected, stream name: '%s'", field.name(), name);
+                                    emitterFields.produce(new EmitterBuildItem(name));
+                                }
+                            }
                         }
                     }
                 }
