@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2014 TORCH GmbH
+ * Copyright 2013-2014 TORCH GmbH
  *
  * This file is part of Graylog2.
  *
@@ -15,6 +15,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 
 package org.graylog2;
@@ -27,20 +28,20 @@ import com.github.joschi.jadconfig.JadConfig;
 import com.github.joschi.jadconfig.RepositoryException;
 import com.github.joschi.jadconfig.ValidationException;
 import com.github.joschi.jadconfig.repositories.PropertiesRepository;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Sets;
 import com.google.inject.Guice;
 import com.google.inject.Injector;
 import com.google.inject.Module;
+import com.google.inject.Injector;
 import org.apache.commons.io.IOUtils;
 import org.apache.log4j.Level;
-import org.graylog2.bindings.PersistenceServicesBindings;
+import org.graylog2.bindings.ServerBindings;
 import org.graylog2.bindings.ServerBindings;
 import org.graylog2.cluster.Node;
 import org.graylog2.cluster.NodeNotFoundException;
-import org.graylog2.cluster.NodeService;
-import org.graylog2.cluster.NodeServiceImpl;
 import org.graylog2.filters.*;
-import org.graylog2.initializers.DroolsInitializer;
-import org.graylog2.initializers.PeriodicalsInitializer;
+import org.graylog2.initializers.*;
 import org.graylog2.inputs.gelf.http.GELFHttpInput;
 import org.graylog2.inputs.gelf.tcp.GELFTCPInput;
 import org.graylog2.inputs.gelf.udp.GELFUDPInput;
@@ -53,17 +54,17 @@ import org.graylog2.inputs.raw.tcp.RawTCPInput;
 import org.graylog2.inputs.raw.udp.RawUDPInput;
 import org.graylog2.inputs.syslog.tcp.SyslogTCPInput;
 import org.graylog2.inputs.syslog.udp.SyslogUDPInput;
+import org.graylog2.lifecycles.Lifecycle;
 import org.graylog2.notifications.Notification;
-import org.graylog2.notifications.NotificationImpl;
-import org.graylog2.notifications.NotificationService;
 import org.graylog2.outputs.ElasticSearchOutput;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.initializers.InitializerConfigurationException;
 import org.graylog2.plugin.inputs.MessageInput;
-import org.graylog2.plugin.lifecycles.Lifecycle;
 import org.graylog2.plugins.PluginInstaller;
 import org.graylog2.shared.NodeRunner;
-import org.graylog2.shared.bindings.GuiceInstantiationService;
+import org.graylog2.shared.BaseConfiguration;
+import org.graylog2.shared.NodeRunner;
+import org.graylog2.shared.filters.FilterRegistry;
 import org.graylog2.shared.filters.FilterRegistry;
 import org.graylog2.system.activities.Activity;
 import org.slf4j.Logger;
@@ -73,7 +74,10 @@ import org.slf4j.bridge.SLF4JBridgeHandler;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.Writer;
+import java.lang.reflect.Field;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Main class of Graylog2.
@@ -135,12 +139,8 @@ public final class Main extends NodeRunner {
             logLevel = Level.DEBUG;
         }
 
-        GuiceInstantiationService instantiationService = new GuiceInstantiationService();
-        List<Module> bindingsModules = getBindingsModules(instantiationService,
-                new ServerBindings(configuration),
-                new PersistenceServicesBindings());
+        List<Module> bindingsModules = getBindingsModules(new ServerBindings(configuration));
         Injector injector = Guice.createInjector(bindingsModules);
-        instantiationService.setInjector(injector);
 
         // This is holding all our metrics.
         final MetricRegistry metrics = injector.getInstance(MetricRegistry.class);
@@ -186,23 +186,22 @@ public final class Main extends NodeRunner {
         server.initialize();
 
         // Register this node.
-        final NodeService nodeService = injector.getInstance(NodeService.class);
-        nodeService.registerServer(server, configuration.isMaster(), configuration.getRestTransportUri());
+        Node.registerServer(server, configuration.isMaster(), configuration.getRestTransportUri());
 
         Node thisNode = null;
         try {
-            thisNode = nodeService.thisNode(server);
+            thisNode = Node.thisNode(server);
         } catch (NodeNotFoundException e) {
             throw new RuntimeException("Did not find own node. This should never happen.", e);
         }
-        if (configuration.isMaster() && !nodeService.isOnlyMaster(server)) {
+        if (configuration.isMaster() && !thisNode.isOnlyMaster()) {
             LOG.warn("Detected another master in the cluster. Retrying in {} seconds to make sure it is not "
-                    + "an old stale instance.", NodeServiceImpl.PING_TIMEOUT);
+                    + "an old stale instance.", Node.PING_TIMEOUT);
             try {
-                Thread.sleep(NodeServiceImpl.PING_TIMEOUT*1000);
+                Thread.sleep(Node.PING_TIMEOUT*1000);
             } catch (InterruptedException e) { /* nope */ }
             
-            if (!nodeService.isOnlyMaster(server)) {
+            if (!thisNode.isOnlyMaster()) {
                 // All devils here.
                 String what = "Detected other master node in the cluster! Starting as non-master! "
                         + "This is a mis-configuration you should fix.";
@@ -210,11 +209,10 @@ public final class Main extends NodeRunner {
                 server.getActivityWriter().write(new Activity(what, Main.class));
 
                 // Write a notification.
-                final NotificationService notificationService = injector.getInstance(NotificationService.class);
-                Notification notification = notificationService.buildNow()
-                        .addType(NotificationImpl.Type.MULTI_MASTER)
-                        .addSeverity(NotificationImpl.Severity.URGENT);
-                notificationService.publishIfFirst(notification);
+                Notification.buildNow(server)
+                        .addType(Notification.Type.MULTI_MASTER)
+                        .addSeverity(Notification.Severity.URGENT)
+                        .publishIfFirst();
 
                 configuration.setIsMaster(false);
             } else {
@@ -258,16 +256,16 @@ public final class Main extends NodeRunner {
         server.inputs().register(RadioInput.class, RadioInput.NAME);
 
         // Register initializers.
-        server.initializers().register(injector.getInstance(DroolsInitializer.class));
-        server.initializers().register(injector.getInstance(PeriodicalsInitializer.class));
+        server.initializers().register(new DroolsInitializer());
+        server.initializers().register(new PeriodicalsInitializer());
 
         // Register message filters. (Order is important here)
         final FilterRegistry filterRegistry = injector.getInstance(FilterRegistry.class);
-        filterRegistry.register(injector.getInstance(StaticFieldFilter.class));
-        filterRegistry.register(injector.getInstance(ExtractorFilter.class));
-        filterRegistry.register(injector.getInstance(BlacklistFilter.class));
-        filterRegistry.register(injector.getInstance(StreamMatcherFilter.class));
-        filterRegistry.register(injector.getInstance(RewriteFilter.class));
+        filterRegistry.register(new StaticFieldFilter());
+        filterRegistry.register(new ExtractorFilter());
+        filterRegistry.register(new BlacklistFilter());
+        filterRegistry.register(new StreamMatcherFilter());
+        filterRegistry.register(new RewriteFilter());
 
         // Register outputs.
         server.outputs().register(new ElasticSearchOutput(server));
