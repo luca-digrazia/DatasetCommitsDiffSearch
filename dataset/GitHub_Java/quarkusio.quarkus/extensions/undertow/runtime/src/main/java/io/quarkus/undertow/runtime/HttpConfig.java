@@ -24,6 +24,9 @@ import io.quarkus.runtime.annotations.ConfigPhase;
 import io.quarkus.runtime.annotations.ConfigRoot;
 import io.quarkus.runtime.configuration.ssl.ServerSslConfig;
 
+/**
+ * Configuration which applies to the HTTP server.
+ */
 @ConfigRoot(phase = ConfigPhase.RUN_TIME)
 public class HttpConfig {
 
@@ -53,15 +56,8 @@ public class HttpConfig {
     /**
      * The HTTP host
      */
-    @ConfigItem(defaultValue = "localhost")
+    @ConfigItem(defaultValue = "0.0.0.0")
     public String host;
-
-    /**
-     * The number of worker threads used for blocking tasks, this will be automatically set to a reasonable value
-     * based on the number of CPU core if it is not provided
-     */
-    @ConfigItem
-    public OptionalInt workerThreads;
 
     /**
      * The number if IO threads used to perform IO. This will be automatically set to a reasonable value based on

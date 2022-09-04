@@ -458,7 +458,7 @@ public class UndertowBuildStep {
             }
         }
         for (ServletInitParamBuildItem i : initParams) {
-            template.addServletInitParameter(deployment, i.getKey(), i.getValue());
+            template.addServltInitParameter(deployment, i.getKey(), i.getValue());
         }
         for (ServletContextAttributeBuildItem i : contextParams) {
             template.addServletContextAttribute(deployment, i.getKey(), i.getValue());
