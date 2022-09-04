@@ -27,7 +27,6 @@ import io.quarkus.runtime.LaunchMode;
 import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.vertx.core.deployment.EventLoopCountBuildItem;
 import io.quarkus.vertx.core.deployment.InternalWebVertxBuildItem;
-import io.quarkus.vertx.http.runtime.CurrentVertxRequest;
 import io.quarkus.vertx.http.runtime.HttpBuildTimeConfig;
 import io.quarkus.vertx.http.runtime.HttpConfiguration;
 import io.quarkus.vertx.http.runtime.RouterProducer;
@@ -38,6 +37,8 @@ import io.vertx.core.impl.VertxImpl;
 import io.vertx.ext.web.Router;
 
 class VertxHttpProcessor {
+
+    HttpConfiguration httpConfiguration;
 
     @BuildStep
     HttpRootPathBuildItem httpRoot(HttpBuildTimeConfig config) {
@@ -52,11 +53,7 @@ class VertxHttpProcessor {
 
     @BuildStep
     AdditionalBeanBuildItem additionalBeans() {
-        return AdditionalBeanBuildItem.builder()
-                .setUnremovable()
-                .addBeanClass(RouterProducer.class)
-                .addBeanClass(CurrentVertxRequest.class)
-                .build();
+        return AdditionalBeanBuildItem.unremovableOf(RouterProducer.class);
     }
 
     /**
@@ -74,7 +71,8 @@ class VertxHttpProcessor {
 
     @BuildStep(onlyIf = IsNormal.class)
     @Record(value = ExecutionTime.RUNTIME_INIT, optional = true)
-    public KubernetesPortBuildItem kubernetes(HttpConfiguration config, VertxHttpRecorder recorder) {
+    public KubernetesPortBuildItem kubernetes(HttpConfiguration config, BuildProducer<KubernetesPortBuildItem> portProducer,
+            VertxHttpRecorder recorder) {
         int port = ConfigProvider.getConfig().getOptionalValue("quarkus.http.port", Integer.class).orElse(8080);
         recorder.warnIfPortChanged(config, port);
         return new KubernetesPortBuildItem(config.port, "http");
@@ -100,12 +98,11 @@ class VertxHttpProcessor {
     @Record(ExecutionTime.RUNTIME_INIT)
     ServiceStartBuildItem finalizeRouter(
             VertxHttpRecorder recorder, BeanContainerBuildItem beanContainer,
-            Optional<RequireVirtualHttpBuildItem> requireVirtual, InternalWebVertxBuildItem vertx,
-            LaunchModeBuildItem launchMode, ShutdownContextBuildItem shutdown,
-            List<DefaultRouteBuildItem> defaultRoutes, List<FilterBuildItem> filters,
-            VertxWebRouterBuildItem router, EventLoopCountBuildItem eventLoopCount,
-            HttpBuildTimeConfig httpBuildTimeConfig, HttpConfiguration httpConfiguration,
-            BuildProducer<ReflectiveClassBuildItem> reflectiveClass, List<WebsocketSubProtocolsBuildItem> websocketSubProtocols)
+            Optional<RequireVirtualHttpBuildItem> requireVirtual,
+            InternalWebVertxBuildItem vertx,
+            LaunchModeBuildItem launchMode, ShutdownContextBuildItem shutdown, List<DefaultRouteBuildItem> defaultRoutes,
+            List<FilterBuildItem> filters, VertxWebRouterBuildItem router, EventLoopCountBuildItem eventLoopCountBuildItem,
+            HttpBuildTimeConfig httpBuildTimeConfig)
             throws BuildException, IOException {
         Optional<DefaultRouteBuildItem> defaultRoute;
         if (defaultRoutes == null || defaultRoutes.isEmpty()) {
@@ -128,18 +125,21 @@ class VertxHttpProcessor {
                 listOfFilters, vertx.getVertx(), router.getRouter(), httpBuildTimeConfig.rootPath, launchMode.getLaunchMode());
 
         boolean startVirtual = requireVirtual.isPresent() || httpConfiguration.virtual;
-        if (startVirtual) {
-            reflectiveClass
-                    .produce(new ReflectiveClassBuildItem(true, false, false, VirtualServerChannel.class));
-        }
         // start http socket in dev/test mode even if virtual http is required
         boolean startSocket = !startVirtual || launchMode.getLaunchMode() != LaunchMode.NORMAL;
         recorder.startServer(vertx.getVertx(), shutdown,
                 httpConfiguration, launchMode.getLaunchMode(), startVirtual, startSocket,
-                eventLoopCount.getEventLoopCount(),
-                websocketSubProtocols.stream().map(bi -> bi.getWebsocketSubProtocols())
-                        .collect(Collectors.joining(",")));
+                eventLoopCountBuildItem.getEventLoopCount());
 
         return new ServiceStartBuildItem("vertx-http");
+    }
+
+    @BuildStep
+    public void registerReflectionClasses(Optional<RequireVirtualHttpBuildItem> requireVirtual,
+            BuildProducer<ReflectiveClassBuildItem> reflectiveClassBuildItemBuildProducer) {
+        if (requireVirtual.isPresent() || httpConfiguration.virtual) {
+            reflectiveClassBuildItemBuildProducer
+                    .produce(new ReflectiveClassBuildItem(true, false, false, VirtualServerChannel.class));
+        }
     }
 }
