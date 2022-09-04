@@ -45,11 +45,7 @@ public class ChangeUserRequestForm extends ChangeUserRequest {
         r.email = email;
         r.fullname = fullname;
         r.startpage = startpage;
-        if ((timezone == null) || (timezone.isEmpty())) {
-            r.timezone = null;
-        } else {
-            r.timezone = timezone;
-        }
+        r.timezone = timezone.isEmpty() ? null : timezone;
         r.sessionTimeoutMs = sessionTimeoutMs;
         return r;
     }

@@ -13,7 +13,7 @@ public class CreateAlarmCallbackRequest extends ApiRequest {
     @Constraints.Required
     public String type;
     @Constraints.Required
-    public Map<String, Object> configuration;
+    public Map<String, String> configuration;
     @SerializedName("creator_user_id")
     public String creatorUserId;
 
@@ -25,11 +25,11 @@ public class CreateAlarmCallbackRequest extends ApiRequest {
         this.type = type;
     }
 
-    public Map<String, Object> getConfiguration() {
+    public Map<String, String> getConfiguration() {
         return configuration;
     }
 
-    public void setConfiguration(Map<String, Object> configuration) {
+    public void setConfiguration(Map<String, String> configuration) {
         this.configuration = configuration;
     }
 
