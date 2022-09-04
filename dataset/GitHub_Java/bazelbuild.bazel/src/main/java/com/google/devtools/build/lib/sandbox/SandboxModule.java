@@ -21,6 +21,7 @@ import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
 import com.google.common.eventbus.Subscribe;
 import com.google.devtools.build.lib.actions.ExecException;
+import com.google.devtools.build.lib.actions.ExecutorInitException;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnExecutedEvent;
 import com.google.devtools.build.lib.actions.SpawnResult;
@@ -40,12 +41,6 @@ import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.runtime.BlazeModule;
 import com.google.devtools.build.lib.runtime.Command;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
-import com.google.devtools.build.lib.runtime.ProcessWrapper;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
-import com.google.devtools.build.lib.server.FailureDetails.Sandbox;
-import com.google.devtools.build.lib.util.AbruptExitException;
-import com.google.devtools.build.lib.util.DetailedExitCode;
-import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.vfs.FileSystem;
@@ -141,20 +136,12 @@ public final class SandboxModule extends BlazeModule {
   @Override
   public void registerSpawnStrategies(
       SpawnStrategyRegistry.Builder registryBuilder, CommandEnvironment env)
-      throws AbruptExitException {
+      throws ExecutorInitException {
     checkNotNull(env, "env not initialized; was beforeCommand called?");
     try {
       setup(env, registryBuilder);
     } catch (IOException e) {
-      throw new AbruptExitException(
-          DetailedExitCode.of(
-              ExitCode.LOCAL_ENVIRONMENTAL_ERROR,
-              FailureDetail.newBuilder()
-                  .setMessage(String.format("Failed to initialize sandbox: %s", e.getMessage()))
-                  .setSandbox(
-                      Sandbox.newBuilder().setCode(Sandbox.Code.INITIALIZATION_FAILURE).build())
-                  .build()),
-          e);
+      throw new ExecutorInitException("Failed to initialize sandbox", e);
     }
   }
 
@@ -289,6 +276,7 @@ public final class SandboxModule extends BlazeModule {
                   helpers,
                   cmdEnv,
                   sandboxBase,
+                  timeoutKillDelay,
                   sandboxfsProcess,
                   options.sandboxfsMapSymlinkTargets,
                   treeDeleter));
@@ -317,6 +305,7 @@ public final class SandboxModule extends BlazeModule {
                     pathToDocker,
                     sandboxBase,
                     defaultImage,
+                    timeoutKillDelay,
                     useCustomizedImages,
                     treeDeleter));
         spawnRunners.add(spawnRunner);
@@ -358,6 +347,7 @@ public final class SandboxModule extends BlazeModule {
                   helpers,
                   cmdEnv,
                   sandboxBase,
+                  timeoutKillDelay,
                   sandboxfsProcess,
                   options.sandboxfsMapSymlinkTargets,
                   treeDeleter));
@@ -433,7 +423,6 @@ public final class SandboxModule extends BlazeModule {
         env.getLocalResourceManager(),
         LocalEnvProvider.forCurrentOs(env.getClientEnv()),
         env.getBlazeWorkspace().getBinTools(),
-        ProcessWrapper.fromCommandEnvironment(env),
         // TODO(buchgr): Replace singleton by a command-scoped RunfilesTreeUpdater
         RunfilesTreeUpdater.INSTANCE);
   }
@@ -475,11 +464,6 @@ public final class SandboxModule extends BlazeModule {
     @Override
     public boolean canExec(Spawn spawn) {
       return sandboxSpawnRunner.canExec(spawn) || fallbackSpawnRunner.canExec(spawn);
-    }
-
-    @Override
-    public boolean handlesCaching() {
-      return false;
     }
 
     @Override
