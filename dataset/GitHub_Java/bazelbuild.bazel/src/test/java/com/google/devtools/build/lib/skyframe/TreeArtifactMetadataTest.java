@@ -102,9 +102,7 @@ public class TreeArtifactMetadataTest extends ArtifactFunctionTestCase {
     // breaking changes.
     Map<String, Metadata> digestBuilder = new HashMap<>();
     for (PathFragment child : children) {
-      Metadata subdigest = FileArtifactValue.createNormalFile(
-          tree.getPath().getRelative(child).getDigest(),
-          tree.getPath().getRelative(child).getFileSize());
+      Metadata subdigest = new Metadata(tree.getPath().getRelative(child).getDigest());
       digestBuilder.put(child.getPathString(), subdigest);
     }
     assertThat(DigestUtils.fromMetadata(digestBuilder).getDigestBytesUnsafe())
@@ -224,7 +222,7 @@ public class TreeArtifactMetadataTest extends ArtifactFunctionTestCase {
   }
 
   private void setGeneratingActions() {
-    if (evaluator.getExistingValue(OWNER_KEY) == null) {
+    if (evaluator.getExistingValueForTesting(OWNER_KEY) == null) {
       differencer.inject(
           ImmutableMap.of(
               OWNER_KEY,
