@@ -35,7 +35,6 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFactory;
-import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.buildtool.BuildRequest.BuildRequestOptions;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
@@ -62,7 +61,6 @@ import com.google.devtools.build.lib.skyframe.SequencedSkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.SkyValueDirtinessChecker;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.util.SkyframeExecutorTestUtils;
-import com.google.devtools.build.lib.syntax.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.util.BlazeClock;
@@ -165,10 +163,6 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
   protected void useRuleClassProvider(ConfiguredRuleClassProvider ruleClassProvider)
       throws Exception {
     this.ruleClassProvider = ruleClassProvider;
-    useConfigurationFactory(
-        new ConfigurationFactory(
-            ruleClassProvider.getConfigurationCollectionFactory(),
-            ruleClassProvider.getConfigurationFragments()));
     PackageFactory pkgFactory =
         analysisMock
             .getPackageFactoryForTesting()
@@ -195,7 +189,6 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
     skyframeExecutor.preparePackageLoading(
         pkgLocator,
         packageCacheOptions,
-        Options.getDefaults(SkylarkSemanticsOptions.class),
         ruleClassProvider.getDefaultsPackageContent(
             analysisMock.getInvocationPolicyEnforcer().getInvocationPolicy()),
         UUID.randomUUID(),
@@ -232,7 +225,6 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
     optionsParser = OptionsParser.newOptionsParser(Iterables.concat(Arrays.asList(
         ExecutionOptions.class,
         PackageCacheOptions.class,
-        SkylarkSemanticsOptions.class,
         BuildRequestOptions.class,
         BuildView.Options.class),
         ruleClassProvider.getConfigurationOptions()));
@@ -322,20 +314,15 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
     viewOptions.loadingPhaseThreads = LOADING_PHASE_THREADS;
 
     BuildOptions buildOptions = ruleClassProvider.createBuildOptions(optionsParser);
-
     PackageCacheOptions packageCacheOptions = optionsParser.getOptions(PackageCacheOptions.class);
+
     PathPackageLocator pathPackageLocator = PathPackageLocator.create(
         outputBase, packageCacheOptions.packagePath, reporter, rootDirectory, rootDirectory);
     packageCacheOptions.showLoadingProgress = true;
     packageCacheOptions.globbingThreads = 7;
-
-    SkylarkSemanticsOptions skylarkSemanticsOptions =
-        optionsParser.getOptions(SkylarkSemanticsOptions.class);
-
     skyframeExecutor.preparePackageLoading(
         pathPackageLocator,
         packageCacheOptions,
-        skylarkSemanticsOptions,
         ruleClassProvider.getDefaultsPackageContent(
             analysisMock.getInvocationPolicyEnforcer().getInvocationPolicy()),
         UUID.randomUUID(),
@@ -509,16 +496,4 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
     update();
   }
 
-  /**
-   * Makes custom configuration fragments available in tests.
-   */
-  protected final void setConfigFragmentsAvailableInTests(
-      ConfigurationFragmentFactory... factories) throws Exception {
-    ConfiguredRuleClassProvider.Builder builder = new ConfiguredRuleClassProvider.Builder();
-    TestRuleClassProvider.addStandardRules(builder);
-    for (ConfigurationFragmentFactory factory : factories) {
-      builder.addConfigurationFragment(factory);
-    }
-    useRuleClassProvider(builder.build());
-  }
 }

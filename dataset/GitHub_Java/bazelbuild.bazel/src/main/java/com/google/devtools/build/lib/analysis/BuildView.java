@@ -40,7 +40,6 @@ import com.google.devtools.build.lib.analysis.DependencyResolver.InconsistentAsp
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.ComposingSplitTransition;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -841,19 +840,12 @@ public class BuildView {
     for (BuildConfiguration config : configurations.getTargetConfigurations()) {
       for (Target target : targets) {
         nodes.add(new TargetAndConfiguration(target,
-            config.useDynamicConfigurations()
-                // Dynamic configurations apply top-level transitions through a different code path:
-                // BuildConfiguration#topLevelConfigurationHook. That path has the advantages of a)
-                // not requiring a global transitions table and b) making its choices outside core
-                // Bazel code.
-                ? (target.isConfigurable() ? config : null)
-                : BuildConfigurationCollection.configureTopLevelTarget(config, target)));
+            BuildConfigurationCollection.configureTopLevelTarget(config, target)));
       }
     }
-    return ImmutableList.copyOf(
-        configurations.useDynamicConfigurations()
-            ? getDynamicConfigurations(nodes, eventHandler)
-            : nodes);
+    return configurations.useDynamicConfigurations()
+        ? getDynamicConfigurations(nodes, eventHandler)
+        : ImmutableList.copyOf(nodes);
   }
 
   /**
@@ -863,8 +855,7 @@ public class BuildView {
    *
    * <p>Else returns configurations that unconditionally include all fragments.
    *
-   * <p>Preserves the original input order (but merges duplicate nodes that might occur due to
-   * top-level configuration transitions) . Uses original (untrimmed) configurations for targets
+   * <p>Preserves the original input order. Uses original (untrimmed) configurations for targets
    * that can't be evaluated (e.g. due to loading phase errors).
    *
    * <p>This is suitable for feeding {@link ConfiguredTargetValue} keys: as general principle {@link
@@ -873,7 +864,7 @@ public class BuildView {
    */
   // TODO(bazel-team): error out early for targets that fail - untrimmed configurations should
   // never make it through analysis (and especially not seed ConfiguredTargetValues)
-  private LinkedHashSet<TargetAndConfiguration> getDynamicConfigurations(
+  private List<TargetAndConfiguration> getDynamicConfigurations(
       Iterable<TargetAndConfiguration> inputs, ExtendedEventHandler eventHandler)
       throws InterruptedException {
     Map<Label, Target> labelsToTargets = new LinkedHashMap<>();
@@ -885,10 +876,23 @@ public class BuildView {
 
     for (TargetAndConfiguration targetAndConfig : inputs) {
       labelsToTargets.put(targetAndConfig.getLabel(), targetAndConfig.getTarget());
+
+      Attribute.Transition ruleclassTransition = null;
+      if (targetAndConfig.getTarget().getAssociatedRule() != null) {
+        Rule associatedRule = targetAndConfig.getTarget().getAssociatedRule();
+        RuleTransitionFactory transitionFactory =
+            associatedRule.getRuleClassObject().getTransitionFactory();
+        if (transitionFactory != null) {
+          ruleclassTransition = transitionFactory.buildTransitionFor(associatedRule);
+        }
+      }
       if (targetAndConfig.getConfiguration() != null) {
         asDeps.put(targetAndConfig.getConfiguration(),
             Dependency.withTransitionAndAspects(
-                targetAndConfig.getLabel(), getTopLevelTransition(targetAndConfig),
+                targetAndConfig.getLabel(),
+                ruleclassTransition == null
+                  ? Attribute.ConfigurationTransition.NONE
+                  : ruleclassTransition,
                 // TODO(bazel-team): support top-level aspects
                 AspectCollection.EMPTY));
       }
@@ -912,7 +916,8 @@ public class BuildView {
       }
     }
 
-    LinkedHashSet<TargetAndConfiguration> result = new LinkedHashSet<>();
+    ImmutableList.Builder<TargetAndConfiguration> result =
+        ImmutableList.<TargetAndConfiguration>builder();
     for (TargetAndConfiguration originalInput : inputs) {
       if (successfullyEvaluatedTargets.containsKey(originalInput)) {
         // The configuration was successfully trimmed.
@@ -922,45 +927,8 @@ public class BuildView {
         result.add(originalInput);
       }
     }
-    return result;
+    return result.build();
   }
-
-  /**
-   * Returns the transition to apply to the top-level configuration before applying it to this
-   * target. This enables support for rule-triggered top-level configuration hooks.
-   */
-  private static Attribute.Transition getTopLevelTransition(
-      TargetAndConfiguration targetAndConfig) {
-    Target target = targetAndConfig.getTarget();
-    BuildConfiguration fromConfig = targetAndConfig.getConfiguration();
-    Preconditions.checkArgument(fromConfig.useDynamicConfigurations());
-
-    // Top-level transitions (chosen by configuration fragments):
-    Transition topLevelTransition = fromConfig.topLevelConfigurationHook(target);
-    if (topLevelTransition == null) {
-      topLevelTransition = ConfigurationTransition.NONE;
-    }
-
-    // Rule class transitions (chosen by rule class definitions):
-    if (target.getAssociatedRule() == null) {
-      return topLevelTransition;
-    }
-    Rule associatedRule = target.getAssociatedRule();
-    RuleTransitionFactory transitionFactory =
-        associatedRule.getRuleClassObject().getTransitionFactory();
-    if (transitionFactory == null) {
-      return topLevelTransition;
-    }
-    Attribute.Transition ruleClassTransition = transitionFactory.buildTransitionFor(associatedRule);
-    if (ruleClassTransition == null) {
-      return topLevelTransition;
-    } else if (topLevelTransition == ConfigurationTransition.NONE) {
-      return ruleClassTransition;
-    } else {
-      return new ComposingSplitTransition(topLevelTransition, ruleClassTransition);
-    }
-  }
-
 
   /**
    * Gets a dynamic configuration for the given target.

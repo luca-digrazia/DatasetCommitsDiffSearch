@@ -30,14 +30,11 @@ import com.google.devtools.build.lib.packages.AspectClass;
 import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.ClassObjectConstructor;
-import com.google.devtools.build.lib.packages.ClassObjectConstructor.Key;
 import com.google.devtools.build.lib.packages.SkylarkClassObject;
 import com.google.devtools.build.lib.packages.SkylarkClassObjectConstructor;
-import com.google.devtools.build.lib.packages.SkylarkProviderIdentifier;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.util.Preconditions;
 import java.util.Arrays;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.TreeMap;
 import javax.annotation.Nullable;
@@ -93,33 +90,6 @@ public final class ConfiguredAspect implements Iterable<TransitiveInfoProvider> 
     return providers.getProvider(providerClass);
   }
 
-  public Object getProvider(SkylarkProviderIdentifier id) {
-    if (id.isLegacy()) {
-      return get(id.getLegacyId());
-    } else {
-      return get(id.getKey());
-    }
-  }
-
-  public SkylarkClassObject get(ClassObjectConstructor.Key key) {
-    if (OutputGroupProvider.SKYLARK_CONSTRUCTOR.getKey().equals(key)) {
-      return getProvider(OutputGroupProvider.class);
-    }
-    SkylarkProviders skylarkProviders = getProvider(SkylarkProviders.class);
-    return skylarkProviders != null ? skylarkProviders.getDeclaredProvider(key) : null;
-  }
-
-  public Object get(String legacyKey) {
-    if (OutputGroupProvider.SKYLARK_NAME.equals(legacyKey)) {
-      return getProvider(OutputGroupProvider.class);
-    }
-    SkylarkProviders skylarkProviders = getProvider(SkylarkProviders.class);
-    return skylarkProviders != null
-        ? skylarkProviders.get(SkylarkProviderIdentifier.forLegacy(legacyKey))
-        : null;
-  }
-
-
   @Override
   public UnmodifiableIterator<TransitiveInfoProvider> iterator() {
     return providers.values().iterator();
@@ -146,8 +116,8 @@ public final class ConfiguredAspect implements Iterable<TransitiveInfoProvider> 
     private final Map<String, NestedSetBuilder<Artifact>> outputGroupBuilders = new TreeMap<>();
     private final ImmutableMap.Builder<String, Object> skylarkProviderBuilder =
         ImmutableMap.builder();
-    private final LinkedHashMap<Key, SkylarkClassObject>
-        skylarkDeclaredProvidersBuilder = new LinkedHashMap<>();
+    private final ImmutableMap.Builder<SkylarkClassObjectConstructor.Key, SkylarkClassObject>
+        skylarkDeclaredProvidersBuilder = ImmutableMap.builder();
     private final RuleContext ruleContext;
     private final AspectDescriptor descriptor;
 
@@ -238,26 +208,9 @@ public final class ConfiguredAspect implements Iterable<TransitiveInfoProvider> 
         throw new EvalException(
             constructor.getLocation(), "All providers must be top level values");
       }
-      ClassObjectConstructor.Key key = constructor.getKey();
-      addDeclaredProvider(key, declaredProvider);
+      skylarkDeclaredProvidersBuilder.put(constructor.getKey(), declaredProvider);
       return this;
     }
-
-    private void addDeclaredProvider(Key key, SkylarkClassObject declaredProvider) {
-      if (OutputGroupProvider.SKYLARK_CONSTRUCTOR.getKey().equals(key)) {
-        addProvider(OutputGroupProvider.class, (OutputGroupProvider) declaredProvider);
-      } else {
-        skylarkDeclaredProvidersBuilder.put(key, declaredProvider);
-      }
-    }
-
-    public Builder addNativeDeclaredProvider(SkylarkClassObject declaredProvider) {
-      ClassObjectConstructor constructor = declaredProvider.getConstructor();
-      Preconditions.checkState(constructor.isExported());
-      addDeclaredProvider(constructor.getKey(), declaredProvider);
-      return this;
-    }
-
 
     public ConfiguredAspect build() {
       if (!outputGroupBuilders.isEmpty()) {
@@ -266,18 +219,16 @@ public final class ConfiguredAspect implements Iterable<TransitiveInfoProvider> 
           outputGroups.put(entry.getKey(), entry.getValue().build());
         }
 
-        if (skylarkDeclaredProvidersBuilder.containsKey(
-            OutputGroupProvider.SKYLARK_CONSTRUCTOR.getKey())) {
+        if (providers.contains(OutputGroupProvider.class)) {
           throw new IllegalStateException(
               "OutputGroupProvider was provided explicitly; do not use addOutputGroup");
         }
-        addDeclaredProvider(OutputGroupProvider.SKYLARK_CONSTRUCTOR.getKey(),
-            new OutputGroupProvider(outputGroups.build()));
+        addProvider(new OutputGroupProvider(outputGroups.build()));
       }
 
       ImmutableMap<String, Object> skylarkProvidersMap = skylarkProviderBuilder.build();
       ImmutableMap<SkylarkClassObjectConstructor.Key, SkylarkClassObject>
-          skylarkDeclaredProvidersMap = ImmutableMap.copyOf(skylarkDeclaredProvidersBuilder);
+          skylarkDeclaredProvidersMap = skylarkDeclaredProvidersBuilder.build();
       if (!skylarkProvidersMap.isEmpty() || !skylarkDeclaredProvidersMap.isEmpty()) {
         providers.add(new SkylarkProviders(skylarkProvidersMap, skylarkDeclaredProvidersMap));
       }
