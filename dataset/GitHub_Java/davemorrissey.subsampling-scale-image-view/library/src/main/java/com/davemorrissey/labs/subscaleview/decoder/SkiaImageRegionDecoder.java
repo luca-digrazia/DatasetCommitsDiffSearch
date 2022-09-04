@@ -7,12 +7,10 @@ import android.content.res.AssetManager;
 import android.content.res.Resources;
 import android.graphics.*;
 import android.net.Uri;
-import android.os.Build;
 import android.text.TextUtils;
 
 import java.io.InputStream;
 import java.util.List;
-import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -23,9 +21,9 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * however it has some problems with grayscale, indexed and CMYK images.
  *
  * A {@link ReadWriteLock} is used to delegate responsibility for multi threading behaviour to the
- * {@link BitmapRegionDecoder} instance on SDK >= 21, whilst allowing this class to block until no
- * tiles are being loaded before recycling the decoder. In practice, {@link BitmapRegionDecoder} is
- * synchronized internally so this has no real impact on performance.
+ * {@link BitmapRegionDecoder} instance, whilst allowing this class to block until no tiles are being
+ * loaded before recycling the decoder. In practice, {@link BitmapRegionDecoder} is single threaded
+ * so this has no real impact on performance.
  */
 public class SkiaImageRegionDecoder implements ImageRegionDecoder {
 
@@ -99,7 +97,7 @@ public class SkiaImageRegionDecoder implements ImageRegionDecoder {
 
     @Override
     public Bitmap decodeRegion(Rect sRect, int sampleSize) {
-        getDecodeLock().lock();
+        decoderLock.readLock().lock();
         try {
             if (decoder != null && !decoder.isRecycled()) {
                 BitmapFactory.Options options = new BitmapFactory.Options();
@@ -114,36 +112,27 @@ public class SkiaImageRegionDecoder implements ImageRegionDecoder {
                 throw new IllegalStateException("Cannot decode region after decoder has been recycled");
             }
         } finally {
-            getDecodeLock().unlock();
+            decoderLock.readLock().unlock();
         }
     }
 
     @Override
-    public synchronized boolean isReady() {
-        return decoder != null && !decoder.isRecycled();
+    public boolean isReady() {
+        decoderLock.readLock().lock();
+        try {
+            return decoder != null && !decoder.isRecycled();
+        } finally {
+            decoderLock.readLock().unlock();
+        }
     }
 
     @Override
-    public synchronized void recycle() {
+    public void recycle() {
         decoderLock.writeLock().lock();
         try {
             decoder.recycle();
-            decoder = null;
         } finally {
             decoderLock.writeLock().unlock();
-        }
-    }
-
-    /**
-     * Before SDK 21, BitmapRegionDecoder was not synchronized internally. Any attempt to decode
-     * regions from multiple threads with one decoder instance causes a segfault. For old versions
-     * use the write lock to enforce single threaded decoding.
-     */
-    private Lock getDecodeLock() {
-        if (Build.VERSION.SDK_INT < 21) {
-            return decoderLock.writeLock();
-        } else {
-            return decoderLock.readLock();
         }
     }
 }
