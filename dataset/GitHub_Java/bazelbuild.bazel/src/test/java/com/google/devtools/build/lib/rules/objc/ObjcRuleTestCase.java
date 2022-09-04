@@ -85,7 +85,6 @@ import com.google.devtools.build.xcode.bundlemerge.proto.BundleMergeProtos;
 import com.google.devtools.build.xcode.bundlemerge.proto.BundleMergeProtos.BundleFile;
 import com.google.devtools.build.xcode.bundlemerge.proto.BundleMergeProtos.MergeZip;
 import com.google.devtools.build.xcode.plmerge.proto.PlMergeProtos;
-import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
@@ -96,6 +95,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import javax.annotation.Nullable;
+import org.junit.Before;
 
 /**
  * Superclass for all Obj-C rule tests.
@@ -260,11 +260,13 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
     return getFirstArtifactEndingWith(artifacts, suffix).getExecPathString();
   }
 
-  @Override
-  public void initializeMockClient() throws IOException {
-    super.initializeMockClient();
+  @Before
+  public final void initializeMockToolsConfig() throws Exception {
     MockObjcSupport.setup(mockToolsConfig);
     MockProtoSupport.setup(mockToolsConfig);
+
+    // Set flags required by objc builds.
+    useConfiguration();
   }
 
   protected static String frameworkDir(ConfiguredTarget target) {
