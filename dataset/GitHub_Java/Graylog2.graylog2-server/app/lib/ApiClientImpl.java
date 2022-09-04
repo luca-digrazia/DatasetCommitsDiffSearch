@@ -28,6 +28,7 @@ import com.google.gson.GsonBuilder;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import com.ning.http.client.*;
+import lib.security.Graylog2ServerUnavailableException;
 import models.*;
 import models.api.requests.ApiRequest;
 import models.api.responses.EmptyResponse;
@@ -62,7 +63,6 @@ class ApiClientImpl implements ApiClient {
     public void start() {
         AsyncHttpClientConfig.Builder builder = new AsyncHttpClientConfig.Builder();
         builder.setAllowPoolingConnection(false);
-        builder.setUserAgent("graylog2-web/" + Version.VERSION);
         client = new AsyncHttpClient(builder.build());
 
         shutdownHook = new Thread(new Runnable() {
@@ -156,12 +156,11 @@ class ApiClientImpl implements ApiClient {
         private final ArrayList<Object> pathParams = Lists.newArrayList();
         private final ArrayList<F.Tuple<String, String>> queryParams = Lists.newArrayList();
         private Set<Integer> expectedResponseCodes = Sets.newHashSet();
-        private TimeUnit timeoutUnit = TimeUnit.MILLISECONDS;
-        private long timeoutValue = Configuration.apiTimeout("DEFAULT");
+        private TimeUnit timeoutUnit = TimeUnit.SECONDS;
+        private int timeoutValue = 5;
         private boolean unauthenticated = false;
         private MediaType mediaType = MediaType.JSON_UTF_8;
         private String sessionId;
-        private Boolean extendSession;
 
         public ApiRequestBuilder(Method method, Class<T> responseClass) {
             this.method = method;
@@ -276,12 +275,6 @@ class ApiClientImpl implements ApiClient {
         }
 
         @Override
-        public lib.ApiRequestBuilder<T> extendSession(boolean extend) {
-            this.extendSession = extend;
-            return this;
-        }
-
-        @Override
         public lib.ApiRequestBuilder<T> unauthenticated() {
             this.unauthenticated = true;
             return this;
@@ -303,14 +296,7 @@ class ApiClientImpl implements ApiClient {
         }
 
         @Override
-        public lib.ApiRequestBuilder<T> timeout(long value) {
-            this.timeoutValue = value;
-            this.timeoutUnit = TimeUnit.MILLISECONDS;
-            return this;
-        }
-
-        @Override
-        public ApiRequestBuilder<T> timeout(long value, TimeUnit unit) {
+        public ApiRequestBuilder<T> timeout(int value, TimeUnit unit) {
             this.timeoutValue = value;
             this.timeoutUnit = unit;
             return this;
@@ -553,15 +539,6 @@ class ApiClientImpl implements ApiClient {
                 requestBuilder.addHeader("Accept", "application/json");
             }
             requestBuilder.addHeader("Accept-Charset", "utf-8");
-            // check for the request-global flag passed from the periodicals.
-            // you can override it per request, but that seems unlikely.
-            // this is a hack, if you have a better idea without touching dozens of methods, please share :)
-            if (extendSession == null) {
-                extendSession = Tools.apiRequestShouldExtendSession();
-            }
-            if (!extendSession) {
-                requestBuilder.addHeader("X-Graylog2-No-Session-Extension", "true");
-            }
             return requestBuilder;
         }
 
