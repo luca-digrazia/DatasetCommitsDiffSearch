@@ -598,6 +598,8 @@ public class CcToolchainProviderHelper {
     }
     final CcCompilationContext ccCompilationContext = ccCompilationContextBuilder.build();
 
+    NestedSetBuilder<Pair<String, String>> coverageEnvironment = NestedSetBuilder.compileOrder();
+
     PathFragment sysroot = calculateSysroot(attributes, toolchainInfo.getDefaultSysroot());
 
     ImmutableList.Builder<PathFragment> builtInIncludeDirectoriesBuilder = ImmutableList.builder();
@@ -611,6 +613,13 @@ public class CcToolchainProviderHelper {
     }
     ImmutableList<PathFragment> builtInIncludeDirectories =
         builtInIncludeDirectoriesBuilder.build();
+
+    coverageEnvironment.add(
+        Pair.of(
+            "COVERAGE_GCOV_PATH", toolchainInfo.getToolPathFragment(Tool.GCOV).getPathString()));
+    if (cppConfiguration.getFdoInstrument() != null) {
+      coverageEnvironment.add(Pair.of("FDO_DIR", cppConfiguration.getFdoInstrument()));
+    }
 
     Artifact prefetchHintsArtifact = getPrefetchHintsArtifact(prefetchHints, ruleContext);
 
@@ -647,6 +656,7 @@ public class CcToolchainProviderHelper {
             toolchainInfo.getDefaultSysroot(),
             attributes.getAdditionalBuildVariables()),
         getBuiltinIncludes(attributes.getLibc()),
+        coverageEnvironment.build(),
         attributes.getLinkDynamicLibraryTool(),
         builtInIncludeDirectories,
         sysroot,

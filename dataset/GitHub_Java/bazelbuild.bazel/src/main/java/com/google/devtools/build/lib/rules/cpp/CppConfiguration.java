@@ -162,7 +162,6 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
   private final boolean stripBinaries;
   private final CompilationMode compilationMode;
   private final boolean collectCodeCoverage;
-  private final boolean isThisHostConfigurationDoNotUseWillBeRemovedFor129045294;
 
   static CppConfiguration create(CpuTransformer cpuTransformer, BuildOptions options)
       throws InvalidConfigurationException {
@@ -215,8 +214,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
             || (cppOptions.stripBinaries == StripMode.SOMETIMES
                 && compilationMode == CompilationMode.FASTBUILD)),
         compilationMode,
-        commonOptions.collectCodeCoverage,
-        commonOptions.isHost);
+        commonOptions.collectCodeCoverage);
   }
 
   private CppConfiguration(
@@ -233,8 +231,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
       CppOptions cppOptions,
       boolean stripBinaries,
       CompilationMode compilationMode,
-      boolean collectCodeCoverage,
-      boolean isHostConfiguration) {
+      boolean collectCodeCoverage) {
     this.transformedCpuFromOptions = transformedCpuFromOptions;
     this.desiredCpu = desiredCpu;
     this.fdoPath = fdoPath;
@@ -249,7 +246,6 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
     this.stripBinaries = stripBinaries;
     this.compilationMode = compilationMode;
     this.collectCodeCoverage = collectCodeCoverage;
-    this.isThisHostConfigurationDoNotUseWillBeRemovedFor129045294 = isHostConfiguration;
   }
 
   /** Returns the label of the <code>cc_compiler</code> rule for the C++ configuration. */
@@ -506,64 +502,27 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
     return cppOptions.strictSystemIncludes;
   }
 
-  String getFdoInstrument() {
-    if (isThisHostConfigurationDoNotUseWillBeRemovedFor129045294()) {
-      // We don't want FDO in the host configuration
-      return null;
-    }
+  public String getFdoInstrument() {
     return cppOptions.fdoInstrumentForBuild;
   }
 
-  /**
-   * @deprecated Unsafe because it returns a value from target configuration even in the host
-   *     configuration.
-   */
-  @Deprecated
-  PathFragment getFdoPathUnsafeSinceItCanReturnValueFromWrongConfiguration() {
+  public PathFragment getFdoPath() {
     return fdoPath;
   }
 
-  /**
-   * @deprecated Unsafe because it returns a value from target configuration even in the host
-   *     configuration.
-   */
-  @Deprecated
-  Label getFdoOptimizeLabelUnsafeSinceItCanReturnValueFromWrongConfiguration() {
+  public Label getFdoOptimizeLabel() {
     return fdoOptimizeLabel;
   }
 
-  Label getFdoPrefetchHintsLabel() {
-    if (isThisHostConfigurationDoNotUseWillBeRemovedFor129045294()) {
-      // We don't want FDO in the host configuration
-      return null;
-    }
-    return getFdoPrefetchHintsLabelUnsafeSinceItCanReturnValueFromWrongConfiguration();
-  }
-
-  /**
-   * @deprecated Unsafe because it returns a value from target configuration even in the host
-   *     configuration.
-   */
-  @Deprecated
-  Label getFdoPrefetchHintsLabelUnsafeSinceItCanReturnValueFromWrongConfiguration() {
+  public Label getFdoPrefetchHintsLabel() {
     return cppOptions.getFdoPrefetchHintsLabel();
   }
 
-  /**
-   * @deprecated Unsafe because it returns a value from target configuration even in the host
-   *     configuration.
-   */
-  @Deprecated
-  Label getFdoProfileLabelUnsafeSinceItCanReturnValueFromWrongConfiguration() {
+  public Label getFdoProfileLabel() {
     return cppOptions.fdoProfileLabel;
   }
 
-  /**
-   * @deprecated Unsafe because it returns a value from target configuration even in the host
-   *     configuration.
-   */
-  @Deprecated
-  Label getXFdoProfileLabelUnsafeSinceItCanReturnValueFromWrongConfiguration() {
+  public Label getXFdoProfileLabel() {
     if (cppOptions.fdoOptimizeForBuild != null
         || cppOptions.fdoInstrumentForBuild != null
         || cppOptions.fdoProfileLabel != null
@@ -646,12 +605,5 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
 
   public boolean collectCodeCoverage() {
     return collectCodeCoverage;
-  }
-
-  /** @deprecated this is only a temporary workaround, will be removed by b/129045294. */
-  // TODO(b/129045294): Remove at first opportunity
-  @Deprecated
-  boolean isThisHostConfigurationDoNotUseWillBeRemovedFor129045294() {
-    return isThisHostConfigurationDoNotUseWillBeRemovedFor129045294;
   }
 }

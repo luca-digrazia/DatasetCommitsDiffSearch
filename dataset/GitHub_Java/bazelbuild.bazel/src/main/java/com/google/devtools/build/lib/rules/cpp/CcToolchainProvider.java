@@ -38,6 +38,7 @@ import com.google.devtools.build.lib.rules.cpp.Link.LinkingMode;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcToolchainProviderApi;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
+import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CToolchain;
 import java.util.Map;
@@ -79,6 +80,7 @@ public final class CcToolchainProvider extends ToolchainInfo
           /* supportsHeaderParsing= */ false,
           CcToolchainVariables.EMPTY,
           /* builtinIncludeFiles= */ ImmutableList.of(),
+          /* coverageEnvironment= */ NestedSetBuilder.emptySet(Order.COMPILE_ORDER),
           /* linkDynamicLibraryTool= */ null,
           /* builtInIncludeDirectories= */ ImmutableList.of(),
           /* sysroot= */ null,
@@ -112,6 +114,7 @@ public final class CcToolchainProvider extends ToolchainInfo
   private final boolean supportsHeaderParsing;
   private final CcToolchainVariables buildVariables;
   private final ImmutableList<Artifact> builtinIncludeFiles;
+  private final NestedSet<Pair<String, String>> coverageEnvironment;
   @Nullable private final Artifact linkDynamicLibraryTool;
   private final ImmutableList<PathFragment> builtInIncludeDirectories;
   @Nullable private final PathFragment sysroot;
@@ -153,6 +156,7 @@ public final class CcToolchainProvider extends ToolchainInfo
       boolean supportsHeaderParsing,
       CcToolchainVariables buildVariables,
       ImmutableList<Artifact> builtinIncludeFiles,
+      NestedSet<Pair<String, String>> coverageEnvironment,
       Artifact linkDynamicLibraryTool,
       ImmutableList<PathFragment> builtInIncludeDirectories,
       @Nullable PathFragment sysroot,
@@ -190,6 +194,7 @@ public final class CcToolchainProvider extends ToolchainInfo
     this.supportsHeaderParsing = supportsHeaderParsing;
     this.buildVariables = buildVariables;
     this.builtinIncludeFiles = builtinIncludeFiles;
+    this.coverageEnvironment = coverageEnvironment;
     this.linkDynamicLibraryTool = linkDynamicLibraryTool;
     this.builtInIncludeDirectories = builtInIncludeDirectories;
     this.sysroot = sysroot;
@@ -615,6 +620,14 @@ public final class CcToolchainProvider extends ToolchainInfo
    */
   public ImmutableList<Artifact> getBuiltinIncludeFiles() {
     return builtinIncludeFiles;
+  }
+
+  /**
+   * Returns the environment variables that need to be added to tests that collect code
+   * coverageFiles.
+   */
+  public NestedSet<Pair<String, String>> getCoverageEnvironment() {
+    return coverageEnvironment;
   }
 
   /**
