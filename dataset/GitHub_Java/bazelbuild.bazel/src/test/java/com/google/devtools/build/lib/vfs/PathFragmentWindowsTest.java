@@ -47,21 +47,21 @@ public class PathFragmentWindowsTest {
   @Test
   public void testAbsoluteAndAbsoluteLookingPaths() {
     assertThat(create("/c").isAbsolute()).isTrue();
-    assertThat(create("/c").segments()).containsExactly("c");
+    assertThat(create("/c").getSegments()).containsExactly("c");
 
     assertThat(create("/c/").isAbsolute()).isTrue();
-    assertThat(create("/c/").segments()).containsExactly("c");
+    assertThat(create("/c/").getSegments()).containsExactly("c");
 
     assertThat(create("C:/").isAbsolute()).isTrue();
-    assertThat(create("C:/").segments()).isEmpty();
+    assertThat(create("C:/").getSegments()).isEmpty();
 
     PathFragment p5 = create("/c:");
     assertThat(p5.isAbsolute()).isTrue();
-    assertThat(p5.segments()).containsExactly("c:");
+    assertThat(p5.getSegments()).containsExactly("c:");
     assertThat(create("C:").isAbsolute()).isFalse();
 
     assertThat(create("/c:").isAbsolute()).isTrue();
-    assertThat(create("/c:").segments()).containsExactly("c:");
+    assertThat(create("/c:").getSegments()).containsExactly("c:");
 
     assertThat(create("/c")).isEqualTo(create("/c/"));
     assertThat(create("/c")).isNotEqualTo(create("C:/"));
@@ -111,16 +111,16 @@ public class PathFragmentWindowsTest {
 
   @Test
   public void testRelativeTo() {
-    assertThat(create("").relativeTo("").getPathString()).isEmpty();
+    assertThat(create("").relativeTo("").getPathString()).isEqualTo("");
     assertThrows(IllegalArgumentException.class, () -> create("").relativeTo("a"));
 
     assertThat(create("a").relativeTo("")).isEqualTo(create("a"));
-    assertThat(create("a").relativeTo("a").getPathString()).isEmpty();
+    assertThat(create("a").relativeTo("a").getPathString()).isEqualTo("");
     assertThrows(IllegalArgumentException.class, () -> create("a").relativeTo("b"));
     assertThat(create("a/b").relativeTo("a")).isEqualTo(create("b"));
 
     assertThrows(IllegalArgumentException.class, () -> create("C:/").relativeTo(""));
-    assertThat(create("C:/").relativeTo("C:/").getPathString()).isEmpty();
+    assertThat(create("C:/").relativeTo("C:/").getPathString()).isEqualTo("");
   }
 
   @Test
@@ -242,7 +242,7 @@ public class PathFragmentWindowsTest {
     // Bazel doesn't resolve such paths, and just takes them literally like normal path segments.
     // If the user attempts to open files under such paths, the file system API will give an error.
     assertThat(create("C:").isAbsolute()).isFalse();
-    assertThat(create("C:").segments()).containsExactly("C:");
+    assertThat(create("C:").getSegments()).containsExactly("C:");
   }
 
   @Test
