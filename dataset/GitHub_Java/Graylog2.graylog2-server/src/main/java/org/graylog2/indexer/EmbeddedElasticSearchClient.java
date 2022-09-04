@@ -15,9 +15,12 @@ import org.apache.commons.io.FileUtils;
 import org.apache.log4j.Logger;
 import org.elasticsearch.action.ActionFuture;
 import org.elasticsearch.action.WriteConsistencyLevel;
+import org.elasticsearch.action.admin.cluster.health.ClusterHealthRequest;
 import org.elasticsearch.action.admin.cluster.node.info.NodesInfoRequest;
 import org.elasticsearch.action.admin.cluster.node.info.NodesInfoResponse;
 import org.elasticsearch.action.admin.cluster.state.ClusterStateRequest;
+import org.elasticsearch.action.admin.indices.alias.IndicesAliasesRequest;
+import org.elasticsearch.action.admin.indices.alias.IndicesAliasesResponse;
 import org.elasticsearch.action.admin.indices.create.CreateIndexRequest;
 import org.elasticsearch.action.admin.indices.create.CreateIndexRequestBuilder;
 import org.elasticsearch.action.admin.indices.create.CreateIndexResponse;
@@ -28,9 +31,9 @@ import org.elasticsearch.action.admin.indices.mapping.put.PutMappingRequest;
 import org.elasticsearch.action.admin.indices.stats.IndexStats;
 import org.elasticsearch.action.admin.indices.stats.IndicesStats;
 import org.elasticsearch.action.admin.indices.stats.IndicesStatsRequest;
+import org.elasticsearch.action.admin.indices.status.IndicesStatusRequest;
 import org.elasticsearch.action.bulk.BulkRequestBuilder;
 import org.elasticsearch.action.bulk.BulkResponse;
-import org.elasticsearch.action.count.CountRequest;
 import org.elasticsearch.action.deletebyquery.DeleteByQueryRequestBuilder;
 import org.elasticsearch.action.deletebyquery.DeleteByQueryResponse;
 import org.elasticsearch.action.index.IndexRequest.OpType;
@@ -44,9 +47,8 @@ import org.elasticsearch.common.xcontent.XContentType;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.node.Node;
 import org.elasticsearch.node.NodeBuilder;
-import org.graylog2.Core;
-import org.graylog2.logmessage.LogMessageImpl;
-import org.graylog2.plugin.logmessage.LogMessage;
+import org.graylog2.GraylogServer;
+import org.graylog2.logmessage.LogMessage;
 import org.json.simple.JSONValue;
 
 // TODO this class blocks for most of its operations, but is called from the main thread for some of them
@@ -69,9 +71,9 @@ public class EmbeddedElasticSearchClient {
 
     final static Calendar cal = Calendar.getInstance();
 
-    private Core server;
+    private GraylogServer server;
 
-    public EmbeddedElasticSearchClient(Core graylogServer) {
+    public EmbeddedElasticSearchClient(GraylogServer graylogServer) {
         server = graylogServer;
 
         final NodeBuilder builder = nodeBuilder().client(true);
@@ -97,17 +99,8 @@ public class EmbeddedElasticSearchClient {
     }
     
     public String allIndicesAlias() {
+
         return server.getConfiguration().getElasticSearchIndexPrefix() + "_*";
-    }
-    
-    public long getTotalIndexSize() {
-        return client.admin().indices().stats(
-                new IndicesStatsRequest().indices(allIndicesAlias()))
-                .actionGet()
-                .total()
-                .store()
-                .getSize()
-                .getMb();
     }
     
     public String nodeIdToName(String nodeId) {
@@ -138,14 +131,6 @@ public class EmbeddedElasticSearchClient {
             return "UNKNOWN";
         }
         
-    }
-    
-    public int getNumberOfNodesInCluster() {
-        return client.admin().cluster().nodesInfo(new NodesInfoRequest().all()).actionGet().nodes().length;
-    }
-    
-    public long getTotalNumberOfMessagesInIndices() {
-        return client.count(new CountRequest(allIndicesAlias())).actionGet().count();
     }
     
     public Map<String, IndexStats> getIndices() {
