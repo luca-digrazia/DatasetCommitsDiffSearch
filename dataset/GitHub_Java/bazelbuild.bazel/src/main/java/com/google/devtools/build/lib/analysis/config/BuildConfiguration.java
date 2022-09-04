@@ -167,7 +167,7 @@ public class BuildConfiguration implements BuildConfigurationApi {
       return false;
     }
     BuildConfiguration otherConfig = (BuildConfiguration) other;
-    return fragments.values().asList().equals(otherConfig.fragments.values().asList())
+    return fragments.values().equals(otherConfig.fragments.values())
         && buildOptions.equals(otherConfig.buildOptions);
   }
 
