@@ -41,11 +41,11 @@ import com.google.devtools.build.lib.packages.Type.ConversionException;
 import com.google.devtools.build.lib.packages.Type.LabelClass;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.ClassObject;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.Starlark;
-import com.google.devtools.build.lib.syntax.StarlarkValue;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.util.StringUtil;
@@ -1301,7 +1301,7 @@ public final class Attribute implements Comparable<Attribute> {
    *
    * <p>Implementations of this interface must be immutable.
    */
-  public abstract static class ComputedDefault implements StarlarkValue {
+  public abstract static class ComputedDefault implements SkylarkValue {
     private final ImmutableList<String> dependencies;
 
     /**
@@ -1480,9 +1480,7 @@ public final class Attribute implements Comparable<Attribute> {
         if (!attr.hasComputedDefault()) {
           Object value = rule.get(attrName, attr.getType());
           if (!EvalUtils.isNullOrNone(value)) {
-            // Some attribute values are not valid Starlark values:
-            // visibility is an ImmutableList, for example.
-            attrValues.put(attr.getName(), Starlark.fromJava(value, /*mutability=*/ null));
+            attrValues.put(attr.getName(), value);
           }
         }
       }
@@ -1613,7 +1611,7 @@ public final class Attribute implements Comparable<Attribute> {
    *     Label}, or a {@link List} of {@link Label} objects.
    */
   @Immutable
-  public abstract static class LateBoundDefault<FragmentT, ValueT> implements StarlarkValue {
+  public abstract static class LateBoundDefault<FragmentT, ValueT> implements SkylarkValue {
     /**
      * Functional interface for computing the value of a late-bound attribute.
      *

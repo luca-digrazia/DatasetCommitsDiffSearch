@@ -23,8 +23,8 @@ import com.google.common.testing.EqualsTester;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.SkylarkInfo.Layout;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.StarlarkValue;
 import java.util.Map;
 import javax.annotation.Nullable;
 import org.junit.Test;
@@ -42,7 +42,8 @@ public class SkylarkInfoTest {
   public void layoutAccessors() {
     Layout layout = new Layout(ImmutableList.of("x", "y", "z"));
     assertThat(layout.size()).isEqualTo(3);
-    assertThat(layout.getFieldIndex("a")).isNull();
+    assertThat(layout.hasField("x")).isTrue();
+    assertThat(layout.hasField("q")).isFalse();
     assertThat(layout.getFieldIndex("z")).isEqualTo(2);
     assertThat(layout.getFields()).containsExactly("x", "y", "z").inOrder();
     assertThat(
@@ -122,7 +123,7 @@ public class SkylarkInfoTest {
   @Test
   public void mutableIfContentsAreMutable() throws Exception {
     SkylarkProvider provider = makeExportedProvider();
-    StarlarkValue v = new StarlarkValue() {};
+    SkylarkValue v = new SkylarkValue() {};
     SkylarkInfo mapInfo = makeSchemalessInfoWithF1F2Values(provider, 5, v);
     SkylarkInfo compactInfo = makeSchemafulInfoWithF1F2Values(provider, 5, v);
     assertThat(mapInfo.isImmutable()).isFalse();

@@ -86,8 +86,6 @@ public final class Dict<K, V> implements Map<K, V>, StarlarkMutable, SkylarkInde
     this.mutability = mutability == null ? Mutability.IMMUTABLE : mutability;
   }
 
-  /** @deprecated use {@code new Dict(thread.mutability())} instead. */
-  @Deprecated
   private Dict(@Nullable StarlarkThread thread) {
     this.mutability = thread == null ? Mutability.IMMUTABLE : thread.mutability();
   }
@@ -269,7 +267,7 @@ public final class Dict<K, V> implements Map<K, V>, StarlarkMutable, SkylarkInde
               + "{2: \"a\", 4: \"b\", 1: \"c\"}.values() == [\"a\", \"b\", \"c\"]</pre>\n",
       useStarlarkThread = true)
   public StarlarkList<?> invoke(StarlarkThread thread) throws EvalException {
-    return StarlarkList.copyOf(thread.mutability(), values());
+    return StarlarkList.copyOf(thread, values());
   }
 
   @SkylarkCallable(
@@ -319,48 +317,19 @@ public final class Dict<K, V> implements Map<K, V>, StarlarkMutable, SkylarkInde
     return new Dict<>(mutability);
   }
 
-  /**
-   * @return a dict mutable in given environment only
-   * @deprecated use {@code of(thread.mutability())} instead.
-   */
-  @Deprecated
+  /** @return a dict mutable in given environment only */
   public static <K, V> Dict<K, V> of(@Nullable StarlarkThread thread) {
     return new Dict<>(thread);
   }
 
-  /** Returns a dict mutable in given environment only. */
-  public static <K, V> Dict<K, V> of(@Nullable Mutability mu) {
-    return new Dict<>(mu);
-  }
-
-  /**
-   * Returns a dict mutable in given environment only, with given initial key and value.
-   *
-   * @deprecated use {@code of(thread.mutability(), k, v)} instead.
-   */
-  @Deprecated
+  /** @return a dict mutable in given environment only, with given initial key and value */
   public static <K, V> Dict<K, V> of(@Nullable StarlarkThread thread, K k, V v) {
     return Dict.<K, V>of(thread).putUnsafe(k, v);
   }
 
-  /**
-   * Returns a dict mutable in given environment only, with two given initial key value pairs.
-   *
-   * @deprecated use {@code of(thread.mutability(), k1, v2, k2, v2)}.
-   */
-  @Deprecated
+  /** @return a dict mutable in given environment only, with two given initial key value pairs */
   public static <K, V> Dict<K, V> of(@Nullable StarlarkThread thread, K k1, V v1, K k2, V v2) {
     return Dict.<K, V>of(thread).putUnsafe(k1, v1).putUnsafe(k2, v2);
-  }
-
-  /** Returns a dict mutable in given environment only, with given initial key and value */
-  public static <K, V> Dict<K, V> of(@Nullable Mutability mu, K k, V v) {
-    return Dict.<K, V>of(mu).putUnsafe(k, v);
-  }
-
-  /** Returns a dict mutable in given environment only, with two given initial key value pairs. */
-  public static <K, V> Dict<K, V> of(@Nullable Mutability mu, K k1, V v1, K k2, V v2) {
-    return Dict.<K, V>of(mu).putUnsafe(k1, v1).putUnsafe(k2, v2);
   }
 
   // TODO(bazel-team): Make other methods that take in mutabilities instead of environments, make
@@ -371,11 +340,7 @@ public final class Dict<K, V> implements Map<K, V>, StarlarkMutable, SkylarkInde
     return Dict.<K, V>withMutability(mutability).putAllUnsafe(m);
   }
 
-  /**
-   * @return a dict mutable in given environment only, with contents copied from given map
-   * @deprecated use {@code copyOf(thread.mutability(), m)} when available.
-   */
-  @Deprecated
+  /** @return a dict mutable in given environment only, with contents copied from given map */
   public static <K, V> Dict<K, V> copyOf(
       @Nullable StarlarkThread thread, Map<? extends K, ? extends V> m) {
     return Dict.<K, V>of(thread).putAllUnsafe(m);

@@ -120,7 +120,7 @@ public class SkylarkNativeModule implements SkylarkNativeModuleApi {
       throw new EvalException(loc, "illegal argument in call to glob", e);
     }
 
-    return StarlarkList.copyOf(thread.mutability(), matches);
+    return StarlarkList.copyOf(thread, matches);
   }
 
   @Override
