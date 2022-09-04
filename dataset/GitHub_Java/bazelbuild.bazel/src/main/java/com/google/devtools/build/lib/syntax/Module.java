@@ -55,7 +55,7 @@ import javax.annotation.Nullable;
 // - separate the universal predeclared environment and make it implicit.
 // - eliminate initialize(). The only constructor we need is:
 //   (String name, Mutability mu, Map<String, Object> predeclared, Object label).
-public final class Module implements ValidationEnvironment.Module {
+public final class Module implements ValidationEnvironment.Module, Mutability.Freezable {
 
   /**
    * Final, except that it may be initialized after instantiation. Null mutability indicates that
@@ -91,22 +91,6 @@ public final class Module implements ValidationEnvironment.Module {
     this.bindings = new LinkedHashMap<>();
     this.restrictedBindings = new LinkedHashMap<>();
     this.exportedBindings = new HashSet<>();
-  }
-
-  /**
-   * Returns the module (file) of the innermost enclosing Starlark function on the call stack, or
-   * null if none of the active calls are functions defined in Starlark.
-   *
-   * <p>The name of this function is intentionally horrible to make you feel bad for using it.
-   */
-  @Nullable
-  public static Module ofInnermostEnclosingStarlarkFunction(StarlarkThread thread) {
-    for (Debug.Frame fr : thread.getDebugCallStack().reverse()) {
-      if (fr.getFunction() instanceof StarlarkFunction) {
-        return ((StarlarkFunction) fr.getFunction()).getModule();
-      }
-    }
-    return null;
   }
 
   Module(
@@ -225,6 +209,7 @@ public final class Module implements ValidationEnvironment.Module {
   }
 
   /** Returns the {@link Mutability} of this {@link Module}. */
+  @Override
   public Mutability mutability() {
     checkInitialized();
     return mutability;
@@ -338,9 +323,7 @@ public final class Module implements ValidationEnvironment.Module {
   public void put(String varname, Object value) throws MutabilityException {
     Preconditions.checkNotNull(value, "Module.put(%s, null)", varname);
     checkInitialized();
-    if (mutability.isFrozen()) {
-      throw new MutabilityException("trying to mutate a frozen module");
-    }
+    Mutability.checkMutable(this, mutability());
     bindings.put(varname, value);
   }
 
