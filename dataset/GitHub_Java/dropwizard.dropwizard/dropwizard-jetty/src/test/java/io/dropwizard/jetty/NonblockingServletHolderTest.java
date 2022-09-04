@@ -3,7 +3,7 @@ package io.dropwizard.jetty;
 import java.io.IOException;
 import org.eclipse.jetty.io.EofException;
 import org.eclipse.jetty.server.Request;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 import org.mockito.InOrder;
 
 import javax.servlet.Servlet;
@@ -21,7 +21,6 @@ import static org.mockito.Mockito.verify;
 
 public class NonblockingServletHolderTest {
     private final Servlet servlet = mock(Servlet.class);
-    @SuppressWarnings("deprecation")
     private final NonblockingServletHolder holder = new NonblockingServletHolder(servlet);
     private final Request baseRequest = mock(Request.class);
     private final ServletRequest request = mock(ServletRequest.class);
