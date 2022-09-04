@@ -24,7 +24,6 @@ import org.slf4j.LoggerFactory;
 import javax.ws.rs.Path;
 import javax.ws.rs.ext.Provider;
 import java.util.List;
-import java.util.Map;
 
 public class DropwizardResourceConfig extends ScanningResourceConfig {
     private static final String NEWLINE = String.format("%n");
@@ -75,14 +74,6 @@ public class DropwizardResourceConfig extends ScanningResourceConfig {
 
         for (Object o : getSingletons()) {
             if (o.getClass().isAnnotationPresent(Path.class)) {
-                builder.add(o.getClass().getCanonicalName());
-            }
-        }
-
-        for (Object o : getExplicitRootResources().values()) {
-            if (o instanceof Class) {
-                builder.add(((Class<?>)o).getCanonicalName());
-            } else {
                 builder.add(o.getClass().getCanonicalName());
             }
         }
@@ -138,33 +129,14 @@ public class DropwizardResourceConfig extends ScanningResourceConfig {
                 msg.append(line).append(NEWLINE);
             }
         }
-        for (Map.Entry<String, Object> entry : getExplicitRootResources().entrySet()) {
-            Class<?> klass;
-            if (entry.getValue() instanceof Class) {
-                klass = (Class<?>)entry.getValue();
-            } else {
-                klass = entry.getValue().getClass();
-            }
-            AbstractResource resource = new AbstractResource(entry.getKey(), IntrospectionModeller.createResource(klass));
-
-            List<String> endpoints = Lists.newArrayList();
-            populateEndpoints(endpoints, rootPath, klass, false, resource);
-
-            for (String line : Ordering.natural().sortedCopy(endpoints)) {
-                msg.append(line).append(NEWLINE);
-            }
-        }
 
         LOGGER.info(msg.toString());
     }
 
     private void populateEndpoints(List<String> endpoints, String basePath, Class<?> klass,
                                    boolean isLocator) {
-        populateEndpoints(endpoints, basePath, klass, isLocator, IntrospectionModeller.createResource(klass));
-    }
+        AbstractResource resource = IntrospectionModeller.createResource(klass);
 
-    private void populateEndpoints(List<String> endpoints, String basePath, Class<?> klass,
-                                   boolean isLocator, AbstractResource resource) {
         if (!isLocator) {
             basePath = normalizePath(basePath, resource.getPath().getValue());
         }
