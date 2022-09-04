@@ -89,10 +89,12 @@ public class JibProcessor {
 
         JibContainerBuilder jibContainerBuilder;
         String packageType = packageConfig.type;
-        if (packageConfig.isLegacyJar() || packageType.equalsIgnoreCase(PackageConfig.UBER_JAR)) {
+        if (packageType.equalsIgnoreCase(PackageConfig.LEGACY)
+                || packageType.equalsIgnoreCase(PackageConfig.JAR)
+                || packageType.equalsIgnoreCase(PackageConfig.UBER_JAR)) {
             jibContainerBuilder = createContainerBuilderFromLegacyJar(jibConfig,
                     sourceJar, outputTarget, mainClass, containerImageLabels);
-        } else if (packageConfig.isFastJar()) {
+        } else if (packageType.equalsIgnoreCase(PackageConfig.FAST_JAR)) {
             jibContainerBuilder = createContainerBuilderFromFastJar(jibConfig, sourceJar, containerImageLabels);
         } else {
             throw new IllegalArgumentException(
@@ -250,7 +252,7 @@ public class JibProcessor {
     private JibContainerBuilder createContainerBuilderFromFastJar(JibConfig jibConfig,
             JarBuildItem sourceJarBuildItem,
             List<ContainerImageLabelBuildItem> containerImageLabels) {
-        Path componentsPath = sourceJarBuildItem.getPath().getParent();
+        Path componentsPath = sourceJarBuildItem.getPath().getParent().getParent();
 
         AbsoluteUnixPath workDirInContainer = AbsoluteUnixPath.get("/work");
 
