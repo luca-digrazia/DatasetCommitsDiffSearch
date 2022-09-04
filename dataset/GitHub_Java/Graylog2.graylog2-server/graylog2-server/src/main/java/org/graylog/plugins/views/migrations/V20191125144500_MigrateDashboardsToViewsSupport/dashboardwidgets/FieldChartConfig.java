@@ -1,3 +1,19 @@
+/**
+ * This file is part of Graylog.
+ *
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Graylog is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.dashboardwidgets;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
@@ -8,6 +24,7 @@ import com.google.auto.value.AutoValue;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.RandomUUIDProvider;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.TimeRange;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.ViewWidget;
+import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.Widget;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.viewwidgets.AggregationConfig;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.viewwidgets.Pivot;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.viewwidgets.Series;
@@ -41,18 +58,18 @@ public abstract class FieldChartConfig extends WidgetConfigBase implements Widge
         return Series.create(mapStatsFunction(valuetype()), field());
     }
 
-    public Set<ViewWidget> toViewWidgets(RandomUUIDProvider randomUUIDProvider) {
+    public Set<ViewWidget> toViewWidgets(Widget widget, RandomUUIDProvider randomUUIDProvider) {
         final AggregationConfig.Builder configBuilder = AggregationConfig.builder()
                 .rowPivots(Collections.singletonList(
                         Pivot.timeBuilder()
                                 .field(TIMESTAMP_FIELD)
-                                .config(TimeHistogramConfig.builder().interval(ApproximatedAutoInterval.of(interval(), timerange())).build())
+                                .config(TimeHistogramConfig.builder().interval(ApproximatedAutoIntervalFactory.of(interval(), timerange())).build())
                                 .build()
                 ))
                 .series(Collections.singletonList(series()))
                 .visualization(visualization());
         return Collections.singleton(
-                createViewWidget(randomUUIDProvider.get())
+                createAggregationWidget(randomUUIDProvider.get())
                         .config(visualizationConfig().map(configBuilder::visualizationConfig).orElse(configBuilder).build())
                         .build()
         );

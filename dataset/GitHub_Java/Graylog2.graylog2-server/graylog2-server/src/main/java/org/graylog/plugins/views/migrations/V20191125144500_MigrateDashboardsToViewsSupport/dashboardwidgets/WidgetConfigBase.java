@@ -1,3 +1,19 @@
+/**
+ * This file is part of Graylog.
+ *
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Graylog is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.dashboardwidgets;
 
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.viewwidgets.AreaVisualizationConfig;
@@ -12,7 +28,7 @@ import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToV
 
 import java.util.Optional;
 
-abstract class WidgetConfigBase implements WidgetConfig {
+abstract class WidgetConfigBase implements WidgetConfigWithTimeRange {
     static String TIMESTAMP_FIELD = "timestamp";
 
     Pivot valuesPivotForField(String field, int limit) {
@@ -25,7 +41,7 @@ abstract class WidgetConfigBase implements WidgetConfig {
     Pivot timestampPivot(String interval) {
         return Pivot.timeBuilder()
                 .field(TIMESTAMP_FIELD)
-                .config(TimeHistogramConfig.builder().interval(ApproximatedAutoInterval.of(interval, timerange())).build())
+                .config(TimeHistogramConfig.builder().interval(ApproximatedAutoIntervalFactory.of(interval, timerange())).build())
                 .build();
     }
 

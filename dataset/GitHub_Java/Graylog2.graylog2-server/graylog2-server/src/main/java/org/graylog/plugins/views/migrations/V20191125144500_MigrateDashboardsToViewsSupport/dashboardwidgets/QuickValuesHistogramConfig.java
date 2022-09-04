@@ -1,3 +1,19 @@
+/**
+ * This file is part of Graylog.
+ *
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Graylog is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.dashboardwidgets;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
@@ -10,6 +26,7 @@ import com.google.common.collect.ImmutableList;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.RandomUUIDProvider;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.TimeRange;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.ViewWidget;
+import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.Widget;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.viewwidgets.AggregationConfig;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.viewwidgets.AutoInterval;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.viewwidgets.BarVisualizationConfig;
@@ -66,9 +83,9 @@ public abstract class QuickValuesHistogramConfig extends WidgetConfigBase implem
     }
 
     @Override
-    public Set<ViewWidget> toViewWidgets(RandomUUIDProvider randomUUIDProvider) {
+    public Set<ViewWidget> toViewWidgets(Widget widget, RandomUUIDProvider randomUUIDProvider) {
         return Collections.singleton(
-                createViewWidget(randomUUIDProvider.get())
+                createAggregationWidget(randomUUIDProvider.get())
                         .config(
                                 AggregationConfig.builder()
                                         .rowPivots(Collections.singletonList(
@@ -77,7 +94,7 @@ public abstract class QuickValuesHistogramConfig extends WidgetConfigBase implem
                                                         .config(TimeHistogramConfig.builder()
                                                                 .interval(
                                                                         interval()
-                                                                                .map(interval -> ApproximatedAutoInterval.of(interval, timerange()))
+                                                                                .map(interval -> ApproximatedAutoIntervalFactory.of(interval, timerange()))
                                                                                 .orElse(AutoInterval.create())
                                                                 ).build())
                                                         .build()
