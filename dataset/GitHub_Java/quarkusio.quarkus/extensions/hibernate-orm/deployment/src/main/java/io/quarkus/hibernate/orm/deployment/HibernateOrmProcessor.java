@@ -34,7 +34,6 @@ import org.hibernate.MultiTenancyStrategy;
 import org.hibernate.annotations.Proxy;
 import org.hibernate.boot.archive.scan.spi.ClassDescriptor;
 import org.hibernate.cfg.AvailableSettings;
-import org.hibernate.cfg.beanvalidation.BeanValidationIntegrator;
 import org.hibernate.dialect.DB297Dialect;
 import org.hibernate.dialect.DerbyTenSevenDialect;
 import org.hibernate.dialect.MariaDB103Dialect;
@@ -136,9 +135,7 @@ public final class HibernateOrmProcessor {
 
     @BuildStep
     void checkTransactionsSupport(Capabilities capabilities) {
-        // JTA is necessary for blocking Hibernate ORM but not necessarily for Hibernate Reactive
-        if (capabilities.isMissing(Capability.TRANSACTIONS)
-                && capabilities.isMissing(Capability.HIBERNATE_REACTIVE)) {
+        if (capabilities.isMissing(Capability.TRANSACTIONS)) {
             throw new ConfigurationException("The Hibernate ORM extension is only functional in a JTA environment.");
         }
     }
@@ -170,17 +167,6 @@ public final class HibernateOrmProcessor {
     public SystemPropertyBuildItem enforceDisableRuntimeEnhancer() {
         return new SystemPropertyBuildItem(AvailableSettings.BYTECODE_PROVIDER,
                 org.hibernate.cfg.Environment.BYTECODE_PROVIDER_NAME_NONE);
-    }
-
-    @BuildStep
-    public void enrollBeanValidationTypeSafeActivatorForReflection(Capabilities capabilities,
-            BuildProducer<ReflectiveClassBuildItem> reflectiveClasses) {
-        if (capabilities.isPresent(Capability.HIBERNATE_VALIDATOR)) {
-            reflectiveClasses.produce(new ReflectiveClassBuildItem(true, true,
-                    "org.hibernate.cfg.beanvalidation.TypeSafeActivator"));
-            reflectiveClasses.produce(new ReflectiveClassBuildItem(false, false, false,
-                    BeanValidationIntegrator.BV_CHECK_CLASS));
-        }
     }
 
     @BuildStep
@@ -552,8 +538,6 @@ public final class HibernateOrmProcessor {
                 .filter(i -> i.isDefault())
                 .findFirst();
 
-        Set<Optional<String>> storageEngines = new HashSet<>();
-
         if ((defaultJdbcDataSource.isPresent() && hibernateOrmConfig.persistenceUnits.isEmpty()) ||
                 hibernateOrmConfig.defaultPersistenceUnit.isAnyPropertySet()) {
             producePersistenceUnitDescriptorFromConfig(
@@ -563,8 +547,6 @@ public final class HibernateOrmProcessor {
                             Collections.emptySet()),
                     jdbcDataSources, applicationArchivesBuildItem, launchMode,
                     systemProperties, nativeImageResources, hotDeploymentWatchedFiles, persistenceUnitDescriptors);
-
-            storageEngines.add(hibernateOrmConfig.defaultPersistenceUnit.dialect.storageEngine);
         }
 
         for (Entry<String, HibernateOrmConfigPersistenceUnit> persistenceUnitEntry : hibernateOrmConfig.persistenceUnits
@@ -574,13 +556,6 @@ public final class HibernateOrmProcessor {
                     modelClassesPerPersistencesUnits.getOrDefault(persistenceUnitEntry.getKey(), Collections.emptySet()),
                     jdbcDataSources, applicationArchivesBuildItem, launchMode,
                     systemProperties, nativeImageResources, hotDeploymentWatchedFiles, persistenceUnitDescriptors);
-
-            storageEngines.add(persistenceUnitEntry.getValue().dialect.storageEngine);
-        }
-
-        if (storageEngines.size() > 1) {
-            throw new ConfigurationException(
-                    "The dialect storage engine is a global configuration property: it must be consistent across all persistence units.");
         }
     }
 
@@ -623,7 +598,7 @@ public final class HibernateOrmProcessor {
             dataSource = DataSourceUtil.DEFAULT_DATASOURCE_NAME;
         }
 
-        Optional<String> dialect = persistenceUnitConfig.dialect.dialect;
+        Optional<String> dialect = persistenceUnitConfig.dialect;
         if (!dialect.isPresent()) {
             dialect = guessDialect(jdbcDataSource.getDbKind());
         }
@@ -647,9 +622,10 @@ public final class HibernateOrmProcessor {
         descriptor.getProperties().setProperty(AvailableSettings.DIALECT, dialect.get());
 
         // The storage engine has to be set as a system property.
-        if (persistenceUnitConfig.dialect.storageEngine.isPresent()) {
+        if (persistenceUnitConfig.dialectStorageEngine.isPresent()) {
+            // TODO MULTI-PUS: this won't work with multiple persistence units...
             systemProperties.produce(new SystemPropertyBuildItem(AvailableSettings.STORAGE_ENGINE,
-                    persistenceUnitConfig.dialect.storageEngine.get()));
+                    persistenceUnitConfig.dialectStorageEngine.get()));
         }
         // Physical Naming Strategy
         persistenceUnitConfig.physicalNamingStrategy.ifPresent(
@@ -689,9 +665,6 @@ public final class HibernateOrmProcessor {
                     Integer.toString(persistenceUnitConfig.batchFetchSize));
             descriptor.getProperties().setProperty(AvailableSettings.BATCH_FETCH_STYLE, BatchFetchStyle.PADDED.toString());
         }
-
-        persistenceUnitConfig.maxFetchDepth.ifPresent(
-                depth -> descriptor.getProperties().setProperty(AvailableSettings.MAX_FETCH_DEPTH, String.valueOf(depth)));
 
         persistenceUnitConfig.query.queryPlanCacheMaxSize.ifPresent(
                 maxSize -> descriptor.getProperties().setProperty(AvailableSettings.QUERY_PLAN_CACHE_MAX_SIZE, maxSize));
