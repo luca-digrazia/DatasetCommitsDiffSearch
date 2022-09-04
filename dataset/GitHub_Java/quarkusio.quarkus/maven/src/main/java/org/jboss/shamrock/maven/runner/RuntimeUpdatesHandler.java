@@ -1,7 +1,6 @@
 package org.jboss.shamrock.maven.runner;
 
 import java.io.ByteArrayOutputStream;
-import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -10,9 +9,7 @@ import java.lang.instrument.ClassDefinition;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
 import java.util.function.Consumer;
 
 import org.fakereplace.core.Fakereplace;
@@ -32,7 +29,6 @@ public class RuntimeUpdatesHandler implements HttpHandler {
     private final Path sourcesDir;
     private volatile long nextUpdate;
     private volatile long lastChange = System.currentTimeMillis();
-    private final ClassLoaderCompiler compiler;
 
     static final UpdateHandler FAKEREPLACE_HANDLER;
 
@@ -47,11 +43,10 @@ public class RuntimeUpdatesHandler implements HttpHandler {
         FAKEREPLACE_HANDLER = fr;
     }
 
-    public RuntimeUpdatesHandler(HttpHandler next, Path classesDir, Path sourcesDir, ClassLoaderCompiler compiler) {
+    public RuntimeUpdatesHandler(HttpHandler next, Path classesDir, Path sourcesDir) {
         this.next = next;
         this.classesDir = classesDir;
         this.sourcesDir = sourcesDir;
-        this.compiler = compiler;
     }
 
     @Override
@@ -85,35 +80,16 @@ public class RuntimeUpdatesHandler implements HttpHandler {
     }
 
     private boolean doScan() throws IOException {
-        Set<File> changedSourceFiles = new HashSet<>();
-        final long start = System.currentTimeMillis();
-        if(sourcesDir != null) {
-            Files.walk(sourcesDir).forEach(new Consumer<Path>() {
-                @Override
-                public void accept(Path path) {
-                    try {
-                        if (!path.toString().endsWith(".java")) {
-                            return;
-                        }
-                        long lastModified = Files.getLastModifiedTime(path).toMillis();
-                        if (lastModified > lastChange) {
-                            changedSourceFiles.add(path.toFile());
-                        }
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                }
-            });
-        }
-        if (!changedSourceFiles.isEmpty()) {
-            compiler.compile(changedSourceFiles);
-        }
+        //TODO: this is super simple at the moment, if there are changes
+        //we just restart the app which will drop the class loader
+        //this will change considerably with Fakereplace
         Map<String, byte[]> changedClasses = new HashMap<>();
+
         Files.walk(classesDir).forEach(new Consumer<Path>() {
             @Override
             public void accept(Path path) {
                 try {
-                    if (!path.toString().endsWith(".class")) {
+                    if(!path.toString().endsWith(".class")) {
                         return;
                     }
                     long lastModified = Files.getLastModifiedTime(path).toMillis();
@@ -147,7 +123,6 @@ public class RuntimeUpdatesHandler implements HttpHandler {
             FAKEREPLACE_HANDLER.handle(changedClasses);
             RunMojoMain.restartApp(true);
         }
-        System.out.println("Hot replace total time: " + (System.currentTimeMillis() - start) + "ms");
 
         return true;
     }
