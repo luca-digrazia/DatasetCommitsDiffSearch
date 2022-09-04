@@ -13,19 +13,25 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package org.androidannotations.api.sharedpreferences;
+package org.androidannotations.test15.prefs;
 
 import java.util.Set;
 
-public final class StringSetPrefEditorField<T extends EditorHelper<T>> extends AbstractPrefEditorField<T> {
+import org.androidannotations.annotations.sharedpreferences.DefaultInt;
+import org.androidannotations.annotations.sharedpreferences.DefaultString;
+import org.androidannotations.annotations.sharedpreferences.SharedPref;
+import org.androidannotations.annotations.sharedpreferences.SharedPref.Scope;
 
-	StringSetPrefEditorField(T editorHelper, String key) {
-		super(editorHelper, key);
-	}
+@SharedPref(Scope.UNIQUE)
+public interface SomePrefs {
+	
+	@DefaultString("John")
+	String name();
 
-	public T put(Set<String> value) {
-		StringSetPrefField.setValue(editorHelper.getEditor(), key, value);
+	@DefaultInt(42)
+	int age();
 
-		return editorHelper;
-	}
+	long lastUpdated();
+
+	Set<String> types();
 }

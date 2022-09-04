@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -16,6 +16,13 @@
 package org.androidannotations.test15.prefs;
 
 import static org.fest.assertions.Assertions.assertThat;
+import static org.junit.Assert.fail;
+
+import java.io.IOException;
+import java.io.Serializable;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.TreeSet;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -24,7 +31,7 @@ import org.junit.runner.RunWith;
 import android.content.SharedPreferences;
 
 import org.androidannotations.test15.AndroidAnnotationsTestRunner;
-import org.androidannotations.test15.R;
+import org.apache.pig.impl.util.ObjectSerializer;
 
 @RunWith(AndroidAnnotationsTestRunner.class)
 public class PrefsActivityTest {
@@ -69,6 +76,23 @@ public class PrefsActivityTest {
 		long now = System.currentTimeMillis();
 		somePrefs.lastUpdated().put(now);
 		assertThat(sharedPref.getLong("lastUpdated", 0)).isEqualTo(now);
+	}
+
+	@Test
+	public void putStringSet() {
+		Set<String> values = new TreeSet<String>();
+		values.add("1");
+		values.add("2");
+		values.add("3");
+		values.add("4");
+		values.add("5");
+
+		somePrefs.types().put(values);
+		try {
+			assertThat(ObjectSerializer.deserialize(sharedPref.getString("types", null))).isEqualTo(values);
+		} catch (IOException e) {
+			fail("IO exception while deserializing the object");
+		}
 	}
 
 	@Test
@@ -150,6 +174,30 @@ public class PrefsActivityTest {
 	}
 
 	@Test
+	public void getStringSet() {
+		Set<String> values = new TreeSet<String>();
+		values.add("1");
+		values.add("2");
+		values.add("3");
+		values.add("4");
+		values.add("5");
+
+		try {
+			sharedPref.edit()
+					.putString("types", ObjectSerializer.serialize((Serializable) values))
+					.commit();
+		} catch (IOException e) {
+			fail("Error while serializing string set: " + e.toString());
+		}
+
+		Set<String> set = somePrefs.types().get();
+		int i = 0;
+		for(String v : set) {
+			assertThat(v).isEqualTo(new Integer(++i).toString());
+		}
+	}
+
+	@Test
 	public void defaultValue() {
 		assertThat(somePrefs.name().get()).isEqualTo("John");
 	}
@@ -167,9 +215,4 @@ public class PrefsActivityTest {
 		assertThat(sharedPref.contains("name")).isFalse();
 	}
 
-	@Test
-	public void stringResourcePrefKey() {
-		somePrefs.stringResKeyPref().put(88);
-		assertThat(sharedPref.getInt(activity.getString(R.string.prefStringKey), 0)).isEqualTo(88);
-	}
 }
