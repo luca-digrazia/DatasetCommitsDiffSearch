@@ -20,7 +20,6 @@ import com.google.common.base.Verify;
 import com.google.common.base.VerifyException;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.LinkedHashMultimap;
 import com.google.common.collect.LinkedListMultimap;
@@ -72,6 +71,7 @@ import com.google.devtools.build.lib.skyframe.AspectFunction.AspectCreationExcep
 import com.google.devtools.build.lib.skyframe.AspectValue.AspectKey;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor.BuildViewProvider;
 import com.google.devtools.build.lib.skyframe.ToolchainUtil.ToolchainContextException;
+import com.google.devtools.build.lib.skyframe.ToolchainUtil.UnresolvedToolchainsException;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.util.OrderedSetMultimap;
 import com.google.devtools.build.lib.util.Preconditions;
@@ -100,9 +100,9 @@ import javax.annotation.Nullable;
  * SkyFunction for {@link ConfiguredTargetValue}s.
  *
  * <p>This class, together with {@link AspectFunction} drives the analysis phase. For more
- * information, see {@link com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory}.
+ * information, see {@link com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory}.
  *
- * @see com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory
+ * @see com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory
  */
 public final class ConfiguredTargetFunction implements SkyFunction {
   // This construction is a bit funky, but guarantees that the Object reference here is globally
@@ -148,6 +148,10 @@ public final class ConfiguredTargetFunction implements SkyFunction {
     this.removeActionsAfterEvaluation = Preconditions.checkNotNull(removeActionsAfterEvaluation);
   }
 
+  private static boolean useDynamicConfigurations(BuildConfiguration config) {
+    return config != null && config.useDynamicConfigurations();
+  }
+
   @Override
   public SkyValue compute(SkyKey key, Environment env) throws ConfiguredTargetFunctionException,
       InterruptedException {
@@ -174,7 +178,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
       target = pkg.getTarget(lc.getLabel().getName());
     } catch (NoSuchTargetException e) {
       throw new ConfiguredTargetFunctionException(
-          new ConfiguredValueCreationException(e.getMessage(), lc.getLabel()));
+          new ConfiguredValueCreationException(e.getMessage()));
     }
     if (pkg.containsErrors()) {
       transitiveLoadingRootCauses.add(lc.getLabel());
@@ -193,7 +197,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
     // associates the corresponding error with this target, as expected. Without this line,
     // the first TransitiveTargetValue call happens on its dep (in trimConfigurations), so Bazel
     // associates the error with the dep, which is misleading.
-    if (configuration != null && configuration.trimConfigurations()
+    if (useDynamicConfigurations(configuration) && configuration.trimConfigurations()
         && env.getValue(TransitiveTargetValue.key(lc.getLabel())) == null) {
       return null;
     }
@@ -201,8 +205,6 @@ public final class ConfiguredTargetFunction implements SkyFunction {
     TargetAndConfiguration ctgValue = new TargetAndConfiguration(target, configuration);
 
     SkyframeDependencyResolver resolver = view.createDependencyResolver(env);
-
-    ToolchainContext toolchainContext = null;
 
     // TODO(janakr): this acquire() call may tie up this thread indefinitely, reducing the
     // parallelism of Skyframe. This is a strict improvement over the prior state of the code, in
@@ -230,6 +232,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
       }
 
       // Determine what toolchains are needed by this target.
+      ToolchainContext toolchainContext = null;
       if (target instanceof Rule) {
         Rule rule = ((Rule) target);
         ImmutableList<Label> requiredToolchains = rule.getRuleClassObject().getRequiredToolchains();
@@ -275,42 +278,18 @@ public final class ConfiguredTargetFunction implements SkyFunction {
       return ans;
     } catch (DependencyEvaluationException e) {
       if (e.getCause() instanceof ConfiguredValueCreationException) {
-        ConfiguredValueCreationException cvce = (ConfiguredValueCreationException) e.getCause();
-
-        // Check if this is caused by an unresolved toolchain, and report it as such.
-        if (toolchainContext != null) {
-          ImmutableSet.Builder<Label> causes = new ImmutableSet.Builder<Label>();
-          if (cvce.getAnalysisRootCause() != null) {
-            causes.add(cvce.getAnalysisRootCause());
-          }
-          if (!cvce.getRootCauses().isEmpty()) {
-            causes.addAll(cvce.getRootCauses());
-          }
-          Set<Label> toolchainDependencyErrors =
-              toolchainContext.filterToolchainLabels(causes.build());
-          if (!toolchainDependencyErrors.isEmpty()) {
-            env.getListener()
-                .handle(
-                    Event.error(
-                        String.format(
-                            "While resolving toolchains for target %s: %s",
-                            target.getLabel(), e.getCause().getMessage())));
-          }
-        }
-
-        throw new ConfiguredTargetFunctionException(cvce);
+        throw new ConfiguredTargetFunctionException(
+            (ConfiguredValueCreationException) e.getCause());
       } else if (e.getCause() instanceof InconsistentAspectOrderException) {
         InconsistentAspectOrderException cause = (InconsistentAspectOrderException) e.getCause();
         throw new ConfiguredTargetFunctionException(
             new ConfiguredValueCreationException(cause.getMessage(), target.getLabel()));
-      } else if (e.getCause() instanceof InvalidConfigurationException) {
+      } else {
+        // Cast to InvalidConfigurationException as a consistency check. If you add any
+        // DependencyEvaluationException constructors, you may need to change this code, too.
         InvalidConfigurationException cause = (InvalidConfigurationException) e.getCause();
         throw new ConfiguredTargetFunctionException(
             new ConfiguredValueCreationException(cause.getMessage(), target.getLabel()));
-      } else {
-        // Unknown exception type.
-        throw new ConfiguredTargetFunctionException(
-            new ConfiguredValueCreationException(e.getMessage(), target.getLabel()));
       }
     } catch (AspectCreationException e) {
       // getAnalysisRootCause may be null if the analysis of the aspect itself failed.
@@ -321,21 +300,20 @@ public final class ConfiguredTargetFunction implements SkyFunction {
       throw new ConfiguredTargetFunctionException(
           new ConfiguredValueCreationException(e.getMessage(), analysisRootCause));
     } catch (ToolchainContextException e) {
-      // We need to throw a ConfiguredValueCreationException, so either find one or make one.
-      ConfiguredValueCreationException cvce;
-      if (e.getCause() instanceof ConfiguredValueCreationException) {
-        cvce = (ConfiguredValueCreationException) e.getCause();
+      if (e.getCause() instanceof UnresolvedToolchainsException) {
+        UnresolvedToolchainsException ute = (UnresolvedToolchainsException) e.getCause();
+        env.getListener()
+            .handle(Event.error(ute.getMessage() + " for target " + target.getLabel()));
+        throw new ConfiguredTargetFunctionException(
+            new ConfiguredValueCreationException(ute.getMessage(), target.getLabel()));
+      } else if (e.getCause() instanceof ConfiguredValueCreationException) {
+        ConfiguredValueCreationException cvce = (ConfiguredValueCreationException) e.getCause();
+        throw new ConfiguredTargetFunctionException(cvce);
       } else {
-        cvce = new ConfiguredValueCreationException(e.getCause().getMessage(), target.getLabel());
+        // TODO(katre): better error handling
+        throw new ConfiguredTargetFunctionException(
+            new ConfiguredValueCreationException(e.getMessage()));
       }
-
-      env.getListener()
-          .handle(
-              Event.error(
-                  String.format(
-                      "While resolving toolchains for target %s: %s",
-                      target.getLabel(), e.getCause().getMessage())));
-      throw new ConfiguredTargetFunctionException(cvce);
     } finally {
       cpuBoundSemaphore.release();
     }
@@ -398,8 +376,8 @@ public final class ConfiguredTargetFunction implements SkyFunction {
     }
 
     // Trim each dep's configuration so it only includes the fragments needed by its transitive
-    // closure.
-    if (ctgValue.getConfiguration() != null) {
+    // closure (only dynamic configurations support this).
+    if (useDynamicConfigurations(ctgValue.getConfiguration())) {
       depValueNames = getDynamicConfigurations(env, ctgValue, depValueNames, hostConfiguration,
           ruleClassProvider);
       // It's important that we don't use "if (env.missingValues()) { return null }" here (or
@@ -750,6 +728,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
   @Nullable
   private static Set<Class<? extends BuildConfiguration.Fragment>> getTransitiveFragments(
       Environment env, Label dep, BuildConfiguration parentConfig) throws InterruptedException {
+    Preconditions.checkArgument(parentConfig.useDynamicConfigurations());
     if (!parentConfig.trimConfigurations()) {
       return parentConfig.getAllFragments().keySet();
     }
@@ -1062,16 +1041,20 @@ public final class ConfiguredTargetFunction implements SkyFunction {
       return null;
     }
 
+
     // No need to get new configs from Skyframe - config_setting rules always use the current
     // target's config.
     // TODO(bazel-team): remove the need for this special transformation. We can probably do this by
     // simply passing this through trimConfigurations.
-    ImmutableList.Builder<Dependency> staticConfigs = ImmutableList.builder();
-    for (Dependency dep : configValueNames) {
-      staticConfigs.add(Dependency.withConfigurationAndAspects(dep.getLabel(),
-          ctgValue.getConfiguration(), dep.getAspects()));
+    BuildConfiguration targetConfig = ctgValue.getConfiguration();
+    if (useDynamicConfigurations(targetConfig)) {
+      ImmutableList.Builder<Dependency> staticConfigs = ImmutableList.builder();
+      for (Dependency dep : configValueNames) {
+        staticConfigs.add(
+            Dependency.withConfigurationAndAspects(dep.getLabel(), targetConfig, dep.getAspects()));
+      }
+      configValueNames = staticConfigs.build();
     }
-    configValueNames = staticConfigs.build();
 
     Map<SkyKey, ConfiguredTarget> configValues = resolveConfiguredTargetDependencies(
         env, configValueNames, transitivePackages, transitiveLoadingRootCauses);

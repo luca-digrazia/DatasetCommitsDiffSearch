@@ -60,7 +60,7 @@ public final class AspectDefinition {
   private final RequiredProviders requiredProviders;
   private final RequiredProviders requiredProvidersForAspects;
   private final ImmutableMap<String, Attribute> attributes;
-  private final ImmutableSet<Label> requiredToolchains;
+  private final ImmutableList<Label> requiredToolchains;
 
   /**
    * Which attributes aspect should propagate along:
@@ -83,7 +83,7 @@ public final class AspectDefinition {
       RequiredProviders requiredProviders,
       RequiredProviders requiredAspectProviders,
       ImmutableMap<String, Attribute> attributes,
-      ImmutableSet<Label> requiredToolchains,
+      ImmutableList<Label> requiredToolchains,
       @Nullable ImmutableSet<String> restrictToAttributes,
       @Nullable ConfigurationFragmentPolicy configurationFragmentPolicy,
       boolean applyToFiles) {
@@ -117,7 +117,7 @@ public final class AspectDefinition {
   }
 
   /** Returns the required toolchains declared by this aspect. */
-  public ImmutableSet<Label> getRequiredToolchains() {
+  public ImmutableList<Label> getRequiredToolchains() {
     return requiredToolchains;
   }
 
@@ -485,7 +485,7 @@ public final class AspectDefinition {
           requiredProviders.build(),
           requiredAspectProviders.build(),
           ImmutableMap.copyOf(attributes),
-          ImmutableSet.copyOf(requiredToolchains),
+          ImmutableList.copyOf(requiredToolchains),
           propagateAlongAttributes == null ? null : ImmutableSet.copyOf(propagateAlongAttributes),
           configurationFragmentPolicy.build(),
           applyToFiles);

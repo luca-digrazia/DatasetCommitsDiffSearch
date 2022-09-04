@@ -35,13 +35,13 @@ public interface Target {
   /**
    *  Returns the label of this target.  (e.g. "//foo:bar")
    */
-  @SkylarkCallable(name = "label", documented = false)
+  @SkylarkCallable(name = "label", doc = "")
   Label getLabel();
 
   /**
    *  Returns the name of this rule (relative to its owning package).
    */
-  @SkylarkCallable(name = "name", documented = false)
+  @SkylarkCallable(name = "name", doc = "")
   String getName();
 
   /**
