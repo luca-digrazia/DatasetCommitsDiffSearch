@@ -52,19 +52,12 @@ public class RestTest extends AAProcessorTestHelper {
 	}
 
 	@Test
-	public void clientWithBodyParameters() throws IOException {
-		CompileResult result = compileFiles(ClientWithBodyParameters.class);
-		assertCompilationSuccessful(result);
-	}
-
-	@Test
-	public void clientWithWrongBodyParameters() throws IOException {
-		CompileResult result = compileFiles(ClientWithWrongBodyParameters.class);
-		assertCompilationErrorOn(ClientWithWrongBodyParameters.class, "@Get", result);
-		assertCompilationErrorOn(ClientWithWrongBodyParameters.class, "@Head", result);
-		assertCompilationErrorOn(ClientWithWrongBodyParameters.class, "@Options", result);
-		assertCompilationErrorOn(ClientWithWrongBodyParameters.class, "@Post(\"/multipleBodyNotAcceptable/\")", result);
-		assertCompilationErrorCount(7, result);
+	public void clientWithRequestEntity() throws IOException {
+		CompileResult result = compileFiles(ClientWithRequestEntity.class);
+		assertCompilationErrorOn(ClientWithRequestEntity.class, "@Get", result);
+		assertCompilationErrorOn(ClientWithRequestEntity.class, "@Head", result);
+		assertCompilationErrorOn(ClientWithRequestEntity.class, "@Options", result);
+		assertCompilationErrorCount(3, result);
 	}
 
 	@Test
@@ -115,9 +108,8 @@ public class RestTest extends AAProcessorTestHelper {
 		assertCompilationErrorOn(ClientWithWrongFields.class, "@Post(\"/conflictWithPathParam\")", result);
 		assertCompilationErrorOn(ClientWithWrongFields.class, "@Post(\"/duplicateField\")", result);
 		assertCompilationErrorOn(ClientWithWrongFields.class, "@Post(\"/fieldAndPartOnSameMethod\")", result);
-		assertCompilationErrorOn(ClientWithWrongFields.class, "@Post(\"/fieldAndBodyOnSameMethod\")", result);
 
-		assertCompilationErrorCount(12, result);
+		assertCompilationErrorCount(11, result);
 	}
 
 	@Test
@@ -132,7 +124,7 @@ public class RestTest extends AAProcessorTestHelper {
 		assertCompilationErrorOn(FieldPathParamOnSameArgument.class, "@Field", result);
 		assertCompilationErrorOn(FieldPathParamOnSameArgument.class, "@Path", result);
 
-		assertCompilationErrorCount(3, result);
+		assertCompilationErrorCount(2, result);
 	}
 
 	@Test
