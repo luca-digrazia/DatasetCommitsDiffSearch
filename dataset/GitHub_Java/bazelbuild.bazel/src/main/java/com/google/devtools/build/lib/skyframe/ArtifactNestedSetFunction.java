@@ -43,7 +43,7 @@ import java.util.concurrent.ConcurrentMap;
  * <p>[1] Heuristic: If the size of the NestedSet exceeds a certain threshold, we evaluate it as an
  * ArtifactNestedSetKey.
  */
-public class ArtifactNestedSetFunction implements SkyFunction {
+class ArtifactNestedSetFunction implements SkyFunction {
 
   /**
    * A concurrent map from Artifacts' SkyKeys to their ValueOrException, for Artifacts that are part
@@ -99,6 +99,9 @@ public class ArtifactNestedSetFunction implements SkyFunction {
                 artifactNestedSetKey.directKeys(),
                 IOException.class,
                 ActionExecutionException.class);
+    if (env.valuesMissing()) {
+      return null;
+    }
 
     // Evaluate all children.
     ArrayList<SkyKey> transitiveKeys = new ArrayList<>();
