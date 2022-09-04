@@ -49,16 +49,7 @@ public class Persisted {
     protected final Core core;
     protected final String collectionName;
     protected final Map<String, Validator> validations;
-
-    protected Persisted(String collectionName, Core core, Map<String, Object> fields) {
-        this.id = new ObjectId();
-        this.fields = fields;
-
-        this.collectionName = collectionName;
-        this.core = core;
-        this.validations = null;
-    }
-
+    
 	protected Persisted(String collectionName, Core core, Map<String, Object> fields, Map<String, Validator> validations) {
         this.id = new ObjectId();
 		this.fields = fields;
@@ -67,15 +58,6 @@ public class Persisted {
 		this.core = core;
         this.validations = validations;
 	}
-
-    protected Persisted(String collectionName, Core core, ObjectId id, Map<String, Object> fields) {
-        this.id = id;
-        this.fields = fields;
-
-        this.collectionName = collectionName;
-        this.core = core;
-        this.validations = null;
-    }
 
 	protected Persisted(String collectionName, Core core, ObjectId id, Map<String, Object> fields,  Map<String, Validator> validations) {
 		this.id = id;
@@ -91,31 +73,23 @@ public class Persisted {
 	}
 	
 	protected static List<DBObject> query(DBObject query, Core core, String collectionName) {
-        List<DBObject> results = Lists.newArrayList();
-        DBCursor cursor = collection(core, collectionName).find(query);
+		List<DBObject> results = Lists.newArrayList();
+		DBCursor cursor = collection(core, collectionName).find(query);
 
-        try {
-            while(cursor.hasNext()) {
-                results.add(cursor.next());
-            }
-        } finally {
-            cursor.close();
-        }
-
-        return results;
-    }
-
-    protected static DBObject findOne(DBObject query, Core core, String collectionName) {
-        return collection(core, collectionName).findOne(query);
-    }
-
+		try {
+			while(cursor.hasNext()) {
+				results.add(cursor.next());
+			}
+		} finally {
+			cursor.close();
+		}
+		
+		return results;
+	}
+	
 	public void destroy() {
 		collection().remove(new BasicDBObject("_id", id));
 	}
-
-    public static void destroyAll(Core core, String collectionName) {
-        collection(core, collectionName).remove(new BasicDBObject());
-    }
 	
 	public ObjectId save() throws ValidationException {
         if(!validate(validations, fields)) {
@@ -135,14 +109,6 @@ public class Persisted {
 		
 		return id;
 	}
-
-    public ObjectId saveWithoutValidation() {
-        try {
-            return save();
-        } catch (ValidationException e) { /* */ }
-
-        return null;
-    }
 	
 	protected DBCollection collection() {
 		return collection(this.core, this.collectionName);
