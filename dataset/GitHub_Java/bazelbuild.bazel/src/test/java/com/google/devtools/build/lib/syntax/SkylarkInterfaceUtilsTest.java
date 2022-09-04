@@ -34,9 +34,9 @@ public class SkylarkInterfaceUtilsTest {
   /** MockClassA */
   @SkylarkModule(name = "MockClassA", doc = "MockClassA")
   public static class MockClassA {
-    @SkylarkCallable(name = "foo", doc = "MockClassA#foo")
+    @SkylarkCallable(doc = "MockClassA#foo")
     public void foo() {}
-    @SkylarkCallable(name = "bar", doc = "MockClassA#bar")
+    @SkylarkCallable(doc = "MockClassA#bar")
     public void bar() {}
     public void baz() {}
   }
@@ -44,20 +44,20 @@ public class SkylarkInterfaceUtilsTest {
   /** MockInterfaceB1 */
   @SkylarkModule(name = "MockInterfaceB1", doc = "MockInterfaceB1")
   public static interface MockInterfaceB1 {
-    @SkylarkCallable(name = "foo", doc = "MockInterfaceB1#foo")
+    @SkylarkCallable(doc = "MockInterfaceB1#foo")
     void foo();
-    @SkylarkCallable(name = "bar", doc = "MockInterfaceB1#bar")
+    @SkylarkCallable(doc = "MockInterfaceB1#bar")
     void bar();
-    @SkylarkCallable(name = "baz", doc = "MockInterfaceB1#baz")
+    @SkylarkCallable(doc = "MockInterfaceB1#baz")
     void baz();
   }
 
   /** MockInterfaceB2 */
   @SkylarkModule(name = "MockInterfaceB2", doc = "MockInterfaceB2")
   public static interface MockInterfaceB2 {
-    @SkylarkCallable(name = "baz", doc = "MockInterfaceB2#baz")
+    @SkylarkCallable(doc = "MockInterfaceB2#baz")
     void baz();
-    @SkylarkCallable(name = "qux", doc = "MockInterfaceB2#qux")
+    @SkylarkCallable(doc = "MockInterfaceB2#qux")
     void qux();
   }
 
@@ -65,7 +65,7 @@ public class SkylarkInterfaceUtilsTest {
   @SkylarkModule(name = "MockClassC", doc = "MockClassC")
   public static class MockClassC extends MockClassA implements MockInterfaceB1, MockInterfaceB2 {
     @Override
-    @SkylarkCallable(name = "foo", doc = "MockClassC#foo")
+    @SkylarkCallable(doc = "MockClassC#foo")
     public void foo() {}
     @Override
     public void bar() {}
@@ -78,7 +78,7 @@ public class SkylarkInterfaceUtilsTest {
   /** MockClassD */
   public static class MockClassD extends MockClassC {
     @Override
-    @SkylarkCallable(name = "foo", doc = "MockClassD#foo")
+    @SkylarkCallable(doc = "MockClassD#foo")
     public void foo() {}
   }
 
