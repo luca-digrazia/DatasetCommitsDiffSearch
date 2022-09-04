@@ -14,16 +14,19 @@
 package com.google.devtools.build.lib.rules.apple;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.analysis.RuleContext;
+import com.google.devtools.build.lib.analysis.TransitionMode;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.BuiltinProvider;
 import com.google.devtools.build.lib.packages.NativeInfo;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
 import com.google.devtools.build.lib.starlarkbuildapi.apple.XcodeConfigInfoApi;
+import com.google.devtools.build.lib.syntax.Dict;
+import com.google.devtools.build.lib.syntax.EvalException;
+import java.util.Map;
 import javax.annotation.Nullable;
-import net.starlark.java.eval.Dict;
-import net.starlark.java.eval.EvalException;
 
 /**
  * The set of Apple versions computed from command line options and the {@code xcode_config} rule.
@@ -47,7 +50,7 @@ public class XcodeConfigInfo extends NativeInfo
   private final DottedVersion macosMinimumOsVersion;
   @Nullable private final DottedVersion xcodeVersion;
   @Nullable private final Availability availability;
-  @Nullable private final Dict<String, String> executionRequirements; // immutable
+  @Nullable private final Map<String, String> executionRequirements;
 
   public XcodeConfigInfo(
       DottedVersion iosSdkVersion,
@@ -72,7 +75,7 @@ public class XcodeConfigInfo extends NativeInfo
     this.xcodeVersion = xcodeVersion;
     this.availability = availability;
 
-    Dict.Builder<String, String> builder = Dict.builder();
+    ImmutableMap.Builder<String, String> builder = ImmutableMap.builder();
     builder.put(ExecutionRequirements.REQUIRES_DARWIN, "");
     switch (availability) {
       case LOCAL:
@@ -85,7 +88,7 @@ public class XcodeConfigInfo extends NativeInfo
         break;
     }
     builder.put(ExecutionRequirements.REQUIREMENTS_SET, "");
-    this.executionRequirements = builder.buildImmutable();
+    this.executionRequirements = builder.build();
   }
 
   /** Indicates the platform(s) on which an Xcode version is available. */
@@ -225,17 +228,17 @@ public class XcodeConfigInfo extends NativeInfo
   }
 
   /** Returns the execution requirements for actions that use this Xcode version. */
-  public Dict<String, String> getExecutionRequirements() {
+  public Map<String, String> getExecutionRequirements() {
     return executionRequirements;
   }
 
   @Override
   public Dict<String, String> getExecutionRequirementsDict() {
-    return executionRequirements;
+    return Dict.copyOf(null, executionRequirements);
   }
 
   public static XcodeConfigInfo fromRuleContext(RuleContext ruleContext) {
     return ruleContext.getPrerequisite(
-        XcodeConfigRule.XCODE_CONFIG_ATTR_NAME, XcodeConfigInfo.PROVIDER);
+        XcodeConfigRule.XCODE_CONFIG_ATTR_NAME, TransitionMode.TARGET, XcodeConfigInfo.PROVIDER);
   }
 }

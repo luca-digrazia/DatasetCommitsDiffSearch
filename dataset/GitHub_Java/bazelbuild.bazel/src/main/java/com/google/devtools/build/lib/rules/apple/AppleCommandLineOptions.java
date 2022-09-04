@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.rules.apple;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
+import com.google.devtools.build.lib.analysis.config.CoreOptionConverters.DefaultLabelConverter;
 import com.google.devtools.build.lib.analysis.config.CoreOptionConverters.LabelConverter;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -26,6 +27,7 @@ import com.google.devtools.build.lib.skyframe.serialization.DeserializationConte
 import com.google.devtools.build.lib.skyframe.serialization.SerializationContext;
 import com.google.devtools.build.lib.skyframe.serialization.SerializationException;
 import com.google.devtools.build.lib.starlarkbuildapi.apple.AppleBitcodeModeApi;
+import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.common.options.Converters.CommaSeparatedOptionListConverter;
 import com.google.devtools.common.options.EnumConverter;
 import com.google.devtools.common.options.Option;
@@ -37,7 +39,6 @@ import com.google.protobuf.CodedOutputStream;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
-import net.starlark.java.eval.Printer;
 
 /** Command-line options for building for Apple platforms. */
 public class AppleCommandLineOptions extends FragmentOptions {
@@ -332,6 +333,15 @@ public class AppleCommandLineOptions extends FragmentOptions {
   public List<String> catalystCpus;
 
   @Option(
+    name = "default_ios_provisioning_profile",
+    defaultValue = "",
+    documentationCategory = OptionDocumentationCategory.SIGNING,
+    effectTags = {OptionEffectTag.CHANGES_INPUTS},
+    converter = DefaultProvisioningProfileConverter.class
+  )
+  public Label defaultProvisioningProfile;
+
+  @Option(
     name = "xcode_version_config",
     defaultValue = "@local_config_xcode//:host_xcodes",
     converter = LabelConverter.class,
@@ -350,6 +360,13 @@ public class AppleCommandLineOptions extends FragmentOptions {
   // TODO(cparsons): Update all callers to reference the actual xcode_version_config flag value.
   @VisibleForTesting
   public static final String DEFAULT_XCODE_VERSION_CONFIG_LABEL = "//tools/objc:host_xcodes";
+
+  /** Converter for --default_ios_provisioning_profile. */
+  public static class DefaultProvisioningProfileConverter extends DefaultLabelConverter {
+    public DefaultProvisioningProfileConverter() {
+      super("//tools/objc:default_provisioning_profile");
+    }
+  }
 
   @Option(
       name = "apple_bitcode",

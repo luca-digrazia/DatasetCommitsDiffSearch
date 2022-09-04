@@ -17,17 +17,17 @@ package com.google.devtools.build.lib.rules.apple;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.packages.BuiltinProvider;
+import com.google.devtools.build.lib.packages.NativeProvider;
 import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.packages.StarlarkInfo;
 import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.starlarkbuildapi.apple.ApplePlatformApi;
 import com.google.devtools.build.lib.starlarkbuildapi.apple.ApplePlatformTypeApi;
+import com.google.devtools.build.lib.syntax.Location;
+import com.google.devtools.build.lib.syntax.Printer;
 import java.util.HashMap;
 import java.util.Locale;
 import javax.annotation.Nullable;
-import net.starlark.java.eval.Printer;
-import net.starlark.java.syntax.Location;
 
 /** An enum that can be used to distinguish between various apple platforms. */
 @Immutable
@@ -95,16 +95,6 @@ public enum ApplePlatform implements ApplePlatformApi {
   @Override
   public String getNameInPlist() {
     return nameInPlist;
-  }
-
-  /**
-   * Returns the platform cpu string with target environment (_device|_simulator).
-   *
-   * @param targetCpu cpu value with platform type prefix, such as 'ios_arm64'
-   */
-  public String cpuStringWithTargetEnvironmentForTargetCpu(String targetCpu) {
-    String targetEnvironment = isDevice ? "device" : "simulator";
-    return String.format("%s_%s", targetCpu, targetEnvironment);
   }
 
   /**
@@ -199,7 +189,7 @@ public enum ApplePlatform implements ApplePlatformApi {
 
   /** Returns a Starlark struct that contains the instances of this enum. */
   public static StructImpl getStarlarkStruct() {
-    Provider constructor = new BuiltinProvider<StructImpl>("platforms", StructImpl.class) {};
+    Provider constructor = new NativeProvider<StructImpl>(StructImpl.class, "platforms") {};
     HashMap<String, Object> fields = new HashMap<>();
     for (ApplePlatform type : values()) {
       fields.put(type.starlarkKey, type);
@@ -269,7 +259,7 @@ public enum ApplePlatform implements ApplePlatformApi {
 
     /** Returns a Starlark struct that contains the instances of this enum. */
     public static StructImpl getStarlarkStruct() {
-      Provider constructor = new BuiltinProvider<StructImpl>("platform_types", StructImpl.class) {};
+      Provider constructor = new NativeProvider<StructImpl>(StructImpl.class, "platform_types") {};
       HashMap<String, Object> fields = new HashMap<>();
       for (PlatformType type : values()) {
         fields.put(type.starlarkKey, type);

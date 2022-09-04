@@ -15,6 +15,7 @@
 package com.google.devtools.build.lib.rules.objc;
 
 import static com.google.devtools.build.lib.packages.Type.STRING;
+import static com.google.devtools.build.lib.rules.apple.AppleConfiguration.IOS_CPU_PREFIX;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Optional;
@@ -44,11 +45,11 @@ import com.google.devtools.build.lib.rules.cpp.CppOptions;
 import com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.PlatformRule;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.starlarkbuildapi.SplitTransitionProviderApi;
+import com.google.devtools.build.lib.syntax.Printer;
+import com.google.devtools.build.lib.syntax.StarlarkValue;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import net.starlark.java.eval.Printer;
-import net.starlark.java.eval.StarlarkValue;
 
 /**
  * {@link TransitionFactory} implementation for multi-architecture apple rules which can accept
@@ -310,12 +311,12 @@ public class MultiArchSplitTransitionProvider
         // TODO(b/29355778, b/28403953): Use a crosstool for any apple rule. Deprecate ios_cpu.
         appleCommandLineOptions.iosCpu = cpu;
 
-        String platformCpu = ApplePlatform.cpuStringForTarget(platformType, cpu);
         if (splitOptions.get(ObjcCommandLineOptions.class).enableCcDeps) {
           // Only set the (CC-compilation) CPU for dependencies if explicitly required by the user.
           // This helps users of the iOS rules who do not depend on CC rules as these CPU values
           // require additional flags to work (e.g. a custom crosstool) which now only need to be
           // set if this feature is explicitly requested.
+          String platformCpu = ApplePlatform.cpuStringForTarget(platformType, cpu);
           AppleCrosstoolTransition.setAppleCrosstoolTransitionConfiguration(buildOptions,
               splitOptions, platformCpu);
         }
@@ -336,7 +337,7 @@ public class MultiArchSplitTransitionProvider
         }
 
         appleCommandLineOptions.configurationDistinguisher = configurationDistinguisher;
-        splitBuildOptions.put(platformCpu, splitOptions.underlying());
+        splitBuildOptions.put(IOS_CPU_PREFIX + cpu, splitOptions.underlying());
       }
       return splitBuildOptions.build();
     }
