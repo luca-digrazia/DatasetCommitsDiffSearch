@@ -74,7 +74,7 @@ public final class PyRuntimeRule implements RuleDefinition {
   public Metadata getMetadata() {
     return Metadata.builder()
         .name("py_runtime")
-        .ancestors(BaseRuleClasses.NativeBuildRule.class)
+        .ancestors(BaseRuleClasses.BaseRule.class)
         .factoryClass(PyRuntime.class)
         .build();
   }
