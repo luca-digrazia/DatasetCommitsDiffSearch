@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,15 +15,18 @@ package com.google.devtools.build.lib.util.io;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.io.ByteStreams;
+import com.google.common.primitives.Bytes;
 import com.google.devtools.build.lib.concurrent.ThreadSafety;
+import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
-
-import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * An implementation of {@link OutErr} that captures all out/err output into
@@ -34,8 +37,12 @@ import java.io.PrintStream;
  *
  * You should not use this object from multiple different threads.
  */
+// Note that it should be safe to treat the Output and Error streams within a FileOutErr each as
+// individually ThreadCompatible.
 @ThreadSafety.ThreadCompatible
 public class FileOutErr extends OutErr {
+
+  private final AtomicInteger childCount = new AtomicInteger();
 
   /**
    * Create a new FileOutErr that will write its input,
@@ -47,13 +54,12 @@ public class FileOutErr extends OutErr {
    * @param stderr The file for the stderr of this outErr
    */
   public FileOutErr(Path stdout, Path stderr) {
-    super(new FileRecordingOutputStream(stdout), new FileRecordingOutputStream(stderr));
+    this(new FileRecordingOutputStream(stdout), new FileRecordingOutputStream(stderr));
   }
 
   /**
-   * Creates a new FileOutErr that writes its input
-   * to the file specified by output. Both stdout/stderr will
-   * be copied into the single file.
+   * Creates a new FileOutErr that writes its input to the file specified by output. Both
+   * stdout/stderr will be copied into the single file.
    *
    * @param output The file for the both stdout and stderr of this outErr.
    */
@@ -61,6 +67,11 @@ public class FileOutErr extends OutErr {
     // We don't need to create a synchronized funnel here, like in the OutErr -- The
     // respective functions in the FileRecordingOutputStream take care of locking.
     this(new FileRecordingOutputStream(output));
+  }
+
+  protected FileOutErr(AbstractFileRecordingOutputStream out,
+                       AbstractFileRecordingOutputStream err) {
+    super(out, err);
   }
 
   /**
@@ -100,41 +111,67 @@ public class FileOutErr extends OutErr {
   }
 
   /**
-   * Returns the file this OutErr uses to buffer stdout
+   * Returns the {@link Path} this OutErr uses to buffer stdout
    *
-   * The user must ensure that no other process is writing to the
-   * files at time of creation.
+   * <p>The user must ensure that no other process is writing to the files at time of creation.
    *
    * @return the path object with the contents of stdout
    */
-  public Path getOutputFile() {
+  public Path getOutputPath() {
     return getFileOutputStream().getFile();
   }
 
+  /** Returns the length of the stdout contents. */
+  public long outSize() throws IOException {
+    return getFileOutputStream().getRecordedOutputSize();
+  }
+
   /**
-   * Returns the file this OutErr uses to buffer stderr.
+   * Returns the {@link Path} this OutErr uses to buffer stderr.
    *
    * @return the path object with the contents of stderr
    */
-  public Path getErrorFile() {
+  public Path getErrorPath() {
     return getFileErrorStream().getFile();
   }
 
-  /**
-   * Interprets the captured out content as an {@code ISO-8859-1} encoded
-   * string.
-   */
-  public String outAsLatin1() {
+  public byte[] outAsBytes() {
     return getFileOutputStream().getRecordedOutput();
   }
 
-  /**
-   * Interprets the captured err content as an {@code ISO-8859-1} encoded
-   * string.
-   */
-  public String errAsLatin1() {
+  @VisibleForTesting
+  public String outAsLatin1() {
+    return new String(outAsBytes(), StandardCharsets.ISO_8859_1);
+  }
+
+  public byte[] errAsBytes() {
     return getFileErrorStream().getRecordedOutput();
   }
+
+  @VisibleForTesting
+  public String errAsLatin1() {
+    return new String(errAsBytes(), StandardCharsets.ISO_8859_1);
+  }
+
+  /** Returns the length of the stderr contents. */
+  public long errSize() throws IOException {
+    return getFileErrorStream().getRecordedOutputSize();
+  }
+
+  /**
+   * Closes and deletes the error stream.
+   */
+  public void clearErr() throws IOException {
+    getFileErrorStream().clear();
+  }
+
+  /**
+   * Closes and deletes the out stream.
+   */
+  public void clearOut() throws IOException {
+    getFileOutputStream().clear();
+  }
+
 
   /**
    * Writes the captured out content to the given output stream,
@@ -145,11 +182,20 @@ public class FileOutErr extends OutErr {
   }
 
   /**
-   * Writes the captured out content to the given output stream,
+   * Writes the captured error content to the given error stream,
    * avoiding keeping the entire contents in memory.
    */
   public void dumpErrAsLatin1(OutputStream out) {
     getFileErrorStream().dumpOut(out);
+  }
+
+  /**
+   * Writes the captured content to the given {@link FileOutErr},
+   * avoiding keeping the entire contents in memory.
+   */
+  public static void dump(FileOutErr from, FileOutErr to) {
+    from.dumpOutAsLatin1(to.getOutputStream());
+    from.dumpErrAsLatin1(to.getErrorStream());
   }
 
   private AbstractFileRecordingOutputStream getFileOutputStream() {
@@ -160,6 +206,18 @@ public class FileOutErr extends OutErr {
     return (AbstractFileRecordingOutputStream) getErrorStream();
   }
 
+  @ThreadSafe
+  public FileOutErr childOutErr() {
+    int index = childCount.getAndIncrement();
+    Path outPath = getFileOutputStream().getFileUnsafe();
+    Path errPath = getFileErrorStream().getFileUnsafe();
+    if (outPath == null || errPath == null) {
+      return new FileOutErr();
+    }
+    return new FileOutErr(
+        outPath.getParentDirectory().getRelative(outPath.getBaseName() + "-" + index),
+        errPath.getParentDirectory().getRelative(errPath.getBaseName() + "-" + index));
+  }
   /**
    * An abstract supertype for the two other inner classes in this type
    * to implement streams that can write to a file.
@@ -183,16 +241,22 @@ public class FileOutErr extends OutErr {
      */
     abstract boolean hasRecordedOutput();
 
-    /**
-     * Returns the output this AbstractFileOutErr has recorded.
-     */
-    abstract String getRecordedOutput();
+    /** Returns the output this AbstractFileOutErr has recorded. */
+    abstract byte[] getRecordedOutput();
+
+    /** Returns the size of the recorded output. */
+    abstract long getRecordedOutputSize() throws IOException;
 
     /**
      * Writes the output to the given output stream,
      * avoiding keeping the entire contents in memory.
      */
     abstract void dumpOut(OutputStream out);
+
+    abstract Path getFileUnsafe();
+
+    /** Closes and deletes the output. */
+    abstract void clear() throws IOException;
   }
 
   /**
@@ -215,13 +279,23 @@ public class FileOutErr extends OutErr {
     }
 
     @Override
+    Path getFileUnsafe() {
+      return null;
+    }
+
+    @Override
     boolean hasRecordedOutput() {
       return false;
     }
 
     @Override
-    String getRecordedOutput() {
-      return "";
+    byte[] getRecordedOutput() {
+      return new byte[] {};
+    }
+
+    @Override
+    long getRecordedOutputSize() {
+      return 0;
     }
 
     @Override
@@ -229,6 +303,9 @@ public class FileOutErr extends OutErr {
       return;
     }
 
+    @Override
+    public void clear() {
+    }
 
     @Override
     public void write(byte[] b, int off, int len) {
@@ -243,31 +320,34 @@ public class FileOutErr extends OutErr {
     }
   }
 
-
   /**
-   * An output stream that captures all output into a file.
-   * The file is created only if output is received.
+   * An output stream that captures all output into a file. The file is created only if output is
+   * received.
    *
-   * The user must take care that nobody else is writing to the
-   * file that is backing the output stream.
+   * The user must take care that nobody else is writing to the file that is backing the output
+   * stream.
    *
-   * The write() methods of type are synchronized to ensure
-   * that writes from different threads are not mixed up.
+   * The write() methods of type are synchronized to ensure that writes from different threads are
+   * not mixed up. Note that this class is otherwise
+   * {@link com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible}. Only the
+   * write() methods are allowed to be concurrently, and only concurrently with each other. All
+   * other calls must be serialized.
    *
-   * The outputStream is here only for the benefit of the pumping
-   * IO we're currently using for execution - Once that is gone,
-   * we can remove this output stream and fold its code into the
+   * The outputStream is here only for the benefit of the pumping IO we're currently using for
+   * execution - Once that is gone we can remove this output stream and fold its code into the
    * FileOutErr.
    */
   @ThreadSafety.ThreadCompatible
-  private static class FileRecordingOutputStream extends AbstractFileRecordingOutputStream {
+  protected static class FileRecordingOutputStream extends AbstractFileRecordingOutputStream {
 
     private final Path outputFile;
-    OutputStream outputStream;
-    String error;
+    private OutputStream outputStream;
+    private String error;
+    private Long cachedSize;
 
-    FileRecordingOutputStream(Path outputFile) {
+    protected FileRecordingOutputStream(Path outputFile) {
       this.outputFile = outputFile;
+      this.cachedSize = 0L;
     }
 
     @Override
@@ -277,7 +357,19 @@ public class FileOutErr extends OutErr {
 
     @Override
     Path getFile() {
+      // The caller is getting a reference to the filesystem path, so conservatively assume the
+      // file has been modified.
+      markDirty();
       return outputFile;
+    }
+
+    @Override
+    Path getFileUnsafe() {
+      return outputFile;
+    }
+
+    private synchronized void markDirty() {
+      cachedSize = null;
     }
 
     private OutputStream getOutputStream() throws IOException {
@@ -292,64 +384,85 @@ public class FileOutErr extends OutErr {
       return outputStream != null;
     }
 
+    @Override
+    public synchronized void clear() throws IOException {
+      close();
+      outputStream = null;
+      outputFile.delete();
+      cachedSize = 0L;
+    }
+
     /**
      * Called whenever the FileRecordingOutputStream finds an error.
      */
-    private void recordError(IOException exception) {
+    protected void recordError(IOException exception) {
       String newErrorText = exception.getMessage();
       error = (error == null) ? newErrorText : error + "\n" + newErrorText;
     }
 
     @Override
     boolean hasRecordedOutput() {
-      if (hadError()) {
-        return true;
-      }
-      if (!outputFile.exists()) {
-        return false;
-      }
       try {
-        return outputFile.getFileSize() > 0;
+        return getRecordedOutputSize() > 0;
       } catch (IOException ex) {
-        recordError(ex);
+        // Error already recorded by getRecordedOutputSize().
         return true;
       }
     }
 
     @Override
-    String getRecordedOutput() {
-      StringBuilder result = new StringBuilder();
-      try {
-        if (getFile().exists()) {
-          result.append(FileSystemUtils.readContentAsLatin1(getFile()));
+    byte[] getRecordedOutput() {
+      byte[] bytes = null;
+      synchronized (this) {
+        try {
+          bytes = FileSystemUtils.readContent(outputFile);
+          cachedSize = (long) bytes.length;
+        } catch (FileNotFoundException e) {
+          cachedSize = 0L;
+        } catch (IOException ex) {
+          recordError(ex);
         }
-      } catch (IOException ex) {
-        recordError(ex);
       }
 
       if (hadError()) {
-        result.append(error);
+        byte[] errorBytes = error.getBytes(StandardCharsets.ISO_8859_1);
+        if (bytes == null) {
+          bytes = errorBytes;
+        } else {
+          bytes = Bytes.concat(bytes, errorBytes);
+        }
       }
-      return result.toString();
+      return bytes == null ? new byte[] {} : bytes;
+    }
+
+    @Override
+    synchronized long getRecordedOutputSize() throws IOException {
+      if (hadError()) {
+        return error.length();
+      }
+      if (cachedSize == null) {
+        try {
+          cachedSize = outputFile.getFileSize();
+        } catch (FileNotFoundException e) {
+          cachedSize = 0L;
+        } catch (IOException e) {
+          recordError(e);
+          throw e;
+        }
+      }
+      return cachedSize;
     }
 
     @Override
     void dumpOut(OutputStream out) {
-      InputStream in = null;
-      try {
-        if (getFile().exists()) {
-          in = new FileInputStream(getFile().getPathString());
+      synchronized (this) {
+        try (InputStream in = outputFile.getInputStream()) {
           ByteStreams.copy(in, out);
-        }
-      } catch (IOException ex) {
-        recordError(ex);
-      } finally {
-        if (in != null) {
-          try {
-            in.close();
-          } catch (IOException e) {
-            // Ignore.
-          }
+          out.flush();
+        } catch (FileNotFoundException e) {
+          cachedSize = 0L;
+        } catch (IOException ex) {
+          recordError(ex);
         }
       }
 
@@ -363,6 +476,7 @@ public class FileOutErr extends OutErr {
     @Override
     public synchronized void write(byte[] b, int off, int len) {
       if (len > 0) {
+        markDirty();
         try {
           getOutputStream().write(b, off, len);
         } catch (IOException ex) {
@@ -373,6 +487,7 @@ public class FileOutErr extends OutErr {
 
     @Override
     public synchronized void write(int b) {
+      markDirty();
       try {
         getOutputStream().write(b);
       } catch (IOException ex) {
@@ -383,6 +498,7 @@ public class FileOutErr extends OutErr {
     @Override
     public synchronized void write(byte[] b) throws IOException {
       if (b.length > 0) {
+        markDirty();
         getOutputStream().write(b);
       }
     }
