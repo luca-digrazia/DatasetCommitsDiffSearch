@@ -143,7 +143,7 @@ public class FullyQualifiedName implements DataKey {
   }
 
   static final Pattern QUALIFIED_REFERENCE =
-      Pattern.compile("^((?<package>[^:]+):)?(?<type>\\w+)/(?<name>[A-Za-z0-9_.]+)$");
+      Pattern.compile("((?<package>[^:]+):)?(?<type>\\w+)/(?<name>\\w+)");
 
   public static FullyQualifiedName fromReference(
       String qualifiedReference, Optional<String> packageName) {
@@ -536,7 +536,25 @@ public class FullyQualifiedName implements DataKey {
       List<String> handledQualifiers = new ArrayList<>();
       // Do some substitution of language/region qualifiers.
       while (rawQualifiers.hasNext()) {
-        handledQualifiers.add(rawQualifiers.next());
+        String qualifier = rawQualifiers.next();
+        if ("es".equalsIgnoreCase(qualifier)
+            && rawQualifiers.hasNext()
+            && "419".equalsIgnoreCase(rawQualifiers.peek())) {
+          // Replace the es-419.
+          handledQualifiers.add("b+es+419");
+          // Consume the next value, as it's been replaced.
+          rawQualifiers.next();
+        } else if ("sr".equalsIgnoreCase(qualifier)
+            && rawQualifiers.hasNext()
+            && "rlatn".equalsIgnoreCase(rawQualifiers.peek())) {
+          // Replace the sr-rLatn.
+          handledQualifiers.add("b+sr+Latn");
+          // Consume the next value, as it's been replaced.
+          rawQualifiers.next();
+        } else {
+          // This qualifier can probably be handled by FolderConfiguration.
+          handledQualifiers.add(qualifier);
+        }
       }
       // Create a configuration
       FolderConfiguration config = FolderConfiguration.getConfigFromQualifiers(handledQualifiers);
