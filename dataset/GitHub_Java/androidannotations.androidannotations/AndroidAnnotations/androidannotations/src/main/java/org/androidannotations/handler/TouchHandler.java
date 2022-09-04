@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -39,7 +39,7 @@ import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
 import com.sun.codemodel.JVar;
 
-public class TouchHandler extends AbstractViewListenerHandler {
+public class TouchHandler extends AbstractListenerHandler {
 
 	public TouchHandler(ProcessingEnvironment processingEnvironment) {
 		super(Touch.class, processingEnvironment);
@@ -53,11 +53,7 @@ public class TouchHandler extends AbstractViewListenerHandler {
 
 		validatorHelper.returnTypeIsVoidOrBoolean(executableElement, valid);
 
-		validatorHelper.param.hasZeroOrOneMotionEventParameter(executableElement, valid);
-
-		validatorHelper.param.hasZeroOrOneViewParameter(executableElement, valid);
-
-		validatorHelper.param.hasNoOtherParameterThanMotionEventOrView(executableElement, valid);
+		validatorHelper.param.hasOneMotionEventOrTwoMotionEventViewParameters(executableElement, valid);
 	}
 
 	@Override
@@ -76,12 +72,21 @@ public class TouchHandler extends AbstractViewListenerHandler {
 	protected void processParameters(EComponentWithViewSupportHolder holder, JMethod listenerMethod, JInvocation call, List<? extends VariableElement> parameters) {
 		JVar viewParam = listenerMethod.param(classes().VIEW, "view");
 		JVar eventParam = listenerMethod.param(classes().MOTION_EVENT, "event");
+		boolean hasItemParameter = parameters.size() == 2;
 
-		for (VariableElement parameter : parameters) {
-			String parameterType = parameter.asType().toString();
-			if (parameterType.equals(CanonicalNameConstants.MOTION_EVENT)) {
+		VariableElement first = parameters.get(0);
+		String firstType = first.asType().toString();
+		if (firstType.equals(CanonicalNameConstants.MOTION_EVENT)) {
+			call.arg(eventParam);
+		} else {
+			call.arg(viewParam);
+		}
+		if (hasItemParameter) {
+			VariableElement second = parameters.get(1);
+			String secondType = second.asType().toString();
+			if (secondType.equals(CanonicalNameConstants.MOTION_EVENT)) {
 				call.arg(eventParam);
-			} else if (parameterType.equals(CanonicalNameConstants.VIEW)) {
+			} else {
 				call.arg(viewParam);
 			}
 		}

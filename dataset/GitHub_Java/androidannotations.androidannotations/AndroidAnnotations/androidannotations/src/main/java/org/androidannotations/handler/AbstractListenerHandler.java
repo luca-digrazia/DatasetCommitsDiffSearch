@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -80,7 +80,7 @@ public abstract class AbstractListenerHandler extends BaseAnnotationHandler<ECom
 	@Override
 	public void process(Element element, EComponentWithViewSupportHolder holder) {
 		this.holder = holder;
-		methodName = element.getSimpleName().toString();
+		this.methodName = element.getSimpleName().toString();
 
 		ExecutableElement executableElement = (ExecutableElement) element;
 		List<? extends VariableElement> parameters = executableElement.getParameters();
@@ -103,7 +103,7 @@ public abstract class AbstractListenerHandler extends BaseAnnotationHandler<ECom
 
 		for (JFieldRef idRef : idsRefs) {
 			FoundViewHolder foundViewHolder = holder.getFoundViewHolder(idRef, getViewClass());
-			foundViewHolder.getIfNotNullBlock().invoke(foundViewHolder.getRef(), getSetterName()).arg(_new(listenerAnonymousClass));
+			foundViewHolder.getIfNotNullBlock().invoke(foundViewHolder.getView(), getSetterName()).arg(_new(listenerAnonymousClass));
 		}
 	}
 
