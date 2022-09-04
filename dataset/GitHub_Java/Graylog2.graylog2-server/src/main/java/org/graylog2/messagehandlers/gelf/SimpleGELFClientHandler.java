@@ -27,12 +27,9 @@ import java.util.zip.DataFormatException;
 import org.graylog2.Log;
 import org.graylog2.Tools;
 import org.graylog2.database.MongoBridge;
-import org.graylog2.messagehandlers.common.GELFMessageFilterHook;
 import org.graylog2.messagehandlers.common.HostUpsertHook;
 import org.graylog2.messagehandlers.common.MessageCounterHook;
-import org.graylog2.messagehandlers.common.MessageFilterHook;
 import org.graylog2.messagehandlers.common.ReceiveHookManager;
-import org.productivity.java.syslog4j.Syslog;
 
 /**
  * GELFClient.java: Jun 23, 2010 7:15:12 PM
@@ -99,18 +96,13 @@ public class SimpleGELFClientHandler extends GELFClientHandlerBase implements GE
             Log.info("Got GELF message: " + message.toString());
 
             // Insert message into MongoDB.
-            boolean filterOut = ReceiveHookManager.preProcess(new GELFMessageFilterHook(), message);
-            if( filterOut ) {
-            	Syslog.getInstance("udp").debug("Not inserting event into database.");
-            } else {
-                m.insertGelfMessage(message);
-                // This is doing the upcounting for statistics.
-                ReceiveHookManager.postProcess(new MessageCounterHook(), message);
+            m.insertGelfMessage(message);
 
-                // Counts up host in hosts collection.
-                ReceiveHookManager.postProcess(new HostUpsertHook(), message);
-            }
+            // This is doing the upcounting for statistics.
+            ReceiveHookManager.postProcess(new MessageCounterHook(), message);
 
+            // Counts up host in hosts collection.
+            ReceiveHookManager.postProcess(new HostUpsertHook(), message);
         } catch(Exception e) {
             Log.warn("Could not handle GELF client: " + e.toString());
             e.printStackTrace();

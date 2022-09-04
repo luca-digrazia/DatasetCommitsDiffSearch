@@ -31,8 +31,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 import org.graylog2.periodical.ChunkedGELFClientManagerThread;
-import org.graylog2.periodical.ServerValueHistoryWriterThread;
-import org.graylog2.periodical.ThroughputWriterThread;
+import org.graylog2.periodical.LoadStatisticsThread;
 
 /**
  * Main class of Graylog2.
@@ -47,11 +46,15 @@ public final class Main {
     public static boolean debugMode = false;
 
     /**
+     * Controlled by parameter "debug". Enables output of messages/second for benchmarking.
+     */
+    public static boolean printLoadStats = false;
+
+    /**
      * This holds the configuration from /etc/graylog2.conf
      */
     public static Properties masterConfig = null;
-
-    public static final String GRAYLOG2_VERSION = "0.9.5-dev";
+    
     
 
     private Main() { }
@@ -128,12 +131,18 @@ public final class Main {
             Main.debugMode = true;
         } else {
             System.out.println("[x] Not in Debug mode.");
+
+            // Maybe print out messages/second? (Only available if not in debug mode)
+            if (args.length > 0 && args[0].equalsIgnoreCase("loadstats")) {
+                Main.printLoadStats = true;
+                System.out.println("[x] Printing load stats.");
+            }
         }
 
         // Write a PID file.
         try {
             String pid = Tools.getPID();
-            if (pid == null || pid.length() == 0 || pid.equals("unknown")) {
+            if (pid == null || pid.length() == 0) {
                 throw new Exception("Could not determine PID.");
             }
 
@@ -162,14 +171,6 @@ public final class Main {
             System.exit(1); // Exit with error.
         }
 
-        // Fill some stuff into the server_values collection.
-        ServerValue.setStartupTime(Tools.getUTCTimestamp());
-        ServerValue.setPID(Integer.parseInt(Tools.getPID()));
-        ServerValue.setJREInfo(Tools.getSystemInformation());
-        ServerValue.setGraylog2Version(GRAYLOG2_VERSION);
-        ServerValue.setAvailableProcessors(HostSystem.getAvailableProcessors());
-        ServerValue.setLocalHostname(Tools.getLocalHostname());
-
         // Start the Syslog thread that accepts syslog packages.
         SyslogServerThread syslogServerThread = new SyslogServerThread(Integer.parseInt(Main.masterConfig.getProperty("syslog_listen_port")));
         syslogServerThread.start();
@@ -194,13 +195,11 @@ public final class Main {
             System.out.println("[x] GELF threads are up.");
         }
 
-        // Start thread that stores throughput info.
-        ThroughputWriterThread throughputThread = new ThroughputWriterThread();
-        throughputThread.start();
-
-        // Start thread that stores system information periodically.
-        ServerValueHistoryWriterThread serverValueHistoryThread = new ServerValueHistoryWriterThread();
-        serverValueHistoryThread.start();
+        if (Main.printLoadStats) {
+            // Start thread that prints out load statistics.
+            LoadStatisticsThread loadStatThread = new LoadStatisticsThread();
+            loadStatThread.start();
+        }
 
         System.out.println("[x] Graylog2 up and running.");
     }
