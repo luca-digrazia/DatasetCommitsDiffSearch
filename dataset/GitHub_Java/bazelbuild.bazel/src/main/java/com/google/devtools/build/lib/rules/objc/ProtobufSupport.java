@@ -137,7 +137,7 @@ final class ProtobufSupport {
             .build();
 
     compilationSupport.registerCompileAndArchiveActions(common, userHeaderSearchPaths);
-    setObjcProvider(common.getObjcProvider());
+    setObjcProvider(compilationSupport.getObjcProvider());
 
     return this;
   }

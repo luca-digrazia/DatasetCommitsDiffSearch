@@ -135,7 +135,6 @@ public class FakeAppleCommon
       Sequence<?> extraLinkopts,
       Sequence<?> extraLinkInputs,
       StarlarkInt stamp,
-      Boolean shouldLipo,
       StarlarkThread thread) {
     return new FakeStructApi();
   }

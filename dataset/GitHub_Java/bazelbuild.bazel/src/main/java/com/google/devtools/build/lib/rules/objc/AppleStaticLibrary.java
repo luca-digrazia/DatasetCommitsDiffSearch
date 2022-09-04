@@ -154,7 +154,8 @@ public class AppleStaticLibrary implements RuleConfiguredTargetFactory {
               protosObjcProvider);
       ObjcProvider objcProvider =
           common
-              .getObjcProvider()
+              .getObjcProviderBuilder()
+              .build()
               .subtractSubtrees(
                   cpuToObjcAvoidDepsMap.get(childCpu),
                   cpuToCcAvoidDepsMap.get(childCpu).stream()

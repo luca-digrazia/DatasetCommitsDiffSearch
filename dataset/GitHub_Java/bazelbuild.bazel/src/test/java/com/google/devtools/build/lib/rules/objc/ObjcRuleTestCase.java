@@ -1815,6 +1815,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
   }
 
   protected void checkCustomModuleMap(RuleType ruleType) throws Exception {
+    useConfiguration("--experimental_objc_enable_module_maps");
     ruleType.scratchTarget(scratch, "deps", "['//z:testModuleMap']");
     scratch.file("z/b.m");
     scratch.file("z/b.h");

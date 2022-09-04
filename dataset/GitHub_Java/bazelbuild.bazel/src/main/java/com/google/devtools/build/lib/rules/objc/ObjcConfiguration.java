@@ -61,6 +61,7 @@ public class ObjcConfiguration extends Fragment implements ObjcConfigurationApi<
   private final CompilationMode compilationMode;
   private final ImmutableList<String> fastbuildOptions;
   private final boolean enableBinaryStripping;
+  private final boolean moduleMapsEnabled;
   @Nullable private final String signingCertName;
   private final boolean debugWithGlibcxx;
   private final boolean deviceDebugEntitlements;
@@ -90,6 +91,7 @@ public class ObjcConfiguration extends Fragment implements ObjcConfigurationApi<
             || (cppOptions.appleEnableAutoDsymDbg && this.compilationMode == CompilationMode.DBG);
     this.fastbuildOptions = ImmutableList.copyOf(objcOptions.fastbuildOptions);
     this.enableBinaryStripping = objcOptions.enableBinaryStripping;
+    this.moduleMapsEnabled = objcOptions.enableModuleMaps;
     this.signingCertName = objcOptions.iosSigningCertName;
     this.debugWithGlibcxx = objcOptions.debugWithGlibcxx;
     this.deviceDebugEntitlements = objcOptions.deviceDebugEntitlements;
@@ -208,6 +210,13 @@ public class ObjcConfiguration extends Fragment implements ObjcConfigurationApi<
   @Override
   public ImmutableList<String> getCopts() {
     return copts;
+  }
+
+  /**
+   * Whether module map generation and interpretation is enabled.
+   */
+  public boolean moduleMapsEnabled() {
+    return moduleMapsEnabled;
   }
 
   /**
