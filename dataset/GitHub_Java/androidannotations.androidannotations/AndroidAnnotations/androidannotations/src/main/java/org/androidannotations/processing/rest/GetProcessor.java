@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,22 +15,30 @@
  */
 package org.androidannotations.processing.rest;
 
-import java.lang.annotation.Annotation;
-
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
+import javax.lang.model.element.ExecutableElement;
 
 import org.androidannotations.annotations.rest.Get;
+import org.androidannotations.helper.CanonicalNameConstants;
+import org.androidannotations.processing.EBeanHolder;
 
-public class GetProcessor extends GetPostProcessor {
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JExpression;
+import com.sun.codemodel.JInvocation;
+import com.sun.codemodel.JVar;
+
+public class GetProcessor extends MethodCrudProcessor {
 
 	public GetProcessor(ProcessingEnvironment processingEnv, RestImplementationsHolder restImplementationHolder) {
 		super(processingEnv, restImplementationHolder);
 	}
 
 	@Override
-	public Class<? extends Annotation> getTarget() {
-		return Get.class;
+	public String getTarget() {
+		return Get.class.getName();
 	}
 
 	@Override
@@ -39,4 +47,26 @@ public class GetProcessor extends GetPostProcessor {
 		return getAnnotation.value();
 	}
 
+	@Override
+	protected JExpression generateHttpEntityVar(MethodProcessorHolder methodHolder) {
+		ExecutableElement executableElement = (ExecutableElement) methodHolder.getElement();
+		EBeanHolder holder = methodHolder.getHolder();
+		JClass httpEntity = holder.refClass(CanonicalNameConstants.HTTP_ENTITY);
+
+		JBlock body = methodHolder.getBody();
+		JVar httpHeadersVar = generateHttpHeadersVar(methodHolder, holder, body, executableElement);
+
+		boolean hasHeaders = httpHeadersVar != null;
+
+		if (hasHeaders) {
+			JInvocation newHttpEntityVarCall = JExpr._new(httpEntity.narrow(Object.class));
+			newHttpEntityVarCall.arg(httpHeadersVar);
+
+			String httpEntityVarName = "requestEntity";
+
+			return body.decl(httpEntity.narrow(Object.class), httpEntityVarName, newHttpEntityVarCall);
+		} else {
+			return JExpr._null();
+		}
+	}
 }
