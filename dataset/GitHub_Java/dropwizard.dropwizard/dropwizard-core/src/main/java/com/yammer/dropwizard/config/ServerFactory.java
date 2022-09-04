@@ -2,7 +2,6 @@ package com.yammer.dropwizard.config;
 
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.ImmutableSet;
 import com.yammer.dropwizard.jetty.BiDiGzipHandler;
 import com.yammer.dropwizard.jetty.QuietErrorHandler;
@@ -179,7 +178,7 @@ public class ServerFactory {
     }
 
     private Handler createExternalServlet(ImmutableMap<String, ServletHolder> servlets,
-                                          ImmutableMultimap<String, FilterHolder> filters,
+                                          ImmutableMap<String, FilterHolder> filters,
                                           ImmutableSet<EventListener> listeners) {
         final ServletContextHandler handler = new ServletContextHandler();
         handler.setBaseResource(Resource.newClassPathResource("."));
@@ -188,7 +187,7 @@ public class ServerFactory {
             handler.addServlet(entry.getValue(), entry.getKey());
         }
 
-        for (ImmutableMap.Entry<String, FilterHolder> entry : filters.entries()) {
+        for (ImmutableMap.Entry<String, FilterHolder> entry : filters.entrySet()) {
             handler.addFilter(entry.getValue(), entry.getKey(), EnumSet.of(DispatcherType.REQUEST));
         }
 
