@@ -20,6 +20,7 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.RuleContext;
+import com.google.devtools.build.lib.analysis.TransitionMode;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -74,7 +75,8 @@ public final class InstrumentedFilesCollector {
     return instrumentedFilesInfoBuilder.build();
   }
 
-  public static InstrumentedFilesInfo collect(RuleContext ruleContext, InstrumentationSpec spec) {
+  public static InstrumentedFilesInfo collectTransitive(
+      RuleContext ruleContext, InstrumentationSpec spec) {
     return collect(
         ruleContext,
         spec,
@@ -84,7 +86,7 @@ public final class InstrumentedFilesCollector {
             Order.STABLE_ORDER));
   }
 
-  public static InstrumentedFilesInfo collect(
+  public static InstrumentedFilesInfo collectTransitive(
       RuleContext ruleContext,
       InstrumentationSpec spec,
       NestedSet<Pair<String, String>> reportedToActualSources) {
@@ -166,28 +168,6 @@ public final class InstrumentedFilesCollector {
       NestedSet<Pair<String, String>> coverageEnvironment,
       boolean withBaselineCoverage,
       NestedSet<Pair<String, String>> reportedToActualSources) {
-    return collect(
-        ruleContext,
-        spec,
-        localMetadataCollector,
-        rootFiles,
-        coverageSupportFiles,
-        coverageEnvironment,
-        withBaselineCoverage,
-        reportedToActualSources,
-        /* additionalMetadata= */ null);
-  }
-
-  public static InstrumentedFilesInfo collect(
-      RuleContext ruleContext,
-      InstrumentationSpec spec,
-      @Nullable LocalMetadataCollector localMetadataCollector,
-      @Nullable Iterable<Artifact> rootFiles,
-      NestedSet<Artifact> coverageSupportFiles,
-      NestedSet<Pair<String, String>> coverageEnvironment,
-      boolean withBaselineCoverage,
-      NestedSet<Pair<String, String>> reportedToActualSources,
-      @Nullable Iterable<Artifact> additionalMetadata) {
     Preconditions.checkNotNull(ruleContext);
     Preconditions.checkNotNull(spec);
 
@@ -232,10 +212,6 @@ public final class InstrumentedFilesCollector {
     // Local metadata files.
     if (localMetadataCollector != null) {
       instrumentedFilesInfoBuilder.collectLocalMetadata(localMetadataCollector, rootFiles);
-    }
-
-    if (additionalMetadata != null) {
-      instrumentedFilesInfoBuilder.addMetadataFiles(additionalMetadata);
     }
 
     return instrumentedFilesInfoBuilder.build();
@@ -419,10 +395,6 @@ public final class InstrumentedFilesCollector {
           rootFiles, ruleContext.getAnalysisEnvironment(), metadataFilesBuilder);
     }
 
-    void addMetadataFiles(Iterable<Artifact> files) {
-      metadataFilesBuilder.addAll(files);
-    }
-
     InstrumentedFilesInfo build() {
       NestedSet<Artifact> baselineCoverageFiles = baselineCoverageInstrumentedFilesBuilder.build();
       return new InstrumentedFilesInfo(
@@ -448,7 +420,7 @@ public final class InstrumentedFilesCollector {
     for (String attr : attributeNames) {
       if (ruleContext.getRule().isAttrDefined(attr, BuildType.LABEL_LIST) ||
           ruleContext.getRule().isAttrDefined(attr, BuildType.LABEL)) {
-        prerequisites.addAll(ruleContext.getPrerequisites(attr));
+        prerequisites.addAll(ruleContext.getPrerequisites(attr, TransitionMode.DONT_CHECK));
       }
     }
     return prerequisites;
@@ -460,7 +432,8 @@ public final class InstrumentedFilesCollector {
     for (Attribute attr : ruleContext.getRule().getAttributes()) {
       if ((attr.getType() == BuildType.LABEL_LIST || attr.getType() == BuildType.LABEL)
           && !attr.getTransitionFactory().isTool()) {
-        prerequisites.addAll(ruleContext.getPrerequisites(attr.getName()));
+        prerequisites.addAll(
+            ruleContext.getPrerequisites(attr.getName(), TransitionMode.DONT_CHECK));
       }
     }
     return prerequisites;

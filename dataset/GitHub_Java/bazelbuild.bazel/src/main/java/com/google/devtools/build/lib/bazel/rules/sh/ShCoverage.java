@@ -22,5 +22,7 @@ final class ShCoverage {
   private ShCoverage() {}
 
   public static final InstrumentationSpec INSTRUMENTATION_SPEC =
-      new InstrumentationSpec(FileTypeSet.ANY_FILE, "srcs", "deps", "data");
+      new InstrumentationSpec(FileTypeSet.ANY_FILE)
+          .withSourceAttributes("srcs")
+          .withDependencyAttributes("deps", "data");
 }

@@ -30,6 +30,7 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
+import com.google.devtools.build.lib.analysis.TransitionMode;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector;
@@ -64,11 +65,12 @@ public class Filegroup implements RuleConfiguredTargetFactory {
 
     NestedSet<Artifact> filesToBuild =
         outputGroupName.isEmpty()
-            ? PrerequisiteArtifacts.nestedSet(ruleContext, "srcs")
-            : getArtifactsForOutputGroup(outputGroupName, ruleContext.getPrerequisites("srcs"));
+            ? PrerequisiteArtifacts.nestedSet(ruleContext, "srcs", TransitionMode.TARGET)
+            : getArtifactsForOutputGroup(
+                outputGroupName, ruleContext.getPrerequisites("srcs", TransitionMode.TARGET));
 
     InstrumentedFilesInfo instrumentedFilesProvider =
-        InstrumentedFilesCollector.collect(
+        InstrumentedFilesCollector.collectTransitive(
             ruleContext,
             // Seems strange to have "srcs" in "dependency attributes" instead of "source
             // attributes", but that's correct behavior here because this rule just forwards
