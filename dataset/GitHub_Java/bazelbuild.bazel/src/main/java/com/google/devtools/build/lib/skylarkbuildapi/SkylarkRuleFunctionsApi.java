@@ -524,6 +524,7 @@ public interface SkylarkRuleFunctionsApi<FileApiT extends FileApi> {
         @Param(
             name = "label_string",
             type = String.class,
+            legacyNamed = true,
             doc = "the label string."),
         @Param(
             name = "relative_to_caller_repository",

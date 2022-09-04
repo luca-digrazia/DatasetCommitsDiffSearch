@@ -22,37 +22,15 @@ import com.google.common.collect.ImmutableList;
 import java.util.List;
 
 /**
- * Options that affect the dynamic behavior of Starlark execution and operators.
+ * Options that affect Starlark semantics.
  *
- * <p>For descriptions of what these options do, see {@link packages.StarlarkSemanticsOptions}.
- *
- * <p>For options that affect the static behavior of the Starlark frontend (lexer, parser,
- * validator, compiler), see FileOptions.
+ * <p>For descriptions of what these options do, see {@link StarlarkSemanticsOptions}.
  */
 // TODO(brandjon): User error messages that reference options should maybe be substituted with the
 // option name outside of the core Starlark interpreter?
 // TODO(brandjon): Eventually these should be documented in full here, and StarlarkSemanticsOptions
 // should refer to this class for documentation. But this doesn't play nice with the options
 // parser's annotation mechanism.
-//
-// TODO(adonovan): nearly all of these options are Bazel-isms.
-// The only ones that affect the Starlark interpreter directly are are:
-// - incompatibleRestrictNamedParams, which affects calls to many built-ins,
-//   but is used only by copybara and will be deleted soon (CL 298871155);
-// - incompatibleRestrictStringEscapes, which affects the lexer and is thus
-//   properly one of the FileOptions, but piggybacks on the command-line flag
-//   plumbing of StarlarkSemantics; and
-// - internalSkylarkFlagTestCanary, which is used to test propagation of Bazel
-//   command-line flags to the 'print' built-in, but this could easily be
-//   achieved using some other Bazel-specific built-in.
-// Most of the rest are used generically to disable parameters to built-ins,
-// or to disable fields of modules, based on flags. In both of those cases,
-// a generic set-of-feature-strings representation would do.
-// A few could be expressed as Bazel-specific thread state,
-// though several are inspected by the implementations of operations
-// such as SkylarkIndexable, SkylarkQueryable, and SkylarkClassObject.
-// TODO(adonovan): move to lib.packages.BuildLanguageSemantics.
-//
 @AutoValue
 public abstract class StarlarkSemantics {
 
@@ -269,6 +247,8 @@ public abstract class StarlarkSemantics {
 
   public abstract boolean incompatibleNoTargetOutputGroup();
 
+  public abstract boolean incompatibleRestrictNamedParams();
+
   public abstract boolean incompatibleRunShellCommandString();
 
   public abstract boolean incompatibleVisibilityPrivateAttributesAtDefinition();
@@ -360,6 +340,7 @@ public abstract class StarlarkSemantics {
           .incompatibleNoSupportToolsInActionInputs(true)
           .incompatibleNoTargetOutputGroup(true)
           .incompatibleRunShellCommandString(false)
+          .incompatibleRestrictNamedParams(true)
           .incompatibleVisibilityPrivateAttributesAtDefinition(false)
           .internalSkylarkFlagTestCanary(false)
           .incompatibleDoNotSplitLinkingCmdline(true)
@@ -442,6 +423,8 @@ public abstract class StarlarkSemantics {
     public abstract Builder incompatibleNoSupportToolsInActionInputs(boolean value);
 
     public abstract Builder incompatibleNoTargetOutputGroup(boolean value);
+
+    public abstract Builder incompatibleRestrictNamedParams(boolean value);
 
     public abstract Builder incompatibleRunShellCommandString(boolean value);
 
