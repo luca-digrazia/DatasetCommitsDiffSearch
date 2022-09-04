@@ -33,7 +33,6 @@ import io.quarkus.gizmo.ResultHandle;
 import io.quarkus.grpc.runtime.GrpcClientInterceptorContainer;
 import io.quarkus.grpc.runtime.annotations.GrpcService;
 import io.quarkus.grpc.runtime.supports.GrpcClientConfigProvider;
-import io.quarkus.grpc.runtime.supports.IOThreadClientInterceptor;
 
 public class GrpcClientProcessor {
 
@@ -44,7 +43,6 @@ public class GrpcClientProcessor {
         beans.produce(AdditionalBeanBuildItem.unremovableOf(GrpcService.class));
         beans.produce(AdditionalBeanBuildItem.unremovableOf(GrpcClientConfigProvider.class));
         beans.produce(AdditionalBeanBuildItem.unremovableOf(GrpcClientInterceptorContainer.class));
-        beans.produce(AdditionalBeanBuildItem.unremovableOf(IOThreadClientInterceptor.class));
     }
 
     @BuildStep
@@ -86,7 +84,11 @@ public class GrpcClientProcessor {
                 type = injectionType.asClassType();
             }
             if (!type.name().equals(GrpcDotNames.CHANNEL)) {
-                item.addStubClass(type);
+                if (isMutinyStub(type.name())) {
+                    item.setMutinyStubClass(type);
+                } else {
+                    item.setBlockingStubClass(type);
+                }
             }
         }
 
@@ -136,23 +138,36 @@ public class GrpcClientProcessor {
             channelProducer.done();
             beans.produce(new BeanRegistrationPhaseBuildItem.BeanConfiguratorBuildItem(channelProducer));
 
-            String svcName = svc.getServiceName();
-            for (ClassType stubClass : svc.getStubClasses()) {
-                DotName stubClassName = stubClass.name();
-                BeanConfigurator<Object> stubProducer = phase.getContext()
-                        .configure(stubClassName)
-                        .types(stubClass)
-                        .addQualifier().annotation(GrpcDotNames.GRPC_SERVICE).addValue("value", svcName).done()
+            if (svc.blockingStubClass != null) {
+                BeanConfigurator<Object> blockingStubProducer = phase.getContext()
+                        .configure(svc.blockingStubClass.name())
+                        .types(svc.blockingStubClass)
+                        .addQualifier().annotation(GrpcDotNames.GRPC_SERVICE).addValue("value", svc.getServiceName()).done()
                         .scope(Singleton.class)
                         .creator(new Consumer<MethodCreator>() {
                             @Override
                             public void accept(MethodCreator mc) {
-                                GrpcClientProcessor.this.generateStubProducer(mc, svcName, stubClassName,
-                                        isMutinyStub(stubClassName));
+                                GrpcClientProcessor.this.generateStubProducer(mc, svc, false);
                             }
                         });
-                stubProducer.done();
-                beans.produce(new BeanRegistrationPhaseBuildItem.BeanConfiguratorBuildItem(stubProducer));
+                blockingStubProducer.done();
+                beans.produce(new BeanRegistrationPhaseBuildItem.BeanConfiguratorBuildItem(blockingStubProducer));
+            }
+
+            if (svc.mutinyStubClass != null) {
+                BeanConfigurator<Object> blockingStubProducer = phase.getContext()
+                        .configure(svc.mutinyStubClass.name())
+                        .types(svc.mutinyStubClass)
+                        .addQualifier().annotation(GrpcDotNames.GRPC_SERVICE).addValue("value", svc.getServiceName()).done()
+                        .scope(Singleton.class)
+                        .creator(new Consumer<MethodCreator>() {
+                            @Override
+                            public void accept(MethodCreator mc) {
+                                GrpcClientProcessor.this.generateStubProducer(mc, svc, true);
+                            }
+                        });
+                blockingStubProducer.done();
+                beans.produce(new BeanRegistrationPhaseBuildItem.BeanConfiguratorBuildItem(blockingStubProducer));
             }
         }
     }
@@ -164,33 +179,24 @@ public class GrpcClientProcessor {
         mc.close();
     }
 
-    private void generateStubProducer(MethodCreator mc, String svcName, DotName stubClassName, boolean mutiny) {
-        ResultHandle prefix = mc.load(svcName);
+    private void generateStubProducer(MethodCreator mc, GrpcServiceBuildItem svc, boolean mutiny) {
+        ResultHandle prefix = mc.load(svc.getServiceName());
         ResultHandle channel = mc.invokeStaticMethod(RETRIEVE_CHANNEL_METHOD, prefix);
 
         MethodDescriptor descriptor;
         if (mutiny) {
             descriptor = MethodDescriptor
-                    .ofMethod(convertToServiceName(stubClassName), "newMutinyStub",
-                            stubClassName.toString(),
+                    .ofMethod(svc.getMutinyGrpcServiceName(), "newMutinyStub", svc.mutinyStubClass.name().toString(),
                             Channel.class.getName());
         } else {
             descriptor = MethodDescriptor
-                    .ofMethod(convertToServiceName(stubClassName), "newBlockingStub",
-                            stubClassName.toString(),
+                    .ofMethod(svc.getBlockingGrpcServiceName(), "newBlockingStub",
+                            svc.blockingStubClass.name().toString(),
                             Channel.class.getName());
         }
 
         ResultHandle stub = mc.invokeStaticMethod(descriptor, channel);
         mc.returnValue(stub);
         mc.close();
-    }
-
-    private String convertToServiceName(DotName stubName) {
-        if (stubName.isInner()) {
-            return stubName.prefix().toString();
-        } else {
-            return stubName.toString();
-        }
     }
 }
