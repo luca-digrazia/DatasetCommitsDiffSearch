@@ -10,9 +10,12 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import io.smallrye.mutiny.Multi;
+import io.vertx.axle.core.Vertx;
 
 class MailTest {
 
@@ -21,6 +24,17 @@ class MailTest {
     private static final String DESCRIPTION = "my lorem ipsum";
     private static final String TO_ADDRESS = "quarkus@quarkus.io";
     private static final String TEXT_PLAIN = "text/plain";
+    private static Vertx vertx;
+
+    @BeforeAll
+    static void init() {
+        vertx = Vertx.vertx();
+    }
+
+    @AfterAll
+    static void closing() {
+        vertx.close().toCompletableFuture().join();
+    }
 
     @Test
     void testSimpleTextEmail() {
@@ -169,34 +183,6 @@ class MailTest {
 
         mail.setHeaders(null);
         assertThat(mail.getHeaders()).isEmpty();
-    }
-
-    @Test
-    void testMultipleReplyTo() {
-        Mail mail = new Mail().addTo(TO_ADDRESS).setSubject("test").setText(BEGINNING)
-                .setFrom("from@quarkus.io")
-                .setReplyTo("reply-to@quarkus.io", "another@quarkus.io")
-                .setBounceAddress("bounce@quarkus.io");
-        assertThat(mail.getTo()).containsExactly(TO_ADDRESS);
-        assertThat(mail.getSubject()).isEqualTo("test");
-        assertThat(mail.getText()).isEqualTo(BEGINNING);
-        assertThat(mail.getHtml()).isNull();
-        assertThat(mail.getFrom()).isEqualTo("from@quarkus.io");
-        assertThat(mail.getReplyTo()).isEqualTo("reply-to@quarkus.io,another@quarkus.io");
-        assertThat(mail.getBounceAddress()).isEqualTo("bounce@quarkus.io");
-
-        mail = new Mail().addTo(TO_ADDRESS).setSubject("test").setText(BEGINNING)
-                .setFrom("from@quarkus.io")
-                .addReplyTo("another@quarkus.io")
-                .addReplyTo("reply-to@quarkus.io")
-                .setBounceAddress("bounce@quarkus.io");
-        assertThat(mail.getTo()).containsExactly(TO_ADDRESS);
-        assertThat(mail.getSubject()).isEqualTo("test");
-        assertThat(mail.getText()).isEqualTo(BEGINNING);
-        assertThat(mail.getHtml()).isNull();
-        assertThat(mail.getFrom()).isEqualTo("from@quarkus.io");
-        assertThat(mail.getReplyTo()).isEqualTo("another@quarkus.io,reply-to@quarkus.io");
-        assertThat(mail.getBounceAddress()).isEqualTo("bounce@quarkus.io");
     }
 
 }
