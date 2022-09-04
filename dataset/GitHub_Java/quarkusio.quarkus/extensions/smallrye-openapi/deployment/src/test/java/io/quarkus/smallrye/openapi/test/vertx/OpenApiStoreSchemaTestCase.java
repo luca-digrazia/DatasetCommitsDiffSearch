@@ -1,4 +1,4 @@
-package io.quarkus.smallrye.openapi.test.jaxrs;
+package io.quarkus.smallrye.openapi.test.vertx;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -16,13 +16,13 @@ import io.smallrye.openapi.runtime.io.Format;
 
 public class OpenApiStoreSchemaTestCase {
 
-    private static String directory = "target/generated/jax-rs/";
+    private static String directory = "target/generated/vertx/";
     private static final String OPEN_API_DOT = "openapi.";
 
     @RegisterExtension
     static QuarkusUnitTest runner = new QuarkusUnitTest()
             .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
-                    .addClasses(OpenApiResource.class, ResourceBean.class)
+                    .addClasses(OpenApiRoute.class)
                     .addAsResource(new StringAsset("quarkus.smallrye-openapi.store-schema-directory=" + directory),
                             "application.properties"));
 
