@@ -18,12 +18,12 @@ import com.google.common.base.Verify;
 import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.events.StoredEventHandler;
+import com.google.devtools.build.lib.packages.Package.Builder;
+import com.google.devtools.build.lib.packages.RuleFactory.BuildLangTypedAttributeValuesMap;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.util.Preconditions;
-
 import java.util.Map;
 
 /**
@@ -31,20 +31,7 @@ import java.util.Map;
  */
 public class ExternalPackageBuilder {
 
-  private Map<PackageIdentifier.RepositoryName, Rule> repositoryMap = Maps.newLinkedHashMap();
-
-  void build(Package.Builder pkg) {
-    for (Rule rule : repositoryMap.values()) {
-      try {
-        pkg.addRule(rule);
-      } catch (Package.NameConflictException e) {
-        throw new IllegalStateException(
-            "Got a name conflict for " + rule + ", which can't happen: " + e.getMessage(), e);
-      }
-    }
-  }
-
-  public ExternalPackageBuilder createAndAddRepositoryRule(
+  public static Rule createAndAddRepositoryRule(
       Package.Builder pkg,
       RuleClass ruleClass,
       RuleClass bindRuleClass,
@@ -54,20 +41,41 @@ public class ExternalPackageBuilder {
           InterruptedException {
 
     StoredEventHandler eventHandler = new StoredEventHandler();
-    Rule tempRule =
-        RuleFactory.createRule(pkg, ruleClass, kwargs, eventHandler, ast, ast.getLocation(), null);
+    BuildLangTypedAttributeValuesMap attributeValues = new BuildLangTypedAttributeValuesMap(kwargs);
+    Rule rule =
+        RuleFactory.createRule(
+            pkg,
+            ruleClass,
+            attributeValues,
+            eventHandler,
+            ast,
+            ast.getLocation(),
+            /*env=*/ null,
+            new AttributeContainer(ruleClass));
     pkg.addEvents(eventHandler.getEvents());
-    repositoryMap.put(PackageIdentifier.RepositoryName.create("@" + tempRule.getName()), tempRule);
+    pkg.addPosts(eventHandler.getPosts());
+    overwriteRule(pkg, rule);
     for (Map.Entry<String, Label> entry :
-        ruleClass.getExternalBindingsFunction().apply(tempRule).entrySet()) {
+        ruleClass.getExternalBindingsFunction().apply(rule).entrySet()) {
       Label nameLabel = Label.parseAbsolute("//external:" + entry.getKey());
-      addBindRule(pkg, bindRuleClass, nameLabel, entry.getValue(), tempRule.getLocation());
+      addBindRule(
+          pkg,
+          bindRuleClass,
+          nameLabel,
+          entry.getValue(),
+          rule.getLocation(),
+          new AttributeContainer(bindRuleClass));
     }
-    return this;
+    return rule;
   }
 
-  public void addBindRule(
-      Package.Builder pkg, RuleClass bindRuleClass, Label virtual, Label actual, Location location)
+  static void addBindRule(
+      Builder pkg,
+      RuleClass bindRuleClass,
+      Label virtual,
+      Label actual,
+      Location location,
+      AttributeContainer attributeContainer)
       throws RuleFactory.InvalidRuleException, Package.NameConflictException, InterruptedException {
 
     Map<String, Object> attributes = Maps.newHashMap();
@@ -78,13 +86,24 @@ public class ExternalPackageBuilder {
       attributes.put("actual", actual);
     }
     StoredEventHandler handler = new StoredEventHandler();
+    BuildLangTypedAttributeValuesMap attributeValues =
+        new BuildLangTypedAttributeValuesMap(attributes);
     Rule rule =
-        RuleFactory.createRule(pkg, bindRuleClass, attributes, handler, null, location, null);
+        RuleFactory.createRule(
+            pkg,
+            bindRuleClass,
+            attributeValues,
+            handler,
+            /*ast=*/ null,
+            location,
+            /*env=*/ null,
+            attributeContainer);
     overwriteRule(pkg, rule);
     rule.setVisibility(ConstantRuleVisibility.PUBLIC);
   }
 
-  private void overwriteRule(Package.Builder pkg, Rule rule) throws Package.NameConflictException {
+  private static void overwriteRule(Package.Builder pkg, Rule rule)
+      throws Package.NameConflictException, InterruptedException {
     Preconditions.checkArgument(rule.getOutputFiles().isEmpty());
     Target old = pkg.targets.get(rule.getName());
     if (old != null) {
