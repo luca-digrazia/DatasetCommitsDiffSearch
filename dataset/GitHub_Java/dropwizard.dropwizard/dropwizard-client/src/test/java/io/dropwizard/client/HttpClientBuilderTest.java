@@ -11,6 +11,7 @@ import io.dropwizard.lifecycle.Managed;
 import io.dropwizard.lifecycle.setup.LifecycleEnvironment;
 import io.dropwizard.setup.Environment;
 import io.dropwizard.util.Duration;
+import org.apache.commons.lang3.reflect.FieldUtils;
 import org.apache.http.Header;
 import org.apache.http.HeaderIterator;
 import org.apache.http.HttpHeaders;
@@ -139,7 +140,7 @@ public class HttpClientBuilderTest {
     }
 
     @BeforeEach
-    void setUp() {
+    public void setUp() {
         final MetricRegistry metricRegistry = new MetricRegistry();
         configuration = new HttpClientConfiguration();
         builder = new HttpClientBuilder(metricRegistry);
@@ -149,12 +150,12 @@ public class HttpClientBuilderTest {
     }
 
     @AfterEach
-    void validate() {
+    public void validate() {
         validateMockitoUsage();
     }
 
     @Test
-    void setsTheMaximumConnectionPoolSize() throws Exception {
+    public void setsTheMaximumConnectionPoolSize() throws Exception {
         configuration.setMaxConnections(412);
         final ConfiguredCloseableHttpClient client = builder.using(configuration)
                 .createClient(apacheBuilder, builder.configureConnectionManager(connectionManager), "test");
@@ -166,7 +167,7 @@ public class HttpClientBuilderTest {
 
 
     @Test
-    void setsTheMaximumRoutePoolSize() throws Exception {
+    public void setsTheMaximumRoutePoolSize() throws Exception {
         configuration.setMaxConnectionsPerRoute(413);
         final ConfiguredCloseableHttpClient client = builder.using(configuration)
                 .createClient(apacheBuilder, builder.configureConnectionManager(connectionManager), "test");
@@ -177,7 +178,7 @@ public class HttpClientBuilderTest {
     }
 
     @Test
-    void setsTheUserAgent() throws Exception {
+    public void setsTheUserAgent() throws Exception {
         configuration.setUserAgent(Optional.of("qwerty"));
         assertThat(builder.using(configuration).createClient(apacheBuilder, connectionManager, "test")).isNotNull();
 
@@ -185,34 +186,34 @@ public class HttpClientBuilderTest {
     }
 
     @Test
-    void canUseACustomDnsResolver() throws Exception {
+    public void canUseACustomDnsResolver() throws Exception {
         final DnsResolver resolver = mock(DnsResolver.class);
         final InstrumentedHttpClientConnectionManager manager =
                 builder.using(resolver).createConnectionManager(registry, "test");
 
         // Yes, this is gross. Thanks, Apache!
         final Field connectionOperatorField =
-                getInaccessibleField(PoolingHttpClientConnectionManager.class, "connectionOperator");
+                FieldUtils.getField(PoolingHttpClientConnectionManager.class, "connectionOperator", true);
         final Object connectOperator = connectionOperatorField.get(manager);
-        final Field dnsResolverField = getInaccessibleField(connectOperator.getClass(), "dnsResolver");
+        final Field dnsResolverField = FieldUtils.getField(connectOperator.getClass(), "dnsResolver", true);
         assertThat(dnsResolverField.get(connectOperator)).isEqualTo(resolver);
     }
 
 
     @Test
-    void usesASystemDnsResolverByDefault() throws Exception {
+    public void usesASystemDnsResolverByDefault() throws Exception {
         final InstrumentedHttpClientConnectionManager manager = builder.createConnectionManager(registry, "test");
 
         // Yes, this is gross. Thanks, Apache!
         final Field connectionOperatorField =
-                getInaccessibleField(PoolingHttpClientConnectionManager.class, "connectionOperator");
+                FieldUtils.getField(PoolingHttpClientConnectionManager.class, "connectionOperator", true);
         final Object connectOperator = connectionOperatorField.get(manager);
-        final Field dnsResolverField = getInaccessibleField(connectOperator.getClass(), "dnsResolver");
+        final Field dnsResolverField = FieldUtils.getField(connectOperator.getClass(), "dnsResolver", true);
         assertThat(dnsResolverField.get(connectOperator)).isInstanceOf(SystemDefaultDnsResolver.class);
     }
 
     @Test
-    void canUseACustomHostnameVerifierWhenTlsConfigurationNotSpecified() throws Exception {
+    public void canUseACustomHostnameVerifierWhenTlsConfigurationNotSpecified() throws Exception {
         final HostnameVerifier customVerifier = (s, sslSession) -> false;
 
         final Registry<ConnectionSocketFactory> configuredRegistry;
@@ -224,12 +225,12 @@ public class HttpClientBuilderTest {
         assertThat(socketFactory).isNotNull();
 
         final Field hostnameVerifierField =
-                getInaccessibleField(SSLConnectionSocketFactory.class, "hostnameVerifier");
+                FieldUtils.getField(SSLConnectionSocketFactory.class, "hostnameVerifier", true);
         assertThat(hostnameVerifierField.get(socketFactory)).isSameAs(customVerifier);
     }
 
     @Test
-    void canUseACustomHostnameVerifierWhenTlsConfigurationSpecified() throws Exception {
+    public void canUseACustomHostnameVerifierWhenTlsConfigurationSpecified() throws Exception {
         final TlsConfiguration tlsConfiguration = new TlsConfiguration();
         tlsConfiguration.setVerifyHostname(true);
         configuration.setTlsConfiguration(tlsConfiguration);
@@ -245,12 +246,12 @@ public class HttpClientBuilderTest {
         assertThat(socketFactory).isNotNull();
 
         final Field hostnameVerifierField =
-                getInaccessibleField(SSLConnectionSocketFactory.class, "hostnameVerifier");
+                FieldUtils.getField(SSLConnectionSocketFactory.class, "hostnameVerifier", true);
         assertThat(hostnameVerifierField.get(socketFactory)).isSameAs(customVerifier);
     }
 
     @Test
-    void canUseASystemHostnameVerifierByDefaultWhenTlsConfigurationNotSpecified() throws Exception {
+    public void canUseASystemHostnameVerifierByDefaultWhenTlsConfigurationNotSpecified() throws Exception {
         final Registry<ConnectionSocketFactory> configuredRegistry;
         configuredRegistry = builder.createConfiguredRegistry();
         assertThat(configuredRegistry).isNotNull();
@@ -260,12 +261,12 @@ public class HttpClientBuilderTest {
         assertThat(socketFactory).isNotNull();
 
         final Field hostnameVerifierField =
-                getInaccessibleField(SSLConnectionSocketFactory.class, "hostnameVerifier");
+                FieldUtils.getField(SSLConnectionSocketFactory.class, "hostnameVerifier", true);
         assertThat(hostnameVerifierField.get(socketFactory)).isInstanceOf(HostnameVerifier.class);
     }
 
     @Test
-    void canUseASystemHostnameVerifierByDefaultWhenTlsConfigurationSpecified() throws Exception {
+    public void canUseASystemHostnameVerifierByDefaultWhenTlsConfigurationSpecified() throws Exception {
         final TlsConfiguration tlsConfiguration = new TlsConfiguration();
         tlsConfiguration.setVerifyHostname(true);
         configuration.setTlsConfiguration(tlsConfiguration);
@@ -279,23 +280,23 @@ public class HttpClientBuilderTest {
         assertThat(socketFactory).isNotNull();
 
         final Field hostnameVerifierField =
-                getInaccessibleField(SSLConnectionSocketFactory.class, "hostnameVerifier");
+                FieldUtils.getField(SSLConnectionSocketFactory.class, "hostnameVerifier", true);
         assertThat(hostnameVerifierField.get(socketFactory)).isInstanceOf(HostnameVerifier.class);
     }
 
     @Test
-    void createClientCanPassCustomVerifierToApacheBuilder() throws Exception {
+    public void createClientCanPassCustomVerifierToApacheBuilder() throws Exception {
         final HostnameVerifier customVerifier = (s, sslSession) -> false;
 
         assertThat(builder.using(customVerifier).createClient(apacheBuilder, connectionManager, "test")).isNotNull();
 
         final Field hostnameVerifierField =
-                getInaccessibleField(org.apache.http.impl.client.HttpClientBuilder.class, "hostnameVerifier");
+                FieldUtils.getField(org.apache.http.impl.client.HttpClientBuilder.class, "hostnameVerifier", true);
         assertThat(hostnameVerifierField.get(apacheBuilder)).isSameAs(customVerifier);
     }
 
     @Test
-    void doesNotReuseConnectionsIfKeepAliveIsZero() throws Exception {
+    public void doesNotReuseConnectionsIfKeepAliveIsZero() throws Exception {
         configuration.setKeepAlive(Duration.seconds(0));
         assertThat(builder.using(configuration).createClient(apacheBuilder, connectionManager, "test")).isNotNull();
 
@@ -305,7 +306,7 @@ public class HttpClientBuilderTest {
 
 
     @Test
-    void reusesConnectionsIfKeepAliveIsNonZero() throws Exception {
+    public void reusesConnectionsIfKeepAliveIsNonZero() throws Exception {
         configuration.setKeepAlive(Duration.seconds(1));
         assertThat(builder.using(configuration).createClient(apacheBuilder, connectionManager, "test")).isNotNull();
 
@@ -314,7 +315,7 @@ public class HttpClientBuilderTest {
     }
 
     @Test
-    void usesKeepAliveForPersistentConnections() throws Exception {
+    public void usesKeepAliveForPersistentConnections() throws Exception {
         configuration.setKeepAlive(Duration.seconds(1));
         assertThat(builder.using(configuration).createClient(apacheBuilder, connectionManager, "test")).isNotNull();
 
@@ -328,11 +329,11 @@ public class HttpClientBuilderTest {
     }
 
     @Test
-    void usesDefaultForNonPersistentConnections() throws Exception {
+    public void usesDefaultForNonPersistentConnections() throws Exception {
         configuration.setKeepAlive(Duration.seconds(1));
         assertThat(builder.using(configuration).createClient(apacheBuilder, connectionManager, "test")).isNotNull();
 
-        final Field field = getInaccessibleField(httpClientBuilderClass, "keepAliveStrategy");
+        final Field field = FieldUtils.getField(httpClientBuilderClass, "keepAliveStrategy", true);
         final DefaultConnectionKeepAliveStrategy strategy = (DefaultConnectionKeepAliveStrategy) field.get(apacheBuilder);
         final HttpContext context = mock(HttpContext.class);
         final HttpResponse response = mock(HttpResponse.class);
@@ -346,7 +347,7 @@ public class HttpClientBuilderTest {
     }
 
     @Test
-    void ignoresCookiesByDefault() throws Exception {
+    public void ignoresCookiesByDefault() throws Exception {
         assertThat(builder.using(configuration).createClient(apacheBuilder, connectionManager, "test")).isNotNull();
 
         assertThat(((RequestConfig) spyHttpClientBuilderField("defaultRequestConfig", apacheBuilder)).getCookieSpec())
@@ -354,7 +355,7 @@ public class HttpClientBuilderTest {
     }
 
     @Test
-    void usesBestMatchCookiePolicyIfCookiesAreEnabled() throws Exception {
+    public void usesBestMatchCookiePolicyIfCookiesAreEnabled() throws Exception {
         configuration.setCookiesEnabled(true);
         assertThat(builder.using(configuration).createClient(apacheBuilder, connectionManager, "test")).isNotNull();
 
@@ -363,7 +364,7 @@ public class HttpClientBuilderTest {
     }
 
     @Test
-    void normalizeUriByDefault() throws Exception {
+    public void normalizeUriByDefault() throws Exception {
         assertThat(builder.using(configuration).createClient(apacheBuilder, connectionManager, "test")).isNotNull();
 
         assertThat(((RequestConfig) spyHttpClientBuilderField("defaultRequestConfig", apacheBuilder)).isNormalizeUri())
@@ -371,7 +372,7 @@ public class HttpClientBuilderTest {
     }
 
     @Test
-    void disableNormalizeUriWhenDisabled() throws Exception {
+    public void disableNormalizeUriWhenDisabled() throws Exception {
         configuration.setNormalizeUriEnabled(false);
         assertThat(builder.using(configuration).createClient(apacheBuilder, connectionManager, "test")).isNotNull();
 
@@ -380,7 +381,7 @@ public class HttpClientBuilderTest {
     }
 
     @Test
-    void setsTheSocketTimeout() throws Exception {
+    public void setsTheSocketTimeout() throws Exception {
         configuration.setTimeout(Duration.milliseconds(500));
         assertThat(builder.using(configuration).createClient(apacheBuilder, connectionManager, "test")).isNotNull();
 
@@ -389,7 +390,7 @@ public class HttpClientBuilderTest {
     }
 
     @Test
-    void setsTheConnectTimeout() throws Exception {
+    public void setsTheConnectTimeout() throws Exception {
         configuration.setConnectionTimeout(Duration.milliseconds(500));
         assertThat(builder.using(configuration).createClient(apacheBuilder, connectionManager, "test")).isNotNull();
 
@@ -398,7 +399,7 @@ public class HttpClientBuilderTest {
     }
 
     @Test
-    void setsTheConnectionRequestTimeout() throws Exception {
+    public void setsTheConnectionRequestTimeout() throws Exception {
         configuration.setConnectionRequestTimeout(Duration.milliseconds(123));
 
         assertThat(builder.using(configuration).createClient(apacheBuilder, connectionManager, "test")).isNotNull();
@@ -407,14 +408,14 @@ public class HttpClientBuilderTest {
     }
 
     @Test
-    void disablesNaglesAlgorithm() throws Exception {
+    public void disablesNaglesAlgorithm() throws Exception {
         assertThat(builder.using(configuration).createClient(apacheBuilder, connectionManager, "test")).isNotNull();
 
         assertThat(((SocketConfig) spyHttpClientBuilderField("defaultSocketConfig", apacheBuilder)).isTcpNoDelay()).isTrue();
     }
 
     @Test
-    void disablesStaleConnectionCheck() throws Exception {
+    public void disablesStaleConnectionCheck() throws Exception {
         assertThat(builder.using(configuration).createClient(apacheBuilder, connectionManager, "test")).isNotNull();
 
         // It is fine to use the isStaleConnectionCheckEnabled deprecated API, as we are ensuring
@@ -425,7 +426,7 @@ public class HttpClientBuilderTest {
     }
 
     @Test
-    void usesTheDefaultRoutePlanner() throws Exception {
+    public void usesTheDefaultRoutePlanner() throws Exception {
         final CloseableHttpClient httpClient = builder.using(configuration)
                 .createClient(apacheBuilder, connectionManager, "test").getClient();
 
@@ -435,7 +436,7 @@ public class HttpClientBuilderTest {
     }
 
     @Test
-    void usesACustomRoutePlanner() throws Exception {
+    public void usesACustomRoutePlanner() throws Exception {
         final HttpRoutePlanner routePlanner = new SystemDefaultRoutePlanner(new ProxySelector() {
             @Override
             public List<Proxy> select(URI uri) {
@@ -456,7 +457,7 @@ public class HttpClientBuilderTest {
     }
 
     @Test
-    void usesACustomHttpRequestRetryHandler() throws Exception {
+    public void usesACustomHttpRequestRetryHandler() throws Exception {
         final HttpRequestRetryHandler customHandler = (exception, executionCount, context) -> false;
 
         configuration.setRetries(1);
@@ -467,7 +468,7 @@ public class HttpClientBuilderTest {
     }
 
     @Test
-    void usesCredentialsProvider() throws Exception {
+    public void usesCredentialsProvider() throws Exception {
         final CredentialsProvider credentialsProvider = new CredentialsProvider() {
             @Override
             public void setCredentials(AuthScope authscope, Credentials credentials) {
@@ -491,7 +492,7 @@ public class HttpClientBuilderTest {
     }
 
     @Test
-    void usesProxy() throws Exception {
+    public void usesProxy() throws Exception {
         HttpClientConfiguration config = new HttpClientConfiguration();
         ProxyConfiguration proxy = new ProxyConfiguration("192.168.52.11", 8080);
         config.setProxyConfiguration(proxy);
@@ -500,7 +501,7 @@ public class HttpClientBuilderTest {
     }
 
     @Test
-    void usesProxyWithoutPort() throws Exception {
+    public void usesProxyWithoutPort() throws Exception {
         HttpClientConfiguration config = new HttpClientConfiguration();
         ProxyConfiguration proxy = new ProxyConfiguration("192.168.52.11");
         config.setProxyConfiguration(proxy);
@@ -509,7 +510,7 @@ public class HttpClientBuilderTest {
     }
 
     @Test
-    void usesProxyWithBasicAuth() throws Exception {
+    public void usesProxyWithBasicAuth() throws Exception {
         HttpClientConfiguration config = new HttpClientConfiguration();
         AuthConfiguration auth = new AuthConfiguration("secret", "stuff");
         ProxyConfiguration proxy = new ProxyConfiguration("192.168.52.11", 8080, "http", auth);
@@ -518,14 +519,15 @@ public class HttpClientBuilderTest {
         CloseableHttpClient httpClient = checkProxy(config, new HttpHost("dropwizard.io", 80),
                 new HttpHost("192.168.52.11", 8080, "http"));
         CredentialsProvider credentialsProvider = (CredentialsProvider)
-                getInaccessibleField(httpClient.getClass(), "credentialsProvider").get(httpClient);
+                FieldUtils.getField(httpClient.getClass(), "credentialsProvider", true)
+                        .get(httpClient);
 
         assertThat(credentialsProvider.getCredentials(new AuthScope("192.168.52.11", 8080)))
                 .isEqualTo(new UsernamePasswordCredentials("secret", "stuff"));
     }
 
     @Test
-    void usesProxyWithNtlmAuth() throws Exception {
+    public void usesProxyWithNtlmAuth() throws Exception {
         HttpClientConfiguration config = new HttpClientConfiguration();
         AuthConfiguration auth = new AuthConfiguration("secret", "stuff", "NTLM", "realm", "host", "domain", "NT");
         ProxyConfiguration proxy = new ProxyConfiguration("192.168.52.11", 8080, "http", auth);
@@ -534,7 +536,8 @@ public class HttpClientBuilderTest {
         CloseableHttpClient httpClient = checkProxy(config, new HttpHost("dropwizard.io", 80),
                 new HttpHost("192.168.52.11", 8080, "http"));
         CredentialsProvider credentialsProvider = (CredentialsProvider)
-                getInaccessibleField(httpClient.getClass(), "credentialsProvider").get(httpClient);
+                FieldUtils.getField(httpClient.getClass(), "credentialsProvider", true)
+                        .get(httpClient);
 
         AuthScope authScope = new AuthScope("192.168.52.11", 8080, "realm", "NTLM");
         Credentials credentials = new NTCredentials("secret", "stuff", "host", "domain");
@@ -544,7 +547,7 @@ public class HttpClientBuilderTest {
     }
 
     @Test
-    void usesProxyWithNonProxyHosts() throws Exception {
+    public void usesProxyWithNonProxyHosts() throws Exception {
         HttpClientConfiguration config = new HttpClientConfiguration();
         ProxyConfiguration proxy = new ProxyConfiguration("192.168.52.11", 8080);
         proxy.setNonProxyHosts(Collections.singletonList("*.example.com"));
@@ -554,7 +557,7 @@ public class HttpClientBuilderTest {
     }
 
     @Test
-    void usesProxyWithNonProxyHostsAndTargetDoesNotMatch() throws Exception {
+    public void usesProxyWithNonProxyHostsAndTargetDoesNotMatch() throws Exception {
         HttpClientConfiguration config = new HttpClientConfiguration();
         ProxyConfiguration proxy = new ProxyConfiguration("192.168.52.11");
         proxy.setNonProxyHosts(Collections.singletonList("*.example.com"));
@@ -564,7 +567,7 @@ public class HttpClientBuilderTest {
     }
 
     @Test
-    void usesNoProxy() throws Exception {
+    public void usesNoProxy() throws Exception {
         checkProxy(new HttpClientConfiguration(), new HttpHost("dropwizard.io", 80), null);
     }
 
@@ -572,7 +575,7 @@ public class HttpClientBuilderTest {
                                            @Nullable HttpHost expectedProxy) throws Exception {
         CloseableHttpClient httpClient = builder.using(config).build("test");
         HttpRoutePlanner routePlanner = (HttpRoutePlanner)
-                getInaccessibleField(httpClient.getClass(), "routePlanner").get(httpClient);
+                FieldUtils.getField(httpClient.getClass(), "routePlanner", true).get(httpClient);
 
         HttpRoute route = routePlanner.determineRoute(target, new HttpGet(target.toURI()),
                 new BasicHttpContext());
@@ -584,7 +587,7 @@ public class HttpClientBuilderTest {
     }
 
     @Test
-    void setValidateAfterInactivityPeriodFromConfiguration() throws Exception {
+    public void setValidateAfterInactivityPeriodFromConfiguration() throws Exception {
         int validateAfterInactivityPeriod = 50000;
         configuration.setValidateAfterInactivityPeriod(Duration.milliseconds(validateAfterInactivityPeriod));
         final ConfiguredCloseableHttpClient client = builder.using(configuration)
@@ -596,26 +599,28 @@ public class HttpClientBuilderTest {
     }
 
     @Test
-    void usesACustomHttpClientMetricNameStrategy() throws Exception {
+    public void usesACustomHttpClientMetricNameStrategy() throws Exception {
         assertThat(builder.using(HttpClientMetricNameStrategies.HOST_AND_METHOD)
                 .createClient(apacheBuilder, connectionManager, "test"))
                 .isNotNull();
-        assertThat(getInaccessibleField(InstrumentedHttpRequestExecutor.class,"metricNameStrategy")
+        assertThat(FieldUtils.getField(InstrumentedHttpRequestExecutor.class,
+                "metricNameStrategy", true)
                 .get(spyHttpClientBuilderField("requestExec", apacheBuilder)))
                 .isSameAs(HttpClientMetricNameStrategies.HOST_AND_METHOD);
     }
 
     @Test
-    void usesMethodOnlyHttpClientMetricNameStrategyByDefault() throws Exception {
+    public void usesMethodOnlyHttpClientMetricNameStrategyByDefault() throws Exception {
         assertThat(builder.createClient(apacheBuilder, connectionManager, "test"))
                 .isNotNull();
-        assertThat(getInaccessibleField(InstrumentedHttpRequestExecutor.class, "metricNameStrategy")
+        assertThat(FieldUtils.getField(InstrumentedHttpRequestExecutor.class,
+                "metricNameStrategy", true)
                 .get(spyHttpClientBuilderField("requestExec", apacheBuilder)))
                 .isSameAs(HttpClientMetricNameStrategies.METHOD_ONLY);
     }
 
     @Test
-    void exposedConfigIsTheSameAsInternalToTheWrappedHttpClient() throws Exception {
+    public void exposedConfigIsTheSameAsInternalToTheWrappedHttpClient() throws Exception {
         ConfiguredCloseableHttpClient client = builder.createClient(apacheBuilder, connectionManager, "test");
         assertThat(client).isNotNull();
 
@@ -623,19 +628,20 @@ public class HttpClientBuilderTest {
     }
 
     @Test
-    void disablesContentCompression() throws Exception {
+    public void disablesContentCompression() throws Exception {
         ConfiguredCloseableHttpClient client = builder
                 .disableContentCompression(true)
                 .createClient(apacheBuilder, connectionManager, "test");
         assertThat(client).isNotNull();
 
-        final Boolean contentCompressionDisabled =
-            (Boolean) getInaccessibleField(httpClientBuilderClass, "contentCompressionDisabled").get(apacheBuilder);
+        final Boolean contentCompressionDisabled = (Boolean) FieldUtils
+                .getField(httpClientBuilderClass, "contentCompressionDisabled", true)
+                .get(apacheBuilder);
         assertThat(contentCompressionDisabled).isTrue();
     }
 
     @Test
-    void managedByEnvironment() throws Exception {
+    public void managedByEnvironment() throws Exception {
         final Environment environment = mock(Environment.class);
         when(environment.getName()).thenReturn("test-env");
         when(environment.metrics()).thenReturn(new MetricRegistry());
@@ -660,7 +666,7 @@ public class HttpClientBuilderTest {
     }
 
     @Test
-    void usesACustomRedirectStrategy() throws Exception {
+    public void usesACustomRedirectStrategy() throws Exception {
         RedirectStrategy neverFollowRedirectStrategy = new RedirectStrategy() {
             @Override
             public boolean isRedirected(HttpRequest httpRequest,
@@ -684,15 +690,15 @@ public class HttpClientBuilderTest {
     }
 
     @Test
-    void usesDefaultHeaders() throws Exception {
+    public void usesDefaultHeaders() throws Exception {
         final ConfiguredCloseableHttpClient client =
                 builder.using(Collections.singletonList(new BasicHeader(HttpHeaders.ACCEPT_LANGUAGE, "de")))
                         .createClient(apacheBuilder, connectionManager, "test");
         assertThat(client).isNotNull();
 
         @SuppressWarnings("unchecked")
-        List<? extends Header> defaultHeaders =
-            (List<? extends Header>) getInaccessibleField(httpClientBuilderClass, "defaultHeaders")
+        List<? extends Header> defaultHeaders = (List<? extends Header>) FieldUtils
+                .getField(httpClientBuilderClass, "defaultHeaders", true)
                 .get(apacheBuilder);
 
         assertThat(defaultHeaders).hasSize(1);
@@ -702,49 +708,55 @@ public class HttpClientBuilderTest {
     }
 
     @Test
-    void usesHttpProcessor() throws Exception {
+    public void usesHttpProcessor() throws Exception {
         HttpProcessor httpProcessor = mock(HttpProcessor.class);
         final ConfiguredCloseableHttpClient client =
             builder.using(httpProcessor)
                 .createClient(apacheBuilder, connectionManager, "test");
         assertThat(client).isNotNull();
-        assertThat(getInaccessibleField(httpClientBuilderClass, "httpprocessor")
+        assertThat(FieldUtils.getField(httpClientBuilderClass,
+            "httpprocessor", true)
             .get(apacheBuilder))
             .isSameAs(httpProcessor);
     }
 
     @Test
-    void usesServiceUnavailableRetryStrategy() throws Exception {
+    public void usesServiceUnavailableRetryStrategy() throws Exception {
         ServiceUnavailableRetryStrategy serviceUnavailableRetryStrategy = mock(ServiceUnavailableRetryStrategy.class);
         final ConfiguredCloseableHttpClient client =
             builder.using(serviceUnavailableRetryStrategy)
                 .createClient(apacheBuilder, connectionManager, "test");
         assertThat(client).isNotNull();
-        assertThat(getInaccessibleField(httpClientBuilderClass, "serviceUnavailStrategy")
+        assertThat(FieldUtils.getField(httpClientBuilderClass,
+            "serviceUnavailStrategy", true)
             .get(apacheBuilder))
             .isSameAs(serviceUnavailableRetryStrategy);
     }
 
     @Test
-    void allowsCustomBuilderConfiguration() throws Exception {
+    public void allowsCustomBuilderConfiguration() throws Exception {
         CustomBuilder builder = new CustomBuilder(new MetricRegistry());
         assertThat(builder.customized).isFalse();
         builder.createClient(apacheBuilder, connectionManager, "test");
         assertThat(builder.customized).isTrue();
-        assertThat(getInaccessibleField(httpClientBuilderClass, "requestExec").get(apacheBuilder))
+        assertThat(FieldUtils.getField(httpClientBuilderClass,
+            "requestExec", true)
+            .get(apacheBuilder))
             .isInstanceOf(CustomRequestExecutor.class);
     }
 
     @Test
-    void buildWithAnotherBuilder() throws Exception {
+    public void buildWithAnotherBuilder() throws Exception {
         CustomBuilder builder = new CustomBuilder(new MetricRegistry(), anotherApacheBuilder);
         builder.build("test");
-        assertThat(getInaccessibleField(httpClientBuilderClass, "requestExec").get(anotherApacheBuilder))
+        assertThat(FieldUtils.getField(httpClientBuilderClass,
+            "requestExec", true)
+            .get(anotherApacheBuilder))
             .isInstanceOf(CustomRequestExecutor.class);
     }
 
     @Test
-    void configureCredentialReturnsNTCredentialsForNTLMConfig() {
+    public void configureCredentialReturnsNTCredentialsForNTLMConfig() {
         AuthConfiguration ntlmConfig = new AuthConfiguration("username", "password", "NTLM", "realm", "hostname", "domain", "NT");
 
         Credentials credentials = builder.configureCredentials(ntlmConfig);
@@ -754,7 +766,7 @@ public class HttpClientBuilderTest {
     }
 
     @Test
-    void configureCredentialReturnsNTCredentialsForBasicConfig() {
+    public void configureCredentialReturnsNTCredentialsForBasicConfig() {
         AuthConfiguration ntlmConfig = new AuthConfiguration("username", "password");
 
         Credentials credentials = builder.configureCredentials(ntlmConfig);
@@ -764,18 +776,12 @@ public class HttpClientBuilderTest {
     }
 
     private Object spyHttpClientBuilderField(final String fieldName, final Object obj) throws Exception {
-        final Field field = getInaccessibleField(httpClientBuilderClass, fieldName);
+        final Field field = FieldUtils.getField(httpClientBuilderClass, fieldName, true);
         return field.get(obj);
     }
 
     private Object spyHttpClientField(final String fieldName, final Object obj) throws Exception {
-        final Field field = getInaccessibleField(httpClientClass, fieldName);
+        final Field field = FieldUtils.getField(httpClientClass, fieldName, true);
         return field.get(obj);
-    }
-
-    private static Field getInaccessibleField(Class klass, String name) throws NoSuchFieldException {
-        Field field = klass.getDeclaredField(name);
-        field.setAccessible(true);
-        return field;
     }
 }

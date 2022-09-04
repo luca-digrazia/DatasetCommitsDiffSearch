@@ -2,12 +2,10 @@ package io.dropwizard.testing.junit5;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.guava.GuavaModule;
-import com.google.common.collect.ImmutableList;
 import io.dropwizard.jackson.Jackson;
-import io.dropwizard.testing.app.Person;
 import io.dropwizard.testing.app.PeopleStore;
+import io.dropwizard.testing.app.Person;
 import io.dropwizard.testing.app.PersonResource;
-import io.dropwizard.testing.junit.ResourceTestRule;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -17,19 +15,18 @@ import javax.ws.rs.client.Entity;
 import javax.ws.rs.core.GenericType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.ext.ExceptionMapper;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Tests {@link ResourceTestRule}.
+ * Tests {@link ResourceExtension}.
  */
 @ExtendWith(DropwizardExtensionsSupport.class)
-public class PersonResourceTest {
+class PersonResourceTest {
     private static class DummyExceptionMapper implements ExceptionMapper<WebApplicationException> {
         @Override
         public Response toResponse(WebApplicationException e) {
@@ -37,13 +34,12 @@ public class PersonResourceTest {
         }
     }
 
-    private static final PeopleStore PEOPLE_STORE = mock(PeopleStore.class);
-
     private static final ObjectMapper OBJECT_MAPPER = Jackson.newObjectMapper()
         .registerModule(new GuavaModule());
 
-    public static final ResourceExtension RESOURCES = ResourceExtension.builder()
-        .addResource(new PersonResource(PEOPLE_STORE))
+    private final PeopleStore peopleStore = mock(PeopleStore.class);
+    private final ResourceExtension resources = ResourceExtension.builder()
+        .addResource(new PersonResource(peopleStore))
         .setMapper(OBJECT_MAPPER)
         .setClientConfigurator(clientConfig -> clientConfig.register(DummyExceptionMapper.class))
         .build();
@@ -51,48 +47,46 @@ public class PersonResourceTest {
     private final Person person = new Person("blah", "blah@example.com");
 
     @BeforeEach
-    public void setup() {
-        reset(PEOPLE_STORE);
-        when(PEOPLE_STORE.fetchPerson(eq("blah"))).thenReturn(person);
+    void setup() {
+        when(peopleStore.fetchPerson("blah")).thenReturn(person);
     }
 
     @Test
-    public void testGetPerson() {
-        assertThat(RESOURCES.target("/person/blah").request()
+    void testGetPerson() {
+        assertThat(resources.target("/person/blah").request()
             .get(Person.class))
             .isEqualTo(person);
-        verify(PEOPLE_STORE).fetchPerson("blah");
+        verify(peopleStore).fetchPerson("blah");
     }
 
     @Test
-    public void testGetImmutableListOfPersons() {
-        assertThat(RESOURCES.target("/person/blah/list").request()
-            .get(new GenericType<ImmutableList<Person>>() {
-            })).isEqualTo(ImmutableList.of(person));
+    void testGetImmutableListOfPersons() {
+        assertThat(resources.target("/person/blah/list").request().get(new GenericType<List<Person>>() {
+            })).containsOnly(person);
     }
 
     @Test
-    public void testGetPersonWithQueryParam() {
+    void testGetPersonWithQueryParam() {
         // Test to ensure that the dropwizard validator is registered so that
         // it can validate the "ind" IntParam.
-        assertThat(RESOURCES.target("/person/blah/index")
+        assertThat(resources.target("/person/blah/index")
             .queryParam("ind", 0).request()
             .get(Person.class))
             .isEqualTo(person);
-        verify(PEOPLE_STORE).fetchPerson("blah");
+        verify(peopleStore).fetchPerson("blah");
     }
 
     @Test
-    public void testDefaultConstraintViolation() {
-        assertThat(RESOURCES.target("/person/blah/index")
+    void testDefaultConstraintViolation() {
+        assertThat(resources.target("/person/blah/index")
             .queryParam("ind", -1).request()
             .get().readEntity(String.class))
             .isEqualTo("{\"errors\":[\"query param ind must be greater than or equal to 0\"]}");
     }
 
     @Test
-    public void testDefaultJsonProcessingMapper() {
-        assertThat(RESOURCES.target("/person/blah/runtime-exception")
+    void testDefaultJsonProcessingMapper() {
+        assertThat(resources.target("/person/blah/runtime-exception")
             .request()
             .post(Entity.json("{ \"he: \"ho\"}"))
             .readEntity(String.class))
@@ -100,8 +94,8 @@ public class PersonResourceTest {
     }
 
     @Test
-    public void testDefaultExceptionMapper() {
-        assertThat(RESOURCES.target("/person/blah/runtime-exception")
+    void testDefaultExceptionMapper() {
+        assertThat(resources.target("/person/blah/runtime-exception")
             .request()
             .post(Entity.json("{}"))
             .readEntity(String.class))
@@ -109,16 +103,16 @@ public class PersonResourceTest {
     }
 
     @Test
-    public void testDefaultEofExceptionMapper() {
-        assertThat(RESOURCES.target("/person/blah/eof-exception")
+    void testDefaultEofExceptionMapper() {
+        assertThat(resources.target("/person/blah/eof-exception")
             .request()
             .get().getStatus())
             .isEqualTo(Response.Status.BAD_REQUEST.getStatusCode());
     }
 
     @Test
-    public void testValidationGroupsException() {
-        final Response resp = RESOURCES.target("/person/blah/validation-groups-exception")
+    void testValidationGroupsException() {
+        final Response resp = resources.target("/person/blah/validation-groups-exception")
             .request()
             .post(Entity.json("{}"));
         assertThat(resp.getStatus()).isEqualTo(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode());
@@ -128,7 +122,7 @@ public class PersonResourceTest {
     }
 
     @Test
-    public void testCustomClientConfiguration() {
-        assertThat(RESOURCES.client().getConfiguration().isRegistered(DummyExceptionMapper.class)).isTrue();
+    void testCustomClientConfiguration() {
+        assertThat(resources.client().getConfiguration().isRegistered(DummyExceptionMapper.class)).isTrue();
     }
 }
