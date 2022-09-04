@@ -32,6 +32,8 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 
 /**
+ * LogMessage.java: 12.04.2012 13:06:01
+ *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class LogMessage {

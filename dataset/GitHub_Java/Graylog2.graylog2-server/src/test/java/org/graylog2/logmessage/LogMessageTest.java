@@ -20,6 +20,7 @@
 
 package org.graylog2.logmessage;
 
+import com.beust.jcommander.internal.Maps;
 import java.util.Map;
 import java.util.HashMap;
 import org.junit.Test;
@@ -115,6 +116,63 @@ public class LogMessageTest {
         assertEquals(2, lm.getAdditionalData().size());
         assertEquals("lol", lm.getAdditionalData().get("_ohai"));
         assertEquals(9001, lm.getAdditionalData().get("_wat"));
+    }
+    
+    @Test
+    public void testAddAdditionalDataTrimsWhiteSpacesTabsAndStuffFromKeyAndValue() {
+        LogMessage lm = new LogMessage();
+        lm.addAdditionalData(" one", "value_one");
+        lm.addAdditionalData(" two  ", "value_two");
+        lm.addAdditionalData("three ", "value_three");
+        lm.addAdditionalData("  four   ", "value_four_lol_tab");
+        lm.addAdditionalData("five", 5); // zomg integer
+        
+        assertEquals("value_one", lm.getAdditionalData().get("_one"));
+        assertEquals("value_two", lm.getAdditionalData().get("_two"));
+        assertEquals("value_three", lm.getAdditionalData().get("_three"));
+        assertEquals("value_four_lol_tab", lm.getAdditionalData().get("_four"));
+        assertEquals(5, lm.getAdditionalData().get("_five"));
+    }
+    
+    @Test
+    public void testAddAdditionalDataTrimsWhiteSpacesTabsAndStuffFromKeyAndValueWhenInsertedAsMap() {
+        LogMessage lm = new LogMessage();
+        Map<String, String> av = Maps.newHashMap();
+        
+        av.put(" one", "value_one");
+        av.put(" two  ", "value_two");
+        av.put("three ", "value_three");
+        av.put("  four   ", "value_four_lol_tab");
+        
+        lm.addAdditionalData(av);
+        
+        assertEquals("value_one", lm.getAdditionalData().get("_one"));
+        assertEquals("value_two", lm.getAdditionalData().get("_two"));
+        assertEquals("value_three", lm.getAdditionalData().get("_three"));
+        assertEquals("value_four_lol_tab", lm.getAdditionalData().get("_four"));
+    }
+
+    @Test
+    public void testRemoveAdditionalData() {
+        LogMessage lm = new LogMessage();
+        lm.addAdditionalData("_something", "foo");
+        lm.addAdditionalData("_something_else", "bar");
+
+        lm.removeAdditionalData("_something_else");
+
+        assertEquals(1, lm.getAdditionalData().size());
+        assertEquals("foo", lm.getAdditionalData().get("_something"));
+    }
+
+    @Test
+    public void testRemoveAdditionalDataWithNonExistentKey() {
+        LogMessage lm = new LogMessage();
+        lm.addAdditionalData("_something", "foo");
+        lm.addAdditionalData("_something_else", "bar");
+
+        lm.removeAdditionalData("_LOLIDONTEXIST");
+
+        assertEquals(2, lm.getAdditionalData().size());
     }
 
     @Test
