@@ -16,11 +16,11 @@ package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.RuleErrorConsumer;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.AspectDescriptor;
+import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.HeadersCheckingMode;
@@ -54,13 +54,12 @@ public final class MockCppSemantics implements CppSemantics {
   }
 
   @Override
-  public HeadersCheckingMode determineStarlarkHeadersCheckingMode(
-      RuleContext context, CppConfiguration cppConfig, CcToolchainProvider toolchain) {
+  public HeadersCheckingMode determineStarlarkHeadersCheckingMode(CppConfiguration cppConfig) {
     return HeadersCheckingMode.LOOSE;
   }
 
   @Override
-  public boolean needsDotdInputPruning(BuildConfiguration configuration) {
+  public boolean needsDotdInputPruning() {
     return true;
   }
 

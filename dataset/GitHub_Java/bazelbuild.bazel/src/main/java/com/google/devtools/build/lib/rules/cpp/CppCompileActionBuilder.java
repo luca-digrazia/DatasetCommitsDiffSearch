@@ -22,7 +22,6 @@ import com.google.devtools.build.lib.actions.ActionEnvironment;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.RuleErrorConsumer;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -30,6 +29,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
+import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.rules.cpp.CcCommon.CoptsFilter;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -276,6 +276,7 @@ public class CppCompileActionBuilder {
             cppConfiguration,
             shareable,
             shouldScanIncludes,
+            shouldPruneModules(),
             usePic,
             useHeaderModules,
             realMandatoryInputs,
@@ -316,7 +317,7 @@ public class CppCompileActionBuilder {
     NestedSetBuilder<Artifact> realMandatoryInputsBuilder = NestedSetBuilder.compileOrder();
     realMandatoryInputsBuilder.addTransitive(mandatoryInputsBuilder.build());
     realMandatoryInputsBuilder.addAll(getBuiltinIncludeFiles());
-    if (useHeaderModules() && !shouldScanIncludes) {
+    if (useHeaderModules() && !shouldPruneModules()) {
       realMandatoryInputsBuilder.addTransitive(ccCompilationContext.getTransitiveModules(usePic));
     }
     ccCompilationContext.addAdditionalInputs(realMandatoryInputsBuilder);
@@ -345,6 +346,10 @@ public class CppCompileActionBuilder {
         && (sourceFile.isFileType(CppFileTypes.CPP_SOURCE)
             || sourceFile.isFileType(CppFileTypes.CPP_HEADER)
             || sourceFile.isFileType(CppFileTypes.CPP_MODULE_MAP));
+  }
+
+  private boolean shouldPruneModules() {
+    return shouldScanIncludes && useHeaderModules();
   }
 
   /**

@@ -15,6 +15,7 @@ package com.google.devtools.build.lib.includescanning;
 
 import com.google.common.base.Preconditions;
 import com.google.common.base.Supplier;
+import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
@@ -57,7 +58,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
 
 /**
  * C include scanner. Quickly scans C/C++ source files to determine the bounding set of transitively
@@ -114,7 +114,7 @@ public class LegacyIncludeScanner implements IncludeScanner {
      * Locates an included file along the search paths. The result is cacheable.
      *
      * @param inclusion the inclusion to locate
-     * @param pathToDeclaredHeader generated files which may be reached during scanning
+     * @param pathToLegalOutputArtifact generated files which may be reached during scanning
      * @param onlyCheckGenerated if true, only search for generated output files
      * @return a tuple of the found file, the position of the respective include path entry on the
      *     search path (or null if no matching file was found), and whether the scan touched illegal
@@ -122,7 +122,7 @@ public class LegacyIncludeScanner implements IncludeScanner {
      */
     protected LocateOnPathResult locateOnPaths(
         InclusionWithContext inclusion,
-        Map<PathFragment, Artifact> pathToDeclaredHeader,
+        Map<PathFragment, Artifact> pathToLegalOutputArtifact,
         boolean onlyCheckGenerated) {
       PathFragment name = inclusion.getInclusion().pathFragment;
 
@@ -154,7 +154,7 @@ public class LegacyIncludeScanner implements IncludeScanner {
               locateOnFrameworkPaths(
                   frameworkName,
                   relHeaderPath,
-                  pathToDeclaredHeader,
+                  pathToLegalOutputArtifact,
                   onlyCheckGenerated,
                   viewedIllegalOutput);
           if (result.path != null) {
@@ -186,15 +186,16 @@ public class LegacyIncludeScanner implements IncludeScanner {
           continue;
         }
         viewedIllegalOutput =
-            viewedIllegalOutput || isIllegalOutputFile(fileFragment, pathToDeclaredHeader);
+            viewedIllegalOutput
+                || isIllegalOutputFile(fileFragment, pathToLegalOutputArtifact.keySet());
         boolean isOutputDirectory = fileFragment.startsWith(outputPathFragment);
-        if (!isFile(fileFragment, name, !isOutputDirectory, pathToDeclaredHeader)) {
+        if (!isFile(fileFragment, name, !isOutputDirectory, pathToLegalOutputArtifact.keySet())) {
           continue;
         }
         Artifact artifact;
         if (isOutputDirectory) {
           // May be a normal output file or an inc_library header.
-          artifact = pathToDeclaredHeader.get(fileFragment);
+          artifact = pathToLegalOutputArtifact.get(fileFragment);
           if (artifact == null) {
             // This happens if an included file exists in a cc_inc_library's output directory,
             // but is not an output of the cc_inc_library. This can happen if, for instance, the
@@ -235,7 +236,7 @@ public class LegacyIncludeScanner implements IncludeScanner {
      *
      * @param frameworkName the name of the framework, including the ".framework" suffix
      * @param relHeaderPath the path of the framework header, relative to the framework
-     * @param pathToDeclaredHeader generated files which may be reached during scanning
+     * @param pathToLegalOutputArtifact generated files which may be reached during scanning
      * @param onlyCheckGenerated if true, only search for generated output files
      * @param viewedIllegalOutput whether the scanner has viewed an illegal output file.
      * @return a tuple of the found file, the context path position of the input inclusion, and
@@ -244,9 +245,10 @@ public class LegacyIncludeScanner implements IncludeScanner {
     private LocateOnPathResult locateOnFrameworkPaths(
         String frameworkName,
         PathFragment relHeaderPath,
-        Map<PathFragment, Artifact> pathToDeclaredHeader,
+        Map<PathFragment, Artifact> pathToLegalOutputArtifact,
         boolean onlyCheckGenerated,
         boolean viewedIllegalOutput) {
+      Set<PathFragment> outputArtifactPaths = pathToLegalOutputArtifact.keySet();
       for (int i = 0; i < frameworkIncludePaths.size(); ++i) {
         PathFragment includePath = frameworkIncludePaths.get(i);
 
@@ -263,17 +265,17 @@ public class LegacyIncludeScanner implements IncludeScanner {
             fullFrameworkPath.getRelative("Headers").getRelative(relHeaderPath);
 
         viewedIllegalOutput =
-            viewedIllegalOutput || isIllegalOutputFile(fullHeaderPath, pathToDeclaredHeader);
+            viewedIllegalOutput || isIllegalOutputFile(fullHeaderPath, outputArtifactPaths);
         boolean isOutputDirectory = fullHeaderPath.startsWith(outputPathFragment);
-        if (isFile(fullHeaderPath, relHeaderPath, isOutputDirectory, pathToDeclaredHeader)) {
+        if (isFile(fullHeaderPath, relHeaderPath, isOutputDirectory, outputArtifactPaths)) {
           foundHeaderPath = fullHeaderPath;
         } else {
           // Look for header in path/to/foo.framework/PrivateHeaders/
           fullHeaderPath =
               fullFrameworkPath.getRelative("PrivateHeaders").getRelative(relHeaderPath);
           viewedIllegalOutput =
-              viewedIllegalOutput || isIllegalOutputFile(fullHeaderPath, pathToDeclaredHeader);
-          if (isFile(fullHeaderPath, relHeaderPath, isOutputDirectory, pathToDeclaredHeader)) {
+              viewedIllegalOutput || isIllegalOutputFile(fullHeaderPath, outputArtifactPaths);
+          if (isFile(fullHeaderPath, relHeaderPath, isOutputDirectory, outputArtifactPaths)) {
             foundHeaderPath = fullHeaderPath;
           } else {
             continue;
@@ -282,7 +284,7 @@ public class LegacyIncludeScanner implements IncludeScanner {
 
         Artifact artifact;
         if (isOutputDirectory) {
-          artifact = pathToDeclaredHeader.get(foundHeaderPath);
+          artifact = pathToLegalOutputArtifact.get(foundHeaderPath);
           if (artifact == null) {
             // This happens if an included file exists in a framework directory but is not but is
             // not an output of the framework rule.
@@ -324,21 +326,21 @@ public class LegacyIncludeScanner implements IncludeScanner {
      * Locates an included file along the search paths.
      *
      * @param inclusion the inclusion to locate
-     * @param pathToDeclaredHeader generated files which may be reached during scanning
+     * @param pathToLegalOutputArtifact generated files which may be reached during scanning
      * @return a LocateOnPathResult
      */
     protected abstract LocateOnPathResult lookup(
-        InclusionWithContext inclusion, Map<PathFragment, Artifact> pathToDeclaredHeader);
+        InclusionWithContext inclusion, Map<PathFragment, Artifact> pathToLegalOutputArtifact);
 
     /**
      * Locates an included file along the search paths.
      *
      * @param inclusion the inclusion to locate
-     * @param pathToDeclaredHeader generated files which may be reached during scanning
+     * @param pathToLegalOutputArtifact generated files which may be reached during scanning
      * @return a LocateOnPathResult
      */
     protected abstract ListenableFuture<LocateOnPathResult> lookupAsync(
-        InclusionWithContext inclusion, Map<PathFragment, Artifact> pathToDeclaredHeader);
+        InclusionWithContext inclusion, Map<PathFragment, Artifact> pathToLegalOutputArtifact);
   }
 
   /**
@@ -352,10 +354,11 @@ public class LegacyIncludeScanner implements IncludeScanner {
 
     @Override
     public LocateOnPathResult lookup(
-        InclusionWithContext inclusion, Map<PathFragment, Artifact> pathToDeclaredHeader) {
+        InclusionWithContext inclusion, Map<PathFragment, Artifact> pathToLegalOutputArtifact) {
       LocateOnPathResult result =
-          cache.computeIfAbsent(inclusion, key -> locateOnPaths(key, pathToDeclaredHeader, false));
-      // If the previous computation for this inclusion had a different pathToDeclaredHeader
+          cache.computeIfAbsent(
+              inclusion, key -> locateOnPaths(key, pathToLegalOutputArtifact, false));
+      // If the previous computation for this inclusion had a different pathToLegalOutputArtifact
       // map, result may not be valid for this lookup. Because this is a hot spot, we tolerate a
       // known correctness bug but try to catch most issues.
       // (1) [correct]: The prior computation found an output file, but that file is not in the
@@ -368,14 +371,14 @@ public class LegacyIncludeScanner implements IncludeScanner {
       // is very rare. b/150307245.
       if (result.path != null) {
         if (result.path.isSourceArtifact()
-            || result.path.equals(pathToDeclaredHeader.get(result.path.getExecPath()))) {
+            || result.path.equals(pathToLegalOutputArtifact.get(result.path.getExecPath()))) {
           return result;
         }
       } else if (!result.viewedIllegalOutputFile) {
         return result;
       }
 
-      result = locateOnPaths(inclusion, pathToDeclaredHeader, true);
+      result = locateOnPaths(inclusion, pathToLegalOutputArtifact, true);
       if (result.path != null || !result.viewedIllegalOutputFile) {
         // In this case, the result is now cachable either because a file has been found or
         // because there are no more illegal output files. This is rare in practice. Avoid
@@ -387,7 +390,7 @@ public class LegacyIncludeScanner implements IncludeScanner {
 
     @Override
     protected ListenableFuture<LocateOnPathResult> lookupAsync(
-        InclusionWithContext inclusion, Map<PathFragment, Artifact> pathToDeclaredHeader) {
+        InclusionWithContext inclusion, Map<PathFragment, Artifact> pathToLegalOutputArtifact) {
       throw new UnsupportedOperationException();
     }
   }
@@ -403,20 +406,21 @@ public class LegacyIncludeScanner implements IncludeScanner {
 
     @Override
     protected LocateOnPathResult lookup(
-        InclusionWithContext inclusion, Map<PathFragment, Artifact> pathToDeclaredHeader) {
+        InclusionWithContext inclusion, Map<PathFragment, Artifact> pathToLegalOutputArtifact) {
       throw new UnsupportedOperationException();
     }
 
     @Override
     public ListenableFuture<LocateOnPathResult> lookupAsync(
-        InclusionWithContext inclusion, Map<PathFragment, Artifact> pathToDeclaredHeader) {
+        InclusionWithContext inclusion, Map<PathFragment, Artifact> pathToLegalOutputArtifact) {
       SettableFuture<LocateOnPathResult> future = SettableFuture.create();
       ListenableFuture<LocateOnPathResult> previous = cache.putIfAbsent(inclusion, future);
       ListenableFuture<LocateOnPathResult> actualFuture;
       if (previous == null) {
         includePool.execute(
             () -> {
-              LocateOnPathResult result = locateOnPaths(inclusion, pathToDeclaredHeader, false);
+              LocateOnPathResult result =
+                  locateOnPaths(inclusion, pathToLegalOutputArtifact, false);
               future.set(result);
             });
         actualFuture = future;
@@ -434,7 +438,7 @@ public class LegacyIncludeScanner implements IncludeScanner {
               return Futures.immediateFuture(result);
             }
 
-            result = locateOnPaths(inclusion, pathToDeclaredHeader, true);
+            result = locateOnPaths(inclusion, pathToLegalOutputArtifact, true);
             if (result.path != null || !result.viewedIllegalOutputFile) {
               // In this case, the result is now cachable either because a file has been found or
               // because there are no more illegal output files. This is rare in practice. Avoid
@@ -561,11 +565,10 @@ public class LegacyIncludeScanner implements IncludeScanner {
     this.pathCache = pathCache;
     this.artifactFactory = Preconditions.checkNotNull(artifactFactory);
     this.spawnIncludeScannerSupplier = spawnIncludeScannerSupplier;
-    this.quoteIncludePaths =
-        ImmutableList.<PathFragment>builder()
-            .addAll(quoteIncludePaths)
-            .addAll(includePaths)
-            .build();
+    this.quoteIncludePaths = ImmutableList.<PathFragment>builder()
+        .addAll(quoteIncludePaths)
+        .addAll(includePaths)
+        .build();
     this.quoteIncludePathsFrameworkIndex = quoteIncludePaths.size();
     this.includePaths = ImmutableList.copyOf(includePaths);
     this.frameworkIncludePaths = ImmutableList.copyOf(frameworkIncludePaths);
@@ -587,13 +590,13 @@ public class LegacyIncludeScanner implements IncludeScanner {
    * @return the resolved Path, or null if no file could be found
    */
   private Artifact locateRelative(
-      Inclusion inclusion, Map<PathFragment, Artifact> declaredHeaders, Artifact includer) {
+      Inclusion inclusion, Map<PathFragment, Artifact> legalOutputFiles, Artifact includer) {
     if (inclusion.kind != Kind.QUOTE) {
       return null;
     }
     PathFragment name = inclusion.pathFragment;
     PathFragment execPath = includer.getExecPath().getParentDirectory().getRelative(name);
-    if (!isFile(execPath, name, includer.isSourceArtifact(), declaredHeaders)) {
+    if (!isFile(execPath, name, includer.isSourceArtifact(), legalOutputFiles.keySet())) {
       return null;
     }
     PathFragment parentDirectory = includer.getRootRelativePath().getParentDirectory();
@@ -604,9 +607,8 @@ public class LegacyIncludeScanner implements IncludeScanner {
       // directory names there are in it.
       return null;
     }
-    Artifact header = declaredHeaders.get(execPath);
-    if (header != null) {
-      return header;
+    if (legalOutputFiles.containsKey(execPath)) {
+      return legalOutputFiles.get(execPath);
     }
     ArtifactRoot root = includer.getRoot();
     Artifact sourceArtifact =
@@ -629,12 +631,10 @@ public class LegacyIncludeScanner implements IncludeScanner {
 
   /** Returns whether the given path exists in the filesystem. */
   private boolean isFile(
-      PathFragment execPath,
-      PathFragment includeAsWritten,
-      boolean isSource,
-      Map<PathFragment, Artifact> declaredHeaders) {
+      PathFragment execPath, PathFragment includeAsWritten, boolean isSource,
+      Collection<PathFragment> legalOutputFiles) {
     if (isRealOutputFile(execPath)) {
-      return declaredHeaders.containsKey(execPath);
+      return legalOutputFiles.contains(execPath);
     }
     // TODO(djasper): This code path cannot be hit with isSource being false. Verify and add
     // Preconditions check.
@@ -650,10 +650,6 @@ public class LegacyIncludeScanner implements IncludeScanner {
           return false;
         }
       }
-    }
-    // Shortcut: If this is a declared header, it's bound to exist.
-    if (declaredHeaders.containsKey(execPath)) {
-      return true;
     }
     return pathCache.fileExists(execPath, isSource);
   }
@@ -678,13 +674,20 @@ public class LegacyIncludeScanner implements IncludeScanner {
                 actionExecutionMetadata,
                 actionExecutionContext,
                 grepIncludes,
-                includeScanningHeaderData)
+                includeScanningHeaderData.getPathToLegalOutputArtifact(),
+                includeScanningHeaderData.getModularHeaders())
             : new LegacyIncludeVisitor(
                 actionExecutionMetadata,
                 actionExecutionContext,
                 grepIncludes,
-                includeScanningHeaderData);
-    return visitor.processInternal(mainSource, sources, cmdlineIncludes, includes, pathHints);
+                includeScanningHeaderData.getPathToLegalOutputArtifact(),
+                includeScanningHeaderData.getModularHeaders());
+    return visitor.processInternal(
+        mainSource,
+        sources,
+        cmdlineIncludes,
+        includes,
+        pathHints);
   }
 
   private ImmutableSet<Artifact> prepare(SkyFunction.Environment env) throws InterruptedException {
@@ -714,8 +717,8 @@ public class LegacyIncludeScanner implements IncludeScanner {
   }
 
   private boolean isIllegalOutputFile(
-      PathFragment includeFile, Map<PathFragment, Artifact> declaredHeaders) {
-    return isRealOutputFile(includeFile) && !declaredHeaders.containsKey(includeFile);
+      PathFragment includeFile, Collection<PathFragment> legalOutputFiles) {
+    return isRealOutputFile(includeFile) && !legalOutputFiles.contains(includeFile);
   }
 
   private boolean isRealOutputFile(PathFragment path) {
@@ -746,8 +749,7 @@ public class LegacyIncludeScanner implements IncludeScanner {
     private final ActionExecutionMetadata actionExecutionMetadata;
     private final ActionExecutionContext actionExecutionContext;
     private final Artifact grepIncludes;
-    private final IncludeScanningHeaderData headerData;
-    private final Map<PathFragment, Artifact> pathToDeclaredHeader;
+    private final Map<PathFragment, Artifact> pathToLegalOutputArtifact;
     /** The set of headers known to be part of a C++ module. Scanning can stop here. */
     private final Set<Artifact> modularHeaders;
 
@@ -758,7 +760,8 @@ public class LegacyIncludeScanner implements IncludeScanner {
         ActionExecutionMetadata actionExecutionMetadata,
         ActionExecutionContext actionExecutionContext,
         Artifact grepIncludes,
-        IncludeScanningHeaderData headerData) {
+        final Map<PathFragment, Artifact> pathToLegalOutputArtifact,
+        Set<Artifact> modularHeaders) {
       super(
           includePool,
           /*shutdownOnCompletion=*/ false,
@@ -767,9 +770,8 @@ public class LegacyIncludeScanner implements IncludeScanner {
       this.actionExecutionMetadata = actionExecutionMetadata;
       this.actionExecutionContext = actionExecutionContext;
       this.grepIncludes = grepIncludes;
-      this.headerData = headerData;
-      this.pathToDeclaredHeader = headerData.getPathToDeclaredHeader();
-      this.modularHeaders = headerData.getModularHeaders();
+      this.pathToLegalOutputArtifact = pathToLegalOutputArtifact;
+      this.modularHeaders = modularHeaders;
     }
 
     @Override
@@ -858,36 +860,41 @@ public class LegacyIncludeScanner implements IncludeScanner {
       checkForInterrupt("processing", source);
 
       Collection<Inclusion> inclusions;
-      SettableFuture<Collection<Inclusion>> future = SettableFuture.create();
-      Future<Collection<Inclusion>> previous = fileParseCache.putIfAbsent(source, future);
-      if (previous == null) {
-        previous = future;
-        try {
-          future.set(
-              parser.extractInclusions(
-                  source,
-                  actionExecutionMetadata,
-                  actionExecutionContext,
-                  grepIncludes,
-                  spawnIncludeScannerSupplier.get(),
-                  isRealOutputFile(source.getExecPath())));
-        } catch (IOException | ExecException | InterruptedException e) {
-          future.setException(e);
-          fileParseCache.remove(source);
-          throw e;
-        }
-      }
       try {
-        inclusions = previous.get();
-      } catch (ExecutionException e) {
-        if (e.getCause() instanceof InterruptedException) {
-          throw (InterruptedException) e.getCause();
-        } else if (e.getCause() instanceof ExecException) {
-          throw (ExecException) e.getCause();
-        } else if (e.getCause() instanceof IOException) {
-          throw (IOException) e.getCause();
+        inclusions =
+            fileParseCache
+                .computeIfAbsent(
+                    source,
+                    file -> {
+                      try {
+                        return Futures.immediateFuture(
+                            parser.extractInclusions(
+                                file,
+                                actionExecutionMetadata,
+                                actionExecutionContext,
+                                grepIncludes,
+                                spawnIncludeScannerSupplier.get(),
+                                isRealOutputFile(source.getExecPath())));
+                      } catch (IOException e) {
+                        throw new IORuntimeException(e);
+                      } catch (ExecException e) {
+                        throw new ExecRuntimeException(e);
+                      } catch (InterruptedException e) {
+                        throw new InterruptedRuntimeException(e);
+                      }
+                    })
+                .get();
+      } catch (ExecutionException ee) {
+        try {
+          Throwables.throwIfInstanceOf(ee.getCause(), RuntimeException.class);
+          throw new IllegalStateException(ee.getCause());
+        } catch (IORuntimeException e) {
+          throw e.getCauseIOException();
+        } catch (ExecRuntimeException e) {
+          throw e.getRealCause();
+        } catch (InterruptedRuntimeException e) {
+          throw e.getRealCause();
         }
-        throw new IllegalStateException(e.getCause());
       }
       Preconditions.checkNotNull(inclusions, source);
 
@@ -941,7 +948,8 @@ public class LegacyIncludeScanner implements IncludeScanner {
         throws IOException, ExecException, InterruptedException {
       // Try to find the included file relative to the file that contains the inclusion. Relative
       // inclusions are handled like the first entry on the quote include path
-      Artifact includeFile = locateRelative(inclusion.getInclusion(), pathToDeclaredHeader, source);
+      Artifact includeFile =
+          locateRelative(inclusion.getInclusion(), pathToLegalOutputArtifact, source);
       int contextPathPos = 0;
       Kind contextKind = null;
 
@@ -950,7 +958,7 @@ public class LegacyIncludeScanner implements IncludeScanner {
       // If nothing has been found, get an inclusion from the cache. This will automatically search
       // on the include paths and populate the cache if necessary.
       if (includeFile == null) {
-        LocateOnPathResult result = inclusionCache.lookup(inclusion, pathToDeclaredHeader);
+        LocateOnPathResult result = inclusionCache.lookup(inclusion, pathToLegalOutputArtifact);
         includeFile = result.path;
         contextPathPos = result.includePosition;
         contextKind = inclusion.getContextKind();
@@ -958,8 +966,7 @@ public class LegacyIncludeScanner implements IncludeScanner {
 
       // Recursively process the found file (if not yet done).
       if (includeFile != null
-          && !isIllegalOutputFile(includeFile.getExecPath(), pathToDeclaredHeader)
-          && headerData.isLegalHeader(includeFile)
+          && !isIllegalOutputFile(includeFile.getExecPath(), pathToLegalOutputArtifact.keySet())
           && visitedInclusions.add(
               new ArtifactWithInclusionContext(includeFile, contextKind, contextPathPos))) {
         visited.add(includeFile);
@@ -1037,9 +1044,7 @@ public class LegacyIncludeScanner implements IncludeScanner {
     private final ActionExecutionMetadata actionExecutionMetadata;
     private final ActionExecutionContext actionExecutionContext;
     private final Artifact grepIncludes;
-    private final IncludeScanningHeaderData headerData;
-
-    private final Map<PathFragment, Artifact> pathToDeclaredHeader;
+    private final Map<PathFragment, Artifact> pathToLegalOutputArtifact;
     /** The set of headers known to be part of a C++ module. Scanning can stop here. */
     private final Set<Artifact> modularHeaders;
 
@@ -1050,13 +1055,13 @@ public class LegacyIncludeScanner implements IncludeScanner {
         ActionExecutionMetadata actionExecutionMetadata,
         ActionExecutionContext actionExecutionContext,
         Artifact grepIncludes,
-        IncludeScanningHeaderData headerData) {
+        Map<PathFragment, Artifact> pathToLegalOutputArtifact,
+        Set<Artifact> modularHeaders) {
       this.actionExecutionMetadata = actionExecutionMetadata;
       this.actionExecutionContext = actionExecutionContext;
       this.grepIncludes = grepIncludes;
-      this.headerData = headerData;
-      this.pathToDeclaredHeader = headerData.getPathToDeclaredHeader();
-      this.modularHeaders = headerData.getModularHeaders();
+      this.pathToLegalOutputArtifact = pathToLegalOutputArtifact;
+      this.modularHeaders = modularHeaders;
     }
 
     @Override
@@ -1225,7 +1230,8 @@ public class LegacyIncludeScanner implements IncludeScanner {
         throws IOException, InterruptedException {
       // Try to find the included file relative to the file that contains the inclusion. Relative
       // inclusions are handled like the first entry on the quote include path
-      Artifact includeFile = locateRelative(inclusion.getInclusion(), pathToDeclaredHeader, source);
+      Artifact includeFile =
+          locateRelative(inclusion.getInclusion(), pathToLegalOutputArtifact, source);
 
       checkForInterrupt("visiting", source);
 
@@ -1233,7 +1239,7 @@ public class LegacyIncludeScanner implements IncludeScanner {
       // on the include paths and populate the cache if necessary.
       if (includeFile == null) {
         ListenableFuture<LocateOnPathResult> lookupFuture =
-            inclusionCache.lookupAsync(inclusion, pathToDeclaredHeader);
+            inclusionCache.lookupAsync(inclusion, pathToLegalOutputArtifact);
         return Futures.transformAsync(
             lookupFuture,
             (locateOnPathResult) ->
@@ -1241,7 +1247,7 @@ public class LegacyIncludeScanner implements IncludeScanner {
                     locateOnPathResult,
                     inclusion.getContextKind(),
                     visited,
-                    pathToDeclaredHeader,
+                    pathToLegalOutputArtifact,
                     visitedInclusions),
             MoreExecutors.directExecutor());
       } else {
@@ -1249,7 +1255,7 @@ public class LegacyIncludeScanner implements IncludeScanner {
         Kind contextKind = null;
         // Recursively process the found file (if not yet done).
         return processFound(
-            locateOnPathResult, contextKind, visited, pathToDeclaredHeader, visitedInclusions);
+            locateOnPathResult, contextKind, visited, pathToLegalOutputArtifact, visitedInclusions);
       }
     }
 
@@ -1258,7 +1264,7 @@ public class LegacyIncludeScanner implements IncludeScanner {
         LocateOnPathResult locateOnPathResult,
         Kind contextKind,
         Set<Artifact> visited,
-        Map<PathFragment, Artifact> pathToDeclaredHeader,
+        Map<PathFragment, Artifact> pathToLegalOutputArtifact,
         Set<ArtifactWithInclusionContext> visitedInclusions)
         throws IOException, InterruptedException {
       // Try to find the included file relative to the file that contains the inclusion. Relative
@@ -1268,8 +1274,7 @@ public class LegacyIncludeScanner implements IncludeScanner {
 
       // Recursively process the found file (if not yet done).
       if (includeFile != null
-          && !isIllegalOutputFile(includeFile.getExecPath(), pathToDeclaredHeader)
-          && headerData.isLegalHeader(includeFile)
+          && !isIllegalOutputFile(includeFile.getExecPath(), pathToLegalOutputArtifact.keySet())
           && visitedInclusions.add(
               new ArtifactWithInclusionContext(includeFile, contextKind, contextPathPos))) {
         visited.add(includeFile);

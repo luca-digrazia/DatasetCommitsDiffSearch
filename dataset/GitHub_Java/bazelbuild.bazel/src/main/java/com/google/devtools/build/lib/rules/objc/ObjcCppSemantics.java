@@ -18,10 +18,10 @@ import static com.google.devtools.build.lib.rules.objc.CompilationSupport.Includ
 
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.RuleErrorConsumer;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.packages.AspectDescriptor;
+import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.rules.cpp.CcCompilationContext;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
@@ -93,8 +93,7 @@ public class ObjcCppSemantics implements CppSemantics {
   }
 
   @Override
-  public HeadersCheckingMode determineStarlarkHeadersCheckingMode(
-      RuleContext context, CppConfiguration cppConfig, CcToolchainProvider toolchain) {
+  public HeadersCheckingMode determineStarlarkHeadersCheckingMode(CppConfiguration cppConfig) {
     if (cppConfig.strictHeaderCheckingFromStarlark()) {
       return HeadersCheckingMode.STRICT;
     }
@@ -107,7 +106,7 @@ public class ObjcCppSemantics implements CppSemantics {
   }
 
   @Override
-  public boolean needsDotdInputPruning(BuildConfiguration configuration) {
+  public boolean needsDotdInputPruning() {
     return config.getDotdPruningPlan() == DotdPruningMode.USE;
   }
 
