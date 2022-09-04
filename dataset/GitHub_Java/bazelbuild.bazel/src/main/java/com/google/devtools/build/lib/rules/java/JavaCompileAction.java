@@ -32,10 +32,10 @@ import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
-import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.actions.ParameterFile;
 import com.google.devtools.build.lib.actions.ResourceSet;
+import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.actions.RunfilesSupplier;
 import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
 import com.google.devtools.build.lib.actions.extra.JavaCompileInfo;
@@ -428,21 +428,63 @@ public final class JavaCompileAction extends SpawnAction {
     }
   }
 
+  /** Creates an ArgvFragment containing the common initial command line arguments */
+  private static CustomMultiArgv spawnCommandLineBase(
+      final PathFragment javaExecutable,
+      final Artifact javaBuilderJar,
+      final ImmutableList<Artifact> instrumentationJars,
+      final ImmutableList<String> javaBuilderJvmFlags,
+      final String javaBuilderMainClass,
+      final String pathDelimiter) {
+    return new CustomMultiArgv() {
+      @Override
+      public Iterable<String> argv() {
+        checkNotNull(javaBuilderJar);
+
+        if (!javaBuilderJar.getExtension().equals("jar")) {
+          // JavaBuilder is a non-deploy.jar executable.
+          return ImmutableList.of(javaBuilderJar.getExecPathString());
+        }
+
+        CustomCommandLine.Builder builder =
+            CustomCommandLine.builder().addPath(javaExecutable).addAll(javaBuilderJvmFlags);
+        if (!instrumentationJars.isEmpty()) {
+          builder
+              .addExecPaths(
+                  "-cp",
+                  VectorArg.join(pathDelimiter)
+                      .each(
+                          ImmutableList.<Artifact>builder()
+                              .addAll(instrumentationJars)
+                              .add(javaBuilderJar)
+                              .build()))
+              .addDynamicString(javaBuilderMainClass);
+        } else {
+          // If there are no instrumentation jars, use simpler '-jar' option to launch JavaBuilder.
+          builder.addExecPath("-jar", javaBuilderJar);
+        }
+        return builder.build().arguments();
+      }
+    };
+  }
+
   /**
    * Tells {@link Builder} how to create new artifacts. Is there so that {@link Builder} can be
    * exercised in tests without creating a full {@link RuleContext}.
    */
   public interface ArtifactFactory {
 
-    /** Create an artifact with the specified root-relative path under the specified root. */
-    Artifact create(PathFragment rootRelativePath, ArtifactRoot root);
+    /**
+     * Create an artifact with the specified root-relative path under the specified root.
+     */
+    Artifact create(PathFragment rootRelativePath, Root root);
   }
 
   @VisibleForTesting
   static ArtifactFactory createArtifactFactory(final AnalysisEnvironment env) {
     return new ArtifactFactory() {
       @Override
-      public Artifact create(PathFragment rootRelativePath, ArtifactRoot root) {
+      public Artifact create(PathFragment rootRelativePath, Root root) {
         return env.getDerivedArtifact(rootRelativePath, root);
       }
     };
@@ -515,17 +557,15 @@ public final class JavaCompileAction extends SpawnAction {
      * Creates a Builder from an owner and a build configuration.
      */
     public Builder(final RuleContext ruleContext, JavaSemantics semantics) {
-      this(
-          ruleContext.getActionOwner(),
+      this(ruleContext.getActionOwner(),
           ruleContext.getAnalysisEnvironment(),
           new ArtifactFactory() {
             @Override
-            public Artifact create(PathFragment rootRelativePath, ArtifactRoot root) {
+            public Artifact create(PathFragment rootRelativePath, Root root) {
               return ruleContext.getDerivedArtifact(rootRelativePath, root);
             }
           },
-          ruleContext.getConfiguration(),
-          semantics);
+          ruleContext.getConfiguration(), semantics);
     }
 
     public JavaCompileAction build() {
@@ -578,37 +618,26 @@ public final class JavaCompileAction extends SpawnAction {
           paramFileContents, ParameterFile.ParameterFileType.UNQUOTED, ISO_8859_1);
       analysisEnvironment.registerAction(parameterFileWriteAction);
 
-      // The actual params-file-based command line executed for a compile action.
-      CustomCommandLine.Builder javaBuilderCommandLine = CustomCommandLine.builder();
-      Artifact javaBuilderJar = checkNotNull(javaBuilder.getExecutable());
-      if (!javaBuilderJar.getExtension().equals("jar")) {
-        // JavaBuilder is a non-deploy.jar executable.
-        javaBuilderCommandLine.addExecPath(javaBuilderJar);
-      } else {
-        javaBuilderCommandLine.addPath(javaExecutable).addAll(javacJvmOpts);
-        if (!instrumentationJars.isEmpty()) {
-          javaBuilderCommandLine
-              .addExecPaths(
-                  "-cp",
-                  VectorArg.join(pathSeparator)
-                      .each(
-                          ImmutableList.<Artifact>builder()
-                              .addAll(instrumentationJars)
-                              .add(javaBuilderJar)
-                              .build()))
-              .addDynamicString(semantics.getJavaBuilderMainClass());
-        } else {
-          // If there are no instrumentation jars, use simpler '-jar' option to launch JavaBuilder.
-          javaBuilderCommandLine.addExecPath("-jar", javaBuilderJar);
-        }
-      }
-      javaBuilderCommandLine.addFormatted("@%s", paramFile.getExecPath());
+      CustomMultiArgv spawnCommandLineBase =
+          spawnCommandLineBase(
+              javaExecutable,
+              javaBuilder.getExecutable(),
+              instrumentationJars,
+              javacJvmOpts,
+              semantics.getJavaBuilderMainClass(),
+              pathSeparator);
 
       if (artifactForExperimentalCoverage != null) {
         analysisEnvironment.registerAction(new LazyWritePathsFileAction(
             owner, artifactForExperimentalCoverage, sourceFiles, false));
       }
 
+      // The actual params-file-based command line executed for a compile action.
+      CommandLine javaBuilderCommandLine =
+          CustomCommandLine.builder()
+              .addCustomMultiArgv(spawnCommandLineBase)
+              .addFormatted("@%s", paramFile.getExecPath())
+              .build();
 
       NestedSet<Artifact> tools =
           NestedSetBuilder.<Artifact>stableOrder()
@@ -642,7 +671,7 @@ public final class JavaCompileAction extends SpawnAction {
           inputs,
           outputs,
           paramFileContents,
-          javaBuilderCommandLine.build(),
+          javaBuilderCommandLine,
           classDirectory,
           outputJar,
           classpathEntries,

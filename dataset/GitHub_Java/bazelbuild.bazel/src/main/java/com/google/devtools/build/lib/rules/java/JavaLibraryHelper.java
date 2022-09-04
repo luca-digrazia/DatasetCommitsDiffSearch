@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.rules.java;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.devtools.build.lib.analysis.config.BuildConfiguration.StrictDepsMode.OFF;
+import static com.google.devtools.build.lib.rules.java.JavaCompilationArgs.ClasspathType.BOTH;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -26,7 +27,6 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration.StrictDe
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.rules.java.JavaCompilationArgs.ClasspathType;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration.JavaClasspathMode;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider.OutputJar;
 import java.util.ArrayList;
@@ -60,7 +60,6 @@ public final class JavaLibraryHelper {
   private ImmutableList<Artifact> sourcePathEntries = ImmutableList.of();
   private StrictDepsMode strictDepsMode = StrictDepsMode.OFF;
   private JavaClasspathMode classpathMode = JavaClasspathMode.OFF;
-  private String injectingRuleKind;
 
   public JavaLibraryHelper(RuleContext ruleContext) {
     this.ruleContext = ruleContext;
@@ -141,11 +140,6 @@ public final class JavaLibraryHelper {
     return this;
   }
 
-  public JavaLibraryHelper setInjectingRuleKind(String injectingRuleKind) {
-    this.injectingRuleKind = injectingRuleKind;
-    return this;
-  }
-
   /**
    * When in strict mode, compiling the source-jars passed to this JavaLibraryHelper will break if
    * they depend on classes not in any of the {@link
@@ -193,7 +187,6 @@ public final class JavaLibraryHelper {
     addDepsToAttributes(attributes);
     attributes.setStrictJavaDeps(strictDepsMode);
     attributes.setTargetLabel(ruleContext.getLabel());
-    attributes.setInjectingRuleKind(injectingRuleKind);
     attributes.setSourcePath(sourcePathEntries);
     JavaCommon.addPlugins(attributes, plugins);
 
@@ -249,21 +242,16 @@ public final class JavaLibraryHelper {
    *     compilation. Contrast this with {@link #setCompilationStrictDepsMode}.
    */
   public JavaCompilationArgsProvider buildCompilationArgsProvider(
-      JavaCompilationArtifacts artifacts, boolean isReportedAsStrict, boolean isNeverlink) {
-    JavaCompilationArgsHelper compilationArgsHelper =
-        JavaCompilationArgsHelper.builder()
-            .setRecursive(false)
-            .setIsNeverLink(isNeverlink)
-            .setSrcLessDepsExport(false)
-            .setCompilationArtifacts(artifacts)
-            .setDepsCompilationArgs(deps)
-            .setExportsCompilationArgs(exports)
-            .build();
-
-    JavaCompilationArgs directArgs = getJavaCompilationArgs(compilationArgsHelper);
+      JavaCompilationArtifacts artifacts, boolean isReportedAsStrict) {
+    JavaCompilationArgs directArgs = JavaCompilationArgs.builder()
+        .merge(artifacts)
+        .addTransitiveDependencies(exports, true /* recursive */)
+        .build();
     JavaCompilationArgs transitiveArgs =
-        getJavaCompilationArgs(compilationArgsHelper.toBuilder().setRecursive(true).build());
-
+        JavaCompilationArgs.builder()
+            .addTransitiveArgs(directArgs, BOTH)
+            .addTransitiveDependencies(deps, true /* recursive */)
+            .build();
     Artifact compileTimeDepArtifact = artifacts.getCompileTimeDependencyArtifact();
     NestedSet<Artifact> compileTimeJavaDepArtifacts = compileTimeDepArtifact != null 
         ? NestedSetBuilder.create(Order.STABLE_ORDER, compileTimeDepArtifact)
@@ -298,27 +286,6 @@ public final class JavaLibraryHelper {
         .addTransitiveDependencies(deps, false)
         .build()
         .getCompileTimeJars();
-  }
-
-  static JavaCompilationArgs getJavaCompilationArgs(JavaCompilationArgsHelper helper) {
-    ClasspathType type = helper.isNeverLink() ? ClasspathType.COMPILE_ONLY : ClasspathType.BOTH;
-    JavaCompilationArgs.Builder builder =
-        JavaCompilationArgs.builder()
-            .merge(helper.compilationArtifacts(), helper.isNeverLink())
-            .addTransitiveTargets(helper.exports(), helper.recursive(), type)
-            .addTransitiveCompilationArgs(
-                helper.exportsCompilationArgs(), helper.recursive(), type);
-    // TODO(bazel-team): remove srcs-less behaviour after android_library users are refactored
-    if (helper.recursive() || helper.srcLessDepsExport()) {
-      builder
-          .addTransitiveCompilationArgs(helper.depsCompilationArgs(), helper.recursive(), type)
-          .addTransitiveTargets(helper.deps(), helper.recursive(), type)
-          .addTransitiveCompilationArgs(
-              helper.runtimeDepsCompilationArgs(), helper.recursive(), ClasspathType.RUNTIME_ONLY)
-          .addTransitiveTargets(
-              helper.runtimeDeps(), helper.recursive(), ClasspathType.RUNTIME_ONLY);
-    }
-    return builder.build();
   }
 
   private boolean isStrict() {
