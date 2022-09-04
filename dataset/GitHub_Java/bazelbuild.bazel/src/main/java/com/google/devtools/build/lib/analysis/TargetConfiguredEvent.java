@@ -17,9 +17,8 @@ import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.buildeventstream.BuildEvent;
 import com.google.devtools.build.lib.buildeventstream.BuildEventContext;
-import com.google.devtools.build.lib.buildeventstream.BuildEventIdUtil;
+import com.google.devtools.build.lib.buildeventstream.BuildEventId;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
-import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos.BuildEventId;
 import com.google.devtools.build.lib.buildeventstream.BuildEventWithConfiguration;
 import com.google.devtools.build.lib.buildeventstream.GenericBuildEvent;
 import com.google.devtools.build.lib.buildeventstream.NullConfiguration;
@@ -28,7 +27,7 @@ import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.packages.TestSize;
-import com.google.devtools.build.lib.packages.Type;
+import com.google.devtools.build.lib.syntax.Type;
 import java.util.Collection;
 
 /** Event reporting about the configurations associated with a given target */
@@ -56,20 +55,18 @@ public class TargetConfiguredEvent implements BuildEventWithConfiguration {
 
   @Override
   public BuildEventId getEventId() {
-    return BuildEventIdUtil.targetConfigured(target.getLabel());
+    return BuildEventId.targetConfigured(target.getLabel());
   }
 
   @Override
   public Collection<BuildEventId> getChildrenEvents() {
-    ImmutableList.Builder<BuildEventId> childrenBuilder = ImmutableList.builder();
+    ImmutableList.Builder childrenBuilder = ImmutableList.builder();
     for (BuildConfiguration config : configurations) {
       if (config != null) {
-        childrenBuilder.add(
-            BuildEventIdUtil.targetCompleted(target.getLabel(), config.getEventId()));
+        childrenBuilder.add(BuildEventId.targetCompleted(target.getLabel(), config.getEventId()));
       } else {
         childrenBuilder.add(
-            BuildEventIdUtil.targetCompleted(
-                target.getLabel(), BuildEventIdUtil.nullConfigurationId()));
+            BuildEventId.targetCompleted(target.getLabel(), BuildEventId.nullConfigurationId()));
       }
     }
     return childrenBuilder.build();
@@ -95,9 +92,7 @@ public class TargetConfiguredEvent implements BuildEventWithConfiguration {
     BuildEventStreamProtos.TargetConfigured.Builder builder =
         BuildEventStreamProtos.TargetConfigured.newBuilder().setTargetKind(target.getTargetKind());
     Rule rule = target.getAssociatedRule();
-    if (rule != null && RawAttributeMapper.of(rule).has("tags")) {
-      // Not every rule has tags, as, due to the "external" package we also have to expect
-      // repository rules at this place.
+    if (rule != null) {
       builder.addAllTag(RawAttributeMapper.of(rule).getMergedValues("tags", Type.STRING_LIST));
     }
     if (TargetUtils.isTestRule(target)) {

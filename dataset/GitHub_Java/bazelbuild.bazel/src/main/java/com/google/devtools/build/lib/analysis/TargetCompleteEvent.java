@@ -46,6 +46,7 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.ConfiguredAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
+import com.google.devtools.build.lib.packages.TestSize;
 import com.google.devtools.build.lib.packages.TestTimeout;
 import com.google.devtools.build.lib.rules.AliasConfiguredTarget;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
@@ -218,21 +219,23 @@ public final class TargetCompleteEvent
         BuildEventStreamProtos.TargetComplete.newBuilder();
 
     builder.setSuccess(!failed());
+    builder.setTargetKind(targetAndData.getTarget().getTargetKind());
     builder.addAllTag(getTags());
     builder.addAllOutputGroup(getOutputFilesByGroup(converters.artifactGroupNamer()));
 
     if (isTest) {
       builder.setTestTimeoutSeconds(getTestTimeoutSeconds(targetAndData));
+      builder.setTestSize(
+          TargetConfiguredEvent.bepTestSize(
+              TestSize.getTestSize(targetAndData.getTarget().getAssociatedRule())));
     }
 
     // TODO(aehlig): remove direct reporting of artifacts as soon as clients no longer
     // need it.
-    if (converters.getOptions().legacyImportantOutputs) {
-      addImportantOutputs(builder, converters, getLegacyFilteredImportantArtifacts());
-      if (baselineCoverageArtifacts != null) {
-        addImportantOutputs(
-            builder, (artifact -> BASELINE_COVERAGE), converters, baselineCoverageArtifacts);
-      }
+    addImportantOutputs(builder, converters, getLegacyFilteredImportantArtifacts());
+    if (baselineCoverageArtifacts != null) {
+      addImportantOutputs(
+          builder, (artifact -> BASELINE_COVERAGE), converters, baselineCoverageArtifacts);
     }
 
     BuildEventStreamProtos.TargetComplete complete = builder.build();

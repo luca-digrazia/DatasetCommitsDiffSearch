@@ -16,10 +16,11 @@ package com.google.devtools.build.lib.bazel.rules;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.analysis.config.BuildEventWithConfiguration;
-import com.google.devtools.build.lib.buildeventstream.BuildEventConverters;
+import com.google.devtools.build.lib.buildeventstream.BuildEvent;
+import com.google.devtools.build.lib.buildeventstream.BuildEventContext;
 import com.google.devtools.build.lib.buildeventstream.BuildEventId;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
+import com.google.devtools.build.lib.buildeventstream.BuildEventWithConfiguration;
 import com.google.devtools.build.lib.buildeventstream.GenericBuildEvent;
 import com.google.devtools.build.lib.cmdline.Label;
 import java.util.Collection;
@@ -38,7 +39,8 @@ public class VisibilityErrorEvent implements BuildEventWithConfiguration {
 
   @Override
   public BuildEventId getEventId() {
-    return BuildEventId.targetCompleted(label, configuration.getEventId());
+    // TODO(aehlig): track the configuration as well
+    return BuildEventId.unconfiguredLabelId(label);
   }
 
   @Override
@@ -47,15 +49,18 @@ public class VisibilityErrorEvent implements BuildEventWithConfiguration {
   }
 
   @Override
-  public BuildEventStreamProtos.BuildEvent asStreamProto(BuildEventConverters converters) {
+  public BuildEventStreamProtos.BuildEvent asStreamProto(BuildEventContext converters) {
     return GenericBuildEvent.protoChaining(this)
-        .setAnalysisFailed(
-            BuildEventStreamProtos.AnalysisFailure.newBuilder().setDetails(errorMessage).build())
+        .setAborted(
+            BuildEventStreamProtos.Aborted.newBuilder()
+                .setReason(BuildEventStreamProtos.Aborted.AbortReason.ANALYSIS_FAILURE)
+                .setDescription(errorMessage)
+                .build())
         .build();
   }
 
   @Override
-  public Collection<BuildConfiguration> getConfigurations() {
-    return ImmutableList.of(configuration);
+  public Collection<BuildEvent> getConfigurations() {
+    return ImmutableList.<BuildEvent>of(configuration.toBuildEvent());
   }
 }

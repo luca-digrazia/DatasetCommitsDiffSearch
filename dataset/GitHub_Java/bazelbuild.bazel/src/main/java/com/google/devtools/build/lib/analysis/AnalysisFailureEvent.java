@@ -1,4 +1,4 @@
-// Copyright 2018 The Bazel Authors. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,14 +15,14 @@
 package com.google.devtools.build.lib.analysis;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.buildeventstream.BuildEvent;
 import com.google.devtools.build.lib.buildeventstream.BuildEventContext;
 import com.google.devtools.build.lib.buildeventstream.BuildEventId;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
 import com.google.devtools.build.lib.buildeventstream.GenericBuildEvent;
 import com.google.devtools.build.lib.buildeventstream.NullConfiguration;
-import com.google.devtools.build.lib.causes.Cause;
+import com.google.devtools.build.lib.causes.LabelCause;
+import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import java.util.Collection;
 
@@ -32,22 +32,30 @@ import java.util.Collection;
  */
 public class AnalysisFailureEvent implements BuildEvent {
   private final ConfiguredTargetKey failedTarget;
+  private final Label failureReason;
   private final BuildEventId configuration;
-  private final Iterable<Cause> causes;
 
   public AnalysisFailureEvent(
-      ConfiguredTargetKey failedTarget, BuildEventId configuration, Iterable<Cause> causes) {
+      ConfiguredTargetKey failedTarget, BuildEventId configuration, Label failureReason) {
     this.failedTarget = failedTarget;
+    this.failureReason = failureReason;
     if (configuration != null) {
       this.configuration = configuration;
     } else {
-      this.configuration = NullConfiguration.INSTANCE.getEventId();
+      this.configuration = (new NullConfiguration()).getEventId();
     }
-    this.causes = causes;
+  }
+
+  public AnalysisFailureEvent(ConfiguredTargetKey failedTarget, Label failureReason) {
+    this(failedTarget, null, failureReason);
   }
 
   public ConfiguredTargetKey getFailedTarget() {
     return failedTarget;
+  }
+
+  public Label getFailureReason() {
+    return failureReason;
   }
 
   @Override
@@ -57,7 +65,9 @@ public class AnalysisFailureEvent implements BuildEvent {
 
   @Override
   public Collection<BuildEventId> getChildrenEvents() {
-    return ImmutableList.copyOf(Iterables.transform(causes, BuildEventId::fromCause));
+    // TODO(aehlig): the root cause is not necessarily a label; e.g., it could
+    // also be a configured label.
+    return ImmutableList.of(BuildEventId.fromCause(new LabelCause(failureReason)));
   }
 
   @Override
