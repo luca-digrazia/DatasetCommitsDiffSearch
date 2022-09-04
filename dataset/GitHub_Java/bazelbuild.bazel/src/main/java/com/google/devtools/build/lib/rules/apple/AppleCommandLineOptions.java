@@ -220,14 +220,15 @@ public class AppleCommandLineOptions extends FragmentOptions {
   public Label appleCrosstoolTop;
 
   @Option(
-      name = "apple_platform_type",
-      defaultValue = "MACOS",
-      converter = PlatformTypeConverter.class,
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = {OptionEffectTag.BAZEL_INTERNAL_CONFIGURATION},
-      help =
-          "Don't set this value from the command line - it is derived from other flags and "
-              + "configuration transitions derived from rule attributes")
+    name = "apple_platform_type",
+    defaultValue = "IOS",
+    converter = PlatformTypeConverter.class,
+    documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+    effectTags = {OptionEffectTag.BAZEL_INTERNAL_CONFIGURATION},
+    help =
+        "Don't set this value from the command line - it is derived from other flags and "
+            + "configuration transitions derived from rule attributes"
+  )
   public PlatformType applePlatformType;
 
   @Option(
@@ -389,16 +390,20 @@ public class AppleCommandLineOptions extends FragmentOptions {
      * Compile the minimal set of bitcode markers. This is often the best option for developer/debug
      * builds.
      */
-    EMBEDDED_MARKERS("embedded_markers", ImmutableList.of("bitcode_embedded_markers")),
+    EMBEDDED_MARKERS(
+        "embedded_markers", ImmutableList.of("bitcode_embedded_markers"), "-fembed-bitcode-marker"),
     /** Fully embed bitcode in compiled files. This is often the best option for release builds. */
-    EMBEDDED("embedded", ImmutableList.of("bitcode_embedded"));
+    EMBEDDED("embedded", ImmutableList.of("bitcode_embedded"), "-fembed-bitcode");
 
     private final String mode;
     private final ImmutableList<String> featureNames;
+    private final ImmutableList<String> clangFlags;
 
-    private AppleBitcodeMode(String mode, ImmutableList<String> featureNames) {
+    private AppleBitcodeMode(
+        String mode, ImmutableList<String> featureNames, String... clangFlags) {
       this.mode = mode;
       this.featureNames = featureNames;
+      this.clangFlags = ImmutableList.copyOf(clangFlags);
     }
 
     @Override
@@ -414,6 +419,14 @@ public class AppleCommandLineOptions extends FragmentOptions {
     /** Returns the names of any crosstool features that correspond to this bitcode mode. */
     public ImmutableList<String> getFeatureNames() {
       return featureNames;
+    }
+
+    /**
+     * Returns the flags that should be added to compile and link actions to use this bitcode
+     * setting.
+     */
+    public ImmutableList<String> getCompileAndLinkFlags() {
+      return clangFlags;
     }
 
     /** Converts to {@link AppleBitcodeMode}. */

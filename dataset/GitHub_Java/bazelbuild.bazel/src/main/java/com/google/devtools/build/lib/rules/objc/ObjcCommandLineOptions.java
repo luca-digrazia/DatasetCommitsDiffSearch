@@ -231,13 +231,14 @@ public class ObjcCommandLineOptions extends FragmentOptions {
   public boolean deviceDebugEntitlements;
 
   @Option(
-      name = "objc_use_dotd_pruning",
-      defaultValue = "true",
-      documentationCategory = OptionDocumentationCategory.BUILD_TIME_OPTIMIZATION,
-      effectTags = {OptionEffectTag.CHANGES_INPUTS, OptionEffectTag.LOADING_AND_ANALYSIS},
-      help =
-          "If set, .d files emitted by clang will be used to prune the set of inputs passed into "
-              + "objc compiles.")
+    name = "objc_use_dotd_pruning",
+    defaultValue = "true",
+    documentationCategory = OptionDocumentationCategory.BUILD_TIME_OPTIMIZATION,
+    effectTags = {OptionEffectTag.CHANGES_INPUTS, OptionEffectTag.LOADING_AND_ANALYSIS},
+    help =
+        "If set, .d files emited by clang will be used to prune the set of inputs passed into objc "
+            + "compiles."
+  )
   public boolean useDotdPruning;
 
   @Option(
@@ -309,18 +310,6 @@ public class ObjcCommandLineOptions extends FragmentOptions {
             + "not to all transitive dependencies."
   )
   public boolean strictObjcModuleMaps;
-
-  @Option(
-      name = "incompatible_disable_objc_library_resources",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      metadataTags = {
-        OptionMetadataTag.INCOMPATIBLE_CHANGE,
-        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-      },
-      help = "If enabled, objc_library resource attributes are disallowed.")
-  public boolean disableObjcLibraryResources;
 
   @Override
   public FragmentOptions getHost() {

@@ -26,7 +26,7 @@ public class DottedVersionConverter implements Converter<DottedVersion.Option> {
   public DottedVersion.Option convert(String input) throws OptionsParsingException {
     try {
       return DottedVersion.option(DottedVersion.fromString(input));
-    } catch (DottedVersion.InvalidDottedVersionException e) {
+    } catch (IllegalArgumentException e) {
       throw new OptionsParsingException(e.getMessage());
     }
   }

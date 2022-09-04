@@ -181,7 +181,7 @@ public final class DottedVersion implements DottedVersionApi<DottedVersion> {
     try {
       firstNumber = Integer.parseInt(parsedComponent.group(group));
     } catch (NumberFormatException e) {
-      throw new IllegalArgumentException(String.format(ILLEGAL_VERSION, version), e);
+      throw new IllegalArgumentException(String.format(ILLEGAL_VERSION, version));
     }
     return firstNumber;
   }
