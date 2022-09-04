@@ -408,6 +408,7 @@ public final class ApplicationManifest {
             .setJavaPackage(merged.getJavaPackage())
             .setDebug(ruleContext.getConfiguration().getCompilationMode() != CompilationMode.OPT)
             .setMergedResources(mergedResources)
+            .withPrimary(merged)
             .setRTxtOut(merged.getRTxt())
             .setSourceJarOut(merged.getJavaSourceJar())
             .setApkOut(resourceContainer.getApk())
@@ -417,7 +418,7 @@ public final class ApplicationManifest {
             .setAapt2RTxtOut(merged.getAapt2RTxt())
             .setAapt2SourceJarOut(merged.getAapt2JavaSourceJar())
             .setStaticLibraryOut(merged.getStaticLibrary())
-            .build(ruleContext, merged);
+            .build(ruleContext);
 
     return new ResourceApk(
         resourceContainer.getApk(),
@@ -671,6 +672,7 @@ public final class ApplicationManifest {
             .setJavaPackage(merged.getJavaPackage())
             .setDebug(ruleContext.getConfiguration().getCompilationMode() != CompilationMode.OPT)
             .setMergedResources(mergedResources)
+            .withPrimary(merged)
             .setRTxtOut(merged.getRTxt())
             .setSourceJarOut(merged.getJavaSourceJar())
             .setApkOut(resourceContainer.getApk())
@@ -680,7 +682,7 @@ public final class ApplicationManifest {
             .setAapt2RTxtOut(merged.getAapt2RTxt())
             .setAapt2SourceJarOut(merged.getAapt2JavaSourceJar())
             .setStaticLibraryOut(merged.getStaticLibrary())
-            .build(ruleContext, merged);
+            .build(ruleContext);
 
     return new ResourceApk(
         resourceContainer.getApk(),

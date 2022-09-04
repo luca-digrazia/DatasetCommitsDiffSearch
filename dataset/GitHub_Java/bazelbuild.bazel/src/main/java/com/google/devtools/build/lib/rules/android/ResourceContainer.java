@@ -200,7 +200,7 @@ public abstract class ResourceContainer implements CompiledMergableAndroidData {
   public ResourceContainer filter(
       RuleErrorConsumer errorConsumer, ResourceFilter filter, boolean isDependency)
       throws RuleErrorException {
-    Optional<? extends AndroidResources> filteredResources =
+    Optional<AndroidResources> filteredResources =
         getResources().maybeFilter(errorConsumer, filter, isDependency);
 
     if (!filteredResources.isPresent()) {
