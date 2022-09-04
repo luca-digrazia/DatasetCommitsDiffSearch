@@ -261,8 +261,7 @@ public final class PlatformMappingValue implements SkyValue {
 
   private OptionsParsingResult parse(Iterable<String> args, BuildOptions defaultBuildOptions)
       throws OptionsParsingException {
-    OptionsParser parser =
-        OptionsParser.builder().optionsClasses(defaultBuildOptions.getFragmentClasses()).build();
+    OptionsParser parser = OptionsParser.newOptionsParser(defaultBuildOptions.getFragmentClasses());
     parser.parse(ImmutableList.copyOf(args));
     // TODO(schmitt): Parse starlark options as well.
     return parser;
