@@ -57,7 +57,6 @@ import com.google.devtools.build.lib.runtime.commands.BuildCommand;
 import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.InvocationPolicy;
 import com.google.devtools.build.lib.sandbox.SandboxOptions;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
-import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.io.OutErr;
 import com.google.devtools.build.lib.vfs.OutputService;
@@ -285,7 +284,7 @@ public class BlazeRuntimeWrapper {
               /* execStartTimeNanos= */ 42,
               /* enabledCpuUsageProfiling= */ false,
               /* slimProfile= */ false,
-              /* includePrimaryOutput= */ false);
+              /* enableActionCountProfile= */ false);
       OutErr outErr = env.getReporter().getOutErr();
       System.setOut(new PrintStream(outErr.getOutputStream(), /*autoflush=*/ true));
       System.setErr(new PrintStream(outErr.getErrorStream(), /*autoflush=*/ true));
@@ -370,9 +369,7 @@ public class BlazeRuntimeWrapper {
         buildTool.stopRequest(
             lastResult,
             null,
-            success
-                ? DetailedExitCode.justExitCode(ExitCode.SUCCESS)
-                : DetailedExitCode.justExitCode(ExitCode.BUILD_FAILURE),
+            success ? ExitCode.SUCCESS : ExitCode.BUILD_FAILURE,
             /*startSuspendCount=*/ 0);
         getSkyframeExecutor().notifyCommandComplete(env.getReporter());
       }
