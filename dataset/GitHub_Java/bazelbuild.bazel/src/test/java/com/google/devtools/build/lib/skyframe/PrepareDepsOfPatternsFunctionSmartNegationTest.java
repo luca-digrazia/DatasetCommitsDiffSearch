@@ -31,8 +31,7 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.events.Reporter;
-import com.google.devtools.build.lib.packages.PackageFactory;
-import com.google.devtools.build.lib.packages.StarlarkSemanticsOptions;
+import com.google.devtools.build.lib.packages.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.rules.repository.RepositoryDelegatorFunction;
@@ -81,25 +80,25 @@ public class PrepareDepsOfPatternsFunctionSmartNegationTest extends FoundationTe
             /* defaultSystemJavabase= */ null,
             AnalysisMock.get().getProductName());
     ConfiguredRuleClassProvider ruleClassProvider = AnalysisMock.get().createRuleClassProvider();
-
-    PackageFactory pkgFactory =
-        AnalysisMock.get()
-            .getPackageFactoryBuilderForTesting(directories)
-            .build(ruleClassProvider, fileSystem);
     skyframeExecutor =
-        BazelSkyframeExecutorConstants.newBazelSkyframeExecutorBuilder()
-            .setPkgFactory(pkgFactory)
-            .setFileSystem(fileSystem)
-            .setDirectories(directories)
-            .setActionKeyContext(new ActionKeyContext())
-            .setBuildInfoFactories(
-                AnalysisMock.get().createRuleClassProvider().getBuildInfoFactories())
-            .setDefaultBuildOptions(
-                DefaultBuildOptionsForTesting.getDefaultBuildOptionsForTest(ruleClassProvider))
-            .setExtraSkyFunctions(AnalysisMock.get().getSkyFunctions(directories))
-            .setAdditionalBlacklistedPackagePrefixesFile(
-                PathFragment.create(ADDITIONAL_BLACKLISTED_PACKAGE_PREFIXES_FILE_PATH_STRING))
-            .build();
+        SequencedSkyframeExecutor.create(
+            AnalysisMock.get()
+                .getPackageFactoryBuilderForTesting(directories)
+                .build(ruleClassProvider, fileSystem),
+            fileSystem,
+            directories,
+            new ActionKeyContext(),
+            /*workspaceStatusActionFactory=*/ null,
+            AnalysisMock.get().createRuleClassProvider().getBuildInfoFactories(),
+            ImmutableList.of(),
+            AnalysisMock.get().getSkyFunctions(directories),
+            ImmutableList.of(),
+            BazelSkyframeExecutorConstants.HARDCODED_BLACKLISTED_PACKAGE_PREFIXES,
+            PathFragment.create(ADDITIONAL_BLACKLISTED_PACKAGE_PREFIXES_FILE_PATH_STRING),
+            BazelSkyframeExecutorConstants.CROSS_REPOSITORY_LABEL_VIOLATION_STRATEGY,
+            BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY,
+            BazelSkyframeExecutorConstants.ACTION_ON_IO_EXCEPTION_READING_BUILD_FILE,
+            DefaultBuildOptionsForTesting.getDefaultBuildOptionsForTest(ruleClassProvider));
     TestConstants.processSkyframeExecutorForTesting(skyframeExecutor);
     skyframeExecutor.preparePackageLoading(
         new PathPackageLocator(
@@ -107,7 +106,8 @@ public class PrepareDepsOfPatternsFunctionSmartNegationTest extends FoundationTe
             ImmutableList.of(Root.fromPath(rootDirectory)),
             BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY),
         Options.getDefaults(PackageCacheOptions.class),
-        Options.getDefaults(StarlarkSemanticsOptions.class),
+        Options.getDefaults(SkylarkSemanticsOptions.class),
+        AnalysisMock.get().getDefaultsPackageContent(),
         UUID.randomUUID(),
         ImmutableMap.<String, String>of(),
         new TimestampGranularityMonitor(null));
