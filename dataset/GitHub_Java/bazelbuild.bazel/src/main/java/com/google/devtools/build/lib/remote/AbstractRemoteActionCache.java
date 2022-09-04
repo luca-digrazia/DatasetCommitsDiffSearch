@@ -17,7 +17,6 @@ import com.google.devtools.build.lib.actions.EnvironmentalExecException;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.concurrent.ThreadSafety;
 import com.google.devtools.build.lib.remote.TreeNodeRepository.TreeNode;
-import com.google.devtools.build.lib.remote.util.DigestUtil;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.Dirent;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -132,7 +131,13 @@ public abstract class AbstractRemoteActionCache implements AutoCloseable {
         downloadFile(path, file.getDigest(), file.getIsExecutable(), file.getContent());
       }
       for (OutputDirectory dir : result.getOutputDirectoriesList()) {
-        byte[] b = downloadBlob(dir.getTreeDigest());
+        Digest treeDigest = dir.getTreeDigest();
+        byte[] b = downloadBlob(treeDigest);
+        Digest receivedTreeDigest = digestUtil.compute(b);
+        if (!receivedTreeDigest.equals(treeDigest)) {
+          throw new IOException(
+              "Digest does not match " + receivedTreeDigest + " != " + treeDigest);
+        }
         Tree tree = Tree.parseFrom(b);
         Map<Digest, Directory> childrenMap = new HashMap<>();
         for (Directory child : tree.getChildrenList()) {
@@ -210,7 +215,7 @@ public abstract class AbstractRemoteActionCache implements AutoCloseable {
    * Download a file (that is not a directory). If the {@code content} is not given, the content is
    * fetched from the digest.
    */
-  public void downloadFile(
+  protected void downloadFile(
       Path path, Digest digest, boolean isExecutable, @Nullable ByteString content)
       throws IOException, InterruptedException {
     FileSystemUtils.createDirectoryAndParents(path.getParentDirectory());
