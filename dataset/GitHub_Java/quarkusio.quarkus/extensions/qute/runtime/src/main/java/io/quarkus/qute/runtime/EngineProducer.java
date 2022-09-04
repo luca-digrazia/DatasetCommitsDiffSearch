@@ -42,8 +42,6 @@ public class EngineProducer {
 
     public static final String INJECT_NAMESPACE = "inject";
 
-    private static final String TAGS = "tags/";
-
     private static final Logger LOGGER = Logger.getLogger(EngineProducer.class);
 
     private final Engine engine;
@@ -55,7 +53,7 @@ public class EngineProducer {
     public EngineProducer(QuteContext context, Event<EngineBuilder> event) {
         this.suffixes = context.getConfig().suffixes;
         this.basePath = "templates/";
-        this.tagPath = basePath + TAGS;
+        this.tagPath = basePath + "tags/";
         this.tags = context.getTags();
 
         LOGGER.debugf("Initializing Qute [templates: %s, tags: %s, resolvers: %s", context.getTemplatePaths(), tags,
@@ -113,9 +111,8 @@ public class EngineProducer {
         for (String tag : tags) {
             // Strip suffix, item.html -> item
             String tagName = tag.contains(".") ? tag.substring(0, tag.lastIndexOf('.')) : tag;
-            String tagTemplateId = TAGS + tagName;
-            LOGGER.debugf("Registered UserTagSectionHelper for %s [%s]", tagName, tagTemplateId);
-            builder.addSectionHelper(new UserTagSectionHelper.Factory(tagName, tagTemplateId));
+            LOGGER.debugf("Registered UserTagSectionHelper for %s", tagName);
+            builder.addSectionHelper(new UserTagSectionHelper.Factory(tagName));
         }
         // Add locator
         builder.addLocator(this::locate);
@@ -141,6 +138,10 @@ public class EngineProducer {
         return tagPath;
     }
 
+    List<String> getSuffixes() {
+        return suffixes;
+    }
+
     private ValueResolver createResolver(String resolverClassName) {
         try {
             Class<?> resolverClazz = Thread.currentThread()
@@ -160,21 +161,25 @@ public class EngineProducer {
      */
     private Optional<TemplateLocation> locate(String path) {
         URL resource = null;
-        String templatePath = basePath + path;
-        LOGGER.debugf("Locate template for %s", templatePath);
-        resource = locatePath(templatePath);
-        if (resource == null) {
+        // First try to locate a tag template
+        if (tags.stream().anyMatch(tag -> tag.startsWith(path))) {
+            LOGGER.debugf("Locate tag for %s", path);
+            resource = locatePath(tagPath + path);
             // Try path with suffixes
             for (String suffix : suffixes) {
-                templatePath = basePath + path + "." + suffix;
-                resource = locatePath(templatePath);
+                resource = locatePath(tagPath + path + "." + suffix);
                 if (resource != null) {
                     break;
                 }
             }
         }
+        if (resource == null) {
+            String templatePath = basePath + path;
+            LOGGER.debugf("Locate template for %s", templatePath);
+            resource = locatePath(templatePath);
+        }
         if (resource != null) {
-            return Optional.of(new ResourceTemplateLocation(resource, guessVariant(templatePath)));
+            return Optional.of(new ResourceTemplateLocation(resource, guessVariant(path)));
         }
         return Optional.empty();
     }

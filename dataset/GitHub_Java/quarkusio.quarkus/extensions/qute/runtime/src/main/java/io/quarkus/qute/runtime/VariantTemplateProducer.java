@@ -3,6 +3,7 @@ package io.quarkus.qute.runtime;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,6 +21,7 @@ import javax.enterprise.inject.spi.AnnotatedParameter;
 import javax.enterprise.inject.spi.InjectionPoint;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import javax.interceptor.Interceptor;
 
 import org.jboss.logging.Logger;
 import org.reactivestreams.Publisher;
@@ -32,7 +34,10 @@ import io.quarkus.qute.TemplateInstanceBase;
 import io.quarkus.qute.Variant;
 import io.quarkus.qute.api.ResourcePath;
 import io.quarkus.qute.api.VariantTemplate;
+import io.quarkus.qute.runtime.QuteRecorder.QuteContext;
+import io.quarkus.runtime.Startup;
 
+@Startup(Interceptor.Priority.PLATFORM_BEFORE)
 @Singleton
 public class VariantTemplateProducer {
 
@@ -43,18 +48,14 @@ public class VariantTemplateProducer {
 
     private Map<String, TemplateVariants> templateVariants;
 
-    void init(Map<String, List<String>> variants) {
-        if (templateVariants != null) {
-            LOGGER.warn("Qute VariantTemplateProducer already initialized!");
-            return;
-        }
-        LOGGER.debugf("Initializing VariantTemplateProducer: %s", templateVariants);
-
-        templateVariants = new HashMap<>();
-        for (Entry<String, List<String>> entry : variants.entrySet()) {
+    VariantTemplateProducer(QuteContext context) {
+        Map<String, TemplateVariants> templateVariants = new HashMap<>();
+        for (Entry<String, List<String>> entry : context.getVariants().entrySet()) {
             TemplateVariants var = new TemplateVariants(initVariants(entry.getKey(), entry.getValue()), entry.getKey());
             templateVariants.put(entry.getKey(), var);
         }
+        this.templateVariants = Collections.unmodifiableMap(templateVariants);
+        LOGGER.debugf("Initializing Qute variant templates: %s", templateVariants);
     }
 
     @Typed(VariantTemplate.class)
