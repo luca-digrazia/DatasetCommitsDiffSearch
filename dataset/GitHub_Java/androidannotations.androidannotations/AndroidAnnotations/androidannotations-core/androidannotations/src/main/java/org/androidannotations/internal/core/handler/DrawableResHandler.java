@@ -18,12 +18,12 @@ package org.androidannotations.internal.core.handler;
 import org.androidannotations.AndroidAnnotationsEnvironment;
 import org.androidannotations.internal.core.model.AndroidRes;
 
-public class ColorStateListResHandler extends ContextCompatAwareResHandler {
+public class DrawableResHandler extends ContextCompatAwareResHandler {
 
-	private static final int MIN_SDK_WITH_CONTEXT_GET_COLOR_STATE_LIST = 23;
-	private static final String MIN_SDK_PLATFORM_NAME = "M";
+	private static final int MIN_SDK_WITH_CONTEXT_GET_DRAWABLE = 21;
+	private static final String MIN_SDK_PLATFORM_NAME = "LOLLIPOP";
 
-	public ColorStateListResHandler(AndroidAnnotationsEnvironment environment) {
-		super(AndroidRes.COLOR_STATE_LIST, environment, MIN_SDK_WITH_CONTEXT_GET_COLOR_STATE_LIST, MIN_SDK_PLATFORM_NAME);
+	public DrawableResHandler(AndroidAnnotationsEnvironment environment) {
+		super(AndroidRes.DRAWABLE, environment, MIN_SDK_WITH_CONTEXT_GET_DRAWABLE, MIN_SDK_PLATFORM_NAME);
 	}
 }
