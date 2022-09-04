@@ -23,17 +23,17 @@ import java.util.Optional;
 /** Syntax node for a dot expression. e.g. obj.field, but not obj.method() */
 public final class DotExpression extends Expression {
 
-  private final Expression object;
+  private final Expression obj;
 
   private final Identifier field;
 
-  public DotExpression(Expression object, Identifier field) {
-    this.object = object;
+  public DotExpression(Expression obj, Identifier field) {
+    this.obj = obj;
     this.field = field;
   }
 
-  public Expression getObject() {
-    return object;
+  public Expression getObj() {
+    return obj;
   }
 
   public Identifier getField() {
@@ -42,14 +42,14 @@ public final class DotExpression extends Expression {
 
   @Override
   public void prettyPrint(Appendable buffer) throws IOException {
-    object.prettyPrint(buffer);
+    obj.prettyPrint(buffer);
     buffer.append('.');
     field.prettyPrint(buffer);
   }
 
   @Override
   Object doEval(Environment env) throws EvalException, InterruptedException {
-    Object objValue = object.eval(env);
+    Object objValue = obj.eval(env);
     String name = field.getName();
     Object result = eval(objValue, name, getLocation(), env);
     return checkResult(objValue, result, name, getLocation());
@@ -123,5 +123,10 @@ public final class DotExpression extends Expression {
   @Override
   public void accept(SyntaxTreeVisitor visitor) {
     visitor.visit(this);
+  }
+
+  @Override
+  void validate(ValidationEnvironment env) throws EvalException {
+    obj.validate(env);
   }
 }
