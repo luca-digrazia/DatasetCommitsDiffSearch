@@ -1,4 +1,4 @@
-/*
+/*******************************************************************************
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ ******************************************************************************/
 
 package smile.validation;
 
@@ -31,17 +31,18 @@ public class GroupKFoldTest {
 
     @Test
     public void testNoGroupsInSameFold() {
+        int n = 10;
         int k = 3;
         int[] groups = new int[] {1, 2, 2, 0, 0, 0, 2, 1, 1, 2};
 
-        Bag[] bags = CrossValidation.nonoverlap(groups, k);
+        Split[] splits = CrossValidation.group(groups, k);
 
         for (int i = 0; i < k; i++) {
-            int[] train = MathEx.unique(Arrays.stream(bags[i].samples).map(x -> groups[x]).toArray());
-            int[] test = MathEx.unique(Arrays.stream(bags[i].oob).map(x -> groups[x]).toArray());
+            int[] trainGroups = MathEx.unique(Arrays.stream(splits[i].train).map(x -> groups[x]).toArray());
+            int[] testGroups = MathEx.unique(Arrays.stream(splits[i].test).map(x -> groups[x]).toArray());
 
-            boolean anyTrainGroupInTestFold = Arrays.stream(train)
-                    .anyMatch(trainGroup -> Arrays.stream(test).anyMatch(testGroup -> trainGroup == testGroup));
+            boolean anyTrainGroupInTestFold = Arrays.stream(trainGroups)
+                    .anyMatch(trGroup -> Arrays.stream(testGroups).anyMatch(teGroup -> trGroup == teGroup));
 
             assertFalse(anyTrainGroupInTestFold);
         }
@@ -50,12 +51,12 @@ public class GroupKFoldTest {
     @Test(expected = IllegalArgumentException.class)
     public void testInvalidKParameter() {
         int[] groups = new int[] {1, 2, 2, 0, 0, 0, 2, 1, 1, 2};
-        CrossValidation.nonoverlap(groups, -1);
+        CrossValidation.group(groups, -1);
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void testInvalidGroupsKParameters() {
         int[] groups = new int[] {1, 2, 2, 0, 0, 0, 2, 1, 1, 2};
-        CrossValidation.nonoverlap(groups, 4);
+        CrossValidation.group(groups, 4);
     }
 }

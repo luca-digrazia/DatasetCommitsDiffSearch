@@ -1,4 +1,4 @@
-/*
+/*******************************************************************************
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ ******************************************************************************/
 
 package smile.validation;
 
@@ -51,7 +51,7 @@ public interface CrossValidation {
      * @param k the number of rounds of cross validation.
      * @return k-fold data splits.
      */
-    static Bag[] of(int n, int k) {
+    static Split[] of(int n, int k) {
         return of(n, k, true);
     }
 
@@ -62,7 +62,7 @@ public interface CrossValidation {
      * @param shuffle whether to shuffle samples before splitting.
      * @return k-fold data splits.
      */
-    static Bag[] of(int n, int k, boolean shuffle) {
+    static Split[] of(int n, int k, boolean shuffle) {
         if (n < 0) {
             throw new IllegalArgumentException("Invalid sample size: " + n);
         }
@@ -71,7 +71,7 @@ public interface CrossValidation {
             throw new IllegalArgumentException("Invalid number of CV rounds: " + k);
         }
 
-        Bag[] bags = new Bag[k];
+        Split[] splits = new Split[k];
 
         int[] index = IntStream.range(0, n).toArray();
         if (shuffle){
@@ -94,97 +94,10 @@ public interface CrossValidation {
                 }
             }
 
-            bags[i] = new Bag(train, test);
+            splits[i] = new Split(train, test);
         }
 
-        return bags;
-    }
-
-    /**
-     * Cross validation with stratified folds. The folds are made by
-     * preserving the percentage of samples for each group.
-     *
-     * @param category the strata labels.
-     * @param k the number of folds.
-     */
-    static Bag[] of(int[] category, int k) {
-        if (k < 0) {
-            throw new IllegalArgumentException("Invalid number of folds: " + k);
-        }
-
-        int[] unique = MathEx.unique(category);
-        int m = unique.length;
-
-        Arrays.sort(unique);
-        IntSet encoder = new IntSet(unique);
-
-        int n = category.length;
-        int[] y = category;
-        if (unique[0] != 0 || unique[m-1] != m-1) {
-            y = new int[n];
-            for (int i = 0; i < n; i++) {
-                y[i] = encoder.indexOf(category[i]);
-            }
-        }
-
-        // # of samples in each strata
-        int[] ni = new int[m];
-        for (int i : y) ni[i]++;
-
-        int min = MathEx.min(ni);
-        if (min < k) {
-            org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(CrossValidation.class);
-            logger.warn("The least populated class has only {} members, which is less than k={}.", min, k);
-        }
-
-        int[][] strata = new int[m][];
-        for (int i = 0; i < m; i++) {
-            strata[i] = new int[ni[i]];
-        }
-
-        int[] pos = new int[m];
-        for (int i = 0; i < n; i++) {
-            int j =  y[i];
-            strata[j][pos[j]++] = i;
-        }
-
-        int[] chunk = new int[m];
-        for (int i = 0; i < m; i++) {
-            chunk[i] = Math.max(1, ni[i] / k);
-        }
-
-        Bag[] bags = new Bag[k];
-        for (int i = 0; i < k; i++) {
-            int p = 0;
-            int q = 0;
-            int[] train = new int[n];
-            int[] test = new int[n];
-
-            for (int j = 0; j < m; j++) {
-                int size = ni[j];
-                int start = chunk[j] * i;
-                int end = chunk[j] * (i + 1);
-                if (i == k - 1) end = size;
-
-                int[] stratum = strata[j];
-                for (int l = 0; l < size; l++) {
-                    if (l >= start && l < end) {
-                        test[q++] = stratum[l];
-                    } else {
-                        train[p++] = stratum[l];
-                    }
-                }
-            }
-
-            train = Arrays.copyOf(train, p);
-            test = Arrays.copyOf(test, q);
-            // Samples are in order of strata. It is better to shuffle.
-            MathEx.permutate(train);
-            MathEx.permutate(test);
-            bags[i] = new Bag(train, test);
-        }
-
-        return bags;
+        return splits;
     }
 
     /**
@@ -200,18 +113,19 @@ public interface CrossValidation {
      * doesn't learn user-specific features that don't generalize to unseen
      * users, this approach could be used.
      *
-     * @param group the group labels of the samples.
+     * @param group the group labels for the samples in [0, g), where g
+     *              is the number of groups.
      * @param k the number of folds.
      */
-    static Bag[] nonoverlap(int[] group, int k) {
+    static Split[] group(int[] group, int k) {
         if (k < 0) {
             throw new IllegalArgumentException("Invalid number of folds: " + k);
         }
 
         int[] unique = MathEx.unique(group);
-        int m = unique.length;
+        int g = unique.length;
 
-        if (k > m) {
+        if (k > g) {
             throw new IllegalArgumentException("k-fold must be not greater than the than number of groups");
         }
 
@@ -219,41 +133,41 @@ public interface CrossValidation {
         IntSet encoder = new IntSet(unique);
 
         int n = group.length;
-        int[] y = group;
-        if (unique[0] != 0 || unique[m-1] != m-1) {
-            y = new int[n];
+        if (unique[0] != 0 || unique[g-1] != g-1) {
+            int[] y = new int[n];
             for (int i = 0; i < n; i++) {
                 y[i] = encoder.indexOf(group[i]);
             }
+            group = y;
         }
 
         // sort the groups by number of samples so that we can distribute
         // test samples from largest groups first
-        int[] ni = new int[m];
-        for (int i : y) ni[i]++;
+        int[] ni = new int[g];
+        for (int i : group) ni[i]++;
 
         int[] index = QuickSort.sort(ni);
 
         // distribute test samples into k folds one group at a time,
-        // from the largest to the smallest group.
-        // always put test samples into the fold with the fewest samples.
+        // from the largest to the smallest group,
+        // always putting test samples into the fold with the fewest samples
         int[] foldSize = new int[k];
-        int[] group2Fold = new int[m];
+        int[] group2Fold = new int[g];
 
-        for (int i = m - 1; i >= 0; i--) {
+        for (int i = g - 1; i >= 0; i--) {
             int smallestFold = MathEx.whichMin(foldSize);
             foldSize[smallestFold] += ni[i];
             group2Fold[index[i]] = smallestFold;
         }
 
-        Bag[] bags = new Bag[k];
+        Split[] splits = new Split[k];
         for (int i = 0; i < k; i++) {
             int[] train = new int[n - foldSize[i]];
             int[] test = new int[foldSize[i]];
-            bags[i] = new Bag(train, test);
+            splits[i] = new Split(train, test);
 
             for (int j = 0, trainIndex = 0, testIndex = 0; j < n; j++) {
-                if (group2Fold[y[j]] == i) {
+                if (group2Fold[group[j]] == i) {
                     test[testIndex++] = j;
                 } else {
                     train[trainIndex++] = j;
@@ -261,7 +175,7 @@ public interface CrossValidation {
             }
         }
 
-        return bags;
+        return splits;
     }
 
     /**
