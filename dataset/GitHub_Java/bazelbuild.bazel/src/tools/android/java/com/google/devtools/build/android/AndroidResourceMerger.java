@@ -28,12 +28,13 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
-/** Collects all the functionationality for an action to merge resources. */
+/** Collects all the functionality for an action to merge resources. */
+// TODO(bazel-team): Turn into an instance object, in order to use an external ExecutorService.
 public class AndroidResourceMerger {
   static final Logger logger = Logger.getLogger(AndroidResourceProcessor.class.getName());
 
   /** Merges all secondary resources with the primary resources. */
-  static MergedAndroidData mergeData(
+  public static MergedAndroidData mergeData(
       final ParsedAndroidData primary,
       final Path primaryManifest,
       final List<? extends SerializedAndroidData> direct,
@@ -43,19 +44,20 @@ public class AndroidResourceMerger {
       @Nullable final PngCruncher cruncher,
       final VariantType type,
       @Nullable final Path symbolsOut,
-      @Nullable AndroidResourceClassWriter rclassWriter,
-      AndroidDataDeserializer deserializer)
+      @Nullable AndroidResourceClassWriter rclassWriter)
       throws MergingException {
     Stopwatch timer = Stopwatch.createStarted();
     final ListeningExecutorService executorService =
         MoreExecutors.listeningDecorator(Executors.newFixedThreadPool(15));
     try (Closeable closeable = ExecutorServiceCloser.createWith(executorService)) {
-      AndroidDataMerger merger =
-          AndroidDataMerger.createWithPathDeduplictor(executorService, deserializer);
       UnwrittenMergedAndroidData merged =
-          merger.loadAndMerge(
-              transitive, direct, primary, primaryManifest, type != VariantType.LIBRARY);
-      logger.fine(String.format("merge finished in %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
+          mergeData(
+              executorService,
+              transitive,
+              direct,
+              primary,
+              primaryManifest,
+              type != VariantType.LIBRARY);
       timer.reset().start();
       if (symbolsOut != null) {
         AndroidDataSerializer serializer = AndroidDataSerializer.create();
@@ -84,6 +86,24 @@ public class AndroidResourceMerger {
     }
   }
 
+  public static UnwrittenMergedAndroidData mergeData(
+      ListeningExecutorService executorService,
+      List<? extends SerializedAndroidData> transitive,
+      List<? extends SerializedAndroidData> direct,
+      ParsedAndroidData primary,
+      Path primaryManifest,
+      boolean allowPrimaryOverrideAll)
+      throws MergingException {
+    Stopwatch timer = Stopwatch.createStarted();
+    try {
+      AndroidDataMerger merger = AndroidDataMerger.createWithPathDeduplictor(executorService);
+      return merger.loadAndMerge(
+          transitive, direct, primary, primaryManifest, allowPrimaryOverrideAll);
+    } finally {
+      logger.fine(String.format("merge finished in %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
+    }
+  }
+
   /**
    * Merges all secondary resources with the primary resources, given that the primary resources
    * have not yet been parsed and serialized.
@@ -96,8 +116,7 @@ public class AndroidResourceMerger {
       final Path assetsOut,
       @Nullable final PngCruncher cruncher,
       final VariantType type,
-      @Nullable final Path symbolsOut,
-      final List<String> filteredResources)
+      @Nullable final Path symbolsOut)
       throws MergingException {
     try {
       final ParsedAndroidData parsedPrimary = ParsedAndroidData.from(primary);
@@ -111,8 +130,7 @@ public class AndroidResourceMerger {
           cruncher,
           type,
           symbolsOut,
-          null /* rclassWriter */,
-          AndroidDataDeserializer.withFilteredResources(filteredResources));
+          null /* rclassWriter */);
     } catch (IOException e) {
       throw MergingException.wrapException(e).build();
     }
@@ -148,8 +166,6 @@ public class AndroidResourceMerger {
         cruncher,
         type,
         symbolsOut,
-        rclassWriter,
-        deserializer);
+        rclassWriter);
   }
 }
-
