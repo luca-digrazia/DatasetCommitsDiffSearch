@@ -17,7 +17,6 @@ import java.util.SortedMap;
  */
 public class Cli {
     private static final String COMMAND_NAME_ATTR = "command";
-    private static final String[] HELP = { "-h" };
 
     private final SortedMap<String, Command> commands;
     private final Bootstrap<?> bootstrap;
@@ -47,7 +46,7 @@ public class Cli {
     public void run(String[] arguments) throws Exception {
         try {
             // assume -h if no arguments are given
-            final String[] args = (arguments.length == 0) ? HELP : arguments;
+            final String[] args = (arguments.length == 0) ? new String[]{ "-h" } : arguments;
             final Namespace namespace = parser.parseArgs(args);
             final Command command = commands.get(namespace.getString(COMMAND_NAME_ATTR));
             command.run(bootstrap, namespace);
