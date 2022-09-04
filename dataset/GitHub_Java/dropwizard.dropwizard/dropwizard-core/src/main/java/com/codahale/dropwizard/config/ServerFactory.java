@@ -1,7 +1,6 @@
 package com.codahale.dropwizard.config;
 
-import com.codahale.dropwizard.configuration.ConfigurationException;
-import com.codahale.dropwizard.jersey.jackson.JacksonMessageBodyProvider;
+import com.codahale.dropwizard.jersey.JacksonMessageBodyProvider;
 import com.codahale.dropwizard.jetty.*;
 import com.codahale.dropwizard.servlets.ThreadNameFilter;
 import com.codahale.dropwizard.util.Duration;
@@ -26,7 +25,6 @@ import org.eclipse.jetty.security.HashLoginService;
 import org.eclipse.jetty.security.SecurityHandler;
 import org.eclipse.jetty.security.authentication.BasicAuthenticator;
 import org.eclipse.jetty.server.*;
-import org.eclipse.jetty.server.handler.ErrorHandler;
 import org.eclipse.jetty.server.handler.RequestLogHandler;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
@@ -128,9 +126,7 @@ public class ServerFactory {
             server.setHandler(requestLogHandler);
         }
 
-        final ErrorHandler errorHandler = new ErrorHandler();
-        errorHandler.setShowStacks(false);
-        server.addBean(errorHandler);
+        server.addBean(new UnbrandedErrorHandler());
 
         server.setStopAtShutdown(true);
 
@@ -183,7 +179,7 @@ public class ServerFactory {
         final ServletContainer jerseyContainer = env.getJerseyServletContainer();
         if (jerseyContainer != null) {
             env.getJerseyEnvironment().addProvider(
-                    new JacksonMessageBodyProvider(env.getObjectMapper(),
+                    new JacksonMessageBodyProvider(env.getJsonEnvironment().build(),
                                                    env.getValidator())
             );
             final ServletHolder jerseyHolder = new NonblockingServletHolder(jerseyContainer);
@@ -277,6 +273,19 @@ public class ServerFactory {
         return connector;
     }
 
+    private ThreadPool createThreadPool() {
+        final BlockingQueue<Runnable> queue = new BlockingArrayQueue<>(config.getMinThreads(),
+                                                                       config.getMaxThreads(),
+                                                                       config.getMaxQueuedRequests()
+                                                                             .or(Integer.MAX_VALUE));
+        final QueuedThreadPool pool = new QueuedThreadPool(config.getMaxThreads(),
+                                                           config.getMinThreads(),
+                                                           60000,
+                                                           queue);
+        pool.setName("dw");
+        return pool;
+    }
+
     private Handler createHandler(Connector applicationConnector,
                                   ServletContextHandler applicationHandler,
                                   Connector adminConnector,
@@ -315,15 +324,10 @@ public class ServerFactory {
     }
 
     private ThreadPool createThreadPool(MetricRegistry metricRegistry) {
-        final BlockingQueue<Runnable> queue = new BlockingArrayQueue<>(config.getMinThreads(),
-                                                                       config.getMaxThreads(),
-                                                                       config.getMaxQueuedRequests()
-                                                                             .or(Integer.MAX_VALUE));
+        // TODO: 4/24/13 <coda> -- add support for idle time and max queue size
         return new InstrumentedQueuedThreadPool(metricRegistry,
                                                 "dw",
                                                 config.getMaxThreads(),
-                                                config.getMinThreads(),
-                                                60000,
-                                                queue);
+                                                config.getMinThreads());
     }
 }
