@@ -65,7 +65,6 @@ import com.google.devtools.common.options.OpaqueOptionsData;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingResult;
 import com.google.devtools.common.options.TriState;
-import com.google.protobuf.Any;
 import java.io.BufferedOutputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -144,8 +143,7 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
       LockingMode lockingMode,
       String clientDescription,
       long firstContactTimeMillis,
-      Optional<List<Pair<String, String>>> startupOptionsTaggedWithBazelRc,
-      List<Any> commandExtensions)
+      Optional<List<Pair<String, String>>> startupOptionsTaggedWithBazelRc)
       throws InterruptedException {
     OriginalUnstructuredCommandLineEvent originalCommandLine =
         new OriginalUnstructuredCommandLineEvent(args);
@@ -240,8 +238,7 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
               commandName,
               command,
               waitTimeInMs,
-              startupOptionsTaggedWithBazelRc,
-              commandExtensions);
+              startupOptionsTaggedWithBazelRc);
       if (result.shutdown()) {
         // TODO(lberki): This also handles the case where we catch an uncaught Throwable in
         // execExclusively() which is not an explicit shutdown.
@@ -273,8 +270,7 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
         LockingMode.ERROR_OUT,
         clientDescription,
         runtime.getClock().currentTimeMillis(),
-        /*startupOptionsTaggedWithBazelRc=*/ Optional.empty(),
-        /*commandExtensions=*/ ImmutableList.of());
+        Optional.empty() /* startupOptionBundles */);
   }
 
   private BlazeCommandResult execExclusively(
@@ -286,8 +282,7 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
       String commandName,
       BlazeCommand command,
       long waitTimeInMs,
-      Optional<List<Pair<String, String>>> startupOptionsTaggedWithBazelRc,
-      List<Any> commandExtensions) {
+      Optional<List<Pair<String, String>>> startupOptionsTaggedWithBazelRc) {
     // Record the start time for the profiler. Do not put anything before this!
     long execStartTimeNanos = runtime.getClock().nanoTime();
 
@@ -317,12 +312,7 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
     List<String> commandEnvWarnings = new ArrayList<>();
     CommandEnvironment env =
         workspace.initCommand(
-            commandAnnotation,
-            options,
-            commandEnvWarnings,
-            waitTimeInMs,
-            firstContactTime,
-            commandExtensions);
+            commandAnnotation, options, commandEnvWarnings, waitTimeInMs, firstContactTime);
     CommonCommandOptions commonOptions = options.getOptions(CommonCommandOptions.class);
     boolean tracerEnabled = false;
     if (commonOptions.enableTracer == TriState.YES) {
@@ -443,7 +433,9 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
         reporter.addHandler(handler);
         env.getEventBus().register(handler);
 
-        runtime.getRetainedHeapLimiter().update(commonOptions, env.getCommandId(), reporter);
+        runtime
+            .getRetainedHeapLimiter()
+            .update(commonOptions.oomMoreEagerlyThreshold, commonOptions.oomMessage, reporter);
 
         // We register an ANSI-allowing handler associated with {@code handler} so that ANSI control
         // codes can be re-introduced later even if blaze is invoked with --color=no. This is useful

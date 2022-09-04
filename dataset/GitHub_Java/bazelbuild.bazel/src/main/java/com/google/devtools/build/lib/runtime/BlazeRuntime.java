@@ -57,7 +57,6 @@ import com.google.devtools.build.lib.packages.Package.Builder.DefaultPackageSett
 import com.google.devtools.build.lib.packages.Package.Builder.PackageSettings;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.PackageLoadingListener;
-import com.google.devtools.build.lib.packages.PackageOverheadEstimator;
 import com.google.devtools.build.lib.packages.PackageValidator;
 import com.google.devtools.build.lib.profiler.AutoProfiler;
 import com.google.devtools.build.lib.profiler.MemoryProfiler;
@@ -395,8 +394,7 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
             options.enableCpuUsageProfiling,
             options.slimProfile,
             options.includePrimaryOutput,
-            options.profileIncludeTargetLabel,
-            options.alwaysProfileSlowOperations);
+            options.profileIncludeTargetLabel);
         // Instead of logEvent() we're calling the low level function to pass the timings we took in
         // the launcher. We're setting the INIT phase marker so that it follows immediately the
         // LAUNCH phase.
@@ -683,8 +681,7 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
     actionKeyContext.clear();
     DebugLoggerConfigurator.flushServerLog();
     storedExitCode.set(null);
-    return BlazeCommandResult.withResponseExtensions(
-        finalCommandResult, env.getResponseExtensions());
+    return finalCommandResult;
   }
 
   /**
@@ -944,8 +941,7 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
               LockingMode.ERROR_OUT,
               "batch client",
               runtime.getClock().currentTimeMillis(),
-              Optional.of(startupOptionsFromCommandLine.build()),
-              /*commandExtensions=*/ ImmutableList.of());
+              Optional.of(startupOptionsFromCommandLine.build()));
       if (result.getExecRequest() == null) {
         // Simple case: we are given an exit code
         return result.getExitCode().getNumericExitCode();
@@ -1218,8 +1214,7 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
               try {
                 // TODO(adonovan): opt: cache seen files, as the stack often repeats the same files.
                 Path path = finalFS.getPath(PathFragment.create(loc.file()));
-                List<String> lines = FileSystemUtils.readLines(path, UTF_8);
-                return lines.size() >= loc.line() ? lines.get(loc.line() - 1) : null;
+                return Iterables.get(FileSystemUtils.readLines(path, UTF_8), loc.line() - 1, null);
               } catch (Throwable unused) {
                 // ignore any failure (e.g. ENOENT, security manager rejecting I/O)
               }
@@ -1484,7 +1479,6 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
               BlazeVersionInfo.instance().getVersion(),
               packageSettings,
               getPackageValidator(blazeModules),
-              getPackageOverheadEstimator(blazeModules),
               getPackageLoadingListener(
                   blazeModules, packageSettings, ruleClassProvider, fileSystem));
 
@@ -1620,19 +1614,6 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
       Preconditions.checkState(
           packageValidators.size() <= 1, "more than one module defined a PackageValidator");
       return Iterables.getFirst(packageValidators, PackageValidator.NOOP_VALIDATOR);
-    }
-
-    private static PackageOverheadEstimator getPackageOverheadEstimator(
-        List<BlazeModule> blazeModules) {
-      List<PackageOverheadEstimator> packageOverheadEstimators =
-          blazeModules.stream()
-              .map(BlazeModule::getPackageOverheadEstimator)
-              .filter(estimator -> estimator != null)
-              .collect(toImmutableList());
-      Preconditions.checkState(
-          packageOverheadEstimators.size() <= 1,
-          "more than one module defined a PackageOverheadEstimator");
-      return Iterables.getFirst(packageOverheadEstimators, PackageOverheadEstimator.NOOP_ESTIMATOR);
     }
   }
 
