@@ -2,7 +2,6 @@ package org.jboss.protean.gizmo;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Set;
 
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
@@ -33,9 +32,6 @@ public class FunctionCreatorImpl implements FunctionCreator {
         return instance;
     }
 
-    Set<ResultHandle> getCapturedResultHandles() {
-        return capturedResultHandles.keySet();
-    }
 
     @Override
     public BytecodeCreator getBytecode() {
@@ -97,6 +93,9 @@ public class FunctionCreatorImpl implements FunctionCreator {
          */
         ResultHandle apply(ResultHandle handle) {
             if (handle.getOwner() == functionCreator.owner) {
+                if (!handle.isConstant() && handle.getNo() > functionCreator.instance.getNo()) {
+                    throw new IllegalArgumentException("Attempted to use a ResultHandle in a function that was returned after the function was defined");
+                }
                 CapturedResultHandle capture = functionCreator.capturedResultHandles.get(handle);
                 if (capture != null) {
                     return capture.substitute;
