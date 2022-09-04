@@ -97,13 +97,11 @@ public abstract class QuickValuesHistogramConfig extends WidgetConfigBase implem
             @JsonProperty("limit") Integer limit,
             @JsonProperty("sort_order") String sortOrder,
             @JsonProperty("stacked_fields") String stackedFields,
-            @JsonProperty("interval") @Nullable String interval,
-            @JsonProperty("stream_id") @Nullable String streamId
+            @JsonProperty("interval") @Nullable String interval
     ) {
         return new AutoValue_QuickValuesHistogramConfig(
                 query,
                 timerange,
-                Optional.ofNullable(streamId),
                 field,
                 limit,
                 sortOrder,
