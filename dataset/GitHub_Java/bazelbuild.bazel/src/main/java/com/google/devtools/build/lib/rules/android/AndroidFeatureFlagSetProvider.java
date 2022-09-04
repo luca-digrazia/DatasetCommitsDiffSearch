@@ -31,8 +31,8 @@ import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.config.ConfigFeatureFlag;
 import com.google.devtools.build.lib.skylarkbuildapi.android.AndroidFeatureFlagSetProviderApi;
-import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.SkylarkDict;
 import java.util.Map;
 
 /**
@@ -93,34 +93,30 @@ public final class AndroidFeatureFlagSetProvider extends NativeInfo
     }
 
     if (!ConfigFeatureFlag.isAvailable(ruleContext)) {
-      throw ruleContext.throwWithAttributeError(
+      ruleContext.attributeError(
           FEATURE_FLAG_ATTR,
           String.format(
               "the %s attribute is not available in package '%s'",
               FEATURE_FLAG_ATTR, ruleContext.getLabel().getPackageIdentifier()));
+      throw new RuleErrorException();
     }
 
     Iterable<? extends TransitiveInfoCollection> actualTargets =
         ruleContext.getPrerequisites(FEATURE_FLAG_ATTR, Mode.TARGET);
-    RuleErrorException exception = null;
+    boolean aliasFound = false;
     for (TransitiveInfoCollection target : actualTargets) {
       Label label = AliasProvider.getDependencyLabel(target);
       if (!label.equals(target.getLabel())) {
-        try {
-          exception =
-              ruleContext.throwWithAttributeError(
-                  FEATURE_FLAG_ATTR,
-                  String.format(
-                      "Feature flags must be named directly, not through aliases; use '%s', not"
-                          + " '%s'",
-                      target.getLabel(), label));
-        } catch (RuleErrorException e) {
-          exception = e;
-        }
+        ruleContext.attributeError(
+            FEATURE_FLAG_ATTR,
+            String.format(
+                "Feature flags must be named directly, not through aliases; use '%s', not '%s'",
+                target.getLabel(), label));
+        aliasFound = true;
       }
     }
-    if (exception != null) {
-      throw exception;
+    if (aliasFound) {
+      throw new RuleErrorException();
     }
     return Optional.of(ImmutableMap.copyOf(expectedValues));
   }
@@ -157,10 +153,11 @@ public final class AndroidFeatureFlagSetProvider extends NativeInfo
     }
 
     @Override
-    public AndroidFeatureFlagSetProvider create(Dict<?, ?> flags) // <Label, String>
+    public AndroidFeatureFlagSetProvider create(SkylarkDict<?, ?> flags) // <Label, String>
         throws EvalException {
       return new AndroidFeatureFlagSetProvider(
-          Optional.of(Dict.castSkylarkDictOrNoneToDict(flags, Label.class, String.class, "flags")));
+          Optional.of(
+              SkylarkDict.castSkylarkDictOrNoneToDict(flags, Label.class, String.class, "flags")));
     }
   }
 }
