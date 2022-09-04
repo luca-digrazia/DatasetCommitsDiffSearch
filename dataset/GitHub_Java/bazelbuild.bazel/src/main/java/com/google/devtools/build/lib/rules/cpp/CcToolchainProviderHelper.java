@@ -328,7 +328,7 @@ public class CcToolchainProviderHelper {
     ruleContext.registerAction(
         new SpawnAction.Builder()
             .addInput(rawProfileArtifact)
-            .addTransitiveInputs(attributes.getAllFilesMiddleman())
+            .addTransitiveInputs(attributes.getCrosstoolMiddleman())
             .addOutput(profileArtifact)
             .useDefaultShellEnvironment()
             .setExecutable(toolchainInfo.getToolPathFragment(Tool.LLVM_PROFDATA))
@@ -602,17 +602,17 @@ public class CcToolchainProviderHelper {
         cppConfiguration,
         toolchainInfo,
         toolchainInfo.getToolsDirectory(),
-        attributes.getAllFiles(),
+        attributes.getCrosstool(),
         attributes.getFullInputsForCrosstool(),
-        attributes.getCompilerFiles(),
-        attributes.getCompilerFilesWithoutIncludes(),
-        attributes.getStripFiles(),
-        attributes.getObjcopyFiles(),
-        attributes.getAsFiles(),
-        attributes.getArFiles(),
+        attributes.getCompile(),
+        attributes.getCompileWithoutIncludes(),
+        attributes.getStrip(),
+        attributes.getObjcopy(),
+        attributes.getAs(),
+        attributes.getAr(),
         attributes.getFullInputsForLink(),
         attributes.getIfsoBuilder(),
-        attributes.getDwpFiles(),
+        attributes.getDwp(),
         attributes.getCoverage(),
         attributes.getLibc(),
         staticRuntimeLinkInputs,
