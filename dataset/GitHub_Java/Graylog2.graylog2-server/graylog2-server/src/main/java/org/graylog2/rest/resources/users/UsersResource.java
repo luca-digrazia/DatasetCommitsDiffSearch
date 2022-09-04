@@ -456,7 +456,7 @@ public class UsersResource extends RestResource {
         final List<String> permissions;
 
         final Set<String> roleIds = user.getRoleIds();
-        Set<String> roleNames = Collections.emptySet();
+        Set<String> roleNames = null;
         if (!roleIds.isEmpty()) {
             try {
                 final Map<String, Role> idMap = roleService.loadAllIdMap();
