@@ -18,12 +18,12 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.VectorArg;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
 import java.util.Collections;
@@ -48,6 +48,7 @@ public class ResourceShrinkerActionBuilder {
   private final AndroidSdkProvider sdk;
 
   private List<String> uncompressedExtensions = Collections.emptyList();
+  private List<String> assetsToIgnore = Collections.emptyList();
   private ResourceFilter resourceFilter;
 
   /** @param ruleContext The RuleContext of the owning rule. */
@@ -61,6 +62,11 @@ public class ResourceShrinkerActionBuilder {
   public ResourceShrinkerActionBuilder setUncompressedExtensions(
       List<String> uncompressedExtensions) {
     this.uncompressedExtensions = uncompressedExtensions;
+    return this;
+  }
+
+  public ResourceShrinkerActionBuilder setAssetsToIgnore(List<String> assetsToIgnore) {
+    this.assetsToIgnore = assetsToIgnore;
     return this;
   }
 
@@ -137,7 +143,7 @@ public class ResourceShrinkerActionBuilder {
     this.logOut = logOut;
     return this;
   }
-
+  
   /**
    * @param androidAaptVersion The aapt version to target with this action.
    */
@@ -174,6 +180,9 @@ public class ResourceShrinkerActionBuilder {
     if (!uncompressedExtensions.isEmpty()) {
       commandLine.addAll(
           "--uncompressedExtensions", VectorArg.join(",").each(uncompressedExtensions));
+    }
+    if (!assetsToIgnore.isEmpty()) {
+      commandLine.addAll("--assetsToIgnore", VectorArg.join(",").each(assetsToIgnore));
     }
     if (ruleContext.getConfiguration().getCompilationMode() != CompilationMode.OPT) {
       commandLine.add("--debug");
@@ -230,7 +239,7 @@ public class ResourceShrinkerActionBuilder {
             .addTool(aapt)
             .addInputs(inputs.build())
             .addOutputs(outputs.build())
-            .addCommandLine(commandLine.build())
+            .setCommandLine(commandLine.build())
             .setExecutable(
                 ruleContext.getExecutablePrerequisite("$android_resources_busybox", Mode.HOST))
             .setProgressMessage("Shrinking resources for %s", ruleContext.getLabel())
