@@ -20,7 +20,6 @@ import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.inject.assistedinject.Assisted;
-import org.apache.commons.lang3.StringUtils;
 import org.graylog2.inputs.codecs.gelf.GELFMessage;
 import org.graylog2.inputs.transports.TcpTransport;
 import org.graylog2.plugin.Message;
@@ -114,8 +113,7 @@ public class GelfCodec extends AbstractCodec {
         try {
             node = objectMapper.readTree(json);
         } catch (final Exception e) {
-            log.error("Could not parse JSON, first 400 characters: " +
-                              StringUtils.abbreviate(json, 403), e);
+            log.error("Could not parse JSON!", e);
             throw new IllegalStateException("JSON is null/could not be parsed (invalid JSON)", e);
         }
 
