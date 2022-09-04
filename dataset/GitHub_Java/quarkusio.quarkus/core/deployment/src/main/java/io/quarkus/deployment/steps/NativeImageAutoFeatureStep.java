@@ -31,7 +31,6 @@ import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveFieldBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveMethodBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.RuntimeInitializedClassBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.RuntimeInitializedPackageBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.RuntimeReinitializedClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ServiceProviderBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.UnsafeAccessedFieldBuildItem;
@@ -49,10 +48,8 @@ public class NativeImageAutoFeatureStep {
     private static final String GRAAL_AUTOFEATURE = "io/quarkus/runner/AutoFeature";
     private static final MethodDescriptor IMAGE_SINGLETONS_LOOKUP = ofMethod(ImageSingletons.class, "lookup", Object.class,
             Class.class);
-    private static final MethodDescriptor INITIALIZE_CLASSES_AT_RUN_TIME = ofMethod(RuntimeClassInitialization.class,
+    private static final MethodDescriptor INITIALIZE_AT_RUN_TIME = ofMethod(RuntimeClassInitialization.class,
             "initializeAtRunTime", void.class, Class[].class);
-    private static final MethodDescriptor INITIALIZE_PACKAGES_AT_RUN_TIME = ofMethod(RuntimeClassInitialization.class,
-            "initializeAtRunTime", void.class, String[].class);
     private static final MethodDescriptor RERUN_INITIALIZATION = ofMethod(
             "org.graalvm.nativeimage.impl.RuntimeClassInitializationSupport",
             "rerunInitialization", void.class, Class.class, String.class);
@@ -71,7 +68,6 @@ public class NativeImageAutoFeatureStep {
     @BuildStep
     void generateFeature(BuildProducer<GeneratedNativeImageClassBuildItem> nativeImageClass,
             List<RuntimeInitializedClassBuildItem> runtimeInitializedClassBuildItems,
-            List<RuntimeInitializedPackageBuildItem> runtimeInitializedPackageBuildItems,
             List<RuntimeReinitializedClassBuildItem> runtimeReinitializedClassBuildItems,
             List<NativeImageProxyDefinitionBuildItem> proxies,
             List<NativeImageResourceBuildItem> resources,
@@ -128,20 +124,7 @@ public class NativeImageAutoFeatureStep {
                 CatchBlockCreator cc = tc.addCatch(Throwable.class);
                 cc.invokeVirtualMethod(ofMethod(Throwable.class, "printStackTrace", void.class), cc.getCaughtException());
             }
-            overallCatch.invokeStaticMethod(INITIALIZE_CLASSES_AT_RUN_TIME, classes);
-        }
-
-        if (!runtimeInitializedPackageBuildItems.isEmpty()) {
-            ResultHandle packages = overallCatch.newArray(String.class,
-                    overallCatch.load(runtimeInitializedPackageBuildItems.size()));
-            for (int i = 0; i < runtimeInitializedPackageBuildItems.size(); i++) {
-                TryBlock tc = overallCatch.tryBlock();
-                ResultHandle pkg = tc.load(runtimeInitializedPackageBuildItems.get(i).getPackageName());
-                tc.writeArrayValue(packages, i, pkg);
-                CatchBlockCreator cc = tc.addCatch(Throwable.class);
-                cc.invokeVirtualMethod(ofMethod(Throwable.class, "printStackTrace", void.class), cc.getCaughtException());
-            }
-            overallCatch.invokeStaticMethod(INITIALIZE_PACKAGES_AT_RUN_TIME, packages);
+            overallCatch.invokeStaticMethod(INITIALIZE_AT_RUN_TIME, classes);
         }
 
         // hack in reinitialization of process info classes
