@@ -74,17 +74,11 @@ public final class EnvironmentBackedRecursivePackageProvider
   public Package getPackage(ExtendedEventHandler eventHandler, PackageIdentifier packageName)
       throws NoSuchPackageException, MissingDepException, InterruptedException {
     SkyKey pkgKey = PackageValue.key(packageName);
-    PackageValue pkgValue;
-    try {
-      pkgValue = (PackageValue) env.getValueOrThrow(pkgKey, NoSuchPackageException.class);
-      if (pkgValue == null) {
-        throw new MissingDepException();
-      }
-    } catch (NoSuchPackageException e) {
-      encounteredPackageErrors.set(true);
-      throw e;
+    PackageValue pkgValue =
+        (PackageValue) env.getValueOrThrow(pkgKey, NoSuchPackageException.class);
+    if (pkgValue == null) {
+      throw new MissingDepException();
     }
-
     Package pkg = pkgValue.getPackage();
     if (pkg.containsErrors()) {
       // If this is a nokeep_going build, we must shut the build down by throwing an exception. To
@@ -168,7 +162,7 @@ public final class EnvironmentBackedRecursivePackageProvider
     if (blacklistedSubdirectories.contains(directory)) {
       return ImmutableList.of();
     }
-    ImmutableSet<PathFragment> filteredBlacklistedSubdirectories =
+    ImmutableSet filteredBlacklistedSubdirectories =
         ImmutableSet.copyOf(
             Iterables.filter(
                 blacklistedSubdirectories,
@@ -192,9 +186,6 @@ public final class EnvironmentBackedRecursivePackageProvider
         // bubble up to here, but we ignore it and depend on the top-level caller to be flexible in
         // the exception types it can accept.
         throw new MissingDepException();
-      }
-      if (lookup.hasErrors()) {
-        encounteredPackageErrors.set(true);
       }
 
       for (String packageName : lookup.getPackages()) {
