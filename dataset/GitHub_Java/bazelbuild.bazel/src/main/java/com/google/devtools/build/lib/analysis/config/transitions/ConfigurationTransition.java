@@ -15,26 +15,18 @@
 package com.google.devtools.build.lib.analysis.config.transitions;
 
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import java.util.Map;
+import java.util.List;
 
 /**
  * A configuration transition.
  */
 public interface ConfigurationTransition {
   /**
-   * A designated key string for patch transitions. See {@link ConfigurationTransition#apply} for
-   * its usage.
-   */
-  String PATCH_TRANSITION_KEY = "";
-
-  /**
-   * Returns the map of {@code BuildOptions} after applying this transition. The returned map keys
-   * are only used for dealing with split transitions. Patch transitions, including internal, native
-   * Patch transitions, should return a single entry map with key {@code PATCH_TRANSITION_KEY}.
+   * Returns the list of {@code BuildOptions} after applying this transition.
    *
-   * <p>Returning an empty or null map triggers a {@link RuntimeException}.
+   * <p>Returning an empty or null list triggers a {@link RuntimeException}.
    */
-  Map<String, BuildOptions> apply(BuildOptions buildOptions);
+  List<BuildOptions> apply(BuildOptions buildOptions);
 
   /**
    * We want to keep the number of transition interfaces no larger than what's necessary to maintain
