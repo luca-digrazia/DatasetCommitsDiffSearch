@@ -18,10 +18,7 @@ import static com.google.common.truth.Truth.assertThat;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
-import com.google.devtools.build.lib.packages.util.MockProtoSupport;
-import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
-import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -34,12 +31,6 @@ public class CcSkylarkApiProviderTest extends BuildViewTestCase {
   private CcSkylarkApiProvider getApi(String label) throws Exception {
     RuleConfiguredTarget rule = (RuleConfiguredTarget) getConfiguredTarget(label);
     return (CcSkylarkApiProvider) rule.get(CcSkylarkApiProvider.NAME);
-  }
-
-  @Before
-  public void setUp() throws Exception {
-    MockProtoSupport.setupWorkspace(scratch);
-    invalidatePackages();
   }
 
   @Test
@@ -70,10 +61,9 @@ public class CcSkylarkApiProviderTest extends BuildViewTestCase {
       return;
     }
 
-    mockToolsConfig.create("protobuf_workspace/WORKSPACE");
+    mockToolsConfig.create("/protobuf/WORKSPACE");
     mockToolsConfig.overwrite(
-        "protobuf_workspace/BUILD",
-        TestConstants.LOAD_PROTO_LANG_TOOLCHAIN,
+        "/protobuf/BUILD",
         "package(default_visibility=['//visibility:public'])",
         "exports_files(['protoc'])",
         "proto_lang_toolchain(",
@@ -86,14 +76,13 @@ public class CcSkylarkApiProviderTest extends BuildViewTestCase {
         new String(FileSystemUtils.readContentAsLatin1(rootDirectory.getRelative("WORKSPACE")));
     mockToolsConfig.overwrite(
         "WORKSPACE",
-        "local_repository(name = 'com_google_protobuf', path = 'protobuf_workspace/')",
+        "local_repository(name = 'com_google_protobuf', path = '/protobuf/')",
         existingWorkspace);
     invalidatePackages(); // A dash of magic to re-evaluate the WORKSPACE file.
 
     useConfiguration("--incompatible_disable_legacy_cc_provider");
     scratch.file(
         "a/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
         "cc_proto_library(name='a', deps=[':p'])",
         "proto_library(name='p', srcs=['p.proto'])");
     assertThat(getApi("//a:a")).isNull();

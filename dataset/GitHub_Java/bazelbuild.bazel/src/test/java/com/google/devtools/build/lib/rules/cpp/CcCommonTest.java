@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.rules.cpp;
 
 import static com.google.common.collect.Iterables.getOnlyElement;
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.common.truth.Truth.assertWithMessage;
 import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.baseArtifactNames;
 import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.baseNamesOf;
 import static org.junit.Assume.assumeTrue;
@@ -332,7 +331,7 @@ public class CcCommonTest extends BuildViewTestCase {
         ActionsTestUtil.baseArtifactNames(getOutputGroup(target, OutputGroupInfo.TEMP_FILES));
 
     // Return the IterableSubject for the temp files.
-    return assertWithMessage("k8").that(temps);
+    return assertThat(temps).named("k8");
   }
 
   @Test

@@ -28,7 +28,7 @@ import static com.google.devtools.build.lib.rules.objc.ObjcProvider.SDK_FRAMEWOR
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.WEAK_SDK_FRAMEWORK;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.NON_ARC_SRCS_TYPE;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.SRCS_TYPE;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
@@ -1071,8 +1071,12 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
     createLibraryTargetWriter("//lib:lib")
         .setAndCreateFiles("srcs", "a.m", "b.m", "private.h")
         .write();
-    reporter.removeHandler(failFastHandler);
-    assertThrows(NoSuchTargetException.class, () -> getTarget("//lib:liblib.a"));
+    try {
+      reporter.removeHandler(failFastHandler);
+      getTarget("//lib:liblib.a");
+      fail("should have thrown");
+    } catch (NoSuchTargetException expected) {
+    }
   }
 
   @Test
@@ -1255,9 +1259,12 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
 
   @Test
   public void testIosSdkVersionCannotBeDefinedButEmpty() throws Exception {
-    OptionsParsingException e =
-        assertThrows(OptionsParsingException.class, () -> useConfiguration("--ios_sdk_version="));
-    assertThat(e).hasMessageThat().contains("--ios_sdk_version");
+    try {
+      useConfiguration("--ios_sdk_version=");
+      fail("Should fail for empty ios_sdk_version");
+    } catch (OptionsParsingException e) {
+      assertThat(e).hasMessageThat().contains("--ios_sdk_version");
+    }
   }
 
   private void checkErrorIfNotExist(String attribute, String value) throws Exception {
@@ -1638,13 +1645,13 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
         "--crosstool_top=" + MockObjcSupport.DEFAULT_OSX_CROSSTOOL, "--objc_use_dotd_pruning");
     createLibraryTargetWriter("//lib:lib").setList("srcs", "a.m").write();
     CppCompileAction compileAction = (CppCompileAction) compileAction("//lib:lib", "a.o");
-    ActionExecutionException expected =
-        assertThrows(
-            ActionExecutionException.class,
-            () ->
-                compileAction.discoverInputsFromDotdFiles(
-                    new ActionExecutionContextBuilder().build(), null, null, null));
-    assertThat(expected).hasMessageThat().contains("error while parsing .d file");
+    try {
+      compileAction.discoverInputsFromDotdFiles(
+          new ActionExecutionContextBuilder().build(), null, null, null);
+      fail("Expected ActionExecutionException");
+    } catch (ActionExecutionException expected) {
+      assertThat(expected).hasMessageThat().contains("error while parsing .d file");
+    }
   }
 
   @Test
