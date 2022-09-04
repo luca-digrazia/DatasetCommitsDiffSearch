@@ -589,7 +589,6 @@ public class LoadingPhaseRunnerTest {
 
     private final List<Path> changes = new ArrayList<>();
     private final LoadingPhaseRunner loadingPhaseRunner;
-    private final BlazeDirectories directories;
 
     private LoadingOptions options;
     private final StoredEventHandler storedErrors;
@@ -607,18 +606,18 @@ public class LoadingPhaseRunnerTest {
       mockToolsConfig = new MockToolsConfig(workspace);
       analysisMock = AnalysisMock.get();
       analysisMock.setupMockClient(mockToolsConfig);
-      directories =
-          new BlazeDirectories(
-              new ServerDirectories(fs.getPath("/install"), fs.getPath("/output")),
-              workspace,
-              analysisMock.getProductName());
       FileSystemUtils.deleteTree(workspace.getRelative("base"));
 
       ConfiguredRuleClassProvider ruleClassProvider = analysisMock.createRuleClassProvider();
       PackageFactory pkgFactory =
-          analysisMock.getPackageFactoryBuilderForTesting(directories).build(ruleClassProvider, fs);
+          analysisMock.getPackageFactoryBuilderForTesting().build(ruleClassProvider, fs);
       PackageCacheOptions options = Options.getDefaults(PackageCacheOptions.class);
       storedErrors = new StoredEventHandler();
+      BlazeDirectories directories =
+          new BlazeDirectories(
+              new ServerDirectories(fs.getPath("/install"), fs.getPath("/output")),
+              workspace,
+              analysisMock.getProductName());
       skyframeExecutor =
           SequencedSkyframeExecutor.create(
               pkgFactory,
@@ -628,7 +627,7 @@ public class LoadingPhaseRunnerTest {
               ruleClassProvider.getBuildInfoFactories(),
               ImmutableList.<DiffAwareness.Factory>of(),
               Predicates.<PathFragment>alwaysFalse(),
-              analysisMock.getSkyFunctions(directories),
+              analysisMock.getSkyFunctions(),
               ImmutableList.<PrecomputedValue.Injected>of(),
               ImmutableList.<SkyValueDirtinessChecker>of(),
               PathFragment.EMPTY_FRAGMENT,

@@ -114,7 +114,7 @@ public class ExternalPackageUtilTest extends BuildViewTestCase {
         new WorkspaceFileFunction(
             ruleClassProvider,
             analysisMock
-                .getPackageFactoryBuilderForTesting(directories)
+                .getPackageFactoryBuilderForTesting()
                 .setEnvironmentExtensions(
                     ImmutableList.<EnvironmentExtension>of(
                         new PackageFactory.EmptyEnvironmentExtension()))

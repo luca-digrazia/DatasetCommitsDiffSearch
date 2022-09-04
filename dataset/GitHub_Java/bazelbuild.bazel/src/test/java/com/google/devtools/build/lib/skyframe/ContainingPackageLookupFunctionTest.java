@@ -113,7 +113,7 @@ public class ContainingPackageLookupFunctionTest extends FoundationTestCase {
         new WorkspaceFileFunction(
             ruleClassProvider,
             analysisMock
-                .getPackageFactoryBuilderForTesting(directories)
+                .getPackageFactoryBuilderForTesting()
                 .setEnvironmentExtensions(
                     ImmutableList.<EnvironmentExtension>of(
                         new PackageFactory.EmptyEnvironmentExtension()))

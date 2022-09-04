@@ -85,7 +85,7 @@ public class PackageCacheTest extends FoundationTestCase {
             rootDirectory,
             analysisMock.getProductName());
     PackageFactory.BuilderForTesting packageFactoryBuilder =
-        analysisMock.getPackageFactoryBuilderForTesting(directories);
+        analysisMock.getPackageFactoryBuilderForTesting();
     if (!doPackageLoadingChecks) {
       packageFactoryBuilder.disableChecks();
     }
@@ -98,7 +98,7 @@ public class PackageCacheTest extends FoundationTestCase {
             ruleClassProvider.getBuildInfoFactories(),
             ImmutableList.<DiffAwareness.Factory>of(),
             Predicates.<PathFragment>alwaysFalse(),
-            analysisMock.getSkyFunctions(directories),
+            AnalysisMock.get().getSkyFunctions(),
             ImmutableList.<PrecomputedValue.Injected>of(),
             ImmutableList.<SkyValueDirtinessChecker>of(),
             PathFragment.EMPTY_FRAGMENT,

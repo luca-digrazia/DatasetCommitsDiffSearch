@@ -81,7 +81,7 @@ public class BuildFileModificationTest extends FoundationTestCase {
     skyframeExecutor =
         SequencedSkyframeExecutor.create(
             analysisMock
-                .getPackageFactoryBuilderForTesting(directories)
+                .getPackageFactoryBuilderForTesting()
                 .build(ruleClassProvider, scratch.getFileSystem()),
             directories,
             null, /* BinTools */
@@ -89,7 +89,7 @@ public class BuildFileModificationTest extends FoundationTestCase {
             ruleClassProvider.getBuildInfoFactories(),
             ImmutableList.<DiffAwareness.Factory>of(),
             Predicates.<PathFragment>alwaysFalse(),
-            analysisMock.getSkyFunctions(directories),
+            AnalysisMock.get().getSkyFunctions(),
             ImmutableList.<PrecomputedValue.Injected>of(),
             ImmutableList.<SkyValueDirtinessChecker>of(),
             PathFragment.EMPTY_FRAGMENT,

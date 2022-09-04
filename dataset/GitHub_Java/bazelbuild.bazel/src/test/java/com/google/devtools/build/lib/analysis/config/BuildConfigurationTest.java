@@ -146,8 +146,7 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
           .hasMessageThat()
           .matches(
               Pattern.compile(
-                  "No default_toolchain found for cpu 'bogus'. "
-                      + "Valid cpus are: \\[\n(  [\\w-]+,\n)+]"));
+                  "No toolchain found for cpu 'bogus'. Valid cpus are: \\[\n(  [\\w-]+,\n)+]"));
     }
   }
 

@@ -1249,22 +1249,22 @@ public class FileFunctionTest {
 
   @Test
   public void testInfiniteSymlinkExpansion_AbsoluteSymlinkToDescendant() throws Exception {
-    runTestInfiniteSymlinkExpansion(/* symlinkToAncestor= */ false, /*absoluteSymlink=*/ true);
+    runTestInfiniteSymlinkExpansion(/*ancestor=*/ false, /*absoluteSymlink=*/ true);
   }
 
   @Test
   public void testInfiniteSymlinkExpansion_RelativeSymlinkToDescendant() throws Exception {
-    runTestInfiniteSymlinkExpansion(/* symlinkToAncestor= */ false, /*absoluteSymlink=*/ false);
+    runTestInfiniteSymlinkExpansion(/*ancestor=*/ false, /*absoluteSymlink=*/ false);
   }
 
   @Test
   public void testInfiniteSymlinkExpansion_AbsoluteSymlinkToAncestor() throws Exception {
-    runTestInfiniteSymlinkExpansion(/* symlinkToAncestor= */ true, /*absoluteSymlink=*/ true);
+    runTestInfiniteSymlinkExpansion(/*ancestor=*/ true, /*absoluteSymlink=*/ true);
   }
 
   @Test
   public void testInfiniteSymlinkExpansion_RelativeSymlinkToAncestor() throws Exception {
-    runTestInfiniteSymlinkExpansion(/* symlinkToAncestor= */ true, /*absoluteSymlink=*/ false);
+    runTestInfiniteSymlinkExpansion(/*ancestor=*/ true, /*absoluteSymlink=*/ false);
   }
 
   @Test

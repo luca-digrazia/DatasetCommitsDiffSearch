@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.profiler.AutoProfiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
-import com.google.devtools.build.lib.profiler.memory.AllocationTracker;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.util.LoggingUtil;
 import com.google.devtools.build.lib.util.Preconditions;
@@ -36,7 +35,6 @@ import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.common.options.OptionsProvider;
 import java.io.IOException;
-import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
@@ -58,7 +56,6 @@ public final class BlazeWorkspace {
   private final SubscriberExceptionHandler eventBusExceptionHandler;
   private final WorkspaceStatusAction.Factory workspaceStatusActionFactory;
   private final BinTools binTools;
-  @Nullable private final AllocationTracker allocationTracker;
 
   private final BlazeDirectories directories;
   private final SkyframeExecutor skyframeExecutor;
@@ -75,13 +72,11 @@ public final class BlazeWorkspace {
       SkyframeExecutor skyframeExecutor,
       SubscriberExceptionHandler eventBusExceptionHandler,
       WorkspaceStatusAction.Factory workspaceStatusActionFactory,
-      BinTools binTools,
-      @Nullable AllocationTracker allocationTracker) {
+      BinTools binTools) {
     this.runtime = runtime;
     this.eventBusExceptionHandler = eventBusExceptionHandler;
     this.workspaceStatusActionFactory = workspaceStatusActionFactory;
     this.binTools = binTools;
-    this.allocationTracker = allocationTracker;
 
     this.directories = directories;
     this.skyframeExecutor = skyframeExecutor;
@@ -187,24 +182,13 @@ public final class BlazeWorkspace {
   /**
    * Initializes a CommandEnvironment to execute a command in this workspace.
    *
-   * <p>This method should be called from the "main" thread on which the command will execute; that
-   * thread will receive interruptions if a module requests an early exit.
-   *
-   * @param warnings a list of warnings to which the CommandEnvironment can add any warning
-   * generated during initialization. This is needed because Blaze's output handling is not yet
-   * fully configured at this point.
+   * <p>This method should be called from the "main" thread on which the command will execute;
+   * that thread will receive interruptions if a module requests an early exit.
    */
-  public CommandEnvironment initCommand(
-      Command command, OptionsProvider options, List<String> warnings) {
-    CommandEnvironment env =
-        new CommandEnvironment(
-            runtime,
-            this,
-            new EventBus(eventBusExceptionHandler),
-            Thread.currentThread(),
-            command,
-            options,
-            warnings);
+  public CommandEnvironment initCommand(Command command, OptionsProvider options) {
+    CommandEnvironment env = new CommandEnvironment(
+        runtime, this, new EventBus(eventBusExceptionHandler), Thread.currentThread(), command,
+        options);
     skyframeExecutor.setClientEnv(env.getClientEnv());
     return env;
   }
@@ -319,11 +303,6 @@ public final class BlazeWorkspace {
       logger.warning(
           "failed to create execution root '" + directories.getExecRoot() + "': " + e.getMessage());
     }
-  }
-
-  @Nullable
-  public AllocationTracker getAllocationTracker() {
-    return allocationTracker;
   }
 }
 
