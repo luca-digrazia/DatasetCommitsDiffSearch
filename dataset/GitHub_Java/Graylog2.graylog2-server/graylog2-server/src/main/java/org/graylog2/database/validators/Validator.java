@@ -19,22 +19,11 @@
  */
 package org.graylog2.database.validators;
 
-import static org.junit.Assert.*;
-import org.junit.Test;
-
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
-public class FilledStringValidatorTest {
+public interface Validator {
 
-    @Test
-    public void testValidate() throws Exception {
-        Validator v = new FilledStringValidator();
-        assertFalse(v.validate(null));
-        assertFalse(v.validate(534));
-        assertFalse(v.validate(""));
-        assertFalse(v.validate(new String()));
-        assertTrue(v.validate("so valid"));
-    }
+    public boolean validate(Object value);
 
 }

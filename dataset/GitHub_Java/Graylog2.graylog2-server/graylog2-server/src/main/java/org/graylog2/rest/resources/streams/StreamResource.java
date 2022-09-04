@@ -65,10 +65,12 @@ public class StreamResource extends RestResource {
 
     @Context ResourceConfig rc;
 
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
     @POST @Path("/")
     @Consumes(MediaType.APPLICATION_JSON) 
     @Produces(MediaType.APPLICATION_JSON)
-    public Response create(String body, @QueryParam("pretty") boolean prettyPrint) {
+    public Response create(String body) {
         Core core = (Core) rc.getProperty("core");
 
         if (body == null || body.isEmpty()) {
@@ -103,7 +105,7 @@ public class StreamResource extends RestResource {
         Map<String, Object> result = Maps.newHashMap();
         result.put("stream_id", id.toStringMongod());
 
-        return Response.status(Status.CREATED).entity(json(result, prettyPrint)).build();
+        return Response.status(Status.CREATED).entity("fixme").build();
     }
     
     @GET @Path("/")
@@ -120,7 +122,16 @@ public class StreamResource extends RestResource {
         result.put("total", streams.size());
         result.put("streams", streams);
 
-        return json(result, prettyPrint);
+        try {
+            if (prettyPrint) {
+                return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(result);
+            } else {
+                return objectMapper.writeValueAsString(result);
+            }
+        } catch (JsonProcessingException e) {
+            LOG.error("Error while generating JSON", e);
+            throw new WebApplicationException(e, Response.Status.INTERNAL_SERVER_ERROR);
+        }
     }
     
     @GET @Path("/{streamId}")
@@ -140,9 +151,18 @@ public class StreamResource extends RestResource {
         	throw new WebApplicationException(404);
         }
 
-        return json(stream.asMap(), prettyPrint);
+        try {
+            if (prettyPrint) {
+                return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(stream.asMap());
+            } else {
+                return objectMapper.writeValueAsString(stream.asMap());
+            }
+        } catch (JsonProcessingException e) {
+            LOG.error("Error while generating JSON", e);
+            throw new WebApplicationException(e, Response.Status.INTERNAL_SERVER_ERROR);
+        }
     }
-
+    
     @DELETE @Path("/{streamId}")
     public Response delete(@PathParam("streamId") String streamId) {
         Core core = (Core) rc.getProperty("core");

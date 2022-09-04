@@ -24,16 +24,9 @@ package org.graylog2.database.validators;
  */
 public class DateValidator implements Validator {
 
-    /**
-     * Validates: Object is not null, of type org.joda.time.DateTime and
-     * the String representation is in UTC.
-     *
-     * @param value The object to check
-     * @return validation result
-     */
     @Override
     public boolean validate(Object value) {
-        return value != null && (value instanceof org.joda.time.DateTime) && value.toString().endsWith("Z");
+        return value != null && (value instanceof java.util.Date);
     }
 
 }

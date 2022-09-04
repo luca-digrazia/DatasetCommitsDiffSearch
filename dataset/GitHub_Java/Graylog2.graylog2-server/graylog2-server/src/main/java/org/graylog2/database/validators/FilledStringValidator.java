@@ -24,12 +24,6 @@ package org.graylog2.database.validators;
  */
 public class FilledStringValidator implements Validator {
 
-    /**
-     * Validates: Object is not null, of type String and not empty.
-     *
-     * @param value The object to check
-     * @return validation result
-     */
     @Override
     public boolean validate(Object value) {
         return value != null && value instanceof String && !((String) value).isEmpty();

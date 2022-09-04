@@ -48,24 +48,29 @@ public class Persisted {
     
     protected final Core core;
     protected final String collectionName;
-    protected final Map<String, Validator> validations;
     
-	protected Persisted(String collectionName, Core core, Map<String, Object> fields, Map<String, Validator> validations) {
+	protected Persisted(String collectionName, Core core, Map<String, Object> fields, Map<String, Validator> validations) throws ValidationException {
         this.id = new ObjectId();
 		this.fields = fields;
 		
 		this.collectionName = collectionName;
 		this.core = core;
-        this.validations = validations;
+
+        if(!validate(validations, fields)) {
+            throw new ValidationException();
+        }
 	}
 
-	protected Persisted(String collectionName, Core core, ObjectId id, Map<String, Object> fields,  Map<String, Validator> validations) {
+	protected Persisted(String collectionName, Core core, ObjectId id, Map<String, Object> fields,  Map<String, Validator> validations) throws ValidationException {
 		this.id = id;
 		this.fields = fields;
 		
 		this.collectionName = collectionName;
 		this.core = core;
-        this.validations = validations;
+
+        if(!validate(validations, fields)) {
+            throw new ValidationException();
+        }
 	}
 	
 	protected static DBObject get(ObjectId id, Core core, String collectionName) {
@@ -91,11 +96,7 @@ public class Persisted {
 		collection().remove(new BasicDBObject("_id", id));
 	}
 	
-	public ObjectId save() throws ValidationException {
-        if(!validate(validations, fields)) {
-            throw new ValidationException();
-        }
-
+	public ObjectId save() {
 		BasicDBObject doc = new BasicDBObject(fields);
 		doc.put("_id", id); // ID was created in constructor or taken from original doc already.
 

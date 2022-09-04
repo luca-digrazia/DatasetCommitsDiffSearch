@@ -1,28 +1,19 @@
-/**
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Graylog2 is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- */
 /*
  * To change this template, choose Tools | Templates
  * and open the template in the editor.
  */
 package org.graylog2.buffers.processors;
 
-import org.testng.annotations.Test;
-
-import static org.testng.AssertJUnit.assertEquals;
+import java.util.List;
+import org.elasticsearch.common.collect.Lists;
+import org.graylog2.GraylogServerStub;
+import org.graylog2.TestHelper;
+import org.graylog2.buffers.MessageEvent;
+import org.graylog2.buffers.processors.fakeoutputs.FakeOutput;
+import org.graylog2.plugin.Message;
+import org.graylog2.plugin.streams.Stream;
+import org.junit.Test;
+import static org.junit.Assert.*;
 
 /**
  *
@@ -30,8 +21,7 @@ import static org.testng.AssertJUnit.assertEquals;
  */
 public class OutputBufferProcessorTest {
     
-    @Test(enabled = false)
-    // Ignored until FakeStream class has been restored
+    @Test
     public void testOnEventWritesToAllOutputsWhenGettingBatches() throws Exception {
         /*FakeOutput fo1 = new FakeOutput();
         FakeOutput fo2 = new FakeOutput();
@@ -48,7 +38,7 @@ public class OutputBufferProcessorTest {
         
         FakeStream stream2 = new FakeStream("fakestream2");
         stream1.addOutput(fo2);
-
+        
         List<Stream> streamList1 = Lists.newArrayList();
         streamList1.add(stream1);
         streamList1.add(stream2);
