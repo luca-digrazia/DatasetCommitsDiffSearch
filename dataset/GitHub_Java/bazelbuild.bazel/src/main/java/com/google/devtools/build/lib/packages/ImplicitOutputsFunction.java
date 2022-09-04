@@ -89,7 +89,7 @@ public abstract class ImplicitOutputsFunction {
         Type<?> attrType = map.getAttributeType(attrName);
         // Don't include configurable attributes: we don't know which value they might take
         // since we don't yet have a build configuration.
-        if (!map.isConfigurable(attrName)) {
+        if (!map.isConfigurable(attrName, attrType)) {
           Object value = map.get(attrName, attrType);
           attrValues.put(attrName, value == null ? Runtime.NONE : value);
         }
@@ -291,9 +291,7 @@ public abstract class ImplicitOutputsFunction {
     }
 
     Type<?> attrType = rule.getAttributeType(attrName);
-    if (attrType == null) {
-      return Collections.emptySet();
-    }
+    if (attrType == null) { return Collections.emptySet(); }
     // String attributes and lists are easy.
     if (Type.STRING == attrType) {
       return singleton(rule.get(attrName, Type.STRING));
