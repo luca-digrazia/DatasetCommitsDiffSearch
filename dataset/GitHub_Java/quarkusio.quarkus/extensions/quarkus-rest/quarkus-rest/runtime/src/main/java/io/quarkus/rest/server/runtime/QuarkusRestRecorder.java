@@ -540,8 +540,7 @@ public class QuarkusRestRecorder extends QuarkusRestCommonRecorder {
                     //so we don't want to add any extra latency into the common case
                     RuntimeResource fake = new RuntimeResource(i.getKey(), entry.getKey(), null, null, Collections.emptyList(),
                             null, null,
-                            new ServerRestHandler[] { mapper }, null, new Class[0], null, false, null, null, null, null, null,
-                            Collections.emptyMap());
+                            new ServerRestHandler[] { mapper }, null, new Class[0], null, false, null, null, null, null, null);
                     result.add(new RequestMapper.RequestPath<>(false, fake.getPath(), fake));
                 }
             }
@@ -797,7 +796,7 @@ public class QuarkusRestRecorder extends QuarkusRestCommonRecorder {
                 clazz.getFactory(), handlers.toArray(EMPTY_REST_HANDLER_ARRAY), method.getName(), parameterTypes,
                 nonAsyncReturnType, method.isBlocking(), resourceClass,
                 lazyMethod,
-                pathParameterIndexes, score, sseElementType, clazz.getResourceExceptionMapper());
+                pathParameterIndexes, score, sseElementType);
         return runtimeResource;
     }
 
