@@ -49,14 +49,12 @@ import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.Capability;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
-import io.quarkus.deployment.annotations.Consume;
 import io.quarkus.deployment.annotations.Record;
-import io.quarkus.deployment.builditem.AdditionalStaticInitConfigSourceProviderBuildItem;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
+import io.quarkus.deployment.builditem.ProxyUnwrapperBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.util.ServiceUtil;
 import io.quarkus.resteasy.common.runtime.ResteasyInjectorFactoryRecorder;
-import io.quarkus.resteasy.common.runtime.config.ResteasyConfigSourceProvider;
 import io.quarkus.resteasy.common.runtime.providers.ServerFormUrlEncodedProvider;
 import io.quarkus.resteasy.common.spi.ResteasyConfigBuildItem;
 import io.quarkus.resteasy.common.spi.ResteasyDotNames;
@@ -123,18 +121,9 @@ public class ResteasyCommonProcessor {
     }
 
     @BuildStep
-    void initConfigSourceProvider(BuildProducer<AdditionalStaticInitConfigSourceProviderBuildItem> initConfigSourceProvider) {
-        initConfigSourceProvider.produce(
-                new AdditionalStaticInitConfigSourceProviderBuildItem(ResteasyConfigSourceProvider.class.getName()));
-    }
-
-    @BuildStep
     ResteasyConfigBuildItem resteasyConfig(ResteasyJsonConfig resteasyJsonConfig, Capabilities capabilities) {
         return new ResteasyConfigBuildItem(resteasyJsonConfig.jsonDefault &&
-        // RESTEASY_JACKSON or RESTEASY_JACKSON_CLIENT
-                (capabilities.isCapabilityWithPrefixPresent(Capability.RESTEASY_JSON_JACKSON)
-                        // RESTEASY_JSONB or RESTEASY_JSONB_CLIENT
-                        || capabilities.isCapabilityWithPrefixPresent(Capability.RESTEASY_JSON_JSONB)));
+                (capabilities.isPresent(Capability.REST_JACKSON) || capabilities.isPresent(Capability.REST_JSONB)));
     }
 
     @BuildStep
@@ -148,11 +137,16 @@ public class ResteasyCommonProcessor {
     }
 
     @Record(STATIC_INIT)
-    @Consume(BeanContainerBuildItem.class)
     @BuildStep
-    ResteasyInjectionReadyBuildItem setupResteasyInjection(
+    ResteasyInjectionReadyBuildItem setupResteasyInjection(List<ProxyUnwrapperBuildItem> proxyUnwrappers,
+            BeanContainerBuildItem beanContainerBuildItem,
+            Capabilities capabilities,
             ResteasyInjectorFactoryRecorder recorder) {
-        RuntimeValue<InjectorFactory> injectorFactory = recorder.setup();
+        List<Function<Object, Object>> unwrappers = new ArrayList<>();
+        for (ProxyUnwrapperBuildItem i : proxyUnwrappers) {
+            unwrappers.add(i.getUnwrapper());
+        }
+        RuntimeValue<InjectorFactory> injectorFactory = recorder.setup(beanContainerBuildItem.getValue(), unwrappers);
         return new ResteasyInjectionReadyBuildItem(injectorFactory);
     }
 
@@ -195,8 +189,7 @@ public class ResteasyCommonProcessor {
         // add the other providers detected
         Set<String> providersToRegister = new HashSet<>(otherProviders);
 
-        if (!capabilities.isPresent(Capability.VERTX)
-                && !capabilities.isCapabilityWithPrefixPresent(Capability.RESTEASY_JSON)) {
+        if (!capabilities.isPresent(Capability.RESTEASY_JSON)) {
 
             boolean needJsonSupport = restJsonSupportNeeded(indexBuildItem, ResteasyDotNames.CONSUMES)
                     || restJsonSupportNeeded(indexBuildItem, ResteasyDotNames.PRODUCES)
@@ -284,7 +277,7 @@ public class ResteasyCommonProcessor {
             BuildProducer<AdditionalBeanBuildItem> additionalBean,
             BuildProducer<UnremovableBeanBuildItem> unremovable) {
 
-        if (capabilities.isCapabilityWithPrefixPresent(Capability.RESTEASY_JSON_JACKSON)) {
+        if (capabilities.isPresent(Capability.REST_JACKSON)) {
             registerJsonContextResolver(OBJECT_MAPPER, QUARKUS_OBJECT_MAPPER_CONTEXT_RESOLVER, combinedIndexBuildItem,
                     jaxrsProvider, additionalBean, unremovable);
             if (resteasyJsonConfig.jsonDefault) {
@@ -292,7 +285,7 @@ public class ResteasyCommonProcessor {
             }
         }
 
-        if (capabilities.isCapabilityWithPrefixPresent(Capability.RESTEASY_JSON_JSONB)) {
+        if (capabilities.isPresent(Capability.REST_JSONB)) {
             registerJsonContextResolver(JSONB, QUARKUS_JSONB_CONTEXT_RESOLVER, combinedIndexBuildItem, jaxrsProvider,
                     additionalBean, unremovable);
             if (resteasyJsonConfig.jsonDefault) {
