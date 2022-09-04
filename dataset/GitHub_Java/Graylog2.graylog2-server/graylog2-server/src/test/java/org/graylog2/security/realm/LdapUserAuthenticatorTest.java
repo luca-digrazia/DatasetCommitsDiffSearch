@@ -16,9 +16,6 @@
  */
 package org.graylog2.security.realm;
 
-import com.google.common.collect.Maps;
-import com.lordofthejars.nosqlunit.annotation.UsingDataSet;
-import com.lordofthejars.nosqlunit.core.LoadStrategyEnum;
 import org.apache.directory.ldap.client.api.LdapConnectionConfig;
 import org.apache.directory.server.annotations.CreateLdapServer;
 import org.apache.directory.server.annotations.CreateTransport;
@@ -39,27 +36,19 @@ import org.graylog2.plugin.database.users.User;
 import org.graylog2.security.ldap.LdapConnector;
 import org.graylog2.security.ldap.LdapSettingsImpl;
 import org.graylog2.security.ldap.LdapSettingsService;
-import org.graylog2.shared.security.Permissions;
 import org.graylog2.shared.security.ldap.LdapEntry;
 import org.graylog2.shared.security.ldap.LdapSettings;
 import org.graylog2.shared.users.UserService;
 import org.graylog2.users.RoleService;
-import org.graylog2.users.UserImpl;
-import org.joda.time.DateTimeZone;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import java.net.URI;
-import java.util.Collections;
-import java.util.HashMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyString;
-import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
 @RunWith(FrameworkRunner.class)
@@ -142,17 +131,12 @@ public class LdapUserAuthenticatorTest extends AbstractLdapTestUnit {
 
     @Test
     public void testDoGetAuthenticationInfo() throws Exception {
-        final LdapUserAuthenticator authenticator = spy(new LdapUserAuthenticator(ldapConnector,
-                                                                              ldapSettingsService,
-                                                                              userService,
-                                                                              mock(RoleService.class),
-                                                                              DateTimeZone.UTC));
+        final LdapUserAuthenticator authenticator = new LdapUserAuthenticator(ldapConnector, ldapSettingsService, userService);
 
         when(ldapSettingsService.load())
                 .thenReturn(ldapSettings);
-        doReturn(mock(User.class))
-                .when(authenticator)
-                .syncFromLdapEntry(any(LdapEntry.class),any(LdapSettings.class), anyString());
+        when(userService.syncFromLdapEntry(any(LdapEntry.class), any(LdapSettings.class), any(String.class)))
+                .thenReturn(mock(User.class));
 
         assertThat(authenticator.doGetAuthenticationInfo(VALID_TOKEN)).isNotNull();
         assertThat(authenticator.doGetAuthenticationInfo(INVALID_TOKEN)).isNull();
@@ -160,78 +144,11 @@ public class LdapUserAuthenticatorTest extends AbstractLdapTestUnit {
 
     @Test
     public void testDoGetAuthenticationInfoDeniesEmptyPassword() throws Exception {
-        final LdapUserAuthenticator authenticator = new LdapUserAuthenticator(ldapConnector,
-                                                                              ldapSettingsService,
-                                                                              userService,
-                                                                              mock(RoleService.class),
-                                                                              DateTimeZone.UTC);
+        final LdapUserAuthenticator authenticator = new LdapUserAuthenticator(ldapConnector, ldapSettingsService, userService);
 
         when(ldapSettingsService.load()).thenReturn(ldapSettings);
 
         assertThat(authenticator.doGetAuthenticationInfo(new UsernamePasswordToken("john", (char[]) null))).isNull();
         assertThat(authenticator.doGetAuthenticationInfo(new UsernamePasswordToken("john", new char[0]))).isNull();
-    }
-
-    @Test
-    @UsingDataSet(loadStrategy = LoadStrategyEnum.DELETE_ALL)
-    public void testSyncFromLdapEntry() {
-        final LdapUserAuthenticator authenticator = spy(new LdapUserAuthenticator(ldapConnector,
-                                                                                  ldapSettingsService,
-                                                                                  userService,
-                                                                                  mock(RoleService.class),
-                                                                                  DateTimeZone.UTC));
-
-        final LdapEntry userEntry = new LdapEntry();
-        final LdapSettings ldapSettings = mock(LdapSettings.class);
-        when(ldapSettings.getDisplayNameAttribute()).thenReturn("displayName");
-        when(ldapSettings.getDefaultGroupId()).thenReturn("54e3deadbeefdeadbeef0001");
-        when(ldapSettings.getAdditionalDefaultGroupIds()).thenReturn(Collections.emptySet());
-
-        when(userService.create())
-                .thenReturn(new UserImpl(null, new Permissions(Collections.emptySet()), Maps.newHashMap()));
-
-        final User ldapUser = authenticator.syncFromLdapEntry(userEntry, ldapSettings, "user");
-
-        assertThat(ldapUser).isNotNull();
-        assertThat(ldapUser.isExternalUser()).isTrue();
-        assertThat(ldapUser.getName()).isEqualTo("user");
-        assertThat(ldapUser.getEmail()).isEqualTo("user@localhost");
-        assertThat(ldapUser.getHashedPassword()).isEqualTo("User synced from LDAP.");
-        assertThat(ldapUser.getTimeZone()).isEqualTo(DateTimeZone.UTC);
-        assertThat(ldapUser.getRoleIds()).containsOnly("54e3deadbeefdeadbeef0001");
-        assertThat(ldapUser.getPermissions()).isNotEmpty();
-    }
-
-    @Test
-    @UsingDataSet(loadStrategy = LoadStrategyEnum.DELETE_ALL)
-    public void testSyncFromLdapEntryExistingUser() {
-        final LdapUserAuthenticator authenticator = spy(new LdapUserAuthenticator(ldapConnector,
-                                                                                  ldapSettingsService,
-                                                                                  userService,
-                                                                                  mock(RoleService.class),
-                                                                                  DateTimeZone.UTC));
-
-        final LdapEntry userEntry = new LdapEntry();
-        final LdapSettings ldapSettings = mock(LdapSettings.class);
-        when(ldapSettings.getDisplayNameAttribute()).thenReturn("displayName");
-        when(ldapSettings.getDefaultGroupId()).thenReturn("54e3deadbeefdeadbeef0001");
-        when(ldapSettings.getAdditionalDefaultGroupIds()).thenReturn(Collections.emptySet());
-
-        final HashMap<String, Object> fields = Maps.newHashMap();
-        fields.put("permissions", Collections.singletonList("test:permission:1234"));
-        when(userService.load(anyString()))
-                .thenReturn(new UserImpl(null, new Permissions(Collections.emptySet()), fields));
-
-        final User ldapUser = authenticator.syncFromLdapEntry(userEntry, ldapSettings, "user");
-
-        assertThat(ldapUser).isNotNull();
-        assertThat(ldapUser.getPermissions()).contains("test:permission:1234");
-        assertThat(ldapUser.isExternalUser()).isTrue();
-        assertThat(ldapUser.getName()).isEqualTo("user");
-        assertThat(ldapUser.getEmail()).isEqualTo("user@localhost");
-        assertThat(ldapUser.getHashedPassword()).isEqualTo("User synced from LDAP.");
-        assertThat(ldapUser.getTimeZone()).isEqualTo(DateTimeZone.UTC);
-        assertThat(ldapUser.getRoleIds()).containsOnly("54e3deadbeefdeadbeef0001");
-        assertThat(ldapUser.getPermissions()).isNotEmpty();
     }
 }

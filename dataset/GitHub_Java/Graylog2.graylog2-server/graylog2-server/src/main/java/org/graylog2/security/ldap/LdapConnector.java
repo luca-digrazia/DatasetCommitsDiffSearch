@@ -27,12 +27,10 @@ import org.apache.directory.api.ldap.model.entry.Attribute;
 import org.apache.directory.api.ldap.model.entry.Entry;
 import org.apache.directory.api.ldap.model.entry.Value;
 import org.apache.directory.api.ldap.model.exception.LdapException;
-import org.apache.directory.api.ldap.model.exception.LdapInvalidDnException;
 import org.apache.directory.api.ldap.model.message.BindRequestImpl;
 import org.apache.directory.api.ldap.model.message.BindResponse;
 import org.apache.directory.api.ldap.model.message.ResultCodeEnum;
 import org.apache.directory.api.ldap.model.message.SearchScope;
-import org.apache.directory.api.ldap.model.name.Dn;
 import org.apache.directory.ldap.client.api.LdapConnectionConfig;
 import org.apache.directory.ldap.client.api.LdapNetworkConnection;
 import org.graylog2.plugin.DocsHelper;
@@ -44,7 +42,6 @@ import org.slf4j.LoggerFactory;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Named;
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.text.MessageFormat;
 import java.util.Collections;
@@ -115,28 +112,28 @@ public class LdapConnector {
 
     @Nullable
     public LdapEntry search(LdapNetworkConnection connection,
-                            String searchBase,
-                            String searchPattern,
-                            String displayNameAttribute,
-                            String principal,
-                            boolean activeDirectory,
-                            String groupSearchBase,
-                            String groupIdAttribute,
-                            String groupSearchPattern) throws LdapException, CursorException {
+                                          String searchBase,
+                                          String searchPattern,
+                                          String displayNameAttribute,
+                                          String principal,
+                                          boolean activeDirectory,
+                                          String groupSearchBase,
+                                          String groupIdAttribute,
+                                          String groupSearchPattern) throws LdapException, CursorException {
         final LdapEntry ldapEntry = new LdapEntry();
         final Set<String> groupDns = Sets.newHashSet();
 
-        final String filter = new MessageFormat(searchPattern, Locale.ENGLISH).format(new Object[]{sanitizePrincipal(principal)});
+        final String filter = MessageFormat.format(searchPattern, sanitizePrincipal(principal));
         if (LOG.isTraceEnabled()) {
             LOG.trace("Search {} for {}, starting at {}",
                       activeDirectory ? "ActiveDirectory" : "LDAP", filter, searchBase);
         }
-
-        try (final EntryCursor entryCursor = connection.search(searchBase,
-                filter,
-                SearchScope.SUBTREE,
-                groupIdAttribute, displayNameAttribute, "dn", "uid", "userPrincipalName", "mail", "rfc822Mailbox", "memberOf", "isMemberOf")
-        ) {
+        EntryCursor entryCursor = null;
+        try {
+            entryCursor = connection.search(searchBase,
+                                            filter,
+                                            SearchScope.SUBTREE,
+                                            groupIdAttribute, displayNameAttribute, "dn", "uid", "userPrincipalName", "mail", "rfc822Mailbox", "memberOf", "isMemberOf");
             final Iterator<Entry> it = entryCursor.iterator();
             if (it.hasNext()) {
                 final Entry e = it.next();
@@ -213,9 +210,10 @@ public class LdapConnector {
                 }
             }
             return ldapEntry;
-        } catch (IOException e) {
-            LOG.debug("Error while closing cursor", e);
-            return null;
+        } finally {
+            if (entryCursor != null) {
+                entryCursor.close();
+            }
         }
     }
 
@@ -226,11 +224,13 @@ public class LdapConnector {
                                   @Nullable LdapEntry ldapEntry) {
         final Set<String> groups = Sets.newHashSet();
 
-        try (final EntryCursor groupSearch = connection.search(
-                groupSearchBase,
-                groupSearchPattern,
-                SearchScope.SUBTREE,
-                "objectClass", ATTRIBUTE_UNIQUE_MEMBER, ATTRIBUTE_MEMBER, ATTRIBUTE_MEMBER_UID, groupIdAttribute)) {
+        EntryCursor groupSearch = null;
+        try {
+            groupSearch = connection.search(
+                    groupSearchBase,
+                    groupSearchPattern,
+                    SearchScope.SUBTREE,
+                    "objectClass", ATTRIBUTE_UNIQUE_MEMBER, ATTRIBUTE_MEMBER, ATTRIBUTE_MEMBER_UID, groupIdAttribute);
             LOG.trace("LDAP search for groups: {} starting at {}", groupSearchPattern, groupSearchBase);
             for (Entry e : groupSearch) {
                 if (LOG.isTraceEnabled()) {
@@ -268,12 +268,12 @@ public class LdapConnector {
                     }
                     final Attribute members = e.get(memberAttribute);
                     if (members != null) {
-                        final String dn = normalizedDn(ldapEntry.getDn());
+                        final String dn = ldapEntry.getDn();
                         final String uid = ldapEntry.get("uid");
 
                         for (Value<?> member : members) {
                             LOG.trace("DN {} == {} member?", dn, member.getString());
-                            if (dn != null && dn.equalsIgnoreCase(normalizedDn(member.getString()))) {
+                            if (dn.equalsIgnoreCase(member.getString())) {
                                 groups.add(groupId);
                             } else {
                                 // The posixGroup object class is using the memberUid attribute for group members.
@@ -294,46 +294,13 @@ public class LdapConnector {
                             "LDAP referrals at the moment. Please see " +
                             DocsHelper.PAGE_LDAP_TROUBLESHOOTING.toString() + " for more information.",
                     ExceptionUtils.getRootCause(e));
+        } finally {
+            if (groupSearch != null) {
+                groupSearch.close();
+            }
         }
 
         return groups;
-    }
-
-    /**
-     * When the given string is a DN, the method ensures that the DN gets normalized so it can be used in string
-     * comparison.
-     *
-     * If the string is not a DN, the method just returns it.
-     *
-     * Examples:
-     *
-     * String is a DN:
-     *   input  = "cn=John Doe, ou=groups, ou=system"
-     *   output = "cn=John Doe,ou=groups,ou=system"
-     *
-     * String is not a DN:
-     *   input  = "john"
-     *   output = "john"
-     *
-     * This behavior is needed because for some values we don't know if the value is a DN or not. (i.e. group member values)
-     *
-     * See: https://github.com/Graylog2/graylog2-server/issues/1790
-     *
-     * @param dn denormalized DN string
-     * @return normalized DN string
-     */
-    @Nullable
-    private String normalizedDn(String dn) {
-        if (isNullOrEmpty(dn)) {
-            return dn;
-        } else {
-            try {
-                return new Dn(dn).getNormName();
-            } catch (LdapInvalidDnException e) {
-                LOG.debug("Invalid DN", e);
-                return dn;
-            }
-        }
     }
 
     public Set<String> listGroups(LdapNetworkConnection connection,

@@ -32,7 +32,6 @@ import org.apache.directory.server.core.integ.AbstractLdapTestUnit;
 import org.apache.directory.server.core.integ.FrameworkRunner;
 import org.apache.directory.server.core.partition.impl.avl.AvlPartition;
 import org.apache.directory.server.ldap.LdapServer;
-import org.graylog2.ApacheDirectoryTestServiceFactory;
 import org.graylog2.shared.security.ldap.LdapEntry;
 import org.junit.After;
 import org.junit.Before;
@@ -51,7 +50,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 })
 @CreateDS(
         name = "LdapConnectorTest",
-        factory = ApacheDirectoryTestServiceFactory.class, // Ensures a unique storage location
         partitions = {
                 @CreatePartition(
                         name = "example.com",
@@ -165,7 +163,7 @@ public class LdapConnectorTest extends AbstractLdapTestUnit {
                 .isNotNull()
                 .isEqualTo("cn=John Doe,ou=users,dc=example,dc=com");
 
-        assertThat(entry.getGroups()).hasSize(2).contains("Engineers", "Whitespace Engineers");
+        assertThat(entry.getGroups()).hasSize(1).contains("Engineers");
     }
 
     @Test
@@ -206,8 +204,8 @@ public class LdapConnectorTest extends AbstractLdapTestUnit {
                 .isEqualTo("cn=John Doe,ou=users,dc=example,dc=com");
 
         assertThat(entry.getGroups())
-                .hasSize(4)
-                .contains("Developers", "QA", "Engineers", "Whitespace Engineers");
+                .hasSize(3)
+                .contains("Developers", "QA", "Engineers");
     }
 
     @Test
@@ -215,33 +213,8 @@ public class LdapConnectorTest extends AbstractLdapTestUnit {
         final Set<String> groups = connector.listGroups(connection, "ou=groups,dc=example,dc=com", "(objectClass=top)", "cn");
 
         assertThat(groups)
-                .hasSize(4)
-                .contains("Developers", "QA", "Engineers", "Whitespace Engineers");
-    }
-
-    @Test
-    public void testFindGroupsWithWhitespace() throws Exception {
-        final LdapEntry ldapEntry1 = new LdapEntry();
-        ldapEntry1.setDn("cn=John Doe,ou=users,dc=example,dc=com");
-        ldapEntry1.put("uid", "john");
-
-        final LdapEntry ldapEntry2 = new LdapEntry();
-        ldapEntry2.setDn("cn=John Doe,  ou=users, dc=example, dc=com");
-        ldapEntry2.put("uid", "john");
-
-        final Set<String> groups1 = connector.findGroups(connection,
-                "ou=groups,dc=example,dc=com",
-                "(objectClass=groupOfUniqueNames)",
-                "cn",
-                ldapEntry1);
-        final Set<String> groups2 = connector.findGroups(connection,
-                "ou=groups,dc=example,dc=com",
-                "(objectClass=groupOfUniqueNames)",
-                "cn",
-                ldapEntry2);
-
-        assertThat(groups1).hasSize(2).containsOnly("Whitespace Engineers", "Engineers");
-        assertThat(groups2).hasSize(2).containsOnly("Whitespace Engineers", "Engineers");
+                .hasSize(3)
+                .contains("Developers", "QA", "Engineers");
     }
 
     @Test
