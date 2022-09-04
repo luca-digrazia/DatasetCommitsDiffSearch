@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -50,9 +50,10 @@ public class BeanProcessor implements ElementProcessor {
 	@Override
 	public void process(Element element, JCodeModel codeModel, EBeansHolder eBeansHolder) {
 		EBeanHolder holder = eBeansHolder.getEnclosingEBeanHolder(element);
-
-		DeclaredType targetAnnotationClassValue = annotationHelper.extractAnnotationClassParameter(element);
-
+		
+		
+		DeclaredType targetAnnotationClassValue = annotationHelper.extractAnnotationClassValue(element);
+		
 		TypeMirror elementType;
 		if (targetAnnotationClassValue != null) {
 			elementType = targetAnnotationClassValue;
@@ -64,7 +65,7 @@ public class BeanProcessor implements ElementProcessor {
 
 		String typeQualifiedName = elementType.toString();
 
-		JClass injectedClass = eBeansHolder.refClass(typeQualifiedName + GENERATION_SUFFIX);
+		JClass injectedClass = codeModel.ref(typeQualifiedName + GENERATION_SUFFIX);
 
 		{
 			// getInstance

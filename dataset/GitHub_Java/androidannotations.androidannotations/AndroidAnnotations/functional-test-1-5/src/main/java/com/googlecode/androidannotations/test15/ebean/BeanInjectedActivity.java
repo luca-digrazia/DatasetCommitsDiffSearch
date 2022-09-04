@@ -28,8 +28,5 @@ public class BeanInjectedActivity extends Activity {
 	
 	@Bean(SomeImplementation.class)
 	public SomeInterface interfaceDependency;
-	
-	@Bean
-	public SingletonDependency singletonDependency;
 
 }
