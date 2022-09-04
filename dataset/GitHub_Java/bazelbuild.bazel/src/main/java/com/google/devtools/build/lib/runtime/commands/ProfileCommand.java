@@ -251,6 +251,7 @@ public final class ProfileCommand implements BlazeCommand {
                     statistics.getSummaryStatistics(),
                     statistics.getSummaryPhaseStatistics(),
                     Optional.<CriticalPathStatistics>absent(),
+                    statistics.getMissingActionsCount(),
                     opts.vfsStatsLimit)
                 .print();
           }
@@ -309,6 +310,7 @@ public final class ProfileCommand implements BlazeCommand {
                   phaseSummaryStatistics,
                   phaseStatistics,
                   critPathStats,
+                  info.getMissingActionsCount(),
                   opts.htmlDetails,
                   opts.htmlPixelsPerSecond,
                   opts.vfsStatsLimit,
@@ -320,6 +322,7 @@ public final class ProfileCommand implements BlazeCommand {
                       phaseSummaryStatistics,
                       phaseStatistics,
                       Optional.of(critPathStats),
+                      info.getMissingActionsCount(),
                       opts.vfsStatsLimit)
                   .print();
             }
