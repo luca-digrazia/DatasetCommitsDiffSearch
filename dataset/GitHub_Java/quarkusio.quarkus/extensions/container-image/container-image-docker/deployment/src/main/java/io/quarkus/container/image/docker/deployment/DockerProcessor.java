@@ -18,6 +18,7 @@ import java.util.function.Function;
 import org.jboss.logging.Logger;
 
 import io.quarkus.container.image.deployment.ContainerImageConfig;
+import io.quarkus.container.image.deployment.ContainerImageConfig.Execution;
 import io.quarkus.container.image.deployment.util.ImageUtil;
 import io.quarkus.container.image.deployment.util.NativeBinaryUtil;
 import io.quarkus.container.spi.ContainerImageBuildRequestBuildItem;
@@ -52,8 +53,7 @@ public class DockerProcessor {
             // used to ensure that the jar has been built
             JarBuildItem jar) {
 
-        if (!containerImageConfig.build && !containerImageConfig.push && !buildRequest.isPresent()
-                && !pushRequest.isPresent()) {
+        if (containerImageConfig.execution == Execution.NONE && !buildRequest.isPresent() && !pushRequest.isPresent()) {
             return;
         }
 
@@ -81,8 +81,7 @@ public class DockerProcessor {
             // used to ensure that the native binary has been built
             NativeImageBuildItem nativeImage) {
 
-        if (!containerImageConfig.build && !containerImageConfig.push && !buildRequest.isPresent()
-                && !pushRequest.isPresent()) {
+        if (containerImageConfig.execution == Execution.NONE && !buildRequest.isPresent() && !pushRequest.isPresent()) {
             return;
         }
 
@@ -91,7 +90,7 @@ public class DockerProcessor {
                     "The native binary produced by the build is not a Linux binary and therefore cannot be used in a Linux container image. Consider adding \"quarkus.native.container-build=true\" to your configuration");
         }
 
-        log.info("Starting docker image build");
+        log.info("Building docker image for native image.");
 
         String image = containerImage.getImage();
 
@@ -114,9 +113,7 @@ public class DockerProcessor {
             throw dockerException(buildArgs);
         }
 
-        log.infof("Pushed container image %s (%s)\n", image, reader.getImageId());
-
-        if (pushRequested || containerImageConfig.push) {
+        if (pushRequested || containerImageConfig.execution == ContainerImageConfig.Execution.PUSH) {
             // Check if we need to login first
             if (containerImageConfig.username.isPresent() && containerImageConfig.password.isPresent()) {
                 boolean loginSuccessful = ExecUtil.exec("docker", "-u", containerImageConfig.username.get(),
@@ -130,7 +127,6 @@ public class DockerProcessor {
             if (!pushSuccessful) {
                 throw dockerException(pushArgs);
             }
-            log.info("Successfully pushed docker image " + image);
         }
     }
 

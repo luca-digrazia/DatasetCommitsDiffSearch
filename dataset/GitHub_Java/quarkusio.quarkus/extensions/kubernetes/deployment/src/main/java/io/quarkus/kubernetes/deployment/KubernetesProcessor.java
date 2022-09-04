@@ -5,7 +5,6 @@ import static io.quarkus.kubernetes.deployment.Constants.*;
 import java.io.File;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
@@ -95,6 +94,10 @@ class KubernetesProcessor {
         if (kubernetesPortBuildItems.isEmpty()) {
             return;
         }
+
+        // The resources that dekorate's execution will result in, will later-on be written
+        // by quarkus in the 'wiring-classes' directory
+        // The location is needed in order to properly support s2i build triggering
 
         // by passing false to SimpleFileWriter, we ensure that no files are actually written during this phase
         final Path root;
@@ -189,7 +192,7 @@ class KubernetesProcessor {
                     new GeneratedFileSystemResourceBuildItem(
                             // we need to make sure we are only passing the relative path to the build item
                             relativePath,
-                            resourceEntry.getValue().getBytes(StandardCharsets.UTF_8)));
+                            resourceEntry.getValue().getBytes("UTF-8")));
         }
 
         featureProducer.produce(new FeatureBuildItem(FeatureBuildItem.KUBERNETES));
@@ -210,11 +213,11 @@ class KubernetesProcessor {
         containerImageBuildItem.ifPresent(c -> session.resources()
                 .decorate(new ApplyImageDecorator(applicationInfo.getName(), c.getImage())));
 
-        //Handle env variables
+        //Hanlde env variables
         kubernetesEnvBuildItems.forEach(e -> session.resources()
                 .decorate(new AddEnvVarDecorator(new EnvBuilder().withName(e.getName()).withValue(e.getValue()).build())));
 
-        //Handle Command and arguments
+        //Handle Command and arugments
         commandBuildItem.ifPresent(c -> {
             session.resources().decorate(new ApplyCommandDecorator(applicationInfo.getName(), new String[] { c.getCommand() }));
             session.resources().decorate(new ApplyArgsDecorator(applicationInfo.getName(), c.getArgs()));
@@ -303,4 +306,9 @@ class KubernetesProcessor {
         return key.substring(0, key.indexOf("."));
     }
 
+    private <T> T[] toArray(List<T> list) {
+        Class clazz = list.get(0).getClass();
+        T[] array = (T[]) java.lang.reflect.Array.newInstance(clazz, list.size());
+        return list.toArray(array);
+    }
 }
