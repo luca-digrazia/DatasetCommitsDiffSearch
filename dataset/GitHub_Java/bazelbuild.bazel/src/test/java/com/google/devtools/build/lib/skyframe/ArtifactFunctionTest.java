@@ -29,7 +29,6 @@ import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.actions.ActionTemplate;
 import com.google.devtools.build.lib.actions.Actions;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.Artifact.DerivedArtifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifactType;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
@@ -314,7 +313,7 @@ public class ArtifactFunctionTest extends ArtifactFunctionTestCase {
   @Test
   public void actionExecutionValueSerialization() throws Exception {
     ActionLookupData dummyData = ActionLookupData.create(ALL_OWNER, 0);
-    DerivedArtifact artifact1 = createDerivedArtifact("one");
+    Artifact.DerivedArtifact artifact1 = createDerivedArtifact("one");
     FileArtifactValue metadata1 =
         ActionMetadataHandler.fileArtifactValueFromArtifact(artifact1, null, null);
     SpecialArtifact treeArtifact = createDerivedTreeArtifactOnly("tree");
@@ -327,7 +326,7 @@ public class ArtifactFunctionTest extends ArtifactFunctionTestCase {
         TreeArtifactValue.create(
             ImmutableMap.of(
                 treeFileArtifact, FileArtifactValue.createForTesting(treeFileArtifact)));
-    DerivedArtifact artifact3 = createDerivedArtifact("three");
+    Artifact.DerivedArtifact artifact3 = createDerivedArtifact("three");
     FilesetOutputSymlink filesetOutputSymlink =
         FilesetOutputSymlink.createForTesting(
             PathFragment.EMPTY_FRAGMENT, PathFragment.EMPTY_FRAGMENT, PathFragment.EMPTY_FRAGMENT);
@@ -356,10 +355,10 @@ public class ArtifactFunctionTest extends ArtifactFunctionTestCase {
         ArtifactRoot.asSourceRoot(Root.fromPath(root)), PathFragment.create(path));
   }
 
-  private DerivedArtifact createDerivedArtifact(String path) {
+  private Artifact.DerivedArtifact createDerivedArtifact(String path) {
     PathFragment execPath = PathFragment.create("out").getRelative(path);
-    DerivedArtifact output =
-        new DerivedArtifact(ArtifactRoot.asDerivedRoot(root, "out"), execPath, ALL_OWNER);
+    Artifact.DerivedArtifact output =
+        new Artifact.DerivedArtifact(ArtifactRoot.asDerivedRoot(root, "out"), execPath, ALL_OWNER);
     actions.add(new DummyAction(NestedSetBuilder.emptySet(Order.STABLE_ORDER), output));
     output.setGeneratingActionKey(ActionLookupData.create(ALL_OWNER, actions.size() - 1));
     return output;
@@ -368,7 +367,7 @@ public class ArtifactFunctionTest extends ArtifactFunctionTestCase {
   private Artifact createMiddlemanArtifact(String path) {
     ArtifactRoot middlemanRoot =
         ArtifactRoot.middlemanRoot(middlemanPath, middlemanPath.getRelative("out"));
-    return new DerivedArtifact(
+    return new Artifact.DerivedArtifact(
         middlemanRoot, middlemanRoot.getExecPath().getRelative(path), ALL_OWNER);
   }
 
@@ -434,8 +433,8 @@ public class ArtifactFunctionTest extends ArtifactFunctionTestCase {
     }
     SkyValue value = result.get(key);
     if (value instanceof ActionExecutionValue) {
-      return ((ActionExecutionValue) value)
-          .getExistingFileArtifactValue((DerivedArtifact) artifact);
+      return ActionExecutionValue.createSimpleFileArtifactValue(
+          (Artifact.DerivedArtifact) artifact, (ActionExecutionValue) value);
     }
     return value;
   }

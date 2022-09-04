@@ -216,7 +216,8 @@ class ArtifactFunction implements SkyFunction {
 
       for (TreeFileArtifact treeFileArtifact : treeFileArtifacts) {
         FileArtifactValue value =
-            actionExecutionValue.getExistingFileArtifactValue(treeFileArtifact);
+            ActionExecutionValue.createSimpleFileArtifactValue(
+                treeFileArtifact, actionExecutionValue);
         if (FileArtifactValue.OMITTED_FILE_MARKER.equals(value)) {
           omitted = true;
         } else {
@@ -332,8 +333,8 @@ class ArtifactFunction implements SkyFunction {
         fileInputsBuilder.add(
             Pair.of(
                 input,
-                ((ActionExecutionValue) inputValue)
-                    .getExistingFileArtifactValue((DerivedArtifact) input)));
+                ActionExecutionValue.createSimpleFileArtifactValue(
+                    (DerivedArtifact) input, (ActionExecutionValue) inputValue)));
       } else if (inputValue instanceof TreeArtifactValue) {
         directoryInputsBuilder.add(Pair.of(input, (TreeArtifactValue) inputValue));
       } else {

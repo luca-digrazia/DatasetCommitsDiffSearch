@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.actions.FileArtifactValue;
 import com.google.devtools.build.lib.actions.HasDigest;
 import com.google.devtools.build.lib.actions.cache.DigestUtils;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.SerializationConstant;
 import com.google.devtools.build.lib.vfs.Dirent;
 import com.google.devtools.build.lib.vfs.Dirent.Type;
 import com.google.devtools.build.lib.vfs.Path;
@@ -44,27 +43,27 @@ import javax.annotation.Nullable;
  * Value for TreeArtifacts, which contains a digest and the {@link FileArtifactValue}s of its child
  * {@link TreeFileArtifact}s.
  */
+@AutoCodec
 public class TreeArtifactValue implements HasDigest, SkyValue {
 
-  @SerializationConstant @AutoCodec.VisibleForSerialization
-  static final TreeArtifactValue EMPTY =
+  private static final TreeArtifactValue EMPTY =
       new TreeArtifactValue(
           DigestUtils.fromMetadata(ImmutableMap.of()),
           ImmutableSortedMap.of(),
-          /*entirelyRemote=*/ false);
+          /* remote= */ false);
 
   private final byte[] digest;
   private final ImmutableSortedMap<TreeFileArtifact, FileArtifactValue> childData;
-  private final boolean entirelyRemote;
+  private final boolean remote;
 
   @AutoCodec.VisibleForSerialization
   TreeArtifactValue(
       byte[] digest,
       ImmutableSortedMap<TreeFileArtifact, FileArtifactValue> childData,
-      boolean entirelyRemote) {
+      boolean remote) {
     this.digest = digest;
     this.childData = childData;
-    this.entirelyRemote = entirelyRemote;
+    this.remote = remote;
   }
 
   /**
@@ -78,7 +77,7 @@ public class TreeArtifactValue implements HasDigest, SkyValue {
     }
     Map<String, FileArtifactValue> digestBuilder =
         Maps.newHashMapWithExpectedSize(childFileValues.size());
-    boolean entirelyRemote = true;
+    boolean remote = true;
     for (Map.Entry<TreeFileArtifact, ? extends FileArtifactValue> e : childFileValues.entrySet()) {
       TreeFileArtifact child = e.getKey();
       FileArtifactValue value = e.getValue();
@@ -86,14 +85,15 @@ public class TreeArtifactValue implements HasDigest, SkyValue {
           !FileArtifactValue.OMITTED_FILE_MARKER.equals(value),
           "Cannot construct TreeArtifactValue because child %s was omitted",
           child);
-      // Tolerate a tree artifact having a mix of local and remote children (b/152496153#comment80).
-      entirelyRemote &= value.isRemote();
+      // TODO(buchgr): Enforce that all children in a tree artifact are either remote or local
+      // once b/70354083 is fixed.
+      remote = remote && value.isRemote();
       digestBuilder.put(child.getParentRelativePath().getPathString(), value);
     }
     return new TreeArtifactValue(
         DigestUtils.fromMetadata(digestBuilder),
         ImmutableSortedMap.copyOf(childFileValues),
-        entirelyRemote);
+        remote);
   }
 
   FileArtifactValue getSelfData() {
@@ -125,8 +125,8 @@ public class TreeArtifactValue implements HasDigest, SkyValue {
   }
 
   /** Returns true if the {@link TreeFileArtifact}s are only stored remotely. */
-  public boolean isEntirelyRemote() {
-    return entirelyRemote;
+  public boolean isRemote() {
+    return remote;
   }
 
   @Override
@@ -161,67 +161,57 @@ public class TreeArtifactValue implements HasDigest, SkyValue {
   }
 
   /**
-   * Represents a tree artifact that was intentionally omitted, similar to {@link
-   * FileArtifactValue#OMITTED_FILE_MARKER}.
-   */
-  @SerializationConstant
-  public static final TreeArtifactValue OMITTED_TREE_MARKER = createMarker("OMITTED_TREE_MARKER");
-
-  /**
    * A TreeArtifactValue that represents a missing TreeArtifact. This is occasionally useful because
    * Java's concurrent collections disallow null members.
    */
-  static final TreeArtifactValue MISSING_TREE_ARTIFACT = createMarker("MISSING_TREE_ARTIFACT");
+  static final TreeArtifactValue MISSING_TREE_ARTIFACT =
+      new TreeArtifactValue(null, ImmutableSortedMap.of(), /* remote= */ false) {
+        @Override
+        FileArtifactValue getSelfData() {
+          throw new UnsupportedOperationException();
+        }
 
-  private static TreeArtifactValue createMarker(String toStringRepresentation) {
-    return new TreeArtifactValue(null, ImmutableSortedMap.of(), /*entirelyRemote=*/ false) {
-      @Override
-      FileArtifactValue getSelfData() {
-        throw new UnsupportedOperationException(toString());
-      }
+        @Override
+        public ImmutableSet<TreeFileArtifact> getChildren() {
+          throw new UnsupportedOperationException();
+        }
 
-      @Override
-      public ImmutableSet<TreeFileArtifact> getChildren() {
-        throw new UnsupportedOperationException(toString());
-      }
+        @Override
+        ImmutableMap<TreeFileArtifact, FileArtifactValue> getChildValues() {
+          throw new UnsupportedOperationException();
+        }
 
-      @Override
-      ImmutableMap<TreeFileArtifact, FileArtifactValue> getChildValues() {
-        throw new UnsupportedOperationException(toString());
-      }
+        @Override
+        FileArtifactValue getMetadata() {
+          throw new UnsupportedOperationException();
+        }
 
-      @Override
-      FileArtifactValue getMetadata() {
-        throw new UnsupportedOperationException(toString());
-      }
+        @Override
+        ImmutableSet<PathFragment> getChildPaths() {
+          throw new UnsupportedOperationException();
+        }
 
-      @Override
-      ImmutableSet<PathFragment> getChildPaths() {
-        throw new UnsupportedOperationException(toString());
-      }
+        @Nullable
+        @Override
+        public byte[] getDigest() {
+          throw new UnsupportedOperationException();
+        }
 
-      @Nullable
-      @Override
-      public byte[] getDigest() {
-        throw new UnsupportedOperationException(toString());
-      }
+        @Override
+        public int hashCode() {
+          return 24; // my favorite number
+        }
 
-      @Override
-      public int hashCode() {
-        return System.identityHashCode(this);
-      }
+        @Override
+        public boolean equals(Object other) {
+          return this == other;
+        }
 
-      @Override
-      public boolean equals(Object other) {
-        return this == other;
-      }
-
-      @Override
-      public String toString() {
-        return toStringRepresentation;
-      }
-    };
-  }
+        @Override
+        public String toString() {
+          return "MISSING_TREE_ARTIFACT";
+        }
+      };
 
   private static void explodeDirectory(
       Path treeArtifactPath,
