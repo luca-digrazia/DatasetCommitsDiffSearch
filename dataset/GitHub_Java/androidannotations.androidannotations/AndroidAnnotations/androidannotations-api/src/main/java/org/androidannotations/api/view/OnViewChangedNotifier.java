@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,8 +15,8 @@
  */
 package org.androidannotations.api.view;
 
-import java.util.LinkedHashSet;
-import java.util.Set;
+import java.util.LinkedList;
+import java.util.List;
 
 public class OnViewChangedNotifier {
 
@@ -34,7 +34,7 @@ public class OnViewChangedNotifier {
 		}
 	}
 
-	private final Set<OnViewChangedListener> listeners = new LinkedHashSet<OnViewChangedListener>();
+	private final List<OnViewChangedListener> listeners = new LinkedList<OnViewChangedListener>();
 
 	public void notifyViewChanged(HasViews hasViews) {
 		for (OnViewChangedListener listener : listeners) {

@@ -16,19 +16,14 @@
 package org.androidannotations;
 
 import static org.androidannotations.helper.AndroidManifestFinder.ANDROID_MANIFEST_FILE_OPTION;
-import static org.androidannotations.helper.CanonicalNameConstants.PRODUCE;
-import static org.androidannotations.helper.CanonicalNameConstants.SUBSCRIBE;
 import static org.androidannotations.helper.ModelConstants.TRACE_OPTION;
 
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.Messager;
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.annotation.processing.RoundEnvironment;
@@ -39,6 +34,8 @@ import javax.lang.model.element.Element;
 import javax.lang.model.element.TypeElement;
 import javax.tools.Diagnostic;
 
+import org.androidannotations.annotationprocessor.AnnotatedAbstractProcessor;
+import org.androidannotations.annotationprocessor.SupportedAnnotationClasses;
 import org.androidannotations.annotations.AfterInject;
 import org.androidannotations.annotations.AfterTextChange;
 import org.androidannotations.annotations.AfterViews;
@@ -166,7 +163,6 @@ import org.androidannotations.processing.OptionsItemProcessor;
 import org.androidannotations.processing.OptionsMenuProcessor;
 import org.androidannotations.processing.OrmLiteDaoProcessor;
 import org.androidannotations.processing.PrefProcessor;
-import org.androidannotations.processing.ProduceProcessor;
 import org.androidannotations.processing.ResProcessor;
 import org.androidannotations.processing.RestServiceProcessor;
 import org.androidannotations.processing.RoboGuiceProcessor;
@@ -175,7 +171,6 @@ import org.androidannotations.processing.SeekBarProgressChangeProcessor;
 import org.androidannotations.processing.SeekBarTouchStartProcessor;
 import org.androidannotations.processing.SeekBarTouchStopProcessor;
 import org.androidannotations.processing.SharedPrefProcessor;
-import org.androidannotations.processing.SubscribeProcessor;
 import org.androidannotations.processing.SystemServiceProcessor;
 import org.androidannotations.processing.TextChangeProcessor;
 import org.androidannotations.processing.TouchProcessor;
@@ -233,7 +228,6 @@ import org.androidannotations.validation.OptionsItemValidator;
 import org.androidannotations.validation.OptionsMenuValidator;
 import org.androidannotations.validation.OrmLiteDaoValidator;
 import org.androidannotations.validation.PrefValidator;
-import org.androidannotations.validation.ProduceValidator;
 import org.androidannotations.validation.ResValidator;
 import org.androidannotations.validation.RestServiceValidator;
 import org.androidannotations.validation.RoboGuiceValidator;
@@ -243,7 +237,6 @@ import org.androidannotations.validation.SeekBarProgressChangeValidator;
 import org.androidannotations.validation.SeekBarTouchStartValidator;
 import org.androidannotations.validation.SeekBarTouchStopValidator;
 import org.androidannotations.validation.SharedPrefValidator;
-import org.androidannotations.validation.SubscribeValidator;
 import org.androidannotations.validation.SystemServiceValidator;
 import org.androidannotations.validation.TextChangeValidator;
 import org.androidannotations.validation.TouchValidator;
@@ -259,12 +252,89 @@ import org.androidannotations.validation.rest.PostValidator;
 import org.androidannotations.validation.rest.PutValidator;
 import org.androidannotations.validation.rest.RestValidator;
 
+@SupportedAnnotationClasses({ EActivity.class, //
+		App.class, //
+		EViewGroup.class, //
+		EView.class, //
+		AfterViews.class, //
+		RoboGuice.class, //
+		ViewById.class, //
+		Click.class, //
+		LongClick.class, //
+		ItemClick.class, //
+		ItemLongClick.class, //
+		Touch.class, //
+		ItemSelect.class, //
+		UiThread.class, //
+		Transactional.class, //
+		Background.class, //
+		Extra.class, //
+		SystemService.class, //
+		SharedPref.class, //
+		Pref.class, //
+		StringRes.class, //
+		ColorRes.class, //
+		AnimationRes.class, //
+		BooleanRes.class, //
+		ColorStateListRes.class, //
+		DimensionRes.class, //
+		DimensionPixelOffsetRes.class, //
+		DimensionPixelSizeRes.class, //
+		DrawableRes.class, //
+		IntArrayRes.class, //
+		IntegerRes.class, //
+		LayoutRes.class, //
+		MovieRes.class, //
+		TextRes.class, //
+		TextArrayRes.class, //
+		StringArrayRes.class, //
+		Rest.class, //
+		Get.class, //
+		Head.class, //
+		Options.class, //
+		Post.class, //
+		Put.class, //
+		Delete.class, //
+		Accept.class, //
+		FromHtml.class, //
+		OptionsMenu.class, //
+		OptionsItem.class, //
+		HtmlRes.class, //
+		NoTitle.class, //
+		CustomTitle.class, //
+		Fullscreen.class, //
+		RestService.class, //
+		EBean.class, //
+		RootContext.class, //
+		Bean.class, //
+		AfterInject.class, //
+		EService.class, //
+		EReceiver.class, //
+		EProvider.class, //
+		Trace.class, //
+		InstanceState.class, //
+		NonConfigurationInstance.class, //
+		EApplication.class, //
+		EFragment.class, //
+		FragmentById.class, //
+		FragmentByTag.class, //
+		BeforeTextChange.class, //
+		TextChange.class, //
+		SeekBarProgressChange.class, //
+		SeekBarTouchStart.class, //
+		SeekBarTouchStop.class, //
+		AfterTextChange.class, //
+		OrmLiteDao.class, //
+		HttpsClient.class, //
+		FragmentArg.class, //
+		OnActivityResult.class, //
+		HierarchyViewerSupport.class //
+})
 @SupportedSourceVersion(SourceVersion.RELEASE_6)
 @SupportedOptions({ TRACE_OPTION, ANDROID_MANIFEST_FILE_OPTION })
-public class AndroidAnnotationProcessor extends AbstractProcessor {
+public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 
 	private final TimeStats timeStats = new TimeStats();
-	private Set<String> supportedAnnotationNames;
 
 	@Override
 	public synchronized void init(ProcessingEnvironment processingEnv) {
@@ -330,8 +400,8 @@ public class AndroidAnnotationProcessor extends AbstractProcessor {
 
 	private AnnotationElementsHolder extractAnnotations(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
 		timeStats.start("Extract Annotations");
-		ModelExtractor modelExtractor = new ModelExtractor();
-		AnnotationElementsHolder extractedModel = modelExtractor.extract(annotations, getSupportedAnnotationTypes(), roundEnv);
+		ModelExtractor modelExtractor = new ModelExtractor(processingEnv, getSupportedAnnotationClasses());
+		AnnotationElementsHolder extractedModel = modelExtractor.extract(annotations, roundEnv);
 		timeStats.stop("Extract Annotations");
 		return extractedModel;
 	}
@@ -435,16 +505,13 @@ public class AndroidAnnotationProcessor extends AbstractProcessor {
 		 */
 		modelValidator.register(new AfterViewsValidator(processingEnv));
 		modelValidator.register(new TraceValidator(processingEnv));
-		modelValidator.register(new SubscribeValidator(processingEnv));
-		modelValidator.register(new ProduceValidator(processingEnv));
-		modelValidator.register(new RunnableValidator(UiThread.class.getName(), processingEnv));
-		modelValidator.register(new RunnableValidator(Background.class.getName(), processingEnv));
+		modelValidator.register(new RunnableValidator(UiThread.class, processingEnv));
+		modelValidator.register(new RunnableValidator(Background.class, processingEnv));
 		modelValidator.register(new InstanceStateValidator(processingEnv));
 		modelValidator.register(new OrmLiteDaoValidator(processingEnv, rClass));
 		modelValidator.register(new HttpsClientValidator(processingEnv, rClass));
 		modelValidator.register(new OnActivityResultValidator(processingEnv, rClass));
 		modelValidator.register(new HierarchyViewerSupportValidator(processingEnv, androidManifest));
-
 		return modelValidator;
 	}
 
@@ -530,8 +597,6 @@ public class AndroidAnnotationProcessor extends AbstractProcessor {
 		if (traceActivated()) {
 			modelProcessor.register(new TraceProcessor());
 		}
-		modelProcessor.register(new SubscribeProcessor());
-		modelProcessor.register(new ProduceProcessor());
 		modelProcessor.register(new UiThreadProcessor());
 		modelProcessor.register(new BackgroundProcessor());
 		modelProcessor.register(new AfterInjectProcessor());
@@ -572,102 +637,5 @@ public class AndroidAnnotationProcessor extends AbstractProcessor {
 		PrintWriter pw = new PrintWriter(writer);
 		e.printStackTrace(pw);
 		return writer.toString();
-	}
-
-	@Override
-	public Set<String> getSupportedAnnotationTypes() {
-		if (supportedAnnotationNames == null) {
-			Class<?>[] annotationClassesArray = { //
-			//
-					EActivity.class, //
-					App.class, //
-					EViewGroup.class, //
-					EView.class, //
-					AfterViews.class, //
-					RoboGuice.class, //
-					ViewById.class, //
-					Click.class, //
-					LongClick.class, //
-					ItemClick.class, //
-					ItemLongClick.class, //
-					Touch.class, //
-					ItemSelect.class, //
-					UiThread.class, //
-					Transactional.class, //
-					Background.class, //
-					Extra.class, //
-					SystemService.class, //
-					SharedPref.class, //
-					Pref.class, //
-					StringRes.class, //
-					ColorRes.class, //
-					AnimationRes.class, //
-					BooleanRes.class, //
-					ColorStateListRes.class, //
-					DimensionRes.class, //
-					DimensionPixelOffsetRes.class, //
-					DimensionPixelSizeRes.class, //
-					DrawableRes.class, //
-					IntArrayRes.class, //
-					IntegerRes.class, //
-					LayoutRes.class, //
-					MovieRes.class, //
-					TextRes.class, //
-					TextArrayRes.class, //
-					StringArrayRes.class, //
-					Rest.class, //
-					Get.class, //
-					Head.class, //
-					Options.class, //
-					Post.class, //
-					Put.class, //
-					Delete.class, //
-					Accept.class, //
-					FromHtml.class, //
-					OptionsMenu.class, //
-					OptionsItem.class, //
-					HtmlRes.class, //
-					NoTitle.class, //
-					CustomTitle.class, //
-					Fullscreen.class, //
-					RestService.class, //
-					EBean.class, //
-					RootContext.class, //
-					Bean.class, //
-					AfterInject.class, //
-					EService.class, //
-					EReceiver.class, //
-					EProvider.class, //
-					Trace.class, //
-					InstanceState.class, //
-					NonConfigurationInstance.class, //
-					EApplication.class, //
-					EFragment.class, //
-					FragmentById.class, //
-					FragmentByTag.class, //
-					BeforeTextChange.class, //
-					TextChange.class, //
-					SeekBarProgressChange.class, //
-					SeekBarTouchStart.class, //
-					SeekBarTouchStop.class, //
-					AfterTextChange.class, //
-					OrmLiteDao.class, //
-					HttpsClient.class, //
-					FragmentArg.class, //
-					OnActivityResult.class, //
-					HierarchyViewerSupport.class //
-			};
-
-			Set<String> set = new HashSet<String>(annotationClassesArray.length);
-			for (Class<?> annotationClass : annotationClassesArray) {
-				set.add(annotationClass.getName());
-			}
-
-			set.add(SUBSCRIBE);
-			set.add(PRODUCE);
-
-			supportedAnnotationNames = Collections.unmodifiableSet(set);
-		}
-		return supportedAnnotationNames;
 	}
 }
