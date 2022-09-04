@@ -256,10 +256,9 @@ public class RegisteredToolchainsFunctionTest extends ToolchainTestCase {
         .addEqualityGroup(
             RegisteredToolchainsValue.create(ImmutableList.of(toolchain1, toolchain2)),
             RegisteredToolchainsValue.create(ImmutableList.of(toolchain1, toolchain2)))
-        .addEqualityGroup(RegisteredToolchainsValue.create(ImmutableList.of(toolchain1)))
-        .addEqualityGroup(RegisteredToolchainsValue.create(ImmutableList.of(toolchain2)))
         .addEqualityGroup(
-            RegisteredToolchainsValue.create(ImmutableList.of(toolchain2, toolchain1)))
-        .testEquals();
+            RegisteredToolchainsValue.create(ImmutableList.of(toolchain1)),
+            RegisteredToolchainsValue.create(ImmutableList.of(toolchain2)),
+            RegisteredToolchainsValue.create(ImmutableList.of(toolchain2, toolchain1)));
   }
 }

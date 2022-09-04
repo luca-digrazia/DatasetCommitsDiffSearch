@@ -72,12 +72,12 @@ public class RegisteredToolchainsFunction implements SkyFunction {
     ImmutableList<Label> toolchainLabels;
     try {
       toolchainLabels =
-          TargetPatternUtil.expandTargetPatterns(
+          ToolchainUtil.expandTargetPatterns(
               env, targetPatterns.build(), FilteringPolicies.ruleType("toolchain", true));
       if (env.valuesMissing()) {
         return null;
       }
-    } catch (TargetPatternUtil.InvalidTargetPatternException e) {
+    } catch (ToolchainUtil.InvalidTargetPatternException e) {
       throw new RegisteredToolchainsFunctionException(
           new InvalidToolchainLabelException(e), Transience.PERSISTENT);
     }
@@ -181,7 +181,7 @@ public class RegisteredToolchainsFunction implements SkyFunction {
               "target does not provide the DeclaredToolchainInfo provider"));
     }
 
-    public InvalidToolchainLabelException(TargetPatternUtil.InvalidTargetPatternException e) {
+    public InvalidToolchainLabelException(ToolchainUtil.InvalidTargetPatternException e) {
       this(e.getInvalidPattern(), e.getTpe());
     }
 
