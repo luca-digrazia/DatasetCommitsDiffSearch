@@ -41,17 +41,11 @@ public class ProtoConfiguration extends Fragment implements ProtoConfigurationAp
   /** Command line options. */
   public static class Options extends FragmentOptions {
     @Option(
-        name = "incompatible_generated_protos_in_virtual_imports",
-        defaultValue = "false",
+        name = "experimental_generated_protos_in_virtual_imports",
+        defaultValue = "true",
         documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
         effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
-        metadataTags = {
-          OptionMetadataTag.INCOMPATIBLE_CHANGE,
-          OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-        },
-        help =
-            "If set, generated .proto files are put into a virtual import directory. For more "
-                + "information, see https://github.com/bazelbuild/bazel/issues/9215")
+        help = "If set, generated .proto files are put into a virtual import directory.")
     public boolean generatedProtosInVirtualImports;
 
     @Option(
