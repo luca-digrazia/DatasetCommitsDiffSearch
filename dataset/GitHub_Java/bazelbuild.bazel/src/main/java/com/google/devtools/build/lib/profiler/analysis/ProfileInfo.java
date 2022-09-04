@@ -458,6 +458,10 @@ public class ProfileInfo {
   private ListMultimap<String, Task> builtinFunctions;
 
   public final Map<Task, Task[]> actionDependencyMap;
+  // Used to create fake Action tasks if ACTIONG_GRAPH task does not have
+  // corresponding ACTION task. For action dependency calculations we will
+  // create fake ACTION tasks and assign them negative ids.
+  private int fakeActionId = 0;
 
   private ProfileInfo(String comment) {
     this.comment = comment;
@@ -479,6 +483,14 @@ public class ProfileInfo {
    */
   public boolean isCorruptedOrIncomplete() {
     return corruptedOrIncomplete;
+  }
+
+  /**
+   * Returns number of missing actions which were faked in order to complete
+   * action graph.
+   */
+  public int getMissingActionsCount() {
+    return -fakeActionId;
   }
 
   /**
