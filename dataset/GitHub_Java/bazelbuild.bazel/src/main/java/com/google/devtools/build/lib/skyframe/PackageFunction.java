@@ -337,8 +337,7 @@ public class PackageFunction implements SkyFunction {
             pkg,
             starlarkSemantics,
             // This is a lie.
-            /*loadTimeNanos=*/ 0L,
-            env.getListener());
+            /*loadTimeNanos=*/ 0L);
       } catch (InvalidPackageException e) {
         throw new PackageFunctionException(e, Transience.PERSISTENT);
       }
@@ -540,7 +539,7 @@ public class PackageFunction implements SkyFunction {
 
     try {
       packageFactory.afterDoneLoadingPackage(
-          pkg, starlarkSemantics, packageCacheEntry.loadTimeNanos, env.getListener());
+          pkg, starlarkSemantics, packageCacheEntry.loadTimeNanos);
     } catch (InvalidPackageException e) {
       throw new PackageFunctionException(e, Transience.PERSISTENT);
     }

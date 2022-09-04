@@ -364,12 +364,9 @@ public abstract class BlazeModule {
   }
 
   /**
-   * Returns a helper that the {@link PackageFactory} will use during package loading, or null if
-   * the module does not provide any helper.
-   *
-   * <p>Called once during server startup some time after {@link #serverInit}.
-   *
-   * <p>Note that only one helper per Bazel/Blaze runtime is allowed.
+   * Returns a helper that the {@link PackageFactory} will use during package loading. If the module
+   * does not provide any helper, it should return null. Note that only one helper per Bazel/Blaze
+   * runtime is allowed.
    */
   public Package.Builder.Helper getPackageBuilderHelper(
       ConfiguredRuleClassProvider ruleClassProvider, FileSystem fs) {
@@ -377,12 +374,9 @@ public abstract class BlazeModule {
   }
 
   /**
-   * Returns a {@link PackageValidator} to be used to validate loaded packages, or null if the
-   * module does not provide any validator.
-   *
-   * <p>Called once during server startup some time after {@link #serverInit}.
-   *
-   * <p>Note that only one helper per Bazel/Blaze runtime is allowed.
+   * Returns a {@link PackageValidator} to be used to validate loaded packages. If the module does
+   * not provide any validator it should return null. Only one validator per runtime is allowed -
+   * IOW, only one module per runtime may provide a validator.
    */
   @Nullable
   public PackageValidator getPackageValidator() {
@@ -430,10 +424,6 @@ public abstract class BlazeModule {
     void exit(AbruptExitException exception);
   }
 
-  /**
-   * Provides additional precomputed values to inject into the skyframe graph. Called on every
-   * command execution.
-   */
   public ImmutableList<PrecomputedValue.Injected> getPrecomputedValues() {
     return ImmutableList.of();
   }

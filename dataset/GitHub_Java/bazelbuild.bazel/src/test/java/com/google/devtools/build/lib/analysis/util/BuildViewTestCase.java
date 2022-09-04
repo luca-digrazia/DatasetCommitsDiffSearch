@@ -784,7 +784,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   }
 
   @Nullable
-  protected ParameterFileWriteAction paramFileWriteActionForAction(Action action) {
+  private ParameterFileWriteAction paramFileWriteActionForAction(Action action) {
     for (Artifact input : action.getInputs().toList()) {
       if (!(input instanceof SpecialArtifact)) {
         Action generatingAction = getGeneratingAction(input);

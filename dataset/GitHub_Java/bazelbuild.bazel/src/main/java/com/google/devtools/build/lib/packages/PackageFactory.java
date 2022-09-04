@@ -659,13 +659,10 @@ public final class PackageFactory {
    * @throws InvalidPackageException if the package is determined to be invalid
    */
   public void afterDoneLoadingPackage(
-      Package pkg,
-      StarlarkSemantics starlarkSemantics,
-      long loadTimeNanos,
-      ExtendedEventHandler eventHandler)
+      Package pkg, StarlarkSemantics starlarkSemantics, long loadTimeNanos)
       throws InvalidPackageException {
     packageBuilderHelper.onLoadingComplete(pkg, starlarkSemantics, loadTimeNanos);
-    packageValidator.validate(pkg, eventHandler);
+    packageValidator.validate(pkg);
   }
 
   /**
