@@ -386,13 +386,6 @@ public final class DocstringUtils {
             if (deprecated.isEmpty() && nonStandardDeprecation.isEmpty()) {
               nonStandardDeprecation = checkForNonStandardDeprecation(line);
             }
-            if (line.startsWith("Returns: ")) {
-              error(
-                  "the return value should be documented in a section, like this:\n\n"
-                      + "Returns:\n"
-                      + "  <documentation here>\n\n"
-                      + "For more details, please have a look at the documentation.");
-            }
             if (!(onLastLine() && line.trim().isEmpty())) {
               longDescriptionLines.add(line);
             }
@@ -418,11 +411,7 @@ public final class DocstringUtils {
 
     private String checkForNonStandardDeprecation(String line) {
       if (line.toLowerCase().startsWith("deprecated:") || line.contains("DEPRECATED")) {
-        error(
-            "use a 'Deprecated:' section for deprecations, similar to a 'Returns:' section:\n\n"
-                + "Deprecated:\n"
-                + "  <reason and alternative>\n\n"
-                + "For more details, please have a look at the documentation.");
+        error("use a 'Deprecated:' section for deprecations, similar to a 'Returns:' section");
         return line;
       }
       return "";
@@ -467,10 +456,7 @@ public final class DocstringUtils {
         trimmedLine = line.substring(actualIndentation);
         Matcher matcher = paramLineMatcher.matcher(trimmedLine);
         if (!matcher.matches()) {
-          error(
-              "invalid parameter documentation"
-                  + " (expected format: \"parameter_name: documentation\")."
-                  + "For more details, please have a look at the documentation.");
+          error("invalid parameter documentation");
           nextLine();
           continue;
         }
@@ -489,7 +475,7 @@ public final class DocstringUtils {
         params.add(new ParameterDoc(parameterName, attributes, parameterDescription));
       }
       if (params.isEmpty()) {
-        error(sectionLineNumber, "section is empty or badly formatted");
+        error(sectionLineNumber, "section is empty");
       }
       return params;
     }

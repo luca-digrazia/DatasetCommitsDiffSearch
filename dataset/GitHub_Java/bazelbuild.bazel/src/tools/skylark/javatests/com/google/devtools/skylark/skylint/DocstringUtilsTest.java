@@ -212,7 +212,7 @@ public class DocstringUtilsTest {
     List<DocstringParseError> errors = new ArrayList<>();
     DocstringUtils.parseDocstring(
         "summary\n" + "\n" + "Args:\n" + "More description.\n", 0, errors);
-    Truth.assertThat(errors.toString()).contains("3: section is empty or badly formatted");
+    Truth.assertThat(errors.toString()).contains("3: section is empty");
 
     errors = new ArrayList<>();
     DocstringUtils.parseDocstring(
@@ -230,15 +230,6 @@ public class DocstringUtilsTest {
     List<DocstringParseError> errors = new ArrayList<>();
     DocstringUtils.parseDocstring("summary\n" + "\n" + "Args:\n" + "" + "  foo: \n\n", 0, errors);
     Truth.assertThat(errors.toString()).contains("4: empty parameter description for 'foo'");
-  }
-
-  @Test
-  public void sectionOnOneLine() throws Exception {
-    List<DocstringParseError> errors = new ArrayList<>();
-    DocstringUtils.parseDocstring("summary\n" + "\n" + "Returns: foo\n", 0, errors);
-    Truth.assertThat(errors).hasSize(1);
-    Truth.assertThat(errors.get(0).toString())
-        .startsWith("3: the return value should be documented in a section");
   }
 
   @Test
@@ -291,7 +282,7 @@ public class DocstringUtilsTest {
     Truth.assertThat(info.longDescription).isEqualTo("Deprecated: foo");
     Truth.assertThat(errors).hasSize(1);
     Truth.assertThat(errors.get(0).toString())
-        .startsWith(
+        .isEqualTo(
             "3: use a 'Deprecated:' section for deprecations, similar to a 'Returns:' section");
 
     errors = new ArrayList<>();
@@ -304,7 +295,7 @@ public class DocstringUtilsTest {
     Truth.assertThat(info.longDescription).isEqualTo("This is DEPRECATED.");
     Truth.assertThat(errors).hasSize(1);
     Truth.assertThat(errors.get(0).toString())
-        .startsWith(
+        .isEqualTo(
             "3: use a 'Deprecated:' section for deprecations, similar to a 'Returns:' section");
   }
 
@@ -503,10 +494,7 @@ public class DocstringUtilsTest {
             2,
             errors);
     Truth.assertThat(info.parameters).isEmpty();
-    Truth.assertThat(errors.toString())
-        .contains(
-            "4: invalid parameter documentation"
-                + " (expected format: \"parameter_name: documentation\").");
+    Truth.assertThat(errors.toString()).contains("4: invalid parameter documentation");
   }
 
   @Test
