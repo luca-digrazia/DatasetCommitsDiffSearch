@@ -19,6 +19,7 @@ package org.graylog2.system.stats;
 import org.graylog.plugins.views.search.views.DashboardService;
 import org.graylog2.alarmcallbacks.AlarmCallbackConfigurationService;
 import org.graylog2.alerts.AlertService;
+import org.graylog2.database.NotFoundException;
 import org.graylog2.indexer.cluster.Cluster;
 import org.graylog2.inputs.InputService;
 import org.graylog2.security.ldap.LdapSettingsService;
@@ -114,8 +115,10 @@ public class ClusterStatsService {
     public LdapStats ldapStats() {
         int numberOfRoles = 0;
         LdapSettings ldapSettings = null;
-        numberOfRoles = roleService.loadAll().size();
-        ldapSettings = ldapSettingsService.load();
+        try {
+            numberOfRoles = roleService.loadAll().size();
+            ldapSettings = ldapSettingsService.load();
+        } catch (NotFoundException ignored) {}
         if (ldapSettings == null) {
             return LdapStats.create(false,
                                     false,
