@@ -294,9 +294,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
               ctgValue,
               ImmutableList.<Aspect>of(),
               configConditions,
-              toolchainContext == null
-                  ? ImmutableSet.of()
-                  : toolchainContext.resolvedToolchainLabels(),
+              toolchainContext,
               ruleClassProvider,
               view.getHostConfiguration(configuration),
               transitivePackagesForPackageRootResolution,
@@ -311,12 +309,6 @@ public final class ConfiguredTargetFunction implements SkyFunction {
                 "Analysis failed", configuration, transitiveRootCauses.build()));
       }
       Preconditions.checkNotNull(depValueMap);
-
-      // Load the requested toolchains into the ToolchainContext, now that we have dependencies.
-      if (toolchainContext != null) {
-        toolchainContext.resolveToolchains(depValueMap);
-      }
-
       ConfiguredTargetValue ans =
           createConfiguredTarget(
               view,
@@ -424,7 +416,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
    * @param ctgValue the label and the configuration of the node
    * @param aspects
    * @param configConditions the configuration conditions for evaluating the attributes of the node
-   * @param toolchainLabels labels of required toolchain dependencies
+   * @param toolchainContext context information for required toolchains
    * @param ruleClassProvider rule class provider for determining the right configuration fragments
    *     to apply to deps
    * @param hostConfiguration the host configuration. There's a noticeable performance hit from
@@ -441,7 +433,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
       TargetAndConfiguration ctgValue,
       Iterable<Aspect> aspects,
       ImmutableMap<Label, ConfigMatchingProvider> configConditions,
-      ImmutableSet<Label> toolchainLabels,
+      @Nullable ToolchainContext toolchainContext,
       RuleClassProvider ruleClassProvider,
       BuildConfiguration hostConfiguration,
       @Nullable NestedSetBuilder<Package> transitivePackagesForPackageRootResolution,
@@ -458,7 +450,9 @@ public final class ConfiguredTargetFunction implements SkyFunction {
               hostConfiguration,
               aspects,
               configConditions,
-              toolchainLabels,
+              toolchainContext == null
+                  ? ImmutableSet.of()
+                  : toolchainContext.resolvedToolchainLabels(),
               transitiveRootCauses,
               defaultBuildOptions,
               ((ConfiguredRuleClassProvider) ruleClassProvider).getTrimmingTransitionFactory());
@@ -486,14 +480,12 @@ public final class ConfiguredTargetFunction implements SkyFunction {
               hostConfiguration,
               ruleClassProvider,
               defaultBuildOptions);
-    }
-
-    // Return early in case packages were not loaded yet. In theory, we could start configuring
-    // dependent targets in loaded packages. However, that creates an artificial sync boundary
-    // between loading all dependent packages (fast) and configuring some dependent targets (can
-    // have a long tail).
-    if (env.valuesMissing()) {
-      return null;
+      // It's important that we don't use "if (env.missingValues()) { return null }" here (or
+      // in the following lines). See the comments in getDynamicConfigurations' Skyframe call
+      // for explanation.
+      if (depValueNames == null) {
+        return null;
+      }
     }
 
     // Resolve configured target dependencies and handle errors.

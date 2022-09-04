@@ -56,11 +56,11 @@ import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SkylarkImplicitOutputsFunction;
+import com.google.devtools.build.lib.packages.Info;
 import com.google.devtools.build.lib.packages.OutputFile;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.packages.RawAttributeMapper;
-import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.packages.StructProvider;
 import com.google.devtools.build.lib.shell.ShellUtils;
 import com.google.devtools.build.lib.shell.ShellUtils.TokenizationException;
@@ -137,7 +137,7 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi {
   private SkylarkDict<String, String> makeVariables;
   private SkylarkAttributesCollection attributesCollection;
   private SkylarkAttributesCollection ruleAttributesCollection;
-  private StructImpl splitAttributes;
+  private Info splitAttributes;
 
   // TODO(bazel-team): we only need this because of the css_binary rule.
   private ImmutableMap<Artifact, Label> artifactsLabelMap;
@@ -413,7 +413,7 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi {
     return ruleLabelCanonicalName;
   }
 
-  private static StructImpl buildSplitAttributeInfo(
+  private static Info buildSplitAttributeInfo(
       Collection<Attribute> attributes, RuleContext ruleContext) {
 
     ImmutableMap.Builder<String, Object> splitAttrInfos = ImmutableMap.builder();
@@ -502,13 +502,13 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi {
   }
 
   @Override
-  public StructImpl getAttr() throws EvalException {
+  public Info getAttr() throws EvalException {
     checkMutable("attr");
     return attributesCollection.getAttr();
   }
 
   @Override
-  public StructImpl getSplitAttr() throws EvalException {
+  public Info getSplitAttr() throws EvalException {
     checkMutable("split_attr");
     if (splitAttributes == null) {
       throw new EvalException(
@@ -519,21 +519,21 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi {
 
   /** See {@link RuleContext#getExecutablePrerequisite(String, Mode)}. */
   @Override
-  public StructImpl getExecutable() throws EvalException {
+  public Info getExecutable() throws EvalException {
     checkMutable("executable");
     return attributesCollection.getExecutable();
   }
 
   /** See {@link RuleContext#getPrerequisiteArtifact(String, Mode)}. */
   @Override
-  public StructImpl getFile() throws EvalException {
+  public Info getFile() throws EvalException {
     checkMutable("file");
     return attributesCollection.getFile();
   }
 
   /** See {@link RuleContext#getPrerequisiteArtifacts(String, Mode)}. */
   @Override
-  public StructImpl getFiles() throws EvalException {
+  public Info getFiles() throws EvalException {
     checkMutable("files");
     return attributesCollection.getFiles();
   }
@@ -1010,10 +1010,6 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi {
         MutableList.copyOf(env, inputs),
         MutableList.copyOf(env, argv),
         helper.getToolsRunfilesSuppliers());
-  }
-
-  public SkylarkSemantics getSkylarkSemantics() {
-    return skylarkSemantics;
   }
 
   /**

@@ -201,13 +201,9 @@ public final class RuleContext extends TargetContext
       ImmutableMap<String, Attribute> aspectAttributes,
       @Nullable ToolchainContext toolchainContext,
       ConstraintSemantics constraintSemantics) {
-    super(
-        builder.env,
-        builder.target.getAssociatedRule(),
-        builder.configuration,
-        builder.prerequisiteMap.get(null),
+    super(builder.env, builder.rule, builder.configuration, builder.prerequisiteMap.get(null),
         builder.visibility);
-    this.rule = builder.target.getAssociatedRule();
+    this.rule = builder.rule;
     this.aspects = builder.aspects;
     this.aspectDescriptors =
         builder
@@ -1406,7 +1402,7 @@ public final class RuleContext extends TargetContext
   @VisibleForTesting
   public static final class Builder implements RuleErrorConsumer  {
     private final AnalysisEnvironment env;
-    private final Target target;
+    private final Rule rule;
     private final ConfigurationFragmentPolicy configurationFragmentPolicy;
     private ImmutableList<Class<? extends BuildConfiguration.Fragment>> universalFragments;
     private final BuildConfiguration configuration;
@@ -1420,25 +1416,24 @@ public final class RuleContext extends TargetContext
     private ImmutableList<Aspect> aspects;
     private ToolchainContext toolchainContext;
     private ConstraintSemantics constraintSemantics;
-    private ConfiguredTargetAndData associatedTarget;
 
     @VisibleForTesting
     public Builder(
         AnalysisEnvironment env,
-        Target target,
+        Rule rule,
         ImmutableList<Aspect> aspects,
         BuildConfiguration configuration,
         BuildConfiguration hostConfiguration,
         PrerequisiteValidator prerequisiteValidator,
         ConfigurationFragmentPolicy configurationFragmentPolicy) {
       this.env = Preconditions.checkNotNull(env);
-      this.target = Preconditions.checkNotNull(target);
+      this.rule = Preconditions.checkNotNull(rule);
       this.aspects = aspects;
       this.configurationFragmentPolicy = Preconditions.checkNotNull(configurationFragmentPolicy);
       this.configuration = Preconditions.checkNotNull(configuration);
       this.hostConfiguration = Preconditions.checkNotNull(hostConfiguration);
       this.prerequisiteValidator = prerequisiteValidator;
-      reporter = new ErrorReporter(env, target.getAssociatedRule(), getRuleClassNameForLogging());
+      reporter = new ErrorReporter(env, rule, getRuleClassNameForLogging());
     }
 
     @VisibleForTesting
@@ -1447,12 +1442,11 @@ public final class RuleContext extends TargetContext
       Preconditions.checkNotNull(configConditions);
       Preconditions.checkNotNull(visibility);
       Preconditions.checkNotNull(constraintSemantics);
-      AttributeMap attributes =
-          ConfiguredAttributeMapper.of(target.getAssociatedRule(), configConditions);
+      AttributeMap attributes = ConfiguredAttributeMapper.of(rule, configConditions);
       validateAttributes(attributes);
       ListMultimap<String, ConfiguredTargetAndData> targetMap = createTargetMap();
       ListMultimap<String, ConfiguredFilesetEntry> filesetEntryMap =
-          createFilesetEntryMap(target.getAssociatedRule(), configConditions);
+          createFilesetEntryMap(rule, configConditions);
       return new RuleContext(
           this,
           attributes,
@@ -1467,10 +1461,7 @@ public final class RuleContext extends TargetContext
     }
 
     private void validateAttributes(AttributeMap attributes) {
-      target
-          .getAssociatedRule()
-          .getRuleClassObject()
-          .checkAttributesNonEmpty(target.getAssociatedRule(), reporter, attributes);
+      rule.getRuleClassObject().checkAttributesNonEmpty(rule, reporter, attributes);
     }
 
     public Builder setVisibility(NestedSet<PackageGroupContents> visibility) {
@@ -1561,10 +1552,6 @@ public final class RuleContext extends TargetContext
      */
     private ListMultimap<String, ConfiguredFilesetEntry> createFilesetEntryMap(
         final Rule rule, ImmutableMap<Label, ConfigMatchingProvider> configConditions) {
-      if (!target.getTargetKind().equals("Fileset rule")) {
-        return ImmutableSortedKeyListMultimap.<String, ConfiguredFilesetEntry>builder().build();
-      }
-
       final ImmutableSortedKeyListMultimap.Builder<String, ConfiguredFilesetEntry> mapBuilder =
           ImmutableSortedKeyListMultimap.builder();
       for (Attribute attr : rule.getAttributes()) {
@@ -1721,10 +1708,7 @@ public final class RuleContext extends TargetContext
       if (prerequisiteTarget instanceof Rule) {
         Rule prerequisiteRule = (Rule) prerequisiteTarget;
 
-        String reason =
-            attribute
-                .getValidityPredicate()
-                .checkValid(target.getAssociatedRule(), prerequisiteRule);
+        String reason = attribute.getValidityPredicate().checkValid(rule, prerequisiteRule);
         if (reason != null) {
           reportBadPrerequisite(attribute, prerequisite, reason, false);
         }
@@ -1765,7 +1749,7 @@ public final class RuleContext extends TargetContext
     }
 
     public Rule getRule() {
-      return target.getAssociatedRule();
+      return rule;
     }
 
     /**
@@ -1773,13 +1757,13 @@ public final class RuleContext extends TargetContext
      */
     public String getRuleClassNameForLogging() {
       if (aspects.isEmpty()) {
-        return target.getAssociatedRule().getRuleClass();
+        return rule.getRuleClass();
       }
 
       return Joiner.on(",")
               .join(aspects.stream().map(a -> a.getDescriptor()).collect(Collectors.toList()))
           + " aspect on "
-          + target.getAssociatedRule().getRuleClass();
+          + rule.getRuleClass();
     }
 
     public BuildConfiguration getConfiguration() {
@@ -1795,7 +1779,7 @@ public final class RuleContext extends TargetContext
      * method to determine whether a dependency is allowed as per visibility rules.
      */
     public boolean isVisible(TransitiveInfoCollection prerequisite) {
-      return RuleContext.isVisible(target.getAssociatedRule(), prerequisite);
+      return RuleContext.isVisible(rule, prerequisite);
     }
 
     private void validateDirectPrerequisiteFileTypes(
