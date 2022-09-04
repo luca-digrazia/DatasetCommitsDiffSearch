@@ -130,9 +130,7 @@ public class ResourceShrinkerActionBuilder {
               .addVectoredFlag(
                   "--resourcePackages", getResourcePackages(primaryResources, dependencyResources))
               .addInput("--primaryManifest", primaryResources.getManifest())
-              .maybeAddInput("--dependencyManifest", getManifests(dependencyResources))
-              .maybeAddFlag(
-                  "--resourceConfigs", resourceFilterFactory.getConfigurationFilterString());
+              .maybeAddInput("--dependencyManifest", getManifests(dependencyResources));
     }
 
     builder
