@@ -18,17 +18,23 @@ package org.graylog2.rest.resources.alarmcallbacks;
 
 import com.codahale.metrics.annotation.Timed;
 import com.google.common.collect.Lists;
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
-import io.swagger.annotations.ApiParam;
+import com.wordnik.swagger.annotations.Api;
+import com.wordnik.swagger.annotations.ApiOperation;
+import com.wordnik.swagger.annotations.ApiParam;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.graylog2.alarmcallbacks.AlarmCallbackHistory;
 import org.graylog2.alarmcallbacks.AlarmCallbackHistoryService;
+import org.graylog2.alerts.Alert;
+import org.graylog2.alerts.AlertService;
 import org.graylog2.database.NotFoundException;
+import org.graylog2.plugin.streams.Stream;
 import org.graylog2.rest.models.alarmcallbacks.AlarmCallbackHistoryListSummary;
 import org.graylog2.rest.models.alarmcallbacks.AlarmCallbackHistorySummary;
 import org.graylog2.shared.rest.resources.RestResource;
 import org.graylog2.shared.security.RestPermissions;
+import org.graylog2.streams.StreamService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import javax.ws.rs.GET;
@@ -39,14 +45,22 @@ import javax.ws.rs.core.MediaType;
 import java.util.List;
 
 @RequiresAuthentication
-@Api(value = "AlarmCallbackHistories", description = "Manage stream legacy alarm callback histories")
+@Api(value = "AlarmCallbackHistories", description = "Manage stream alarm callback histories")
 @Path("/streams/{streamid}/alerts/{alertId}/history")
 public class AlarmCallbackHistoryResource extends RestResource {
+    private static final Logger LOG = LoggerFactory.getLogger(AlarmCallbackHistoryResource.class);
+
     private final AlarmCallbackHistoryService alarmCallbackHistoryService;
+    private final StreamService streamService;
+    private final AlertService alertService;
 
     @Inject
-    public AlarmCallbackHistoryResource(AlarmCallbackHistoryService alarmCallbackHistoryService) {
+    public AlarmCallbackHistoryResource(AlarmCallbackHistoryService alarmCallbackHistoryService,
+                                        StreamService streamService,
+                                        AlertService alertService) {
         this.alarmCallbackHistoryService = alarmCallbackHistoryService;
+        this.streamService = streamService;
+        this.alertService = alertService;
     }
 
     @GET
@@ -58,6 +72,9 @@ public class AlarmCallbackHistoryResource extends RestResource {
                                                        @ApiParam(name = "alertId", value = "The id of the alert whose callback history we want.", required = true)
                                                        @PathParam("alertId") String alertId) throws NotFoundException {
         checkPermission(RestPermissions.STREAMS_READ, streamid);
+
+        final Stream stream = this.streamService.load(streamid);
+        final Alert alert = this.alertService.load(alertId, streamid);
 
         final List<AlarmCallbackHistory> historyList = this.alarmCallbackHistoryService.getForAlertId(alertId);
 
