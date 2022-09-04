@@ -34,7 +34,6 @@ import org.graylog2.buffers.BasicCache;
 import org.graylog2.buffers.Cache;
 import org.graylog2.buffers.OutputBuffer;
 import org.graylog2.buffers.ProcessBuffer;
-import org.graylog2.dashboards.DashboardRegistry;
 import org.graylog2.database.HostCounterCacheImpl;
 import org.graylog2.database.MongoBridge;
 import org.graylog2.database.MongoConnection;
@@ -42,11 +41,11 @@ import org.graylog2.gelf.GELFChunkManager;
 import org.graylog2.indexer.Deflector;
 import org.graylog2.indexer.Indexer;
 import org.graylog2.initializers.Initializers;
-import org.graylog2.inputs.InputRegistry;
+import org.graylog2.inputs.Inputs;
 import org.graylog2.jersey.container.netty.NettyContainer;
 import org.graylog2.metrics.jersey2.AnyExceptionClassMapper;
 import org.graylog2.metrics.jersey2.MetricsDynamicBinding;
-import org.graylog2.outputs.OutputRegistry;
+import org.graylog2.outputs.Outputs;
 import org.graylog2.plugin.GraylogServer;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.alarms.callbacks.AlarmCallback;
@@ -80,6 +79,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.net.URI;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -108,7 +108,7 @@ public class Core implements GraylogServer {
     private static final int SCHEDULED_THREADS_POOL_SIZE = 30;
     private ScheduledExecutorService scheduler;
 
-    public static final String GRAYLOG2_VERSION = "0.20.0-preview.5";
+    public static final String GRAYLOG2_VERSION = "0.20.0-dev";
     public static final String GRAYLOG2_CODENAME = "Amigo Humanos (Flipper)";
 
     private Indexer indexer;
@@ -124,10 +124,8 @@ public class Core implements GraylogServer {
     private List<AlarmCallback> alarmCallbacks = Lists.newArrayList();
 
     private Initializers initializers;
-    private InputRegistry inputs;
-    private OutputRegistry outputs;
-
-    private DashboardRegistry dashboards;
+    private Inputs inputs;
+    private Outputs outputs;
     
     private ProcessBuffer processBuffer;
     private OutputBuffer outputBuffer;
@@ -194,13 +192,8 @@ public class Core implements GraylogServer {
         mongoConnection.connect();
 
         initializers = new Initializers(this);
-        inputs = new InputRegistry(this);
-        outputs = new OutputRegistry(this);
-
-        if (isMaster()) {
-            dashboards = new DashboardRegistry(this);
-            dashboards.loadPersisted();
-        }
+        inputs = new Inputs(this);
+        outputs = new Outputs(this);
 
         activityWriter = new ActivityWriter(this);
 
@@ -599,19 +592,11 @@ public class Core implements GraylogServer {
         return initializers;
     }
 
-    public InputRegistry inputs() {
+    public Inputs inputs() {
         return inputs;
     }
 
-    public OutputRegistry outputs() {
+    public Outputs outputs() {
         return outputs;
-    }
-
-    public DashboardRegistry dashboards() {
-        if (!isMaster()) {
-            throw new RuntimeException("Dashboards can only be accessed on master nodes.");
-        }
-
-        return dashboards;
     }
 }

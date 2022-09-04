@@ -34,7 +34,10 @@ import org.graylog2.plugin.Tools;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.ws.rs.core.UriBuilder;
+import java.net.SocketException;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.UnknownHostException;
 import java.util.Arrays;
 import java.util.List;
@@ -75,9 +78,6 @@ public class Configuration {
 
     @Parameter(value = "no_retention")
     private boolean noRetention;
-
-    @Parameter(value = "retention_strategy", required = true)
-    private String retentionStrategy;
     
     @Parameter(value = "elasticsearch_max_number_of_indices", required = true, validator = PositiveIntegerValidator.class)
     private int maxNumberOfIndices = 20;
@@ -98,13 +98,13 @@ public class Configuration {
     private int outputBufferProcessorThreadsCorePoolSize = 3;
     
     @Parameter(value = "processor_wait_strategy", required = true)
-    private String processorWaitStrategy = "blocking";
+    private String processorWaitStrategy = "sleeping";
     
     @Parameter(value = "ring_size", required = true, validator = PositiveIntegerValidator.class)
     private int ringSize = 1024;
 
-    @Parameter(value = "elasticsearch_config_file", required = false, validator = FileReadableValidator.class)
-    private String elasticSearchConfigFile; // = "/etc/graylog2-elasticsearch.yml";
+    @Parameter(value = "elasticsearch_config_file", required = true, validator = FileReadableValidator.class)
+    private String elasticSearchConfigFile = "/etc/graylog2-elasticsearch.yml";
 
     @Parameter(value = "elasticsearch_index_prefix", required = true)
     private String elasticsearchIndexPrefix = "graylog2";
@@ -188,44 +188,13 @@ public class Configuration {
     private String pluginDir = "plugin";
 
     @Parameter(value = "node_id_file", required = false)
-    private String nodeIdFile = "/etc/graylog2-server-node-id";
+    private String nodeIdFile = "graylog2-server-node-id";
 
     @Parameter(value = "root_username", required = false)
     private String rootUsername = "admin";
 
-    @Parameter(value = "root_password_sha2", required = true)
-    private String rootPasswordSha2;
-
-    @Parameter(value = "allow_leading_wildcard_searches", required = false)
-    private boolean allowLeadingWildcardSearches = false;
-
-    @Parameter(value = "enable_metrics_collection", required = false)
-    private boolean metricsCollectionEnabled = false;
-
-    /* Elasticsearch defaults */
-    @Parameter(value = "elasticsearch_cluster_name", required = true)
-    private String esClusterName = "graylog2";
-
-    @Parameter(value = "elasticsearch_node_name", required = true)
-    private String esNodeName = "graylog2-server";
-
-    @Parameter(value = "elasticsearch_node_master", required = true)
-    private boolean esIsMasterEligible = false;
-
-    @Parameter(value = "elasticsearch_node_data", required = true)
-    private boolean esStoreData = false;
-
-    @Parameter(value = "elasticsearch_transport_tcp_port", validator = InetPortValidator.class, required = true)
-    private int esTransportTcpPort = 9350;
-
-    @Parameter(value = "elasticsearch_http_enabled", required = false)
-    private boolean esIsHttpEnabled = false;
-
-    @Parameter(value = "elasticsearch_discovery_zen_ping_multicast_enabled", required = false)
-    private boolean esMulticastDiscovery = true;
-
-    @Parameter(value = "elasticsearch_discovery_zen_ping_unicast_hosts", required = false, converter = StringListConverter.class)
-    private List<String> esUnicastHosts;
+    @Parameter(value = "root_password_sha1", required = true)
+    private String rootPasswordSha1;
 
     public boolean isMaster() {
         return isMaster;
@@ -289,8 +258,8 @@ public class Configuration {
         }
         
         LOG.warn("Invalid setting for [processor_wait_strategy]:"
-                + " Falling back to default: BlockingWaitStrategy.");
-        return new BlockingWaitStrategy();
+                + " Falling back to default: SleepingWaitStrategy.");
+        return new SleepingWaitStrategy();
     }
 
     public int getRingSize() {
@@ -308,7 +277,7 @@ public class Configuration {
     public int getElasticSearchMaxDocsPerIndex() {
         return this.elasticsearchMaxDocsPerIndex;
     }
-
+    
     public int getElasticSearchShards() {
         return this.elasticsearchShards;
     }
@@ -456,7 +425,7 @@ public class Configuration {
     }
 
     public URI getRestListenUri() {
-        return Tools.getUriStandard(restListenUri);
+        return getUriStandard(restListenUri);
     }
 
     public URI getRestTransportUri() {
@@ -464,63 +433,33 @@ public class Configuration {
             return null;
         }
 
-        return Tools.getUriStandard(restTransportUri);
+        return getUriStandard(restTransportUri);
+    }
+
+    private URI getUriStandard(String from) {
+        try {
+            URI uri = new URI(from);
+
+            // The port is set to -1 if not defined. Default to 80 here.
+            if (uri.getPort() == -1) {
+                return UriBuilder.fromUri(uri).port(80).build();
+            }
+
+            return uri;
+        } catch (URISyntaxException e) {
+            throw new RuntimeException("Could not parse REST listen URI.", e);
+        }
     }
 
     public String getRootUsername() {
         return rootUsername;
     }
 
-    public String getRootPasswordSha2() {
-        return rootPasswordSha2;
+    public String getRootPasswordSha1() {
+        return rootPasswordSha1;
     }
 
     public void setRestTransportUri(String restTransportUri) {
         this.restTransportUri = restTransportUri;
     }
-
-    public String getEsClusterName() {
-        return esClusterName;
-    }
-
-    public String getEsNodeName() {
-        return esNodeName;
-    }
-
-    public boolean isEsIsMasterEligible() {
-        return esIsMasterEligible;
-    }
-
-    public boolean isEsStoreData() {
-        return esStoreData;
-    }
-
-    public int getEsTransportTcpPort() {
-        return esTransportTcpPort;
-    }
-
-    public boolean isEsIsHttpEnabled() {
-        return esIsHttpEnabled;
-    }
-
-    public boolean isEsMulticastDiscovery() {
-        return esMulticastDiscovery;
-    }
-
-    public List<String> getEsUnicastHosts() {
-        return esUnicastHosts;
-    }
-
-    public String getRetentionStrategy() {
-        return retentionStrategy;
-    }
-
-    public boolean isAllowLeadingWildcardSearches() {
-        return allowLeadingWildcardSearches;
-    }
-
-    public boolean isMetricsCollectionEnabled() {
-        return metricsCollectionEnabled;
-    }
-
 }
