@@ -30,7 +30,7 @@ public class QuarkusStreamHandler implements RequestStreamHandler {
                 Class appClass = Class.forName("io.quarkus.runner.ApplicationImpl");
                 String[] args = {};
                 Application app = (Application) appClass.newInstance();
-                app.run(args);
+                app.start(args);
                 errorWriter.println("Quarkus bootstrapped successfully.");
                 started = true;
             } catch (Exception ex) {
