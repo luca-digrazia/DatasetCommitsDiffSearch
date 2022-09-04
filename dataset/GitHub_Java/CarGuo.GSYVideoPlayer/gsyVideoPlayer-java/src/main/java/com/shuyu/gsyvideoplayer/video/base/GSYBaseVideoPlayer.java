@@ -601,10 +601,8 @@ public abstract class GSYBaseVideoPlayer extends GSYVideoControlView {
             mTextureViewContainer.removeAllViews();
         }
 
-        saveLocationStatus(context, statusBar, actionBar);
 
-        //切换时关闭非全屏定时器
-        cancelProgressTimer();
+        saveLocationStatus(context, statusBar, actionBar);
 
         boolean hadNewConstructor = true;
 
@@ -685,9 +683,8 @@ public abstract class GSYBaseVideoPlayer extends GSYVideoControlView {
                 resolveFullVideoShow(context, gsyVideoPlayer, frameLayout);
             }
 
-            gsyVideoPlayer.addTextureView();
 
-            gsyVideoPlayer.startProgressTimer();
+            gsyVideoPlayer.addTextureView();
 
             getGSYVideoManager().setLastListener(this);
             getGSYVideoManager().setListener(gsyVideoPlayer);
