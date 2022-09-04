@@ -20,8 +20,11 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.collect.CollectionUtils;
 import com.google.devtools.build.lib.concurrent.ThreadSafety;
+import com.google.devtools.build.lib.skyframe.serialization.InjectingObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.Strategy;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
+import com.google.devtools.build.lib.vfs.FileSystemProvider;
 
 /**
  * Factory for creating new {@link LinkerInput} objects.
@@ -32,15 +35,11 @@ public abstract class LinkerInputs {
    * object file.
    */
   @ThreadSafety.Immutable
-  @AutoCodec
   public static class SimpleLinkerInput implements LinkerInput {
     private final Artifact artifact;
     private final ArtifactCategory category;
-    private final boolean disableWholeArchive;
 
-    @AutoCodec.Instantiator
-    public SimpleLinkerInput(
-        Artifact artifact, ArtifactCategory category, boolean disableWholeArchive) {
+    public SimpleLinkerInput(Artifact artifact, ArtifactCategory category) {
       String basename = artifact.getFilename();
       switch (category) {
         case STATIC_LIBRARY:
@@ -63,7 +62,6 @@ public abstract class LinkerInputs {
       }
       this.artifact = Preconditions.checkNotNull(artifact);
       this.category = category;
-      this.disableWholeArchive = disableWholeArchive;
     }
 
     @Override
@@ -124,11 +122,6 @@ public abstract class LinkerInputs {
     public boolean isMustKeepDebug() {
       return false;
     }
-
-    @Override
-    public boolean disableWholeArchive() {
-      return disableWholeArchive;
-    }
   }
 
   /**
@@ -138,7 +131,7 @@ public abstract class LinkerInputs {
   @ThreadSafety.Immutable
   private static class FakeLinkerInput extends SimpleLinkerInput {
     private FakeLinkerInput(Artifact artifact) {
-      super(artifact, ArtifactCategory.OBJECT_FILE, /* disableWholeArchive= */ false);
+      super(artifact, ArtifactCategory.OBJECT_FILE);
       Preconditions.checkState(Link.OBJECT_FILETYPES.matches(artifact.getFilename()));
     }
 
@@ -152,7 +145,11 @@ public abstract class LinkerInputs {
    * A library the user can link to. This is different from a simple linker input in that it also
    * has a library identifier.
    */
+  @AutoCodec(strategy = Strategy.POLYMORPHIC, dependency = FileSystemProvider.class)
   public interface LibraryToLink extends LinkerInput {
+    public static final InjectingObjectCodec<LibraryToLink, FileSystemProvider> CODEC =
+        new LinkerInputs_LibraryToLink_AutoCodec();
+
     ImmutableMap<Artifact, Artifact> getLtoBitcodeFiles();
 
     /**
@@ -177,8 +174,11 @@ public abstract class LinkerInputs {
    * library that it links to.
    */
   @ThreadSafety.Immutable
-  @AutoCodec
+  @AutoCodec(dependency = FileSystemProvider.class)
   public static class SolibLibraryToLink implements LibraryToLink {
+    public static final InjectingObjectCodec<SolibLibraryToLink, FileSystemProvider> CODEC =
+        new LinkerInputs_SolibLibraryToLink_AutoCodec();
+
     private final Artifact solibSymlinkArtifact;
     private final Artifact libraryArtifact;
     private final String libraryIdentifier;
@@ -272,18 +272,16 @@ public abstract class LinkerInputs {
     public boolean isMustKeepDebug() {
       return false;
     }
-
-    @Override
-    public boolean disableWholeArchive() {
-      return false;
-    }
   }
 
   /** This class represents a library that may contain object files. */
   @ThreadSafety.Immutable
-  @AutoCodec
+  @AutoCodec(dependency = FileSystemProvider.class)
   @VisibleForSerialization
   static class CompoundLibraryToLink implements LibraryToLink {
+    public static final InjectingObjectCodec<CompoundLibraryToLink, FileSystemProvider> CODEC =
+        new LinkerInputs_CompoundLibraryToLink_AutoCodec();
+
     private final Artifact libraryArtifact;
     private final ArtifactCategory category;
     private final String libraryIdentifier;
@@ -424,31 +422,28 @@ public abstract class LinkerInputs {
     public boolean isMustKeepDebug() {
       return this.mustKeepDebug;
     }
-
-    @Override
-    public boolean disableWholeArchive() {
-      return false;
-    }
   }
 
   //////////////////////////////////////////////////////////////////////////////////////
   // Public factory constructors:
   //////////////////////////////////////////////////////////////////////////////////////
 
-  /** Creates linker input objects for non-library files. */
-  public static Iterable<LinkerInput> simpleLinkerInputs(
-      Iterable<Artifact> input, final ArtifactCategory category, boolean disableWholeArchive) {
-    return Iterables.transform(
-        input, artifact -> simpleLinkerInput(artifact, category, disableWholeArchive));
+  /**
+   * Creates linker input objects for non-library files.
+   */
+  public static Iterable<LinkerInput> simpleLinkerInputs(Iterable<Artifact> input,
+      final ArtifactCategory category) {
+    return Iterables.transform(input, artifact -> simpleLinkerInput(artifact, category));
   }
 
-  /** Creates a linker input for which we do not know what objects files it consists of. */
-  public static LinkerInput simpleLinkerInput(
-      Artifact artifact, ArtifactCategory category, boolean disableWholeArchive) {
+  /**
+   * Creates a linker input for which we do not know what objects files it consists of.
+   */
+  public static LinkerInput simpleLinkerInput(Artifact artifact, ArtifactCategory category) {
     // This precondition check was in place and *most* of the tests passed with them; the only
     // exception is when you mention a generated .a file in the srcs of a cc_* rule.
     // Preconditions.checkArgument(!ARCHIVE_LIBRARY_FILETYPES.contains(artifact.getFileType()));
-    return new SimpleLinkerInput(artifact, category, disableWholeArchive);
+    return new SimpleLinkerInput(artifact, category);
   }
 
   /**
