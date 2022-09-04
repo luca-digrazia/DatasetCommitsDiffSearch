@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -34,11 +34,6 @@ import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JFieldVar;
 import com.sun.codemodel.JTryBlock;
 
-/**
- * This class generates the code that creates DAOs with ORMLite
- * 
- * @author Johan Poirier <johan.poirier@gmail.com>
- */
 public class OrmLiteDaoProcessor implements ElementProcessor {
 
 	@Override
@@ -72,15 +67,7 @@ public class OrmLiteDaoProcessor implements ElementProcessor {
 
 		JBlock methodBody = holder.init.body();
 
-		// connection source field
-		String connectionSourceRef = "connection_source_";
-		try {
-			holder.eBean.field(PRIVATE, classes.CONNECTION_SOURCE, connectionSourceRef);
-		} catch (IllegalArgumentException e) {
-			// connection_source_ already generated
-		}
-
-		// context field
+		// comments
 		String contextRef = "context_";
 		JFieldVar contextField;
 		try {
@@ -91,12 +78,14 @@ public class OrmLiteDaoProcessor implements ElementProcessor {
 		}
 
 		// get connection source
+		String connectionSourceRef = "_aa_connection_source";
+		methodBody.decl(classes.CONNECTION_SOURCE, connectionSourceRef);
 		JExpression dbHelperExpr = holder.refClass(databaseHelperTypeMirror.toString()).dotclass();
-		methodBody._if(JExpr.ref(connectionSourceRef).eq(JExpr._null()))._then().assign(ref(connectionSourceRef), holder.refClass(CanonicalNameConstants.OPEN_HELPER_MANAGER).staticInvoke("getHelper").arg(ref(contextRef)).arg(dbHelperExpr).invoke("getConnectionSource"));
+		methodBody.assign(ref(connectionSourceRef), holder.refClass(CanonicalNameConstants.OPEN_HELPER_MANAGER).staticInvoke("getHelper").arg(ref(contextRef)).arg(dbHelperExpr).invoke("getConnectionSource"));
 
 		// create dao from dao manager
 		JTryBlock tryBlock = methodBody._try();
 		tryBlock.body().assign(ref(fieldName), holder.refClass(CanonicalNameConstants.DAO_MANAGER).staticInvoke("createDao").arg(JExpr.ref(connectionSourceRef)).arg(holder.refClass(modelObjectTypeMirror.toString()).dotclass()));
-		tryBlock._catch(classes.SQL_EXCEPTION).body().directStatement("android.util.Log.d(\"AndroidAnnotations\", _x.getMessage()); _x.printStackTrace();");
+		tryBlock._catch(classes.SQL_EXCEPTION);
 	}
 }

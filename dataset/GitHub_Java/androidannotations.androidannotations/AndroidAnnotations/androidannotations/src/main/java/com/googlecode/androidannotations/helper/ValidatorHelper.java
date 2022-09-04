@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -35,6 +35,7 @@ import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.ArrayType;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.ErrorType;
+import javax.lang.model.type.MirroredTypeException;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.ElementFilter;
@@ -51,6 +52,7 @@ import com.googlecode.androidannotations.annotations.EReceiver;
 import com.googlecode.androidannotations.annotations.EService;
 import com.googlecode.androidannotations.annotations.EView;
 import com.googlecode.androidannotations.annotations.EViewGroup;
+import com.googlecode.androidannotations.annotations.OrmLiteDao;
 import com.googlecode.androidannotations.annotations.Trace;
 import com.googlecode.androidannotations.annotations.ViewById;
 import com.googlecode.androidannotations.annotations.rest.Delete;
@@ -170,21 +172,8 @@ public class ValidatorHelper {
 		hasClassAnnotation(element, enclosingElement, validatedElements, EActivity.class, valid);
 	}
 
-	public void enclosingElementHasEActivityOrEFragment(Element element, AnnotationElements validatedElements, IsValid valid) {
-		Element enclosingElement = element.getEnclosingElement();
-		@SuppressWarnings("unchecked")
-		List<Class<? extends Annotation>> validAnnotations = asList(EActivity.class, EFragment.class);
-		hasOneOfClassAnnotations(element, enclosingElement, validatedElements, validAnnotations, valid);
-	}
-
 	public void hasEActivity(Element element, AnnotationElements validatedElements, IsValid valid) {
 		hasClassAnnotation(element, element, validatedElements, EActivity.class, valid);
-	}
-
-	public void hasEActivityOrEFragment(Element element, AnnotationElements validatedElements, IsValid valid) {
-		@SuppressWarnings("unchecked")
-		List<Class<? extends Annotation>> validAnnotations = asList(EActivity.class, EFragment.class);
-		hasOneOfClassAnnotations(element, element, validatedElements, validAnnotations, valid);
 	}
 
 	public void enclosingElementHasEnhancedViewSupportAnnotation(Element element, AnnotationElements validatedElements, IsValid valid) {
@@ -341,7 +330,7 @@ public class ValidatorHelper {
 	}
 
 	public void typeOrTargetValueHasAnnotation(Class<? extends Annotation> annotation, Element element, IsValid valid) {
-		DeclaredType targetAnnotationClassValue = annotationHelper.extractAnnotationClassParameter(element);
+		DeclaredType targetAnnotationClassValue = annotationHelper.extractAnnotationClassValue(element);
 
 		if (targetAnnotationClassValue != null) {
 			typeHasAnnotation(annotation, targetAnnotationClassValue, element, valid);
@@ -551,6 +540,69 @@ public class ValidatorHelper {
 
 	public void extendsContext(Element element, IsValid valid) {
 		extendsType(element, CanonicalNameConstants.CONTEXT, valid);
+	}
+
+	public void extendsOrmLiteDao(Element element, IsValid valid) {
+		TypeMirror typeMirror = element.asType();
+		boolean isValid = false;
+
+		// get model annotation class value
+		OrmLiteDao annotation = element.getAnnotation(OrmLiteDao.class);
+		TypeMirror modelObjectTypeMirror = null;
+		try {
+			annotation.model();
+		} catch (MirroredTypeException mte) {
+			modelObjectTypeMirror = mte.getTypeMirror();
+		}
+
+		// first case : element is a Dao
+		TypeMirror daoTypeMirror = annotationHelper.typeElementFromQualifiedName(CanonicalNameConstants.DAO).asType();
+		if (annotationHelper.getTypeUtils().isSubtype(daoTypeMirror, typeMirror)) {
+			isValid = hasDaoAnObjectModelParameterizedType(typeMirror, modelObjectTypeMirror);
+		}
+		// second case : element inherits from Dao
+		else {
+			List<? extends TypeMirror> supertypes = annotationHelper.getTypeUtils().directSupertypes(typeMirror);
+			for (int i = supertypes.size(); i-- > 0;) {
+				if (annotationHelper.getTypeUtils().isSubtype(supertypes.get(i), daoTypeMirror) && hasDaoAnObjectModelParameterizedType(supertypes.get(i), modelObjectTypeMirror)) {
+					isValid = true;
+					break;
+				}
+			}
+		}
+
+		if (!isValid) {
+			valid.invalidate();
+			annotationHelper.printAnnotationError(element, "%s can only be used on an element that is a Dao or inherits from a Dao and has the parameterized type : " + modelObjectTypeMirror.toString());
+		}
+	}
+
+	private boolean hasDaoAnObjectModelParameterizedType(TypeMirror daoType, TypeMirror objectModelType) {
+		DeclaredType declaredType = (DeclaredType) daoType;
+		List<? extends TypeMirror> argTypes = declaredType.getTypeArguments();
+		if (argTypes.size() > 0) {
+			if (argTypes.get(0).equals(objectModelType)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	public void hasASqlLiteOpenHelperParameterizedType(Element element, IsValid valid) {
+		// get helper annotation class value
+		OrmLiteDao annotation = element.getAnnotation(OrmLiteDao.class);
+		TypeMirror helperType = null;
+		try {
+			annotation.helper();
+		} catch (MirroredTypeException mte) {
+			helperType = mte.getTypeMirror();
+		}
+
+		TypeMirror openHelperType = annotationHelper.typeElementFromQualifiedName(CanonicalNameConstants.SQLLITE_OPEN_HELPER).asType();
+		if (!annotationHelper.getTypeUtils().isSubtype(helperType, openHelperType)) {
+			valid.invalidate();
+			annotationHelper.printAnnotationError(element, "helper value must inherits from : " + openHelperType.toString());
+		}
 	}
 
 	public void upperclassOfRegisteredApplication(Element element, AndroidManifest manifest, IsValid valid) {
