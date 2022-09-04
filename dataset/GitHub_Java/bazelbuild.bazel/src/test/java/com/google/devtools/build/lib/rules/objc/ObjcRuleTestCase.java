@@ -749,7 +749,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
 
     assertThat(Artifact.toExecPaths(protoActionD.getInputs())).contains("protos/data_d.proto");
     assertThat(Artifact.toExecPaths(protoActionD.getInputs()))
-        .containsAtLeast("protos/data_a.proto", "protos/data_c.proto");
+        .containsAllOf("protos/data_a.proto", "protos/data_c.proto");
     assertThat(Artifact.toExecPaths(protoActionD.getInputs()))
         .doesNotContain("protos/data_b.proto");
   }
@@ -1095,7 +1095,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
         .write();
 
     CommandAction compileAction = compileAction("//objc:x", "a.o");
-    assertThat(compileAction.getArguments()).containsAtLeast("-Dfoo", "-Dbar");
+    assertThat(compileAction.getArguments()).containsAllOf("-Dfoo", "-Dbar");
   }
 
   protected void checkSdkIncludesUsedInCompileAction(RuleType ruleType) throws Exception {
@@ -1414,9 +1414,13 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
     verifyObjlist(x8664BinAction, "package/libcclib.a");
 
     assertThat(Artifact.toExecPaths(i386BinAction.getInputs()))
-        .containsAtLeast(i386Prefix + "package/libcclib.a", i386Prefix + "x/x-linker.objlist");
+        .containsAllOf(
+            i386Prefix + "package/libcclib.a",
+            i386Prefix + "x/x-linker.objlist");
     assertThat(Artifact.toExecPaths(x8664BinAction.getInputs()))
-        .containsAtLeast(x8664Prefix + "package/libcclib.a", x8664Prefix + "x/x-linker.objlist");
+        .containsAllOf(
+            x8664Prefix + "package/libcclib.a",
+            x8664Prefix + "x/x-linker.objlist");
   }
 
   // Regression test for b/32310268.
@@ -1620,7 +1624,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
         getFirstArtifactEndingWith(linkAction.getInputs(), "libobjcLib.a"));
 
     assertAppleSdkPlatformEnv(objcLibCompileAction, "WatchSimulator");
-    assertThat(objcLibCompileAction.getArguments()).containsAtLeast("-arch_only", "i386").inOrder();
+    assertThat(objcLibCompileAction.getArguments()).containsAllOf("-arch_only", "i386").inOrder();
   }
 
   protected void checkWatchSimulatorLinkAction(RuleType ruleType) throws Exception {
@@ -1642,8 +1646,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
 
     assertAppleSdkPlatformEnv(linkAction, "WatchSimulator");
     assertThat(normalizeBashArgs(linkAction.getArguments()))
-        .containsAtLeast("-arch", "i386")
-        .inOrder();
+        .containsAllOf("-arch", "i386").inOrder();
   }
 
   protected void checkWatchSimulatorLipoAction(RuleType ruleType) throws Exception {
@@ -1665,7 +1668,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
 
     assertContainsSublist(action.getArguments(), ImmutableList.of(
         MOCK_XCRUNWRAPPER_EXECUTABLE_PATH, LIPO, "-create"));
-    assertThat(action.getArguments()).containsAtLeast(armv7kBin, i386Bin);
+    assertThat(action.getArguments()).containsAllOf(armv7kBin, i386Bin);
     assertContainsSublist(action.getArguments(), ImmutableList.of(
         "-o", execPathEndingWith(action.getOutputs(), "x_lipobin")));
 

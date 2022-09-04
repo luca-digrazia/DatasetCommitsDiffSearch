@@ -140,13 +140,13 @@ public class AndroidDataBindingV2Test extends AndroidBuildViewTestCase {
         getFirstArtifactEndingWith(
             allArtifacts, "databinding/lib_with_databinding/layout-info.zip");
     assertThat(getGeneratingSpawnActionArgs(libResourceInfoOutput))
-        .containsAtLeast("--dataBindingInfoOut", libResourceInfoOutput.getExecPathString())
+        .containsAllOf("--dataBindingInfoOut", libResourceInfoOutput.getExecPathString())
         .inOrder();
 
     Artifact binResourceInfoOutput =
         getFirstArtifactEndingWith(allArtifacts, "databinding/app/layout-info.zip");
     assertThat(getGeneratingSpawnActionArgs(binResourceInfoOutput))
-        .containsAtLeast("--dataBindingInfoOut", binResourceInfoOutput.getExecPathString())
+        .containsAllOf("--dataBindingInfoOut", binResourceInfoOutput.getExecPathString())
         .inOrder();
 
     // Java compilation includes the data binding annotation processor, the resource processor's
@@ -159,7 +159,7 @@ public class AndroidDataBindingV2Test extends AndroidBuildViewTestCase {
     assertThat(getProcessorNames(libCompileAction))
         .contains("android.databinding.annotationprocessor.ProcessDataBinding");
     assertThat(prettyArtifactNames(libCompileAction.getInputs()))
-        .containsAtLeast(
+        .containsAllOf(
             "java/android/library/databinding/lib_with_databinding/layout-info.zip",
             "java/android/library/databinding/lib_with_databinding/DataBindingInfo.java");
 
@@ -169,7 +169,7 @@ public class AndroidDataBindingV2Test extends AndroidBuildViewTestCase {
     assertThat(getProcessorNames(binCompileAction))
         .contains("android.databinding.annotationprocessor.ProcessDataBinding");
     assertThat(prettyArtifactNames(binCompileAction.getInputs()))
-        .containsAtLeast(
+        .containsAllOf(
             "java/android/binary/databinding/app/layout-info.zip",
             "java/android/binary/databinding/app/DataBindingInfo.java");
   }
@@ -326,7 +326,7 @@ public class AndroidDataBindingV2Test extends AndroidBuildViewTestCase {
             + "lib_with_resource_files/bin-files/android.lib_with_resource_files-";
 
     assertThat(appJarInputs)
-        .containsAtLeast(
+        .containsAllOf(
             "java/android/binary/databinding/app/layout-info.zip",
             libWithResourcesMetadataBaseDir + "android.lib_with_resource_files-br.bin");
 
@@ -357,7 +357,7 @@ public class AndroidDataBindingV2Test extends AndroidBuildViewTestCase {
                 getFirstArtifactEndingWith(libArtifacts, "lib_no_resource_files.jar"));
     // The annotation processor is attached to the Java compilation:
     assertThat(getJavacArguments(libCompileAction))
-        .containsAtLeast(
+        .containsAllOf(
             "--processors", "android.databinding.annotationprocessor.ProcessDataBinding");
     // The dummy .java file with annotations that trigger the annotation process is present:
     assertThat(prettyArtifactNames(libCompileAction.getInputs()))

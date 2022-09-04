@@ -14,7 +14,7 @@
 package com.google.devtools.build.lib.vfs;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
@@ -205,7 +205,7 @@ public class GlobTest {
           }
 
           @Override
-          public Collection<Dirent> readdir(Path path) {
+          public Collection<Dirent> readdir(Path path, Symlinks symlinks) {
             throw new IllegalStateException();
           }
 
@@ -215,15 +215,15 @@ public class GlobTest {
           }
         };
 
-    IOException e =
-        assertThrows(
-            IOException.class,
-            () ->
-                new UnixGlob.Builder(tmpPath)
-                    .addPattern("foo/bar/wiz/file")
-                    .setFilesystemCalls(new AtomicReference<>(syscalls))
-                    .glob());
-    assertThat(e).hasMessageThat().isEqualTo("EIO");
+    try {
+      new UnixGlob.Builder(tmpPath)
+          .addPattern("foo/bar/wiz/file")
+          .setFilesystemCalls(new AtomicReference<>(syscalls))
+          .glob();
+      fail("Expected failure");
+    } catch (IOException e) {
+      assertThat(e).hasMessageThat().isEqualTo("EIO");
+    }
   }
 
   @Test
@@ -236,7 +236,7 @@ public class GlobTest {
           }
 
           @Override
-          public Collection<Dirent> readdir(Path path) {
+          public Collection<Dirent> readdir(Path path, Symlinks symlinks) {
             throw new IllegalStateException();
           }
 
@@ -322,11 +322,14 @@ public class GlobTest {
   }
 
   private void assertIllegalPattern(String pattern) throws Exception {
-    IllegalArgumentException e =
-        assertThrows(
-            IllegalArgumentException.class,
-            () -> new UnixGlob.Builder(tmpPath).addPattern(pattern).globInterruptible());
-    assertThat(e).hasMessageThat().containsMatch("in glob pattern");
+    try {
+      new UnixGlob.Builder(tmpPath)
+          .addPattern(pattern)
+          .globInterruptible();
+      fail();
+    } catch (IllegalArgumentException e) {
+      assertThat(e).hasMessageThat().containsMatch("in glob pattern");
+    }
   }
 
   @Test
@@ -343,17 +346,24 @@ public class GlobTest {
   public void testIOException() throws Exception {
     throwOnReaddir = fs.getPath("/throw_on_readdir");
     throwOnReaddir.createDirectory();
-    assertThrows(
-        IOException.class, () -> new UnixGlob.Builder(throwOnReaddir).addPattern("**").glob());
+    try {
+      new UnixGlob.Builder(throwOnReaddir).addPattern("**").glob();
+      fail();
+    } catch (IOException e) {
+      // Expected.
+    }
   }
 
   @Test
   public void testFastFailureithInterrupt() throws Exception {
     Thread.currentThread().interrupt();
     throwOnStat = tmpPath;
-    FileNotFoundException e =
-        assertThrows(FileNotFoundException.class, () -> new UnixGlob.Builder(tmpPath).glob());
-    assertThat(e).hasMessageThat().contains("globtmp");
+    try {
+      new UnixGlob.Builder(tmpPath).glob();
+      fail();
+    } catch (FileNotFoundException e) {
+      assertThat(e).hasMessageThat().contains("globtmp");
+    }
   }
 
   @Test
@@ -370,17 +380,27 @@ public class GlobTest {
           }
         };
 
-    Future<?> globResult =
-        new UnixGlob.Builder(tmpPath)
-            .addPattern("**")
-            .setDirectoryFilter(interrupterPredicate)
-            .setExecutor(executor)
-            .globAsync();
-    assertThrows(InterruptedException.class, () -> globResult.get());
+    Future<?> globResult = null;
+    try {
+      globResult =
+          new UnixGlob.Builder(tmpPath)
+              .addPattern("**")
+              .setDirectoryFilter(interrupterPredicate)
+              .setExecutor(executor)
+              .globAsync();
+      globResult.get();
+      fail(); // Should have received InterruptedException
+    } catch (InterruptedException e) {
+      // good
+    }
 
     globResult.cancel(true);
-    assertThrows(
-        CancellationException.class, () -> Uninterruptibles.getUninterruptibly(globResult));
+    try {
+      Uninterruptibles.getUninterruptibly(globResult);
+      fail();
+    } catch (CancellationException e) {
+      // Expected.
+    }
 
     Thread.interrupted();
     assertThat(executor.isShutdown()).isFalse();

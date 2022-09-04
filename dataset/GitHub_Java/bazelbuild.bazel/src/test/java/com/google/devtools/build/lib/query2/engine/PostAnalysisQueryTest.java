@@ -201,7 +201,7 @@ public abstract class PostAnalysisQueryTest<T> extends AbstractQueryTest<T> {
 
     helper.setQuerySettings(Setting.NO_IMPLICIT_DEPS);
     assertThat(evalToListOfStrings("deps(//test:my_rule)"))
-        .containsAtLeastElementsIn(evalToListOfStrings(explicits));
+        .containsAllIn(evalToListOfStrings(explicits));
     assertThat(evalToListOfStrings("deps(//test:my_rule)"))
         .doesNotContain(evalToListOfStrings(implicits));
   }
@@ -245,16 +245,16 @@ public abstract class PostAnalysisQueryTest<T> extends AbstractQueryTest<T> {
 
     // Check for implicit toolchain dependencies
     assertThat(evalToListOfStrings("deps(//test:my_rule)"))
-        .containsAtLeastElementsIn(
-            evalToListOfStrings(explicits + " + " + implicits + " + " + PLATFORM_LABEL));
+        .containsAllIn(evalToListOfStrings(explicits + " + " + implicits + " + " + PLATFORM_LABEL));
 
     helper.setQuerySettings(Setting.NO_IMPLICIT_DEPS);
     assertThat(evalToListOfStrings("deps(//test:my_rule)"))
-        .containsAtLeastElementsIn(evalToListOfStrings(explicits));
+        .containsAllIn(evalToListOfStrings(explicits));
     assertThat(evalToListOfStrings("deps(//test:my_rule)"))
         .doesNotContain(evalToListOfStrings(implicits));
   }
 
+  @Override
   @Test
   public void testNoImplicitDeps_computedDefault() throws Exception {
     MockRule computedDefaultRule =
