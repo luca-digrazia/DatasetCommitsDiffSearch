@@ -152,6 +152,10 @@ public class MongoMapper {
 
         coll.ensureIndex(new BasicDBObject("name", 1));
         
+        // Truncate hosts collection.
+
+        coll.remove(new BasicDBObject());
+
         // Go trough every host and insert.
         for (Iterator<String> i = hosts.iterator(); i.hasNext( ); ) {
             try {
