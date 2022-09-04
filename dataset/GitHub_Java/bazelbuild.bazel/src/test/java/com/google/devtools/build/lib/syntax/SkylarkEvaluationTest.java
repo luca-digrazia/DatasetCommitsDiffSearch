@@ -1487,8 +1487,8 @@ public class SkylarkEvaluationTest extends EvaluationTest {
   }
 
   @Test
-  public void testInSetDeprecated() throws Exception {
-    new SkylarkTest("--incompatible_depset_is_not_iterable=false")
+  public void testInSet() throws Exception {
+    new SkylarkTest()
         .testStatement("'b' in depset(['a', 'b'])", Boolean.TRUE)
         .testStatement("'c' in depset(['a', 'b'])", Boolean.FALSE)
         .testStatement("1 in depset(['a', 'b'])", Boolean.FALSE);

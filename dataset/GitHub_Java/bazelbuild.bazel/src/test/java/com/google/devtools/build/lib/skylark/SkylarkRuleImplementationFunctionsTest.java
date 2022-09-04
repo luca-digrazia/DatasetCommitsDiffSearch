@@ -781,7 +781,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
             Iterables.getOnlyElement(
                 ruleContext.getRuleContext().getAnalysisEnvironment().getRegisteredActions());
     assertThat(ActionsTestUtil.baseArtifactNames(action.getInputs()))
-        .containsAtLeast(
+        .containsAllOf(
             "mytool.sh",
             "mytool",
             "foo_Smytool" + OsUtils.executableExtension() + "-runfiles",
@@ -2883,7 +2883,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         getGeneratingAction(
             Iterables.getOnlyElement(r.getProvider(FileProvider.class).getFilesToBuild()));
     assertThat(ActionsTestUtil.baseArtifactNames(action.getRunfilesSupplier().getArtifacts()))
-        .containsAtLeast("tool", "tool.sh", "data");
+        .containsAllOf("tool", "tool.sh", "data");
   }
 
   @Test
@@ -2911,7 +2911,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         getGeneratingAction(
             Iterables.getOnlyElement(r.getProvider(FileProvider.class).getFilesToBuild()));
     assertThat(ActionsTestUtil.baseArtifactNames(action.getRunfilesSupplier().getArtifacts()))
-        .containsAtLeast("tool", "tool.sh", "data");
+        .containsAllOf("tool", "tool.sh", "data");
   }
 
   // Verifies that configuration_field can only be used on 'label' attributes.
@@ -3208,4 +3208,3 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     }
   }
 }
-
