@@ -182,22 +182,20 @@ public class WorkspaceFactory {
   private void execute(BuildFileAST ast, @Nullable Map<String, Extension> importedExtensions,
       StoredEventHandler localReporter)
       throws InterruptedException {
+    // Note that this Skylark environment ignores command line flags.
+    Environment.Builder environmentBuilder =
+        Environment.builder(mutability)
+            .setGlobals(BazelLibrary.GLOBALS)
+            .setEventHandler(localReporter);
     if (importedExtensions != null) {
-      Map<String, Extension> map = new HashMap<>(parentImportMap);
+      Map<String, Extension> map = new HashMap<String, Extension>(parentImportMap);
       map.putAll(importedExtensions);
-      importMap = ImmutableMap.copyOf(importedExtensions);
+      importMap = ImmutableMap.<String, Extension>copyOf(importedExtensions);
     } else {
       importMap = parentImportMap;
     }
-    Environment workspaceEnv =
-        Environment.builder(mutability)
-            // Note that this Skylark environment ignores command line flags.
-            .useDefaultSemantics()
-            .setGlobals(BazelLibrary.GLOBALS)
-            .setEventHandler(localReporter)
-            .setImportedExtensions(importMap)
-            .setPhase(Phase.WORKSPACE)
-            .build();
+    environmentBuilder.setImportedExtensions(importMap);
+    Environment workspaceEnv = environmentBuilder.setPhase(Phase.WORKSPACE).build();
     addWorkspaceFunctions(workspaceEnv, localReporter);
     for (Map.Entry<String, Object> binding : parentVariableBindings.entrySet()) {
       try {
@@ -422,9 +420,7 @@ public class WorkspaceFactory {
                 } catch (LabelSyntaxException e) {
                   throw new EvalException(
                       ast.getLocation(),
-                      String.format(
-                          "In register_toolchains: unable to parse toolchain label %s: %s",
-                          rawLabel, e.getMessage()),
+                      String.format("Unable to parse toolchain %s: %s", rawLabel, e.getMessage()),
                       e);
                 }
               }
@@ -532,7 +528,8 @@ public class WorkspaceFactory {
     }
 
     builder.put("bazel_version", version);
-    return NativeProvider.STRUCT.create(builder.build(), "no native function or rule '%s'");
+    return NativeClassObjectConstructor.STRUCT.create(
+        builder.build(), "no native function or rule '%s'");
   }
 
   static ClassObject newNativeModule(RuleClassProvider ruleClassProvider, String version) {

@@ -383,11 +383,6 @@ public final class PackageFactory {
     public abstract BuilderForTesting builder();
   }
 
-  @VisibleForTesting
-  public Package.Builder.Helper getPackageBuilderHelperForTesting() {
-    return packageBuilderHelper;
-  }
-
   /**
    * Constructs a {@code PackageFactory} instance with a specific glob path translator
    * and rule factory.
@@ -578,12 +573,11 @@ public final class PackageFactory {
     try {
       Globber.Token globToken = context.globber.runAsync(includes, excludes, excludeDirs);
       matches = context.globber.fetch(globToken);
-    } catch (IOException e) {
-      String errorMessage =
-          "error globbing [" + Joiner.on(", ").join(includes) + "]: " + e.getMessage();
-      context.eventHandler.handle(Event.error(ast.getLocation(), errorMessage));
-      context.pkgBuilder.setIOExceptionAndMessage(e, errorMessage);
-      matches = ImmutableList.of();
+    } catch (IOException expected) {
+      context.eventHandler.handle(Event.error(ast.getLocation(),
+              "error globbing [" + Joiner.on(", ").join(includes) + "]: " + expected.getMessage()));
+      context.pkgBuilder.setContainsErrors();
+      matches = ImmutableList.<String>of();
     } catch (BadGlobException e) {
       throw new EvalException(ast.getLocation(), e.getMessage());
     }

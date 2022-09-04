@@ -13,8 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.base.Preconditions;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.skyframe.LegacySkyKey;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
@@ -77,7 +76,7 @@ public class WorkspaceNameValue implements SkyValue {
   /** Singleton class used as the {@link SkyKey#argument} for {@link WorkspaceNameValue#key}. */
   public static final class DummyArgument {
     static final int HASHCODE = DummyArgument.class.getCanonicalName().hashCode();
-    @AutoCodec public static final DummyArgument INSTANCE = new DummyArgument();
+    public static final DummyArgument INSTANCE = new DummyArgument();
 
     private DummyArgument() {
     }
