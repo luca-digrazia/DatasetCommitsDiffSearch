@@ -19,7 +19,9 @@ import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.errorprone.annotations.MustBeClosed;
+import com.google.protobuf.Any;
 import com.sun.tools.javac.util.Context;
+import com.sun.tools.javac.util.Context.Factory;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.Set;
@@ -42,13 +44,14 @@ public abstract class BlazeJavacStatistics {
 
   public static void preRegister(Context context) {
     if (contextsInitialized.add(context)) {
-      context.<Builder>put(
+      context.put(
           Builder.class,
-          ctx -> {
-            Builder instance = newBuilder();
-            ctx.put(Builder.class, instance);
-            return instance;
-          });
+          (Factory<Builder>)
+              c -> {
+                Builder instance = newBuilder();
+                c.put(Builder.class, instance);
+                return instance;
+              });
     } else {
       throw new IllegalStateException("Initialize called twice!");
     }
@@ -66,7 +69,10 @@ public abstract class BlazeJavacStatistics {
         .transitiveClasspathFallback(false);
   }
 
-  public abstract ImmutableMap<AuxiliaryDataSource, byte[]> auxiliaryData();
+  public abstract ImmutableMap<TickKey, Any> protoTicks();
+
+  @Deprecated // use protoTicks() instead.
+  public abstract ImmutableListMultimap<TickKey, Duration> timingTicks();
 
   public abstract ImmutableListMultimap<String, Duration> errorProneTicks();
 
@@ -82,12 +88,8 @@ public abstract class BlazeJavacStatistics {
 
   // TODO(glorioso): We really need to think out more about what data to collect/store here.
 
-  /**
-   * Known sources of additional data to add to the statistics. Each data source can put a single
-   * byte[] of serialized proto data into this statistics object with {@link
-   * Builder#addAuxiliaryData}
-   */
-  public enum AuxiliaryDataSource {
+  /** Known sources of timing information */
+  public enum TickKey {
     DAGGER,
   }
 
@@ -103,9 +105,12 @@ public abstract class BlazeJavacStatistics {
   @AutoValue.Builder
   public abstract static class Builder {
 
-    abstract ImmutableListMultimap.Builder<String, Duration> errorProneTicksBuilder();
+    abstract ImmutableMap.Builder<TickKey, Any> protoTicksBuilder();
 
-    abstract ImmutableMap.Builder<AuxiliaryDataSource, byte[]> auxiliaryDataBuilder();
+    @Deprecated // use protoTicksBuilder() instead
+    abstract ImmutableListMultimap.Builder<TickKey, Duration> timingTicksBuilder();
+
+    abstract ImmutableListMultimap.Builder<String, Duration> errorProneTicksBuilder();
 
     abstract ImmutableSet.Builder<String> processorsBuilder();
 
@@ -124,17 +129,14 @@ public abstract class BlazeJavacStatistics {
 
     public abstract BlazeJavacStatistics build();
 
-    /**
-     * Add an auxiliary attachment of data to this statistics object. The data should be a proto
-     * serialization of a google.protobuf.Any protobuf.
-     *
-     * <p>Since this method is called across the boundaries of an annotation processorpath and the
-     * runtime classpath of the compiler, we want to reduce the number of classes mentioned, hence
-     * the byte[] data type. If we find a way to make this more safe, we would prefer to use a
-     * protobuf ByteString instead for its immutability.
-     */
-    public Builder addAuxiliaryData(AuxiliaryDataSource key, byte[] serializedData) {
-      auxiliaryDataBuilder().put(key, serializedData.clone());
+    public Builder addTick(TickKey key, Any elapsed) {
+      protoTicksBuilder().put(key, elapsed);
+      return this;
+    }
+
+    @Deprecated // use addTick(key, Any) with a custom proto message.
+    public Builder addTick(TickKey key, Duration elapsed) {
+      timingTicksBuilder().put(key, elapsed);
       return this;
     }
 
