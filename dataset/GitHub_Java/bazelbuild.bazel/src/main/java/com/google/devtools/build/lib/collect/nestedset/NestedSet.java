@@ -21,8 +21,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.devtools.build.lib.bugreport.BugReport;
-import com.google.devtools.build.lib.bugreport.Crash;
-import com.google.devtools.build.lib.bugreport.CrashContext;
 import com.google.devtools.build.lib.collect.compacthashset.CompactHashSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetStore.MissingNestedSetException;
 import com.google.devtools.build.lib.concurrent.MoreFutures;
@@ -295,8 +293,8 @@ public final class NestedSet<E> {
         System.err.println(
             "An interrupted exception occurred during nested set deserialization, "
                 + "exiting abruptly.");
-        BugReport.handleCrash(Crash.from(e, ExitCode.INTERRUPTED), CrashContext.halt());
-        throw new IllegalStateException("Should have halted", e);
+        BugReport.handleCrash(e, ExitCode.INTERRUPTED);
+        throw new IllegalStateException("Server should have shut down.", e);
       }
     } else {
       return children;
@@ -733,13 +731,15 @@ public final class NestedSet<E> {
   private static <E> int replay(
       ImmutableList.Builder<E> output, Object[] children, byte[] memo, int pos) {
     for (Object child : children) {
-      if ((memo[pos >> 3] & (1 << (pos & 7))) == 0) {
-        pos++;
-      } else if (child instanceof Object[]) {
-        pos = replay(output, (Object[]) child, memo, pos + 1);
+      if ((memo[pos >> 3] & (1 << (pos & 7))) != 0) {
+        if (child instanceof Object[]) {
+          pos = replay(output, (Object[]) child, memo, pos + 1);
+        } else {
+          output.add((E) child);
+          ++pos;
+        }
       } else {
-        output.add((E) child);
-        pos++;
+        ++pos;
       }
     }
     return pos;
