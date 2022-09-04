@@ -1,9 +1,5 @@
 package org.litepal.crud;
 
-import java.util.List;
-
-import org.litepal.tablemanager.Connector;
-
 public class ClusterQuery {
 
 	String[] mColumns;
@@ -51,10 +47,8 @@ public class ClusterQuery {
 		return this;
 	}
 
-	public <T> List<T> execute(Class<T> modelClass) {
-		QueryHandler queryHandler = new QueryHandler(Connector.getDatabase());
-		return queryHandler.onFind(modelClass, mColumns, mConditions, mGroupBy, mHaving, mOrderBy,
-				mLimit);
+	public <T> T execute() {
+		return null;
 	}
 
 }
