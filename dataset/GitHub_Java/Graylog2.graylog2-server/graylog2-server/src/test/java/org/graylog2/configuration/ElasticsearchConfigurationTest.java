@@ -43,7 +43,7 @@ public class ElasticsearchConfigurationTest {
         final ElasticsearchConfiguration configuration = new ElasticsearchConfiguration();
         new JadConfig(new InMemoryRepository(), configuration).process();
 
-        assertEquals(configuration.getPathData(), "data/elasticsearch");
+        assertEquals(configuration.getPathData(), "elasticsearch-data");
     }
 
     @Test
