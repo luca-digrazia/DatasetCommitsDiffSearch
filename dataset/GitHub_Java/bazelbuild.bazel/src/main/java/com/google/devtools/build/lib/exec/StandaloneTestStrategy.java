@@ -296,9 +296,9 @@ public class StandaloneTestStrategy extends TestStrategy {
     Path err = resolvedPaths.getTestStderr();
     FileOutErr testOutErr = new FileOutErr(out, err);
     Closeable streamed = null;
-    if (executionOptions.testOutput.equals(ExecutionOptions.TestOutputFormat.STREAMED)) {
+    if (executionOptions.testOutput.equals(TestOutputFormat.STREAMED)) {
       streamed =
-          createStreamedTestOutput(
+          new StreamedTestOutput(
               Reporter.outErrForReporter(actionExecutionContext.getEventHandler()), out);
     }
     long startTimeMillis = actionExecutionContext.getClock().currentTimeMillis();
