@@ -14,7 +14,7 @@
 
 package com.google.devtools.build.lib.analysis;
 
-import static com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransitionProxy.DATA;
+import static com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition.DATA;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.DISTRIBUTIONS;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
@@ -35,13 +35,12 @@ import com.google.devtools.build.lib.analysis.config.DynamicTransitionMapper;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.config.PatchTransition;
 import com.google.devtools.build.lib.analysis.config.RunUnder;
-import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransitionProxy;
-import com.google.devtools.build.lib.analysis.config.transitions.Transition;
 import com.google.devtools.build.lib.analysis.constraints.EnvironmentRule;
 import com.google.devtools.build.lib.analysis.test.TestConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.Attribute.LateBoundDefault;
+import com.google.devtools.build.lib.packages.Attribute.Transition;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
@@ -394,7 +393,7 @@ public class BaseRuleClasses {
   }
 
   /**
-   * Declares the implementations for {@link ConfigurationTransitionProxy} enums.
+   * Declares the implementations for {@link Attribute.ConfigurationTransition} enums.
    *
    * <p>We can't put this in {@link Attribute} because that's in the {@code lib.packages} package,
    * which has no access to configuration classes.
@@ -403,9 +402,9 @@ public class BaseRuleClasses {
    */
   public static final ImmutableMap<Transition, Transition> DYNAMIC_TRANSITIONS_MAP =
       ImmutableMap.of(
-          ConfigurationTransitionProxy.NONE, DynamicTransitionMapper.SELF,
-          ConfigurationTransitionProxy.NULL, DynamicTransitionMapper.SELF
-          // ConfigurationTransitionProxy.DATA is skipped because it's C++-specific.
+          Attribute.ConfigurationTransition.NONE, DynamicTransitionMapper.SELF,
+          Attribute.ConfigurationTransition.NULL, DynamicTransitionMapper.SELF
+          // Attribute.ConfigurationTransition.DATA is skipped because it's C++-specific.
           // The C++ rule definitions handle its mapping.
       );
 }
