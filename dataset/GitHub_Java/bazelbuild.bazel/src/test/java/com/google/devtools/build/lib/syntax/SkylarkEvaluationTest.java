@@ -2097,11 +2097,11 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
           }
 
           @Override
-          public Object callImpl(
-              StarlarkThread thread,
-              FuncallExpression call,
+          public Object call(
               List<Object> args,
-              Map<String, Object> kwargs) {
+              Map<String, Object> kwargs,
+              FuncallExpression call,
+              StarlarkThread thread) {
             return "fromValues";
           }
         };

@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.AttributeValueSource;
-import com.google.devtools.build.lib.packages.BazelStarlarkContext;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Package.NameConflictException;
 import com.google.devtools.build.lib.packages.PackageFactory;
@@ -48,12 +47,12 @@ import com.google.devtools.build.lib.syntax.FunctionSignature;
 import com.google.devtools.build.lib.syntax.Identifier;
 import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.SkylarkUtils;
 import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkFunction;
+import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
-import java.util.List;
 import java.util.Map;
-import javax.annotation.Nullable;
 
 /**
  * The Skylark module containing the definition of {@code repository_rule} function to define a
@@ -71,15 +70,16 @@ public class SkylarkRepositoryModule implements RepositoryModuleApi {
       Boolean remotable,
       String doc,
       FuncallExpression ast,
-      StarlarkThread thread)
+      StarlarkThread funcallThread)
       throws EvalException {
-    BazelStarlarkContext.from(thread).checkLoadingOrWorkspacePhase("repository_rule");
+    SkylarkUtils.checkLoadingOrWorkspacePhase(funcallThread, "repository_rule", ast.getLocation());
+    StarlarkSemantics semantics = funcallThread.getSemantics();
     // We'll set the name later, pass the empty string for now.
     RuleClass.Builder builder = new RuleClass.Builder("", RuleClassType.WORKSPACE, true);
 
     builder.addOrOverrideAttribute(attr("$local", BOOLEAN).defaultValue(local).build());
     builder.addOrOverrideAttribute(attr("$configure", BOOLEAN).defaultValue(configure).build());
-    if (thread.getSemantics().experimentalRepoRemoteExec()) {
+    if (semantics.experimentalRepoRemoteExec()) {
       builder.addOrOverrideAttribute(attr("$remotable", BOOLEAN).defaultValue(remotable).build());
       BaseRuleClasses.execPropertiesAttribute(builder);
     }
@@ -99,7 +99,8 @@ public class SkylarkRepositoryModule implements RepositoryModuleApi {
     }
     builder.setConfiguredTargetFunction(implementation);
     builder.setRuleDefinitionEnvironmentLabelAndHashCode(
-        (Label) thread.getGlobals().getLabel(), thread.getTransitiveContentHashCode());
+        (Label) funcallThread.getGlobals().getLabel(),
+        funcallThread.getTransitiveContentHashCode());
     builder.setWorkspaceOnly();
     return new RepositoryRuleFunction(builder, ast.getLocation());
   }
@@ -143,19 +144,15 @@ public class SkylarkRepositoryModule implements RepositoryModuleApi {
     }
 
     @Override
-    public Object callImpl(
-        StarlarkThread thread,
-        @Nullable FuncallExpression call,
-        List<Object> args,
-        Map<String, Object> kwargs)
+    public Object call(
+        Object[] args,
+        FuncallExpression ast,
+        com.google.devtools.build.lib.syntax.StarlarkThread thread)
         throws EvalException, InterruptedException {
-      if (!args.isEmpty()) {
-        throw new EvalException(null, "unexpected positional arguments");
-      }
       String ruleClassName = null;
-      Expression function = call.getFunction();
+      Expression function = ast.getFunction();
       // If the function ever got exported (the common case), we take the name
-      // it was exported to. Only in the not intended case of calling an unexported
+      // it was exprted to. Only in the not intended case of calling an unexported
       // repository function through an exported macro, we fall back, for lack of
       // alternatives, to the name in the local context.
       // TODO(b/111199163): we probably should disallow the use of non-exported
@@ -172,11 +169,12 @@ public class SkylarkRepositoryModule implements RepositoryModuleApi {
       }
       try {
         RuleClass ruleClass = builder.build(ruleClassName, ruleClassName);
-        PackageContext context = PackageFactory.getContext(thread, call.getLocation());
+        PackageContext context = PackageFactory.getContext(thread, ast.getLocation());
         Package.Builder packageBuilder = context.getBuilder();
 
-        // TODO(adonovan): is this safe? Check.
-        String externalRepoName = (String) kwargs.get("name");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> attributeValues = (Map<String, Object>) args[0];
+        String externalRepoName = (String) attributeValues.get("name");
 
         StringBuilder callStack =
             new StringBuilder("Call stack for the definition of repository '")
@@ -186,7 +184,7 @@ public class SkylarkRepositoryModule implements RepositoryModuleApi {
                 .append(" (rule definition at ")
                 .append(ruleClassDefinitionLocation.toString())
                 .append("):");
-        for (DebugFrame frame : thread.listFrames(call.getLocation())) {
+        for (DebugFrame frame : thread.listFrames(ast.getLocation())) {
           callStack.append("\n - ").append(frame.location().toString());
         }
 
@@ -194,19 +192,19 @@ public class SkylarkRepositoryModule implements RepositoryModuleApi {
             packageBuilder, externalRepoName, thread.getSemantics());
 
         WorkspaceFactoryHelper.addRepoMappings(
-            packageBuilder, kwargs, externalRepoName, call.getLocation());
+            packageBuilder, attributeValues, externalRepoName, ast.getLocation());
 
         Rule rule =
             WorkspaceFactoryHelper.createAndAddRepositoryRule(
                 context.getBuilder(),
                 ruleClass,
                 null,
-                WorkspaceFactoryHelper.getFinalKwargs(kwargs),
-                call.getLocation(),
+                WorkspaceFactoryHelper.getFinalKwargs(attributeValues),
+                ast.getLocation(),
                 callStack.toString());
         return rule;
       } catch (InvalidRuleException | NameConflictException | LabelSyntaxException e) {
-        throw new EvalException(call.getLocation(), e.getMessage());
+        throw new EvalException(ast.getLocation(), e.getMessage());
       }
     }
   }

@@ -21,6 +21,7 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkGlobalLibrary;
 import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.StarlarkFunction;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics.FlagIdentifier;
@@ -108,7 +109,7 @@ public interface RepositoryModuleApi {
             named = true,
             positional = false)
       },
-      useLocation = true,
+      useAst = true,
       useStarlarkThread = true)
   BaseFunction repositoryRule(
       StarlarkFunction implementation,
@@ -118,7 +119,7 @@ public interface RepositoryModuleApi {
       Boolean configure,
       Boolean remotable,
       String doc,
-      Location loc,
+      FuncallExpression ast,
       StarlarkThread thread)
       throws EvalException;
 
