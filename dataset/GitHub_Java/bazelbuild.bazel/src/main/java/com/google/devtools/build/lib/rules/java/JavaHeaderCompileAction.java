@@ -32,8 +32,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.BaseSpawn;
 import com.google.devtools.build.lib.actions.CommandLine;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
-import com.google.devtools.build.lib.actions.CommandLines;
-import com.google.devtools.build.lib.actions.CommandLines.CommandLineLimits;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ParamFileInfo;
 import com.google.devtools.build.lib.actions.ParameterFile;
@@ -99,10 +97,8 @@ public class JavaHeaderCompileAction extends SpawnAction {
    * @param directInputs the set of direct input artifacts of the compile action
    * @param inputs the set of transitive input artifacts of the compile action
    * @param outputs the outputs of the action
-   * @param primaryOutput the output jar
-   * @param commandLines the transitive command line arguments for the java header compiler
    * @param directCommandLine the direct command line arguments for the java header compiler
-   * @param commandLineLimits the command line limits
+   * @param argv the transitive command line arguments for the java header compiler
    * @param progressMessage the message printed during the progression of the build
    */
   protected JavaHeaderCompileAction(
@@ -111,20 +107,16 @@ public class JavaHeaderCompileAction extends SpawnAction {
       Iterable<Artifact> directInputs,
       Iterable<Artifact> inputs,
       Iterable<Artifact> outputs,
-      Artifact primaryOutput,
-      CommandLines commandLines,
       CommandLine directCommandLine,
-      CommandLineLimits commandLineLimits,
+      CommandLine argv,
       CharSequence progressMessage) {
     super(
         owner,
         tools,
         inputs,
         outputs,
-        primaryOutput,
         LOCAL_RESOURCES,
-        commandLines,
-        commandLineLimits,
+        argv,
         false,
         // TODO(#3320): This is missing the config's action environment.
         JavaCompileAction.UTF8_ACTION_ENVIRONMENT,
@@ -148,15 +140,16 @@ public class JavaHeaderCompileAction extends SpawnAction {
   @Override
   protected List<SpawnResult> internalExecute(ActionExecutionContext actionExecutionContext)
       throws ExecException, InterruptedException {
-    Spawn spawn = getDirectSpawn();
-    SpawnActionContext context = getContext(actionExecutionContext, spawn);
+    SpawnActionContext context = getContext(actionExecutionContext);
     try {
-      return context.exec(spawn, actionExecutionContext);
+      return context.exec(getDirectSpawn(), actionExecutionContext);
     } catch (ExecException e) {
       // if the direct input spawn failed, try again with transitive inputs to produce better
       // better messages
       try {
-        return context.exec(getSpawn(actionExecutionContext), actionExecutionContext);
+        return context.exec(
+            getSpawn(actionExecutionContext.getClientEnv()),
+            actionExecutionContext);
       } catch (CommandLineExpansionException commandLineExpansionException) {
         throw new UserExecException(commandLineExpansionException);
       }
@@ -465,10 +458,8 @@ public class JavaHeaderCompileAction extends SpawnAction {
               tools,
               transitiveInputs,
               outputs,
-              outputJar,
               LOCAL_RESOURCES,
-              CommandLines.of(transitiveCommandLine),
-              ruleContext.getConfiguration().getCommandLineLimits(),
+              transitiveCommandLine,
               false,
               // TODO(b/63280599): This is missing the config's action environment.
               JavaCompileAction.UTF8_ACTION_ENVIRONMENT,
@@ -497,10 +488,8 @@ public class JavaHeaderCompileAction extends SpawnAction {
             directInputs,
             transitiveInputs,
             outputs,
-            outputJar,
-            CommandLines.of(transitiveCommandLine),
             directCommandLine,
-            ruleContext.getConfiguration().getCommandLineLimits(),
+            transitiveCommandLine,
             getProgressMessage())
       };
     }
