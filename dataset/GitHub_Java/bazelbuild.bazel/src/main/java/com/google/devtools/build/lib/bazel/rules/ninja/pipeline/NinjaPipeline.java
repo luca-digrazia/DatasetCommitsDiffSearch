@@ -119,7 +119,8 @@ public class NinjaPipeline {
             service.submit(
                 () ->
                     new NinjaParserStep(new NinjaLexer(byteFragmentAtOffset.getFragment()))
-                        .parseNinjaTarget(currentScope, byteFragmentAtOffset.getFragmentOffset())));
+                        .parseNinjaTarget(
+                            currentScope, byteFragmentAtOffset.getRealStartOffset())));
       }
       queue.addAll(currentScope.getIncludedScopes());
       queue.addAll(currentScope.getSubNinjaScopes());
@@ -141,7 +142,7 @@ public class NinjaPipeline {
    * parsing result in the parent file {@link NinjaFileParseResult} structure.
    */
   public NinjaPromise<NinjaFileParseResult> createChildFileParsingPromise(
-      NinjaVariableValue value, long offset, String parentNinjaFileName)
+      NinjaVariableValue value, Integer offset, String parentNinjaFileName)
       throws GenericParsingException, IOException {
     if (value.isPlainText()) {
       // If the value of the path is already known, we can immediately schedule parsing
