@@ -228,12 +228,15 @@ public final class DependencySet {
     Path dotdFile =
         outFile.getRelative(FileSystemUtils.replaceExtension(outFile.asFragment(), suffix));
 
-    try (PrintStream out = new PrintStream(dotdFile.getOutputStream())) {
+    PrintStream out = new PrintStream(dotdFile.getOutputStream());
+    try {
       out.print(outFile.relativeTo(root) + ": ");
       for (Path d : dependencies) {
         out.print(" \\\n  " + d.getPathString());  // should already be root relative
       }
       out.println();
+    } finally {
+      out.close();
     }
   }
 
