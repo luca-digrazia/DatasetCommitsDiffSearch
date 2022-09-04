@@ -149,24 +149,23 @@ public class StreamRouterEngine {
         final Set<Stream> blackList = Sets.newHashSet();
 
         for (final Rule rule : rulesList) {
+            final Stream.MatchingType matchingType = rule.getMatchingType();
             if (blackList.contains(rule.getStream())) {
                 continue;
             }
 
             final StreamRule streamRule = rule.getStreamRule();
-            final StreamRuleType streamRuleType = streamRule.getType();
-            if (streamRuleType != StreamRuleType.PRESENCE && !message.hasField(streamRule.getField())) {
+            if (streamRule.getType() != StreamRuleType.PRESENCE && !message.hasField(streamRule.getField())) {
                 continue;
             }
 
             final Stream stream;
-            if (streamRuleType != StreamRuleType.REGEX) {
+            if (streamRule.getType() != StreamRuleType.REGEX) {
                 stream = rule.match(message);
             } else {
                 stream = matchWithTimeOut(message, rule);
             }
 
-            final Stream.MatchingType matchingType = rule.getMatchingType();
             if (stream == null) {
                 if (matchingType == Stream.MatchingType.AND) {
                     result.remove(rule.getStream());
