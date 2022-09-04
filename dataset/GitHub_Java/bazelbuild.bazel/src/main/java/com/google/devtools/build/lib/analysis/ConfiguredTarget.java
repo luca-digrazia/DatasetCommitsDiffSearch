@@ -55,10 +55,6 @@ public interface ConfiguredTarget extends TransitiveInfoCollection, ClassObject,
   @Nullable
   BuildConfiguration getConfiguration();
 
-  default String getConfigurationChecksum() {
-    return getConfiguration().checksum();
-  }
-
   /**
    * Returns keys for a legacy Skylark provider.
    *

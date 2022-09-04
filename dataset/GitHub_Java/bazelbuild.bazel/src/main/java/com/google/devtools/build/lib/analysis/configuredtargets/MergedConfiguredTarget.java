@@ -53,7 +53,7 @@ public final class MergedConfiguredTarget extends AbstractConfiguredTarget {
   }
 
   private MergedConfiguredTarget(ConfiguredTarget base, TransitiveInfoProviderMap providers) {
-    super(base.getLabel(), base.getConfigurationKey());
+    super(base.getLabel(), base.getConfiguration());
     this.base = base;
     this.providers = providers;
   }

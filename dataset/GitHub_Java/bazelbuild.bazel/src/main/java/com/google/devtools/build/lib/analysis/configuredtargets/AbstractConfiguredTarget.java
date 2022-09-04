@@ -63,19 +63,15 @@ public abstract class AbstractConfiguredTarget
   private static final String DEFAULT_RUNFILES_FIELD = "default_runfiles";
 
   public AbstractConfiguredTarget(Label label, BuildConfiguration configuration) {
-    this(label, configuration, NestedSetBuilder.emptySet(Order.STABLE_ORDER));
-  }
-
-  protected AbstractConfiguredTarget(
-      Label label, BuildConfiguration configuration, NestedSet<PackageGroupContents> visibility) {
     this.label = label;
     this.configuration = configuration;
-    this.visibility = visibility;
+    this.visibility = NestedSetBuilder.emptySet(Order.STABLE_ORDER);
   }
 
-  @Deprecated // For callers to be serializable, they shouldn't have a TargetContext constructor.
   public AbstractConfiguredTarget(TargetContext targetContext) {
-    this(targetContext.getLabel(), targetContext.getConfiguration(), targetContext.getVisibility());
+    this.label = targetContext.getTarget().getLabel();
+    this.configuration = targetContext.getConfiguration();
+    this.visibility = targetContext.getVisibility();
   }
 
   @Override
@@ -199,7 +195,7 @@ public abstract class AbstractConfiguredTarget
   @Nullable
   protected abstract Info rawGetSkylarkProvider(Provider.Key providerKey);
 
-  public String getRuleClassString() {
+  protected String getRuleClassString() {
     return "";
   }
 

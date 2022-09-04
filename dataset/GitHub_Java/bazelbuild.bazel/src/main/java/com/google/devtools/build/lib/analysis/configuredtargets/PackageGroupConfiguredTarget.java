@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.analysis.configuredtargets;
 
+import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.PackageSpecificationProvider;
@@ -29,8 +30,6 @@ import com.google.devtools.build.lib.packages.Info;
 import com.google.devtools.build.lib.packages.PackageGroup;
 import com.google.devtools.build.lib.packages.PackageSpecification.PackageGroupContents;
 import com.google.devtools.build.lib.packages.Provider;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.Instantiator;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 
 /**
  * Dummy ConfiguredTarget for package groups. Contains no functionality, since
@@ -43,25 +42,10 @@ public final class PackageGroupConfiguredTarget extends AbstractConfiguredTarget
 
   private final NestedSet<PackageGroupContents> packageSpecifications;
 
-  @VisibleForSerialization
-  @Instantiator
-  PackageGroupConfiguredTarget(
-      Label label,
-      NestedSet<PackageGroupContents> visibility,
-      NestedSet<PackageGroupContents> packageSpecifications) {
-    super(label, null, visibility);
-    this.packageSpecifications = packageSpecifications;
-  }
-
   public PackageGroupConfiguredTarget(TargetContext targetContext, PackageGroup packageGroup) {
-    this(
-        targetContext.getLabel(),
-        targetContext.getVisibility(),
-        getPackageSpecifications(targetContext, packageGroup));
-  }
+    super(targetContext);
+    Preconditions.checkArgument(targetContext.getConfiguration() == null);
 
-  private static NestedSet<PackageGroupContents> getPackageSpecifications(
-      TargetContext targetContext, PackageGroup packageGroup) {
     NestedSetBuilder<PackageGroupContents> builder = NestedSetBuilder.stableOrder();
     for (Label label : packageGroup.getIncludes()) {
       TransitiveInfoCollection include = targetContext.maybeFindDirectPrerequisite(
@@ -83,7 +67,7 @@ public final class PackageGroupConfiguredTarget extends AbstractConfiguredTarget
     }
 
     builder.add(packageGroup.getPackageSpecifications());
-    return builder.build();
+    packageSpecifications = builder.build();
   }
 
   @Override

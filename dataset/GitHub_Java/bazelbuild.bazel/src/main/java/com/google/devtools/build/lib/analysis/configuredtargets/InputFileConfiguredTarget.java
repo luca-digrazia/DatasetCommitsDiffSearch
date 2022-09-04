@@ -17,53 +17,42 @@ package com.google.devtools.build.lib.analysis.configuredtargets;
 import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.TargetContext;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.InputFile;
 import com.google.devtools.build.lib.packages.License;
-import com.google.devtools.build.lib.packages.PackageSpecification.PackageGroupContents;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.Instantiator;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 
 /**
  * A ConfiguredTarget for an InputFile.
  *
- * <p>All InputFiles for the same target are equivalent, so configuration does not play any role
- * here and is always set to <b>null</b>.
+ * All InputFiles for the same target are equivalent, so configuration does not
+ * play any role here and is always set to <b>null</b>.
  */
-@AutoCodec
 public final class InputFileConfiguredTarget extends FileConfiguredTarget implements SkylarkValue {
+  private final Artifact artifact;
   private final NestedSet<TargetLicense> licenses;
 
-  @Instantiator
-  @VisibleForSerialization
-  InputFileConfiguredTarget(
-      Label label,
-      NestedSet<PackageGroupContents> visibility,
-      Artifact artifact,
-      NestedSet<TargetLicense> licenses) {
-    super(label, null, visibility, artifact);
-    this.licenses = licenses;
-  }
-
-  public InputFileConfiguredTarget(
-      TargetContext targetContext, InputFile inputFile, Artifact artifact) {
-    this(inputFile.getLabel(), targetContext.getVisibility(), artifact, makeLicenses(inputFile));
-    Preconditions.checkArgument(getConfiguration() == null, getLabel());
+  public InputFileConfiguredTarget(TargetContext targetContext, InputFile inputFile,
+      Artifact artifact) {
+    super(targetContext, artifact);
     Preconditions.checkArgument(targetContext.getTarget() == inputFile, getLabel());
+    Preconditions.checkArgument(getConfiguration() == null, getLabel());
+    this.artifact = artifact;
+
+    if (inputFile.getLicense() != License.NO_LICENSE) {
+      licenses = NestedSetBuilder.create(Order.LINK_ORDER,
+          new TargetLicense(getLabel(), inputFile.getLicense()));
+    } else {
+      licenses = NestedSetBuilder.emptySet(Order.LINK_ORDER);
+    }
   }
 
-  private static NestedSet<TargetLicense> makeLicenses(InputFile inputFile) {
-    License license = inputFile.getLicense();
-    return license == License.NO_LICENSE
-        ? NestedSetBuilder.emptySet(Order.LINK_ORDER)
-        : NestedSetBuilder.create(
-            Order.LINK_ORDER, new TargetLicense(inputFile.getLabel(), license));
+  @Override
+  public Artifact getArtifact() {
+    return artifact;
   }
 
   @Override
