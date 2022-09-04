@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,11 +13,10 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.base.mlp;
 
-import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.stream.Collectors;
@@ -53,7 +52,7 @@ public abstract class MultilayerPerceptron implements Serializable {
     /**
      * The buffer to store desired target value of training instance.
      */
-    protected transient ThreadLocal<double[]> target;
+    protected double[] target;
     /**
      * learning rate
      */
@@ -93,26 +92,7 @@ public abstract class MultilayerPerceptron implements Serializable {
         this.net = Arrays.copyOf(net, net.length - 1);
         this.p = net[0].getInputSize();
 
-        init();
-    }
-
-    /**
-     * Initializes the workspace when deserializing the object.
-     */
-    private void readObject(java.io.ObjectInputStream in) throws IOException, ClassNotFoundException {
-        in.defaultReadObject();
-        init();
-    }
-
-    /**
-     * Initializes the workspace.
-     */
-    private void init() {
-        target = new ThreadLocal<double[]>() {
-            protected synchronized double[] initialValue() {
-                return new double[output.getOutputSize()];
-            }
-        };
+        target = new double[output.getOutputSize()];
     }
 
     @Override
@@ -196,7 +176,7 @@ public abstract class MultilayerPerceptron implements Serializable {
      * Propagates the errors back through the network.
      */
     protected void backpropagate(double[] x) {
-        output.computeError(target.get(), 1.0);
+        output.computeError(target, 1.0);
 
         Layer upper = output;
         for (int i = net.length - 1; i >= 0; i--) {

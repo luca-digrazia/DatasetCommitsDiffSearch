@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.regression;
 
@@ -69,7 +69,7 @@ import smile.base.mlp.*;
     @Override
     public void update(double[] x, double y) {
         propagate(x);
-        target.get()[0] = y;
+        target[0] = y;
         backpropagate(x);
         update();
     }
@@ -80,7 +80,6 @@ import smile.base.mlp.*;
         double a = alpha;
         alpha = 1.0;
 
-        double[] target = this.target.get();
         for (int i = 0; i < x.length; i++) {
             propagate(x[i]);
             target[0] = y[i];
