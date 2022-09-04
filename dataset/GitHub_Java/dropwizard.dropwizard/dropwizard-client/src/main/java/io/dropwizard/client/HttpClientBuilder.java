@@ -46,7 +46,7 @@ import java.io.IOException;
  * <p>
  * Among other things,
  * <ul>
- * <li>Disables stale connection checks by default</li>
+ * <li>Disables stale connection checks</li>
  * <li>Disables Nagle's algorithm</li>
  * <li>Disables cookie management by default</li>
  * </ul>
@@ -66,12 +66,14 @@ public class HttpClientBuilder {
     private HttpClientConfiguration configuration = new HttpClientConfiguration();
     private DnsResolver resolver = new SystemDefaultDnsResolver();
     private HttpRequestRetryHandler httpRequestRetryHandler;
-    private Registry<ConnectionSocketFactory> registry;
-
+    private Registry<ConnectionSocketFactory> registry
+            = RegistryBuilder.<ConnectionSocketFactory>create()
+            .register("http", PlainConnectionSocketFactory.getSocketFactory())
+            .register("https", SSLConnectionSocketFactory.getSocketFactory())
+            .build();
     private CredentialsProvider credentialsProvider = null;
     private HttpClientMetricNameStrategy metricNameStrategy = HttpClientMetricNameStrategies.METHOD_ONLY;
     private HttpRoutePlanner routePlanner = null;
-    private boolean disableContentCompression;
 
     public HttpClientBuilder(MetricRegistry metricRegistry) {
         this.metricRegistry = metricRegistry;
@@ -172,17 +174,6 @@ public class HttpClientBuilder {
     }
 
     /**
-     * Disable support of decompression of responses
-     *
-     * @param disableContentCompression {@code true}, if disabled
-     * @return {@code this}
-     */
-    public HttpClientBuilder disableContentCompression(boolean disableContentCompression) {
-        this.disableContentCompression = disableContentCompression;
-        return this;
-    }
-
-    /**
      * Builds the {@link HttpClient}.
      *
      * @param name
@@ -208,12 +199,11 @@ public class HttpClientBuilder {
 
     /**
      * For internal use only, used in {@link io.dropwizard.client.JerseyClientBuilder} to create an instance of {@link io.dropwizard.client.DropwizardApacheConnector}
-     *
      * @param name
      * @return an {@link io.dropwizard.client.ConfiguredCloseableHttpClient}
      */
     ConfiguredCloseableHttpClient buildWithDefaultRequestConfiguration(String name) {
-        final InstrumentedHttpClientConnectionManager manager = createConnectionManager(createConfiguredRegistry(), name);
+        final InstrumentedHttpClientConnectionManager manager = createConnectionManager(registry, name);
         return createClient(org.apache.http.impl.client.HttpClientBuilder.create(), manager, name);
     }
 
@@ -299,10 +289,6 @@ public class HttpClientBuilder {
             builder.setRoutePlanner(routePlanner);
         }
 
-        if (disableContentCompression) {
-            builder.disableContentCompression();
-        }
-
         return new ConfiguredCloseableHttpClient(builder.build(), requestConfig);
     }
 
@@ -342,31 +328,12 @@ public class HttpClientBuilder {
         return configureConnectionManager(manager);
     }
 
-    private Registry<ConnectionSocketFactory> createConfiguredRegistry() {
-        if (registry != null) {
-            return registry;
-        }
-
-        final SSLConnectionSocketFactory sslConnectionSocketFactory;
-        if (configuration.getTlsConfiguration() == null) {
-            sslConnectionSocketFactory = SSLConnectionSocketFactory.getSocketFactory();
-        } else {
-            sslConnectionSocketFactory = new DropwizardSSLConnectionSocketFactory(configuration.getTlsConfiguration()).getSocketFactory();
-        }
-
-        return RegistryBuilder.<ConnectionSocketFactory>create()
-                .register("http", PlainConnectionSocketFactory.getSocketFactory())
-                .register("https", sslConnectionSocketFactory)
-                .build();
-    }
-
-
     @VisibleForTesting
     protected InstrumentedHttpClientConnectionManager configureConnectionManager(
             InstrumentedHttpClientConnectionManager connectionManager) {
         connectionManager.setDefaultMaxPerRoute(configuration.getMaxConnectionsPerRoute());
         connectionManager.setMaxTotal(configuration.getMaxConnections());
-        connectionManager.setValidateAfterInactivity((int) configuration.getValidateAfterInactivityPeriod().toMilliseconds());
+        connectionManager.setValidateAfterInactivity(0);
         return connectionManager;
     }
 }
