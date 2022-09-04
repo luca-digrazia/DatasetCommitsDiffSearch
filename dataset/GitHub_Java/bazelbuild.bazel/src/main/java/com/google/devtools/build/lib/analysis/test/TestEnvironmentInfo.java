@@ -16,35 +16,36 @@ package com.google.devtools.build.lib.analysis.test;
 
 import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.packages.BuiltinProvider;
 import com.google.devtools.build.lib.packages.NativeInfo;
-import com.google.devtools.build.lib.starlarkbuildapi.test.TestEnvironmentInfoApi;
+import com.google.devtools.build.lib.packages.NativeProvider;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import java.util.Map;
 
 /** Provider containing any additional environment variables for use in the test action. */
 @Immutable
-public final class TestEnvironmentInfo extends NativeInfo implements TestEnvironmentInfoApi {
+public final class TestEnvironmentInfo extends NativeInfo {
 
-  /** Starlark constructor and identifier for TestEnvironmentInfo. */
-  public static final BuiltinProvider<TestEnvironmentInfo> PROVIDER =
-      new BuiltinProvider<TestEnvironmentInfo>("TestEnvironment", TestEnvironmentInfo.class) {};
+  /** Skylark constructor and identifier for TestEnvironmentInfo. */
+  public static final NativeProvider<TestEnvironmentInfo> PROVIDER =
+      new NativeProvider<TestEnvironmentInfo>(
+          TestEnvironmentInfo.class, "TestEnvironment") {};
 
   private final Map<String, String> environment;
 
   /** Constructs a new provider with the given variable name to variable value mapping. */
   public TestEnvironmentInfo(Map<String, String> environment) {
+    super(PROVIDER);
     this.environment = Preconditions.checkNotNull(environment);
-  }
-
-  @Override
-  public BuiltinProvider<TestEnvironmentInfo> getProvider() {
-    return PROVIDER;
   }
 
   /**
    * Returns environment variables which should be set on the test action.
    */
-  @Override
+  @SkylarkCallable(
+      name = "environment",
+      doc = "A dict containing environment variables which should be set on the test action.",
+      structField = true
+  )
   public Map<String, String> getEnvironment() {
     return environment;
   }

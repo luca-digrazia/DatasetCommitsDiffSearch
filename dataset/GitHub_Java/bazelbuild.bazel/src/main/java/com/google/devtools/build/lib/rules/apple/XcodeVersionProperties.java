@@ -20,12 +20,19 @@ import com.google.common.base.Strings;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.NativeInfo;
 import com.google.devtools.build.lib.packages.NativeProvider;
-import com.google.devtools.build.lib.skylarkbuildapi.apple.XcodePropertiesApi;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import javax.annotation.Nullable;
 
 /** A tuple containing information about a version of xcode and its properties. */
 @Immutable
-public class XcodeVersionProperties extends NativeInfo implements XcodePropertiesApi {
+@SkylarkModule(
+    name = "XcodeProperties",
+    category = SkylarkModuleCategory.PROVIDER,
+    doc = "A provider containing information about a version of Xcode and its properties."
+)
+public class XcodeVersionProperties extends NativeInfo {
 
   /** Skylark name for the XcodeVersionProperties provider. */
   public static final String SKYLARK_NAME = "XcodeProperties";
@@ -78,25 +85,31 @@ public class XcodeVersionProperties extends NativeInfo implements XcodePropertie
     super(SKYLARK_CONSTRUCTOR);
     this.xcodeVersion = Optional.fromNullable(xcodeVersion);
     this.defaultIosSdkVersion =
-        Strings.isNullOrEmpty(defaultIosSdkVersion)
+        (Strings.isNullOrEmpty(defaultIosSdkVersion))
             ? DottedVersion.fromString(DEFAULT_IOS_SDK_VERSION)
             : DottedVersion.fromString(defaultIosSdkVersion);
     this.defaultWatchosSdkVersion =
-        Strings.isNullOrEmpty(defaultWatchosSdkVersion)
+        (Strings.isNullOrEmpty(defaultWatchosSdkVersion))
             ? DottedVersion.fromString(DEFAULT_WATCHOS_SDK_VERSION)
             : DottedVersion.fromString(defaultWatchosSdkVersion);
     this.defaultTvosSdkVersion =
-        Strings.isNullOrEmpty(defaultTvosSdkVersion)
+        (Strings.isNullOrEmpty(defaultTvosSdkVersion))
             ? DottedVersion.fromString(DEFAULT_TVOS_SDK_VERSION)
             : DottedVersion.fromString(defaultTvosSdkVersion);
     this.defaultMacosSdkVersion =
-        Strings.isNullOrEmpty(defaultMacosSdkVersion)
+        (Strings.isNullOrEmpty(defaultMacosSdkVersion))
             ? DottedVersion.fromString(DEFAULT_MACOS_SDK_VERSION)
             : DottedVersion.fromString(defaultMacosSdkVersion);
   }
 
   /** Returns the xcode version, or null if the xcode version is unknown. */
-  @Override
+  @SkylarkCallable(
+      name = "xcode_version",
+      doc = "The xcode version, or <code>None</code> if the xcode version is unknown.",
+      structField = true,
+      allowReturnNones = true
+  )
+  @Nullable
   public String getXcodeVersionString() {
     if (xcodeVersion.isPresent()) {
       return xcodeVersion.get().toString();
@@ -105,25 +118,53 @@ public class XcodeVersionProperties extends NativeInfo implements XcodePropertie
   }
 
   /** Returns the default ios sdk version to use if this xcode version is in use. */
-  @Override
+  @SkylarkCallable(
+      name = "default_ios_sdk_version",
+      doc = "The default iOS sdk version for this version of xcode, or <code>None</code> if "
+          + "unknown.",
+      structField = true,
+      allowReturnNones = true
+  )
+  @Nullable
   public String getDefaultIosSdkVersionString() {
     return defaultIosSdkVersion != null ? defaultIosSdkVersion.toString() : null;
   }
 
   /** Returns the default watchos sdk version to use if this xcode version is in use. */
-  @Override
+  @SkylarkCallable(
+      name = "default_watchos_sdk_version",
+      doc = "The default watchOS sdk version for this version of xcode, or <code>None</code> if "
+          + "unknown.",
+      structField = true,
+      allowReturnNones = true
+  )
+  @Nullable
   public String getDefaultWatchosSdkVersionString() {
     return defaultWatchosSdkVersion != null ? defaultWatchosSdkVersion.toString() : null;
   }
 
   /** Returns the default tvos sdk version to use if this xcode version is in use. */
-  @Override
+  @SkylarkCallable(
+      name = "default_tvos_sdk_version",
+      doc = "The default tvOS sdk version for this version of xcode, or <code>None</code> if "
+          + "unknown.",
+      structField = true,
+      allowReturnNones = true
+  )
+  @Nullable
   public String getDefaultTvosSdkVersionString() {
     return defaultTvosSdkVersion != null ? defaultTvosSdkVersion.toString() : null;
   }
 
   /** Returns the default macosx sdk version to use if this xcode version is in use. */
-  @Override
+  @SkylarkCallable(
+      name = "default_macos_sdk_version",
+      doc = "The default macOS sdk version for this version of xcode, or <code>None</code> if "
+          + "unknown.",
+      structField = true,
+      allowReturnNones = true
+  )
+  @Nullable
   public String getDefaultMacosSdkVersionString() {
     return defaultMacosSdkVersion != null ? defaultMacosSdkVersion.toString() : null;
   }

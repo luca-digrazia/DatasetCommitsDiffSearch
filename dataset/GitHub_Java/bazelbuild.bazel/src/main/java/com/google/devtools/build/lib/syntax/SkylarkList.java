@@ -186,10 +186,8 @@ public abstract class SkylarkList<E> extends BaseMutableList<E>
   /**
    * Creates an immutable Skylark list with the given elements.
    *
-   * <p>It is unspecified whether this is a Skylark list or tuple. For more control, use one of the
+   * It is unspecified whether this is a Skylark list or tuple. For more control, use one of the
    * factory methods in {@link MutableList} or {@link Tuple}.
-   *
-   * <p>The caller must ensure that the elements of {@code contents} are not mutable.
    */
   // TODO(bazel-team): Eliminate this function in favor of a new MutableList factory method. With
   // such a method, we may no longer need to take null as a possible value for the Mutability or
@@ -231,8 +229,7 @@ public abstract class SkylarkList<E> extends BaseMutableList<E>
     // TODO(bazel-team): move GlobList out of Skylark, into an extension.
     @Nullable private GlobList<E> globList;
 
-    /** Final except for {@link #unsafeShallowFreeze}; must not be modified any other way. */
-    private Mutability mutability;
+    private final Mutability mutability;
 
     private MutableList(
         ArrayList<E> rawContents,
@@ -319,12 +316,6 @@ public abstract class SkylarkList<E> extends BaseMutableList<E>
     @Override
     public Mutability mutability() {
       return mutability;
-    }
-
-    @Override
-    public void unsafeShallowFreeze() {
-      Mutability.Freezable.checkUnsafeShallowFreezePrecondition(this);
-      this.mutability = Mutability.IMMUTABLE;
     }
 
     @Override
@@ -554,8 +545,6 @@ public abstract class SkylarkList<E> extends BaseMutableList<E>
       return Tuple.create(ImmutableList.copyOf(elements));
     }
 
-    // Overridden to recurse over children, since tuples use SHALLOW_IMMUTABLE and other
-    // SkylarkMutable subclasses do not.
     @Override
     public boolean isImmutable() {
       for (Object item : this) {
@@ -568,7 +557,7 @@ public abstract class SkylarkList<E> extends BaseMutableList<E>
 
     @Override
     public Mutability mutability() {
-      return Mutability.SHALLOW_IMMUTABLE;
+      return Mutability.IMMUTABLE;
     }
 
     @Override

@@ -19,15 +19,18 @@ import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTa
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.NativeInfo;
 import com.google.devtools.build.lib.packages.NativeProvider;
-import com.google.devtools.build.lib.skylarkbuildapi.apple.XcodeConfigProviderApi;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import javax.annotation.Nullable;
 
 /**
  * The set of Apple versions computed from command line options and the {@code xcode_config} rule.
  */
 @Immutable
-public class XcodeConfigProvider extends NativeInfo
-    implements XcodeConfigProviderApi<ApplePlatform, ApplePlatform.PlatformType> {
+@SkylarkModule(
+    name = XcodeConfigProvider.SKYLARK_NAME,
+    doc = "The set of Apple versions computed from command line options and the xcode_config rule.")
+public class XcodeConfigProvider extends NativeInfo {
   /** Skylark name for this provider. */
   public static final String SKYLARK_NAME = "XcodeVersionConfig";
 
@@ -63,21 +66,18 @@ public class XcodeConfigProvider extends NativeInfo
     this.xcodeVersion = xcodeVersion;
   }
 
-  /**
-   * Returns the value of the xcode version, if available. This is determined based on a combination
-   * of the {@code --xcode_version} build flag and the {@code xcode_config} target defined in the
-   * {@code --xcode_version_config} flag. Returns null if no xcode is available.
-   */
-  @Override
+  @SkylarkCallable(name = "xcode_version",
+      doc = "Returns the Xcode version that is being used to build.<p>"
+          + "This will return <code>None</code> if no Xcode versions are available.",
+      allowReturnNones = true)
   public DottedVersion getXcodeVersion() {
     return xcodeVersion;
   }
 
-  /**
-   * Returns the minimum compatible OS version for target simulator and devices for a particular
-   * platform type.
-   */
-  @Override
+  @SkylarkCallable(
+      name = "minimum_os_for_platform_type",
+      doc = "The minimum compatible OS version for target simulator and devices for a particular "
+          + "platform type.")
   public DottedVersion getMinimumOsForPlatformType(ApplePlatform.PlatformType platformType) {
     // TODO(b/37240784): Look into using only a single minimum OS flag tied to the current
     // apple_platform_type.
@@ -95,11 +95,10 @@ public class XcodeConfigProvider extends NativeInfo
     }
   }
 
-  /**
-   * Returns the SDK version for a platform (whether they be for simulator or device). This is
-   * directly derived from command line args.
-   */
-  @Override
+  @SkylarkCallable(
+      name = "sdk_version_for_platform",
+      doc = "The version of the platform SDK that will be used to build targets for the given "
+          + "platform.")
   public DottedVersion getSdkVersionForPlatform(ApplePlatform platform) {
     switch (platform) {
       case IOS_DEVICE:

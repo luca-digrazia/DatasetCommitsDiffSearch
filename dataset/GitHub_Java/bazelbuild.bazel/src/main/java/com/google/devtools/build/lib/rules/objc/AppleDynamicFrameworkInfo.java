@@ -19,9 +19,10 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.NativeInfo;
 import com.google.devtools.build.lib.packages.NativeProvider;
-import com.google.devtools.build.lib.skylarkbuildapi.apple.AppleDynamicFrameworkInfoApi;
-import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
-import com.google.devtools.build.lib.syntax.SkylarkType;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import javax.annotation.Nullable;
 
 /**
@@ -39,8 +40,12 @@ import javax.annotation.Nullable;
  * </ul>
  */
 @Immutable
-public final class AppleDynamicFrameworkInfo extends NativeInfo
-    implements AppleDynamicFrameworkInfoApi<Artifact> {
+@SkylarkModule(
+    name = "AppleDynamicFramework",
+    category = SkylarkModuleCategory.PROVIDER,
+    doc = "A provider containing information about an Apple dynamic framework."
+)
+public final class AppleDynamicFrameworkInfo extends NativeInfo {
 
   /** Skylark name for the AppleDynamicFrameworkInfo. */
   public static final String SKYLARK_NAME = "AppleDynamicFramework";
@@ -59,15 +64,14 @@ public final class AppleDynamicFrameworkInfo extends NativeInfo
   /** Field name for the {@link ObjcProvider} containing dependency information. */
   public static final String OBJC_PROVIDER_FIELD_NAME = "objc";
 
-  private final NestedSet<String> dynamicFrameworkDirs;
+  private final NestedSet<PathFragment> dynamicFrameworkDirs;
   private final NestedSet<Artifact> dynamicFrameworkFiles;
   private final @Nullable Artifact dylibBinary;
   private final ObjcProvider depsObjcProvider;
 
-  public AppleDynamicFrameworkInfo(
-      @Nullable Artifact dylibBinary,
+  public AppleDynamicFrameworkInfo(@Nullable Artifact dylibBinary,
       ObjcProvider depsObjcProvider,
-      NestedSet<String> dynamicFrameworkDirs,
+      NestedSet<PathFragment> dynamicFrameworkDirs,
       NestedSet<Artifact> dynamicFrameworkFiles) {
     super(SKYLARK_CONSTRUCTOR);
     this.dylibBinary = dylibBinary;
@@ -76,22 +80,55 @@ public final class AppleDynamicFrameworkInfo extends NativeInfo
     this.dynamicFrameworkFiles = dynamicFrameworkFiles;
   }
 
-  @Override
-  public SkylarkNestedSet /*<String>*/ getDynamicFrameworkDirs() {
-    return SkylarkNestedSet.of(SkylarkType.STRING, dynamicFrameworkDirs);
+  /**
+   * Returns the framework path names used as link inputs in order to link against the dynamic
+   * framework.
+   */
+  @SkylarkCallable(name = "framework_dirs",
+      structField = true,
+      doc = "The framework path names used as link inputs in order to link against the dynamic "
+          + "framework."
+  )
+  public NestedSet<PathFragment> getDynamicFrameworkDirs() {
+    return dynamicFrameworkDirs;
   }
 
-  @Override
-  public SkylarkNestedSet /*<Artifact>*/ getDynamicFrameworkFiles() {
-    return SkylarkNestedSet.of(SkylarkType.of(Artifact.class), dynamicFrameworkFiles);
+  /**
+   * Returns the full set of artifacts that should be included as inputs to link against the
+   * dynamic framework.
+   */
+  @SkylarkCallable(name = "framework_files",
+      structField = true,
+      doc = "The full set of files that should be included as inputs to link against the "
+          + "dynamic framework."
+  )
+  public NestedSet<Artifact> getDynamicFrameworkFiles() {
+    return dynamicFrameworkFiles;
   }
 
-  @Override
+  /**
+   * Returns the multi-architecture dylib binary of the dynamic framework. May return null if
+   * the rule providing the framework only specified framework imports.
+   */
+  @Nullable
+  @SkylarkCallable(name = "binary",
+      structField = true,
+      doc = "The multi-architecture dylib binary of the dynamic framework. May be null if "
+          + "the rule providing the framework only specified framework imports."
+  )
   public Artifact getAppleDylibBinary() {
     return dylibBinary;
   }
 
-  @Override
+  /**
+   * Returns the {@link ObjcProvider} which contains information about the transitive dependencies
+   * linked into the dylib.
+   */
+  @SkylarkCallable(name = "objc",
+      structField = true,
+      doc = "A provider which contains information about the transitive dependencies linked into "
+          + "the dynamic framework."
+  )
   public ObjcProvider getDepsObjcProvider() {
     return depsObjcProvider;
   }

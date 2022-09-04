@@ -233,115 +233,9 @@ public class SkylarkEvaluationTest extends EvaluationTest {
           + ", "
           + optionalNamed
           + ", "
-          + nonNoneable
+          + nonNoneable.toString()
           + (noneable != Runtime.NONE ? ", " + noneable : "")
           + (multi != Runtime.NONE ? ", " + multi : "")
-          + ")";
-    }
-
-    @SkylarkCallable(
-      name = "with_extra",
-      doc = "",
-      useLocation = true,
-      useAst = true,
-      useEnvironment = true
-    )
-    public String withExtraInterpreterParams(
-        Location location, FuncallExpression func, Environment env) {
-      return "with_extra("
-          + location.getStartLine()
-          + ", "
-          + func.getArguments().size()
-          + ", "
-          + env.isGlobal()
-          + ")";
-    }
-
-    @SkylarkCallable(
-      name = "with_params_and_extra",
-      doc = "",
-      mandatoryPositionals = 1,
-      parameters = {
-        @Param(name = "pos2", defaultValue = "False", type = Boolean.class),
-        @Param(
-          name = "posOrNamed",
-          defaultValue = "False",
-          type = Boolean.class,
-          positional = true,
-          named = true
-        ),
-        @Param(name = "named", type = Boolean.class, positional = false, named = true),
-        @Param(
-          name = "optionalNamed",
-          type = Boolean.class,
-          defaultValue = "False",
-          positional = false,
-          named = true
-        ),
-        @Param(
-          name = "nonNoneable",
-          type = Object.class,
-          defaultValue = "\"a\"",
-          positional = false,
-          named = true
-        ),
-        @Param(
-          name = "noneable",
-          type = Integer.class,
-          defaultValue = "None",
-          noneable = true,
-          positional = false,
-          named = true
-        ),
-        @Param(
-          name = "multi",
-          allowedTypes = {
-            @ParamType(type = String.class),
-            @ParamType(type = Integer.class),
-            @ParamType(type = SkylarkList.class, generic1 = Integer.class),
-          },
-          defaultValue = "None",
-          noneable = true,
-          positional = false,
-          named = true
-        )
-      },
-      useAst = true,
-      useLocation = true,
-      useEnvironment = true
-    )
-    public String withParamsAndExtraInterpreterParams(
-        Integer pos1,
-        boolean pos2,
-        boolean posOrNamed,
-        boolean named,
-        boolean optionalNamed,
-        Object nonNoneable,
-        Object noneable,
-        Object multi,
-        Location location,
-        FuncallExpression func,
-        Environment env) {
-      return "with_params_and_extra("
-          + pos1
-          + ", "
-          + pos2
-          + ", "
-          + posOrNamed
-          + ", "
-          + named
-          + ", "
-          + optionalNamed
-          + ", "
-          + nonNoneable
-          + (noneable != Runtime.NONE ? ", " + noneable : "")
-          + (multi != Runtime.NONE ? ", " + multi : "")
-          + ", "
-          + location.getStartLine()
-          + ", "
-          + func.getArguments().size()
-          + ", "
-          + env.isGlobal()
           + ")";
     }
 
@@ -937,14 +831,13 @@ public class SkylarkEvaluationTest extends EvaluationTest {
         .update("mock", new Mock())
         .setUp("")
         .testIfExactError(
-            "parameter 'named' has no default value, in method call "
-                + "with_params(int, bool) of 'Mock'",
+            "parameter 'named' has no default value, in method with_params(int, bool) of 'Mock'",
             "mock.with_params(1, True)");
     new SkylarkTest()
         .update("mock", new Mock())
         .setUp("")
         .testIfExactError(
-            "parameter 'named' has no default value, in method call with_params(int, bool, bool) "
+            "parameter 'named' has no default value, in method with_params(int, bool, bool) "
                 + "of 'Mock'",
             "mock.with_params(1, True, True)");
     new SkylarkTest()
@@ -963,14 +856,14 @@ public class SkylarkEvaluationTest extends EvaluationTest {
         .update("mock", new Mock())
         .setUp("")
         .testIfExactError(
-            "unexpected keyword 'n', in method call with_params(int, bool, bool named, "
+            "unexpected keyword 'n', in method with_params(int, bool, bool named, "
                 + "bool posOrNamed, int n) of 'Mock'",
             "mock.with_params(1, True, named=True, posOrNamed=True, n=2)");
     new SkylarkTest()
         .update("mock", new Mock())
         .setUp("")
         .testIfExactError(
-            "parameter 'nonNoneable' cannot be None, in method call with_params(int, bool, bool, "
+            "parameter 'nonNoneable' cannot be None, in method with_params(int, bool, bool, "
                 + "bool named, bool optionalNamed, NoneType nonNoneable) of 'Mock'",
             "mock.with_params(1, True, True, named=True, optionalNamed=False, nonNoneable=None)");
 
@@ -978,9 +871,8 @@ public class SkylarkEvaluationTest extends EvaluationTest {
         .update("mock", new Mock())
         .setUp("")
         .testIfExactError(
-            "expected value of type 'string or int or sequence of ints or NoneType' for parameter"
-                + " 'multi', in method call with_params(int, bool, bool named, bool multi)"
-                + " of 'Mock'",
+            "Cannot convert parameter 'multi' to type string or int or sequence of ints or"
+                + " NoneType, in method with_params(int, bool, bool named, bool multi) of 'Mock'",
             "mock.with_params(1, True, named=True, multi=False)");
 
     // We do not enforce list item parameter type constraints.
@@ -1027,22 +919,6 @@ public class SkylarkEvaluationTest extends EvaluationTest {
         .update("mock", new Mock())
         .setUp("v = mock.struct_field_callable()")
         .testLookup("v", "foobar");
-  }
-
-  @Test
-  public void testJavaFunctionWithExtraInterpreterParams() throws Exception {
-    new SkylarkTest()
-        .update("mock", new Mock())
-        .setUp("v = mock.with_extra()")
-        .testLookup("v", "with_extra(1, 0, true)");
-  }
-
-  @Test
-  public void testJavaFunctionWithParamsAndExtraInterpreterParams() throws Exception {
-    new SkylarkTest()
-        .update("mock", new Mock())
-        .setUp("b = mock.with_params_and_extra(1, True, named=True)")
-        .testLookup("b", "with_params_and_extra(1, true, false, true, false, a, 1, 3, true)");
   }
 
   @Test
@@ -1528,9 +1404,7 @@ public class SkylarkEvaluationTest extends EvaluationTest {
             "struct_field_callable",
             "value_of",
             "voidfunc",
-            "with_extra",
-            "with_params",
-            "with_params_and_extra");
+            "with_params");
   }
 
   @Test
@@ -1796,20 +1670,39 @@ public class SkylarkEvaluationTest extends EvaluationTest {
 
   @Test
   public void testLoadStatementWithAbsolutePath() throws Exception {
+    env = newEnvironmentWithSkylarkOptions("--incompatible_load_argument_is_label");
     checkEvalErrorContains(
         "First argument of 'load' must be a label and start with either '//', ':', or '@'.",
         "load('/tmp/foo', 'arg')");
   }
 
   @Test
+  public void testAllowLoadStatementWithAbsolutePath() throws Exception {
+    env = newEnvironmentWithSkylarkOptions("--incompatible_load_argument_is_label=false");
+    checkEvalErrorDoesNotContain(
+        "First argument of 'load' must be a label and start with either '//', ':', or '@'.",
+        "load('/tmp/foo', 'arg')");
+  }
+
+  @Test
   public void testLoadStatementWithRelativePath() throws Exception {
+    env = newEnvironmentWithSkylarkOptions("--incompatible_load_argument_is_label");
     checkEvalErrorContains(
         "First argument of 'load' must be a label and start with either '//', ':', or '@'.",
         "load('foo', 'arg')");
   }
 
   @Test
+  public void testAllowLoadStatementWithRelativePath() throws Exception {
+    env = newEnvironmentWithSkylarkOptions("--incompatible_load_argument_is_label=false");
+    checkEvalErrorDoesNotContain(
+        "First argument of 'load' must be a label and start with either '//', ':', or '@'.",
+        "load('foo', 'arg')");
+  }
+
+  @Test
   public void testLoadStatementWithExternalLabel() throws Exception {
+    env = newEnvironmentWithSkylarkOptions("--incompatible_load_argument_is_label");
     checkEvalErrorDoesNotContain(
         "First argument of 'load' must be a label and start with either '//', ':', or '@'.",
         "load('@other//foo.bzl', 'arg')");
@@ -1817,6 +1710,7 @@ public class SkylarkEvaluationTest extends EvaluationTest {
 
   @Test
   public void testLoadStatementWithAbsoluteLabel() throws Exception {
+    env = newEnvironmentWithSkylarkOptions("--incompatible_load_argument_is_label");
     checkEvalErrorDoesNotContain(
         "First argument of 'load' must be a label and start with either '//', ':', or '@'.",
         "load('//foo.bzl', 'arg')");
@@ -1824,6 +1718,7 @@ public class SkylarkEvaluationTest extends EvaluationTest {
 
   @Test
   public void testLoadStatementWithRelativeLabel() throws Exception {
+    env = newEnvironmentWithSkylarkOptions("--incompatible_load_argument_is_label");
     checkEvalErrorDoesNotContain(
         "First argument of 'load' must be a label and start with either '//', ':', or '@'.",
         "load(':foo.bzl', 'arg')");
