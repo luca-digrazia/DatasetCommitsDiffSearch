@@ -16,7 +16,6 @@
  */
 package org.graylog2.shared.buffers;
 
-import com.google.common.base.MoreObjects;
 import com.lmax.disruptor.EventFactory;
 import com.lmax.disruptor.EventTranslatorOneArg;
 import org.graylog2.plugin.journal.RawMessage;
@@ -39,12 +38,4 @@ public class RawMessageEvent {
             event.rawMessage = arg0;
         }
     };
-
-    @Override
-    public String toString() {
-        return MoreObjects.toStringHelper(this)
-                .add("raw", rawMessage)
-                .add("encodedLength", encodedRawMessage.length)
-                .toString();
-    }
 }
