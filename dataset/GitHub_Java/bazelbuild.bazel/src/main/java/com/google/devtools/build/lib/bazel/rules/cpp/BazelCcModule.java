@@ -21,7 +21,6 @@ import com.google.devtools.build.lib.rules.cpp.CcCompilationHelper.CompilationIn
 import com.google.devtools.build.lib.rules.cpp.CcCompilationOutputs;
 import com.google.devtools.build.lib.rules.cpp.CcLinkingHelper.LinkingInfo;
 import com.google.devtools.build.lib.rules.cpp.CcModule;
-import com.google.devtools.build.lib.rules.cpp.CcToolchainConfigInfo;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainVariables;
@@ -50,8 +49,7 @@ public class BazelCcModule extends CcModule
         LinkingInfo,
         CcLinkingContext,
         LibraryToLinkWrapper,
-        CcToolchainVariables,
-        CcToolchainConfigInfo> {
+        CcToolchainVariables> {
 
   @Override
   public CompilationInfo compile(

@@ -24,14 +24,12 @@ import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcCompilationOutputsApi
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcInfoApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcLinkingContextApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcModuleApi;
-import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcToolchainConfigInfoApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcToolchainProviderApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcToolchainVariablesApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CompilationInfoApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.FeatureConfigurationApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.LibraryToLinkWrapperApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.LinkingInfoApi;
-import com.google.devtools.build.lib.skylarkinterface.StarlarkContext;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
@@ -51,8 +49,7 @@ public class FakeCcModule
         LinkingInfoApi,
         CcLinkingContextApi,
         LibraryToLinkWrapperApi,
-        CcToolchainVariablesApi,
-        CcToolchainConfigInfoApi> {
+        CcToolchainVariablesApi> {
 
   @Override
   public ProviderApi getCcToolchainProvider() {
@@ -138,7 +135,7 @@ public class FakeCcModule
       Object librariesToLinkObject,
       Object userLinkFlagsObject,
       Location location,
-      StarlarkContext context) {
+      Environment environment) {
     return null;
   }
 
@@ -157,11 +154,6 @@ public class FakeCcModule
   @Override
   public String legacyCcFlagsMakeVariable(CcToolchainProviderApi ccToolchain) {
     return "";
-  }
-
-  @Override
-  public boolean isCcToolchainResolutionEnabled(SkylarkRuleContextApi ruleContext) {
-    return false;
   }
 
   @Override
@@ -187,29 +179,6 @@ public class FakeCcModule
       Object dynamicLibrary,
       SkylarkList<CcLinkingContextApi> skylarkCcLinkingContexts,
       boolean neverLink) {
-    return null;
-  }
-
-  @Override
-  public CcToolchainConfigInfoApi ccToolchainConfigInfoFromSkylark(
-      SkylarkRuleContextApi skylarkRuleContext,
-      SkylarkList<Object> features,
-      SkylarkList<Object> actionConfigs,
-      SkylarkList<Object> artifactNamePatterns,
-      SkylarkList<String> cxxBuiltInIncludeDirectories,
-      String toolchainIdentifier,
-      String hostSystemName,
-      String targetSystemName,
-      String targetCpu,
-      String targetLibc,
-      String compiler,
-      String abiVersion,
-      String abiLibcVersion,
-      SkylarkList<Object> toolPaths,
-      SkylarkList<Object> makeVariables,
-      Object builtinSysroot,
-      Object ccTargetOs)
-      throws EvalException {
     return null;
   }
 }

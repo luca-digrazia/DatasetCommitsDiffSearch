@@ -35,8 +35,7 @@ public class CcBootstrap implements Bootstrap {
           ? extends LinkingInfoApi,
           ? extends CcLinkingContextApi,
           ? extends LibraryToLinkWrapperApi,
-          ? extends CcToolchainVariablesApi,
-          ? extends CcToolchainConfigInfoApi>
+          ? extends CcToolchainVariablesApi>
       ccModule;
 
   public CcBootstrap(
@@ -51,8 +50,7 @@ public class CcBootstrap implements Bootstrap {
               ? extends LinkingInfoApi,
               ? extends CcLinkingContextApi,
               ? extends LibraryToLinkWrapperApi,
-              ? extends CcToolchainVariablesApi,
-              ? extends CcToolchainConfigInfoApi>
+              ? extends CcToolchainVariablesApi>
           ccModule) {
     this.ccModule = ccModule;
   }

@@ -15,24 +15,22 @@
 package com.google.devtools.build.lib.skylarkbuildapi.java;
 
 import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
-import com.google.devtools.build.lib.skylarkbuildapi.platform.ToolchainInfoApi;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 
 /**
- * Provides access to information about the Java toolchain rule. Accessible as a 'java_toolchain'
- * field on a Target struct.
+ * Provides access to information about the Java toolchain rule.
+ * Accessible as a 'java_toolchain' field on a Target struct.
  */
 @SkylarkModule(
     name = "JavaToolchainSkylarkApiProvider",
     doc =
         "Provides access to information about the Java toolchain rule. "
-            + "Accessible as a 'java_toolchain' field on a Target struct.")
-public interface JavaToolchainSkylarkApiProviderApi extends ToolchainInfoApi {
-
-  String LEGACY_NAME = "java_toolchain";
+            + "Accessible as a 'java_toolchain' field on a Target struct."
+)
+public interface JavaToolchainSkylarkApiProviderApi {
 
   @SkylarkCallable(name = "source_version", doc = "The java source version.", structField = true)
   public String getSourceVersion();
@@ -43,8 +41,8 @@ public interface JavaToolchainSkylarkApiProviderApi extends ToolchainInfoApi {
   @SkylarkCallable(
       name = "javac_jar",
       doc = "The javac jar.",
-      structField = true,
-      allowReturnNones = true)
+      structField = true
+  )
   public FileApi getJavacJar();
 
   @SkylarkCallable(name = "single_jar", doc = "The SingleJar deploy jar.", structField = true)
@@ -54,14 +52,14 @@ public interface JavaToolchainSkylarkApiProviderApi extends ToolchainInfoApi {
       name = "bootclasspath",
       doc = "The Java target bootclasspath entries. Corresponds to javac's -bootclasspath flag.",
       structField = true)
-  public SkylarkNestedSet getSkylarkBootclasspath();
+  public SkylarkNestedSet getBootclasspath();
 
   @SkylarkCallable(
       name = "jvm_opt",
       doc = "The default options for the JVM running the java compiler and associated tools.",
       structField = true)
-  public SkylarkList<String> getSkylarkJvmOptions();
+  public SkylarkList<String> getJvmOptions();
 
   @SkylarkCallable(name = "tools", doc = "The compilation tools.", structField = true)
-  public SkylarkNestedSet getSkylarkTools();
+  public SkylarkNestedSet getTools();
 }
