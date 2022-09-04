@@ -19,6 +19,7 @@ package org.jboss.shamrock.infinispan.client;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
@@ -30,10 +31,12 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 
+import org.infinispan.client.hotrod.configuration.NearCacheMode;
 import org.infinispan.client.hotrod.exceptions.HotRodClientException;
 import org.infinispan.client.hotrod.impl.ConfigurationProperties;
 import org.infinispan.client.hotrod.logging.Log;
 import org.infinispan.client.hotrod.logging.LogFactory;
+import org.infinispan.client.hotrod.marshall.ProtoStreamMarshaller;
 import org.infinispan.commons.util.Util;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
@@ -53,8 +56,8 @@ import org.jboss.shamrock.deployment.builditem.ApplicationIndexBuildItem;
 import org.jboss.shamrock.deployment.builditem.HotDeploymentConfigFileBuildItem;
 import org.jboss.shamrock.deployment.builditem.SystemPropertyBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.ReflectiveClassBuildItem;
+import org.jboss.shamrock.infinispan.client.runtime.InfinispanClientConfiguration;
 import org.jboss.shamrock.infinispan.client.runtime.InfinispanClientProducer;
-import org.jboss.shamrock.infinispan.client.runtime.InfinispanConfiguration;
 import org.jboss.shamrock.infinispan.client.runtime.InfinispanTemplate;
 
 class InfinispanClientProcessor {
@@ -80,12 +83,16 @@ class InfinispanClientProcessor {
         InputStream stream = cl.getResourceAsStream(HOTROD_CLIENT_PROPERTIES);
         Properties properties;
         if (stream == null) {
-            properties = null;
-            log.couldNotFindPropertiesFile(HOTROD_CLIENT_PROPERTIES);
+            properties = new Properties();
+            if (log.isTraceEnabled()) {
+                log.tracef("There was no hotrod-client.properties file found - using defaults");
+            }
         } else {
             try {
                 properties = loadFromStream(stream);
-                log.debugf("Found HotRod properties of %s",  properties);
+                if (log.isDebugEnabled()) {
+                    log.debugf("Found HotRod properties of %s", properties);
+                }
             } finally {
                 Util.close(stream);
             }
@@ -98,9 +105,10 @@ class InfinispanClientProcessor {
                 reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, "com.github.benmanes.caffeine.cache.PSMS"));
             }
 
+            // This is always non null
             Object marshaller = properties.get(ConfigurationProperties.MARSHALLER);
 
-            if (InfinispanClientProducer.isProtoBufAvailable(marshaller)) {
+            if (marshaller instanceof ProtoStreamMarshaller) {
                ApplicationArchive applicationArchive = applicationArchivesBuildItem.getRootArchive();
                // If we have properties file we may have to care about
                Path metaPath = applicationArchive.getChildPath(META_INF);
@@ -120,10 +128,10 @@ class InfinispanClientProcessor {
                   byte[] bytes = Files.readAllBytes(path);
                   // This uses the default file encoding - should we enforce UTF-8?
                   properties.put(InfinispanClientProducer.PROTOBUF_FILE_PREFIX + path.getFileName().toString(),
-                        new String(bytes));
+                        new String(bytes, StandardCharsets.UTF_8));
                }
 
-               InfinispanClientProducer.handleQueryRequirements(properties);
+               InfinispanClientProducer.handleProtoStreamRequirements(properties);
             }
         }
 
@@ -164,21 +172,29 @@ class InfinispanClientProcessor {
     /**
      * The Infinispan client configuration, if set.
      */
-    InfinispanConfiguration infinispanClient;
+    InfinispanClientConfiguration infinispanClient;
 
     @BuildStep
     @Record(ExecutionTime.STATIC_INIT)
     BeanContainerListenerBuildItem build(InfinispanTemplate template, PropertiesBuildItem builderBuildItem) {
         Properties properties = builderBuildItem.getProperties();
-        InfinispanConfiguration conf = infinispanClient;
+        InfinispanClientConfiguration conf = infinispanClient;
         final Optional<String> serverList = conf.serverList;
-        if (serverList.isPresent()) {
-            log.debugf("Applying micro profile configuration on top of hotrod properties: %s", conf);
-            if (properties == null) {
-                properties = new Properties();
-            }
-            properties.put(ConfigurationProperties.SERVER_LIST, serverList.get());
+        if (log.isDebugEnabled()) {
+            log.debugf("Applying micro profile configuration: %s", conf);
         }
+        if (serverList.isPresent()) {
+            // Retain the hotrod-client.properties definition if clashes
+            properties.putIfAbsent(ConfigurationProperties.SERVER_LIST, serverList.get());
+        }
+        int maxEntries = conf.nearCacheMaxEntries;
+        // Only write the entries if is a valid number and it isn't already configured
+        if (maxEntries > 0 && !properties.containsKey(ConfigurationProperties.NEAR_CACHE_MODE)) {
+            // This is already empty so no need for putIfAbsent
+            properties.put(ConfigurationProperties.NEAR_CACHE_MODE, NearCacheMode.INVALIDATED);
+            properties.putIfAbsent(ConfigurationProperties.NEAR_CACHE_MAX_ENTRIES, maxEntries);
+        }
+
         return new BeanContainerListenerBuildItem(template.configureInfinispan(properties));
     }
 

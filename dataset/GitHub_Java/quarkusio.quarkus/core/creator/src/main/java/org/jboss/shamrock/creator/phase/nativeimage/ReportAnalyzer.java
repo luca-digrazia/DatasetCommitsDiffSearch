@@ -18,6 +18,8 @@ package org.jboss.shamrock.creator.phase.nativeimage;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -39,18 +41,18 @@ public class ReportAnalyzer {
      * Analyze the contents of the call tree report produced by Substrate when using -H:+PrintAnalysisCallTree,
      * and does a more meaningful analysis of what is causing a type to be retained.
      *
-     * In particular for virtual or interface methods that have multuple implementations what is calling this method
+     * In particular for virtual or interface methods that have multiple implementations what is calling this method
      * is not really important, its what caused this particular instance of the class to be created that is important
      * (e.g. if you have an instance of Runnable, you don't care about all the different parts that call runnable, you
      * care about what created this particular instance).
      *
      * If a virtual or interface call is detected with multiple implementations then printing the current call flow
-     * is abandonded, and instead the call flow for the constructor of the current object is printed instead.
+     * is abandoned, and instead the call flow for the constructor of the current object is printed instead.
      *
      */
     public static String analyse(String report, String className, String methodName) throws Exception {
         Deque<String> lines = new ArrayDeque<>();
-        try (BufferedReader in = new BufferedReader(new FileReader(report))) {
+        try (BufferedReader in = Files.newBufferedReader(Paths.get(report))) {
             for (String re = in.readLine(); re != null; re = in.readLine()) {
                 lines.add(re);
             }
@@ -77,6 +79,9 @@ public class ReportAnalyzer {
                 } else {
                     lc++;
                 }
+            }
+            if (line.length() < start + 3) {
+                continue;
             }
             Matcher matcher = PATTERN.matcher(line.substring(start + 3));
             if (!matcher.find()) {
