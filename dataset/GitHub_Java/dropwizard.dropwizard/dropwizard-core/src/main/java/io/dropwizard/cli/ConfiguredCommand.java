@@ -62,7 +62,6 @@ public abstract class ConfiguredCommand<T extends Configuration> extends Command
     public final void run(Bootstrap<?> bootstrap, Namespace namespace) throws Exception {
         configuration = parseConfiguration(((Bootstrap<T>)bootstrap).getConfigurationFactoryFactory(),
                                            bootstrap.getConfigurationSourceProvider(),
-                                           bootstrap.getValidatorFactory().getValidator(),
                                            namespace.getString("file"),
                                            getConfigurationClass(),
                                            bootstrap.getObjectMapper());
@@ -105,10 +104,10 @@ public abstract class ConfiguredCommand<T extends Configuration> extends Command
 
     private T parseConfiguration(ConfigurationFactoryFactory<T> configurationFactoryFactory,
                                  ConfigurationSourceProvider provider,
-                                 Validator validator,
                                  String path,
                                  Class<T> klass,
                                  ObjectMapper objectMapper) throws IOException, ConfigurationException {
+        final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
         final ConfigurationFactory<T> configurationFactory = configurationFactoryFactory.create(klass, validator, objectMapper, "dw");
         if (path != null) {
             return configurationFactory.build(provider, path);

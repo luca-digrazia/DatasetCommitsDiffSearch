@@ -10,11 +10,10 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.ConsoleAppender;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.logback.InstrumentedAppender;
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import org.slf4j.ILoggerFactory;
 import org.slf4j.LoggerFactory;
 import org.slf4j.bridge.SLF4JBridgeHandler;
 
@@ -25,9 +24,6 @@ import java.lang.management.ManagementFactory;
 import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
-
-import static ch.qos.logback.core.util.StatusPrinter.printIfErrorsOccured;
-import static com.google.common.base.Preconditions.checkNotNull;
 
 public class LoggingFactory {
     // initially configure for WARN+ console logging
@@ -75,18 +71,6 @@ public class LoggingFactory {
             new ConsoleAppenderFactory()
     );
 
-    @JsonIgnore
-    private final LoggerContext loggerContext;
-
-    public LoggingFactory() {
-        this((LoggerContext) LoggerFactory.getILoggerFactory());
-    }
-
-    @VisibleForTesting
-    LoggingFactory(LoggerContext loggerContext) {
-        this.loggerContext = checkNotNull(loggerContext);
-    }
-
     @JsonProperty
     public Level getLevel() {
         return level;
@@ -126,8 +110,6 @@ public class LoggingFactory {
             root.addAppender(output.build(root.getLoggerContext(), name, null));
         }
 
-        printIfErrorsOccured(root.getLoggerContext());
-
         final MBeanServer server = ManagementFactory.getPlatformMBeanServer();
         try {
             final ObjectName objectName = new ObjectName("io.dropwizard:type=Logging");
@@ -146,7 +128,11 @@ public class LoggingFactory {
     }
 
     public void stop() {
-        loggerContext.stop();
+        ILoggerFactory loggerFactory = LoggerFactory.getILoggerFactory();
+        if (loggerFactory instanceof LoggerContext) {
+            LoggerContext context = (LoggerContext) loggerFactory;
+            context.stop();
+        }
     }
 
     private void configureInstrumentation(Logger root, MetricRegistry metricRegistry) {
@@ -157,7 +143,7 @@ public class LoggingFactory {
     }
 
     private Logger configureLevels() {
-        final Logger root = loggerContext.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
+        final Logger root = (Logger) LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
         root.getLoggerContext().reset();
 
         final LevelChangePropagator propagator = new LevelChangePropagator();
@@ -169,7 +155,7 @@ public class LoggingFactory {
         root.setLevel(level);
 
         for (Map.Entry<String, Level> entry : loggers.entrySet()) {
-            loggerContext.getLogger(entry.getKey()).setLevel(entry.getValue());
+            ((Logger) LoggerFactory.getLogger(entry.getKey())).setLevel(entry.getValue());
         }
 
         return root;

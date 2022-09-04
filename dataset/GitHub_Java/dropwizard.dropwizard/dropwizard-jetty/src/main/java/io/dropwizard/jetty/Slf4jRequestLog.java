@@ -49,7 +49,6 @@ public class Slf4jRequestLog extends AbstractNCSARequestLog {
         event.setLevel(Level.INFO);
         event.setLoggerName("http.request");
         event.setMessage(entry);
-        event.setTimeStamp(System.currentTimeMillis());
 
         appenders.appendLoopOnAppenders(event);
     }
