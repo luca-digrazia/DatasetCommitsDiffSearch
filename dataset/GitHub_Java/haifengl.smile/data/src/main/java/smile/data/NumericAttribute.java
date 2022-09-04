@@ -40,6 +40,10 @@ public class NumericAttribute extends Attribute {
         super(Type.NUMERIC, name, description, weight);
     }
 
+    public NumericAttribute(String name, double weight, double monoReg) {
+        super(Type.NUMERIC, name, null, weight, monoReg);
+    }
+
     @Override
     public String toString(double x) {
         return Double.toString(x);
