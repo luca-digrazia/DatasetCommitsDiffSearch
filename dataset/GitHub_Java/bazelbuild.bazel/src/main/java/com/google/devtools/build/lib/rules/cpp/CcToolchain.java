@@ -183,26 +183,24 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
 
   private Artifact getPrefetchHintsArtifact(
       FdoInputFile prefetchHintsFile, RuleContext ruleContext) {
-    if (prefetchHintsFile == null) {
-      return null;
+    Artifact prefetchHintsArtifact = null;
+    if (prefetchHintsFile != null) {
+      prefetchHintsArtifact = prefetchHintsFile.getArtifact();
+      if (prefetchHintsArtifact == null) {
+        prefetchHintsArtifact =
+            ruleContext.getUniqueDirectoryArtifact(
+                "fdo",
+                prefetchHintsFile.getAbsolutePath().getBaseName(),
+                ruleContext.getBinOrGenfilesDirectory());
+        ruleContext.registerAction(
+            new SymlinkAction(
+                ruleContext.getActionOwner(),
+                PathFragment.create(prefetchHintsFile.getAbsolutePath().getPathString()),
+                prefetchHintsArtifact,
+                "Symlinking LLVM Cache Prefetch Hints Profile "
+                    + prefetchHintsFile.getAbsolutePath().getPathString()));
+      }
     }
-    Artifact prefetchHintsArtifact = prefetchHintsFile.getArtifact();
-    if (prefetchHintsArtifact != null) {
-      return prefetchHintsArtifact;
-    }
-
-    prefetchHintsArtifact =
-        ruleContext.getUniqueDirectoryArtifact(
-            "fdo",
-            prefetchHintsFile.getAbsolutePath().getBaseName(),
-            ruleContext.getBinOrGenfilesDirectory());
-    ruleContext.registerAction(
-        new SymlinkAction(
-            ruleContext.getActionOwner(),
-            PathFragment.create(prefetchHintsFile.getAbsolutePath().getPathString()),
-            prefetchHintsArtifact,
-            "Symlinking LLVM Cache Prefetch Hints Profile "
-                + prefetchHintsFile.getAbsolutePath().getPathString()));
     return prefetchHintsArtifact;
   }
 
@@ -554,7 +552,8 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
           "Symlinking FDO profile " + fdoProfile.getPathString()));
     }
 
-    Artifact prefetchHintsArtifact = getPrefetchHintsArtifact(prefetchHints, ruleContext);
+    Artifact hintsArtifact = getPrefetchHintsArtifact(prefetchHints, ruleContext);
+    ProfileArtifacts profileArtifacts = new ProfileArtifacts(profileArtifact, hintsArtifact);
 
     reportInvalidOptions(ruleContext, toolchainInfo);
 
@@ -607,7 +606,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
             .addNativeDeclaredProvider(templateVariableInfo)
             .addProvider(new FdoSupportProvider(
                 fdoSupport.getFdoSupport(), fdoMode, cppConfiguration.getFdoInstrument(),
-                profileArtifact, prefetchHintsArtifact))
+                profileArtifacts))
             .setFilesToBuild(crosstool)
             .addProvider(RunfilesProvider.simple(Runfiles.EMPTY));
 
