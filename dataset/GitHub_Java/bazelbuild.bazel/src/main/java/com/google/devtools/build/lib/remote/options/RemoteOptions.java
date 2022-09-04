@@ -96,13 +96,12 @@ public final class RemoteOptions extends OptionsBase {
           "Whether to fall back to standalone local execution strategy if remote execution fails.")
   public boolean remoteLocalFallback;
 
-  @Deprecated
   @Option(
       name = "remote_local_fallback_strategy",
       defaultValue = "local",
       documentationCategory = OptionDocumentationCategory.REMOTE,
       effectTags = {OptionEffectTag.UNKNOWN},
-      help = "No-op, deprecated. See https://github.com/bazelbuild/bazel/issues/7480 for details.")
+      help = "The strategy to use when remote execution has to fallback to local execution.")
   public String remoteLocalFallbackStrategy;
 
   @Option(
