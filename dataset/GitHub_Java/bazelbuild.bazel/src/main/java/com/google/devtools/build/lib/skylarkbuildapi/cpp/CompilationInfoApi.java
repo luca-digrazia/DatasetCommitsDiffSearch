@@ -14,22 +14,23 @@
 
 package com.google.devtools.build.lib.skylarkbuildapi.cpp;
 
-import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
-import com.google.devtools.build.lib.syntax.StarlarkValue;
 
-/** Interface for a helper class containing CC compilation providers. */
+/**
+ * Interface for a helper class containing CC compilation providers.
+ */
 @SkylarkModule(
     name = "compilation_info",
     documented = false,
     category = SkylarkModuleCategory.BUILTIN,
-    doc = "Helper class containing CC compilation providers.")
-public interface CompilationInfoApi<FileT extends FileApi> extends StarlarkValue {
+    doc = "Helper class containing CC compilation providers."
+)
+public interface CompilationInfoApi {
   @SkylarkCallable(name = "cc_compilation_outputs", structField = true, documented = false)
-  CcCompilationOutputsApi<?> getCcCompilationOutputs();
+  CcCompilationOutputsApi getCcCompilationOutputs();
 
   @SkylarkCallable(name = "compilation_context", structField = true, documented = false)
-  CcCompilationContextApi<FileT> getCcCompilationContext();
+  CcCompilationContextApi getCcCompilationContext();
 }

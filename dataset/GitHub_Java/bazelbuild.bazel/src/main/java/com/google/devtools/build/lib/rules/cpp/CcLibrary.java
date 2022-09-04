@@ -31,7 +31,6 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
-import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesInfo;
@@ -455,11 +454,6 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
                 LibraryToLinkWrapper.getDynamicLibrariesForRuntime(
                     /* linkingStatically= */ false, libraryToLinkWrappers));
 
-    @SuppressWarnings("unchecked")
-    CppDebugFileProvider cppDebugFileProvider =
-        CcCompilationHelper.buildCppDebugFileProvider(
-            compilationInfo.getCcCompilationOutputs(),
-            (List<TransitiveInfoCollection>) ruleContext.getPrerequisites("deps", Mode.TARGET));
     Map<String, NestedSet<Artifact>> currentOutputGroups =
         CcCompilationHelper.buildOutputGroupsForEmittingCompileProviders(
             compilationInfo.getCcCompilationOutputs(),
@@ -471,7 +465,7 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
     CcSkylarkApiProvider.maybeAdd(ruleContext, targetBuilder);
     targetBuilder
         .setFilesToBuild(filesToBuild)
-        .addProvider(cppDebugFileProvider)
+        .addProvider(compilationInfo.getCppDebugFileProvider())
         .addProvider(ccNativeLibraryProvider)
         .addNativeDeclaredProvider(
             CcInfo.builder()

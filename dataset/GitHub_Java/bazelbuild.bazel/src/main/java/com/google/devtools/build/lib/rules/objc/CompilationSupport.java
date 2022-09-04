@@ -62,7 +62,6 @@ import com.google.devtools.build.lib.actions.CommandLine;
 import com.google.devtools.build.lib.actions.ParamFileInfo;
 import com.google.devtools.build.lib.actions.ParameterFile;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
-import com.google.devtools.build.lib.analysis.AnalysisUtils;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.PrerequisiteArtifacts;
 import com.google.devtools.build.lib.analysis.RuleContext;
@@ -95,7 +94,6 @@ import com.google.devtools.build.lib.rules.cpp.CcCompilationContext;
 import com.google.devtools.build.lib.rules.cpp.CcCompilationHelper;
 import com.google.devtools.build.lib.rules.cpp.CcCompilationHelper.CompilationInfo;
 import com.google.devtools.build.lib.rules.cpp.CcCompilationOutputs;
-import com.google.devtools.build.lib.rules.cpp.CcInfo;
 import com.google.devtools.build.lib.rules.cpp.CcLinkingHelper;
 import com.google.devtools.build.lib.rules.cpp.CcToolchain;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.CollidingProvidesException;
@@ -320,10 +318,11 @@ public class CompilationSupport {
             .addPrivateHeaders(privateHdrs)
             .addDefines(objcProvider.get(DEFINE))
             .addPublicHeaders(publicHdrs)
-            .addCcCompilationContexts(
-                Streams.stream(AnalysisUtils.getProviders(deps, CcInfo.PROVIDER))
-                    .map(CcInfo::getCcCompilationContext)
-                    .collect(ImmutableList.toImmutableList()))
+            .addDeps(deps)
+            // Not all our dependencies need to export cpp information.
+            // For example, objc_proto_library can depend on a proto_library rule that does not
+            // generate C++ protos.
+            .setCheckDepsGenerateCpp(false)
             .setCopts(
                 ImmutableList.<String>builder()
                     .addAll(getCompileRuleCopts())
@@ -339,14 +338,14 @@ public class CompilationSupport {
             .setCppModuleMap(intermediateArtifacts.moduleMap())
             .setPropagateModuleMapToCompileAction(false)
             .addVariableExtension(extension)
-            .setPurpose(purpose)
-            .addQuoteIncludeDirs(semantics.getQuoteIncludes(ruleContext))
-            .setCodeCoverageEnabled(CcCompilationHelper.isCodeCoverageEnabled(ruleContext));
+            .setPurpose(purpose);
 
     if (pchHdr != null) {
       result.addNonModuleMapHeader(pchHdr);
     }
-
+    if (!useDeps) {
+      result.doNotUseDeps();
+    }
     if (getCustomModuleMap(ruleContext).isPresent()) {
       result.doNotGenerateModuleMap();
     }
@@ -450,7 +449,7 @@ public class CompilationSupport {
             nonObjcArcCompilationInfo.getCcCompilationContext()));
     ccCompilationContextBuilder.setPurpose(
         String.format("%s_merged_arc_non_arc_objc", semantics.getPurpose()));
-    ccCompilationContextBuilder.addQuoteIncludeDirs(semantics.getQuoteIncludes(ruleContext));
+    semantics.setupCcCompilationContext(ruleContext, ccCompilationContextBuilder);
 
     CcCompilationOutputs precompiledFilesObjects =
         new CcCompilationOutputs.Builder()
@@ -703,6 +702,7 @@ public class CompilationSupport {
   private final AppleConfiguration appleConfiguration;
   private final CompilationAttributes attributes;
   private final IntermediateArtifacts intermediateArtifacts;
+  private final boolean useDeps;
   private final Map<String, NestedSet<Artifact>> outputGroupCollector;
   private final ImmutableList.Builder<Artifact> objectFilesCollector;
   private final CcToolchainProvider toolchain;
@@ -727,6 +727,7 @@ public class CompilationSupport {
       BuildConfiguration buildConfiguration,
       IntermediateArtifacts intermediateArtifacts,
       CompilationAttributes compilationAttributes,
+      boolean useDeps,
       Map<String, NestedSet<Artifact>> outputGroupCollector,
       ImmutableList.Builder<Artifact> objectFilesCollector,
       CcToolchainProvider toolchain,
@@ -738,6 +739,7 @@ public class CompilationSupport {
     this.appleConfiguration = buildConfiguration.getFragment(AppleConfiguration.class);
     this.attributes = compilationAttributes;
     this.intermediateArtifacts = intermediateArtifacts;
+    this.useDeps = useDeps;
     this.isTestRule = isTestRule;
     this.outputGroupCollector = outputGroupCollector;
     this.objectFilesCollector = objectFilesCollector;
@@ -784,6 +786,15 @@ public class CompilationSupport {
     /** Sets {@link CompilationAttributes} for the calling target. */
     public Builder setCompilationAttributes(CompilationAttributes compilationAttributes) {
       this.compilationAttributes = compilationAttributes;
+      return this;
+    }
+
+    /**
+     * Sets that this {@link CompilationSupport} will not take deps into account in determining
+     * compilation actions.
+     */
+    public Builder doNotUseDeps() {
+      this.useDeps = false;
       return this;
     }
 
@@ -869,6 +880,7 @@ public class CompilationSupport {
           buildConfiguration,
           intermediateArtifacts,
           compilationAttributes,
+          useDeps,
           outputGroupCollector,
           objectFilesCollector,
           toolchain,
