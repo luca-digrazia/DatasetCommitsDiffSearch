@@ -16,7 +16,6 @@
  */
 package org.graylog2.plugin.inject;
 
-import com.fasterxml.jackson.databind.jsontype.NamedType;
 import com.google.common.util.concurrent.Service;
 import com.google.inject.AbstractModule;
 import com.google.inject.Key;
@@ -26,6 +25,7 @@ import com.google.inject.multibindings.MapBinder;
 import com.google.inject.multibindings.Multibinder;
 import com.google.inject.multibindings.OptionalBinder;
 import com.google.inject.name.Names;
+
 import org.apache.shiro.realm.AuthenticatingRealm;
 import org.graylog2.audit.AuditEventSender;
 import org.graylog2.audit.AuditEventType;
@@ -52,12 +52,13 @@ import org.graylog2.plugin.security.PluginPermissions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.lang.annotation.Annotation;
+
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.ws.rs.container.ContainerResponseFilter;
 import javax.ws.rs.container.DynamicFeature;
 import javax.ws.rs.ext.ExceptionMapper;
-import java.lang.annotation.Annotation;
 
 public abstract class Graylog2Module extends AbstractModule {
     private static final Logger LOG = LoggerFactory.getLogger(Graylog2Module.class);
@@ -390,7 +391,7 @@ public abstract class Graylog2Module extends AbstractModule {
                                       Class<? extends LookupCacheConfiguration> configClass) {
         install(new FactoryModuleBuilder().implement(LookupCache.class, cacheClass).build(factoryClass));
         lookupCacheBinder().addBinding(name).to(factoryClass);
-        registerJacksonSubtype(configClass, name);
+        jacksonSubTypesBinder().addBinding(name).toInstance(configClass);
     }
 
 
@@ -404,31 +405,11 @@ public abstract class Graylog2Module extends AbstractModule {
                                             Class<? extends LookupDataAdapterConfiguration> configClass) {
         install(new FactoryModuleBuilder().implement(LookupDataAdapter.class, adapterClass).build(factoryClass));
         lookupDataAdapterBinder().addBinding(name).to(factoryClass);
-        registerJacksonSubtype(configClass, name);
+        jacksonSubTypesBinder().addBinding(name).toInstance(configClass);
     }
 
-    /**
-     * Prefer using {@link #registerJacksonSubtype(Class)} or {@link #registerJacksonSubtype(Class, String)}.
-     */
-    protected Multibinder<NamedType> jacksonSubTypesBinder() {
-        return Multibinder.newSetBinder(binder(), NamedType.class, JacksonSubTypes.class);
-    }
-
-    /**
-     * Use this if the class itself is annotated by {@link com.fasterxml.jackson.annotation.JsonTypeName} instead of explicitly given.
-     * @param klass
-     */
-    protected void registerJacksonSubtype(Class<?> klass) {
-        registerJacksonSubtype(klass, null);
-    }
-
-    /**
-     * Use this if the class does not have a {@link com.fasterxml.jackson.annotation.JsonTypeName} annotation.
-     * @param klass
-     * @param name
-     */
-    protected void registerJacksonSubtype(Class<?> klass, String name) {
-        jacksonSubTypesBinder().addBinding().toInstance(new NamedType(klass, name));
+    protected MapBinder<String, Object> jacksonSubTypesBinder() {
+        return MapBinder.newMapBinder(binder(), TypeLiteral.get(String.class), TypeLiteral.get(Object.class), JacksonSubTypes.class);
     }
 
     protected Multibinder<Migration> migrationsBinder() {

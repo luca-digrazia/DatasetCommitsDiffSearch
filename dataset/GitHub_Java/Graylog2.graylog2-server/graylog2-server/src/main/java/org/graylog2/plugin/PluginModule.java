@@ -23,9 +23,6 @@ import com.google.inject.multibindings.Multibinder;
 import org.graylog2.audit.AuditEventType;
 import org.graylog2.audit.PluginAuditEventTypes;
 import org.graylog2.audit.formatter.AuditEventFormatter;
-import org.graylog2.contentpacks.constraints.ConstraintChecker;
-import org.graylog2.contentpacks.facades.EntityFacade;
-import org.graylog2.contentpacks.model.ModelType;
 import org.graylog2.migrations.Migration;
 import org.graylog2.plugin.alarms.AlertCondition;
 import org.graylog2.plugin.alarms.callbacks.AlarmCallback;
@@ -94,24 +91,13 @@ public abstract class PluginModule extends Graylog2Module {
         serviceBinder.addBinding().to(initializerClass);
     }
 
-    // This should only be used by plugins that have been built before Graylog 3.0.1.
-    // See comments in MessageOutput.Factory and MessageOutput.Factory2 for details
     protected void addMessageOutput(Class<? extends MessageOutput> messageOutputClass) {
         installOutput(outputsMapBinder(), messageOutputClass);
     }
 
-    // This should only be used by plugins that have been built before Graylog 3.0.1.
-    // See comments in MessageOutput.Factory and MessageOutput.Factory2 for details
     protected <T extends MessageOutput> void addMessageOutput(Class<T> messageOutputClass,
                                                               Class<? extends MessageOutput.Factory<T>> factory) {
         installOutput(outputsMapBinder(), messageOutputClass, factory);
-    }
-
-    // This should be used by plugins that have been built for 3.0.1 or later.
-    // See comments in MessageOutput.Factory and MessageOutput.Factory2 for details
-    protected <T extends MessageOutput> void addMessageOutput2(Class<T> messageOutputClass,
-                                                              Class<? extends MessageOutput.Factory2<T>> factory) {
-        installOutput2(outputsMapBinder2(), messageOutputClass, factory);
     }
 
     protected void addRestResource(Class<? extends PluginRestResource> restResourceClass) {
@@ -192,13 +178,5 @@ public abstract class PluginModule extends Graylog2Module {
 
     protected void addMigration(Class<? extends Migration> migrationClass) {
         migrationsBinder().addBinding().to(migrationClass);
-    }
-
-    protected void addEntityFacade(ModelType entityType, Class<? extends EntityFacade<?>> entityFacadeClass) {
-        entityFacadeBinder().addBinding(entityType).to(entityFacadeClass);
-    }
-
-    protected void addConstraintChecker(Class<? extends ConstraintChecker> constraintCheckerClass) {
-        constraintCheckerBinder().addBinding().to(constraintCheckerClass);
     }
 }
