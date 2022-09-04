@@ -3,7 +3,6 @@ package io.quarkus.vertx.http.runtime.security;
 import java.util.Map;
 import java.util.concurrent.CompletionException;
 import java.util.function.BiFunction;
-import java.util.function.Function;
 import java.util.function.Supplier;
 
 import javax.enterprise.inject.spi.CDI;
@@ -16,7 +15,6 @@ import io.quarkus.security.identity.SecurityIdentity;
 import io.quarkus.vertx.http.runtime.HttpBuildTimeConfig;
 import io.quarkus.vertx.http.runtime.HttpConfiguration;
 import io.vertx.core.Handler;
-import io.vertx.core.http.HttpHeaders;
 import io.vertx.ext.web.RoutingContext;
 
 @Recorder
@@ -48,21 +46,7 @@ public class HttpSecurityRecorder {
                                     public void run() {
                                         event.response().end();
                                     }
-                                }).exceptionally(new Function<Throwable, Void>() {
-                                    @Override
-                                    public Void apply(Throwable throwable) {
-                                        event.fail(throwable);
-                                        return null;
-                                    }
                                 });
-                            } else if (throwable instanceof AuthenticationCompletionException) {
-                                event.response().setStatusCode(401);
-                                event.response().end();
-                            } else if (throwable instanceof AuthenticationRedirectException) {
-                                AuthenticationRedirectException redirectEx = (AuthenticationRedirectException) throwable;
-                                event.response().setStatusCode(redirectEx.getCode());
-                                event.response().headers().set(HttpHeaders.LOCATION, redirectEx.getRedirectUri());
-                                event.response().end();
                             } else {
                                 event.fail(throwable);
                             }
