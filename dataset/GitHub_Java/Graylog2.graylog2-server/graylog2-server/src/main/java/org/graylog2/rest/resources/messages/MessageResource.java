@@ -22,7 +22,6 @@ package org.graylog2.rest.resources.messages;
 
 import com.codahale.metrics.annotation.Timed;
 import com.google.common.collect.Maps;
-import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.elasticsearch.indices.IndexMissingException;
 import org.graylog2.indexer.messages.DocumentNotFoundException;
 import org.graylog2.rest.documentation.annotations.*;
@@ -38,7 +37,6 @@ import java.util.Map;
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
-@RequiresAuthentication
 @Api(value = "Messages", description = "Single messages")
 @Path("/messages/{index}")
 public class MessageResource extends RestResource {
