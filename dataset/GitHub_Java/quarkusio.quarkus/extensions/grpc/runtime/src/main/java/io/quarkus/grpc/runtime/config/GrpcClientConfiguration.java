@@ -46,7 +46,7 @@ public class GrpcClientConfiguration {
      * The flow control window in bytes. Default is 1MiB.
      */
     @ConfigItem
-    public Optional<Integer> flowControlWindow;
+    public OptionalInt flowControlWindow;
 
     /**
      * The duration without ongoing RPCs before going to idle mode.
@@ -137,4 +137,10 @@ public class GrpcClientConfiguration {
     @ConfigItem
     public Optional<String> userAgent;
 
+    /**
+     * Use a custom load balancing policy.
+     * Accepted values are: {@code pick_value}, {@code round_robin}, {@code grpclb}
+     */
+    @ConfigItem(defaultValue = "pick_first")
+    public String loadBalancingPolicy;
 }
