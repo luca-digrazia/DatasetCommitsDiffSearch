@@ -22,7 +22,6 @@ import io.quarkus.vertx.core.runtime.VertxCoreRecorder;
 import io.quarkus.vertx.core.runtime.VertxLogDelegateFactory;
 import io.quarkus.vertx.core.runtime.config.VertxConfiguration;
 import io.vertx.core.Vertx;
-import io.vertx.core.spi.resolver.ResolverProvider;
 
 class VertxCoreProcessor {
 
@@ -34,7 +33,7 @@ class VertxCoreProcessor {
                 .addRuntimeInitializedClass("io.vertx.core.http.impl.VertxHttp2ClientUpgradeCodec")
                 .addRuntimeInitializedClass("io.vertx.core.eventbus.impl.clustered.ClusteredEventBus")
 
-                .addNativeImageSystemProperty(ResolverProvider.DISABLE_DNS_RESOLVER_PROP_NAME, "true")
+                .addNativeImageSystemProperty("vertx.disableDnsResolver", "true")
                 .addNativeImageSystemProperty("vertx.logger-delegate-factory-class-name",
                         VertxLogDelegateFactory.class.getName())
                 .build();
