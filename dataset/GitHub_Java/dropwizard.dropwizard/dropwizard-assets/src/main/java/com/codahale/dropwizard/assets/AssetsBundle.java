@@ -4,6 +4,7 @@ import com.codahale.dropwizard.Bundle;
 import com.codahale.dropwizard.servlets.assets.AssetServlet;
 import com.codahale.dropwizard.setup.Bootstrap;
 import com.codahale.dropwizard.setup.Environment;
+import com.google.common.base.Charsets;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
@@ -29,7 +30,7 @@ public class AssetsBundle implements Bundle {
     }
 
     /**
-     * Creates a new AssetsBundle which will configure the service to serve the static files
+     * Creates a new AssetsBundle which will configure the application to serve the static files
      * located in {@code src/main/resources/${path}} as {@code /${path}}. For example, given a
      * {@code path} of {@code "/assets"}, {@code src/main/resources/assets/example.js} would be
      * served up from {@code /assets/example.js}.
@@ -42,7 +43,7 @@ public class AssetsBundle implements Bundle {
     }
 
     /**
-     * Creates a new AssetsBundle which will configure the service to serve the static files
+     * Creates a new AssetsBundle which will configure the application to serve the static files
      * located in {@code src/main/resources/${resourcePath}} as {@code /${uriPath}}. For example, given a
      * {@code resourcePath} of {@code "/assets"} and a uriPath of {@code "/js"},
      * {@code src/main/resources/assets/example.js} would be served up from {@code /js/example.js}.
@@ -56,7 +57,7 @@ public class AssetsBundle implements Bundle {
     }
 
     /**
-     * Creates a new AssetsBundle which will configure the service to serve the static files
+     * Creates a new AssetsBundle which will configure the application to serve the static files
      * located in {@code src/main/resources/${resourcePath}} as {@code /${uriPath}}. If no file name is
      * in ${uriPath}, ${indexFile} is appended before serving. For example, given a
      * {@code resourcePath} of {@code "/assets"} and a uriPath of {@code "/js"},
@@ -81,10 +82,10 @@ public class AssetsBundle implements Bundle {
 
     @Override
     public void run(Environment environment) {
-        environment.getServletEnvironment().addServlet(createServlet(), uriPath + '*');
+        environment.servlets().addServlet("assets", createServlet()).addMapping(uriPath + '*');
     }
 
     private AssetServlet createServlet() {
-        return new AssetServlet(resourcePath, uriPath, indexFile);
+        return new AssetServlet(resourcePath, uriPath, indexFile, Charsets.UTF_8);
     }
 }
