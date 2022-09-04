@@ -1,6 +1,5 @@
 package io.quarkus.deployment.index;
 
-import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -172,13 +171,13 @@ public class ApplicationArchiveBuildStep {
                 String jarPath = url.getPath().substring(0, url.getPath().lastIndexOf('!'));
                 return Paths.get(new URI(jarPath));
             } else if (url.getProtocol().equals("file")) {
-                final Path path = Paths.get(url.toURI());
-                final String filePath = path.toString();
-                final int index = filePath.lastIndexOf(File.separator + "META-INF");
+                int index = url.getPath().lastIndexOf("/META-INF");
                 if (index == -1) {
-                    return path;
+                    return Paths.get(url.getPath());
                 }
-                return Paths.get(filePath.substring(0, index));
+                String pathString = url.getPath().substring(0, index);
+                Path path = Paths.get(new URI(url.getProtocol(), url.getHost(), pathString, null));
+                return path;
             }
             throw new RuntimeException("Unknown URL type " + url.getProtocol());
         } catch (URISyntaxException e) {
