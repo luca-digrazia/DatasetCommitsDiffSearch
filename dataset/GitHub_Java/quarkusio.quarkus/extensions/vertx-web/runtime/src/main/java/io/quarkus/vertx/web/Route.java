@@ -19,12 +19,12 @@ import io.vertx.ext.web.RoutingContext;
  * The annotated method can accept arguments of the following types:
  * <ul>
  * <li>{@code io.vertx.ext.web.RoutingContext}</li>
- * <li>{@code io.vertx.mutiny.ext.web.RoutingContext}</li>
+ * <li>{@code io.vertx.reactivex.ext.web.RoutingContext}</li>
  * <li>{@code io.quarkus.vertx.web.RoutingExchange}</li>
  * <li>{@code io.vertx.core.http.HttpServerRequest}</li>
  * <li>{@code io.vertx.core.http.HttpServerResponse}</li>
- * <li>{@code io.vertx.mutiny.core.http.HttpServerRequest}</li>
- * <li>{@code io.vertx.mutiny.core.http.HttpServerResponse}</li>
+ * <li>{@code io.vertx.reactivex.core.http.HttpServerRequest}</li>
+ * <li>{@code io.vertx.reactivex.core.http.HttpServerResponse}</li>
  * </ul>
  * Furthermore, it is possible to inject the request parameters into a method parameter annotated with
  * {@link io.quarkus.vertx.web.Param}:
@@ -67,8 +67,7 @@ import io.vertx.ext.web.RoutingContext;
  *  </code>
  * </pre>
  * 
- * If the annotated method returns {@code void} then it has to accept at least one argument that makes it possible to end the
- * response, for example {@link RoutingContext}.
+ * If the annotated method returns {@code void} then it has to accept at least one argument.
  * If the annotated method does not return {@code void} then the arguments are optional.
  * <p>
  * If both {@link #path()} and {@link #regex()} are set the regular expression is used for matching.

@@ -30,7 +30,7 @@ public class FailureHandlerTest {
     public static class Routes {
 
         @Route
-        String fail(@Param String type) {
+        void fail(@Param String type) {
             if ("unsupported".equals(type)) {
                 throw new UnsupportedOperationException("Unsupported!");
             } else {
