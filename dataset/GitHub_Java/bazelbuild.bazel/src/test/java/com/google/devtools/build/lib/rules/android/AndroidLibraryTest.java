@@ -17,13 +17,6 @@ import static com.google.common.base.Verify.verifyNotNull;
 import static com.google.common.collect.Iterables.getOnlyElement;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
-import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.prettyArtifactNames;
-import static com.google.devtools.build.lib.rules.java.JavaCompileActionTestHelper.getClasspath;
-import static com.google.devtools.build.lib.rules.java.JavaCompileActionTestHelper.getCompileTimeDependencyArtifacts;
-import static com.google.devtools.build.lib.rules.java.JavaCompileActionTestHelper.getDirectJars;
-import static com.google.devtools.build.lib.rules.java.JavaCompileActionTestHelper.getJavacArguments;
-import static com.google.devtools.build.lib.rules.java.JavaCompileActionTestHelper.getProcessorpath;
-import static com.google.devtools.build.lib.rules.java.JavaCompileActionTestHelper.getStrictJavaDepsMode;
 
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
@@ -40,7 +33,7 @@ import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.OutputGroupInfo;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration.StrictDepsMode;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.configuredtargets.FileConfiguredTarget;
 import com.google.devtools.build.lib.analysis.configuredtargets.OutputFileConfiguredTarget;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -49,6 +42,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.rules.android.AndroidLibraryAarInfo.Aar;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaCompilationInfoProvider;
+import com.google.devtools.build.lib.rules.java.JavaCompileAction;
 import com.google.devtools.build.lib.rules.java.JavaExportsProvider;
 import com.google.devtools.build.lib.rules.java.JavaInfo;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
@@ -177,9 +171,10 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
   public void testCommandLineContainsTargetLabelAndRuleKind() throws Exception {
     scratch.file("java/android/BUILD",
         "android_library(name = 'a', srcs = ['A.java'])");
-    SpawnAction javacAction = (SpawnAction) getGeneratingActionForLabel("//java/android:liba.jar");
+    JavaCompileAction javacAction =
+        (JavaCompileAction) getGeneratingActionForLabel("//java/android:liba.jar");
 
-    String commandLine = Iterables.toString(getJavacArguments(javacAction));
+    String commandLine = Iterables.toString(javacAction.buildCommandLine());
     assertThat(commandLine).contains("--target_label, //java/android:a");
   }
 
@@ -189,8 +184,9 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
     scratch.file("java/android/strict/BUILD",
         "android_library(name = 'b', srcs = ['B.java'])");
     Artifact artifact = getFileConfiguredTarget("//java/android/strict:libb.jar").getArtifact();
-    SpawnAction compileAction = (SpawnAction) getGeneratingAction(artifact);
-    assertThat(getStrictJavaDepsMode(compileAction)).isEqualTo(StrictDepsMode.OFF);
+    JavaCompileAction compileAction = (JavaCompileAction) getGeneratingAction(artifact);
+    assertThat(compileAction.getStrictJavaDepsMode())
+        .isEqualTo(BuildConfiguration.StrictDepsMode.OFF);
   }
 
   @Test
@@ -198,8 +194,9 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
     scratch.file("java/android/strict/BUILD",
         "android_library(name = 'b', srcs = ['B.java'])");
     Artifact artifact = getFileConfiguredTarget("//java/android/strict:libb.jar").getArtifact();
-    SpawnAction compileAction = (SpawnAction) getGeneratingAction(artifact);
-    assertThat(getStrictJavaDepsMode(compileAction)).isEqualTo(StrictDepsMode.ERROR);
+    JavaCompileAction compileAction = (JavaCompileAction) getGeneratingAction(artifact);
+    assertThat(compileAction.getStrictJavaDepsMode())
+        .isEqualTo(BuildConfiguration.StrictDepsMode.ERROR);
   }
 
   @Test
@@ -208,8 +205,9 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
     scratch.file("java/android/strict/BUILD",
         "android_library(name = 'b', srcs = ['B.java'])");
     Artifact artifact = getFileConfiguredTarget("//java/android/strict:libb.jar").getArtifact();
-    SpawnAction compileAction = (SpawnAction) getGeneratingAction(artifact);
-    assertThat(getStrictJavaDepsMode(compileAction)).isEqualTo(StrictDepsMode.WARN);
+    JavaCompileAction compileAction = (JavaCompileAction) getGeneratingAction(artifact);
+    assertThat(compileAction.getStrictJavaDepsMode())
+        .isEqualTo(BuildConfiguration.StrictDepsMode.WARN);
   }
 
   @Test
@@ -247,15 +245,14 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
 
     OutputFileConfiguredTarget output = (OutputFileConfiguredTarget)
         getFileConfiguredTarget("//java/test:libto_be_processed.jar");
-    SpawnAction javacAction = (SpawnAction) getGeneratingAction(output.getArtifact());
+    JavaCompileAction javacAction =
+        (JavaCompileAction) getGeneratingAction(output.getArtifact());
 
-    assertThat(getProcessorNames(javacAction)).contains("com.google.process.stuff");
-    assertThat(getProcessorNames(javacAction)).hasSize(1);
+    assertThat(javacAction.getProcessorNames()).contains("com.google.process.stuff");
+    assertThat(javacAction.getProcessorNames()).hasSize(1);
 
-    assertThat(
-            ActionsTestUtil.baseArtifactNames(
-                getInputs(javacAction, getProcessorpath(javacAction))))
-        .containsExactly("libplugin.jar", "libplugin_dep.jar");
+    assertThat(ActionsTestUtil.baseNamesOf(javacAction.getProcessorpath()))
+        .isEqualTo("libplugin.jar libplugin_dep.jar");
     assertThat(
             actionsTestUtil()
                 .predecessorClosureOf(getFilesToBuild(target), JavaSemantics.JAVA_SOURCE))
@@ -279,14 +276,12 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
     ConfiguredTarget target = getConfiguredTarget("//java/test:to_be_processed");
     OutputFileConfiguredTarget output =
         (OutputFileConfiguredTarget) getFileConfiguredTarget("//java/test:libto_be_processed.jar");
-    SpawnAction javacAction = (SpawnAction) getGeneratingAction(output.getArtifact());
+    JavaCompileAction javacAction = (JavaCompileAction) getGeneratingAction(output.getArtifact());
 
-    assertThat(getProcessorNames(javacAction)).contains("com.google.process.stuff");
-    assertThat(getProcessorNames(javacAction)).hasSize(1);
-    assertThat(
-            ActionsTestUtil.baseArtifactNames(
-                getInputs(javacAction, getProcessorpath(javacAction))))
-        .containsExactly("libplugin.jar", "libplugin_dep.jar");
+    assertThat(javacAction.getProcessorNames()).contains("com.google.process.stuff");
+    assertThat(javacAction.getProcessorNames()).hasSize(1);
+    assertThat(ActionsTestUtil.baseNamesOf(javacAction.getProcessorpath()))
+        .isEqualTo("libplugin.jar libplugin_dep.jar");
     assertThat(
             actionsTestUtil()
                 .predecessorClosureOf(getFilesToBuild(target), JavaSemantics.JAVA_SOURCE))
@@ -392,12 +387,14 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
 
     useConfiguration("--java_deps");
 
-    SpawnAction aAction = (SpawnAction) getGeneratingActionForLabel("//java/deps:liba.jar");
-    List<String> aOutputs = prettyArtifactNames(aAction.getOutputs());
+    JavaCompileAction aAction = (JavaCompileAction) getGeneratingActionForLabel(
+        "//java/deps:liba.jar");
+    List<String> aOutputs = ActionsTestUtil.prettyArtifactNames(aAction.getOutputs());
     assertThat(aOutputs).doesNotContain("java/deps/liba.jdeps");
 
-    SpawnAction bAction = (SpawnAction) getGeneratingActionForLabel("//java/deps:libb.jar");
-    List<String> bOutputs = prettyArtifactNames(bAction.getOutputs());
+    JavaCompileAction bAction = (JavaCompileAction) getGeneratingActionForLabel(
+        "//java/deps:libb.jar");
+    List<String> bOutputs = ActionsTestUtil.prettyArtifactNames(bAction.getOutputs());
     assertThat(bOutputs).contains("java/deps/libb.jdeps");
     assertNoEvents();
   }
@@ -411,9 +408,10 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
         "android_library(name = 'd', srcs = ['D.java'])",
         "android_library(name = 'e', srcs = ['E.java'])");
 
-    SpawnAction aAction = (SpawnAction) getGeneratingActionForLabel("//java/classpath:liba.jar");
+    JavaCompileAction aAction = (JavaCompileAction) getGeneratingActionForLabel(
+        "//java/classpath:liba.jar");
     List<String> deps =
-        prettyArtifactNames(getInputs(aAction, getCompileTimeDependencyArtifacts(aAction)));
+        ActionsTestUtil.prettyArtifactNames(aAction.getCompileTimeDependencyArtifacts());
     assertThat(deps)
         .containsExactly(
             "java/classpath/libc-hjar.jdeps",
@@ -442,9 +440,10 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
 
     useConfiguration("--strict_java_deps=WARN");
 
-    SpawnAction javacAction = (SpawnAction) getGeneratingActionForLabel("//java/exports:libc.jar");
+    JavaCompileAction javacAction =
+        (JavaCompileAction) getGeneratingActionForLabel("//java/exports:libc.jar");
 
-    assertThat(prettyArtifactNames(getInputs(javacAction, getDirectJars(javacAction))))
+    assertThat(ActionsTestUtil.prettyArtifactNames(javacAction.getDirectJars()))
         .containsExactly("java/exports/libb-hjar.jar", "java/exports/liba-hjar.jar");
     assertNoEvents();
   }
@@ -942,7 +941,7 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
         "                deps = [':bar'])",
         "android_library(name = 'bar',",
         "                manifest = 'AndroidManifest.xml')");
-    Function<ValidatedAndroidResources, Label> getLabel = ValidatedAndroidResources::getLabel;
+    Function<ValidatedAndroidData, Label> getLabel = ValidatedAndroidData::getLabel;
     ConfiguredTarget foo = getConfiguredTarget("//java/apps/android:foo");
     assertThat(
             Iterables.transform(
@@ -1034,7 +1033,7 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
     NestedSet<Artifact> filesToBuild = getFilesToBuild(target);
     Set<Artifact> artifacts = actionsTestUtil().artifactClosureOf(filesToBuild);
 
-    ValidatedAndroidResources resources =
+    ValidatedAndroidData resources =
         Iterables.getOnlyElement(
             target.get(AndroidResourcesInfo.PROVIDER).getDirectAndroidResources());
 
@@ -1153,7 +1152,7 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
         .isEqualTo(
             ActionsTestUtil.getFirstArtifactEndingWith(
                 artifactClosure, "java/android/AndroidManifest.xml"));
-    ValidatedAndroidResources resources =
+    ValidatedAndroidData resources =
         getOnlyElement(
             getConfiguredTarget("//java/android:r")
                 .get(AndroidResourcesInfo.PROVIDER)
@@ -1185,7 +1184,7 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
         .isEqualTo(
             ActionsTestUtil.getFirstArtifactEndingWith(
                 artifactClosure, "handwriting/AndroidManifest.xml"));
-    ValidatedAndroidResources resources =
+    ValidatedAndroidData resources =
         getOnlyElement(
             getConfiguredTarget("//research/handwriting/java/com/google/research/handwriting:r")
                 .get(AndroidResourcesInfo.PROVIDER)
@@ -1219,7 +1218,7 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
         .isEqualTo(
             ActionsTestUtil.getFirstArtifactEndingWith(
                 artifactClosure, "java/android/AndroidManifest.xml"));
-    ValidatedAndroidResources resources =
+    ValidatedAndroidData resources =
         getOnlyElement(
             getConfiguredTarget("//java/android:r")
                 .get(AndroidResourcesInfo.PROVIDER)
@@ -1320,9 +1319,10 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
         "                javacopts = ['-g:lines,source'],",
         "               )");
 
-    SpawnAction javacAction = (SpawnAction) getGeneratingActionForLabel("//java/android:liba.jar");
+    JavaCompileAction javacAction =
+        (JavaCompileAction) getGeneratingActionForLabel("//java/android:liba.jar");
 
-    assertThat(getJavacArguments(javacAction)).contains("-g:lines,source");
+    assertThat(javacAction.buildCommandLine()).contains("-g:lines,source");
   }
 
   // Regression test for b/23079127
@@ -1334,9 +1334,10 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
         "android_library(name='b', srcs=['b.srcjar'], deps=[':c'])",
         "android_library(name='c', srcs=['C.java'])");
 
-    SpawnAction javacAction = (SpawnAction) getGeneratingActionForLabel("//java/strict:liba.jar");
+    JavaCompileAction javacAction =
+        (JavaCompileAction) getGeneratingActionForLabel("//java/strict:liba.jar");
 
-    assertThat(prettyArtifactNames(getInputs(javacAction, getDirectJars(javacAction))))
+    assertThat(ActionsTestUtil.prettyArtifactNames(javacAction.getDirectJars()))
         .containsExactly("java/strict/libb-hjar.jar");
   }
 
@@ -1361,7 +1362,7 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
 
     useConfiguration("--java_header_compilation");
     Action a = getGeneratingActionForLabel("//java/test:liba.jar");
-    List<String> inputs = prettyArtifactNames(a.getInputs());
+    List<String> inputs = ActionsTestUtil.prettyArtifactNames(a.getInputs());
     assertThat(inputs).doesNotContain("java/test/libb.jdeps");
     assertThat(inputs).contains("java/test/libb-hjar.jdeps");
   }
@@ -1622,7 +1623,7 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
                 .getActionForArtifactEndingWith(transitiveArtifacts, "proguard-spec.pro_valid"))
         .isNull();
     assertWithMessage("Proguard validate action was not spawned.")
-        .that(prettyArtifactNames(action.getInputs()))
+        .that(ActionsTestUtil.prettyArtifactNames(action.getInputs()))
         .contains("java/com/google/android/hello/library_spec.cfg");
   }
 
@@ -1644,7 +1645,7 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
                 "library_spec.cfg_valid");
     assertWithMessage("Proguard validate action was not spawned.").that(action).isNotNull();
     assertWithMessage("Proguard validate action was spawned without correct input.")
-        .that(prettyArtifactNames(action.getInputs()))
+        .that(ActionsTestUtil.prettyArtifactNames(action.getInputs()))
         .contains("java/com/google/android/hello/library_spec.cfg");
     Action transitiveAction =
         actionsTestUtil()
@@ -1657,7 +1658,7 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
         .that(transitiveAction)
         .isNotNull();
     assertWithMessage("Proguard validate action was spawned without correct input.")
-        .that(prettyArtifactNames(transitiveAction.getInputs()))
+        .that(ActionsTestUtil.prettyArtifactNames(transitiveAction.getInputs()))
         .contains("java/com/google/android/hello/library_spec.cfg");
   }
 
@@ -1727,9 +1728,10 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
         "                javacopts = ['-g:lines,source'],",
         "               )");
 
-    SpawnAction javacAction = (SpawnAction) getGeneratingActionForLabel("//java/android:liba.jar");
+    JavaCompileAction javacAction =
+        (JavaCompileAction) getGeneratingActionForLabel("//java/android:liba.jar");
 
-    String commandLine = Iterables.toString(getJavacArguments(javacAction));
+    String commandLine = Iterables.toString(javacAction.buildCommandLine());
     assertThat(commandLine).contains("-g:lines,source");
   }
 
@@ -1750,7 +1752,7 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
     SpawnAction action = (SpawnAction) actionsTestUtil().getActionForArtifactEndingWith(
         actionsTestUtil().artifactClosureOf(aar), "aartest.aar");
     assertThat(action).isNotNull();
-    assertThat(prettyArtifactNames(getNonToolInputs(action)))
+    assertThat(ActionsTestUtil.prettyArtifactNames(getNonToolInputs(action)))
         .containsAllOf(
             "java/android/aartest/aartest_processed_manifest/AndroidManifest.xml",
             "java/android/aartest/aartest_symbols/R.txt",
@@ -1772,7 +1774,7 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
     SpawnAction action = (SpawnAction) actionsTestUtil().getActionForArtifactEndingWith(
         actionsTestUtil().artifactClosureOf(aar), "aartest.aar");
     assertThat(action).isNotNull();
-    assertThat(prettyArtifactNames(getNonToolInputs(action)))
+    assertThat(ActionsTestUtil.prettyArtifactNames(getNonToolInputs(action)))
         .containsAllOf(
             "java/android/aartest/aartest_processed_manifest/AndroidManifest.xml",
             "java/android/aartest/aartest_symbols/R.txt",
@@ -1932,16 +1934,16 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
         "  manifest='AndroidManifest.xml',",
         "  deps=[':dep'])");
 
-    SpawnAction javacAction =
-        (SpawnAction)
+    JavaCompileAction javacAction =
+        (JavaCompileAction)
             getGeneratingAction(getFileConfiguredTarget("//java/foo:liblib.jar").getArtifact());
 
-    assertThat(prettyArtifactNames(getInputs(javacAction, getDirectJars(javacAction))))
+    assertThat(ActionsTestUtil.prettyArtifactNames(javacAction.getDirectJars()))
         .containsExactly(
             "java/foo/lib_resources.jar", "java/foo/dep_resources.jar", "java/foo/libdep-hjar.jar")
         .inOrder();
 
-    assertThat(prettyArtifactNames(getInputs(javacAction, getClasspath(javacAction))))
+    assertThat(ActionsTestUtil.prettyArtifactNames(javacAction.getClasspath()))
         .containsExactly(
             "java/foo/lib_resources.jar", "java/foo/dep_resources.jar", "java/foo/libdep-hjar.jar")
         .inOrder();

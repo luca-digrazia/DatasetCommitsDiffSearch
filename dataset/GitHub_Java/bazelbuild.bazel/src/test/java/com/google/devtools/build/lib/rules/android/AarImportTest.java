@@ -144,12 +144,12 @@ public class AarImportTest extends BuildViewTestCase {
                 .collect(Collectors.toSet()))
         .containsExactly("a/foo_symbols/symbols.zip", "a/library_symbols/symbols.zip");
 
-    NestedSet<ValidatedAndroidResources> directResources =
+    NestedSet<ValidatedAndroidData> directResources =
         libTarget.get(AndroidResourcesInfo.PROVIDER).getDirectAndroidResources();
 
     assertThat(directResources).hasSize(1);
 
-    ValidatedAndroidResources resourceContainer = directResources.iterator().next();
+    ValidatedAndroidData resourceContainer = directResources.iterator().next();
     Truth.assertThat(resourceContainer.getAapt2RTxt()).isNotNull();
   }
 
@@ -157,11 +157,11 @@ public class AarImportTest extends BuildViewTestCase {
   public void testResourcesProvided() throws Exception {
     ConfiguredTarget aarImportTarget = getConfiguredTarget("//a:foo");
 
-    NestedSet<ValidatedAndroidResources> directResources =
+    NestedSet<ValidatedAndroidData> directResources =
         aarImportTarget.get(AndroidResourcesInfo.PROVIDER).getDirectAndroidResources();
     assertThat(directResources).hasSize(1);
 
-    ValidatedAndroidResources resourceContainer = directResources.iterator().next();
+    ValidatedAndroidData resourceContainer = directResources.iterator().next();
     assertThat(resourceContainer.getManifest()).isNotNull();
 
     Artifact resourceTreeArtifact = Iterables.getOnlyElement(resourceContainer.getResources());
@@ -182,7 +182,7 @@ public class AarImportTest extends BuildViewTestCase {
 
   @Test
   public void testResourcesExtractor() throws Exception {
-    ValidatedAndroidResources resourceContainer =
+    ValidatedAndroidData resourceContainer =
         getConfiguredTarget("//a:foo")
             .get(AndroidResourcesInfo.PROVIDER)
             .getDirectAndroidResources()
@@ -247,7 +247,6 @@ public class AarImportTest extends BuildViewTestCase {
             "--output",
             "--checking_mode=error",
             "--rule_label",
-            "//a:last",
             "--jdeps_output");
     ensureArgumentsHaveClassEntryOptionWithSuffix(
         arguments, "/intermediate/classes_and_libs_merged.jar");
@@ -385,7 +384,7 @@ public class AarImportTest extends BuildViewTestCase {
 
   @Test
   public void testNoCustomJavaPackage() throws Exception {
-    ValidatedAndroidResources resourceContainer =
+    ValidatedAndroidData resourceContainer =
         getConfiguredTarget("//a:foo")
             .get(AndroidResourcesInfo.PROVIDER)
             .getDirectAndroidResources()
