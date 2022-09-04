@@ -403,8 +403,7 @@ public class SmallRyeReactiveMessagingProcessor {
             sigBuilder.append(i.name().toString());
         }
         String targetPackage = DotNames.packageName(bean.getImplClazz().name());
-        String generatedName = (targetPackage.isEmpty() ? "" : targetPackage.replace('.', '/') + "/") + baseName
-                + INVOKER_SUFFIX + "_" + method.name() + "_"
+        String generatedName = targetPackage.replace('.', '/') + "/" + baseName + INVOKER_SUFFIX + "_" + method.name() + "_"
                 + HashUtil.sha1(sigBuilder.toString());
 
         try (ClassCreator invoker = ClassCreator.builder().classOutput(classOutput).className(generatedName)

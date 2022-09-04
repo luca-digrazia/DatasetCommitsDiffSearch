@@ -35,11 +35,13 @@ public class MutinyEmitterWithParameterInjectionTest {
     public void testMutinyEmitter() {
         example.run();
         List<String> list = example.list();
-        assertEquals(4, list.size());
+        assertEquals(6, list.size());
         assertEquals("a", list.get(0));
         assertEquals("b", list.get(1));
         assertEquals("c", list.get(2));
         assertEquals("d", list.get(3));
+        assertEquals("e", list.get(4));
+        assertEquals("f", list.get(5));
     }
 
     @ApplicationScoped
@@ -64,7 +66,9 @@ public class MutinyEmitterWithParameterInjectionTest {
             emitter.sendAndAwait("c");
 
             // Message
-            emitter.send(Message.of("d"));
+            emitter.send(Message.of("d")).await().atMost(Duration.ofSeconds(1));
+            emitter.sendAndForget(Message.of("e"));
+            emitter.sendAndAwait(Message.of("f"));
 
             emitter.complete();
         }
