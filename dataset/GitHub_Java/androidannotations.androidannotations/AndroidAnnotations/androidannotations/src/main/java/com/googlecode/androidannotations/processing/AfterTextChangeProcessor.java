@@ -30,7 +30,6 @@ import com.googlecode.androidannotations.helper.TextWatcherHelper;
 import com.googlecode.androidannotations.rclass.IRClass;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JCodeModel;
-import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JFieldRef;
 import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JMethod;
@@ -42,7 +41,7 @@ import com.sun.codemodel.JVar;
 public class AfterTextChangeProcessor implements ElementProcessor {
 
 	private final TextWatcherHelper helper;
-
+	
 	private final APTCodeModelHelper codeModelHelper;
 
 	public AfterTextChangeProcessor(ProcessingEnvironment processingEnv, IRClass rClass) {
@@ -68,11 +67,11 @@ public class AfterTextChangeProcessor implements ElementProcessor {
 		int editableParameterPosition = -1;
 		int viewParameterPosition = -1;
 		TypeMirror viewParameterType = null;
-
-		for (int i = 0; i < parameters.size(); i++) {
+		
+		for (int i = 0 ; i < parameters.size() ; i++) {
 			VariableElement parameter = parameters.get(i);
 			TypeMirror parameterType = parameter.asType();
-
+			
 			if ("android.text.Editable".equals(parameterType.toString())) {
 				editableParameterPosition = i;
 			} else {
@@ -86,7 +85,7 @@ public class AfterTextChangeProcessor implements ElementProcessor {
 		}
 
 		AfterTextChange annotation = element.getAnnotation(AfterTextChange.class);
-
+		
 		List<JFieldRef> idsRefs = helper.extractFieldRefsFromAnnotationValues(element, annotation.value(), "AfterTextChanged", holder);
 
 		for (JFieldRef idRef : idsRefs) {
@@ -97,13 +96,12 @@ public class AfterTextChangeProcessor implements ElementProcessor {
 
 			JBlock previousBody = codeModelHelper.removeBody(methodToCall);
 			JBlock methodBody = methodToCall.body();
-
+			
 			methodBody.add(previousBody);
-			JExpression activityRef = holder.eBean.staticRef("this");
-			textChangeCall = methodBody.invoke(activityRef, methodName);
+			textChangeCall = methodBody.invoke(methodName);
 
-			for (int i = 0; i < parameters.size(); i++) {
-				if (i == editableParameterPosition) {
+			for (int i = 0 ; i < parameters.size() ; i++) {
+				if (i == editableParameterPosition) {				
 					JVar afterTextChangeEditableParam = codeModelHelper.findParameterByName(methodToCall, "s");
 					textChangeCall.arg(afterTextChangeEditableParam);
 				} else if (i == viewParameterPosition) {
@@ -115,5 +113,5 @@ public class AfterTextChangeProcessor implements ElementProcessor {
 		}
 
 	}
-
+	
 }
