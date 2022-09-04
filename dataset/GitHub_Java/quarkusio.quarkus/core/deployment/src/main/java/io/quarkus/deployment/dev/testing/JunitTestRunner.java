@@ -140,7 +140,6 @@ public class JunitTestRunner {
             currentTestAppConsumer.accept(testApplication);
 
             Set<UniqueId> allDiscoveredIds = new HashSet<>();
-            Set<UniqueId> dynamicIds = new HashSet<>();
             try (DiscoveryResult quarkusTestClasses = discoverTestClasses(devModeContext)) {
 
                 Launcher launcher = LauncherFactory.create(LauncherConfig.builder().build());
@@ -178,7 +177,7 @@ public class JunitTestRunner {
                         .build();
                 TestPlan testPlan = launcher.discover(request);
                 if (!testPlan.containsTests()) {
-                    testState.pruneDeletedTests(allDiscoveredIds, dynamicIds);
+                    testState.pruneDeletedTests(allDiscoveredIds);
                     //nothing to see here
                     for (TestRunListener i : listeners) {
                         i.noTests(new TestRunResults(runId, classScanResult, classScanResult == null, start,
@@ -269,11 +268,7 @@ public class JunitTestRunner {
                                 }
                             }
                         }
-                    }
-
-                    @Override
-                    public void dynamicTestRegistered(TestIdentifier testIdentifier) {
-                        dynamicIds.add(UniqueId.parse(testIdentifier.getUniqueId()));
+                        touchedClasses.push(Collections.synchronizedSet(new HashSet<>()));
                     }
 
                     @Override
@@ -367,7 +362,7 @@ public class JunitTestRunner {
                     return;
                 }
                 testState.updateResults(resultsByClass);
-                testState.pruneDeletedTests(allDiscoveredIds, dynamicIds);
+                testState.pruneDeletedTests(allDiscoveredIds);
                 if (classScanResult != null) {
                     testState.classesRemoved(classScanResult.getDeletedClassNames());
                 }
