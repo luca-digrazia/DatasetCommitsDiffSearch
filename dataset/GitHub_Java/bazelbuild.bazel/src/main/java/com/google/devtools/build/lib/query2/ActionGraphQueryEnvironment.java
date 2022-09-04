@@ -69,7 +69,7 @@ public class ActionGraphQueryEnvironment
       boolean keepGoing,
       ExtendedEventHandler eventHandler,
       Iterable<QueryFunction> extraFunctions,
-      TopLevelConfigurations topLevelConfigurations,
+      BuildConfiguration defaultTargetConfiguration,
       BuildConfiguration hostConfiguration,
       String parserPrefix,
       PathPackageLocator pkgPath,
@@ -79,12 +79,13 @@ public class ActionGraphQueryEnvironment
         keepGoing,
         eventHandler,
         extraFunctions,
-        topLevelConfigurations,
+        defaultTargetConfiguration,
         hostConfiguration,
         parserPrefix,
         pkgPath,
         walkableGraphSupplier,
         settings);
+    this.accessor = new ConfiguredTargetValueAccessor(walkableGraphSupplier.get());
     this.configuredTargetKeyExtractor =
         configuredTargetValue -> {
           try {
@@ -99,16 +100,13 @@ public class ActionGraphQueryEnvironment
             throw new IllegalStateException("Interruption unexpected in configured query");
           }
         };
-    this.accessor =
-        new ConfiguredTargetValueAccessor(
-            walkableGraphSupplier.get(), this.configuredTargetKeyExtractor);
   }
 
   public ActionGraphQueryEnvironment(
       boolean keepGoing,
       ExtendedEventHandler eventHandler,
       Iterable<QueryFunction> extraFunctions,
-      TopLevelConfigurations topLevelConfigurations,
+      BuildConfiguration defaultTargetConfiguration,
       BuildConfiguration hostConfiguration,
       String parserPrefix,
       PathPackageLocator pkgPath,
@@ -118,7 +116,7 @@ public class ActionGraphQueryEnvironment
         keepGoing,
         eventHandler,
         extraFunctions,
-        topLevelConfigurations,
+        defaultTargetConfiguration,
         hostConfiguration,
         parserPrefix,
         pkgPath,
@@ -183,20 +181,8 @@ public class ActionGraphQueryEnvironment
   @Override
   protected ConfiguredTargetValue getTargetConfiguredTarget(Label label)
       throws InterruptedException {
-    if (topLevelConfigurations.isTopLevelTarget(label)) {
-      return this.getConfiguredTargetValue(
-          ConfiguredTargetValue.key(
-              label, topLevelConfigurations.getConfigurationForTopLevelTarget(label)));
-    } else {
-      ConfiguredTargetValue toReturn;
-      for (BuildConfiguration configuration : topLevelConfigurations.getConfigurations()) {
-        toReturn = this.getConfiguredTargetValue(ConfiguredTargetValue.key(label, configuration));
-        if (toReturn != null) {
-          return toReturn;
-        }
-      }
-      return null;
-    }
+    return this.getConfiguredTargetValue(
+        ConfiguredTargetValue.key(label, defaultTargetConfiguration));
   }
 
   @Nullable
