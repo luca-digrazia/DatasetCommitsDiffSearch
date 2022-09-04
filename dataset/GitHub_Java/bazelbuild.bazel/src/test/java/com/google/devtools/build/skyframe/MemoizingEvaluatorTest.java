@@ -5195,9 +5195,7 @@ public class MemoizingEvaluatorTest {
               }
             });
 
-    Exception exception = tester.evalAndGetError(keepGoing, parentKey).getException();
-    assertThat(exception).isInstanceOf(SomeErrorException.class);
-    assertThat(exception).hasMessageThat().isEqualTo("bad");
+    assertThat(tester.evalAndGetError(keepGoing, parentKey).getException()).isSameAs(parentExn);
   }
 
   /** Data encapsulating a graph inconsistency found during evaluation. */
