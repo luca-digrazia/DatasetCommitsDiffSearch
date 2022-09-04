@@ -67,7 +67,7 @@ public class ResolvedGradleArtifactDeps extends AppArtifactResolverBase {
     private List<AppDependency> extractDependencies(Project project) {
         Set<AppDependency> dependencies = new HashSet<>();
 
-        Configuration configuration = project.getConfigurations().getByName("compileClasspath");
+        Configuration configuration = project.getConfigurations().getByName("compileOnly");
         ResolutionResult resolutionResult = configuration.getIncoming().getResolutionResult();
         ResolvedComponentResult root = resolutionResult.getRoot();
 
