@@ -24,6 +24,7 @@ import org.hibernate.event.internal.EntityCopyObserverFactoryInitiator;
 import org.hibernate.hql.internal.QueryTranslatorFactoryInitiator;
 import org.hibernate.integrator.spi.Integrator;
 import org.hibernate.internal.EntityManagerMessageLogger;
+import org.hibernate.internal.util.config.ConfigurationHelper;
 import org.hibernate.persister.internal.PersisterClassResolverInitiator;
 import org.hibernate.persister.internal.PersisterFactoryInitiator;
 import org.hibernate.property.access.internal.PropertyAccessStrategyResolverInitiator;
@@ -95,6 +96,7 @@ public class PreconfiguredServiceRegistryBuilder {
 
         final Map settingsCopy = new HashMap();
         settingsCopy.putAll(configurationValues);
+        ConfigurationHelper.resolvePlaceHolders(settingsCopy);
 
         destroyedRegistry.resetAndReactivate(bootstrapServiceRegistry, initiators, providedServices, settingsCopy);
         return destroyedRegistry;

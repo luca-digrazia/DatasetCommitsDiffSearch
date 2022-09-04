@@ -72,8 +72,7 @@ public final class RecordableBootstrap extends StandardServiceRegistryBuilder {
     }
 
     public RecordableBootstrap(BootstrapServiceRegistry bootstrapServiceRegistry, LoadedConfig loadedConfigBaseline) {
-        this.settings = new HashMap();
-        this.settings.putAll(QuarkusEnvironment.getInitialProperties());
+        this.settings = QuarkusEnvironment.getInitialProperties();
         this.bootstrapServiceRegistry = bootstrapServiceRegistry;
         this.configLoader = new ConfigLoader(bootstrapServiceRegistry);
         this.aggregatedCfgXml = loadedConfigBaseline;
