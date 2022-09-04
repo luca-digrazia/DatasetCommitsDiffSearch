@@ -26,7 +26,6 @@ import org.graylog2.audit.NullAuditEventSender;
 import org.graylog2.indexer.IndexMappingFactory;
 import org.graylog2.indexer.IndexNotFoundException;
 import org.graylog2.indexer.IndexSet;
-import org.graylog2.indexer.IndexSetStatsCreator;
 import org.graylog2.indexer.TestIndexSet;
 import org.graylog2.indexer.cluster.Node;
 import org.graylog2.indexer.cluster.NodeAdapter;
@@ -41,7 +40,6 @@ import org.graylog2.indexer.rotation.strategies.MessageCountRotationStrategy;
 import org.graylog2.indexer.rotation.strategies.MessageCountRotationStrategyConfig;
 import org.graylog2.indexer.searches.IndexRangeStats;
 import org.graylog2.plugin.system.NodeId;
-import org.graylog2.rest.resources.system.indexer.responses.IndexSetStats;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.junit.Before;
@@ -60,7 +58,6 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 public abstract class IndicesIT extends ElasticsearchBaseTest {
     private static final String INDEX_NAME = "graylog_0";
@@ -415,22 +412,5 @@ public abstract class IndicesIT extends ElasticsearchBaseTest {
         indices.cycleAlias(deflector, index2, index1);
 
         assertThat(indices.aliasTarget(deflector)).hasValue(index2);
-    }
-
-    @Test
-    public void retrievingIndexStatsForWildcard() {
-        final IndexSetStatsCreator indexSetStatsCreator = new IndexSetStatsCreator(indices);
-        final String indexPrefix = "indices_wildcard_";
-        final String wildcard = indexPrefix + "*";
-        final IndexSet indexSet = mock(IndexSet.class);
-        when(indexSet.getIndexWildcard()).thenReturn(wildcard);
-
-        client().createRandomIndex(indexPrefix);
-        client().createRandomIndex(indexPrefix);
-
-        final IndexSetStats indexSetStats = indexSetStatsCreator.getForIndexSet(indexSet);
-
-        assertThat(indexSetStats.indices()).isEqualTo(2L);
-        assertThat(indexSetStats.size()).isNotZero();
     }
 }
