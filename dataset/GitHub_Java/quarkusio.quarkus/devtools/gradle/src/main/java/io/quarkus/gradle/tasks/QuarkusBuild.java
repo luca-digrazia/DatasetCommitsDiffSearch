@@ -53,7 +53,7 @@ public class QuarkusBuild extends QuarkusTask {
         getLogger().lifecycle("building quarkus runner");
 
         final AppArtifact appArtifact = extension().getAppArtifact();
-        appArtifact.setPaths(QuarkusGradleUtils.getOutputPaths(getProject()));
+        appArtifact.setPath(extension().appJarOrClasses());
         final AppModelResolver modelResolver = extension().getAppModelResolver();
 
         final Properties realProperties = getBuildSystemProperties(appArtifact);
@@ -63,7 +63,7 @@ public class QuarkusBuild extends QuarkusTask {
             System.setProperty("quarkus.package.uber-jar", "true");
             clear = true;
         }
-        try (CuratedApplication appCreationContext = QuarkusBootstrap.builder()
+        try (CuratedApplication appCreationContext = QuarkusBootstrap.builder(appArtifact.getPath())
                 .setBaseClassLoader(getClass().getClassLoader())
                 .setAppModelResolver(modelResolver)
                 .setTargetDirectory(getProject().getBuildDir().toPath())

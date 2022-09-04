@@ -62,7 +62,6 @@ import io.quarkus.bootstrap.resolver.AppModelResolverException;
 import io.quarkus.dev.DevModeContext;
 import io.quarkus.dev.DevModeMain;
 import io.quarkus.gradle.QuarkusPluginExtension;
-import io.quarkus.runtime.LaunchMode;
 import io.quarkus.utilities.JavaBinFinder;
 
 public class QuarkusDev extends QuarkusTask {
@@ -236,7 +235,7 @@ public class QuarkusDev extends QuarkusTask {
             StringBuilder classPathManifest = new StringBuilder();
 
             final AppModel appModel;
-            final AppModelResolver modelResolver = extension().getAppModelResolver(LaunchMode.DEVELOPMENT);
+            final AppModelResolver modelResolver = extension().getAppModelResolver();
             try {
                 final AppArtifact appArtifact = extension.getAppArtifact();
                 appArtifact.setPath(extension.outputDirectory().toPath());

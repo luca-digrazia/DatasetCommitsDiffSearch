@@ -1,14 +1,11 @@
 package io.quarkus.bootstrap.classloading;
 
-import java.io.File;
 import java.io.IOException;
-import java.io.InterruptedIOException;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.security.CodeSource;
 import java.security.ProtectionDomain;
 import java.security.cert.Certificate;
@@ -32,26 +29,6 @@ public class DirectoryClassPathElement extends AbstractClassPathElement {
     @Override
     public ClassPathResource getResource(String name) {
         Path file = root.resolve(name);
-        Path normal = file.normalize();
-        String cn = name;
-        if (File.separatorChar == '\\') {
-            cn = cn.replace("/", "\\");
-        }
-        if (!normal.startsWith(file)) {
-            //don't allow directory escapes
-            return null;
-        }
-        if (normal.toString().equals(cn)) {
-            //this means that name is absolute (windows only, as the / would have been removed on linux)
-            //we don't allow absolute paths
-            return null;
-        }
-        if (!normal.endsWith(Paths.get(cn))) {
-            //make sure the case is correct
-            //if the file on disk does not match the case of name return null
-            return null;
-        }
-
         if (Files.exists(file)) {
             return new ClassPathResource() {
                 @Override
@@ -76,14 +53,7 @@ public class DirectoryClassPathElement extends AbstractClassPathElement {
                 @Override
                 public byte[] getData() {
                     try {
-                        try {
-                            return Files.readAllBytes(file);
-                        } catch (InterruptedIOException e) {
-                            //if we are interrupted reading data we finish the op, then just re-interrupt the thread state
-                            byte[] bytes = Files.readAllBytes(file);
-                            Thread.currentThread().interrupt();
-                            return bytes;
-                        }
+                        return Files.readAllBytes(file);
                     } catch (IOException e) {
                         throw new RuntimeException("Unable to read " + file, e);
                     }
