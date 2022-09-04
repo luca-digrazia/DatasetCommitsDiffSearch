@@ -81,12 +81,12 @@ public class HibernateOrmRecorder {
 
     public BeanContainerListener initMetadata(List<ParsedPersistenceXmlDescriptor> parsedPersistenceXmlDescriptors,
             Scanner scanner, Collection<Class<? extends Integrator>> additionalIntegrators,
-            PreGeneratedProxies proxyDefinitions, MultiTenancyStrategy strategy) {
+            PreGeneratedProxies proxyDefinitions, MultiTenancyStrategy strategy, boolean jtaPresent) {
         return new BeanContainerListener() {
             @Override
             public void created(BeanContainer beanContainer) {
                 PersistenceUnitsHolder.initializeJpa(parsedPersistenceXmlDescriptors, scanner, additionalIntegrators,
-                        proxyDefinitions, strategy);
+                        proxyDefinitions, strategy, jtaPresent);
             }
         };
     }

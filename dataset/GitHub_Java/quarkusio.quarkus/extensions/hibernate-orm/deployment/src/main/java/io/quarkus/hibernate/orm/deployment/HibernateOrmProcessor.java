@@ -342,10 +342,18 @@ public final class HibernateOrmProcessor {
             allDescriptors.add(pud.getDescriptor());
         }
 
+        // Multi tenancy mode (DATABASE, DISCRIMINATOR, NONE, SCHEMA)
+        MultiTenancyStrategy strategy = getMultiTenancyStrategy();
+        if (strategy == MultiTenancyStrategy.DISCRIMINATOR) {
+            // See https://hibernate.atlassian.net/browse/HHH-6054
+            throw new ConfigurationError("The Hibernate ORM multi tenancy strategy "
+                    + MultiTenancyStrategy.DISCRIMINATOR + " is currently not supported");
+        }
+
         beanContainerListener
                 .produce(new BeanContainerListenerBuildItem(
                         recorder.initMetadata(allDescriptors, scanner, integratorClasses,
-                                proxyDefinitions.getProxies(), getMultiTenancyStrategy(), jtaPresent)));
+                                proxyDefinitions.getProxies(), strategy, jtaPresent)));
     }
 
     /**
@@ -368,14 +376,7 @@ public final class HibernateOrmProcessor {
     }
 
     private MultiTenancyStrategy getMultiTenancyStrategy() {
-        final MultiTenancyStrategy multiTenancyStrategy = MultiTenancyStrategy
-                .valueOf(hibernateConfig.multitenant.orElse(MultiTenancyStrategy.NONE.name()));
-        if (multiTenancyStrategy == MultiTenancyStrategy.DISCRIMINATOR) {
-            // See https://hibernate.atlassian.net/browse/HHH-6054
-            throw new ConfigurationError("The Hibernate ORM multi tenancy strategy "
-                    + MultiTenancyStrategy.DISCRIMINATOR + " is currently not supported");
-        }
-        return multiTenancyStrategy;
+        return MultiTenancyStrategy.valueOf(hibernateConfig.multitenant.orElse(MultiTenancyStrategy.NONE.name()));
     }
 
     private PreGeneratedProxies generatedProxies(Set<String> entityClassNames, IndexView combinedIndex,
