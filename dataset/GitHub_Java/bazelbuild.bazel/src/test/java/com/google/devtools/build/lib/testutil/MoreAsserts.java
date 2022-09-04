@@ -15,6 +15,7 @@ package com.google.devtools.build.lib.testutil;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
+import static com.google.common.truth.Truth.assert_;
 import static org.junit.Assert.fail;
 
 import com.google.common.base.Function;
@@ -67,7 +68,8 @@ public class MoreAsserts {
       Object start, final Class<?> clazz) {
     Predicate<Object> p = obj -> clazz.isAssignableFrom(obj.getClass());
     if (isRetained(p, start)) {
-      fail("Found an instance of " + clazz.getCanonicalName() + " reachable from " + start);
+      assert_().fail(
+          "Found an instance of " + clazz.getCanonicalName() + " reachable from " + start);
     }
   }
 
@@ -317,13 +319,6 @@ public class MoreAsserts {
       failureMessage += "; found these though: " + eventsString;
     }
     fail(failureMessage);
-  }
-
-  public static void assertNotContainsEventRegex(
-      Iterable<Event> eventCollector, String unexpectedEventRegex) {
-    for (Event event : eventCollector) {
-      assertThat(event.toString()).doesNotMatch(unexpectedEventRegex);
-    }
   }
 
   /**
