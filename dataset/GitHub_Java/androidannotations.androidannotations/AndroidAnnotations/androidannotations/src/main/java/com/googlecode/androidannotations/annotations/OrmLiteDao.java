@@ -21,14 +21,20 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Injects an OrmLite Dao, configured with the provided mode and helper classes
+ * Should be used on custom classes to enable usage of AndroidAnnotations
+ * 
+ * Any view related code should happen in an {@link AfterViews} annotated
+ * method.<br>
+ * <br>
+ * 
+ * Most annotations are supported in {@link OrmLiteDao} classes
+ * 
  */
-@Retention(RetentionPolicy.CLASS)
+@Retention(RetentionPolicy.SOURCE)
 @Target(ElementType.FIELD)
 public @interface OrmLiteDao {
 
-	Class<?> helper();
-
 	Class<?> model();
 
+	Class<?> helper();
 }

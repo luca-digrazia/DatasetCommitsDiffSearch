@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -12,8 +12,6 @@
  * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
  * License for the specific language governing permissions and limitations under
  * the License.
- * 
- * @author Nabil Hachicha
  */
 package com.googlecode.androidannotations.processing;
 
@@ -32,11 +30,15 @@ import javax.lang.model.element.Element;
 import com.googlecode.androidannotations.annotations.HttpsClient;
 import com.googlecode.androidannotations.annotations.Id;
 import com.googlecode.androidannotations.processing.EBeansHolder.Classes;
+import com.googlecode.androidannotations.rclass.IRClass;
+import com.googlecode.androidannotations.rclass.IRClass.Res;
+import com.googlecode.androidannotations.rclass.IRInnerClass;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JCatchBlock;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JDefinedClass;
 import com.sun.codemodel.JExpression;
+import com.sun.codemodel.JFieldRef;
 import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
@@ -44,6 +46,12 @@ import com.sun.codemodel.JTryBlock;
 import com.sun.codemodel.JVar;
 
 public class HttpsClientProcessor implements ElementProcessor {
+
+	private final IRClass rClass;
+
+	public HttpsClientProcessor(IRClass rClass) {
+		this.rClass = rClass;
+	}
 
 	@Override
 	public Class<? extends Annotation> getTarget() {
@@ -55,16 +63,16 @@ public class HttpsClientProcessor implements ElementProcessor {
 		EBeanHolder holder = eBeansHolder.getEnclosingEBeanHolder(element);
 
 		HttpsClient annotation = element.getAnnotation(HttpsClient.class);
-		int trustStoreFile = annotation.trustStore();
+		int trustStoreRawId = annotation.trustStore();
 		String trustStorePwd = annotation.trustStorePwd();
 
-		int keyStoreFile = annotation.keyStore();
+		int keyStoreRawId = annotation.keyStore();
 		String keyStorePwd = annotation.keyStorePwd();
 
-		boolean hostnameVerif = annotation.hostnameVerif();
+		boolean allowAllHostnames = annotation.allowAllHostnames();
 
-		boolean useCustomTrustStore = Id.DEFAULT_VALUE != trustStoreFile ? true : false;
-		boolean useCustomKeyStore = Id.DEFAULT_VALUE != keyStoreFile ? true : false;
+		boolean useCustomTrustStore = Id.DEFAULT_VALUE != trustStoreRawId ? true : false;
+		boolean useCustomKeyStore = Id.DEFAULT_VALUE != keyStoreRawId ? true : false;
 
 		String fieldName = element.getSimpleName().toString();
 		JBlock methodBody = holder.init.body();
@@ -102,13 +110,16 @@ public class HttpsClientProcessor implements ElementProcessor {
 			jVarRes = jTryBlock.body().decl(classes.RESOURCES, "res", invoke("getResources"));
 		}
 
+		IRInnerClass rInnerClass = rClass.get(Res.RAW);
 		if (useCustomKeyStore) {
-			JInvocation jInvRawKey = jVarRes.invoke("openRawResource").arg(lit(keyStoreFile));
+			JFieldRef rawIdRef = rInnerClass.getIdStaticRef(keyStoreRawId, holder);
+			JInvocation jInvRawKey = jVarRes.invoke("openRawResource").arg(rawIdRef);
 			jVarKeyFile = jTryBlock.body().decl(classes.INPUT_STREAM, "inKeystore", jInvRawKey);
 		}
 
 		if (useCustomTrustStore) {
-			JInvocation jInvRawTrust = jVarRes.invoke("openRawResource").arg(lit(trustStoreFile));
+			JFieldRef rawIdRef = rInnerClass.getIdStaticRef(trustStoreRawId, holder);
+			JInvocation jInvRawTrust = jVarRes.invoke("openRawResource").arg(rawIdRef);
 			jVarTrstFile = jTryBlock.body().decl(classes.INPUT_STREAM, "inTrustStore", jInvRawTrust);
 
 		} else if (useCustomKeyStore) {
@@ -141,7 +152,7 @@ public class HttpsClientProcessor implements ElementProcessor {
 			JVar jVarCcm = jTryBlock.body().decl(classes.CLIENT_CONNECTION_MANAGER, "ccm");
 			jVarCcm.init(_super().invoke("createClientConnectionManager"));
 
-			if (!hostnameVerif) {
+			if (allowAllHostnames) {
 				JExpression jCast = cast(classes.SSL_SOCKET_FACTORY, jVarCcm.invoke("getSchemeRegistry").invoke("getScheme").arg("https").invoke("getSocketFactory"));
 				jTryBlock.body().add(jCast.invoke("setHostnameVerifier").arg(classes.SSL_SOCKET_FACTORY.staticRef("ALLOW_ALL_HOSTNAME_VERIFIER")));
 			}
@@ -152,7 +163,7 @@ public class HttpsClientProcessor implements ElementProcessor {
 			JVar jVarSslFact = jTryBlock.body().decl(classes.SSL_SOCKET_FACTORY, "newSslSocketFactory");
 			jVarSslFact.init(_new(classes.SSL_SOCKET_FACTORY).arg(null == jVarKeystore ? _null() : jVarKeystore).arg(keyStorePwd).arg(null == jVarTrusted ? _null() : jVarTrusted));
 
-			if (!hostnameVerif) {
+			if (allowAllHostnames) {
 				jTryBlock.body().add(invoke(jVarSslFact, "setHostnameVerifier").arg(classes.SSL_SOCKET_FACTORY.staticRef("ALLOW_ALL_HOSTNAME_VERIFIER")));
 			}
 
