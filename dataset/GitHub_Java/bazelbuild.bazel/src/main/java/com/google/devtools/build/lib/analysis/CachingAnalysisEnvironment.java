@@ -69,6 +69,16 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
   private final boolean isSystemEnv;
   private final boolean extendedSanityChecks;
 
+  /**
+   * If false, no actions will be registered, they'll all be just dropped.
+   *
+   * <p>Usually, an analysis environment should register all actions. However, in some scenarios we
+   * analyze some targets twice, but the first one only serves the purpose of collecting information
+   * for the second analysis. In this case we don't register actions created by the first pass in
+   * order to avoid action conflicts.
+   */
+  private final boolean allowRegisteringActions;
+
   private final ActionKeyContext actionKeyContext;
 
   private boolean enabled = true;
@@ -90,7 +100,8 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
       boolean isSystemEnv,
       boolean extendedSanityChecks,
       ExtendedEventHandler errorEventListener,
-      SkyFunction.Environment env) {
+      SkyFunction.Environment env,
+      boolean allowRegisteringActions) {
     this.artifactFactory = artifactFactory;
     this.actionKeyContext = actionKeyContext;
     this.owner = Preconditions.checkNotNull(owner);
@@ -98,12 +109,13 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
     this.extendedSanityChecks = extendedSanityChecks;
     this.errorEventListener = errorEventListener;
     this.skyframeEnv = env;
+    this.allowRegisteringActions = allowRegisteringActions;
     middlemanFactory = new MiddlemanFactory(artifactFactory, this);
     artifacts = new HashMap<>();
   }
 
   public void disable(Target target) {
-    if (!hasErrors()) {
+    if (!hasErrors() && allowRegisteringActions) {
       verifyGeneratedArtifactHaveActions(target);
     }
     artifacts = null;
@@ -151,11 +163,18 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
 
   @Override
   public ImmutableSet<Artifact> getOrphanArtifacts() {
+    if (!allowRegisteringActions) {
+      return ImmutableSet.of();
+    }
     return ImmutableSet.copyOf(getOrphanArtifactMap().keySet());
   }
 
   @Override
   public ImmutableSet<Artifact> getTreeArtifactsConflictingWithFiles() {
+    if (!allowRegisteringActions) {
+      return ImmutableSet.of();
+    }
+
     boolean hasTreeArtifacts = false;
     for (Artifact artifact : artifacts.keySet()) {
       if (artifact.isTreeArtifact()) {
@@ -281,11 +300,14 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
   @Override
   public void registerAction(ActionAnalysisMetadata... actions) {
     Preconditions.checkState(enabled);
-    Collections.addAll(this.actions, actions);
+    if (allowRegisteringActions) {
+      Collections.addAll(this.actions, actions);
+    }
   }
 
   @Override
   public ActionAnalysisMetadata getLocalGeneratingAction(Artifact artifact) {
+    Preconditions.checkState(allowRegisteringActions);
     for (ActionAnalysisMetadata action : actions) {
       if (action.getOutputs().contains(artifact)) {
         return action;

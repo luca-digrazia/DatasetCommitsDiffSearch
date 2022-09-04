@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis.util;
 
+import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -27,6 +28,7 @@ import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
+import com.google.devtools.build.lib.actions.ArtifactFactory;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.ExecutionStrategy;
@@ -35,19 +37,18 @@ import com.google.devtools.build.lib.actions.MutableActionGraph;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
+import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.OutputGroupInfo;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactContext;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction.Key;
-import com.google.devtools.build.lib.analysis.WorkspaceStatusAction.Options;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory.BuildInfoKey;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
-import com.google.devtools.build.lib.shell.Command;
 import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.util.Fingerprint;
@@ -62,6 +63,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.regex.Pattern;
 
 /**
@@ -150,7 +152,7 @@ public final class AnalysisTestUtil {
     }
 
     @Override
-    public ImmutableList<ActionAnalysisMetadata> getRegisteredActions() {
+    public List<ActionAnalysisMetadata> getRegisteredActions() {
       return original.getRegisteredActions();
     }
 
@@ -205,14 +207,17 @@ public final class AnalysisTestUtil {
   /** A dummy WorkspaceStatusAction. */
   @Immutable
   public static final class DummyWorkspaceStatusAction extends WorkspaceStatusAction {
+    private final String key;
     private final Artifact stableStatus;
     private final Artifact volatileStatus;
 
-    public DummyWorkspaceStatusAction(Artifact stableStatus, Artifact volatileStatus) {
+    public DummyWorkspaceStatusAction(String key,
+        Artifact stableStatus, Artifact volatileStatus) {
       super(
           ActionOwner.SYSTEM_ACTION_OWNER,
           ImmutableList.<Artifact>of(),
           ImmutableList.of(stableStatus, volatileStatus));
+      this.key = key;
       this.stableStatus = stableStatus;
       this.volatileStatus = volatileStatus;
     }
@@ -221,10 +226,8 @@ public final class AnalysisTestUtil {
     public ActionResult execute(ActionExecutionContext actionExecutionContext)
         throws ActionExecutionException {
       try {
-        FileSystemUtils.writeContent(
-            actionExecutionContext.getInputPath(stableStatus), new byte[] {});
-        FileSystemUtils.writeContent(
-            actionExecutionContext.getInputPath(volatileStatus), new byte[] {});
+        FileSystemUtils.writeContent(stableStatus.getPath(), new byte[] {});
+        FileSystemUtils.writeContent(volatileStatus.getPath(), new byte[] {});
       } catch (IOException e) {
         throw new ActionExecutionException(e, this, true);
       }
@@ -233,7 +236,7 @@ public final class AnalysisTestUtil {
 
     @Override
     public String getMnemonic() {
-      return "DummyBuildInfoAction";
+      return "DummyBuildInfoAction" + key;
     }
 
     @Override
@@ -247,6 +250,21 @@ public final class AnalysisTestUtil {
     @Override
     public Artifact getStableStatus() {
       return stableStatus;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (!(o instanceof DummyWorkspaceStatusAction)) {
+        return false;
+      }
+
+      DummyWorkspaceStatusAction that = (DummyWorkspaceStatusAction) o;
+      return that.key.equals(this.key);
+    }
+
+    @Override
+    public int hashCode() {
+      return key.hashCode();
     }
   }
 
@@ -262,38 +280,39 @@ public final class AnalysisTestUtil {
     public ImmutableMap<String, Key> getVolatileKeys() {
       return ImmutableMap.of();
     }
-
-    @Override
-    public Options getOptions() {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public ImmutableMap<String, String> getClientEnv() {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public Command getCommand() {
-      throw new UnsupportedOperationException();
-    }
   }
 
   /**
    * A workspace status action factory that does not do any interaction with the environment.
    */
   public static class DummyWorkspaceStatusActionFactory implements WorkspaceStatusAction.Factory {
-    @Override
-    public WorkspaceStatusAction createWorkspaceStatusAction(
-        WorkspaceStatusAction.Environment env) {
-      Artifact stableStatus = env.createStableArtifact("build-info.txt");
-      Artifact volatileStatus = env.createVolatileArtifact("build-changelist.txt");
-      return new DummyWorkspaceStatusAction(stableStatus, volatileStatus);
+    private final BlazeDirectories directories;
+    private String key;
+
+    public DummyWorkspaceStatusActionFactory(BlazeDirectories directories) {
+      this.directories = directories;
+      this.key = "";
+    }
+
+    public void setKey(String key) {
+      this.key = key;
     }
 
     @Override
-    public Map<String, String> createDummyWorkspaceStatus(
-        WorkspaceStatusAction.DummyEnvironment env) {
+    public WorkspaceStatusAction createWorkspaceStatusAction(
+        ArtifactFactory artifactFactory, ArtifactOwner artifactOwner, Supplier<UUID> buildId,
+        String workspaceName) {
+      Artifact stableStatus = artifactFactory.getDerivedArtifact(
+          PathFragment.create("build-info.txt"),
+          directories.getBuildDataDirectory(workspaceName), artifactOwner);
+      Artifact volatileStatus = artifactFactory.getConstantMetadataArtifact(
+          PathFragment.create("build-changelist.txt"),
+          directories.getBuildDataDirectory(workspaceName), artifactOwner);
+      return new DummyWorkspaceStatusAction(key, stableStatus, volatileStatus);
+    }
+
+    @Override
+    public Map<String, String> createDummyWorkspaceStatus() {
       return ImmutableMap.of();
     }
   }
@@ -337,7 +356,7 @@ public final class AnalysisTestUtil {
     }
 
     @Override
-    public ImmutableList<ActionAnalysisMetadata> getRegisteredActions() {
+    public List<ActionAnalysisMetadata> getRegisteredActions() {
       return ImmutableList.of();
     }
 

@@ -33,6 +33,7 @@ import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionGraph;
 import com.google.devtools.build.lib.actions.ActionInput;
+import com.google.devtools.build.lib.actions.ActionInputFileCache;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionLogBufferPathGenerator;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -46,7 +47,6 @@ import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.actions.CommandLines;
 import com.google.devtools.build.lib.actions.CommandLines.CommandLineAndParamFileInfo;
 import com.google.devtools.build.lib.actions.MapBasedActionGraph;
-import com.google.devtools.build.lib.actions.MetadataProvider;
 import com.google.devtools.build.lib.actions.MiddlemanFactory;
 import com.google.devtools.build.lib.actions.MutableActionGraph;
 import com.google.devtools.build.lib.actions.ParameterFile;
@@ -134,6 +134,7 @@ import com.google.devtools.build.lib.skyframe.BuildConfigurationValue;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.skyframe.DiffAwareness;
+import com.google.devtools.build.lib.skyframe.LegacyLoadingPhaseRunner;
 import com.google.devtools.build.lib.skyframe.PackageRootsNoSymlinkCreation;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.skyframe.SequencedSkyframeExecutor;
@@ -1207,6 +1208,19 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
 
   /**
    * Gets a derived Artifact for testing in the subdirectory of the {@link
+   * BuildConfiguration#getBinDirectory} corresponding to the package of {@code owner}. So
+   * to specify a file foo/foo.o owned by target //foo:foo, {@code packageRelativePath} should just
+   * be "foo.o".
+   */
+  protected Artifact getBinArtifact(String packageRelativePath, String owner) {
+    return getPackageRelativeDerivedArtifact(
+        packageRelativePath,
+        getConfiguration(owner).getBinDirectory(RepositoryName.MAIN),
+        makeConfiguredTargetKey(owner));
+  }
+
+  /**
+   * Gets a derived Artifact for testing in the subdirectory of the {@link
    * BuildConfiguration#getBinDirectory} corresponding to the package of {@code owner}. So to
    * specify a file foo/foo.o owned by target //foo:foo, {@code packageRelativePath} should just be
    * "foo.o".
@@ -1322,18 +1336,13 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
         packageRelativePath,
         getConfiguration(owner)
             .getGenfilesDirectory(owner.getLabel().getPackageIdentifier().getRepository()),
-        getOwnerForAspect(owner, creatingAspectFactory, params));
-  }
-
-  protected AspectValue.AspectKey getOwnerForAspect(
-      ConfiguredTarget owner, NativeAspectClass creatingAspectFactory, AspectParameters params) {
-    return (AspectValue.AspectKey)
-        AspectValue.createAspectKey(
-                owner.getLabel(),
-                getConfiguration(owner),
-                new AspectDescriptor(creatingAspectFactory, params),
-                getConfiguration(owner))
-            .argument();
+        (AspectValue.AspectKey)
+            AspectValue.createAspectKey(
+                    owner.getLabel(),
+                    getConfiguration(owner),
+                    new AspectDescriptor(creatingAspectFactory, params),
+                    getConfiguration(owner))
+                .argument());
   }
 
   /**
@@ -1360,11 +1369,11 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
 
   /**
    * Gets a derived Artifact for testing in the subdirectory of the {@link
-   * BuildConfiguration#getIncludeDirectory} corresponding to the package of {@code owner}. So to
-   * specify a file foo/foo.o owned by target //foo:foo, {@code packageRelativePath} should just be
-   * "foo.h".
+   * BuildConfiguration#getIncludeDirectory} corresponding to the package of {@code owner}.
+   * So to specify a file foo/foo.o owned by target //foo:foo, {@code packageRelativePath} should
+   * just be "foo.h".
    */
-  protected Artifact getIncludeArtifact(String packageRelativePath, ArtifactOwner owner) {
+  private Artifact getIncludeArtifact(String packageRelativePath, ArtifactOwner owner) {
     return getPackageRelativeDerivedArtifact(packageRelativePath,
         targetConfig.getIncludeDirectory(owner.getLabel().getPackageIdentifier().getRepository()),
         owner);
@@ -1732,8 +1741,8 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
 
     BuildView.Options viewOptions = Options.getDefaults(BuildView.Options.class);
 
-    LoadingPhaseRunner runner =
-        skyframeExecutor.getLoadingPhaseRunner(ruleClassProvider.getRuleClassMap().keySet());
+    LoadingPhaseRunner runner = new LegacyLoadingPhaseRunner(getPackageManager(),
+        Collections.unmodifiableSet(ruleClassProvider.getRuleClassMap().keySet()));
     LoadingResult loadingResult =
         runner.execute(
             reporter,
@@ -2103,12 +2112,12 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
 
   /** Creates instances of {@link ActionExecutionContext} consistent with test case. */
   public class ActionExecutionContextBuilder {
-    private MetadataProvider actionInputFileCache = null;
+    private ActionInputFileCache actionInputFileCache = null;
     private TreeMap<String, String> clientEnv = new TreeMap<>();
     private ArtifactExpander artifactExpander = null;
 
-    public ActionExecutionContextBuilder setMetadataProvider(
-        MetadataProvider actionInputFileCache) {
+    public ActionExecutionContextBuilder setActionInputFileCache(
+        ActionInputFileCache actionInputFileCache) {
       this.actionInputFileCache = actionInputFileCache;
       return this;
     }

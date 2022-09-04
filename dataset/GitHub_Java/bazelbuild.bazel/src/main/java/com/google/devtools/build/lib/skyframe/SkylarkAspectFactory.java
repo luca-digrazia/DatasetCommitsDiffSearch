@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.ConfiguredAspect;
 import com.google.devtools.build.lib.analysis.ConfiguredAspectFactory;
@@ -30,6 +29,7 @@ import com.google.devtools.build.lib.packages.Info;
 import com.google.devtools.build.lib.packages.SkylarkDefinedAspect;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
+import com.google.devtools.build.lib.syntax.DebugServerUtils;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalExceptionWithStackTrace;
@@ -50,7 +50,7 @@ public class SkylarkAspectFactory implements ConfiguredAspectFactory {
   @Override
   public ConfiguredAspect create(
       ConfiguredTargetAndData ctadBase, RuleContext ruleContext, AspectParameters parameters)
-      throws InterruptedException, ActionConflictException {
+      throws InterruptedException {
     SkylarkRuleContext skylarkRuleContext = null;
     try (Mutability mutability = Mutability.create("aspect")) {
       AspectDescriptor aspectDescriptor =
@@ -71,16 +71,25 @@ public class SkylarkAspectFactory implements ConfiguredAspectFactory {
               // NB: loading phase functions are not available: this is analysis already, so we do
               // *not* setLoadingPhase().
               .build();
-      Object aspectSkylarkObject;
       try {
-        aspectSkylarkObject =
-            skylarkAspect
-                .getImplementation()
-                .call(
-                    /*args=*/ ImmutableList.of(ctadBase.getConfiguredTarget(), skylarkRuleContext),
-                    /* kwargs= */ ImmutableMap.of(),
-                    /*ast=*/ null,
-                    env);
+        final SkylarkRuleContext finalRuleContext = skylarkRuleContext;
+        Object aspectSkylarkObject =
+            DebugServerUtils.runWithDebuggingIfEnabled(
+                env,
+                () ->
+                    String.format(
+                        "Aspect %s on %s",
+                        skylarkAspect.getName(),
+                        ruleContext.getTarget().getLabel().getCanonicalForm()),
+                () ->
+                    skylarkAspect
+                        .getImplementation()
+                        .call(
+                            /*args=*/ ImmutableList.of(
+                                ctadBase.getConfiguredTarget(), finalRuleContext),
+                            /* kwargs= */ ImmutableMap.of(),
+                            /*ast=*/ null,
+                            env));
 
         if (ruleContext.hasErrors()) {
           return null;
@@ -107,7 +116,7 @@ public class SkylarkAspectFactory implements ConfiguredAspectFactory {
 
   private ConfiguredAspect createAspect(
       Object aspectSkylarkObject, AspectDescriptor aspectDescriptor, RuleContext ruleContext)
-      throws EvalException, ActionConflictException {
+      throws EvalException {
 
     ConfiguredAspect.Builder builder = new ConfiguredAspect.Builder(aspectDescriptor, ruleContext);
 

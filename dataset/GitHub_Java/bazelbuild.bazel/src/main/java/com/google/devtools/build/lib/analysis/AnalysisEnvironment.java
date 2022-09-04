@@ -30,6 +30,7 @@ import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyFunction;
+import java.util.List;
 
 /**
  * The set of services that are provided to {@link ConfiguredTarget} objects
@@ -109,7 +110,7 @@ public interface AnalysisEnvironment extends ActionRegistry {
    * Returns the actions that were registered so far with this analysis environment, that is, all
    * the actions that were created by the current target being analyzed.
    */
-  ImmutableList<ActionAnalysisMetadata> getRegisteredActions();
+  List<ActionAnalysisMetadata> getRegisteredActions();
 
   /**
    * Returns the Skyframe SkyFunction.Environment if available. Otherwise, null.
@@ -160,7 +161,4 @@ public interface AnalysisEnvironment extends ActionRegistry {
   ImmutableSet<Artifact> getTreeArtifactsConflictingWithFiles();
 
   ActionKeyContext getActionKeyContext();
-
-  /** Informs Skyframe that the {@link ConfiguredTarget} accesses {@code source}. */
-  default void registerSourceDependency(Artifact.SourceArtifact source) {}
 }

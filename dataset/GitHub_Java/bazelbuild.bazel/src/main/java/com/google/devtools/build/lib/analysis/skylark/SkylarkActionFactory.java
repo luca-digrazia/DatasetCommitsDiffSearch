@@ -13,10 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis.skylark;
 
-import static java.util.stream.Collectors.toList;
-
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Action;
@@ -28,7 +25,6 @@ import com.google.devtools.build.lib.actions.CommandLineItemSimpleFormatter;
 import com.google.devtools.build.lib.actions.ParamFileInfo;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
 import com.google.devtools.build.lib.actions.RunfilesSupplier;
-import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
 import com.google.devtools.build.lib.actions.extra.SpawnInfo;
 import com.google.devtools.build.lib.analysis.CommandHelper;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
@@ -46,7 +42,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.TargetUtils;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skylarkbuildapi.CommandLineArgsApi;
 import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
 import com.google.devtools.build.lib.skylarkbuildapi.SkylarkActionFactoryApi;
@@ -65,7 +60,6 @@ import com.google.devtools.build.lib.syntax.SkylarkMutable;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.protobuf.GeneratedMessage;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -146,14 +140,10 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
             inputSet,
             ImmutableList.of(PseudoAction.getDummyOutput(ruleContext)),
             mnemonic,
-            SPAWN_INFO,
+            SpawnInfo.spawnInfo,
             SpawnInfo.newBuilder().build());
     ruleContext.registerAction(action);
   }
-
-  @AutoCodec @AutoCodec.VisibleForSerialization
-  static final GeneratedMessage.GeneratedExtension<ExtraActionInfo, SpawnInfo> SPAWN_INFO =
-      SpawnInfo.spawnInfo;
 
   @Override
   public void write(FileApi output, Object content, Boolean isExecutable) throws EvalException {
@@ -402,45 +392,11 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
       }
     } else {
       // Users didn't pass 'tools', kick in compatibility modes
-      if (skylarkSemantics.incompatibleNoSupportToolsInActionInputs()) {
-        // In this mode we error out if we find any tools among the inputs
-        List<Artifact> tools = null;
-        for (Artifact artifact : inputArtifacts) {
-          FilesToRunProvider provider = context.getExecutableRunfiles(artifact);
-          if (provider != null) {
-            tools = tools != null ? tools : new ArrayList<>(1);
-            tools.add(artifact);
-          }
-        }
-        if (tools != null) {
-          String toolsAsString =
-              Joiner.on(", ")
-                  .join(
-                      tools
-                          .stream()
-                          .map(Artifact::getExecPathString)
-                          .map(s -> "'" + s + "'")
-                          .collect(toList()));
-          throw new EvalException(
-              location,
-              String.format(
-                  "Found tool(s) %s in inputs. "
-                      + "A tool is an input with executable=True set. "
-                      + "All tools should be passed using the 'tools' "
-                      + "argument instead of 'inputs' in order to make their runfiles available "
-                      + "to the action. This safety check will not be performed once the action "
-                      + "is modified to take a 'tools' argument. "
-                      + "To temporarily disable this check, "
-                      + "set --incompatible_no_support_tools_in_action_inputs=false.",
-                  toolsAsString));
-        }
-      } else {
-        // Full legacy support -- add tools from inputs
-        for (Artifact artifact : inputArtifacts) {
-          FilesToRunProvider provider = context.getExecutableRunfiles(artifact);
-          if (provider != null) {
-            builder.addTool(provider);
-          }
+      // Full legacy support -- add tools from inputs
+      for (Artifact artifact : inputArtifacts) {
+        FilesToRunProvider provider = context.getExecutableRunfiles(artifact);
+        if (provider != null) {
+          builder.addTool(provider);
         }
       }
     }
