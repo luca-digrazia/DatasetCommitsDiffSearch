@@ -35,10 +35,9 @@ import com.facebook.stetho.dumpapp.StreamingDumpappHandler;
 import com.facebook.stetho.dumpapp.plugins.SharedPreferencesDumperPlugin;
 import com.facebook.stetho.inspector.ChromeDevtoolsServer;
 import com.facebook.stetho.inspector.ChromeDiscoveryHandler;
-import com.facebook.stetho.inspector.elements.Document;
 import com.facebook.stetho.inspector.elements.android.ActivityTracker;
 import com.facebook.stetho.inspector.elements.android.AndroidDOMConstants;
-import com.facebook.stetho.inspector.elements.android.AndroidDocumentProviderFactory;
+import com.facebook.stetho.inspector.elements.android.AndroidDOMProviderFactory;
 import com.facebook.stetho.inspector.protocol.ChromeDevtoolsDomain;
 import com.facebook.stetho.inspector.protocol.module.CSS;
 import com.facebook.stetho.inspector.protocol.module.Console;
@@ -262,11 +261,10 @@ public class Stetho {
       provideIfDesired(new CSS());
       provideIfDesired(new Debugger());
       if (Build.VERSION.SDK_INT >= AndroidDOMConstants.MIN_API_LEVEL) {
-        Document document = new Document(
-            new AndroidDocumentProviderFactory(
-                (Application) mContext.getApplicationContext()));
-
-        provideIfDesired(new DOM(document));
+        provideIfDesired(
+            new DOM(
+                new AndroidDOMProviderFactory(
+                    (Application) mContext.getApplicationContext())));
       }
       provideIfDesired(new DOMStorage(mContext));
       provideIfDesired(new HeapProfiler());
