@@ -35,14 +35,10 @@ import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactor
 import com.google.devtools.build.lib.analysis.test.CoverageReportActionFactory;
 import com.google.devtools.build.lib.bugreport.BugReport;
 import com.google.devtools.build.lib.bugreport.BugReporter;
-import com.google.devtools.build.lib.buildeventstream.BuildEvent.LocalFile.LocalFileType;
-import com.google.devtools.build.lib.buildeventstream.BuildEventArtifactUploader;
-import com.google.devtools.build.lib.buildeventstream.BuildEventArtifactUploader.UploadContext;
-import com.google.devtools.build.lib.buildeventstream.BuildEventProtocolOptions;
-import com.google.devtools.build.lib.buildtool.buildevent.ProfilerStartedEvent;
 import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.clock.Clock;
 import com.google.devtools.build.lib.events.Event;
+import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.events.OutputFilter;
 import com.google.devtools.build.lib.exec.BinTools;
@@ -282,18 +278,12 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
     return moduleInvocationPolicy;
   }
 
-  private BuildEventArtifactUploader newUploader(
-      CommandEnvironment env, String buildEventUploadStrategy) {
-    return getBuildEventArtifactUploaderFactoryMap().select(buildEventUploadStrategy).create(env);
-  }
-
   /** Configure profiling based on the provided options. */
-  ProfilerStartedEvent initProfiler(
-      ExtendedEventHandler eventHandler,
+  Path initProfiler(
+      EventHandler eventHandler,
       BlazeWorkspace workspace,
       CommonCommandOptions options,
-      BuildEventProtocolOptions bepOptions,
-      CommandEnvironment env,
+      UUID buildID,
       long execStartTimeNanos,
       long waitTimeInMs) {
     OutputStream out = null;
@@ -301,8 +291,6 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
     ImmutableSet.Builder<ProfilerTask> profiledTasksBuilder = ImmutableSet.builder();
     Profiler.Format format = Profiler.Format.BINARY_BAZEL_FORMAT;
     Path profilePath = null;
-    String profileName = null;
-    UploadContext streamingContext = null;
     try {
       if (options.enableTracer || (options.removeBinaryProfile && options.profilePath != null)) {
         if (options.enableTracerCompression == TriState.YES
@@ -315,23 +303,15 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
         }
         if (options.profilePath != null) {
           profilePath = workspace.getWorkspace().getRelative(options.profilePath);
-          out = profilePath.getOutputStream();
         } else {
-          profileName = "command.profile";
+          String profileName = "command.profile";
           if (format == Format.JSON_TRACE_FILE_COMPRESSED_FORMAT) {
             profileName = "command.profile.gz";
           }
-          if (bepOptions.streamingLogFileUploads) {
-            BuildEventArtifactUploader buildEventArtifactUploader =
-                newUploader(env, bepOptions.buildEventUploadStrategy);
-            streamingContext = buildEventArtifactUploader.startUpload(LocalFileType.LOG);
-            out = streamingContext.getOutputStream();
-          } else {
-            profilePath = workspace.getOutputBase().getRelative(profileName);
-            out = profilePath.getOutputStream();
-          }
+          profilePath = workspace.getOutputBase().getRelative(profileName);
         }
-        if (profilePath != null && options.announceProfilePath) {
+        out = profilePath.getOutputStream();
+        if (options.announceProfilePath) {
           eventHandler.handle(Event.info("Writing tracer profile to '" + profilePath + "'"));
         }
         for (ProfilerTask profilerTask : ProfilerTask.values()) {
@@ -374,7 +354,7 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
             format,
             getProductName(),
             workspace.getOutputBase().toString(),
-            env.getCommandId(),
+            buildID,
             recordFullProfilerData,
             clock,
             execStartTimeNanos,
@@ -419,7 +399,7 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
     } catch (IOException e) {
       eventHandler.handle(Event.error("Error while creating profile file: " + e.getMessage()));
     }
-    return new ProfilerStartedEvent(profileName, profilePath, streamingContext);
+    return profilePath;
   }
 
   public FileSystem getFileSystem() {
@@ -1339,6 +1319,10 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
     CustomExitCodePublisher.setAbruptExitStatusFileDir(
         serverDirectories.getOutputBase().getPathString());
 
+    // Most static initializers for @SkylarkSignature-containing classes have already run by this
+    // point, but this will pick up the stragglers.
+    initSkylarkBuiltinsRegistry();
+
     AutoProfiler.setClock(runtime.getClock());
     BugReport.setRuntime(runtime);
     BlazeDirectories directories =
@@ -1355,6 +1339,38 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
     // Keep this line last in this method, so that all other initialization is available to it.
     runtime.initWorkspace(directories, binTools);
     return runtime;
+  }
+
+  /**
+   * Configures the Skylark builtins registry.
+   *
+   * <p>Any class containing {@link SkylarkSignature}-annotated fields should call
+   * {@link SkylarkSignatureProcessor#configureSkylarkFunctions} on itself. This serves two
+   * purposes: 1) it initializes those fields for use, and 2) it registers them with the Skylark
+   * builtins registry object
+   * ({@link com.google.devtools.build.lib.syntax.Runtime#getBuiltinRegistry}). Unfortunately
+   * there's some technical debt here: The registry object is static and the registration occurs
+   * inside static initializer blocks.
+   *
+   * <p>The registry supports concurrent read/write access, but read access is not actually
+   * efficient (lockless) until write access is disallowed by calling its
+   * {@link com.google.devtools.build.lib.syntax.Runtime.BuiltinRegistry#freeze freeze} method.
+   * We want to freeze before the build begins, but not before all classes have had a chance to run
+   * their static initializers.
+   *
+   * <p>Therefore, this method first ensures that the initializers have run, and then explicitly
+   * freezes the registry. It ensures initialization by calling a no-op static method on the class.
+   * Only classes whose initializers have been observed to cause {@code BuiltinRegistry} to throw an
+   * exception need to be included here, since that indicates that their initialization did not
+   * happen by this point in time.
+   *
+   * <p>Unit tests don't need to worry about registry freeze exceptions, since the registry isn't
+   * frozen at all for them. They just pay the cost of extra synchronization on every access.
+   */
+  private static void initSkylarkBuiltinsRegistry() {
+    // Currently no classes need to be initialized here. The hook's still here because it's
+    // possible it may be needed again in the future.
+    com.google.devtools.build.lib.syntax.Runtime.getBuiltinRegistry().freeze();
   }
 
   private static String maybeGetPidString() {
