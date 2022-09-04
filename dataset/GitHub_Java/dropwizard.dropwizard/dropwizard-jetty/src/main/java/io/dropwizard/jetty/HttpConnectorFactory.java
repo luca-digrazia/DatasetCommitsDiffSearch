@@ -555,7 +555,7 @@ public class HttpConnectorFactory implements ConnectorFactory {
 
         connector.setReuseAddress(reuseAddress);
         if (soLingerTime != null) {
-            connector.setSoLingerTime((int) soLingerTime.toMilliseconds());
+            connector.setSoLingerTime((int) soLingerTime.toSeconds());
         }
         connector.setIdleTimeout(idleTimeout.toMilliseconds());
         connector.setName(name);
