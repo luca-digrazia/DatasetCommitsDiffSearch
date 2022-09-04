@@ -1,6 +1,6 @@
-package org.graylog2.restclient.models.api.results;
+package models.api.results;
 
-import org.graylog2.restclient.models.api.responses.HighlightRange;
+import org.graylog2.restclient.models.api.responses;
 
 import java.util.ArrayList;
 import java.util.List;
