@@ -34,7 +34,7 @@ public interface SpawnResult {
   /** The status of the attempted Spawn execution. */
   public enum Status {
     /** Subprocess executed successfully, and returned a zero exit code. */
-    SUCCESS,
+    SUCCESS(true),
 
     /** Subprocess executed successfully, but returned a non-zero exit code. */
     NON_ZERO_EXIT(true),
@@ -310,21 +310,6 @@ public interface SpawnResult {
 
     public Builder setSystemTime(Duration systemTime) {
       this.systemTime = Optional.of(systemTime);
-      return this;
-    }
-
-    public Builder setWallTime(Optional<Duration> wallTime) {
-      this.wallTime = wallTime;
-      return this;
-    }
-
-    public Builder setUserTime(Optional<Duration> userTime) {
-      this.userTime = userTime;
-      return this;
-    }
-
-    public Builder setSystemTime(Optional<Duration> systemTime) {
-      this.systemTime = systemTime;
       return this;
     }
 

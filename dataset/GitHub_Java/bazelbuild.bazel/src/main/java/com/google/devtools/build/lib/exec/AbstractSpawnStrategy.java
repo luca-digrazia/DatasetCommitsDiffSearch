@@ -15,7 +15,9 @@
 package com.google.devtools.build.lib.exec;
 
 import com.google.common.base.Preconditions;
+import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Iterables;
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionInput;
@@ -82,7 +84,7 @@ public abstract class AbstractSpawnStrategy implements SandboxedSpawnActionConte
     SpawnCache cache = actionExecutionContext.getContext(SpawnCache.class);
     // In production, the getContext method guarantees that we never get null back. However, our
     // integration tests don't set it up correctly, so cache may be null in testing.
-    if (cache == null) {
+    if (cache == null || !Spawns.mayBeCached(spawn)) {
       cache = SpawnCache.NO_CACHE;
     }
     SpawnResult spawnResult;
@@ -105,15 +107,12 @@ public abstract class AbstractSpawnStrategy implements SandboxedSpawnActionConte
 
     if (spawnResult.status() != Status.SUCCESS) {
       String cwd = actionExecutionContext.getExecRoot().getPathString();
-      String resultMessage = spawnResult.getFailureMessage();
       String message =
-          resultMessage != ""
-              ? resultMessage
-              : CommandFailureUtils.describeCommandFailure(
-                  actionExecutionContext.getVerboseFailures(),
-                  spawn.getArguments(),
-                  spawn.getEnvironment(),
-                  cwd);
+          CommandFailureUtils.describeCommandFailure(
+              actionExecutionContext.getVerboseFailures(),
+              spawn.getArguments(),
+              spawn.getEnvironment(),
+              cwd);
       throw new SpawnExecException(message, spawnResult, /*forciblyRunRemotely=*/false);
     }
     return ImmutableList.of(spawnResult);
@@ -165,7 +164,8 @@ public abstract class AbstractSpawnStrategy implements SandboxedSpawnActionConte
         // TODO(philwo): Benchmark whether using an ExecutionService to do multiple operations in
         // parallel speeds up prefetching of inputs.
         // TODO(philwo): Do we have to expand middleman artifacts here?
-        actionExecutionContext.getActionInputPrefetcher().prefetchFiles(getInputMapping().values());
+        actionExecutionContext.getActionInputPrefetcher().prefetchFiles(
+            Iterables.filter(getInputMapping().values(), Predicates.notNull()));
       }
     }
 

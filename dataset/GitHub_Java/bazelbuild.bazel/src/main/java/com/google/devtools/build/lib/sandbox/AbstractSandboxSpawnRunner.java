@@ -26,13 +26,13 @@ import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.actions.SpawnResult.Status;
 import com.google.devtools.build.lib.actions.UserExecException;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
+import com.google.devtools.build.lib.exec.SpawnExecException;
 import com.google.devtools.build.lib.exec.SpawnRunner;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.shell.AbnormalTerminationException;
 import com.google.devtools.build.lib.shell.Command;
 import com.google.devtools.build.lib.shell.CommandException;
 import com.google.devtools.build.lib.shell.CommandResult;
-import com.google.devtools.build.lib.shell.ExecutionStatistics;
 import com.google.devtools.build.lib.util.CommandFailureUtils;
 import com.google.devtools.build.lib.util.io.OutErr;
 import com.google.devtools.build.lib.vfs.FileSystem;
@@ -41,7 +41,6 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Map;
-import java.util.Optional;
 
 /** Abstract common ancestor for sandbox spawn runners implementing the common parts. */
 abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
@@ -90,16 +89,14 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
       SpawnExecutionPolicy policy,
       Path execRoot,
       Path tmpDir,
-      Duration timeout,
-      Optional<String> statisticsPath)
-      throws IOException, InterruptedException {
+      Duration timeout)
+      throws ExecException, IOException, InterruptedException {
     try {
       sandbox.createFileSystem();
       OutErr outErr = policy.getFileOutErr();
       policy.prefetchInputs();
 
-      SpawnResult result =
-          run(originalSpawn, sandbox, outErr, timeout, execRoot, tmpDir, statisticsPath);
+      SpawnResult result = run(sandbox, outErr, timeout, tmpDir);
 
       policy.lockOutputFiles();
       try {
@@ -107,6 +104,23 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
         sandbox.copyOutputs(execRoot);
       } catch (IOException e) {
         throw new IOException("Could not move output artifacts from sandboxed execution", e);
+      }
+
+      if (result.status() != Status.SUCCESS || result.exitCode() != 0) {
+        String message;
+        if (sandboxOptions.sandboxDebug) {
+          message =
+              CommandFailureUtils.describeCommandFailure(
+                  true, sandbox.getArguments(), sandbox.getEnvironment(), execRoot.getPathString());
+        } else {
+          message =
+              CommandFailureUtils.describeCommandFailure(
+                  verboseFailures,
+                  originalSpawn.getArguments(),
+                  originalSpawn.getEnvironment(),
+                  execRoot.getPathString()) + SANDBOX_DEBUG_SUGGESTION;
+        }
+        throw new SpawnExecException(message, result, /*forciblyRunRemotely=*/false);
       }
       return result;
     } finally {
@@ -117,39 +131,20 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
   }
 
   private final SpawnResult run(
-      Spawn originalSpawn,
-      SandboxedSpawn sandbox,
-      OutErr outErr,
-      Duration timeout,
-      Path execRoot,
-      Path tmpDir,
-      Optional<String> statisticsPath)
+      SandboxedSpawn sandbox, OutErr outErr, Duration timeout, Path tmpDir)
       throws IOException, InterruptedException {
     Command cmd = new Command(
         sandbox.getArguments().toArray(new String[0]),
         sandbox.getEnvironment(),
         sandbox.getSandboxExecRoot().getPathFile());
-      String failureMessage;
-      if (sandboxOptions.sandboxDebug) {
-        failureMessage =
-            CommandFailureUtils.describeCommandFailure(
-                true, sandbox.getArguments(), sandbox.getEnvironment(), execRoot.getPathString());
-      } else {
-        failureMessage =
-            CommandFailureUtils.describeCommandFailure(
-                verboseFailures,
-                originalSpawn.getArguments(),
-                originalSpawn.getEnvironment(),
-                execRoot.getPathString()) + SANDBOX_DEBUG_SUGGESTION;
-      }
 
     long startTime = System.currentTimeMillis();
-    CommandResult commandResult;
+    CommandResult result;
     try {
       if (!tmpDir.exists() && !tmpDir.createDirectory()) {
         throw new IOException(String.format("Could not create temp directory '%s'", tmpDir));
       }
-      commandResult = cmd.execute(outErr.getOutputStream(), outErr.getErrorStream());
+      result = cmd.execute(outErr.getOutputStream(), outErr.getErrorStream());
       if (Thread.currentThread().isInterrupted()) {
         throw new InterruptedException();
       }
@@ -157,7 +152,7 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
       if (Thread.currentThread().isInterrupted()) {
         throw new InterruptedException();
       }
-      commandResult = e.getResult();
+      result = e.getResult();
     } catch (CommandException e) {
       // At the time this comment was written, this must be a ExecFailedException encapsulating an
       // IOException from the underlying Subprocess.Factory.
@@ -167,45 +162,24 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
       return new SpawnResult.Builder()
           .setStatus(Status.EXECUTION_FAILED)
           .setExitCode(LOCAL_EXEC_ERROR)
-          .setFailureMessage(failureMessage)
           .build();
     }
 
-    // TODO(b/62588075): Calculate wall time inside commands instead?
     Duration wallTime = Duration.ofMillis(System.currentTimeMillis() - startTime);
     boolean wasTimeout = wasTimeout(timeout, wallTime);
     int exitCode =
         wasTimeout
             ? POSIX_TIMEOUT_EXIT_CODE
-            : commandResult.getTerminationStatus().getRawExitCode();
+            : result.getTerminationStatus().getRawExitCode();
     Status status =
         wasTimeout
             ? Status.TIMEOUT
             : (exitCode == 0) ? Status.SUCCESS : Status.NON_ZERO_EXIT;
-
-    SpawnResult.Builder spawnResultBuilder =
-        new SpawnResult.Builder()
-            .setStatus(status)
-            .setExitCode(exitCode)
-            .setWallTime(wallTime)
-            .setFailureMessage(status != Status.SUCCESS || exitCode != 0 ? failureMessage : "");
-
-    if (statisticsPath.isPresent()) {
-      Optional<ExecutionStatistics.ResourceUsage> resourceUsage =
-          ExecutionStatistics.getResourceUsage(statisticsPath.get());
-      if (resourceUsage.isPresent()) {
-        spawnResultBuilder.setUserTime(resourceUsage.get().getUserExecutionTime());
-        spawnResultBuilder.setSystemTime(resourceUsage.get().getSystemExecutionTime());
-        spawnResultBuilder.setNumBlockOutputOperations(
-            resourceUsage.get().getBlockOutputOperations());
-        spawnResultBuilder.setNumBlockInputOperations(
-            resourceUsage.get().getBlockInputOperations());
-        spawnResultBuilder.setNumInvoluntaryContextSwitches(
-            resourceUsage.get().getInvoluntaryContextSwitches());
-      }
-    }
-
-    return spawnResultBuilder.build();
+    return new SpawnResult.Builder()
+        .setStatus(status)
+        .setExitCode(exitCode)
+        .setWallTime(wallTime)
+        .build();
   }
 
   private boolean wasTimeout(Duration timeout, Duration wallTime) {
