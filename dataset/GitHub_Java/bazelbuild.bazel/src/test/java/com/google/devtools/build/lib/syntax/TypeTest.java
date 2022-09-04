@@ -14,32 +14,29 @@
 package com.google.devtools.build.lib.syntax;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertSameContents;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotSame;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.License;
 import com.google.devtools.build.lib.packages.TriState;
+import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
+import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
 import com.google.devtools.build.lib.syntax.Type.ConversionException;
 import com.google.devtools.build.lib.testutil.MoreAsserts;
-
-import org.junit.Assert;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
 
 /**
  * Test of type-conversions using Type.
@@ -50,224 +47,182 @@ public class TypeTest {
   private Label currentRule;
 
   @Before
-  public void setUp() throws Exception {
-    this.currentRule = Label.parseAbsolute("//quux:baz");
+  public final void setCurrentRule() throws Exception  {
+    this.currentRule = Label.parseAbsolute("//quux:baz", ImmutableMap.of());
   }
 
   @Test
   public void testInteger() throws Exception {
     Object x = 3;
-    assertEquals(x, Type.INTEGER.convert(x, null));
-    assertThat(Type.INTEGER.flatten(x)).isEmpty();
+    assertThat(Type.INTEGER.convert(x, null)).isEqualTo(x);
+    assertThat(collectLabels(Type.INTEGER, x)).isEmpty();
   }
 
   @Test
   public void testNonInteger() throws Exception {
-    try {
-      Type.INTEGER.convert("foo", null);
-      fail();
-    } catch (Type.ConversionException e) {
-      // This does not use assertMessageContainsWordsWithQuotes because at least
-      // one test should test exact wording (but they all shouldn't to make
-      // changing/improving the messages easy).
-      assertThat(e).hasMessage("expected value of type 'int', but got \"foo\" (string)");
-    }
+    Type.ConversionException e =
+        assertThrows(Type.ConversionException.class, () -> Type.INTEGER.convert("foo", null));
+    assertThat(e)
+        .hasMessageThat()
+        .isEqualTo("expected value of type 'int', but got \"foo\" (string)");
   }
 
   // Ensure that types are reported correctly.
   @Test
   public void testTypeErrorMessage() throws Exception {
-    try {
-      Type.STRING_LIST.convert("[(1,2), 3, 4]", "myexpr", null);
-      fail();
-    } catch (Type.ConversionException e) {
-      assertThat(e).hasMessage("expected value of type 'list(string)' for myexpr, "
-          + "but got \"[(1,2), 3, 4]\" (string)");
-    }
+    Type.ConversionException e =
+        assertThrows(
+            Type.ConversionException.class,
+            () -> Type.STRING_LIST.convert("[(1,2), 3, 4]", "myexpr", null));
+    assertThat(e)
+        .hasMessageThat()
+        .isEqualTo(
+            "expected value of type 'list(string)' for myexpr, "
+                + "but got \"[(1,2), 3, 4]\" (string)");
   }
 
   @Test
   public void testString() throws Exception {
     Object s = "foo";
-    assertEquals(s, Type.STRING.convert(s, null));
-    assertThat(Type.STRING.flatten(s)).isEmpty();
+    assertThat(Type.STRING.convert(s, null)).isEqualTo(s);
+    assertThat(collectLabels(Type.STRING, s)).isEmpty();
   }
 
   @Test
   public void testNonString() throws Exception {
-    try {
-      Type.STRING.convert(3, null);
-      fail();
-    } catch (Type.ConversionException e) {
-      assertThat(e).hasMessage("expected value of type 'string', but got 3 (int)");
-    }
+    Type.ConversionException e =
+        assertThrows(Type.ConversionException.class, () -> Type.STRING.convert(3, null));
+    assertThat(e).hasMessageThat().isEqualTo("expected value of type 'string', but got 3 (int)");
   }
 
   @Test
   public void testBoolean() throws Exception {
     Object myTrue = true;
     Object myFalse = false;
-    assertEquals(Boolean.TRUE, Type.BOOLEAN.convert(1, null));
-    assertEquals(Boolean.FALSE, Type.BOOLEAN.convert(0, null));
-    assertTrue(Type.BOOLEAN.convert(true, null));
-    assertTrue(Type.BOOLEAN.convert(myTrue, null));
-    assertFalse(Type.BOOLEAN.convert(false, null));
-    assertFalse(Type.BOOLEAN.convert(myFalse, null));
-    assertThat(Type.BOOLEAN.flatten(myTrue)).isEmpty();
+    assertThat(Type.BOOLEAN.convert(1, null)).isEqualTo(Boolean.TRUE);
+    assertThat(Type.BOOLEAN.convert(0, null)).isEqualTo(Boolean.FALSE);
+    assertThat(Type.BOOLEAN.convert(true, null)).isTrue();
+    assertThat(Type.BOOLEAN.convert(myTrue, null)).isTrue();
+    assertThat(Type.BOOLEAN.convert(false, null)).isFalse();
+    assertThat(Type.BOOLEAN.convert(myFalse, null)).isFalse();
+    assertThat(collectLabels(Type.BOOLEAN, myTrue)).isEmpty();
   }
 
   @Test
   public void testNonBoolean() throws Exception {
-    try {
-      Type.BOOLEAN.convert("unexpected", null);
-      fail();
-    } catch (Type.ConversionException e) {
-      assertThat(e).hasMessage(
-          "expected value of type 'int', but got \"unexpected\" (string)");
-    }
+    Type.ConversionException e =
+        assertThrows(
+            Type.ConversionException.class, () -> Type.BOOLEAN.convert("unexpected", null));
+    assertThat(e)
+        .hasMessageThat()
+        .isEqualTo("expected value of type 'int', but got \"unexpected\" (string)");
     // Integers other than [0, 1] should fail.
-    try {
-      Type.BOOLEAN.convert(2, null);
-      fail();
-    } catch (Type.ConversionException e) {
-      assertEquals(e.getMessage(), "boolean is not one of [0, 1]");
-    }
-    try {
-      Type.BOOLEAN.convert(-1, null);
-      fail();
-    } catch (Type.ConversionException e) {
-      assertEquals(e.getMessage(), "boolean is not one of [0, 1]");
-    }
+    e = assertThrows(Type.ConversionException.class, () -> Type.BOOLEAN.convert(2, null));
+    assertThat(e).hasMessageThat().isEqualTo("boolean is not one of [0, 1]");
+    e = assertThrows(Type.ConversionException.class, () -> Type.BOOLEAN.convert(-1, null));
+    assertThat(e).hasMessageThat().isEqualTo("boolean is not one of [0, 1]");
   }
 
   @Test
   public void testTriState() throws Exception {
-    Assert.assertEquals(TriState.YES, BuildType.TRISTATE.convert(1, null));
-    assertEquals(TriState.NO, BuildType.TRISTATE.convert(0, null));
-    assertEquals(TriState.AUTO, BuildType.TRISTATE.convert(-1, null));
-    assertEquals(TriState.YES, BuildType.TRISTATE.convert(true, null));
-    assertEquals(TriState.NO, BuildType.TRISTATE.convert(false, null));
-    assertEquals(TriState.YES, BuildType.TRISTATE.convert(TriState.YES, null));
-    assertEquals(TriState.NO, BuildType.TRISTATE.convert(TriState.NO, null));
-    assertEquals(TriState.AUTO, BuildType.TRISTATE.convert(TriState.AUTO, null));
-    assertThat(BuildType.TRISTATE.flatten(TriState.YES)).isEmpty();
+    assertThat(BuildType.TRISTATE.convert(1, null)).isEqualTo(TriState.YES);
+    assertThat(BuildType.TRISTATE.convert(0, null)).isEqualTo(TriState.NO);
+    assertThat(BuildType.TRISTATE.convert(-1, null)).isEqualTo(TriState.AUTO);
+    assertThat(BuildType.TRISTATE.convert(TriState.YES, null)).isEqualTo(TriState.YES);
+    assertThat(BuildType.TRISTATE.convert(TriState.NO, null)).isEqualTo(TriState.NO);
+    assertThat(BuildType.TRISTATE.convert(TriState.AUTO, null)).isEqualTo(TriState.AUTO);
+    assertThat(collectLabels(BuildType.TRISTATE, TriState.YES)).isEmpty();
+
+    // deprecated:
+    assertThat(BuildType.TRISTATE.convert(true, null)).isEqualTo(TriState.YES);
+    assertThat(BuildType.TRISTATE.convert(false, null)).isEqualTo(TriState.NO);
   }
 
   @Test
   public void testTriStateDoesNotAcceptArbitraryIntegers() throws Exception {
     List<Integer> listOfCases = Lists.newArrayList(2, 3, -5, -2, 20);
     for (Object entry : listOfCases) {
-      try {
-        BuildType.TRISTATE.convert(entry, null);
-        fail();
-      } catch (Type.ConversionException e) {
-        // Expected.
-      }
+      assertThrows(Type.ConversionException.class, () -> BuildType.TRISTATE.convert(entry, null));
     }
   }
 
   @Test
   public void testTriStateDoesNotAcceptStrings() throws Exception {
-    List<String> listOfCases = Lists.newArrayList("bad", "true", "auto", "false");
+    List<?> listOfCases = Lists.newArrayList("bad", "true", "auto", "false");
+    // TODO(adonovan): add booleans true, false to this list; see b/116691720.
     for (Object entry : listOfCases) {
-      try {
-        BuildType.TRISTATE.convert(entry, null);
-        fail();
-      } catch (Type.ConversionException e) {
-        // Expected.
-      }
+      assertThrows(Type.ConversionException.class, () -> BuildType.TRISTATE.convert(entry, null));
     }
   }
 
   @Test
   public void testTagConversion() throws Exception {
-    assertSameContents(Sets.newHashSet("attribute"),
-        Type.BOOLEAN.toTagSet(true, "attribute"));
-    assertSameContents(Sets.newHashSet("noattribute"),
-        Type.BOOLEAN.toTagSet(false, "attribute"));
+    assertThat(Type.BOOLEAN.toTagSet(true, "attribute"))
+        .containsExactlyElementsIn(Sets.newHashSet("attribute"));
+    assertThat(Type.BOOLEAN.toTagSet(false, "attribute"))
+        .containsExactlyElementsIn(Sets.newHashSet("noattribute"));
 
-    assertSameContents(Sets.newHashSet("whiskey"),
-        Type.STRING.toTagSet("whiskey", "preferred_cocktail"));
+    assertThat(Type.STRING.toTagSet("whiskey", "preferred_cocktail"))
+        .containsExactlyElementsIn(Sets.newHashSet("whiskey"));
 
-    assertSameContents(Sets.newHashSet("cheddar", "ementaler", "gruyere"),
-        Type.STRING_LIST.toTagSet(
-            Lists.newArrayList("cheddar", "ementaler", "gruyere"), "cheeses"));
+    assertThat(
+            Type.STRING_LIST.toTagSet(
+                Lists.newArrayList("cheddar", "ementaler", "gruyere"), "cheeses"))
+        .containsExactlyElementsIn(Sets.newHashSet("cheddar", "ementaler", "gruyere"));
   }
 
   @Test
   public void testIllegalTagConversionByType() throws Exception {
-    try {
-      BuildType.TRISTATE.toTagSet(TriState.AUTO, "some_tristate");
-      fail("Expect UnsuportedOperationException");
-    } catch (UnsupportedOperationException e) {
-      // Success.
-    }
-    try {
-      BuildType.LICENSE.toTagSet(License.NO_LICENSE, "output_license");
-      fail("Expect UnsuportedOperationException");
-    } catch (UnsupportedOperationException e) {
-      // Success.
-    }
+    assertThrows(
+        UnsupportedOperationException.class,
+        () -> BuildType.TRISTATE.toTagSet(TriState.AUTO, "some_tristate"));
+    assertThrows(
+        UnsupportedOperationException.class,
+        () -> BuildType.LICENSE.toTagSet(License.NO_LICENSE, "output_license"));
   }
 
   @Test
   public void testIllegalTagConversIonFromNullOnSupportedType() throws Exception {
-    try {
-      Type.BOOLEAN.toTagSet(null, "a_boolean");
-      fail("Expect UnsuportedOperationException");
-    } catch (IllegalStateException e) {
-      // Success.
-    }
+    assertThrows(IllegalStateException.class, () -> Type.BOOLEAN.toTagSet(null, "a_boolean"));
   }
 
   @Test
   public void testLabel() throws Exception {
-    Label label = Label
-        .parseAbsolute("//foo:bar");
-    assertEquals(label, BuildType.LABEL.convert("//foo:bar", null, currentRule));
-    assertThat(BuildType.LABEL.flatten(label)).containsExactly(label);
+    Label label = Label.parseAbsolute("//foo:bar", ImmutableMap.of());
+    assertThat(BuildType.LABEL.convert("//foo:bar", null, currentRule)).isEqualTo(label);
+    assertThat(collectLabels(BuildType.LABEL, label)).containsExactly(label);
   }
 
   @Test
   public void testNodepLabel() throws Exception {
-    Label label = Label
-        .parseAbsolute("//foo:bar");
-    assertEquals(label, BuildType.NODEP_LABEL.convert("//foo:bar", null, currentRule));
-    assertThat(BuildType.NODEP_LABEL.flatten(label)).containsExactly(label);
+    Label label = Label.parseAbsolute("//foo:bar", ImmutableMap.of());
+    assertThat(BuildType.NODEP_LABEL.convert("//foo:bar", null, currentRule)).isEqualTo(label);
+    assertThat(collectLabels(BuildType.NODEP_LABEL, label)).containsExactly(label);
   }
 
   @Test
   public void testRelativeLabel() throws Exception {
-    assertEquals(Label.parseAbsolute("//quux:wiz"),
-        BuildType.LABEL.convert(":wiz", null, currentRule));
-    assertEquals(Label.parseAbsolute("//quux:wiz"),
-        BuildType.LABEL.convert("wiz", null, currentRule));
-    try {
-      BuildType.LABEL.convert("wiz", null);
-      fail();
-    } catch (NullPointerException e) {
-      /* ok */
-    }
+    assertThat(BuildType.LABEL.convert(":wiz", null, currentRule))
+        .isEqualTo(Label.parseAbsolute("//quux:wiz", ImmutableMap.of()));
+    assertThat(BuildType.LABEL.convert("wiz", null, currentRule))
+        .isEqualTo(Label.parseAbsolute("//quux:wiz", ImmutableMap.of()));
+    assertThrows(ConversionException.class, () -> BuildType.LABEL.convert("wiz", null));
   }
 
   @Test
   public void testInvalidLabel() throws Exception {
-    try {
-      BuildType.LABEL.convert("not a label", null, currentRule);
-      fail();
-    } catch (Type.ConversionException e) {
-      MoreAsserts.assertContainsWordsWithQuotes(e.getMessage(), "not a label");
-    }
+    Type.ConversionException e =
+        assertThrows(
+            Type.ConversionException.class,
+            () -> BuildType.LABEL.convert("not//a label", null, currentRule));
+    MoreAsserts.assertContainsWordsWithQuotes(e.getMessage(), "not//a label");
   }
 
   @Test
   public void testNonLabel() throws Exception {
-    try {
-      BuildType.LABEL.convert(3, null);
-      fail();
-    } catch (Type.ConversionException e) {
-      assertThat(e).hasMessage("expected value of type 'string', but got 3 (int)");
-    }
+    Type.ConversionException e =
+        assertThrows(Type.ConversionException.class, () -> BuildType.LABEL.convert(3, null));
+    assertThat(e).hasMessageThat().isEqualTo("expected value of type 'string', but got 3 (int)");
   }
 
   @Test
@@ -275,9 +230,9 @@ public class TypeTest {
     Object input = Arrays.asList("foo", "bar", "wiz");
     List<String> converted =
         Type.STRING_LIST.convert(input, null);
-    assertEquals(input, converted);
-    assertNotSame(input, converted);
-    assertThat(Type.STRING_LIST.flatten(input)).isEmpty();
+    assertThat(converted).isEqualTo(input);
+    assertThat(converted).isNotSameInstanceAs(input);
+    assertThat(collectLabels(Type.STRING_LIST, input)).isEmpty();
   }
 
   @Test
@@ -285,44 +240,50 @@ public class TypeTest {
     Object input = ImmutableMap.of("foo", "bar",
                                    "wiz", "bang");
     Map<String, String> converted = Type.STRING_DICT.convert(input, null);
-    assertEquals(input, converted);
-    assertNotSame(input, converted);
-    assertThat(Type.STRING_DICT.flatten(converted)).isEmpty();
+    assertThat(converted).isEqualTo(input);
+    assertThat(converted).isNotSameInstanceAs(input);
+    assertThat(collectLabels(Type.STRING_DICT, converted)).isEmpty();
   }
 
   @Test
   public void testStringDictBadElements() throws Exception {
-    Object input = ImmutableMap.of("foo", Arrays.asList("bar", "baz"),
-        "wiz", "bang");
-    try {
-      Type.STRING_DICT.convert(input, null);
-      fail();
-    } catch (Type.ConversionException e) {
-      assertThat(e).hasMessage("expected value of type 'string' for dict value element, "
-          + "but got [\"bar\", \"baz\"] (List)");
-    }
+    Object input = ImmutableMap.of("foo", MutableList.of(null, "bar", "baz"), "wiz", "bang");
+    Type.ConversionException e =
+        assertThrows(Type.ConversionException.class, () -> Type.STRING_DICT.convert(input, null));
+    assertThat(e)
+        .hasMessageThat()
+        .isEqualTo(
+            "expected value of type 'string' for dict value element, "
+                + "but got [\"bar\", \"baz\"] (list)");
   }
 
   @Test
   public void testNonStringList() throws Exception {
-    try {
-      Type.STRING_LIST.convert(3, "blah");
-      fail();
-    } catch (Type.ConversionException e) {
-      assertThat(e).hasMessage("expected value of type 'list(string)' for blah, but got 3 (int)");
-    }
+    Type.ConversionException e =
+        assertThrows(Type.ConversionException.class, () -> Type.STRING_LIST.convert(3, "blah"));
+    assertThat(e)
+        .hasMessageThat()
+        .isEqualTo("expected value of type 'list(string)' for blah, but got 3 (int)");
   }
 
   @Test
   public void testStringListBadElements() throws Exception {
     Object input = Arrays.<Object>asList("foo", "bar", 1);
-    try {
-      Type.STRING_LIST.convert(input, "argument quux");
-      fail();
-    } catch (Type.ConversionException e) {
-      assertThat(e).hasMessage(
-          "expected value of type 'string' for element 2 of argument quux, but got 1 (int)");
-    }
+    Type.ConversionException e =
+        assertThrows(
+            Type.ConversionException.class, () -> Type.STRING_LIST.convert(input, "argument quux"));
+    assertThat(e)
+        .hasMessageThat()
+        .isEqualTo(
+            "expected value of type 'string' for element 2 of argument quux, but got 1 (int)");
+  }
+
+  @Test
+  public void testListDepsetConversion() throws Exception {
+    Object input = SkylarkNestedSet.of(
+        String.class,
+        NestedSetBuilder.create(Order.STABLE_ORDER, "a", "b", "c"));
+    Type.STRING_LIST.convert(input, null);
   }
 
   @Test
@@ -331,119 +292,50 @@ public class TypeTest {
     List<Label> converted =
       BuildType.LABEL_LIST.convert(input , null, currentRule);
     List<Label> expected =
-      Arrays.asList(Label.parseAbsolute("//foo:bar"),
-                    Label.parseAbsolute("//quux:wiz"));
-    assertEquals(expected, converted);
-    assertNotSame(expected, converted);
-    assertThat(BuildType.LABEL_LIST.flatten(converted)).containsExactlyElementsIn(expected);
+        Arrays.asList(
+            Label.parseAbsolute("//foo:bar", ImmutableMap.of()),
+            Label.parseAbsolute("//quux:wiz", ImmutableMap.of()));
+    assertThat(converted).isEqualTo(expected);
+    assertThat(converted).isNotSameInstanceAs(expected);
+    assertThat(collectLabels(BuildType.LABEL_LIST, converted)).containsExactlyElementsIn(expected);
   }
 
   @Test
   public void testNonLabelList() throws Exception {
-    try {
-      BuildType.LABEL_LIST.convert(3, "foo", currentRule);
-      fail();
-    } catch (Type.ConversionException e) {
-      assertThat(e).hasMessage("expected value of type 'list(label)' for foo, but got 3 (int)");
-    }
+    Type.ConversionException e =
+        assertThrows(
+            Type.ConversionException.class,
+            () -> BuildType.LABEL_LIST.convert(3, "foo", currentRule));
+    assertThat(e)
+        .hasMessageThat()
+        .isEqualTo("expected value of type 'list(label)' for foo, but got 3 (int)");
   }
 
   @Test
   public void testLabelListBadElements() throws Exception {
     Object list = Arrays.<Object>asList("//foo:bar", 2, "foo");
-    try {
-      BuildType.LABEL_LIST.convert(list, null, currentRule);
-      fail();
-    } catch (Type.ConversionException e) {
-      assertThat(e).hasMessage(
-          "expected value of type 'string' for element 1 of null, but got 2 (int)");
-    }
+    Type.ConversionException e =
+        assertThrows(
+            Type.ConversionException.class,
+            () -> BuildType.LABEL_LIST.convert(list, null, currentRule));
+    assertThat(e)
+        .hasMessageThat()
+        .isEqualTo("expected value of type 'string' for element 1 of null, but got 2 (int)");
   }
 
   @Test
   public void testLabelListSyntaxError() throws Exception {
     Object list = Arrays.<Object>asList("//foo:bar/..", "foo");
-    try {
-      BuildType.LABEL_LIST.convert(list, "myexpr", currentRule);
-      fail();
-    } catch (Type.ConversionException e) {
-      assertThat(e).hasMessage("invalid label '//foo:bar/..' in element 0 of myexpr: "
-          + "invalid target name 'bar/..': "
-          + "target names may not contain up-level references '..'");
-    }
-  }
-
-  @Test
-  public void testLabelListDict() throws Exception {
-    Object input = ImmutableMap.of("foo", Arrays.asList("//foo:bar"),
-        "wiz", Arrays.asList(":bang"));
-    Map<String, List<Label>> converted =
-        BuildType.LABEL_LIST_DICT.convert(input, null, currentRule);
-    Label fooLabel = Label
-        .parseAbsolute("//foo:bar");
-    Label bangLabel = Label
-        .parseAbsolute("//quux:bang");
-    Map<?, ?> expected = ImmutableMap.<String, List<Label>>of(
-            "foo", Arrays.<Label>asList(fooLabel),
-            "wiz", Arrays.<Label>asList(bangLabel));
-    assertEquals(expected, converted);
-    assertNotSame(expected, converted);
-    assertThat(BuildType.LABEL_LIST_DICT.flatten(converted)).containsExactly(fooLabel, bangLabel);
-  }
-
-  @Test
-  public void testLabelListDictBadFirstElement() throws Exception {
-    Object input = ImmutableMap.of(2, Arrays.asList("//foo:bar"),
-        "wiz", Arrays.asList(":bang"));
-    try {
-      BuildType.LABEL_LIST_DICT.convert(input, null, currentRule);
-      fail();
-    } catch (Type.ConversionException e) {
-      assertThat(e).hasMessage(
-          "expected value of type 'string' for dict key element, but got 2 (int)");
-    }
-  }
-
-  @Test
-  public void testLabelListDictBadSecondElement() throws Exception {
-    Object input = ImmutableMap.of("foo", "//foo:bar",
-                                   "wiz", Arrays.asList(":bang"));
-    try {
-      BuildType.LABEL_LIST_DICT.convert(input, null, currentRule);
-      fail();
-    } catch (Type.ConversionException e) {
-      assertThat(e).hasMessage(
-          "expected value of type 'list(label)' for dict value element, "
-          + "but got \"//foo:bar\" (string)");
-    }
-  }
-
-  @Test
-  public void testLabelListDictBadElements1() throws Exception {
-    Object input = ImmutableMap.of("foo", "bar",
-                                   "bar", Arrays.asList("//foo:bar"),
-                                   "wiz", Arrays.asList(":bang"));
-    try {
-      BuildType.LABEL_LIST_DICT.convert(input, null);
-      fail();
-    } catch (Type.ConversionException e) {
-      assertThat(e).hasMessage("expected value of type 'list(label)' for dict value element, "
-          + "but got \"bar\" (string)");
-    }
-  }
-
-  @Test
-  public void testLabelListDictSyntaxError() throws Exception {
-    Object input = ImmutableMap.of("foo", Arrays.asList("//foo:.."),
-                                   "wiz", Arrays.asList(":bang"));
-    try {
-      BuildType.LABEL_LIST_DICT.convert(input, "baz", currentRule);
-      fail();
-    } catch (Type.ConversionException e) {
-      assertThat(e).hasMessage("invalid label '//foo:..' in element 0 of dict value element: "
-          + "invalid target name '..': "
-          + "target names may not contain up-level references '..'");
-    }
+    Type.ConversionException e =
+        assertThrows(
+            Type.ConversionException.class,
+            () -> BuildType.LABEL_LIST.convert(list, "myexpr", currentRule));
+    assertThat(e)
+        .hasMessageThat()
+        .isEqualTo(
+            "invalid label '//foo:bar/..' in element 0 of myexpr: "
+                + "invalid target name 'bar/..': "
+                + "target names may not contain up-level references '..'");
   }
 
   @Test
@@ -455,112 +347,66 @@ public class TypeTest {
     Map<?, ?> expected = ImmutableMap.<String, List<String>>of(
             "foo", Arrays.asList("foo", "bar"),
             "wiz", Arrays.asList("bang"));
-    assertEquals(expected, converted);
-    assertNotSame(expected, converted);
-    assertThat(Type.STRING_LIST_DICT.flatten(converted)).isEmpty();
+    assertThat(converted).isEqualTo(expected);
+    assertThat(converted).isNotSameInstanceAs(expected);
+    assertThat(collectLabels(Type.STRING_LIST_DICT, converted)).isEmpty();
   }
 
   @Test
   public void testStringListDictBadFirstElement() throws Exception {
     Object input = ImmutableMap.of(2, Arrays.asList("foo", "bar"),
                                    "wiz", Arrays.asList("bang"));
-    try {
-      Type.STRING_LIST_DICT.convert(input, null, currentRule);
-      fail();
-    } catch (Type.ConversionException e) {
-      assertThat(e).hasMessage(
-          "expected value of type 'string' for dict key element, but got 2 (int)");
-    }
+    Type.ConversionException e =
+        assertThrows(
+            Type.ConversionException.class,
+            () -> Type.STRING_LIST_DICT.convert(input, null, currentRule));
+    assertThat(e)
+        .hasMessageThat()
+        .isEqualTo("expected value of type 'string' for dict key element, but got 2 (int)");
   }
 
   @Test
   public void testStringListDictBadSecondElement() throws Exception {
     Object input = ImmutableMap.of("foo", "bar",
                                    "wiz", Arrays.asList("bang"));
-    try {
-      Type.STRING_LIST_DICT.convert(input, null, currentRule);
-      fail();
-    } catch (Type.ConversionException e) {
-      assertThat(e).hasMessage(
-          "expected value of type 'list(string)' for dict value element, "
-          + "but got \"bar\" (string)");
-    }
+    Type.ConversionException e =
+        assertThrows(
+            Type.ConversionException.class,
+            () -> Type.STRING_LIST_DICT.convert(input, null, currentRule));
+    assertThat(e)
+        .hasMessageThat()
+        .isEqualTo(
+            "expected value of type 'list(string)' for dict value element, "
+                + "but got \"bar\" (string)");
   }
 
   @Test
   public void testStringListDictBadElements1() throws Exception {
-    Object input = ImmutableMap.of(Arrays.asList("foo"), Arrays.asList("bang"),
-                                   "wiz", Arrays.asList("bang"));
-    try {
-      Type.STRING_LIST_DICT.convert(input, null);
-      fail();
-    } catch (Type.ConversionException e) {
-      assertThat(e).hasMessage("expected value of type 'string' for dict key element, but got "
-          + "[\"foo\"] (List)");
-    }
-  }
-
-  @Test
-  public void testStringDictUnary() throws Exception {
-    Object input = ImmutableMap.of("foo", "bar",
-                                   "wiz", "bang");
-    Map<?, ?> converted =
-        Type.STRING_DICT_UNARY.convert(input, null, currentRule);
-    Map<?, ?> expected = ImmutableMap.<String, String>of(
-            "foo", "bar",
-            "wiz", "bang");
-    assertEquals(expected, converted);
-    assertNotSame(expected, converted);
-    assertThat(Type.STRING_DICT_UNARY.flatten(converted)).isEmpty();
-  }
-
-  @Test
-  public void testStringDictUnaryBadFirstElement() throws Exception {
-    Object input = ImmutableMap.of(2, Arrays.asList("foo", "bar"),
-                                   "wiz", Arrays.asList("bang"));
-    try {
-      Type.STRING_DICT_UNARY.convert(input, null, currentRule);
-      fail();
-    } catch (Type.ConversionException e) {
-      assertThat(e).hasMessage("expected value of type 'string' for dict key element, but got "
-          + "2 (int)");
-    }
-  }
-
-  @Test
-  public void testStringDictUnaryBadSecondElement() throws Exception {
-    Object input = ImmutableMap.of("foo", "bar",
-                                   "wiz", Arrays.asList("bang"));
-    try {
-      Type.STRING_DICT_UNARY.convert(input, null, currentRule);
-      fail();
-    } catch (Type.ConversionException e) {
-      assertThat(e).hasMessage("expected value of type 'string' for dict value element, but got "
-          + "[\"bang\"] (List)");
-    }
-  }
-
-  @Test
-  public void testStringDictUnaryBadElements1() throws Exception {
-    Object input = ImmutableMap.of("foo", "bar",
-                                   Arrays.asList("foo", "bar"),
-                                   Arrays.<Object>asList("wiz", "bang"));
-    try {
-      Type.STRING_DICT_UNARY.convert(input, null);
-      fail();
-    } catch (Type.ConversionException e) {
-      assertThat(e).hasMessage("expected value of type 'string' for dict key element, but got "
-          + "[\"foo\", \"bar\"] (List)");
-    }
+    Object input = ImmutableMap.of(Tuple.of("foo"), Tuple.of("bang"), "wiz", Tuple.of("bang"));
+    Type.ConversionException e =
+        assertThrows(
+            Type.ConversionException.class, () -> Type.STRING_LIST_DICT.convert(input, null));
+    assertThat(e)
+        .hasMessageThat()
+        .isEqualTo(
+            "expected value of type 'string' for dict key element, but got "
+                + "(\"foo\",) (tuple)");
   }
 
   @Test
   public void testStringDictThrowsConversionException() throws Exception {
-    try {
-      Type.STRING_DICT.convert("some string", null);
-      fail();
-    } catch (ConversionException e) {
-      assertThat(e).hasMessage("Expected a map for dictionary but got a java.lang.String");
-    }
+    ConversionException e =
+        assertThrows(
+            ConversionException.class, () -> Type.STRING_DICT.convert("some string", null));
+    assertThat(e)
+        .hasMessageThat()
+        .isEqualTo(
+            "expected value of type 'dict(string, string)', but got \"some string\" (string)");
+  }
+
+  private static ImmutableList<Label> collectLabels(Type<?> type, Object value) {
+    final ImmutableList.Builder<Label> result = ImmutableList.builder();
+    type.visitLabels((label, dummy) -> result.add(label), value, /*context=*/ null);
+    return result.build();
   }
 }

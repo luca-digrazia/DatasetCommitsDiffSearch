@@ -13,8 +13,9 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
-import static org.junit.Assert.fail;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
+import java.io.IOException;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -29,8 +30,10 @@ public class ASTNodeTest {
   private ASTNode node;
 
   @Before
-  public void setUp() throws Exception {
+  public final void createNode() throws Exception  {
     node = new ASTNode() {
+      @Override
+      public void prettyPrint(Appendable buffer, int indentLevel) throws IOException {}
       @Override
       public String toString() {
         return null;
@@ -43,22 +46,12 @@ public class ASTNodeTest {
 
   @Test
   public void testHashCodeNotSupported() {
-    try {
-      node.hashCode();
-      fail();
-    } catch (UnsupportedOperationException e) {
-      // yes!
-    }
+    assertThrows(UnsupportedOperationException.class, () -> node.hashCode());
   }
 
   @Test
   public void testEqualsNotSupported() {
-    try {
-      node.equals(this);
-      fail();
-    } catch (UnsupportedOperationException e) {
-      // yes!
-    }
+    assertThrows(UnsupportedOperationException.class, () -> node.equals(null));
   }
 
 }

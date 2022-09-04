@@ -18,11 +18,14 @@ import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.StructProvider;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.EvalUtils.ComparisonException;
+import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
+import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
 import com.google.devtools.build.lib.syntax.util.EvaluationTestCase;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -35,17 +38,18 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class EvalUtilsTest extends EvaluationTestCase {
 
-  private static StarlarkList<Object> makeList(StarlarkThread thread) {
-    return StarlarkList.of(thread, 1, 2, 3);
+  private static MutableList<Object> makeList(Environment env) {
+    return MutableList.of(env, 1, 2, 3);
   }
 
-  private static Dict<Object, Object> makeDict(StarlarkThread thread) {
-    return Dict.of(thread, 1, 1, 2, 2);
+  private static SkylarkDict<Object, Object> makeDict(Environment env) {
+    return SkylarkDict.of(env, 1, 1, 2, 2);
   }
 
   /** MockClassA */
   @SkylarkModule(name = "MockClassA", doc = "MockClassA")
-  public static class MockClassA implements SkylarkValue {}
+  public static class MockClassA {
+  }
 
   /** MockClassB */
   public static class MockClassB extends MockClassA {
@@ -58,7 +62,7 @@ public class EvalUtilsTest extends EvaluationTestCase {
     assertThat(EvalUtils.getDataTypeName(Tuple.of(1, 2, 3))).isEqualTo("tuple");
     assertThat(EvalUtils.getDataTypeName(makeList(null))).isEqualTo("list");
     assertThat(EvalUtils.getDataTypeName(makeDict(null))).isEqualTo("dict");
-    assertThat(EvalUtils.getDataTypeName(Starlark.NONE)).isEqualTo("NoneType");
+    assertThat(EvalUtils.getDataTypeName(Runtime.NONE)).isEqualTo("NoneType");
     assertThat(EvalUtils.getDataTypeName(new MockClassA())).isEqualTo("MockClassA");
     assertThat(EvalUtils.getDataTypeName(new MockClassB())).isEqualTo("MockClassA");
   }
@@ -76,15 +80,15 @@ public class EvalUtilsTest extends EvaluationTestCase {
     // Mutability depends on the environment.
     assertThat(EvalUtils.isImmutable(makeList(null))).isTrue();
     assertThat(EvalUtils.isImmutable(makeDict(null))).isTrue();
-    assertThat(EvalUtils.isImmutable(makeList(thread))).isFalse();
-    assertThat(EvalUtils.isImmutable(makeDict(thread))).isFalse();
+    assertThat(EvalUtils.isImmutable(makeList(env))).isFalse();
+    assertThat(EvalUtils.isImmutable(makeDict(env))).isFalse();
   }
 
   @Test
   public void testDatatypeMutabilityDeep() throws Exception {
     assertThat(EvalUtils.isImmutable(Tuple.<Object>of(makeList(null)))).isTrue();
 
-    assertThat(EvalUtils.isImmutable(Tuple.<Object>of(makeList(thread)))).isFalse();
+    assertThat(EvalUtils.isImmutable(Tuple.<Object>of(makeList(env)))).isFalse();
   }
 
   @Test
@@ -93,13 +97,14 @@ public class EvalUtilsTest extends EvaluationTestCase {
       "1",
       2,
       true,
-      Starlark.NONE,
-      Tuple.of(1, 2, 3),
-      Tuple.of("1", "2", "3"),
-      StarlarkList.of(thread, 1, 2, 3),
-      StarlarkList.of(thread, "1", "2", "3"),
-      Dict.of(thread, "key", 123),
-      Dict.of(thread, 123, "value"),
+      Runtime.NONE,
+      SkylarkList.Tuple.of(1, 2, 3),
+      SkylarkList.Tuple.of("1", "2", "3"),
+      SkylarkList.MutableList.of(env, 1, 2, 3),
+      SkylarkList.MutableList.of(env, "1", "2", "3"),
+      SkylarkDict.of(env, "key", 123),
+      SkylarkDict.of(env, 123, "value"),
+      NestedSetBuilder.stableOrder().add(1).add(2).add(3).build(),
       StructProvider.STRUCT.create(ImmutableMap.of("key", (Object) "value"), "no field %s"),
     };
 
@@ -119,11 +124,14 @@ public class EvalUtilsTest extends EvaluationTestCase {
   public void testComparatorWithNones() throws Exception {
     assertThrows(
         ComparisonException.class,
-        () -> EvalUtils.SKYLARK_COMPARATOR.compare(Starlark.NONE, Starlark.NONE));
+        () -> EvalUtils.SKYLARK_COMPARATOR.compare(Runtime.NONE, Runtime.NONE));
   }
 
-  @SkylarkModule(name = "ParentType", doc = "A parent class annotated with @SkylarkModule.")
-  private static class ParentClassWithSkylarkModule implements SkylarkValue {}
+  @SkylarkModule(
+      name = "ParentType",
+      doc = "A parent class annotated with @SkylarkModule."
+  )
+  private static class ParentClassWithSkylarkModule {}
 
   private static class ChildClass extends ParentClassWithSkylarkModule {}
 
