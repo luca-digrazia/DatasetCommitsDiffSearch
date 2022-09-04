@@ -28,7 +28,6 @@ import io.swagger.annotations.ApiResponses;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.graylog2.Configuration;
-import org.graylog2.auditlog.jersey.AuditLog;
 import org.graylog2.plugin.database.ValidationException;
 import org.graylog2.plugin.database.users.User;
 import org.graylog2.rest.models.users.requests.ChangePasswordRequest;
@@ -147,7 +146,6 @@ public class UsersResource extends RestResource {
     @ApiResponses({
             @ApiResponse(code = 400, message = "Missing or invalid user details.")
     })
-    @AuditLog(object = "user")
     public Response create(@ApiParam(name = "JSON body", value = "Must contain username, full_name, email, password and a list of permissions.", required = true)
                            @Valid @NotNull CreateUserRequest cr) throws ValidationException {
         if (userService.load(cr.username()) != null) {
@@ -208,7 +206,6 @@ public class UsersResource extends RestResource {
             @ApiResponse(code = 400, message = "Attempted to modify a read only user account (e.g. built-in or LDAP users)."),
             @ApiResponse(code = 400, message = "Missing or invalid user details.")
     })
-    @AuditLog(object = "user")
     public void changeUser(@ApiParam(name = "username", value = "The name of the user to modify.", required = true)
                            @PathParam("username") String username,
                            @ApiParam(name = "JSON body", value = "Updated user information.", required = true)
@@ -274,7 +271,6 @@ public class UsersResource extends RestResource {
     @RequiresPermissions(USERS_EDIT)
     @ApiOperation("Removes a user account.")
     @ApiResponses({@ApiResponse(code = 400, message = "When attempting to remove a read only user (e.g. built-in or LDAP user).")})
-    @AuditLog(object = "user")
     public void deleteUser(@ApiParam(name = "username", value = "The name of the user to delete.", required = true)
                            @PathParam("username") String username) {
         if (userService.delete(username) == 0) {
@@ -289,7 +285,6 @@ public class UsersResource extends RestResource {
     @ApiResponses({
             @ApiResponse(code = 400, message = "Missing or invalid permission data.")
     })
-    @AuditLog(object = "user permissions")
     public void editPermissions(@ApiParam(name = "username", value = "The name of the user to modify.", required = true)
                                 @PathParam("username") String username,
                                 @ApiParam(name = "JSON body", value = "The list of permissions to assign to the user.", required = true)
@@ -309,7 +304,6 @@ public class UsersResource extends RestResource {
     @ApiResponses({
             @ApiResponse(code = 400, message = "Missing or invalid permission data.")
     })
-    @AuditLog(object = "user preferences")
     public void savePreferences(@ApiParam(name = "username", value = "The name of the user to modify.", required = true)
                                 @PathParam("username") String username,
                                 @ApiParam(name = "JSON body", value = "The map of preferences to assign to the user.", required = true)
@@ -332,7 +326,6 @@ public class UsersResource extends RestResource {
     @ApiResponses({
             @ApiResponse(code = 500, message = "When saving the user failed.")
     })
-    @AuditLog(object = "user permissions")
     public void deletePermissions(@ApiParam(name = "username", value = "The name of the user to modify.", required = true)
                                   @PathParam("username") String username) throws ValidationException {
         final org.graylog2.plugin.database.users.User user = userService.load(username);
@@ -348,11 +341,10 @@ public class UsersResource extends RestResource {
     @ApiOperation("Update the password for a user.")
     @ApiResponses({
             @ApiResponse(code = 204, message = "The password was successfully updated. Subsequent requests must be made with the new password."),
-            @ApiResponse(code = 400, message = "The new password is missing, or the old password is missing or incorrect."),
-            @ApiResponse(code = 403, message = "The requesting user has insufficient privileges to update the password for the given user."),
-            @ApiResponse(code = 404, message = "User does not exist.")
+            @ApiResponse(code = 400, message = "If the old or new password is missing."),
+            @ApiResponse(code = 403, message = "If the requesting user has insufficient privileges to update the password for the given user or the old password was wrong."),
+            @ApiResponse(code = 404, message = "If the user does not exist.")
     })
-    @AuditLog(object = "user password")
     public void changePassword(
             @ApiParam(name = "username", value = "The name of the user whose password to change.", required = true)
             @PathParam("username") String username,
@@ -399,7 +391,7 @@ public class UsersResource extends RestResource {
             user.setPassword(cr.password());
             userService.save(user);
         } else {
-            throw new BadRequestException("Old password is missing or incorrect.");
+            throw new ForbiddenException();
         }
     }
 
@@ -423,7 +415,6 @@ public class UsersResource extends RestResource {
     @Path("{username}/tokens/{name}")
     @RequiresPermissions(RestPermissions.USERS_TOKENCREATE)
     @ApiOperation("Generates a new access token for a user")
-    @AuditLog(object = "user access token")
     public Token generateNewToken(
             @ApiParam(name = "username", required = true) @PathParam("username") String username,
             @ApiParam(name = "name", value = "Descriptive name for this token (e.g. 'cronjob') ", required = true) @PathParam("name") String name) {
@@ -437,7 +428,6 @@ public class UsersResource extends RestResource {
     @RequiresPermissions(RestPermissions.USERS_TOKENREMOVE)
     @Path("{username}/tokens/{token}")
     @ApiOperation("Removes a token for a user")
-    @AuditLog(object = "user access token")
     public void revokeToken(
             @ApiParam(name = "username", required = true) @PathParam("username") String username,
             @ApiParam(name = "access token", required = true) @PathParam("token") String token) {
