@@ -9,7 +9,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Supplier;
 
 import javax.ws.rs.ServiceUnavailableException;
 import javax.ws.rs.container.AsyncResponse;
@@ -43,7 +42,7 @@ public final class VertxHttpRequest extends BaseHttpRequest {
     private ResteasyHttpHeaders httpHeaders;
     private SynchronousDispatcher dispatcher;
     private String httpMethod;
-    private Supplier<String> remoteHost;
+    private String remoteHost;
     private InputStream inputStream;
     private Map<String, Object> attributes;
     private VertxHttpResponse response;
@@ -56,7 +55,7 @@ public final class VertxHttpRequest extends BaseHttpRequest {
             ResteasyHttpHeaders httpHeaders,
             ResteasyUriInfo uri,
             String httpMethod,
-            Supplier<String> remoteHost,
+            String remoteHost,
             SynchronousDispatcher dispatcher,
             VertxHttpResponse response,
             boolean is100ContinueExpected) {
@@ -140,12 +139,12 @@ public final class VertxHttpRequest extends BaseHttpRequest {
 
     @Override
     public String getRemoteHost() {
-        return remoteHost.get();
+        return remoteHost;
     }
 
     @Override
     public String getRemoteAddress() {
-        return remoteHost.get();
+        return remoteHost;
     }
 
     @Override
