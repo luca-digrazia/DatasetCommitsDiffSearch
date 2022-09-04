@@ -15,30 +15,23 @@
 package com.google.devtools.build.lib.query2.query;
 
 import com.google.common.base.Throwables;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.AbstractQueueVisitor;
-import com.google.devtools.build.lib.concurrent.BlockingStack;
 import com.google.devtools.build.lib.concurrent.ErrorClassifier;
 import com.google.devtools.build.lib.concurrent.NamedForkJoinPool;
 import com.google.devtools.build.lib.concurrent.QuiescingExecutor;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import com.google.devtools.build.lib.events.ErrorSensingEventHandler;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
-import com.google.devtools.build.lib.packages.AggregatingAttributeMapper;
 import com.google.devtools.build.lib.packages.Aspect;
 import com.google.devtools.build.lib.packages.AspectDefinition;
 import com.google.devtools.build.lib.packages.Attribute;
-import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.DependencyFilter;
-import com.google.devtools.build.lib.packages.InputFile;
+import com.google.devtools.build.lib.packages.LabelVisitationUtils;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.OutputFile;
-import com.google.devtools.build.lib.packages.PackageGroup;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.TargetEdgeObserver;
 import com.google.devtools.build.lib.pkgcache.TargetProvider;
@@ -46,8 +39,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.Executors;
 
 /**
  * Visit the transitive closure of a label. Primarily used to "fault in" packages to the
@@ -148,7 +140,6 @@ final class LabelVisitor {
   private final TargetProvider targetProvider;
   private final DependencyFilter edgeFilter;
   private final ConcurrentMap<Label, Integer> visitedTargets = new ConcurrentHashMap<>();
-  private final boolean useForkJoinPool;
 
   private VisitationAttributes lastVisitation;
 
@@ -161,28 +152,26 @@ final class LabelVisitor {
    * @param targetProvider how to resolve labels to targets
    * @param edgeFilter which edges may be traversed
    */
-  public LabelVisitor(
-      TargetProvider targetProvider, DependencyFilter edgeFilter, boolean useForkJoinPool) {
+  public LabelVisitor(TargetProvider targetProvider, DependencyFilter edgeFilter) {
     this.targetProvider = targetProvider;
     this.lastVisitation = NONE;
     this.edgeFilter = edgeFilter;
-    this.useForkJoinPool = useForkJoinPool;
   }
 
-  public void syncWithVisitor(
+  void syncWithVisitor(
       ExtendedEventHandler eventHandler,
       Set<Target> targetsToVisit,
       boolean keepGoing,
       int parallelThreads,
       int maxDepth,
-      TargetEdgeObserver... observers)
+      TargetEdgeObserver observer)
       throws InterruptedException {
     VisitationAttributes nextVisitation = new VisitationAttributes(targetsToVisit, maxDepth);
     if (!lastVisitation.success || !nextVisitation.current(lastVisitation)) {
       lastVisitation = nextVisitation;
       lastVisitation.success =
           redoVisitation(
-              eventHandler, targetsToVisit, keepGoing, parallelThreads, maxDepth, observers);
+              eventHandler, targetsToVisit, keepGoing, parallelThreads, maxDepth, observer);
     }
   }
 
@@ -191,15 +180,15 @@ final class LabelVisitor {
    * cache the result.
    */
   public void syncUncached(
-      ErrorSensingEventHandler eventHandler,
+      ExtendedEventHandler eventHandler,
       Iterable<Target> targetsToVisit,
       boolean keepGoing,
       int parallelThreads,
       int maxDepth,
-      TargetEdgeObserver... observers)
+      TargetEdgeObserver observer)
       throws InterruptedException {
     lastVisitation = NONE;
-    redoVisitation(eventHandler, targetsToVisit, keepGoing, parallelThreads, maxDepth, observers);
+    redoVisitation(eventHandler, targetsToVisit, keepGoing, parallelThreads, maxDepth, observer);
   }
 
   // Does a bounded transitive visitation starting at the given top-level targets.
@@ -209,11 +198,11 @@ final class LabelVisitor {
       boolean keepGoing,
       int parallelThreads,
       int maxDepth,
-      TargetEdgeObserver... observers)
+      TargetEdgeObserver observer)
       throws InterruptedException {
     visitedTargets.clear();
 
-    Visitor visitor = new Visitor(eventHandler, keepGoing, parallelThreads, maxDepth, observers);
+    Visitor visitor = new Visitor(eventHandler, keepGoing, parallelThreads, maxDepth, observer);
 
     Throwable uncaught = null;
     boolean result;
@@ -241,35 +230,32 @@ final class LabelVisitor {
     private final QuiescingExecutor executor;
     private final ExtendedEventHandler eventHandler;
     private final int maxDepth;
-    private final Iterable<TargetEdgeObserver> observers;
-    private final TargetEdgeErrorObserver errorObserver;
+
+    // Observers are stored individually instead of in a list to reduce iteration cost.
+    private final TargetEdgeObserver observer;
+    private final TargetEdgeErrorObserver errorObserver = new TargetEdgeErrorObserver();
 
     Visitor(
         ExtendedEventHandler eventHandler,
         boolean keepGoing,
         int parallelThreads,
         int maxDepth,
-        TargetEdgeObserver... observers) {
-      this.executorService =
-          useForkJoinPool
-              ? NamedForkJoinPool.newNamedPool(THREAD_NAME, parallelThreads)
-              : new ThreadPoolExecutor(
-                  /*corePoolSize=*/ parallelThreads,
-                  /*maximumPoolSize=*/ parallelThreads,
-                  1L,
-                  TimeUnit.SECONDS,
-                  new BlockingStack<>(),
-                  new ThreadFactoryBuilder().setNameFormat(THREAD_NAME + " %d").build());
+        TargetEdgeObserver observer) {
+      if (parallelThreads > 1) {
+        this.executorService = NamedForkJoinPool.newNamedPool(THREAD_NAME, parallelThreads);
+      } else {
+        // ForkJoinPool has a bug where it deadlocks with parallelism=1, so use a
+        // SingleThreadExecutor instead.
+        this.executorService =
+            Executors.newSingleThreadExecutor(
+                new ThreadFactoryBuilder().setNameFormat(THREAD_NAME + " %d").build());
+      }
       this.executor =
           AbstractQueueVisitor.createWithExecutorService(
               executorService, /*failFastOnException=*/ !keepGoing, ErrorClassifier.DEFAULT);
       this.eventHandler = eventHandler;
       this.maxDepth = maxDepth;
-      this.errorObserver = new TargetEdgeErrorObserver();
-      ImmutableList.Builder<TargetEdgeObserver> builder = ImmutableList.builder();
-      builder.add(observers);
-      builder.add(errorObserver);
-      this.observers = builder.build();
+      this.observer = observer;
     }
 
     /**
@@ -290,7 +276,7 @@ final class LabelVisitor {
       return !errorObserver.hasErrors();
     }
 
-    public void stopNewActions() {
+    void stopNewActions() {
       executorService.shutdownNow();
     }
 
@@ -324,59 +310,13 @@ final class LabelVisitor {
         final int count) {
       return () -> {
         try {
-          try {
-            visit(from, attr, targetProvider.getTarget(eventHandler, label), depth + 1, count);
-          } catch (NoSuchThingException e) {
-            observeError(from, label, e);
-          }
+          visit(from, attr, targetProvider.getTarget(eventHandler, label), depth + 1, count);
+        } catch (NoSuchThingException e) {
+          observeError(from, label, e);
         } catch (InterruptedException e) {
           Thread.currentThread().interrupt();
         }
       };
-    }
-
-    private void visitTargetVisibility(Target target, int depth, int count) {
-      Attribute attribute = null;
-      if (target instanceof Rule) {
-        Rule rule = (Rule) target;
-        RuleClass ruleClass = rule.getRuleClassObject();
-        if (!ruleClass.hasAttr("visibility", BuildType.NODEP_LABEL_LIST)) {
-          return;
-        }
-        attribute = ruleClass.getAttributeByName("visibility");
-        if (!edgeFilter.apply(rule, attribute)) {
-          return;
-        }
-      }
-
-      for (Label label : target.getVisibility().getDependencyLabels()) {
-        enqueueTarget(target, attribute, label, depth, count);
-      }
-    }
-
-    /**
-     * Visit all the labels in a given rule.
-     *
-     * <p>Called in a worker thread if CONCURRENT.
-     *
-     * @param rule the rule to visit
-     */
-    @ThreadSafe
-    private void visitRule(final Rule rule, final int depth, final int count)
-        throws InterruptedException {
-      // Follow all labels defined by this rule:
-      AggregatingAttributeMapper.of(rule).visitLabels().stream()
-          .filter(depEdge -> edgeFilter.apply(rule, depEdge.getAttribute()))
-          .forEach(
-              depEdge ->
-                  enqueueTarget(rule, depEdge.getAttribute(), depEdge.getLabel(), depth, count));
-    }
-
-    @ThreadSafe
-    private void visitPackageGroup(PackageGroup packageGroup, int depth, int count) {
-      for (final Label include : packageGroup.getIncludes()) {
-        enqueueTarget(packageGroup, null, include, depth, count);
-      }
     }
 
     /**
@@ -457,39 +397,34 @@ final class LabelVisitor {
       }
 
       observeNode(target);
+
+      // LabelVisitor has some legacy special handling of OutputFiles.
       if (target instanceof OutputFile) {
         Rule rule = ((OutputFile) target).getGeneratingRule();
         observeEdge(target, null, rule);
-        // This is the only recursive call to visit which doesn't pass through enqueueTarget().
         visit(null, null, rule, depth + 1, count + 1);
-        visitTargetVisibility(target, depth, count);
-      } else if (target instanceof InputFile) {
-        visitTargetVisibility(target, depth, count);
-      } else if (target instanceof Rule) {
-        visitTargetVisibility(target, depth, count);
-        visitRule((Rule) target, depth, count);
-      } else if (target instanceof PackageGroup) {
-        visitPackageGroup((PackageGroup) target, depth, count);
       }
+
+      LabelVisitationUtils.visitTarget(
+          target,
+          edgeFilter,
+          (fromTarget, attribute, toLabel) ->
+              enqueueTarget(target, attribute, toLabel, depth, count));
     }
 
     private void observeEdge(Target from, Attribute attribute, Target to) {
-      for (TargetEdgeObserver observer : observers) {
-        observer.edge(from, attribute, to);
-      }
+      observer.edge(from, attribute, to);
+      errorObserver.edge(from, attribute, to);
     }
 
     private void observeNode(Target target) {
-      for (TargetEdgeObserver observer : observers) {
-        observer.node(target);
-      }
+      observer.node(target);
+      errorObserver.node(target);
     }
 
-    private void observeError(Target from, Label label, NoSuchThingException e)
-        throws InterruptedException {
-      for (TargetEdgeObserver observer : observers) {
-        observer.missingEdge(from, label, e);
-      }
+    private void observeError(Target from, Label label, NoSuchThingException e) {
+      observer.missingEdge(from, label, e);
+      errorObserver.missingEdge(from, label, e);
     }
   }
 }

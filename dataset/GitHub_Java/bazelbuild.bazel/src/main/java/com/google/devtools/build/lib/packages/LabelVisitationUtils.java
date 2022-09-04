@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.packages;
 
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.packages.AttributeMap.DepEdge;
 import javax.annotation.Nullable;
 
 /**
@@ -21,8 +22,7 @@ import javax.annotation.Nullable;
  * that are entailed by the values of the {@link Target}'s attributes. Notably, this does *not*
  * include aspect-entailed deps.
  */
-public final class LabelVisitationUtils {
-
+public class LabelVisitationUtils {
   private LabelVisitationUtils() {}
 
   /** Interface for processing the {@link Label} of dep, one at a time. */
@@ -81,16 +81,18 @@ public final class LabelVisitationUtils {
       return;
     }
     Attribute visibilityAttribute = ruleClass.getAttributeByName("visibility");
-    if (edgeFilter.test(rule, visibilityAttribute)) {
+    if (edgeFilter.apply(rule, visibilityAttribute)) {
       visitTargetVisibility(rule, visibilityAttribute, labelProcessor);
     }
   }
 
   private static void visitRule(
       Rule rule, DependencyFilter edgeFilter, LabelProcessor labelProcessor) {
-    AggregatingAttributeMapper.of(rule)
-        .visitLabels(
-            edgeFilter, (attribute, label) -> labelProcessor.process(rule, attribute, label));
+    for (DepEdge depEdge : AggregatingAttributeMapper.of(rule).visitLabels()) {
+      if (edgeFilter.apply(rule, depEdge.getAttribute())) {
+        labelProcessor.process(rule, depEdge.getAttribute(), depEdge.getLabel());
+      }
+    }
   }
 
   private static void visitPackageGroup(PackageGroup packageGroup, LabelProcessor labelProcessor) {
