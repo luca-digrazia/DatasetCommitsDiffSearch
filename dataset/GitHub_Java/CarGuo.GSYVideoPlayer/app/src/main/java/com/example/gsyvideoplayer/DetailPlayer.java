@@ -36,7 +36,6 @@ public class DetailPlayer extends FragmentActivity {
 
     private boolean isFull;
     private boolean isPlay;
-    private boolean isPause;
 
     private OrientationUtils orientationUtils;
 
@@ -131,19 +130,6 @@ public class DetailPlayer extends FragmentActivity {
         super.onBackPressed();
     }
 
-
-    @Override
-    protected void onPause() {
-        super.onPause();
-        isPause = true;
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        isPause = false;
-    }
-
     @Override
     protected void onDestroy() {
         super.onDestroy();
@@ -156,7 +142,7 @@ public class DetailPlayer extends FragmentActivity {
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
         //如果旋转了就全屏
-        if (isPlay && !isPause) {
+        if (isPlay) {
             if (newConfig.orientation == ActivityInfo.SCREEN_ORIENTATION_USER) {
                 if (!detailPlayer.isIfCurrentIsFullscreen()) {
                     detailPlayer.startWindowFullscreen(DetailPlayer.this, true, true);
