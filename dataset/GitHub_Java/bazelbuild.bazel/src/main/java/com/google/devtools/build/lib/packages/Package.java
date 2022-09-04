@@ -815,8 +815,7 @@ public class Package {
     private final HashMap<RepositoryName, HashMap<RepositoryName, RepositoryName>>
         externalPackageRepositoryMappings = new HashMap<>();
     // The map of repository reassignments for BUILD packages loaded within external repositories.
-    // It contains an entry from "@<main workspace name>" to "@" for packages within
-    // the main workspace.
+    // It will be empty for packages within the main workspace.
     private ImmutableMap<RepositoryName, RepositoryName> repositoryMapping = ImmutableMap.of();
     private Path filename = null;
     private Label buildFileLabel = null;
