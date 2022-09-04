@@ -767,7 +767,7 @@ public class CppOptions extends FragmentOptions {
 
   @Option(
       name = "incompatible_disable_depset_in_cc_user_flags",
-      defaultValue = "true",
+      defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
       effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
       metadataTags = {

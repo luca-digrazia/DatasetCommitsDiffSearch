@@ -161,7 +161,6 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
   // The dynamic mode for linking.
   private final boolean stripBinaries;
   private final CompilationMode compilationMode;
-  private final boolean collectCodeCoverage;
 
   static CppConfiguration create(CpuTransformer cpuTransformer, BuildOptions options)
       throws InvalidConfigurationException {
@@ -213,8 +212,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
         (cppOptions.stripBinaries == StripMode.ALWAYS
             || (cppOptions.stripBinaries == StripMode.SOMETIMES
                 && compilationMode == CompilationMode.FASTBUILD)),
-        compilationMode,
-        commonOptions.collectCodeCoverage);
+        compilationMode);
   }
 
   private CppConfiguration(
@@ -230,8 +228,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
       ImmutableList<String> ltobackendOptions,
       CppOptions cppOptions,
       boolean stripBinaries,
-      CompilationMode compilationMode,
-      boolean collectCodeCoverage) {
+      CompilationMode compilationMode) {
     this.transformedCpuFromOptions = transformedCpuFromOptions;
     this.desiredCpu = desiredCpu;
     this.fdoPath = fdoPath;
@@ -245,7 +242,6 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
     this.cppOptions = cppOptions;
     this.stripBinaries = stripBinaries;
     this.compilationMode = compilationMode;
-    this.collectCodeCoverage = collectCodeCoverage;
   }
 
   /** Returns the label of the <code>cc_compiler</code> rule for the C++ configuration. */
@@ -523,17 +519,6 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
 
   public Label getFdoProfileLabel() {
     return cppOptions.fdoProfileLabel;
-  }
-
-  public Label getXFdoProfileLabel() {
-    if (cppOptions.fdoOptimizeForBuild != null
-        || cppOptions.fdoInstrumentForBuild != null
-        || cppOptions.fdoProfileLabel != null
-        || collectCodeCoverage) {
-      return null;
-    }
-
-    return cppOptions.xfdoProfileLabel;
   }
 
   public boolean isFdoAbsolutePathEnabled() {
