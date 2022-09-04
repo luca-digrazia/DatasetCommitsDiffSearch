@@ -1182,8 +1182,7 @@ public class BuildView {
   @VisibleForTesting
   public ConfiguredTargetAndData getConfiguredTargetAndDataForTesting(
       ExtendedEventHandler eventHandler, Label label, BuildConfiguration config) {
-    return skyframeExecutor.getConfiguredTargetAndDataForTesting(
-        eventHandler, label, config, getTopLevelTransitionForTarget(label, config, eventHandler));
+    return skyframeExecutor.getConfiguredTargetAndDataForTesting(eventHandler, label, config);
   }
 
   /**
