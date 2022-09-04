@@ -16,7 +16,6 @@
  */
 package org.graylog2.alarmcallbacks;
 
-import com.google.common.base.Throwables;
 import com.google.common.collect.Lists;
 import org.graylog2.alerts.AlertSender;
 import org.graylog2.alerts.FormattedEmailAlertSender;
@@ -34,6 +33,7 @@ import org.graylog2.plugin.configuration.fields.ConfigurationField;
 import org.graylog2.plugin.configuration.fields.TextField;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.plugin.system.NodeId;
+import org.graylog2.shared.utilities.ExceptionStringFormatter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,6 +41,9 @@ import javax.inject.Inject;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * @author Dennis Oelkers <dennis@torch.sh>
+ */
 public class EmailAlarmCallback implements AlarmCallback {
     private static final Logger LOG = LoggerFactory.getLogger(EmailAlarmCallback.class);
     private final AlertSender alertSender;
@@ -85,7 +88,7 @@ public class EmailAlarmCallback implements AlarmCallback {
                         .addType(Notification.Type.EMAIL_TRANSPORT_CONFIGURATION_INVALID)
                         .addSeverity(Notification.Severity.NORMAL)
                         .addDetail("stream_id", stream.getId())
-                        .addDetail("exception", Throwables.getStackTraceAsString(e));
+                        .addDetail("exception", new ExceptionStringFormatter(e).toString());
                 notificationService.publishIfFirst(notification);
             } catch (Exception e) {
                 LOG.error("Stream [" + stream + "] has alert receivers and is triggered, but sending emails failed", e);
