@@ -29,7 +29,6 @@ import org.graylog.events.notifications.EventNotification;
 import org.graylog.events.notifications.EventNotificationContext;
 import org.graylog.events.notifications.EventNotificationModelData;
 import org.graylog.events.notifications.EventNotificationService;
-import org.graylog.events.notifications.NotificationTestData;
 import org.graylog.events.notifications.PermanentEventNotificationException;
 import org.graylog.events.notifications.TemporaryEventNotificationException;
 import org.graylog.events.processor.EventDefinitionDto;
@@ -88,9 +87,7 @@ public class HTTPEventNotification implements EventNotification {
         final EventNotificationModelData model = getModel(ctx, backlog);
 
         if (!whitelistService.isWhitelisted(config.url())) {
-            if (!NotificationTestData.TEST_NOTIFICATION_ID.equals(ctx.notificationId())) {
-                publishSystemNotificationForWhitelistFailure(config.url(), model.eventDefinitionTitle());
-            }
+            publishSystemNotificationForWhitelistFailure(config.url(), model.eventDefinitionTitle());
             throw new TemporaryEventNotificationException("URL <" + config.url() + "> is not whitelisted.");
         }
 

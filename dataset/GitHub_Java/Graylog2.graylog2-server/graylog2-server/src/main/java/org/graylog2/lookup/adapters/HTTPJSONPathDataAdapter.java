@@ -16,54 +16,59 @@
  */
 package org.graylog2.lookup.adapters;
 
-import com.google.auto.value.AutoValue;
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableMap;
-import com.google.inject.assistedinject.Assisted;
-
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeName;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.floreysoft.jmte.Engine;
+import com.google.auto.value.AutoValue;
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.ArrayListMultimap;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Multimap;
+import com.google.inject.assistedinject.Assisted;
 import com.jayway.jsonpath.DocumentContext;
 import com.jayway.jsonpath.InvalidJsonException;
+import com.jayway.jsonpath.InvalidPathException;
 import com.jayway.jsonpath.JsonPath;
 import com.jayway.jsonpath.PathNotFoundException;
-
-import org.graylog.autovalue.WithBeanGetter;
-import org.graylog2.plugin.lookup.LookupDataAdapter;
-import org.graylog2.plugin.lookup.LookupDataAdapterConfiguration;
-import org.graylog2.plugin.lookup.LookupResult;
-import org.hibernate.validator.constraints.NotEmpty;
-import org.joda.time.Duration;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.UnsupportedEncodingException;
-import java.net.URLEncoder;
-import java.util.Map;
-import java.util.Optional;
-import java.util.concurrent.ScheduledExecutorService;
-
-import javax.annotation.Nullable;
-import javax.inject.Inject;
-import javax.inject.Named;
-import javax.ws.rs.core.HttpHeaders;
-import javax.ws.rs.core.MediaType;
-
 import okhttp3.Headers;
 import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
+import org.graylog.autovalue.WithBeanGetter;
+import org.graylog2.lookup.dto.DataAdapterDto;
+import org.graylog2.plugin.lookup.LookupCachePurge;
+import org.graylog2.plugin.lookup.LookupDataAdapter;
+import org.graylog2.plugin.lookup.LookupDataAdapterConfiguration;
+import org.graylog2.plugin.lookup.LookupResult;
+import org.graylog2.system.urlwhitelist.UrlNotWhitelistedException;
+import org.graylog2.system.urlwhitelist.UrlWhitelistNotificationService;
+import org.graylog2.system.urlwhitelist.UrlWhitelistService;
+import org.joda.time.Duration;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import static com.codahale.metrics.MetricRegistry.name;
+import javax.annotation.Nullable;
+import javax.inject.Inject;
+import javax.validation.constraints.NotEmpty;
+import javax.ws.rs.core.HttpHeaders;
+import javax.ws.rs.core.MediaType;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
 import static com.google.common.base.Strings.isNullOrEmpty;
 
 public class HTTPJSONPathDataAdapter extends LookupDataAdapter {
@@ -73,6 +78,8 @@ public class HTTPJSONPathDataAdapter extends LookupDataAdapter {
     private final Config config;
     private final Engine templateEngine;
     private final OkHttpClient httpClient;
+    private final UrlWhitelistService urlWhitelistService;
+    private final UrlWhitelistNotificationService urlWhitelistNotificationService;
 
     private final Timer httpRequestTimer;
     private final Meter httpRequestErrors;
@@ -83,20 +90,19 @@ public class HTTPJSONPathDataAdapter extends LookupDataAdapter {
     private Headers headers;
 
     @Inject
-    protected HTTPJSONPathDataAdapter(@Assisted LookupDataAdapterConfiguration config,
-                                      @Named("daemonScheduler") ScheduledExecutorService scheduler,
-                                      Engine templateEngine,
-                                      OkHttpClient httpClient,
-                                      MetricRegistry metricRegistry) {
-        super(config, scheduler);
-        this.config = (Config) config;
+    protected HTTPJSONPathDataAdapter(@Assisted("dto") DataAdapterDto dto, Engine templateEngine, OkHttpClient httpClient, UrlWhitelistService urlWhitelistService,
+            UrlWhitelistNotificationService urlWhitelistNotificationService, MetricRegistry metricRegistry) {
+        super(dto, metricRegistry);
+        this.config = (Config) dto.config();
         this.templateEngine = templateEngine;
         // TODO Add config options: caching, timeouts, custom headers, basic auth (See: https://github.com/square/okhttp/wiki/Recipes)
         this.httpClient = httpClient.newBuilder().build(); // Copy HTTP client to be able to modify it
+        this.urlWhitelistService = urlWhitelistService;
+        this.urlWhitelistNotificationService = urlWhitelistNotificationService;
 
-        this.httpRequestTimer = metricRegistry.timer(name(getClass(), "httpRequestTime"));
-        this.httpRequestErrors = metricRegistry.meter(name(getClass(), "httpRequestErrors"));
-        this.httpURLErrors = metricRegistry.meter(name(getClass(), "httpURLErrors"));
+        this.httpRequestTimer = metricRegistry.timer(MetricRegistry.name(getClass(), "httpRequestTime"));
+        this.httpRequestErrors = metricRegistry.meter(MetricRegistry.name(getClass(), "httpRequestErrors"));
+        this.httpURLErrors = metricRegistry.meter(MetricRegistry.name(getClass(), "httpURLErrors"));
     }
 
     @Override
@@ -119,10 +125,14 @@ public class HTTPJSONPathDataAdapter extends LookupDataAdapter {
             this.multiJsonPath = JsonPath.compile(config.multiValueJSONPath().get());
         }
 
-        this.headers = new Headers.Builder()
+        final Headers.Builder headersBuilder = new Headers.Builder()
                 .add(HttpHeaders.USER_AGENT, config.userAgent())
-                .add(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON)
-                .build();
+                .add(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON);
+
+        if (config.headers() != null) {
+            config.headers().forEach(headersBuilder::set);
+        }
+        this.headers = headersBuilder.build();
     }
 
     @Override
@@ -130,12 +140,12 @@ public class HTTPJSONPathDataAdapter extends LookupDataAdapter {
     }
 
     @Override
-    protected Duration refreshInterval() {
+    public Duration refreshInterval() {
         return Duration.ZERO;
     }
 
     @Override
-    protected void doRefresh() throws Exception {
+    protected void doRefresh(LookupCachePurge cachePurge) throws Exception {
     }
 
     @Override
@@ -148,12 +158,24 @@ public class HTTPJSONPathDataAdapter extends LookupDataAdapter {
             encodedKey = String.valueOf(key);
         }
         final String urlString = templateEngine.transform(config.url(), ImmutableMap.of("key", encodedKey));
+
+        if (!urlWhitelistService.isWhitelisted(urlString)) {
+            LOG.error("URL <{}> is not whitelisted. Aborting lookup request.", urlString);
+            publishSystemNotificationForWhitelistFailure();
+            setError(UrlNotWhitelistedException.forUrl(urlString));
+            return getErrorResult();
+        } else {
+            // we use this kind of error reporting mechanism only for whitelist errors, so we can safely clear the
+            // error here
+            clearError();
+        }
+
         final HttpUrl url = HttpUrl.parse(urlString);
 
         if (url == null) {
-            LOG.error("Couldn't parse URL <%s> - returning empty result", urlString);
+            LOG.error("Couldn't parse URL <{}> - returning empty result", urlString);
             httpURLErrors.mark();
-            return LookupResult.empty();
+            return getErrorResult();
         }
 
         final Request request = new Request.Builder()
@@ -167,14 +189,18 @@ public class HTTPJSONPathDataAdapter extends LookupDataAdapter {
             if (!response.isSuccessful()) {
                 LOG.warn("HTTP request for key <{}> failed: {}", key, response);
                 httpRequestErrors.mark();
-                return LookupResult.empty();
+                return getErrorResult();
             }
 
-            return parseBody(singleJsonPath, multiJsonPath, response.body().byteStream());
+            final LookupResult result = parseBody(singleJsonPath, multiJsonPath, response.body().byteStream());
+            if (result == null) {
+                return getErrorResult();
+            }
+            return result;
         } catch (IOException e) {
             LOG.error("HTTP request error for key <{}>", key, e);
             httpRequestErrors.mark();
-            return LookupResult.empty();
+            return getErrorResult();
         } finally {
             time.stop();
         }
@@ -194,6 +220,13 @@ public class HTTPJSONPathDataAdapter extends LookupDataAdapter {
                     if (multiValue instanceof Map) {
                         //noinspection unchecked
                         builder = builder.multiValue((Map<Object, Object>) multiValue);
+                    } else if (multiValue instanceof List) {
+                        //noinspection unchecked
+                        final List<String> stringList = ((List<Object>) multiValue).stream().map(Object::toString).collect(Collectors.toList());
+                        builder = builder.stringListValue(stringList);
+
+                        // for backwards compatibility
+                        builder = builder.multiSingleton(multiValue);
                     } else {
                         builder = builder.multiSingleton(multiValue);
                     }
@@ -216,17 +249,17 @@ public class HTTPJSONPathDataAdapter extends LookupDataAdapter {
                 }
             } catch (PathNotFoundException e) {
                 LOG.warn("Couldn't read single JSONPath from response - returning empty result ({})", e.getMessage());
-                return LookupResult.empty();
+                return null;
             }
         } catch (InvalidJsonException e) {
             LOG.error("Couldn't parse JSON response", e);
-            return LookupResult.empty();
+            return null;
         } catch (ClassCastException e) {
             LOG.error("Couldn't assign value type", e);
-            return LookupResult.empty();
+            return null;
         } catch (Exception e) {
             LOG.error("Unexpected error parsing JSON response", e);
-            return LookupResult.empty();
+            return null;
         }
     }
 
@@ -234,9 +267,9 @@ public class HTTPJSONPathDataAdapter extends LookupDataAdapter {
     public void set(Object key, Object value) {
     }
 
-    public interface Factory extends LookupDataAdapter.Factory<HTTPJSONPathDataAdapter> {
+    public interface Factory extends LookupDataAdapter.Factory2<HTTPJSONPathDataAdapter> {
         @Override
-        HTTPJSONPathDataAdapter create(LookupDataAdapterConfiguration configuration);
+        HTTPJSONPathDataAdapter create(@Assisted("dto") DataAdapterDto dto);
 
         @Override
         Descriptor getDescriptor();
@@ -254,6 +287,7 @@ public class HTTPJSONPathDataAdapter extends LookupDataAdapter {
                     .url("")
                     .singleValueJSONPath("$.value")
                     .userAgent("Graylog Lookup - https://www.graylog.org/")
+                    .headers(Collections.emptyMap())
                     .build();
         }
     }
@@ -263,6 +297,7 @@ public class HTTPJSONPathDataAdapter extends LookupDataAdapter {
     @JsonAutoDetect
     @JsonDeserialize(builder = AutoValue_HTTPJSONPathDataAdapter_Config.Builder.class)
     @JsonTypeName(NAME)
+    @JsonInclude(JsonInclude.Include.NON_EMPTY)
     public static abstract class Config implements LookupDataAdapterConfiguration {
         @Override
         @JsonProperty(TYPE_FIELD)
@@ -283,8 +318,41 @@ public class HTTPJSONPathDataAdapter extends LookupDataAdapter {
         @NotEmpty
         public abstract String userAgent();
 
+        @JsonProperty("headers")
+        @Nullable
+        public abstract Map<String, String> headers();
+
         public static Builder builder() {
             return new AutoValue_HTTPJSONPathDataAdapter_Config.Builder();
+        }
+
+        @Override
+        public Optional<Multimap<String, String>> validate(LookupDataAdapterValidationContext validationContext) {
+            final ArrayListMultimap<String, String> errors = ArrayListMultimap.create();
+
+            if (HttpUrl.parse(url()) == null) {
+                errors.put("url", "Invalid URL.");
+            } else if (!validationContext.getUrlWhitelistService().isWhitelisted(url())) {
+                errors.put("url", "URL <" + url() + "> is not whitelisted.");
+            }
+
+            try {
+                final JsonPath jsonPath = JsonPath.compile(singleValueJSONPath());
+                if (!jsonPath.isDefinite()) {
+                    errors.put("single_value_jsonpath", "JSONPath does not return a single value.");
+                }
+            } catch (InvalidPathException e) {
+                errors.put("single_value_jsonpath", "Invalid JSONPath.");
+            }
+            if (multiValueJSONPath().isPresent()) {
+                try {
+                    JsonPath.compile(multiValueJSONPath().get());
+                } catch (InvalidPathException e) {
+                    errors.put("multi_value_jsonpath", "Invalid JSONPath.");
+                }
+            }
+
+            return errors.isEmpty() ? Optional.empty() : Optional.of(errors);
         }
 
         @AutoValue.Builder
@@ -304,7 +372,18 @@ public class HTTPJSONPathDataAdapter extends LookupDataAdapter {
             @JsonProperty("user_agent")
             public abstract Builder userAgent(String userAgent);
 
+            @JsonProperty("headers")
+            public abstract Builder headers(Map<String, String> headers);
+
             public abstract Config build();
         }
+    }
+
+    private synchronized void publishSystemNotificationForWhitelistFailure() {
+        final String description =
+                "A \"HTTP JSONPath\" lookup adapter is trying to access a URL which is not whitelisted. Please " +
+                        "check your configuration. [adapter name: \"" + name() + "\", url: \"" + config.url() +
+                        "\"]";
+        urlWhitelistNotificationService.publishWhitelistFailure(description);
     }
 }

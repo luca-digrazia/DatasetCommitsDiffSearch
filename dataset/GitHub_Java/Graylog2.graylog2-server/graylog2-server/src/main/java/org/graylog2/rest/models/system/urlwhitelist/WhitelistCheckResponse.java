@@ -14,34 +14,27 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.graylog2.system.urlwhitelist;
+package org.graylog2.rest.models.system.urlwhitelist;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.auto.value.AutoValue;
-import com.google.auto.value.extension.memoized.Memoized;
 import org.graylog.autovalue.WithBeanGetter;
-
-import java.util.regex.Pattern;
 
 @AutoValue
 @WithBeanGetter
 @JsonAutoDetect
-public abstract class RegexWhitelistEntry implements WhitelistEntry {
-    @Memoized
-    protected Pattern cachedPattern() {
-        return Pattern.compile(value(), Pattern.DOTALL);
-    }
+public abstract class WhitelistCheckResponse {
+    @JsonProperty("url")
+    public abstract String url();
+
+    @JsonProperty("is_whitelisted")
+    public abstract boolean isWhitelisted();
 
     @JsonCreator
-    public static RegexWhitelistEntry create(@JsonProperty("id") String id, @JsonProperty("title") String title,
-            @JsonProperty("value") String value) {
-        return new AutoValue_RegexWhitelistEntry(id, Type.REGEX, title, value);
-    }
-
-    @Override
-    public boolean isWhitelisted(String url) {
-        return cachedPattern().matcher(url).find();
+    public static WhitelistCheckResponse create(@JsonProperty("url") String url,
+                                                @JsonProperty("is_whitelisted") boolean isWhitelisted) {
+        return new AutoValue_WhitelistCheckResponse(url, isWhitelisted);
     }
 }

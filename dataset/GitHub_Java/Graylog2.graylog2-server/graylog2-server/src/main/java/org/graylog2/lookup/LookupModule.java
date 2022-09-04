@@ -17,7 +17,6 @@
 package org.graylog2.lookup;
 
 import com.google.inject.Scopes;
-import org.graylog2.Configuration;
 import org.graylog2.lookup.adapters.CSVFileDataAdapter;
 import org.graylog2.lookup.adapters.DSVHTTPDataAdapter;
 import org.graylog2.lookup.adapters.DnsLookupDataAdapter;
@@ -29,11 +28,6 @@ import org.graylog2.system.urlwhitelist.UrlWhitelistNotificationService;
 import org.graylog2.system.urlwhitelist.UrlWhitelistService;
 
 public class LookupModule extends Graylog2Module {
-    private final Configuration configuration;
-
-    public LookupModule(Configuration configuration) {
-        this.configuration = configuration;
-    }
 
     @Override
     protected void configure() {
@@ -52,17 +46,15 @@ public class LookupModule extends Graylog2Module {
                 CaffeineLookupCache.Factory.class,
                 CaffeineLookupCache.Config.class);
 
-        if (!configuration.isCloud()) {
-            installLookupDataAdapter(CSVFileDataAdapter.NAME,
-                    CSVFileDataAdapter.class,
-                    CSVFileDataAdapter.Factory.class,
-                    CSVFileDataAdapter.Config.class);
-        }
+        installLookupDataAdapter(CSVFileDataAdapter.NAME,
+                CSVFileDataAdapter.class,
+                CSVFileDataAdapter.Factory.class,
+                CSVFileDataAdapter.Config.class);
 
         installLookupDataAdapter2(DnsLookupDataAdapter.NAME,
-                DnsLookupDataAdapter.class,
-                DnsLookupDataAdapter.Factory.class,
-                DnsLookupDataAdapter.Config.class);
+                                 DnsLookupDataAdapter.class,
+                                 DnsLookupDataAdapter.Factory.class,
+                                 DnsLookupDataAdapter.Config.class);
 
         installLookupDataAdapter2(HTTPJSONPathDataAdapter.NAME,
                 HTTPJSONPathDataAdapter.class,

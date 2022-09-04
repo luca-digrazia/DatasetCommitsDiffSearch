@@ -1,76 +1,102 @@
 /**
- * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
+
 package org.graylog2.rest.resources.tools;
 
 import com.codahale.metrics.annotation.Timed;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-import org.graylog2.Core;
-import org.graylog2.rest.resources.RestResource;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.shiro.authz.annotation.RequiresAuthentication;
+import org.graylog2.audit.jersey.NoAuditEvent;
+import org.graylog2.rest.models.tools.requests.RegexTestRequest;
+import org.graylog2.rest.models.tools.responses.RegexTesterResponse;
+import org.graylog2.rest.models.tools.responses.RegexValidationResponse;
+import org.graylog2.shared.rest.resources.RestResource;
 
-import javax.ws.rs.*;
+import javax.validation.Valid;
+import javax.validation.constraints.NotEmpty;
+import javax.validation.constraints.NotNull;
+import javax.ws.rs.BadRequestException;
+import javax.ws.rs.Consumes;
+import javax.ws.rs.GET;
+import javax.ws.rs.POST;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
-/**
- * @author Lennart Koopmann <lennart@torch.sh>
- */
+@RequiresAuthentication
 @Path("/tools/regex_tester")
 public class RegexTesterResource extends RestResource {
-
-    private static final Logger LOG = LoggerFactory.getLogger(RegexTesterResource.class);
-
     @GET
     @Timed
     @Produces(MediaType.APPLICATION_JSON)
-    public String regexTester(@QueryParam("regex") String regex, @QueryParam("string") String string) {
-        if (string == null || regex == null || regex.isEmpty()) {
-            LOG.info("Missing parameters for regex test.");
-            throw new WebApplicationException(Response.Status.BAD_REQUEST);
+    public RegexTesterResponse regexTester(@QueryParam("regex") @NotEmpty String regex,
+                                           @QueryParam("string") @NotNull String string) {
+        return doTestRegex(string, regex);
+    }
+
+    @POST
+    @Timed
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    @NoAuditEvent("only used to test regex values")
+    public RegexTesterResponse testRegex(@Valid @NotNull RegexTestRequest regexTestRequest) {
+        return doTestRegex(regexTestRequest.string(), regexTestRequest.regex());
+    }
+
+    @GET
+    @Path("/validate")
+    @Timed
+    @Produces(MediaType.APPLICATION_JSON)
+    public RegexValidationResponse validateRegex(@QueryParam("regex") @NotEmpty String regex) {
+        final RegexValidationResponse.Builder response = RegexValidationResponse.builder()
+                .regex(regex);
+
+        try {
+            Pattern.compile(regex, Pattern.DOTALL);
+            response.isValid(true);
+        } catch (PatternSyntaxException e) {
+            response.isValid(false).validationMessage(e.getMessage());
         }
 
-        final Matcher matcher = Pattern.compile(regex, Pattern.DOTALL).matcher(string);
+        return response.build();
+    }
+
+    private RegexTesterResponse doTestRegex(String example, String regex) {
+        final Pattern pattern;
+        try {
+            pattern = Pattern.compile(regex, Pattern.DOTALL);
+        } catch (PatternSyntaxException e) {
+            throw new BadRequestException("Invalid regular expression: " + e.getMessage(), e);
+        }
+
+        final Matcher matcher = pattern.matcher(example);
         boolean matched = matcher.find();
 
         // Get the first matched group.
-        Map<String,Object> match = Maps.newHashMap();
-        if (matcher.groupCount() > 0) {
-            match.put("match", matcher.group(1));
-            match.put("start", matcher.start(1));
-            match.put("end", matcher.end(1));
+        final RegexTesterResponse.Match match;
+        if (matched && matcher.groupCount() > 0) {
+            match = RegexTesterResponse.Match.create(matcher.group(1), matcher.start(1), matcher.end(1));
+        } else {
+            match = null;
         }
 
-        Map<String, Object> result = Maps.newHashMap();
-        result.put("matched", matched);
-        result.put("match", match);
-        result.put("regex", regex);
-        result.put("string", string);
-
-        return json(result);
+        return RegexTesterResponse.create(matched, match, regex, example);
     }
-
 }

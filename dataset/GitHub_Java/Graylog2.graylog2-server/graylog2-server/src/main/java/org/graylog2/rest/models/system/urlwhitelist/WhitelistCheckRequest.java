@@ -14,23 +14,26 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.graylog2.lookup.adapters;
+package org.graylog2.rest.models.system.urlwhitelist;
 
-import com.google.inject.Inject;
-import org.graylog2.system.urlwhitelist.UrlWhitelistService;
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.google.auto.value.AutoValue;
+import org.graylog.autovalue.WithBeanGetter;
 
-/**
- * Context object for configurations which require access to services to perform validation.
- */
-public class LookupDataAdapterValidationContext {
-    private final UrlWhitelistService urlWhitelistService;
+import javax.validation.constraints.NotEmpty;
 
-    @Inject
-    public LookupDataAdapterValidationContext(UrlWhitelistService urlWhitelistService) {
-        this.urlWhitelistService = urlWhitelistService;
-    }
+@AutoValue
+@WithBeanGetter
+@JsonAutoDetect
+public abstract class WhitelistCheckRequest {
+    @NotEmpty
+    @JsonProperty("url")
+    public abstract String url();
 
-    public UrlWhitelistService getUrlWhitelistService() {
-        return urlWhitelistService;
+    @JsonCreator
+    public static WhitelistCheckRequest create(@JsonProperty("url") @NotEmpty String url) {
+        return new AutoValue_WhitelistCheckRequest(url);
     }
 }

@@ -1,29 +1,30 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.graylog2.alarmcallbacks;
 
-import com.beust.jcommander.internal.Maps;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ning.http.client.AsyncHttpClient;
-import com.ning.http.client.Response;
+import com.google.common.collect.Maps;
+import okhttp3.HttpUrl;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
 import org.graylog2.plugin.alarms.AlertCondition;
 import org.graylog2.plugin.alarms.callbacks.AlarmCallback;
 import org.graylog2.plugin.alarms.callbacks.AlarmCallbackConfigurationException;
@@ -34,75 +35,79 @@ import org.graylog2.plugin.configuration.ConfigurationRequest;
 import org.graylog2.plugin.configuration.fields.ConfigurationField;
 import org.graylog2.plugin.configuration.fields.TextField;
 import org.graylog2.plugin.streams.Stream;
+import org.graylog2.system.urlwhitelist.UrlWhitelistService;
 
 import javax.inject.Inject;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Map;
-import java.util.concurrent.ExecutionException;
 
-/**
- * @author Dennis Oelkers <dennis@torch.sh>
- */
+import static com.google.common.base.Strings.isNullOrEmpty;
+import static javax.ws.rs.core.MediaType.APPLICATION_JSON;
+
 public class HTTPAlarmCallback implements AlarmCallback {
-    private Configuration configuration;
-    private final AsyncHttpClient asyncHttpClient;
+    private static final String CK_URL = "url";
+    private static final MediaType CONTENT_TYPE = MediaType.parse(APPLICATION_JSON);
+
+    private final OkHttpClient httpClient;
     private final ObjectMapper objectMapper;
+    private Configuration configuration;
+    private final UrlWhitelistService whitelistService;
 
     @Inject
-    public HTTPAlarmCallback(AsyncHttpClient asyncHttpClient,
-                             ObjectMapper objectMapper) {
-        this.asyncHttpClient = asyncHttpClient;
+    public HTTPAlarmCallback(final OkHttpClient httpClient, final ObjectMapper objectMapper,
+            UrlWhitelistService whitelistService) {
+        this.httpClient = httpClient;
         this.objectMapper = objectMapper;
+        this.whitelistService = whitelistService;
     }
 
     @Override
-    public void initialize(Configuration config) throws AlarmCallbackConfigurationException {
+    public void initialize(final Configuration config) throws AlarmCallbackConfigurationException {
         this.configuration = config;
     }
 
     @Override
-    public void call(Stream stream, AlertCondition.CheckResult result) throws AlarmCallbackException {
-        System.out.println("Calling " + configuration.getString("url"));
-
-        Map<String, Object> event = Maps.newHashMap();
+    public void call(final Stream stream, final AlertCondition.CheckResult result) throws AlarmCallbackException {
+        final Map<String, Object> event = Maps.newHashMap();
         event.put("stream", stream);
         event.put("check_result", result);
 
-        String body = null;
-
+        final byte[] body;
         try {
-            body = objectMapper.writeValueAsString(event);
+            body = objectMapper.writeValueAsBytes(event);
         } catch (JsonProcessingException e) {
-            throw new AlarmCallbackException("Unable to serialize alarm: " + e.getMessage());
+            throw new AlarmCallbackException("Unable to serialize alarm", e);
         }
 
-        final URL url;
-        try {
-             url = new URL(configuration.getString("url"));
-        } catch (MalformedURLException e) {
-            throw new AlarmCallbackException("Malformed URL: " + e.getMessage());
+        final String url = configuration.getString(CK_URL);
+        final HttpUrl httpUrl = HttpUrl.parse(url);
+        if (httpUrl == null) {
+            throw new AlarmCallbackException("Malformed URL: " + url);
         }
 
-        Response r = null;
-        try {
-            r = asyncHttpClient.preparePut(url.toString())
-                    .setBody(body)
-                    .execute().get();
-        } catch (IOException | InterruptedException | ExecutionException e) {
-            throw new AlarmCallbackException(e.getMessage());
+        if (!whitelistService.isWhitelisted(url)) {
+            throw new AlarmCallbackException("URL <" + url + "> is not whitelisted.");
         }
 
-        if (r.getStatusCode() != 200) {
-            throw new RuntimeException("Expected ping HTTP response [200] but got [" + r.getStatusCode() + "].");
+        final Request request = new Request.Builder()
+                .url(httpUrl)
+                .post(RequestBody.create(CONTENT_TYPE, body))
+                .build();
+        try (final Response r = httpClient.newCall(request).execute()) {
+            if (!r.isSuccessful()) {
+                throw new AlarmCallbackException("Expected successful HTTP response [2xx] but got [" + r.code() + "].");
+            }
+        } catch (IOException e) {
+            throw new AlarmCallbackException(e.getMessage(), e);
         }
     }
 
     @Override
     public ConfigurationRequest getRequestedConfiguration() {
-        ConfigurationRequest configurationRequest = new ConfigurationRequest();
-        configurationRequest.addField(new TextField("url",
+        final ConfigurationRequest configurationRequest = new ConfigurationRequest();
+        configurationRequest.addField(new TextField(CK_URL,
                 "URL",
                 "https://example.org/alerts",
                 "The URL to POST to when an alert is triggered",
@@ -123,12 +128,19 @@ public class HTTPAlarmCallback implements AlarmCallback {
 
     @Override
     public void checkConfiguration() throws ConfigurationException {
-        if (configuration.getString("url") == null || configuration.getString("url").isEmpty())
-            throw new ConfigurationException("URL parameter is missing!");
+        final String url = configuration.getString(CK_URL);
+        if (isNullOrEmpty(url)) {
+            throw new ConfigurationException("URL parameter is missing.");
+        }
+
         try {
-            URL url = new URL(configuration.getString("url"));
+            new URL(url);
         } catch (MalformedURLException e) {
-            throw new ConfigurationException("Malformed URL: " + e.getMessage());
+            throw new ConfigurationException("Malformed URL '" + url + "'", e);
+        }
+
+        if (!whitelistService.isWhitelisted(url)) {
+            throw new ConfigurationException("URL <" + url + "> is not whitelisted.");
         }
     }
 }

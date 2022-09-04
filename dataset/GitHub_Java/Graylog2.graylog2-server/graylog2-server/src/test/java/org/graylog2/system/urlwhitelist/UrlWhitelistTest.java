@@ -67,9 +67,4 @@ public class UrlWhitelistTest {
         UrlWhitelist.createEnabled(ImmutableList.of(LiteralWhitelistEntry.create("a", "a", "a"),
                 RegexWhitelistEntry.create("a", "b", "b")));
     }
-
-    @Test(expected = IllegalArgumentException.class)
-    public void invalidRegex() {
-        UrlWhitelist.createEnabled(ImmutableList.of(RegexWhitelistEntry.create("a", "b", "${")));
-    }
 }

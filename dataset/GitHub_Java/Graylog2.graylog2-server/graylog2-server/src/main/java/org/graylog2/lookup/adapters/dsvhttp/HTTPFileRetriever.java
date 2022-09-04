@@ -1,18 +1,18 @@
-/*
- * Copyright (C) 2020 Graylog, Inc.
+/**
+ * This file is part of Graylog.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the Server Side Public License, version 1,
- * as published by MongoDB, Inc.
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * Server Side Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the Server Side Public License
- * along with this program. If not, see
- * <http://www.mongodb.com/licensing/server-side-public-license>.
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.lookup.adapters.dsvhttp;
 
@@ -53,14 +53,6 @@ public class HTTPFileRetriever {
     }
 
     /**
-     * Request file bytes. No "If-Modified-Since" header will be sent so the file will be fetched again, even if hasn't
-     * been modified since the last fetch.
-     */
-    public Optional<byte[]> fetchFileBytes(String url) throws IOException {
-        return fetchFileBytes(url, false);
-    }
-
-    /**
      * Request file by sending an "If-Modified-Since" header so that the file won't be fetched if it hasn't been
      * modified since the last request.
      */
@@ -68,33 +60,7 @@ public class HTTPFileRetriever {
         return fetchFile(url, true);
     }
 
-    /**
-     * Request file bytes by sending an "If-Modified-Since" header so that the file won't be fetched if it hasn't been
-     * modified since the last request.
-     */
-    public Optional<byte[]> fetchFileBytesIfNotModified(String url) throws IOException {
-        return fetchFileBytes(url, true);
-    }
-
-    private Optional<byte[]> fetchFileBytes(String url, boolean addIfModifiedSinceHeader) throws IOException {
-        try (Response response = doHttpGet(url, addIfModifiedSinceHeader)) {
-            if (null != response && null != response.body()) {
-                return Optional.of(response.body().bytes());
-            }
-        }
-        return Optional.empty();
-    }
-
     private Optional<String> fetchFile(String url, boolean addIfModifiedSinceHeader) throws IOException {
-        try (Response response = doHttpGet(url, addIfModifiedSinceHeader)) {
-            if (null != response && null != response.body()) {
-                return Optional.of(response.body().string());
-            }
-        }
-        return Optional.empty();
-    }
-
-    private Response doHttpGet(String url, boolean addIfModifiedSinceHeader) throws IOException {
         final Request.Builder requestBuilder = new Request.Builder()
                 .get()
                 .url(url)
@@ -107,20 +73,24 @@ public class HTTPFileRetriever {
         }
         final Call request = client.newCall(requestBuilder.build());
 
-        final Response response = request.execute();
-        if (response.isSuccessful()) {
-            final String lastModifiedHeader = response.header("Last-Modified", DateTime.now(DateTimeZone.UTC).toString());
-            final Map<String, String> newLastModified = new HashMap<>(this.lastLastModified.get());
-            newLastModified.put(url, lastModifiedHeader);
-            this.lastLastModified.set(ImmutableMap.copyOf(newLastModified));
+        try (final Response response = request.execute()) {
+            if (response.isSuccessful()) {
+                final String lastModifiedHeader = response.header("Last-Modified", DateTime.now(DateTimeZone.UTC).toString());
+                final Map<String, String> newLastModified = new HashMap<>(this.lastLastModified.get());
+                newLastModified.put(url, lastModifiedHeader);
+                this.lastLastModified.set(ImmutableMap.copyOf(newLastModified));
 
-            return response;
-        } else {
-            if (response.code() != 304) {
-                throw new IOException("Request failed: " + response.message());
+                if (response.body() != null) {
+                    final String body = response.body().string();
+                    return Optional.ofNullable(body);
+                }
+            } else {
+                if (response.code() != 304) {
+                    throw new IOException("Request failed: " + response.message());
+                }
             }
         }
 
-        return null;
+        return Optional.empty();
     }
 }

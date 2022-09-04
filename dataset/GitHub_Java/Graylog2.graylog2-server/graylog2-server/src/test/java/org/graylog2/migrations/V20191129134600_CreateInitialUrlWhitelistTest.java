@@ -21,7 +21,6 @@ import org.graylog2.lookup.adapters.HTTPJSONPathDataAdapter;
 import org.graylog2.lookup.db.DBDataAdapterService;
 import org.graylog2.lookup.dto.DataAdapterDto;
 import org.graylog2.plugin.cluster.ClusterConfigService;
-import org.graylog2.system.urlwhitelist.RegexHelper;
 import org.graylog2.system.urlwhitelist.UrlWhitelist;
 import org.graylog2.system.urlwhitelist.UrlWhitelistService;
 import org.junit.Before;
@@ -30,7 +29,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.mockito.Spy;
 
 import java.util.Collections;
 
@@ -48,8 +46,6 @@ public class V20191129134600_CreateInitialUrlWhitelistTest {
     private DBDataAdapterService dataAdapterService;
     @Mock
     private DBNotificationService notificationService;
-    @Spy
-    private RegexHelper regexHelper;
 
     @InjectMocks
     private V20191129134600_CreateInitialUrlWhitelist migration;

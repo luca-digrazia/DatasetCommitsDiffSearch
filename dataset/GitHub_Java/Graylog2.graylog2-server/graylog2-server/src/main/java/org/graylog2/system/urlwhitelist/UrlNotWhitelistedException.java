@@ -14,23 +14,21 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.graylog2.lookup.adapters;
-
-import com.google.inject.Inject;
-import org.graylog2.system.urlwhitelist.UrlWhitelistService;
+package org.graylog2.system.urlwhitelist;
 
 /**
- * Context object for configurations which require access to services to perform validation.
+ * Indicates that there was an attempt to access a URL which is not whitelisted.
  */
-public class LookupDataAdapterValidationContext {
-    private final UrlWhitelistService urlWhitelistService;
+public class UrlNotWhitelistedException extends Exception {
 
-    @Inject
-    public LookupDataAdapterValidationContext(UrlWhitelistService urlWhitelistService) {
-        this.urlWhitelistService = urlWhitelistService;
+    /**
+     * Create an exception with a message stating that the given URL is not whitelisted.
+     */
+    public static UrlNotWhitelistedException forUrl(String url) {
+        return new UrlNotWhitelistedException("URL <" + url + "> is not whitelisted.");
     }
 
-    public UrlWhitelistService getUrlWhitelistService() {
-        return urlWhitelistService;
+    public UrlNotWhitelistedException(String message) {
+        super(message);
     }
 }
