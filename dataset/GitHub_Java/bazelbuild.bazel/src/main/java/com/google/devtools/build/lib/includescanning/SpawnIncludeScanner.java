@@ -19,6 +19,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
+import com.google.devtools.build.lib.actions.AbstractAction;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionMetadata;
@@ -27,24 +28,35 @@ import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
+import com.google.devtools.build.lib.actions.ArtifactPathResolver;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ExecutionRequirements;
+import com.google.devtools.build.lib.actions.MiddlemanType;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.RunfilesSupplier;
 import com.google.devtools.build.lib.actions.SimpleSpawn;
 import com.google.devtools.build.lib.actions.Spawn;
-import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
+import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.collect.nestedset.Order;
+import com.google.devtools.build.lib.exec.SpawnStrategyResolver;
 import com.google.devtools.build.lib.includescanning.IncludeParser.GrepIncludesFileType;
 import com.google.devtools.build.lib.includescanning.IncludeParser.Inclusion;
+import com.google.devtools.build.lib.util.io.FileOutErr;
+import com.google.devtools.build.lib.vfs.FileStatus;
 import com.google.devtools.build.lib.vfs.OutputService;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import com.google.devtools.build.lib.vfs.Symlinks;
+import com.google.devtools.build.lib.vfs.UnixGlob.FilesystemCalls;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Collection;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 import javax.annotation.Nullable;
 
 /**
@@ -52,18 +64,22 @@ import javax.annotation.Nullable;
  * transitively referenced include files.
  */
 public class SpawnIncludeScanner {
+  /** The grep-includes tool is very lightweight, so don't use the default from AbstractAction. */
   private static final ResourceSet LOCAL_RESOURCES =
-      ResourceSet.createWithRamCpuIo(/*memoryMb=*/10, /*cpuUsage=*/.3, /*ioUsage=*/.0);
+      ResourceSet.createWithRamCpu(/*memoryMb=*/ 10, /*cpuUsage=*/ 1);
 
   private final Path execRoot;
   private OutputService outputService;
   private boolean inMemoryOutput;
   private final int remoteExtractionThreshold;
+  private final AtomicReference<FilesystemCalls> syscallCache;
 
   /** Constructs a new SpawnIncludeScanner. */
-  public SpawnIncludeScanner(Path execRoot, int remoteExtractionThreshold) {
+  public SpawnIncludeScanner(
+      Path execRoot, int remoteExtractionThreshold, AtomicReference<FilesystemCalls> syscallCache) {
     this.execRoot = execRoot;
     this.remoteExtractionThreshold = remoteExtractionThreshold;
+    this.syscallCache = syscallCache;
   }
 
   public void setOutputService(OutputService outputService) {
@@ -77,25 +93,26 @@ public class SpawnIncludeScanner {
 
   @VisibleForTesting
   Path getIncludesOutput(
-      Artifact src, GrepIncludesFileType fileType, boolean placeNextToFile) {
+      Artifact src, ArtifactPathResolver resolver, GrepIncludesFileType fileType,
+      boolean placeNextToFile) {
     if (placeNextToFile) {
       // If this is an output file, just place the grepped-file next to it. The directory is bound
       // to exist.
-      return src.getPath()
+      return resolver.toPath(src)
           .getParentDirectory()
           .getRelative(src.getFilename() + ".blaze-grepped_includes_" + fileType);
     }
-    return execRoot
+    return resolver.convertPath(execRoot)
         .getChild("blaze-grepped_includes_" + fileType.getFileType())
         .getRelative(src.getExecPath());
   }
 
   private PathFragment execPath(Path path) {
-    return path.relativeTo(execRoot);
+    return path.asFragment().relativeTo(execRoot.asFragment());
   }
 
-  /** Returns whether "file" should be parsed using this include scanner. */
-  public boolean shouldParseRemotely(Artifact file, ActionExecutionContext ctx) throws IOException {
+  /** Returns whether {@code file} should be parsed using this include scanner. */
+  boolean shouldParseRemotely(Artifact file) throws IOException {
     // We currently cannot remotely extract inclusions from files that aren't underneath a known
     // Blaze root (e.g. that are in /usr/include). Likely, it's not a good idea to look at those in
     // the first place as it means we have a non-hermetic build.
@@ -106,9 +123,11 @@ public class SpawnIncludeScanner {
     // Files written remotely that are not locally available should be scanned remotely to avoid the
     // bandwidth and disk space penalty of bringing them across. Also, enable include scanning
     // remotely when explicitly directed to via a flag.
-    return remoteExtractionThreshold == 0
-        || (outputService != null && outputService.isRemoteFile(file))
-        || ctx.getPathResolver().toPath(file).getFileSize() > remoteExtractionThreshold;
+    if (remoteExtractionThreshold == 0 || (outputService != null && !file.isSourceArtifact())) {
+      return true;
+    }
+    FileStatus status = syscallCache.get().statIfFound(file.getPath(), Symlinks.FOLLOW);
+    return status == null || status.getSize() > remoteExtractionThreshold;
   }
 
   /**
@@ -128,7 +147,7 @@ public class SpawnIncludeScanner {
     private final String progressMessage;
 
     GrepIncludesAction(ActionExecutionMetadata actionExecutionMetadata, PathFragment input) {
-      this.actionExecutionMetadata = actionExecutionMetadata;
+      this.actionExecutionMetadata = Preconditions.checkNotNull(actionExecutionMetadata);
       this.progressMessage = "Extracting include lines from " + input.getPathString();
     }
 
@@ -154,7 +173,7 @@ public class SpawnIncludeScanner {
 
     @Override
     public String describe() {
-      return getProgressMessage();
+      return progressMessage;
     }
 
     @Override
@@ -168,12 +187,12 @@ public class SpawnIncludeScanner {
     }
 
     @Override
-    public Iterable<Artifact> getTools() {
+    public NestedSet<Artifact> getTools() {
       throw new UnsupportedOperationException();
     }
 
     @Override
-    public Iterable<Artifact> getInputs() {
+    public NestedSet<Artifact> getInputs() {
       throw new UnsupportedOperationException();
     }
 
@@ -183,9 +202,14 @@ public class SpawnIncludeScanner {
     }
 
     @Override
+    public ImmutableMap<String, String> getExecProperties() {
+      return actionExecutionMetadata.getExecProperties();
+    }
+
+    @Override
     @Nullable
     public PlatformInfo getExecutionPlatform() {
-      throw new UnsupportedOperationException();
+      return actionExecutionMetadata.getExecutionPlatform();
     }
 
     @Override
@@ -216,12 +240,13 @@ public class SpawnIncludeScanner {
     }
 
     @Override
-    public Iterable<Artifact> getMandatoryInputs() {
+    public NestedSet<Artifact> getMandatoryInputs() {
       throw new UnsupportedOperationException();
     }
 
     @Override
-    public String getKey(ActionKeyContext actionKeyContext) {
+    public String getKey(
+        ActionKeyContext actionKeyContext, @Nullable ArtifactExpander artifactExpander) {
       throw new UnsupportedOperationException();
     }
 
@@ -237,7 +262,7 @@ public class SpawnIncludeScanner {
     }
 
     @Override
-    public Iterable<Artifact> getInputFilesForExtraAction(
+    public NestedSet<Artifact> getInputFilesForExtraAction(
         ActionExecutionContext actionExecutionContext) {
       throw new UnsupportedOperationException();
     }
@@ -266,23 +291,19 @@ public class SpawnIncludeScanner {
       ActionExecutionContext actionExecutionContext,
       Artifact grepIncludes,
       GrepIncludesFileType fileType,
-      boolean placeNextToFile)
+      boolean isOutputFile)
       throws IOException, ExecException, InterruptedException {
-    Path output = getIncludesOutput(file, fileType, placeNextToFile);
-    if (!inMemoryOutput && !placeNextToFile) {
-      try {
-        Path dir = output.getParentDirectory();
-        if (dir.isDirectory()) {
-          // If the output directory already exists, delete the old include file.
-          output.delete();
-        }
-        dir.createDirectoryAndParents();
-      } catch (IOException e) {
-        throw new IOException(
-            "Error creating output directory "
-                + output.getParentDirectory()
-                + ": "
-                + e.getMessage());
+    boolean placeNextToFile = isOutputFile && !file.hasParent();
+    Path output = getIncludesOutput(file, actionExecutionContext.getPathResolver(), fileType,
+        placeNextToFile);
+    if (!inMemoryOutput) {
+      AbstractAction.deleteOutput(
+          output,
+          placeNextToFile
+              ? actionExecutionContext.getPathResolver().transformRoot(file.getRoot().getRoot())
+              : null);
+      if (!placeNextToFile) {
+        output.getParentDirectory().createDirectoryAndParents();
       }
     }
 
@@ -300,8 +321,9 @@ public class SpawnIncludeScanner {
             actionExecutionContext,
             grepIncludes,
             fileType);
-    return IncludeParser.processIncludes(
-        output, dotIncludeStream == null ? output.getInputStream() : dotIncludeStream);
+    return dotIncludeStream == null
+        ? IncludeParser.processIncludes(output)
+        : IncludeParser.processIncludes(output, dotIncludeStream);
   }
 
   /**
@@ -319,8 +341,7 @@ public class SpawnIncludeScanner {
    *     Otherwise "null"
    * @throws ExecException if scanning fails
    */
-  // Visible only for CppIncludeExtractionContextImpl.
-  static InputStream spawnGrep(
+  private static InputStream spawnGrep(
       Artifact input,
       PathFragment outputExecPath,
       boolean inMemoryOutput,
@@ -330,8 +351,9 @@ public class SpawnIncludeScanner {
       GrepIncludesFileType fileType)
       throws ExecException, InterruptedException {
     ActionInput output = ActionInputHelper.fromPath(outputExecPath);
-    ImmutableList<? extends ActionInput> inputs = ImmutableList.of(grepIncludes, input);
-    ImmutableList<ActionInput> outputs = ImmutableList.of(output);
+    NestedSet<? extends ActionInput> inputs =
+        NestedSetBuilder.create(Order.STABLE_ORDER, grepIncludes, input);
+    ImmutableSet<ActionInput> outputs = ImmutableSet.of(output);
     ImmutableList<String> command =
         ImmutableList.of(
             grepIncludes.getExecPathString(),
@@ -339,7 +361,7 @@ public class SpawnIncludeScanner {
             outputExecPath.getPathString(),
             fileType.getFileType());
 
-    ImmutableMap.Builder<String, String> execInfoBuilder = ImmutableMap.<String, String>builder();
+    ImmutableMap.Builder<String, String> execInfoBuilder = ImmutableMap.builder();
     if (inMemoryOutput) {
       execInfoBuilder.put(
           ExecutionRequirements.REMOTE_EXECUTION_INLINE_OUTPUTS,
@@ -358,10 +380,30 @@ public class SpawnIncludeScanner {
 
     actionExecutionContext.maybeReportSubcommand(spawn);
 
-    SpawnActionContext context = actionExecutionContext.getContext(SpawnActionContext.class);
-    List<SpawnResult> results = context.exec(spawn, actionExecutionContext);
+    // Don't share the originalOutErr across spawnGrep calls. Doing so would not be thread-safe.
+    FileOutErr originalOutErr = actionExecutionContext.getFileOutErr();
+    FileOutErr grepOutErr = originalOutErr.childOutErr();
+    SpawnStrategyResolver spawnStrategyResolver =
+        actionExecutionContext.getContext(SpawnStrategyResolver.class);
+    ActionExecutionContext spawnContext = actionExecutionContext.withFileOutErr(grepOutErr);
+    List<SpawnResult> results;
+    try {
+      results = spawnStrategyResolver.exec(spawn, spawnContext);
+      dump(spawnContext, actionExecutionContext);
+    } catch (ExecException e) {
+      dump(spawnContext, actionExecutionContext);
+      throw e;
+    }
 
     SpawnResult result = Iterables.getLast(results);
     return result.getInMemoryOutput(output);
+  }
+
+  private static void dump(ActionExecutionContext fromContext, ActionExecutionContext toContext) {
+    if (fromContext.getFileOutErr().hasRecordedOutput()) {
+      synchronized (toContext) {
+        FileOutErr.dump(fromContext.getFileOutErr(), toContext.getFileOutErr());
+      }
+    }
   }
 }
