@@ -10,13 +10,13 @@ import java.io.Serializable;
 @SuppressWarnings("WeakerAccess")
 public class ImageViewState implements Serializable {
 
-    private final float scale;
+    private float scale;
 
-    private final float centerX;
+    private float centerX;
 
-    private final float centerY;
+    private float centerY;
 
-    private final int orientation;
+    private int orientation;
 
     public ImageViewState(float scale, PointF center, int orientation) {
         this.scale = scale;
