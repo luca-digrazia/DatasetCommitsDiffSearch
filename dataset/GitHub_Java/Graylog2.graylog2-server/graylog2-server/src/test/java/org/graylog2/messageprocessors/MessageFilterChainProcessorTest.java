@@ -144,22 +144,6 @@ public class MessageFilterChainProcessorTest {
         assertThat(result.getFields()).containsKeys("prio-10", "prio-20", "prio-30");
     }
 
-    @Test
-    public void testMessagesCanBeDropped() {
-        final MessageFilter first = new DummyFilter(10);
-        final MessageFilter second = new RemovingMessageFilter();
-        final Set<MessageFilter> filters = ImmutableSet.of(first, second);
-        final MessageFilterChainProcessor processor = new MessageFilterChainProcessor(new MetricRegistry(),
-                filters,
-                Mockito.mock(Journal.class),
-                serverStatus);
-
-        final Message message = new Message("message", "source", new DateTime(2016, 1, 1, 0, 0, DateTimeZone.UTC));
-        final Messages result = processor.process(message);
-
-        assertThat(result).isEmpty();
-    }
-
     private class DummyFilter implements MessageFilter {
         private final int prio;
 
@@ -181,23 +165,6 @@ public class MessageFilterChainProcessorTest {
         @Override
         public int getPriority() {
             return prio;
-        }
-    }
-
-    private class RemovingMessageFilter implements MessageFilter {
-        @Override
-        public boolean filter(Message msg) {
-            return true;
-        }
-
-        @Override
-        public String getName() {
-            return "Removing filter";
-        }
-
-        @Override
-        public int getPriority() {
-            return Integer.MAX_VALUE;
         }
     }
 }
