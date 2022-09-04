@@ -34,7 +34,6 @@ import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.text.DecimalFormat;
 import java.util.List;
 import java.util.Map;
 
@@ -59,12 +58,9 @@ public class FieldValueAlertCondition extends AbstractAlertCondition {
     private final Number threshold;
     private final CheckType type;
     private final String field;
-    private final DecimalFormat decimalFormat;
 
     public FieldValueAlertCondition(Stream stream, String id, DateTime createdAt, String creatorUserId, Map<String, Object> parameters) {
         super(stream, id, Type.FIELD_VALUE, createdAt, creatorUserId, parameters);
-
-        this.decimalFormat = new DecimalFormat("#.###");
 
         this.time = (Integer) parameters.get("time");
         this.thresholdType = ThresholdType.valueOf(((String) parameters.get("threshold_type")).toUpperCase());
@@ -80,7 +76,7 @@ public class FieldValueAlertCondition extends AbstractAlertCondition {
                 .append(", field: ").append(field)
                 .append(", check type: ").append(type.toString().toLowerCase())
                 .append(", threshold_type: ").append(thresholdType.toString().toLowerCase())
-                .append(", threshold: ").append(decimalFormat.format(threshold))
+                .append(", threshold: ").append(threshold)
                 .append(", grace: ").append(grace)
                 .toString();
     }
@@ -148,10 +144,10 @@ public class FieldValueAlertCondition extends AbstractAlertCondition {
 
                 resultDescription.append("Field ").append(field).append(" had a ")
                         .append(type.toString().toLowerCase()).append(" of ")
-                        .append(decimalFormat.format(result)).append(" in the last ")
+                        .append(result).append(" in the last ")
                         .append(time).append(" minutes with trigger condition ")
                         .append(thresholdType.toString().toLowerCase()).append(" than ")
-                        .append(decimalFormat.format(threshold)).append(". ")
+                        .append(threshold).append(". ")
                         .append("(Current grace time: ").append(grace).append(" minutes)");
 
                 return new CheckResult(true, this, resultDescription.toString(), Tools.iso8601());
