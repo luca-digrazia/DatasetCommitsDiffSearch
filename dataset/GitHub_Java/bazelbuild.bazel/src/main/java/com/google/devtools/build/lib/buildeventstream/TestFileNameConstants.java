@@ -25,13 +25,10 @@ public class TestFileNameConstants {
   public static final String SPLIT_LOGS = "test.splitlogs";
   public static final String TEST_INFRASTRUCTURE_FAILURE = "test.infrastructure_failure";
   public static final String TEST_LOG = "test.log";
-  public static final String TEST_STDERR = "test.stderr";
   public static final String TEST_WARNINGS = "test.warnings";
   public static final String TEST_XML = "test.xml";
   public static final String UNDECLARED_OUTPUTS_ANNOTATIONS = "test.outputs_manifest__ANNOTATIONS";
   public static final String UNDECLARED_OUTPUTS_MANIFEST = "test.outputs_manifest__MANIFEST";
   public static final String UNDECLARED_OUTPUTS_ZIP = "test.outputs__outputs.zip";
   public static final String UNUSED_RUNFILES_LOG = "test.unused_runfiles_log";
-  public static final String TEST_COVERAGE = "test.lcov";
-  public static final String BASELINE_COVERAGE = "baseline.lcov";
 }
