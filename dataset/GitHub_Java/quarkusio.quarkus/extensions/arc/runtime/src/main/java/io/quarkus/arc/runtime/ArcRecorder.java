@@ -5,7 +5,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Supplier;
 
@@ -27,7 +26,7 @@ public class ArcRecorder {
     /**
      * Used to hold the Supplier instances used for synthetic bean declarations.
      */
-    public static volatile Map<String, Supplier<?>> supplierMap;
+    public static volatile Map<String, Supplier<Object>> supplierMap;
 
     private static final Logger LOGGER = Logger.getLogger(ArcRecorder.class.getName());
 
@@ -46,12 +45,8 @@ public class ArcRecorder {
         Arc.setExecutor(executor);
     }
 
-    public void initStaticSupplierBeans(Map<String, Supplier<?>> beans) {
-        supplierMap = new ConcurrentHashMap<>(beans);
-    }
-
-    public void initRuntimeSupplierBeans(Map<String, Supplier<?>> beans) {
-        supplierMap.putAll(beans);
+    public void initSupplierBeans(Map<String, Supplier<Object>> beans) {
+        supplierMap = beans;
     }
 
     public BeanContainer initBeanContainer(ArcContainer container, List<BeanContainerListener> listeners,

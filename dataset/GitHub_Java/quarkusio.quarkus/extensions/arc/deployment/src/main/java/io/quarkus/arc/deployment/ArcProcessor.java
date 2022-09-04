@@ -3,7 +3,6 @@ package io.quarkus.arc.deployment;
 import static io.quarkus.deployment.annotations.ExecutionTime.RUNTIME_INIT;
 import static io.quarkus.deployment.annotations.ExecutionTime.STATIC_INIT;
 
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -41,25 +40,22 @@ import io.quarkus.arc.processor.ResourceOutput;
 import io.quarkus.arc.runtime.AdditionalBean;
 import io.quarkus.arc.runtime.ArcRecorder;
 import io.quarkus.arc.runtime.BeanContainer;
-import io.quarkus.arc.runtime.LaunchModeProducer;
 import io.quarkus.arc.runtime.LifecycleEventRunner;
 import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.Record;
-import io.quarkus.deployment.builditem.AdditionalApplicationArchiveMarkerBuildItem;
 import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
 import io.quarkus.deployment.builditem.ApplicationClassPredicateBuildItem;
-import io.quarkus.deployment.builditem.CapabilityBuildItem;
 import io.quarkus.deployment.builditem.ExecutorBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
 import io.quarkus.deployment.builditem.GeneratedResourceBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
 import io.quarkus.deployment.builditem.TestClassPredicateBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.ReflectiveFieldBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.ReflectiveMethodBuildItem;
+import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
+import io.quarkus.deployment.builditem.substrate.ReflectiveFieldBuildItem;
+import io.quarkus.deployment.builditem.substrate.ReflectiveMethodBuildItem;
 
 /**
  * This class contains build steps that trigger various phases of the bean processing.
@@ -80,11 +76,6 @@ public class ArcProcessor {
     private static final Logger LOGGER = Logger.getLogger(ArcProcessor.class);
 
     static final DotName ADDITIONAL_BEAN = DotName.createSimple(AdditionalBean.class.getName());
-
-    @BuildStep
-    CapabilityBuildItem capability() {
-        return new CapabilityBuildItem(Capabilities.CDI_ARC);
-    }
 
     // PHASE 1 - build BeanProcessor, register custom contexts 
     @BuildStep
@@ -262,14 +253,9 @@ public class ArcProcessor {
                 beanRegistrationPhase.getBeanProcessor());
     }
 
-    @BuildStep
-    List<AdditionalApplicationArchiveMarkerBuildItem> marker() {
-        return Arrays.asList(new AdditionalApplicationArchiveMarkerBuildItem("META-INF/beans.xml"),
-                new AdditionalApplicationArchiveMarkerBuildItem("META-INF/services/javax.enterprise.inject.spi.Extension"));
-    }
-
     // PHASE 4 - generate resources and initialize the container
-    @BuildStep
+    @BuildStep(providesCapabilities = Capabilities.CDI_ARC, applicationArchiveMarkers = { "META-INF/beans.xml",
+            "META-INF/services/javax.enterprise.inject.spi.Extension" })
     @Record(STATIC_INIT)
     public BeanContainerBuildItem generateResources(ArcRecorder recorder, ShutdownContextBuildItem shutdown,
             ValidationPhaseBuildItem validationPhase,
@@ -340,11 +326,6 @@ public class ArcProcessor {
     @Record(value = RUNTIME_INIT)
     void setupExecutor(ExecutorBuildItem executor, ArcRecorder recorder) {
         recorder.initExecutor(executor.getExecutorProxy());
-    }
-
-    @BuildStep
-    AdditionalBeanBuildItem launchMode() {
-        return new AdditionalBeanBuildItem(LaunchModeProducer.class);
     }
 
     private abstract static class AbstractCompositeApplicationClassesPredicate<T> implements Predicate<T> {

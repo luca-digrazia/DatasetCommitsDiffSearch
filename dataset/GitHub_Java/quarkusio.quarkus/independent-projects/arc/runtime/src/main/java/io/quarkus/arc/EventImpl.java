@@ -1,20 +1,4 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-package org.jboss.quarkus.arc;
+package io.quarkus.arc;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.ParameterizedType;
@@ -32,9 +16,8 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executor;
-import java.util.concurrent.ForkJoinPool;
 import java.util.function.Supplier;
-
+import javax.enterprise.context.RequestScoped;
 import javax.enterprise.event.Event;
 import javax.enterprise.event.NotificationOptions;
 import javax.enterprise.event.ObserverException;
@@ -54,22 +37,16 @@ import javax.enterprise.util.TypeLiteral;
 class EventImpl<T> implements Event<T> {
 
     private static final int DEFAULT_CACHE_CAPACITY = 4;
-
-    private static final Executor DEFAULT_EXECUTOR = ForkJoinPool.commonPool();
-
-    private static final NotificationOptions DEFAULT_OPTIONS = NotificationOptions.ofExecutor(DEFAULT_EXECUTOR);
+    private static final NotificationOptions EMPTY_OPTIONS = NotificationOptions.builder().build();
 
     private final HierarchyDiscovery injectionPointTypeHierarchy;
-
     private final Type eventType;
-
     private final Set<Annotation> qualifiers;
-
     private final ConcurrentMap<Class<?>, Notifier<? super T>> notifiers;
 
     private transient volatile Notifier<? super T> lastNotifier;
 
-    public EventImpl(Type eventType, Set<Annotation> qualifiers) {
+    EventImpl(Type eventType, Set<Annotation> qualifiers) {
         if (eventType instanceof ParameterizedType) {
             eventType = ((ParameterizedType) eventType).getActualTypeArguments()[0];
         }
@@ -87,7 +64,7 @@ class EventImpl<T> implements Event<T> {
 
     @Override
     public <U extends T> CompletionStage<U> fireAsync(U event) {
-        return fireAsync(event, DEFAULT_OPTIONS);
+        return fireAsync(event, EMPTY_OPTIONS);
     }
 
     @Override
@@ -99,7 +76,7 @@ class EventImpl<T> implements Event<T> {
 
         Executor executor = options.getExecutor();
         if (executor == null) {
-            executor = DEFAULT_EXECUTOR;
+            executor = Arc.container().getExecutorService();
         }
 
         if (notifier.isEmpty()) {
@@ -113,7 +90,21 @@ class EventImpl<T> implements Event<T> {
             return event;
         };
 
-        CompletableFuture<U> completableFuture = CompletableFuture.supplyAsync(Arc.container().withinRequest(notifyLogic), executor);
+        Supplier<U> withinRequest = () -> {
+            ArcContainer container = Arc.container();
+            if (container.getActiveContext(RequestScoped.class) != null) {
+                return notifyLogic.get();
+            } else {
+                ManagedContext requestContext = container.requestContext();
+                try {
+                    requestContext.activate();
+                    return notifyLogic.get();
+                } finally {
+                    requestContext.terminate();
+                }
+            }
+        };
+        CompletableFuture<U> completableFuture = CompletableFuture.supplyAsync(withinRequest, executor);
         return new AsyncEventDeliveryStage<>(completableFuture, executor);
     }
 
@@ -151,7 +142,8 @@ class EventImpl<T> implements Event<T> {
         return createNotifier(runtimeType, eventType, qualifiers, ArcContainerImpl.unwrap(Arc.container()));
     }
 
-    static <T> Notifier<T> createNotifier(Class<?> runtimeType, Type eventType, Set<Annotation> qualifiers, ArcContainerImpl container) {
+    static <T> Notifier<T> createNotifier(Class<?> runtimeType, Type eventType, Set<Annotation> qualifiers,
+            ArcContainerImpl container) {
         EventMetadata metadata = new EventMetadataImpl(qualifiers, eventType);
         List<ObserverMethod<? super T>> notifierObserverMethods = new ArrayList<>();
         for (ObserverMethod<? super T> observerMethod : container.resolveObservers(eventType, qualifiers)) {
@@ -164,18 +156,21 @@ class EventImpl<T> implements Event<T> {
         Type resolvedType = runtimeType;
         if (Types.containsTypeVariable(resolvedType)) {
             /*
-             * If the container is unable to resolve the parameterized type of the event object, it uses the specified type to infer the parameterized type of
+             * If the container is unable to resolve the parameterized type of the event object, it uses the specified type to
+             * infer the parameterized type of
              * the event types.
              */
             resolvedType = injectionPointTypeHierarchy.resolveType(resolvedType);
         }
         if (Types.containsTypeVariable(resolvedType)) {
             /*
-             * Examining the hierarchy of the specified type did not help. This may still be one of the cases when combining the event type and the specified
+             * Examining the hierarchy of the specified type did not help. This may still be one of the cases when combining the
+             * event type and the specified
              * type reveals the actual values for type variables. Let's try that.
              */
             Type canonicalEventType = Types.getCanonicalType(runtimeType);
-            TypeResolver objectTypeResolver = new EventObjectTypeResolverBuilder(injectionPointTypeHierarchy.getResolver().getResolvedTypeVariables(),
+            TypeResolver objectTypeResolver = new EventObjectTypeResolverBuilder(
+                    injectionPointTypeHierarchy.getResolver().getResolvedTypeVariables(),
                     new HierarchyDiscovery(canonicalEventType).getResolver().getResolvedTypeVariables()).build();
             resolvedType = objectTypeResolver.resolveType(canonicalEventType);
         }
@@ -279,7 +274,7 @@ class EventImpl<T> implements Event<T> {
 
         @Override
         public InjectionPoint getInjectionPoint() {
-            // TODO add partial support
+            // Currently we do not support injection point of the injected Event instance which fired the event
             return null;
         }
 
@@ -291,9 +286,12 @@ class EventImpl<T> implements Event<T> {
     }
 
     /**
-     * There are two different strategies of exception handling for observer methods. When an exception is raised by a synchronous or transactional observer for
-     * a synchronous event, this exception stops the notification chain and the exception is propagated immediately. On the other hand, an exception thrown
-     * during asynchronous event delivery never is never propagated directly. Instead, all the exceptions for a given asynchronous event are collected and then
+     * There are two different strategies of exception handling for observer methods. When an exception is raised by a
+     * synchronous or transactional observer for
+     * a synchronous event, this exception stops the notification chain and the exception is propagated immediately. On the
+     * other hand, an exception thrown
+     * during asynchronous event delivery never is never propagated directly. Instead, all the exceptions for a given
+     * asynchronous event are collected and then
      * made available together using CompletionException.
      *
      * @author Jozef Hartinger
