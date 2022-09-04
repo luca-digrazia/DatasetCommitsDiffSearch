@@ -14,32 +14,29 @@ final public class ConfigDocWriter {
     private final DocFormatter summaryTableDocFormatter = new SummaryTableDocFormatter();
 
     /**
-     * Write configuration in AsciiDoc format in `{root}/target/asciidoc/generated/config/` directory
+     * Write extension configuration AsciiDoc format in `{root}/target/asciidoc/generated/config/`
      */
-    public void writeExtensionConfigDocumentation(Map<String, List<ConfigDocItem>> extensionsConfigurations,
-            boolean withSearchActivated)
+    public void writeExtensionConfigDocumentation(Map<String, List<ConfigDocItem>> extensionsConfigurations)
             throws IOException {
         for (Map.Entry<String, List<ConfigDocItem>> entry : extensionsConfigurations.entrySet()) {
             final List<ConfigDocItem> configDocItems = entry.getValue();
-            final String fileName = entry.getKey();
+            final String extensionFileName = entry.getKey();
 
             sort(configDocItems);
-            String anchorPrefix = fileName;
-            if (fileName.endsWith(Constants.ADOC_EXTENSION)) {
+            String anchorPrefix = extensionFileName;
+            if (extensionFileName.endsWith(".adoc"))
                 anchorPrefix = anchorPrefix.substring(0, anchorPrefix.length() - 5);
-            }
 
-            generateDocumentation(Constants.GENERATED_DOCS_PATH.resolve(fileName), anchorPrefix + "_", withSearchActivated,
-                    configDocItems);
+            generateDocumentation(Constants.GENERATED_DOCS_PATH.resolve(extensionFileName), anchorPrefix + "_", configDocItems);
         }
     }
 
     /**
-     * Write all extension configuration in AsciiDoc format in `{root}/target/asciidoc/generated/config/` directory
+     * Write all extension configuration AsciiDoc format in `{root}/target/asciidoc/generated/config/`
      */
     public void writeAllExtensionConfigDocumentation(List<ConfigDocItem> allItems)
             throws IOException {
-        generateDocumentation(Constants.GENERATED_DOCS_PATH.resolve("all-config.adoc"), "", true, allItems);
+        generateDocumentation(Constants.GENERATED_DOCS_PATH.resolve("all-config.adoc"), "", allItems);
     }
 
     /**
@@ -66,23 +63,19 @@ final public class ConfigDocWriter {
      * @param configDocItems
      * @throws IOException
      */
-    private void generateDocumentation(Path targetPath, String initialAnchorPrefix, boolean activateSearch,
-            List<ConfigDocItem> configDocItems)
+    private void generateDocumentation(Path targetPath, String initialAnchorPrefix, List<ConfigDocItem> configDocItems)
             throws IOException {
         try (Writer writer = Files.newBufferedWriter(targetPath)) {
-            summaryTableDocFormatter.format(writer, initialAnchorPrefix, activateSearch, configDocItems);
+            summaryTableDocFormatter.format(writer, initialAnchorPrefix, configDocItems);
 
             boolean hasDuration = false, hasMemory = false;
             for (ConfigDocItem item : configDocItems) {
-                if (item.hasDurationInformationNote()) {
+                if (item.hasDurationInformationNote())
                     hasDuration = true;
-                }
-
-                if (item.hasMemoryInformationNote()) {
+                if (item.hasMemoryInformationNote())
                     hasMemory = true;
-                }
-            }
 
+            }
             if (hasDuration) {
                 writer.append(Constants.DURATION_FORMAT_NOTE);
             }
