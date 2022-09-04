@@ -46,7 +46,6 @@ import org.graylog2.events.ClusterEventBus;
 import org.graylog2.bindings.providers.ClusterEventBusProvider;
 import org.graylog2.filters.FilterService;
 import org.graylog2.filters.FilterServiceImpl;
-import org.graylog2.grok.GrokPatternRegistry;
 import org.graylog2.indexer.SetIndexReadOnlyJob;
 import org.graylog2.indexer.healing.FixDeflectorByDeleteJob;
 import org.graylog2.indexer.healing.FixDeflectorByMoveJob;
@@ -156,7 +155,6 @@ public class ServerBindings extends Graylog2Module {
         bind(BundleExporterProvider.class).in(Scopes.SINGLETON);
         bind(ClusterStatsModule.class).asEagerSingleton();
         bind(ClusterConfigService.class).to(ClusterConfigServiceImpl.class).asEagerSingleton();
-        bind(GrokPatternRegistry.class).in(Scopes.SINGLETON);
 
         bind(String[].class).annotatedWith(named("RestControllerPackages")).toInstance(new String[]{
                 "org.graylog2.rest.resources",

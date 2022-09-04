@@ -157,7 +157,7 @@ public class EsIndexRangeService implements IndexRangeService {
     @Override
     public SortedSet<IndexRange> findAll() {
         final ImmutableSortedSet.Builder<IndexRange> indexRanges = ImmutableSortedSet.orderedBy(IndexRange.COMPARATOR);
-        for (String index : deflector.getAllGraylogIndexNames()) {
+        for (String index : deflector.getAllDeflectorIndexNames()) {
             try {
                 indexRanges.add(cache.get(index));
             } catch (ExecutionException e) {
