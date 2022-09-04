@@ -67,17 +67,16 @@ public class MongoBridge {
         dbObj.put("level", message.getLevel());
         
         // Add additional fields. XXX PERFORMANCE
-        Map<String,Object> additionalFields = message.getAdditionalData();
+        Map<String,String> additionalFields = message.getAdditionalData();
         Set<String> set = additionalFields.keySet();
         Iterator<String> iter = set.iterator();
         while(iter.hasNext()) {
             String key = iter.next();
-            Object value = additionalFields.get(key);
+            String value = additionalFields.get(key);
             dbObj.put(key, value);
         }
 
-        if (message.getCreatedAt() <= 0) {
-            // This should have already been set at receiving, but to make sure...
+        if (message.getCreatedAt() == 0) {
             dbObj.put("created_at", Tools.getUTCTimestampWithMilliseconds());
         } else {
             dbObj.put("created_at", message.getCreatedAt());
