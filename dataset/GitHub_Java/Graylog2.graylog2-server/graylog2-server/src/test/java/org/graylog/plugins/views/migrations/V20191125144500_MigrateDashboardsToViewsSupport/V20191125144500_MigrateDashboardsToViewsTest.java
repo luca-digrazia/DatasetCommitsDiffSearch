@@ -51,7 +51,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doCallRealMethod;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
@@ -202,18 +204,16 @@ public class V20191125144500_MigrateDashboardsToViewsTest {
     @Test
     @MongoDBFixtures("ops_dashboards.json")
     public void exceptionWhenSavingViewCausesRollback() throws Exception {
-        doCallRealMethod()
-                .doCallRealMethod()
-                .doThrow(new RuntimeException("Something bad happened while saving view"))
+        doThrow(new RuntimeException("Something bad happened while saving view"))
                 .when(viewService)
-                .save(any());
+                .save(argThat(view -> view.id().equals("5ddf8ed8b2d44b2e044729d2")));
 
         assertThatExceptionOfType(RuntimeException.class)
                 .isThrownBy(migration::upgrade)
                 .withMessage("Something bad happened while saving view");
 
-        verify(viewService, times(2)).remove(any());
-        verify(searchService, times(3)).remove(any());
+        verify(viewService, atLeastOnce()).remove(any());
+        verify(searchService, atLeastOnce()).remove(any());
 
         assertThat(viewService.count()).isZero();
         assertThat(searchService.count()).isZero();
@@ -222,18 +222,16 @@ public class V20191125144500_MigrateDashboardsToViewsTest {
     @Test
     @MongoDBFixtures("ops_dashboards.json")
     public void exceptionWhenSavingSearchCausesRollback() throws Exception {
-        doCallRealMethod()
-                .doCallRealMethod()
-                .doThrow(new RuntimeException("Something bad happened while saving view"))
+        doThrow(new RuntimeException("Something bad happened while saving view"))
                 .when(searchService)
-                .save(any());
+                .save(argThat(search -> search.id().equals("5de0e98900002a0017000001")));
 
         assertThatExceptionOfType(RuntimeException.class)
                 .isThrownBy(migration::upgrade)
                 .withMessage("Something bad happened while saving view");
 
-        verify(viewService, times(2)).remove(any());
-        verify(searchService, times(2)).remove(any());
+        verify(viewService, atLeastOnce()).remove(any());
+        verify(searchService, atLeastOnce()).remove(any());
 
         assertThat(viewService.count()).isZero();
         assertThat(searchService.count()).isZero();
