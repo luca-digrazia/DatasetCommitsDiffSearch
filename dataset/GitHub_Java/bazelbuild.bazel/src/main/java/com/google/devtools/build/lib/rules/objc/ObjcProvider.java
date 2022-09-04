@@ -159,13 +159,6 @@ public final class ObjcProvider extends SkylarkClassObject implements Transitive
       new Key<>(LINK_ORDER, "include", PathFragment.class);
 
   /**
-   * Include search paths specified with {@code -iquote} on the command line. Also known as user
-   * header search paths.
-   */
-  public static final Key<PathFragment> IQUOTE =
-      new Key<>(LINK_ORDER, "iquote", PathFragment.class);
-
-  /**
    * Include search paths specified with {@code -isystem} on the command line.
    */
   public static final Key<PathFragment> INCLUDE_SYSTEM =
@@ -418,7 +411,6 @@ public final class ObjcProvider extends SkylarkClassObject implements Transitive
           IMPORTED_LIBRARY,
           INCLUDE,
           INCLUDE_SYSTEM,
-          IQUOTE,
           J2OBJC_LIBRARY,
           JRE_LIBRARY,
           LIBRARY,
