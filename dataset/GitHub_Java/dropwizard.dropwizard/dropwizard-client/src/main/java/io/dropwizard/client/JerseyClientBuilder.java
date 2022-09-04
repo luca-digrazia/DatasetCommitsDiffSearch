@@ -16,6 +16,7 @@ import org.apache.http.config.Registry;
 import org.apache.http.conn.DnsResolver;
 import org.apache.http.conn.routing.HttpRoutePlanner;
 import org.apache.http.conn.socket.ConnectionSocketFactory;
+import org.apache.http.impl.client.CloseableHttpClient;
 import org.glassfish.jersey.client.ClientConfig;
 import org.glassfish.jersey.client.spi.Connector;
 import org.glassfish.jersey.client.spi.ConnectorProvider;
@@ -165,30 +166,6 @@ public class JerseyClientBuilder {
     }
 
     /**
-     * Uses the given {@link ExecutorService}.
-     *
-     * @param executorService a thread pool
-     * @return {@code this}
-     * @see #using(io.dropwizard.setup.Environment)
-     */
-    public JerseyClientBuilder using(ExecutorService executorService) {
-        this.executorService = executorService;
-        return this;
-    }
-
-    /**
-     * Uses the given {@link ObjectMapper}.
-     *
-     * @param objectMapper    an object mapper
-     * @return {@code this}
-     * @see #using(io.dropwizard.setup.Environment)
-     */
-    public JerseyClientBuilder using(ObjectMapper objectMapper) {
-        this.objectMapper = objectMapper;
-        return this;
-    }
-
-    /**
      * Use the given {@link ConnectorProvider} instance.
      * <p/><b>WARNING:</b> Use it with a caution. Most of features will not
      * work in a custom connection provider.
@@ -289,24 +266,18 @@ public class JerseyClientBuilder {
                     "an executor service and an object mapper");
         }
 
-        if (executorService == null && environment != null) {
-            executorService = environment.lifecycle()
-                    .executorService("jersey-client-" + name + "-%d")
-                    .minThreads(configuration.getMinThreads())
-                    .maxThreads(configuration.getMaxThreads())
-                    .workQueue(new ArrayBlockingQueue<Runnable>(configuration.getWorkQueueSize()))
-                    .build();
+        if (environment == null) {
+            return build(name, executorService, objectMapper, validator);
         }
 
-        if (objectMapper == null && environment != null) {
-            objectMapper = environment.getObjectMapper();
-        }
-
-        if (environment != null) {
-            validator = environment.getValidator();
-        }
-
-        return build(name, executorService, objectMapper, validator);
+        return build(name, environment.lifecycle()
+                .executorService("jersey-client-" + name + "-%d")
+                .minThreads(configuration.getMinThreads())
+                .maxThreads(configuration.getMaxThreads())
+                .workQueue(new ArrayBlockingQueue<Runnable>(configuration.getWorkQueueSize()))
+                .build(),
+                environment.getObjectMapper(),
+                environment.getValidator());
     }
 
     private Client build(String name, ExecutorService threadPool,
@@ -343,15 +314,11 @@ public class JerseyClientBuilder {
 
         config.register(new DropwizardExecutorProvider(threadPool));
         if (connectorProvider == null) {
-            final ConfiguredCloseableHttpClient apacheHttpClient =
-                    apacheHttpClientBuilder.buildWithDefaultRequestConfiguration(name);
+            final CloseableHttpClient apacheHttpClient = apacheHttpClientBuilder.build(name);
             connectorProvider = new ConnectorProvider() {
                 @Override
                 public Connector getConnector(Client client, Configuration runtimeConfig) {
-                    return new DropwizardApacheConnector(
-                            apacheHttpClient.getClient(),
-                            apacheHttpClient.getDefaultRequestConfig(),
-                            configuration.isChunkedEncodingEnabled());
+                    return new DropwizardApacheConnector(apacheHttpClient, configuration.isChunkedEncodingEnabled());
                 }
             };
         }
