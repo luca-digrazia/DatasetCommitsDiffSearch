@@ -188,13 +188,6 @@ import java.util.concurrent.TimeUnit;
  *         </td>
  *     </tr>
  *     <tr>
- *         <td>{@code validationQueryTimeout}</td>
- *         <td>none</td>
- *         <td>
- *             The timeout before a connection validation queries fail.
- *         </td>
- *     </tr>
- *     <tr>
  *         <td>{@code checkConnectionWhileIdle}</td>
  *         <td>{@code true}</td>
  *         <td>
@@ -332,9 +325,6 @@ public class DataSourceFactory {
 
     @NotNull
     private String validationQuery = "/* Health Check */ SELECT 1";
-
-    @MinDuration(value = 1, unit = TimeUnit.SECONDS)
-    private Duration validationQueryTimeout;
 
     private boolean checkConnectionWhileIdle = true;
 
@@ -684,17 +674,8 @@ public class DataSourceFactory {
         this.validationInterval = validationInterval;
     }
 
-    @JsonProperty
-    public Optional<Duration> getValidationQueryTimeout() {
-        return Optional.fromNullable(validationQueryTimeout);
-    }
-
-    @JsonProperty
-    public void setValidationQueryTimeout(Duration validationQueryTimeout) {
-        this.validationQueryTimeout = validationQueryTimeout;
-    }
-
-    public ManagedDataSource build(MetricRegistry metricRegistry, String name) {
+    public ManagedDataSource build(MetricRegistry metricRegistry,
+                                   String name) throws ClassNotFoundException {
         final Properties properties = new Properties();
         for (Map.Entry<String, String> property : this.properties.entrySet()) {
             properties.setProperty(property.getKey(), property.getValue());
@@ -719,7 +700,7 @@ public class DataSourceFactory {
         poolConfig.setMaxIdle(maxSize);
         poolConfig.setMinIdle(minSize);
 
-        if (getMaxConnectionAge().isPresent()) {
+        if (maxConnectionAge != null) {
             poolConfig.setMaxAge(maxConnectionAge.toMilliseconds());
         }
 
@@ -736,10 +717,6 @@ public class DataSourceFactory {
         poolConfig.setTestOnReturn(checkConnectionOnReturn);
         poolConfig.setTimeBetweenEvictionRunsMillis((int) evictionInterval.toMilliseconds());
         poolConfig.setValidationInterval(validationInterval.toMilliseconds());
-
-        if (getValidationQueryTimeout().isPresent()) {
-            poolConfig.setValidationQueryTimeout((int) validationQueryTimeout.toSeconds());
-        }
 
         return new ManagedPooledDataSource(poolConfig, metricRegistry);
     }
