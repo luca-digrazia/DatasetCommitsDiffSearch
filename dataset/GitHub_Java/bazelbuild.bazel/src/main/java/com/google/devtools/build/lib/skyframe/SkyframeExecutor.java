@@ -1827,7 +1827,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     preparePackageLoading(
         createPackageLocator(
             eventHandler,
-            packageCacheOptions.packagePath,
+            packageCacheOptions,
             outputBase,
             directories.getWorkspace(),
             workingDirectory),
@@ -1846,13 +1846,13 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
 
   protected PathPackageLocator createPackageLocator(
       ExtendedEventHandler eventHandler,
-      List<String> packagePaths,
+      PackageCacheOptions packageCacheOptions,
       Path outputBase,
       Path workspace,
       Path workingDirectory)
       throws AbruptExitException {
     return PathPackageLocator.create(
-        outputBase, packagePaths, eventHandler, workspace, workingDirectory);
+        outputBase, packageCacheOptions.packagePath, eventHandler, workspace, workingDirectory);
   }
 
   private CyclesReporter createCyclesReporter() {
