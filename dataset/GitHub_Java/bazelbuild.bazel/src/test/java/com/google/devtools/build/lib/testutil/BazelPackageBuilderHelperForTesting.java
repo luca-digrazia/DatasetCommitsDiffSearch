@@ -18,11 +18,11 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
-import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.Package;
+import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.skyframe.packages.BazelPackageLoader;
 import com.google.devtools.build.lib.skyframe.packages.PackageLoader;
@@ -33,11 +33,11 @@ import com.google.devtools.build.lib.syntax.SkylarkSemantics;
  * each loaded package, for the sake of getting pretty nice test coverage.
  */
 public class BazelPackageBuilderHelperForTesting implements Package.Builder.Helper {
-  private final ConfiguredRuleClassProvider ruleClassProvider;
+  private final RuleClassProvider ruleClassProvider;
   private final BlazeDirectories directories;
 
   public BazelPackageBuilderHelperForTesting(
-      ConfiguredRuleClassProvider ruleClassProvider, BlazeDirectories directories) {
+      RuleClassProvider ruleClassProvider, BlazeDirectories directories) {
     this.ruleClassProvider = ruleClassProvider;
     this.directories = directories;
   }
@@ -63,7 +63,7 @@ public class BazelPackageBuilderHelperForTesting implements Package.Builder.Help
 
   private void sanityCheckBazelPackageLoader(
       Package pkg,
-      ConfiguredRuleClassProvider ruleClassProvider,
+      RuleClassProvider ruleClassProvider,
       SkylarkSemantics skylarkSemantics) {
     PackageIdentifier pkgId = pkg.getPackageIdentifier();
     PackageLoader packageLoader =
@@ -89,6 +89,18 @@ public class BazelPackageBuilderHelperForTesting implements Package.Builder.Help
             Iterables.transform(newlyLoadedPkg.getTargets().values(), TARGET_TO_LABEL));
     if (!targetsInPkg.equals(targetsInNewlyLoadedPkg)) {
       Sets.SetView<Label> unsatisfied = Sets.difference(targetsInPkg, targetsInNewlyLoadedPkg);
+      if (pkgId.compareTo(PackageIdentifier.createInMainRepo("tools/defaults")) == 0
+          && unsatisfied.isEmpty()) {
+        // The tools/defaults package is populated from command-line options
+        // (=configuration fragments) which the user specifies in tests using
+        // BuildViewTestCase.useConfiguration().
+        // We'd like PackageLoader to work as much as possible without duplicating the entire
+        // configuration of Bazel, so we prefer not to pass these flags to PackageLoader.
+        // As a result, the contents of tools/defaults might differ.
+        // As long as PackageLoader returns a superset of what Bazel returns, everything should load
+        // fine.
+        return;
+      }
       Sets.SetView<Label> unexpected = Sets.difference(targetsInNewlyLoadedPkg, targetsInPkg);
       throw new IllegalStateException(
           String.format(
