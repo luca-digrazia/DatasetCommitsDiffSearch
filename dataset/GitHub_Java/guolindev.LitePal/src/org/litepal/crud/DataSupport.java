@@ -1,17 +1,18 @@
 package org.litepal.crud;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.litepal.exceptions.DataSupportException;
 import org.litepal.tablemanager.Connector;
 import org.litepal.util.BaseUtility;
 
 import android.content.ContentValues;
+import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 
 /**
@@ -19,7 +20,7 @@ import android.database.sqlite.SQLiteDatabase;
  * @author Tony Green
  * @since 1.1
  */
-public abstract class DataSupport {
+public class DataSupport {
 
 	/**
 	 * The identify of each model. LitePal will generate the value
@@ -69,21 +70,324 @@ public abstract class DataSupport {
 	private List<String> fieldsToSetToDefault;
 
 	/**
+	 * Declaring to query which columns in table.
+	 * 
+	 * <pre>
+	 * DataSupport.select(&quot;name&quot;, &quot;age&quot;).find(Person.class);
+	 * </pre>
+	 * 
+	 * This will find all rows with name and age columns in Person table.
+	 * 
+	 * @param columns
+	 *            A String array of which columns to return. Passing null will
+	 *            return all columns.
+	 * 
+	 * @return A ClusterQuery instance.
+	 */
+	public static ClusterQuery select(String... columns) {
+		ClusterQuery cQuery = new ClusterQuery();
+		cQuery.mColumns = columns;
+		return cQuery;
+	}
+
+	/**
+	 * Declaring to query which rows in table.
+	 * 
+	 * <pre>
+	 * DataSupport.where(&quot;name = ? or age &gt; ?&quot;, &quot;Tom&quot;, &quot;14&quot;).find(Person.class);
+	 * </pre>
+	 * 
+	 * This will find rows which name is Tom or age greater than 14 in Person
+	 * table.
+	 * 
+	 * @param conditions
+	 *            A filter declaring which rows to return, formatted as an SQL
+	 *            WHERE clause. Passing null will return all rows.
+	 * @return A ClusterQuery instance.
+	 */
+	public static ClusterQuery where(String... conditions) {
+		ClusterQuery cQuery = new ClusterQuery();
+		cQuery.mConditions = conditions;
+		return cQuery;
+	}
+
+	/**
+	 * Declaring how to order the rows queried from table.
+	 * 
+	 * <pre>
+	 * DataSupport.order(&quot;name desc&quot;).find(Person.class);
+	 * </pre>
+	 * 
+	 * This will find all rows in Person table sorted by name with inverted
+	 * order.
+	 * 
+	 * @param column
+	 *            How to order the rows, formatted as an SQL ORDER BY clause.
+	 *            Passing null will use the default sort order, which may be
+	 *            unordered.
+	 * @return A ClusterQuery instance.
+	 */
+	public static ClusterQuery order(String column) {
+		ClusterQuery cQuery = new ClusterQuery();
+		cQuery.mOrderBy = column;
+		return cQuery;
+	}
+
+	/**
+	 * Limits the number of rows returned by the query.
+	 * 
+	 * <pre>
+	 * DataSupport.limit(2).find(Person.class);
+	 * </pre>
+	 * 
+	 * This will find the top 2 rows in Person table.
+	 * 
+	 * @param value
+	 *            Limits the number of rows returned by the query, formatted as
+	 *            LIMIT clause.
+	 * @return A ClusterQuery instance.
+	 */
+	public static ClusterQuery limit(int value) {
+		ClusterQuery cQuery = new ClusterQuery();
+		cQuery.mLimit = String.valueOf(value);
+		return cQuery;
+	}
+
+	/**
+	 * Declaring the offset of rows returned by the query. This method must be
+	 * used with {@link #limit(int)}, or nothing will return.
+	 * 
+	 * <pre>
+	 * DataSupport.limit(1).offset(2).find(Person.class);
+	 * </pre>
+	 * 
+	 * This will find the third row in Person table.
+	 * 
+	 * @param value
+	 *            The offset amount of rows returned by the query.
+	 * @return A ClusterQuery instance.
+	 */
+	public static ClusterQuery offset(int value) {
+		ClusterQuery cQuery = new ClusterQuery();
+		cQuery.mOffset = String.valueOf(value);
+		return cQuery;
+	}
+
+	/**
+	 * Finds the record by a specific id.
+	 * 
+	 * <pre>
+	 * Person p = DataSupport.find(Person.class, 1);
+	 * </pre>
+	 * 
+	 * The modelClass determines which table to query and the object type to
+	 * return. If no record can be found, then return null.
+	 * 
+	 * @param modelClass
+	 *            Which table to query and the object type to return.
+	 * @param id
+	 *            Which record to query.
+	 * @return An object with founded data from database, or null.
+	 */
+	public static synchronized <T> T find(Class<T> modelClass, long id) {
+		QueryHandler queryHandler = new QueryHandler(Connector.getDatabase());
+		return queryHandler.onFind(modelClass, id, false);
+	}
+
+	public static synchronized <T> T find(Class<T> modelClass, long id, boolean isEager) {
+		QueryHandler queryHandler = new QueryHandler(Connector.getDatabase());
+		return queryHandler.onFind(modelClass, id, isEager);
+	}
+
+	/**
+	 * Finds the first record of a single table.
+	 * 
+	 * <pre>
+	 * Person p = DataSupport.findFirst(Person.class);
+	 * </pre>
+	 * 
+	 * @param modelClass
+	 *            Which table to query and the object type to return.
+	 * @return An object with data of first row, or null.
+	 */
+	public static synchronized <T> T findFirst(Class<T> modelClass) {
+		QueryHandler queryHandler = new QueryHandler(Connector.getDatabase());
+		return queryHandler.onFindFirst(modelClass, false);
+	}
+
+	public static synchronized <T> T findFirst(Class<T> modelClass, boolean isEager) {
+		QueryHandler queryHandler = new QueryHandler(Connector.getDatabase());
+		return queryHandler.onFindFirst(modelClass, isEager);
+	}
+
+	/**
+	 * Finds the last record of a single table.
+	 * 
+	 * <pre>
+	 * Person p = DataSupport.findLast(Person.class);
+	 * </pre>
+	 * 
+	 * @param modelClass
+	 *            Which table to query and the object type to return.
+	 * @return An object with data of last row, or null.
+	 */
+	public static synchronized <T> T findLast(Class<T> modelClass) {
+		QueryHandler queryHandler = new QueryHandler(Connector.getDatabase());
+		return queryHandler.onFindLast(modelClass);
+	}
+
+	/**
+	 * Finds multiple records by an id array.
+	 * 
+	 * <pre>
+	 * List&lt;Person&gt; people = DataSupport.findAll(Person.class, 1, 2, 3);
+	 * 
+	 * long[] bookIds = { 10, 18 };
+	 * List&lt;Book&gt; books = DataSupport.findAll(Book.class, bookIds);
+	 * </pre>
+	 * 
+	 * Of course you can find all records by passing nothing to the ids
+	 * parameter.
+	 * 
+	 * <pre>
+	 * List&lt;Book&gt; allBooks = DataSupport.findAll(Book.class);
+	 * </pre>
+	 * 
+	 * The modelClass determines which table to query and the object type to
+	 * return.
+	 * 
+	 * @param modelClass
+	 *            Which table to query and the object type to return as a list.
+	 * @param ids
+	 *            Which records to query. Or do not pass it to find all records.
+	 * @return An object list with founded data from database, or an empty list.
+	 */
+	public static synchronized <T> List<T> findAll(Class<T> modelClass, long... ids) {
+		QueryHandler queryHandler = new QueryHandler(Connector.getDatabase());
+		return queryHandler.onFindAll(modelClass, ids);
+	}
+
+	/**
+	 * Runs the provided SQL and returns a Cursor over the result set. You may
+	 * include ?s in where clause in the query, which will be replaced by the
+	 * second to the last parameters, such as:
+	 * 
+	 * <pre>
+	 * Cursor cursor = DataSupport.findBySQL(&quot;select * from person where name=? and age=?&quot;, &quot;Tom&quot;, &quot;14&quot;);
+	 * </pre>
+	 * 
+	 * @param sql
+	 *            First parameter is the SQL clause to apply. Second to the last
+	 *            parameters will replace the place holders.
+	 * @return A Cursor object, which is positioned before the first entry. Note
+	 *         that Cursors are not synchronized, see the documentation for more
+	 *         details.
+	 */
+	public static synchronized Cursor findBySQL(String... sql) {
+		BaseUtility.checkConditionsCorrect(sql);
+		if (sql == null) {
+			return null;
+		}
+		if (sql.length <= 0) {
+			return null;
+		}
+		String[] selectionArgs;
+		if (sql.length == 1) {
+			selectionArgs = null;
+		} else {
+			selectionArgs = new String[sql.length - 1];
+			System.arraycopy(sql, 1, selectionArgs, 0, sql.length - 1);
+		}
+		return Connector.getDatabase().rawQuery(sql[0], selectionArgs);
+	}
+
+	/**
+	 * Deletes the record in the database by id.<br>
+	 * The data in other tables which is referenced with the record will be
+	 * removed too.
+	 * 
+	 * @param modelClass
+	 *            Which table to delete from by class.
+	 * @param id
+	 *            Which record to delete.
+	 * @return The number of rows affected. Including cascade delete rows.
+	 */
+	public static synchronized int delete(Class<?> modelClass, long id) {
+		int rowsAffected = 0;
+		SQLiteDatabase db = Connector.getDatabase();
+		db.beginTransaction();
+		try {
+			DeleteHandler deleteHandler = new DeleteHandler(db);
+			rowsAffected = deleteHandler.onDelete(modelClass, id);
+			db.setTransactionSuccessful();
+			return rowsAffected;
+		} finally {
+			db.endTransaction();
+		}
+	}
+
+	/**
+	 * Deletes all records with details given if they match a set of conditions
+	 * supplied. This method constructs a single SQL DELETE statement and sends
+	 * it to the database.<br>
+	 * Note that this method won't delete the referenced data in other tables.
+	 * You should remove those values by your own.
+	 * 
+	 * @param modelClass
+	 *            Which table to delete from by class.
+	 * @param conditions
+	 *            A string array representing the WHERE part of an SQL
+	 *            statement. First parameter is the WHERE clause to apply when
+	 *            deleting. The way of specifying place holders is to insert one
+	 *            or more question marks in the SQL. The first question mark is
+	 *            replaced by the second element of the array, the next question
+	 *            mark by the third, and so on. Passing empty string will update
+	 *            all rows.
+	 * @return The number of rows affected.
+	 */
+	public static synchronized int deleteAll(Class<?> modelClass, String... conditions) {
+		DeleteHandler deleteHandler = new DeleteHandler(Connector.getDatabase());
+		return deleteHandler.onDeleteAll(modelClass, conditions);
+	}
+
+	/**
+	 * Deletes all records with details given if they match a set of conditions
+	 * supplied. This method constructs a single SQL DELETE statement and sends
+	 * it to the database.<br>
+	 * Note that this method won't delete the referenced data in other tables.
+	 * You should remove those values by your own.
+	 * 
+	 * @param tableName
+	 *            Which table to delete from.
+	 * @param conditions
+	 *            A string array representing the WHERE part of an SQL
+	 *            statement. First parameter is the WHERE clause to apply when
+	 *            deleting. The way of specifying place holders is to insert one
+	 *            or more question marks in the SQL. The first question mark is
+	 *            replaced by the second element of the array, the next question
+	 *            mark by the third, and so on. Passing empty string will update
+	 *            all rows.
+	 * @return The number of rows affected.
+	 */
+	public static synchronized int deleteAll(String tableName, String... conditions) {
+		DeleteHandler deleteHandler = new DeleteHandler(Connector.getDatabase());
+		return deleteHandler.onDeleteAll(tableName, conditions);
+	}
+
+	/**
 	 * Updates the corresponding record by id with ContentValues. Returns the
 	 * number of affected rows.
 	 * 
 	 * @param modelClass
 	 *            Which table to update by class.
-	 * @param id
-	 *            Which record to update.
 	 * @param values
 	 *            A map from column names to new column values. null is a valid
 	 *            value that will be translated to NULL.
+	 * @param id
+	 *            Which record to update.
 	 * @return The number of rows affected.
-	 * 
-	 * @throws DataSupportException
 	 */
-	public static synchronized int update(Class<?> modelClass, long id, ContentValues values) {
+	public static synchronized int update(Class<?> modelClass, ContentValues values, long id) {
 		UpdateHandler updateHandler = new UpdateHandler(Connector.getDatabase());
 		return updateHandler.onUpdate(modelClass, id, values);
 	}
@@ -95,24 +399,87 @@ public abstract class DataSupport {
 	 * 
 	 * @param modelClass
 	 *            Which table to update by class.
+	 * @param values
+	 *            A map from column names to new column values. null is a valid
+	 *            value that will be translated to NULL.
 	 * @param conditions
 	 *            A string array representing the WHERE part of an SQL
 	 *            statement. First parameter is the WHERE clause to apply when
 	 *            updating. The way of specifying place holders is to insert one
 	 *            or more question marks in the SQL. The first question mark is
 	 *            replaced by the second element of the array, the next question
-	 *            mark by the third, and so on. Passing null will update all
-	 *            rows.
+	 *            mark by the third, and so on. Passing empty string will update
+	 *            all rows.
+	 * @return The number of rows affected.
+	 */
+	public static synchronized int updateAll(Class<?> modelClass, ContentValues values,
+			String... conditions) {
+		UpdateHandler updateHandler = new UpdateHandler(Connector.getDatabase());
+		return updateHandler.onUpdateAll(modelClass, values, conditions);
+	}
+
+	/**
+	 * Updates all records with details given if they match a set of conditions
+	 * supplied. This method constructs a single SQL UPDATE statement and sends
+	 * it to the database.
+	 * 
+	 * @param tableName
+	 *            Which table to update.
 	 * @param values
 	 *            A map from column names to new column values. null is a valid
 	 *            value that will be translated to NULL.
+	 * @param conditions
+	 *            A string array representing the WHERE part of an SQL
+	 *            statement. First parameter is the WHERE clause to apply when
+	 *            updating. The way of specifying place holders is to insert one
+	 *            or more question marks in the SQL. The first question mark is
+	 *            replaced by the second element of the array, the next question
+	 *            mark by the third, and so on. Passing empty string will update
+	 *            all rows.
 	 * @return The number of rows affected.
-	 * @throws DataSupportException
 	 */
-	public static synchronized int updateAll(Class<?> modelClass, String[] conditions,
-			ContentValues values) {
+	public static synchronized int updateAll(String tableName, ContentValues values,
+			String... conditions) {
 		UpdateHandler updateHandler = new UpdateHandler(Connector.getDatabase());
-		return updateHandler.onUpdateAll(modelClass, conditions, values);
+		return updateHandler.onUpdateAll(tableName, values, conditions);
+	}
+
+	/**
+	 * Saves the collection into database. <br />
+	 * 
+	 * <pre>
+	 * DataSupport.saveAll(people);
+	 * </pre>
+	 * 
+	 * If the model in collection is a new record gets created in the database,
+	 * otherwise the existing record gets updated.<br />
+	 * If saving process failed by any accident, the whole action will be
+	 * cancelled and your database will be <b>rolled back</b>. <br />
+	 * This method acts the same result as the below way, but <b>much more
+	 * efficient</b>.
+	 * 
+	 * <pre>
+	 * for (Person person : people) {
+	 * 	person.save();
+	 * }
+	 * </pre>
+	 * 
+	 * So when your collection holds huge of models,
+	 * {@link #saveAll(Collection)} is the better choice.
+	 * 
+	 * @param collection
+	 *            Holds all models to save.
+	 */
+	public static synchronized <T extends DataSupport> void saveAll(Collection<T> collection) {
+		SQLiteDatabase db = Connector.getDatabase();
+		db.beginTransaction();
+		try {
+			SaveHandler saveHandler = new SaveHandler(db);
+			saveHandler.onSaveAll(collection);
+			db.setTransactionSuccessful();
+		} finally {
+			db.endTransaction();
+		}
 	}
 
 	/**
@@ -139,16 +506,14 @@ public abstract class DataSupport {
 	/**
 	 * Updates the corresponding record by id. Use setXxx to decide which
 	 * columns to update. <br>
-	 * <b>Note: <b> 1. If you set default value to a field, the corresponding
+	 * <b>Note: </b> 1. If you set a default value to a field, the corresponding
 	 * column won't be updated. Use {@link #setToDefault(String)} to update
 	 * columns into default value. 2. This method couldn't update foreign key in
-	 * database. So do not use setXxx to set associations between models.<br>
-	 * Returns the number of affected rows.
+	 * database. So do not use setXxx to set associations between models.
 	 * 
 	 * @param id
 	 *            Which record to update.
 	 * @return The number of rows affected.
-	 * @throws DataSupportException
 	 */
 	public synchronized int update(long id) {
 		UpdateHandler updateHandler = new UpdateHandler(Connector.getDatabase());
@@ -161,11 +526,10 @@ public abstract class DataSupport {
 	 * Updates all records with details given if they match a set of conditions
 	 * supplied. This method constructs a single SQL UPDATE statement and sends
 	 * it to the database.<br>
-	 * <b>Note: <b> 1. If you set default value to a field, the corresponding
+	 * <b>Note: <b> 1. If you set a default value to a field, the corresponding
 	 * column won't be updated. Use {@link #setToDefault(String)} to update
 	 * columns into default value. 2. This method couldn't update foreign key in
-	 * database. So do not use setXxx to set associations between models.<br>
-	 * Returns the number of affected rows.
+	 * database. So do not use setXxx to set associations between models.
 	 * 
 	 * @param conditions
 	 *            A string array representing the WHERE part of an SQL
@@ -173,12 +537,11 @@ public abstract class DataSupport {
 	 *            updating. The way of specifying place holders is to insert one
 	 *            or more question marks in the SQL. The first question mark is
 	 *            replaced by the second element of the array, the next question
-	 *            mark by the third, and so on. Passing null will update all
-	 *            rows.
+	 *            mark by the third, and so on. Passing empty string will update
+	 *            all rows.
 	 * @return The number of rows affected.
-	 * @throws DataSupportException
 	 */
-	public synchronized int updateAll(String[] conditions) {
+	public synchronized int updateAll(String... conditions) {
 		UpdateHandler updateHandler = new UpdateHandler(Connector.getDatabase());
 		int rowsAffected = updateHandler.onUpdateAll(this, conditions);
 		getFieldsToSetToDefault().clear();
@@ -187,7 +550,14 @@ public abstract class DataSupport {
 
 	/**
 	 * Saves the model. <br />
-	 * <br />
+	 * 
+	 * <pre>
+	 * Person person = new Person();
+	 * person.setName(&quot;Tom&quot;);
+	 * person.setAge(22);
+	 * person.save();
+	 * </pre>
+	 * 
 	 * If the model is a new record gets created in the database, otherwise the
 	 * existing record gets updated.<br />
 	 * If saving process failed by any accident, the whole action will be
@@ -238,6 +608,13 @@ public abstract class DataSupport {
 	 */
 	public void setToDefault(String fieldName) {
 		getFieldsToSetToDefault().add(fieldName);
+	}
+
+	/**
+	 * Disable developers to create instance of DataSupport directly. They
+	 * should inherit this class with subclasses and operate on them.
+	 */
+	protected DataSupport() {
 	}
 
 	/**
@@ -387,8 +764,8 @@ public abstract class DataSupport {
 
 	/**
 	 * Get the associated model's map of self model. It can be used for
-	 * associations actions of CRUD. The key is the name of associated model.
-	 * The value is the id of associated model.
+	 * associations actions of CRUD. The key is the name of associated model's
+	 * table. The value is the id of associated model.
 	 * 
 	 * @return An associated model's map to save self model with foreign key.
 	 */
@@ -454,7 +831,7 @@ public abstract class DataSupport {
 	/**
 	 * Clear all the data for storing associated models' data.
 	 */
-	private void clearAssociatedData() {
+	void clearAssociatedData() {
 		clearIdOfModelWithFK();
 		clearIdOfModelWithoutFK();
 		clearIdOfModelForJoinTable();
