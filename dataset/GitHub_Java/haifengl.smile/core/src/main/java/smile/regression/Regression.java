@@ -16,8 +16,6 @@
 
 package smile.regression;
 
-import java.io.Serializable;
-
 /**
  * Regression analysis includes any techniques for modeling and analyzing
  * the relationship between a dependent variable and one or more independent
@@ -28,13 +26,13 @@ import java.io.Serializable;
  * 
  * @author Haifeng Li
  */
-public interface Regression<T> extends Serializable {
+public interface Regression<T> {
     /**
      * Predicts the dependent variable of an instance.
      * @param x the instance.
      * @return the predicted value of dependent variable.
      */
-    double predict(T x);
+    public double predict(T x);
 
     /**
      * Predicts the dependent variables of an array of instances.
@@ -42,7 +40,7 @@ public interface Regression<T> extends Serializable {
      * @param x the instances.
      * @return the predicted values.
      */
-    default double[] predict(T[] x) {
+    default public double[] predict(T[] x) {
         double[] y = new double[x.length];
         for (int i = 0; i < y.length; i++) {
             y[i] = predict(x[i]);
