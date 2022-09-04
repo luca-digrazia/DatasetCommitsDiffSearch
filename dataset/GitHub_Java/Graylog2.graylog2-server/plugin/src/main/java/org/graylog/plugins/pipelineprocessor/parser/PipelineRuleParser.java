@@ -17,9 +17,11 @@
 package org.graylog.plugins.pipelineprocessor.parser;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+
 import org.antlr.v4.runtime.ANTLRInputStream;
 import org.antlr.v4.runtime.BaseErrorListener;
 import org.antlr.v4.runtime.CommonTokenStream;
@@ -68,11 +70,14 @@ import org.graylog.plugins.pipelineprocessor.ast.functions.ParameterDescriptor;
 import org.graylog.plugins.pipelineprocessor.ast.statements.FunctionStatement;
 import org.graylog.plugins.pipelineprocessor.ast.statements.Statement;
 import org.graylog.plugins.pipelineprocessor.ast.statements.VarAssignStatement;
+import org.graylog.plugins.pipelineprocessor.codegen.CodeGenerator;
+import org.graylog.plugins.pipelineprocessor.codegen.GeneratedRule;
 import org.graylog.plugins.pipelineprocessor.parser.errors.IncompatibleArgumentType;
 import org.graylog.plugins.pipelineprocessor.parser.errors.IncompatibleIndexType;
 import org.graylog.plugins.pipelineprocessor.parser.errors.IncompatibleType;
 import org.graylog.plugins.pipelineprocessor.parser.errors.IncompatibleTypes;
 import org.graylog.plugins.pipelineprocessor.parser.errors.InvalidFunctionArgument;
+import org.graylog.plugins.pipelineprocessor.parser.errors.InvalidOperation;
 import org.graylog.plugins.pipelineprocessor.parser.errors.MissingRequiredParam;
 import org.graylog.plugins.pipelineprocessor.parser.errors.NonIndexableType;
 import org.graylog.plugins.pipelineprocessor.parser.errors.OptionalParametersMustBeNamed;
@@ -81,38 +86,65 @@ import org.graylog.plugins.pipelineprocessor.parser.errors.SyntaxError;
 import org.graylog.plugins.pipelineprocessor.parser.errors.UndeclaredFunction;
 import org.graylog.plugins.pipelineprocessor.parser.errors.UndeclaredVariable;
 import org.graylog.plugins.pipelineprocessor.parser.errors.WrongNumberOfArgs;
+import org.graylog.plugins.pipelineprocessor.processors.ConfigurationStateUpdater;
+import org.joda.time.DateTime;
+import org.joda.time.Duration;
+import org.joda.time.Period;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.inject.Inject;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.SortedSet;
 import java.util.Stack;
+import java.util.concurrent.atomic.AtomicLong;
 
+import javax.inject.Inject;
+
+import static com.google.common.collect.ImmutableSortedSet.orderedBy;
+import static java.util.Comparator.comparingInt;
 import static java.util.stream.Collectors.toList;
 
 public class PipelineRuleParser {
 
     private final FunctionRegistry functionRegistry;
+    private final CodeGenerator codeGenerator;
+
+    private static AtomicLong uniqueId = new AtomicLong(0);
 
     @Inject
-    public PipelineRuleParser(FunctionRegistry functionRegistry) {
+    public PipelineRuleParser(FunctionRegistry functionRegistry, CodeGenerator codeGenerator) {
         this.functionRegistry = functionRegistry;
+        this.codeGenerator = codeGenerator;
     }
 
     private static final Logger log = LoggerFactory.getLogger(PipelineRuleParser.class);
     public static final ParseTreeWalker WALKER = ParseTreeWalker.DEFAULT;
 
-
     public Rule parseRule(String rule, boolean silent) throws ParseException {
-        return parseRule(null, rule, silent);
+        return parseRule(rule, silent, null);
+    }
+
+    public Rule parseRule(String rule, boolean silent, ClassLoader classLoader) throws ParseException {
+        return parseRule("dummy" + uniqueId.getAndIncrement(), rule, silent, classLoader);
     }
 
     public Rule parseRule(String id, String rule, boolean silent) throws ParseException {
+        return parseRule(id, rule, silent, null);
+    }
+
+    /**
+     * Parses the given rule source and optionally generates a Java class for it if the classloader is not null.
+     *
+     * @param id the id of the rule, necessary to generate code
+     * @param rule rule source code
+     * @param silent don't emit status messages during parsing
+     * @param ruleClassLoader the classloader to load the generated code into (can be null)
+     * @return the parse rule
+     * @throws ParseException if a one or more parse errors occur
+     */
+    public Rule parseRule(String id, String rule, boolean silent, ClassLoader ruleClassLoader) throws ParseException {
         final ParseContext parseContext = new ParseContext(silent);
         final SyntaxErrorListener errorListener = new SyntaxErrorListener(parseContext);
 
@@ -139,8 +171,18 @@ public class PipelineRuleParser {
         WALKER.walk(new RuleTypeChecker(parseContext), ruleDeclaration);
 
         if (parseContext.getErrors().isEmpty()) {
-            final Rule parsedRule = parseContext.getRules().get(0);
-            return parsedRule.withId(id);
+            Rule parsedRule = parseContext.getRules().get(0).withId(id);
+            if (ruleClassLoader != null && ConfigurationStateUpdater.isAllowCodeGeneration()) {
+                try {
+                    final Class<? extends GeneratedRule> generatedClass = codeGenerator.generateCompiledRule(parsedRule, ruleClassLoader);
+                    if (generatedClass != null) {
+                        parsedRule = parsedRule.toBuilder().generatedRuleClass(generatedClass).build();
+                    }
+                } catch (Exception e) {
+                    log.warn("Unable to compile rule {} to native code, falling back to interpreting it: {}", parsedRule.name(), e.getMessage());
+                }
+            }
+            return parsedRule;
         }
         throw new ParseException(parseContext.getErrors());
     }
@@ -593,10 +635,10 @@ public class PipelineRuleParser {
             String type;
             // if the identifier is also a declared variable name prefer the variable
             if (isIdIsFieldAccess.peek() && !definedVars.contains(identifierName)) {
-                expr = new FieldRefExpression(ctx.getStart(), identifierName);
+                expr = new FieldRefExpression(ctx.getStart(), identifierName, parseContext.getDefinedVar(identifierName));
                 type = "FIELDREF";
             } else {
-                expr = new VarRefExpression(ctx.getStart(), identifierName);
+                expr = new VarRefExpression(ctx.getStart(), identifierName, parseContext.getDefinedVar(identifierName));
                 type = "VARREF";
             }
             log.trace("{}: ctx {} => {}", type, ctx, expr);
@@ -657,6 +699,11 @@ public class PipelineRuleParser {
             if (leftType.equals(rightType)) {
                 // propagate left type
                 expr.setType(leftType);
+            } else if (DateTime.class.equals(leftType) && DateTime.class.equals(rightType)) {
+                // fine to subtract two dates from each other, this results in a Duration
+                expr.setType(Duration.class);
+            } else if (DateTime.class.equals(leftType) && Period.class.equals(rightType) || Period.class.equals(leftType) && DateTime.class.equals(rightType)) {
+                expr.setType(DateTime.class);
             } else {
                 // this will be detected as an error later
                 expr.setType(Void.class);
@@ -709,6 +756,24 @@ public class PipelineRuleParser {
 
         @Override
         public void exitAddition(RuleLangParser.AdditionContext ctx) {
+            final AdditionExpression addExpression = (AdditionExpression) parseContext.expressions().get(ctx);
+            final Class leftType = addExpression.left().getType();
+            final Class rightType = addExpression.right().getType();
+
+            // special case for DateTime/Period, which are all compatible
+            final boolean leftDate = DateTime.class.equals(leftType);
+            final boolean rightDate = DateTime.class.equals(rightType);
+            final boolean leftPeriod = Period.class.equals(leftType);
+            final boolean rightPeriod = Period.class.equals(rightType);
+            if (leftDate && rightDate) {
+                if (addExpression.isPlus()) {
+                    parseContext.addError(new InvalidOperation(ctx, addExpression, "Unable to add two dates"));
+                }
+                return;
+            } else if (leftDate && rightPeriod || leftPeriod && rightDate || leftPeriod && rightPeriod) {
+                return;
+            }
+            // otherwise check generic binary expression
             checkBinaryExpression(ctx);
         }
 
@@ -905,7 +970,7 @@ public class PipelineRuleParser {
             final Pipeline.Builder builder = Pipeline.builder();
 
             builder.name(unquote(ctx.name.getText(), '"'));
-            SortedSet<Stage> stages = Sets.newTreeSet(Comparator.comparingInt(Stage::stage));
+            final ImmutableSortedSet.Builder<Stage> stages = orderedBy(comparingInt(Stage::stage));
 
             for (RuleLangParser.StageDeclarationContext stage : ctx.stageDeclaration()) {
                 final Stage.Builder stageBuilder = Stage.builder();
@@ -942,7 +1007,7 @@ public class PipelineRuleParser {
                 stages.add(stageBuilder.build());
             }
 
-            builder.stages(stages);
+            builder.stages(stages.build());
             parseContext.pipelines.add(builder.build());
         }
 
