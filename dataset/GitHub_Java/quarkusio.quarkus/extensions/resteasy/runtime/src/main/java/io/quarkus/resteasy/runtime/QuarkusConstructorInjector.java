@@ -27,6 +27,7 @@ import org.jboss.resteasy.spi.ConstructorInjector;
 import org.jboss.resteasy.spi.Failure;
 import org.jboss.resteasy.spi.HttpRequest;
 import org.jboss.resteasy.spi.HttpResponse;
+
 import io.quarkus.arc.runtime.BeanContainer;
 
 public class QuarkusConstructorInjector implements ConstructorInjector {
@@ -44,7 +45,16 @@ public class QuarkusConstructorInjector implements ConstructorInjector {
 
     @Override
     public CompletionStage<Object> construct(boolean unwrapAsync) {
-        return this.delegate.construct(unwrapAsync);
+        if (QuarkusInjectorFactory.CONTAINER == null) {
+            return this.delegate.construct(unwrapAsync);
+        }
+        if (factory == null) {
+            factory = QuarkusInjectorFactory.CONTAINER.instanceFactory(this.ctor.getDeclaringClass());
+        }
+        if (factory == null) {
+            return delegate.construct(unwrapAsync);
+        }
+        return CompletableFuture.completedFuture(factory.create().get());
     }
 
     @Override
@@ -53,10 +63,10 @@ public class QuarkusConstructorInjector implements ConstructorInjector {
         if (QuarkusInjectorFactory.CONTAINER == null) {
             return delegate.construct(request, response, unwrapAsync);
         }
-        if(factory == null) {
+        if (factory == null) {
             factory = QuarkusInjectorFactory.CONTAINER.instanceFactory(this.ctor.getDeclaringClass());
         }
-        if(factory == null) {
+        if (factory == null) {
             return delegate.construct(request, response, unwrapAsync);
         }
         return CompletableFuture.completedFuture(factory.create().get());
