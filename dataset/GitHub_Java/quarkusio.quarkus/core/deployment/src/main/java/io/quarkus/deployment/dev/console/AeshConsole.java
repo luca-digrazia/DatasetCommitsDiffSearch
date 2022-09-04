@@ -19,7 +19,8 @@ public class AeshConsole extends QuarkusConsole {
     private Size size;
     private Attributes attributes;
 
-    private String[] messages = new String[0];
+    private String statusMessage;
+    private String promptMessage;
     private int totalStatusLines = 0;
     private int lastWriteCursorX;
     /**
@@ -59,6 +60,27 @@ public class AeshConsole extends QuarkusConsole {
         }, "Console Shutdown Hoot"));
     }
 
+    private AeshConsole setStatusMessage(String statusMessage) {
+        synchronized (this) {
+            StringBuilder buffer = new StringBuilder();
+            clearStatusMessages(buffer);
+            int newLines = countLines(statusMessage) + countLines(promptMessage);
+            if (statusMessage == null) {
+                if (promptMessage != null) {
+                    newLines += 2;
+                }
+            } else if (promptMessage == null) {
+                newLines += 2;
+            } else {
+                newLines += 3;
+            }
+            this.statusMessage = statusMessage;
+            updatePromptOnChange(buffer, newLines);
+        }
+        deadlockSafeWrite();
+        return this;
+    }
+
     private void updatePromptOnChange(StringBuilder buffer, int newLines) {
         if (newLines > totalStatusLines) {
             StringBuilder nb = new StringBuilder();
@@ -84,39 +106,27 @@ public class AeshConsole extends QuarkusConsole {
     }
 
     private AeshConsole setPromptMessage(String promptMessage) {
-        if (!inputSupport) {
-            return this;
-        }
-        setMessage(0, promptMessage);
-        return this;
-    }
-
-    private AeshConsole setMessage(int position, String message) {
         synchronized (this) {
-            if (messages.length <= position) {
-                String[] old = messages;
-                messages = new String[position + 1];
-                System.arraycopy(old, 0, this.messages, 0, old.length);
+            if (!inputSupport) {
+                return this;
             }
-            messages[position] = message;
-            int newLines = countTotalStatusLines();
             StringBuilder buffer = new StringBuilder();
             clearStatusMessages(buffer);
+            int newLines = countLines(statusMessage) + countLines(promptMessage);
+            if (statusMessage == null) {
+                if (promptMessage != null) {
+                    newLines += 2;
+                }
+            } else if (promptMessage == null) {
+                newLines += 2;
+            } else {
+                newLines += 3;
+            }
+            this.promptMessage = promptMessage;
             updatePromptOnChange(buffer, newLines);
         }
         deadlockSafeWrite();
         return this;
-    }
-
-    private int countTotalStatusLines() {
-        int total = 0;
-        for (String i : messages) {
-            if (i != null) {
-                total++;
-                total += countLines(i);
-            }
-        }
-        return total == 0 ? total : total + 1;
     }
 
     private void end(Connection conn) {
@@ -217,20 +227,14 @@ public class AeshConsole extends QuarkusConsole {
             bottomBlankSpace = 0;
         }
         buffer.append("\n--\n");
-        for (int i = messages.length - 1; i >= 0; --i) {
-            String msg = messages[i];
-            if (msg != null) {
-                buffer.append(msg);
-                if (i > 0) {
-                    //if there is any more messages to print we add a newline
-                    for (int j = 0; j < i; ++j) {
-                        if (messages[j] != null) {
-                            buffer.append("\n");
-                            break;
-                        }
-                    }
-                }
+        if (statusMessage != null) {
+            buffer.append(statusMessage);
+            if (promptMessage != null) {
+                buffer.append("\n");
             }
+        }
+        if (promptMessage != null) {
+            buffer.append(promptMessage);
         }
     }
 
@@ -348,27 +352,13 @@ public class AeshConsole extends QuarkusConsole {
 
         @Override
         protected void setPromptMessage(String prompt) {
-            if (!inputSupport) {
-                return;
-            }
-            setMessage(0, prompt);
-        }
-
-        @Override
-        protected void setResultsMessage(String results) {
-            setMessage(1, results);
-        }
-
-        @Override
-        protected void setCompileErrorMessage(String results) {
-            setMessage(3, results);
+            AeshConsole.this.setPromptMessage(prompt);
         }
 
         @Override
         protected void setStatusMessage(String status) {
-            setMessage(2, status);
+            AeshConsole.this.setStatusMessage(status);
 
         }
-
     }
 }

@@ -19,17 +19,26 @@ import javax.tools.StandardJavaFileManager;
 import javax.tools.StandardLocation;
 import javax.tools.ToolProvider;
 
+import org.jboss.logging.Logger;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 
+import io.quarkus.bootstrap.model.PathsCollection;
 import io.quarkus.gizmo.Gizmo;
 
 public class JavaCompilationProvider implements CompilationProvider {
+
+    private static final Logger log = Logger.getLogger(JavaCompilationProvider.class);
 
     // -g is used to make the java compiler generate all debugging info
     // -parameters is used to generate metadata for reflection on method parameters
     // this is useful when people using debuggers against their hot-reloaded app
     private static final Set<String> COMPILER_OPTIONS = new HashSet<>(Arrays.asList("-g", "-parameters"));
+    private static final Set<String> IGNORE_NAMESPACES = new HashSet<>(Collections.singletonList("org.osgi"));
+
+    JavaCompiler compiler;
+    StandardJavaFileManager fileManager;
+    DiagnosticCollector<JavaFileObject> fileManagerDiagnostics;
 
     @Override
     public Set<String> handledExtensions() {
@@ -38,14 +47,20 @@ public class JavaCompilationProvider implements CompilationProvider {
 
     @Override
     public void compile(Set<File> filesToCompile, Context context) {
-        JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+        JavaCompiler compiler = this.compiler;
+        if (compiler == null) {
+            compiler = this.compiler = ToolProvider.getSystemJavaCompiler();
+        }
         if (compiler == null) {
             throw new RuntimeException("No system java compiler provided");
         }
-        DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<>();
-        try (StandardJavaFileManager fileManager = compiler.getStandardFileManager(diagnostics, null,
-                context.getSourceEncoding())) {
+        try {
+            if (fileManager == null) {
+                fileManager = compiler.getStandardFileManager(fileManagerDiagnostics = new DiagnosticCollector<>(), null,
+                        context.getSourceEncoding());
+            }
 
+            DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<>();
             fileManager.setLocation(StandardLocation.CLASS_PATH, context.getClasspath());
             fileManager.setLocation(StandardLocation.CLASS_OUTPUT, Collections.singleton(context.getOutputDirectory()));
 
@@ -57,12 +72,22 @@ public class JavaCompilationProvider implements CompilationProvider {
                     compilerFlags.toList(), null, sources);
 
             if (!task.call()) {
-                throw new RuntimeException("Compilation failed" + diagnostics.getDiagnostics());
+                StringBuilder sb = new StringBuilder("\u001B[91mCompilation Failed:");
+                for (Diagnostic<? extends JavaFileObject> i : diagnostics.getDiagnostics()) {
+                    sb.append("\n");
+                    sb.append(i.toString());
+                }
+                sb.append("\u001b[0m");
+                throw new RuntimeException(sb.toString());
             }
 
-            for (Diagnostic<? extends JavaFileObject> diagnostic : diagnostics.getDiagnostics()) {
-                System.out.format("%s, line %d in %s", diagnostic.getMessage(null), diagnostic.getLineNumber(),
-                        diagnostic.getSource() == null ? "[unknown source]" : diagnostic.getSource().getName());
+            logDiagnostics(diagnostics);
+
+            if (!fileManagerDiagnostics.getDiagnostics().isEmpty()) {
+                logDiagnostics(fileManagerDiagnostics);
+                fileManager.close();
+                fileManagerDiagnostics = null;
+                fileManager = null;
             }
         } catch (IOException e) {
             throw new RuntimeException("Cannot close file manager", e);
@@ -70,7 +95,7 @@ public class JavaCompilationProvider implements CompilationProvider {
     }
 
     @Override
-    public Path getSourcePath(Path classFilePath, Set<String> sourcePaths, String classesPath) {
+    public Path getSourcePath(Path classFilePath, PathsCollection sourcePaths, String classesPath) {
         Path sourceFilePath = null;
         final RuntimeUpdatesClassVisitor visitor = new RuntimeUpdatesClassVisitor(sourcePaths, classesPath);
         try (final InputStream inputStream = Files.newInputStream(classFilePath)) {
@@ -83,12 +108,43 @@ public class JavaCompilationProvider implements CompilationProvider {
         return sourceFilePath;
     }
 
+    @Override
+    public void close() throws IOException {
+        if (fileManager != null) {
+            fileManager.close();
+            fileManager = null;
+            fileManagerDiagnostics = null;
+        }
+    }
+
+    private void logDiagnostics(final DiagnosticCollector<JavaFileObject> diagnostics) {
+        for (Diagnostic<? extends JavaFileObject> diagnostic : diagnostics.getDiagnostics()) {
+            Logger.Level level = diagnostic.getKind() == Diagnostic.Kind.ERROR ? Logger.Level.ERROR : Logger.Level.WARN;
+            String message = diagnostic.getMessage(null);
+            if (level.equals(Logger.Level.WARN) && ignoreWarningForNamespace(message)) {
+                continue;
+            }
+
+            log.logf(level, "%s, line %d in %s", message, diagnostic.getLineNumber(),
+                    diagnostic.getSource() == null ? "[unknown source]" : diagnostic.getSource().getName());
+        }
+    }
+
+    private static boolean ignoreWarningForNamespace(String message) {
+        for (String ignoreNamespace : IGNORE_NAMESPACES) {
+            if (message.contains(ignoreNamespace)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     static class RuntimeUpdatesClassVisitor extends ClassVisitor {
-        private Set<String> sourcePaths;
-        private String classesPath;
+        private final PathsCollection sourcePaths;
+        private final String classesPath;
         private String sourceFile;
 
-        public RuntimeUpdatesClassVisitor(Set<String> sourcePaths, String classesPath) {
+        public RuntimeUpdatesClassVisitor(PathsCollection sourcePaths, String classesPath) {
             super(Gizmo.ASM_API_VERSION);
             this.sourcePaths = sourcePaths;
             this.classesPath = classesPath;
@@ -100,8 +156,7 @@ public class JavaCompilationProvider implements CompilationProvider {
         }
 
         public Path getSourceFileForClass(final Path classFilePath) {
-            for (String moduleSourcePath : sourcePaths) {
-                final Path sourcesDir = Paths.get(moduleSourcePath);
+            for (Path sourcesDir : sourcePaths) {
                 final Path classesDir = Paths.get(classesPath);
                 final StringBuilder sourceRelativeDir = new StringBuilder();
                 sourceRelativeDir.append(classesDir.relativize(classFilePath.getParent()));

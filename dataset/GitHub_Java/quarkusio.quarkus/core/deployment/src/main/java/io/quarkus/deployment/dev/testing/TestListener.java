@@ -34,8 +34,4 @@ public interface TestListener {
     default void testCompileFailed(String message) {
 
     }
-
-    default void testCompileSucceeded() {
-
-    }
 }
