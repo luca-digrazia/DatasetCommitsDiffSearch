@@ -1,6 +1,6 @@
 package io.dropwizard.configuration;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.util.Arrays;
 
@@ -18,21 +18,21 @@ public class LevenshteinComparatorTest {
      * specifics of the environment / JVM.
      */
     @Test
-    void testLevenshteinComparatorSort() {
+    public void testLevenshteinComparatorSort() {
         // no assertions, just making sure we don't violate the compare contract
-        Arrays.sort(new String[]{
-            "y", "w", "y", "e",
-            "s", "u", "h", "o",
-            "d", "t", "d", "f",
-            "z", "j", "c", "k",
-            "f", "z", "o", "e",
-            "r", "t", "v", "d",
-            "l", "r", "w", "u",
-            "v", "a", "m", "o"}, c);
+        Arrays.sort(new String[] {
+                "y", "w", "y", "e",
+                "s", "u", "h", "o",
+                "d", "t", "d", "f",
+                "z", "j", "c", "k",
+                "f", "z", "o", "e",
+                "r", "t", "v", "d",
+                "l", "r", "w", "u",
+                "v", "a", "m", "o" }, c);
     }
 
     @Test
-    void testLevenshteinCompare() {
+    public void testLevenshteinCompare() {
         assertThat(c.compare("z", "v")).isEqualTo(0);
         assertThat(c.compare("b", "v")).isEqualTo(-1);
         assertThat(c.compare("v", "b")).isEqualTo(1);
