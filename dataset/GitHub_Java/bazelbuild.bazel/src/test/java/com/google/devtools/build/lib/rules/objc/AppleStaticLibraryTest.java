@@ -100,7 +100,6 @@ public class AppleStaticLibraryTest extends ObjcRuleTestCase {
 
   @Test
   public void testAvoidDepsProviders() throws Exception {
-    useConfiguration("--incompatible_disable_objc_library_resources=false");
     scratch.file(
         "package/BUILD",
         "apple_static_library(",
@@ -408,7 +407,7 @@ public class AppleStaticLibraryTest extends ObjcRuleTestCase {
   @Test
   public void testAppleSdkIphoneosPlatformEnv() throws Exception {
     RULE_TYPE.scratchTarget(scratch, "platform_type", "'ios'");
-    useConfiguration("--apple_platform_type=ios", "--cpu=ios_arm64");
+    useConfiguration("--cpu=ios_arm64");
 
     CommandAction action = linkLibAction("//x:x");
 
@@ -734,8 +733,7 @@ public class AppleStaticLibraryTest extends ObjcRuleTestCase {
     AssertionError expected =
         assertThrows(AssertionError.class, () ->
             getConfiguredTarget("//examples/apple_skylark:my_target"));
-    assertThat(expected)
-        .hasMessageThat()
-        .contains("unexpected keyword 'foo', for call to function AppleStaticLibrary");
+    assertThat(expected).hasMessageThat()
+        .contains("unexpected keyword 'foo', in call to AppleStaticLibrary");
   }
 }

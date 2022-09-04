@@ -488,13 +488,13 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
   @Test
   public void testAttrDefaultValue() throws Exception {
     Attribute attr = buildAttribute("a1", "attr.string(default = 'some value')");
-    assertThat(attr.getDefaultValueUnchecked()).isEqualTo("some value");
+    assertThat(attr.getDefaultValueForTesting()).isEqualTo("some value");
   }
 
   @Test
   public void testLabelAttrDefaultValueAsString() throws Exception {
     Attribute sligleAttr = buildAttribute("a1", "attr.label(default = '//foo:bar')");
-    assertThat(sligleAttr.getDefaultValueUnchecked())
+    assertThat(sligleAttr.getDefaultValueForTesting())
         .isEqualTo(
             Label.parseAbsolute(
                 "//foo:bar",
@@ -503,7 +503,7 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
 
     Attribute listAttr =
         buildAttribute("a2", "attr.label_list(default = ['//foo:bar', '//bar:foo'])");
-    assertThat(listAttr.getDefaultValueUnchecked())
+    assertThat(listAttr.getDefaultValueForTesting())
         .isEqualTo(
             ImmutableList.of(
                 Label.parseAbsolute(
@@ -517,7 +517,7 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
 
     Attribute dictAttr =
         buildAttribute("a3", "attr.label_keyed_string_dict(default = {'//foo:bar': 'my value'})");
-    assertThat(dictAttr.getDefaultValueUnchecked())
+    assertThat(dictAttr.getDefaultValueForTesting())
         .isEqualTo(
             ImmutableMap.of(
                 Label.parseAbsolute(
@@ -771,14 +771,15 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
   public void testRuleUnknownKeyword() throws Exception {
     registerDummyUserDefinedFunction();
     checkErrorContains(
-        "unexpected keyword 'bad_keyword', in call to rule(function, string bad_keyword)",
+        "unexpected keyword 'bad_keyword' in call to " + "rule(implementation: function, ",
         "rule(impl, bad_keyword = 'some text')");
   }
 
   @Test
   public void testRuleImplementationMissing() throws Exception {
     checkErrorContains(
-        "parameter 'implementation' has no default value, in call to rule(dict attrs)",
+        "missing mandatory positional argument 'implementation' while calling "
+            + "rule(implementation",
         "rule(attrs = {})");
   }
 
@@ -786,8 +787,8 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
   public void testRuleBadTypeForAdd() throws Exception {
     registerDummyUserDefinedFunction();
     checkErrorContains(
-        "expected value of type 'dict or NoneType' for parameter 'attrs', "
-            + "in call to rule(function, string attrs)",
+        "expected dict or NoneType for 'attrs' while calling rule but got string instead: "
+            + "some text",
         "rule(impl, attrs = 'some text')");
   }
 
@@ -803,7 +804,7 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
   public void testRuleBadTypeForDoc() throws Exception {
     registerDummyUserDefinedFunction();
     checkErrorContains(
-        "expected value of type 'string' for parameter 'doc', in call to rule(function, int doc)",
+        "expected string for 'doc' while calling rule but got int instead",
         "rule(impl, doc = 1)");
   }
 
@@ -839,8 +840,8 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
             + "attr.label(default = Label('//foo:foo'), allow_files=True)})");
     RuleClass c = ((SkylarkRuleFunction) lookup("r1")).getRuleClass();
     Attribute a = c.getAttributeByName("a1");
-    assertThat(a.getDefaultValueUnchecked()).isInstanceOf(Label.class);
-    assertThat(a.getDefaultValueUnchecked().toString()).isEqualTo("//foo:foo");
+    assertThat(a.getDefaultValueForTesting()).isInstanceOf(Label.class);
+    assertThat(a.getDefaultValueForTesting().toString()).isEqualTo("//foo:foo");
   }
 
   @Test
@@ -850,7 +851,7 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
         "r1 = rule(impl, attrs = {'a1': attr.int(default = 40+2)})");
     RuleClass c = ((SkylarkRuleFunction) lookup("r1")).getRuleClass();
     Attribute a = c.getAttributeByName("a1");
-    assertThat(a.getDefaultValueUnchecked()).isEqualTo(42);
+    assertThat(a.getDefaultValueForTesting()).isEqualTo(42);
   }
 
   @Test
@@ -1415,7 +1416,7 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
   @Test
   public void declaredProvidersBadTypeForDoc() throws Exception {
     checkErrorContains(
-        "expected value of type 'string' for parameter 'doc', in call to provider(int doc)",
+        "expected string for 'doc' while calling provider but got int instead",
         "provider(doc = 1)");
   }
 
@@ -1558,7 +1559,7 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
   public void aspectBadTypeForDoc() throws Exception {
     registerDummyUserDefinedFunction();
     checkErrorContains(
-        "expected value of type 'string' for parameter 'doc', in call to aspect(function, int doc)",
+        "expected string for 'doc' while calling aspect but got int instead",
         "aspect(impl, doc = 1)");
   }
 

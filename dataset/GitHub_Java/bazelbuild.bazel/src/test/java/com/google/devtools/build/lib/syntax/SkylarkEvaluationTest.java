@@ -1785,7 +1785,7 @@ public class SkylarkEvaluationTest extends EvaluationTest {
   public void testFunctionCallBadOrdering() throws Exception {
     new SkylarkTest()
         .testIfErrorContains(
-            "global variable 'foo' is referenced before assignment.",
+            "name 'foo' is not defined",
             "def func(): return foo() * 2",
             "x = func()",
             "def foo(): return 2");
@@ -1807,7 +1807,7 @@ public class SkylarkEvaluationTest extends EvaluationTest {
 
   @Test
   public void testShadowisNotInitialized() throws Exception {
-    new SkylarkTest()
+    new SkylarkTest("--incompatible_static_name_resolution=true")
         .testIfErrorContains(
             /* error message */ "local variable 'gl' is referenced before assignment",
             "gl = 5",
@@ -1818,13 +1818,34 @@ public class SkylarkEvaluationTest extends EvaluationTest {
   }
 
   @Test
+  public void testLegacyGlobalVariableNotShadowed() throws Exception {
+    new SkylarkTest("--incompatible_static_name_resolution=false")
+        .setUp(
+            "gl = 5",
+            "def foo():",
+            "    if False: gl = 2",
+            // The legacy behavior is that the global variable is returned.
+            // With --incompatible_static_name_resolution set to true, this becomes an error.
+            "    return gl",
+            "res = foo()")
+        .testLookup("res", 5);
+  }
+
+  @Test
   public void testShadowBuiltin() throws Exception {
-    new SkylarkTest()
+    new SkylarkTest("--incompatible_static_name_resolution=true")
         .testIfErrorContains(
             "global variable 'len' is referenced before assignment",
             "x = len('abc')",
             "len = 2",
             "y = x + len");
+  }
+
+  @Test
+  public void testLegacyShadowBuiltin() throws Exception {
+    new SkylarkTest("--incompatible_static_name_resolution=false")
+        .setUp("x = len('abc')", "len = 2", "y = x + len")
+        .testLookup("y", 5);
   }
 
   @Test
@@ -2186,9 +2207,7 @@ public class SkylarkEvaluationTest extends EvaluationTest {
   @Test
   public void testListComprehensionsDoNotLeakVariables() throws Exception {
     checkEvalErrorContains(
-        // TODO(laurentlb): This happens because the variable gets undefined after the list
-        // comprehension. We should do better.
-        "local variable 'a' is referenced before assignment.",
+        "name 'a' is not defined",
         "def foo():",
         "  a = 10",
         "  b = [a for a in range(3)]",
@@ -2205,35 +2224,35 @@ public class SkylarkEvaluationTest extends EvaluationTest {
   @Test
   public void testLoadStatementWithAbsolutePath() throws Exception {
     checkEvalErrorContains(
-        "First argument of 'load' must be a label and start with either '//', ':', or '@'",
+        "First argument of 'load' must be a label and start with either '//', ':', or '@'.",
         "load('/tmp/foo', 'arg')");
   }
 
   @Test
   public void testLoadStatementWithRelativePath() throws Exception {
     checkEvalErrorContains(
-        "First argument of 'load' must be a label and start with either '//', ':', or '@'",
+        "First argument of 'load' must be a label and start with either '//', ':', or '@'.",
         "load('foo', 'arg')");
   }
 
   @Test
   public void testLoadStatementWithExternalLabel() throws Exception {
     checkEvalErrorDoesNotContain(
-        "First argument of 'load' must be a label and start with either '//', ':', or '@'",
+        "First argument of 'load' must be a label and start with either '//', ':', or '@'.",
         "load('@other//foo.bzl', 'arg')");
   }
 
   @Test
   public void testLoadStatementWithAbsoluteLabel() throws Exception {
     checkEvalErrorDoesNotContain(
-        "First argument of 'load' must be a label and start with either '//', ':', or '@'",
+        "First argument of 'load' must be a label and start with either '//', ':', or '@'.",
         "load('//foo.bzl', 'arg')");
   }
 
   @Test
   public void testLoadStatementWithRelativeLabel() throws Exception {
     checkEvalErrorDoesNotContain(
-        "First argument of 'load' must be a label and start with either '//', ':', or '@'",
+        "First argument of 'load' must be a label and start with either '//', ':', or '@'.",
         "load(':foo.bzl', 'arg')");
   }
 
@@ -2243,7 +2262,7 @@ public class SkylarkEvaluationTest extends EvaluationTest {
 
     AnalysisFailureInfo info = AnalysisFailureInfo.forAnalysisFailures(ImmutableList.of(cause));
 
-    new SkylarkTest()
+    new SkylarkTest("--experimental_analysis_testing_improvements=true")
         .update("val", info)
         .setUp(
             "causes = val.causes",
@@ -2251,6 +2270,15 @@ public class SkylarkEvaluationTest extends EvaluationTest {
             "message = causes.to_list()[0].message")
         .testLookup("label", Label.create("test", "test"))
         .testLookup("message", "ErrorMessage");
+
+    new SkylarkTest()
+        .update("val", info)
+        .testIfErrorContains("'AnalysisFailureInfo' has no field 'causes'", "val.causes");
+
+    new SkylarkTest()
+        .update("val", cause)
+        .testIfErrorContains("'AnalysisFailure' has no field 'message'", "val.message")
+        .testIfErrorContains("'AnalysisFailure' has no field 'label'", "val.label");
   }
 
   @Test
@@ -2258,25 +2286,36 @@ public class SkylarkEvaluationTest extends EvaluationTest {
     // This test uses an arbitrary experimental flag to verify this functionality. If this
     // experimental flag were to go away, this test may be updated to use any experimental flag.
     // The flag itself is unimportant to the test.
-    FlagGuardedValue val =
-        FlagGuardedValue.onlyWhenExperimentalFlagIsTrue(
-            FlagIdentifier.EXPERIMENTAL_BUILD_SETTING_API, "foo");
-    String errorMessage =
-        "GlobalSymbol is experimental and thus unavailable with the current "
-            + "flags. It may be enabled by setting --experimental_build_setting_api";
+    FlagGuardedValue val = FlagGuardedValue.onlyWhenExperimentalFlagIsTrue(
+        FlagIdentifier.EXPERIMENTAL_ANALYSIS_TESTING_IMPROVEMENTS,
+        "foo");
+    String errorMessage = "GlobalSymbol is experimental and thus unavailable with the current "
+        + "flags. It may be enabled by setting --experimental_analysis_testing_improvements";
 
-    new SkylarkTest(ImmutableMap.of("GlobalSymbol", val), "--experimental_build_setting_api=true")
+    new SkylarkTest(
+            ImmutableMap.of("GlobalSymbol", val),
+            "--experimental_analysis_testing_improvements=true")
         .setUp("var = GlobalSymbol")
         .testLookup("var", "foo");
 
-    new SkylarkTest(ImmutableMap.of("GlobalSymbol", val), "--experimental_build_setting_api=false")
-        .testIfErrorContains(errorMessage, "var = GlobalSymbol");
+    new SkylarkTest(
+            ImmutableMap.of("GlobalSymbol", val),
+            "--experimental_analysis_testing_improvements=false")
+        .testIfErrorContains(errorMessage,
+            "var = GlobalSymbol");
 
-    new SkylarkTest(ImmutableMap.of("GlobalSymbol", val), "--experimental_build_setting_api=false")
-        .testIfErrorContains(errorMessage, "def my_function():", "  var = GlobalSymbol");
+    new SkylarkTest(
+            ImmutableMap.of("GlobalSymbol", val),
+            "--experimental_analysis_testing_improvements=false")
+        .testIfErrorContains(errorMessage,
+            "def my_function():",
+            "  var = GlobalSymbol");
 
-    new SkylarkTest(ImmutableMap.of("GlobalSymbol", val), "--experimental_build_setting_api=false")
-        .setUp("GlobalSymbol = 'other'", "var = GlobalSymbol")
+    new SkylarkTest(
+            ImmutableMap.of("GlobalSymbol", val),
+            "--experimental_analysis_testing_improvements=false")
+        .setUp("GlobalSymbol = 'other'",
+            "var = GlobalSymbol")
         .testLookup("var", "other");
   }
 
