@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,13 +13,15 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.data.formula;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.temporal.IsoFields;
+import java.time.temporal.WeekFields;
 import java.util.*;
 import smile.data.Tuple;
 import smile.data.measure.Measure;
@@ -62,7 +64,7 @@ public class Date implements Term {
 
     @Override
     public List<Feature> bind(StructType schema) {
-        int index = schema.fieldIndex(name);
+        int index = schema.indexOf(name);
         DataType type = schema.field(name).type;
         switch (type.id()) {
             case Date:
@@ -94,7 +96,7 @@ public class Date implements Term {
         List<Feature> features = new ArrayList<>();
         for (DateFeature feature : this.features) {
             features.add(new Feature() {
-                StructField field = new StructField(
+                final StructField field = new StructField(
                         String.format("%s_%s", name, feature),
                         DataTypes.IntegerType,
                         feature == DateFeature.MONTH ? month : (feature == DateFeature.DAY_OF_WEEK ? dayOfWeek : null));
@@ -120,6 +122,7 @@ public class Date implements Term {
                     Object x = o.get(index);
                     if (x == null) return null;
 
+                    WeekFields weekFields = WeekFields.of(Locale.ROOT);
                     switch (type.id()) {
                         case Date:
                         {
@@ -127,19 +130,23 @@ public class Date implements Term {
                             switch (feature) {
                                 case YEAR: return date.getYear();
                                 case MONTH: return date.getMonthValue();
+                                case WEEK_OF_YEAR: return date.get(weekFields.weekOfYear());
+                                case WEEK_OF_MONTH: return date.get(weekFields.weekOfMonth());
+                                case QUARTER: return date.get(IsoFields.QUARTER_OF_YEAR);
+                                case DAY_OF_YEAR: return date.getDayOfYear();
                                 case DAY_OF_MONTH: return date.getDayOfMonth();
                                 case DAY_OF_WEEK: return date.getDayOfWeek().getValue();
-                                default: throw new IllegalStateException("Extra time features from a date.");
+                                default: throw new IllegalStateException("Extract time features from a date.");
                             }
                         }
                         case Time:
                         {
                             LocalTime time = (LocalTime) x;
                             switch (feature) {
-                                case HOURS: return time.getHour();
-                                case MINUTES: return time.getMinute();
-                                case SECONDS: return time.getSecond();
-                                default: throw new IllegalStateException("Extra date features from a time.");
+                                case HOUR: return time.getHour();
+                                case MINUTE: return time.getMinute();
+                                case SECOND: return time.getSecond();
+                                default: throw new IllegalStateException("Extract date features from a time.");
                             }
                         }
                         case DateTime:
@@ -148,11 +155,15 @@ public class Date implements Term {
                             switch (feature) {
                                 case YEAR: return dateTime.getYear();
                                 case MONTH: return dateTime.getMonthValue();
+                                case WEEK_OF_YEAR: return dateTime.get(weekFields.weekOfYear());
+                                case WEEK_OF_MONTH: return dateTime.get(weekFields.weekOfMonth());
+                                case QUARTER: return dateTime.get(IsoFields.QUARTER_OF_YEAR);
+                                case DAY_OF_YEAR: return dateTime.getDayOfYear();
                                 case DAY_OF_MONTH: return dateTime.getDayOfMonth();
                                 case DAY_OF_WEEK: return dateTime.getDayOfWeek().getValue();
-                                case HOURS: return dateTime.getHour();
-                                case MINUTES: return dateTime.getMinute();
-                                case SECONDS: return dateTime.getSecond();
+                                case HOUR: return dateTime.getHour();
+                                case MINUTE: return dateTime.getMinute();
+                                case SECOND: return dateTime.getSecond();
                             }
                             break;
                         }
@@ -168,9 +179,9 @@ public class Date implements Term {
     private boolean hasTimeFeatures(DateFeature[] features) {
         for (DateFeature feature : features) {
             switch (feature) {
-                case HOURS:
-                case MINUTES:
-                case SECONDS: return true;
+                case HOUR:
+                case MINUTE:
+                case SECOND: return true;
             }
         }
         return false;
@@ -182,6 +193,10 @@ public class Date implements Term {
             switch (feature) {
                 case YEAR:
                 case MONTH:
+                case WEEK_OF_YEAR:
+                case WEEK_OF_MONTH:
+                case QUARTER:
+                case DAY_OF_YEAR:
                 case DAY_OF_MONTH:
                 case DAY_OF_WEEK: return true;
             }
