@@ -24,11 +24,13 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.rules.cpp.LibraryToLinkWrapper;
+import com.google.devtools.build.lib.rules.cpp.LinkerInput;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider.ClasspathType;
 import com.google.devtools.build.lib.rules.java.proto.GeneratedExtensionRegistryProvider;
 
-/** Implementation for the java_library rule. */
+/**
+ * Implementation for the java_library rule.
+ */
 public class JavaLibrary implements RuleConfiguredTargetFactory {
   private final JavaSemantics semantics;
 
@@ -43,7 +45,7 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
     return init(
         ruleContext,
         common,
-        /* includeGeneratedExtensionRegistry = */ false,
+        /* includeGeneratedExtensionRegistry = */false,
         /* isJavaPluginRule = */ false);
   }
 
@@ -56,8 +58,8 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
     JavaTargetAttributes.Builder attributesBuilder = common.initCommon();
 
     // Collect the transitive dependencies.
-    JavaCompilationHelper helper =
-        new JavaCompilationHelper(ruleContext, semantics, common.getJavacOpts(), attributesBuilder);
+    JavaCompilationHelper helper = new JavaCompilationHelper(
+        ruleContext, semantics, common.getJavacOpts(), attributesBuilder);
     helper.addLibrariesToAttributes(common.targetsTreatedAsDeps(ClasspathType.COMPILE_ONLY));
 
     if (ruleContext.hasErrors()) {
@@ -86,7 +88,8 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
 
     Artifact jar = null;
 
-    Artifact srcJar = ruleContext.getImplicitOutputArtifact(JavaSemantics.JAVA_LIBRARY_SOURCE_JAR);
+    Artifact srcJar = ruleContext.getImplicitOutputArtifact(
+        JavaSemantics.JAVA_LIBRARY_SOURCE_JAR);
 
     NestedSet<Artifact> transitiveSourceJars = common.collectTransitiveSourceJars(srcJar);
     JavaSourceJarsProvider.Builder sourceJarsProviderBuilder =
@@ -94,7 +97,8 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
             .addSourceJar(srcJar)
             .addAllTransitiveSourceJars(transitiveSourceJars);
 
-    Artifact classJar = ruleContext.getImplicitOutputArtifact(JavaSemantics.JAVA_LIBRARY_CLASS_JAR);
+    Artifact classJar = ruleContext.getImplicitOutputArtifact(
+        JavaSemantics.JAVA_LIBRARY_CLASS_JAR);
 
     if (attributes.hasSources() || attributes.hasResources()) {
       // We only want to add a jar to the classpath of a dependent rule if it has content.
@@ -159,20 +163,16 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
             javaArtifacts, attributes, neverLink, helper.getBootclasspathOrDefault()));
 
     JavaCompilationArgsProvider javaCompilationArgs =
-        common.collectJavaCompilationArgs(
-            neverLink, /* srcLessDepsExport= */ false, /* javaProtoLibraryStrictDeps= */ false);
-    JavaStrictCompilationArgsProvider strictJavaCompilationArgs =
-        new JavaStrictCompilationArgsProvider(
-            common.collectJavaCompilationArgs(
-                neverLink, /* srcLessDepsExport= */ false, /* javaProtoLibraryStrictDeps= */ true));
-    NestedSet<LibraryToLinkWrapper> transitiveJavaNativeLibraries =
+        common.collectJavaCompilationArgs(neverLink, false);
+    NestedSet<LinkerInput> transitiveJavaNativeLibraries =
         common.collectTransitiveJavaNativeLibraries();
 
-    RuleConfiguredTargetBuilder builder = new RuleConfiguredTargetBuilder(ruleContext);
+    RuleConfiguredTargetBuilder builder =
+        new RuleConfiguredTargetBuilder(ruleContext);
 
     semantics.addProviders(ruleContext, common, genSourceJar, builder);
     if (generatedExtensionRegistryProvider != null) {
-      builder.addNativeDeclaredProvider(generatedExtensionRegistryProvider);
+      builder.add(GeneratedExtensionRegistryProvider.class, generatedExtensionRegistryProvider);
     }
 
     JavaCompilationArgsProvider compilationArgsProvider = javaCompilationArgs;
@@ -188,28 +188,23 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
 
     NestedSet<Artifact> proguardSpecs = new ProguardLibrary(ruleContext).collectProguardSpecs();
 
-    JavaPluginInfoProvider pluginInfoProvider =
-        isJavaPluginRule
-            // For java_plugin we create the provider with content retrieved from the rule
-            // attributes.
-            ? common.getJavaPluginInfoProvider(ruleContext)
-            // For java_library we add the transitive plugins from plugins and exported_plugins
-            // attrs.
-            : JavaCommon.getTransitivePlugins(ruleContext);
+    JavaPluginInfoProvider pluginInfoProvider = isJavaPluginRule
+        // For java_plugin we create the provider with content retrieved from the rule attributes.
+        ? common.getJavaPluginInfoProvider(ruleContext)
+        // For java_library we add the transitive plugins from plugins and exported_plugins attrs.
+        : JavaCommon.getTransitivePlugins(ruleContext);
 
     // java_library doesn't need to return JavaRunfilesProvider
-    JavaInfo javaInfo =
-        javaInfoBuilder
-            .addProvider(JavaCompilationArgsProvider.class, compilationArgsProvider)
-            .addProvider(JavaStrictCompilationArgsProvider.class, strictJavaCompilationArgs)
-            .addProvider(JavaSourceJarsProvider.class, sourceJarsProvider)
-            .addProvider(JavaRuleOutputJarsProvider.class, ruleOutputJarsProvider)
-            // TODO(bazel-team): this should only happen for java_plugin
-            .addProvider(JavaPluginInfoProvider.class, pluginInfoProvider)
-            .setRuntimeJars(javaArtifacts.getRuntimeJars())
-            .setJavaConstraints(JavaCommon.getConstraints(ruleContext))
-            .setNeverlink(neverLink)
-            .build();
+    JavaInfo javaInfo = javaInfoBuilder
+        .addProvider(JavaCompilationArgsProvider.class, compilationArgsProvider)
+        .addProvider(JavaSourceJarsProvider.class, sourceJarsProvider)
+        .addProvider(JavaRuleOutputJarsProvider.class, ruleOutputJarsProvider)
+        // TODO(bazel-team): this should only happen for java_plugin
+        .addProvider(JavaPluginInfoProvider.class, pluginInfoProvider)
+        .setRuntimeJars(javaArtifacts.getRuntimeJars())
+        .setJavaConstraints(JavaCommon.getConstraints(ruleContext))
+        .setNeverlink(neverLink)
+        .build();
 
     builder
         .addSkylarkTransitiveInfo(
