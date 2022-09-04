@@ -1,5 +1,5 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
  *
  * This file is part of Graylog2.
  *
@@ -15,6 +15,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 
 package org.graylog2.indexer.indices;
@@ -22,8 +23,6 @@ package org.graylog2.indexer.indices;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
-import com.google.inject.assistedinject.Assisted;
-import com.google.inject.assistedinject.AssistedInject;
 import org.elasticsearch.action.ActionFuture;
 import org.elasticsearch.action.WriteConsistencyLevel;
 import org.elasticsearch.action.admin.cluster.state.ClusterStateRequest;
@@ -57,7 +56,7 @@ import org.elasticsearch.common.settings.ImmutableSettings;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.search.SearchHit;
-import org.graylog2.Configuration;
+import org.graylog2.Core;
 import org.graylog2.indexer.IndexNotFoundException;
 import org.graylog2.indexer.Indexer;
 import org.graylog2.indexer.Mapping;
@@ -74,19 +73,15 @@ import static org.elasticsearch.index.query.QueryBuilders.matchAllQuery;
  * @author Lennart Koopmann <lennart@torch.sh>
  */
 public class Indices {
-    public interface Factory {
-        Indices create(Client client);
-    }
 
     private static final Logger LOG = LoggerFactory.getLogger(Indices.class);
 
+    private final Core server;
     private final Client c;
-    private final Configuration configuration;
 
-    @AssistedInject
-    public Indices(@Assisted Client client, Configuration configuration) {
+    public Indices(Client client, Core server) {
+        this.server = server;
         this.c = client;
-        this.configuration = configuration;
     }
 
     public void move(String source, String target) {
@@ -171,7 +166,7 @@ public class Indices {
     }
 
     public String allIndicesAlias() {
-        return configuration.getElasticSearchIndexPrefix() + "_*";
+        return server.getConfiguration().getElasticSearchIndexPrefix() + "_*";
     }
 
     public boolean exists(String index) {
@@ -190,8 +185,8 @@ public class Indices {
 
     public boolean create(String indexName) {
         Map<String, Object> settings = Maps.newHashMap();
-        settings.put("number_of_shards", configuration.getElasticSearchShards());
-        settings.put("number_of_replicas", configuration.getElasticSearchReplicas());
+        settings.put("number_of_shards", server.getConfiguration().getElasticSearchShards());
+        settings.put("number_of_replicas", server.getConfiguration().getElasticSearchReplicas());
         Map<String, String> keywordLowercase = Maps.newHashMap();
         keywordLowercase.put("tokenizer", "keyword");
         keywordLowercase.put("filter", "lowercase");
@@ -205,7 +200,7 @@ public class Indices {
         if (!acknowledged) {
             return false;
         }
-        final PutMappingRequest mappingRequest = Mapping.getPutMappingRequest(c, indexName, configuration.getElasticSearchAnalyzer());
+        final PutMappingRequest mappingRequest = Mapping.getPutMappingRequest(c, indexName, server.getConfiguration().getElasticSearchAnalyzer());
         final boolean mappingCreated = c.admin().indices().putMapping(mappingRequest).actionGet().isAcknowledged();
         return acknowledged && mappingCreated;
     }
