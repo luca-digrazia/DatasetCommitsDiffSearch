@@ -357,15 +357,9 @@ public class QuarkusRestProcessor {
 
         Set<String> allowedClasses = new HashSet<>();
         Set<String> singletonClasses = new HashSet<>();
-        Set<String> globalNameBindings = new HashSet<>();
         boolean filterClasses = false;
         Application application = null;
-        ClassInfo selectedAppClass = null;
         for (ClassInfo applicationClassInfo : applications) {
-            if (selectedAppClass != null) {
-                throw new RuntimeException("More than one Application class: " + applications);
-            }
-            selectedAppClass = applicationClassInfo;
             // FIXME: yell if there's more than one
             String applicationClass = applicationClassInfo.name().toString();
             try {
@@ -430,9 +424,6 @@ public class QuarkusRestProcessor {
                     .setInjectableBeans(injectableBeans).setAdditionalWriters(additionalWriters)
                     .setHasRuntimeConverters(!converterProviders.getParamConverterProviders().isEmpty())
                     .setInitConverters(initConverters).build();
-            if (selectedAppClass != null) {
-                globalNameBindings = endpointIndexer.nameBindingNames(selectedAppClass);
-            }
 
             for (ClassInfo i : scannedResources.values()) {
                 if (filterClasses && !allowedClasses.contains(i.name().toString())) {
@@ -501,7 +492,7 @@ public class QuarkusRestProcessor {
                         interceptors.addResourcePreMatchInterceptor(interceptor);
                     } else {
                         Set<String> nameBindingNames = endpointIndexer.nameBindingNames(filterClass);
-                        if (nameBindingNames.isEmpty() || namePresent(nameBindingNames, globalNameBindings)) {
+                        if (nameBindingNames.isEmpty()) {
                             interceptors.addGlobalRequestInterceptor(interceptor);
                         } else {
                             interceptor.setNameBindingNames(nameBindingNames);
@@ -538,7 +529,7 @@ public class QuarkusRestProcessor {
                     ResourceResponseInterceptor interceptor = new ResourceResponseInterceptor();
                     interceptor.setFactory(factory(filterClass, singletonClasses, recorder, beanContainerBuildItem));
                     Set<String> nameBindingNames = endpointIndexer.nameBindingNames(filterClass);
-                    if (nameBindingNames.isEmpty() || namePresent(nameBindingNames, globalNameBindings)) {
+                    if (nameBindingNames.isEmpty()) {
                         interceptors.addGlobalResponseInterceptor(interceptor);
                     } else {
                         interceptor.setNameBindingNames(nameBindingNames);
@@ -565,7 +556,7 @@ public class QuarkusRestProcessor {
                     ResourceWriterInterceptor interceptor = new ResourceWriterInterceptor();
                     interceptor.setFactory(factory(filterClass, singletonClasses, recorder, beanContainerBuildItem));
                     Set<String> nameBindingNames = endpointIndexer.nameBindingNames(filterClass);
-                    if (nameBindingNames.isEmpty() || namePresent(nameBindingNames, globalNameBindings)) {
+                    if (nameBindingNames.isEmpty()) {
                         interceptors.addGlobalWriterInterceptor(interceptor);
                     } else {
                         interceptor.setNameBindingNames(nameBindingNames);
@@ -583,7 +574,7 @@ public class QuarkusRestProcessor {
                     ResourceReaderInterceptor interceptor = new ResourceReaderInterceptor();
                     interceptor.setFactory(factory(filterClass, singletonClasses, recorder, beanContainerBuildItem));
                     Set<String> nameBindingNames = endpointIndexer.nameBindingNames(filterClass);
-                    if (nameBindingNames.isEmpty() || namePresent(nameBindingNames, globalNameBindings)) {
+                    if (nameBindingNames.isEmpty()) {
                         interceptors.addGlobalReaderInterceptor(interceptor);
                     } else {
                         interceptor.setNameBindingNames(nameBindingNames);
@@ -814,15 +805,6 @@ public class QuarkusRestProcessor {
             // Match paths that begin with the deployment path
             routes.produce(new RouteBuildItem(new BasicRoute(matchPath, VertxHttpRecorder.DEFAULT_ROUTE_ORDER + 1), handler));
         }
-    }
-
-    private boolean namePresent(Set<String> nameBindingNames, Set<String> globalNameBindings) {
-        for (String i : globalNameBindings) {
-            if (nameBindingNames.contains(i)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private void registerExceptionMapper(QuarkusRestRecorder recorder,
