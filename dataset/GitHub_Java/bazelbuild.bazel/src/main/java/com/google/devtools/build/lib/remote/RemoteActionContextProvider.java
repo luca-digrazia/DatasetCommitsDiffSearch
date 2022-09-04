@@ -27,11 +27,6 @@ import com.google.devtools.build.lib.exec.ExecutorLifecycleListener;
 import com.google.devtools.build.lib.exec.ModuleActionContextRegistry;
 import com.google.devtools.build.lib.exec.SpawnCache;
 import com.google.devtools.build.lib.exec.SpawnStrategyRegistry;
-import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
-import com.google.devtools.build.lib.remote.common.RemoteExecutionClient;
-import com.google.devtools.build.lib.remote.common.RemotePathResolver;
-import com.google.devtools.build.lib.remote.common.RemotePathResolver.DefaultRemotePathResolver;
-import com.google.devtools.build.lib.remote.common.RemotePathResolver.SiblingRepositoryLayoutResolver;
 import com.google.devtools.build.lib.remote.options.RemoteOptions;
 import com.google.devtools.build.lib.remote.util.DigestUtil;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
@@ -43,17 +38,16 @@ final class RemoteActionContextProvider implements ExecutorLifecycleListener {
 
   private final CommandEnvironment env;
   private final RemoteCache cache;
-  @Nullable private final RemoteExecutionClient executor;
+  @Nullable private final GrpcRemoteExecutor executor;
   @Nullable private final ListeningScheduledExecutorService retryScheduler;
   private final DigestUtil digestUtil;
   @Nullable private final Path logDir;
   private ImmutableSet<ActionInput> filesToDownload = ImmutableSet.of();
-  private RemoteExecutionService remoteExecutionService;
 
   private RemoteActionContextProvider(
       CommandEnvironment env,
       RemoteCache cache,
-      @Nullable RemoteExecutionClient executor,
+      @Nullable GrpcRemoteExecutor executor,
       @Nullable ListeningScheduledExecutorService retryScheduler,
       DigestUtil digestUtil,
       @Nullable Path logDir) {
@@ -77,46 +71,12 @@ final class RemoteActionContextProvider implements ExecutorLifecycleListener {
   public static RemoteActionContextProvider createForRemoteExecution(
       CommandEnvironment env,
       RemoteExecutionCache cache,
-      RemoteExecutionClient executor,
+      GrpcRemoteExecutor executor,
       ListeningScheduledExecutorService retryScheduler,
       DigestUtil digestUtil,
       Path logDir) {
     return new RemoteActionContextProvider(
         env, cache, executor, retryScheduler, digestUtil, logDir);
-  }
-
-  RemotePathResolver createRemotePathResolver() {
-    Path execRoot = env.getExecRoot();
-    BuildLanguageOptions buildLanguageOptions =
-        env.getOptions().getOptions(BuildLanguageOptions.class);
-    RemotePathResolver remotePathResolver;
-    if (buildLanguageOptions != null && buildLanguageOptions.experimentalSiblingRepositoryLayout) {
-      RemoteOptions remoteOptions = checkNotNull(env.getOptions().getOptions(RemoteOptions.class));
-      remotePathResolver =
-          new SiblingRepositoryLayoutResolver(
-              execRoot, remoteOptions.incompatibleRemoteOutputPathsRelativeToInputRoot);
-    } else {
-      remotePathResolver = new DefaultRemotePathResolver(execRoot);
-    }
-    return remotePathResolver;
-  }
-
-  RemoteExecutionService getRemoteExecutionService() {
-    if (remoteExecutionService == null) {
-      remoteExecutionService =
-          new RemoteExecutionService(
-              env.getExecRoot(),
-              createRemotePathResolver(),
-              env.getBuildRequestId(),
-              env.getCommandId().toString(),
-              digestUtil,
-              checkNotNull(env.getOptions().getOptions(RemoteOptions.class)),
-              cache,
-              executor,
-              filesToDownload);
-    }
-
-    return remoteExecutionService;
   }
 
   /**
@@ -131,20 +91,23 @@ final class RemoteActionContextProvider implements ExecutorLifecycleListener {
       return; // Can't use a spawn strategy without executor.
     }
 
-    boolean verboseFailures =
-        checkNotNull(env.getOptions().getOptions(ExecutionOptions.class)).verboseFailures;
     RemoteSpawnRunner spawnRunner =
         new RemoteSpawnRunner(
             env.getExecRoot(),
             checkNotNull(env.getOptions().getOptions(RemoteOptions.class)),
             env.getOptions().getOptions(ExecutionOptions.class),
-            verboseFailures,
+            checkNotNull(env.getOptions().getOptions(ExecutionOptions.class)).verboseFailures,
             env.getReporter(),
+            env.getBuildRequestId(),
+            env.getCommandId().toString(),
+            (RemoteExecutionCache) cache,
+            executor,
             retryScheduler,
+            digestUtil,
             logDir,
-            getRemoteExecutionService());
+            filesToDownload);
     registryBuilder.registerStrategy(
-        new RemoteSpawnStrategy(env.getExecRoot(), spawnRunner, verboseFailures), "remote");
+        new RemoteSpawnStrategy(env.getExecRoot(), spawnRunner), "remote");
   }
 
   /**
@@ -158,8 +121,12 @@ final class RemoteActionContextProvider implements ExecutorLifecycleListener {
             env.getExecRoot(),
             checkNotNull(env.getOptions().getOptions(RemoteOptions.class)),
             checkNotNull(env.getOptions().getOptions(ExecutionOptions.class)).verboseFailures,
+            cache,
+            env.getBuildRequestId(),
+            env.getCommandId().toString(),
             env.getReporter(),
-            getRemoteExecutionService());
+            digestUtil,
+            filesToDownload);
     registryBuilder.register(SpawnCache.class, spawnCache, "remote-cache");
   }
 
