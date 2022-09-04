@@ -1,6 +1,7 @@
 package io.quarkus.deployment.steps;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 import java.util.OptionalInt;
@@ -16,6 +17,7 @@ import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.DeploymentClassLoaderBuildItem;
 import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
+import io.quarkus.deployment.builditem.GeneratedResourceBuildItem;
 import io.quarkus.deployment.builditem.RunTimeConfigurationSourceBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.RuntimeInitializedClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ServiceProviderBuildItem;
@@ -36,7 +38,8 @@ class ConfigBuildSteps {
 
     @BuildStep
     void generateConfigSources(List<RunTimeConfigurationSourceBuildItem> runTimeSources,
-            final BuildProducer<GeneratedClassBuildItem> generatedClass) {
+            final BuildProducer<GeneratedClassBuildItem> generatedClass,
+            final BuildProducer<GeneratedResourceBuildItem> generatedResource) {
         ClassOutput classOutput = new ClassOutput() {
             @Override
             public void write(String name, byte[] data) {
@@ -69,6 +72,10 @@ class ConfigBuildSteps {
                 mc.returnValue(list);
             }
         }
+
+        generatedResource.produce(new GeneratedResourceBuildItem(
+                SERVICES_PREFIX + ConfigSourceProvider.class.getName(),
+                PROVIDER_CLASS_NAME.getBytes(StandardCharsets.UTF_8)));
     }
 
     // XXX replace this with constant-folded service loader impl
@@ -76,6 +83,7 @@ class ConfigBuildSteps {
     void nativeServiceProviders(
             final DeploymentClassLoaderBuildItem classLoaderItem,
             final BuildProducer<ServiceProviderBuildItem> providerProducer) throws IOException {
+        providerProducer.produce(new ServiceProviderBuildItem(ConfigSourceProvider.class.getName(), PROVIDER_CLASS_NAME));
         providerProducer.produce(new ServiceProviderBuildItem(ConfigProviderResolver.class.getName(),
                 SmallRyeConfigProviderResolver.class.getName()));
         final ClassLoader classLoader = classLoaderItem.getClassLoader();
