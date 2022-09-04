@@ -52,18 +52,4 @@ public interface MovieRepository extends CrudRepository<Movie, Long> {
 
     @Query(value = "select m from Movie m", countQuery = "select count(m) from Movie m")
     Page<Movie> customFind(Pageable pageable);
-
-    // issue 6205
-    @Query(value = "SELECT rating, COUNT(*) FROM Movie GROUP BY rating")
-    List<MovieCountByRating> countByRating();
-
-    // issue 13044
-    @Query("SELECT DISTINCT m.rating FROM Movie m where m.rating != null")
-    List<String> findAllRatings();
-
-    interface MovieCountByRating {
-        String getRating();
-
-        Long getCount();
-    }
 }
