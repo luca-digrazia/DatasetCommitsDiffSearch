@@ -13,18 +13,19 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
-import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
 import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
  * Syntax node for list and tuple literals.
  *
- * <p>(Note that during evaluation, both list and tuple values are represented by java.util.List
- * objects, the only difference between them being whether or not they are mutable.)
+ * <p>(Note that during evaluation, both list and tuple values are represented by
+ * java.util.List objects, the only difference between them being whether or not
+ * they are mutable.)
  */
 public final class ListLiteral extends Expression {
 
@@ -53,7 +54,7 @@ public final class ListLiteral extends Expression {
 
   /** A new literal for an empty list, onto which a new location can be specified */
   public static ListLiteral emptyList() {
-    return makeList(ImmutableList.of());
+    return makeList(Collections.emptyList());
   }
 
   public Kind getKind() {
