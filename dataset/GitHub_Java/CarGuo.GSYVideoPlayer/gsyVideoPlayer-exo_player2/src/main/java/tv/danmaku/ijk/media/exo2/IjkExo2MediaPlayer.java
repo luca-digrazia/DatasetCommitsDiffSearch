@@ -5,11 +5,12 @@ import android.content.Context;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
-import android.view.Surface;
-import android.view.SurfaceHolder;
 
 import androidx.annotation.Nullable;
 import androidx.annotation.Size;
+
+import android.view.Surface;
+import android.view.SurfaceHolder;
 
 import com.google.android.exoplayer2.C;
 import com.google.android.exoplayer2.DefaultLoadControl;
@@ -26,6 +27,7 @@ import com.google.android.exoplayer2.analytics.AnalyticsListener;
 import com.google.android.exoplayer2.decoder.DecoderCounters;
 import com.google.android.exoplayer2.metadata.Metadata;
 import com.google.android.exoplayer2.source.MediaSource;
+import com.google.android.exoplayer2.source.MediaSourceEventListener;
 import com.google.android.exoplayer2.source.TrackGroupArray;
 import com.google.android.exoplayer2.trackselection.DefaultTrackSelector;
 import com.google.android.exoplayer2.trackselection.MappingTrackSelector;
@@ -33,6 +35,7 @@ import com.google.android.exoplayer2.trackselection.TrackSelectionArray;
 
 import java.io.File;
 import java.io.FileDescriptor;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -335,7 +338,7 @@ public class IjkExo2MediaPlayer extends AbstractMediaPlayer implements Player.Ev
     }
 
     protected void prepareAsyncInternal() {
-        new Handler(Looper.myLooper()).post(
+        new Handler(Looper.getMainLooper()).post(
                 new Runnable() {
                     @Override
                     public void run() {
@@ -357,7 +360,7 @@ public class IjkExo2MediaPlayer extends AbstractMediaPlayer implements Player.Ev
                             mLoadControl = new DefaultLoadControl();
                         }
                         mInternalPlayer = new SimpleExoPlayer.Builder(mAppContext, mRendererFactory)
-                                .setLooper(Looper.myLooper())
+                                .setLooper(Looper.getMainLooper())
                                 .setTrackSelector(mTrackSelector)
                                 .setLoadControl(mLoadControl).build();
                         mInternalPlayer.addListener(IjkExo2MediaPlayer.this);
@@ -682,6 +685,11 @@ public class IjkExo2MediaPlayer extends AbstractMediaPlayer implements Player.Ev
     }
 
     @Override
+    public void onAudioSessionId(EventTime eventTime, int audioSessionId) {
+        this.audioSessionId = audioSessionId;
+    }
+
+    @Override
     public void onAudioUnderrun(EventTime eventTime, int bufferSize, long bufferSizeMs, long elapsedSinceLastFeedMs) {
 
     }
@@ -701,7 +709,8 @@ public class IjkExo2MediaPlayer extends AbstractMediaPlayer implements Player.Ev
     }
 
     @Override
-    public void onRenderedFirstFrame(EventTime eventTime, Object output, long renderTimeMs) {
+    public void onRenderedFirstFrame(EventTime eventTime, Surface surface) {
+
     }
 
     @Override
