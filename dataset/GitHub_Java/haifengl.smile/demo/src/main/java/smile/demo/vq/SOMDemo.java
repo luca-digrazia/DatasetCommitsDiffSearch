@@ -27,15 +27,14 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
 
-import smile.math.TimeFunction;
-import smile.vq.Neighborhood;
+import smile.plot.Palette;
+import smile.vq.LatticeNeighborhood;
+import smile.vq.LearningRate;
 import smile.vq.SOM;
 import smile.math.MathEx;
-import smile.plot.swing.Hexmap;
-import smile.plot.swing.Palette;
-import smile.plot.swing.Canvas;
-import smile.plot.swing.Grid;
-import smile.plot.swing.ScatterPlot;
+import smile.plot.Hexmap;
+import smile.plot.PlotCanvas;
+import smile.plot.ScatterPlot;
 
 /**
  *
@@ -84,15 +83,14 @@ public class SOMDemo  extends VQDemo {
 
         double[][][] lattice = SOM.lattice(width, height, dataset[datasetIndex]);
         SOM som = new SOM(lattice,
-                TimeFunction.constant(learningRate),
-                Neighborhood.Gaussian(neighborhood, dataset[datasetIndex].length * epochs / 4));
+                LearningRate.inverse(learningRate, dataset[datasetIndex].length * epochs / 10),
+                LatticeNeighborhood.Gaussian(neighborhood, dataset[datasetIndex].length * epochs / 4));
 
         JPanel pane = new JPanel(new GridLayout(1, 2));
-        Canvas plot = ScatterPlot.of(dataset[datasetIndex], pointLegend).canvas();
-        plot.add(Grid.of(som.neurons()));
+        PlotCanvas plot = ScatterPlot.plot(dataset[datasetIndex], pointLegend);
+        plot.grid(som.neurons());
         plot.setTitle("SOM");
-        JPanel panel = plot.panel();
-        pane.add(panel);
+        pane.add(plot);
 
         int period = dataset[datasetIndex].length / 10;
         Thread thread = new Thread(() -> {
@@ -108,10 +106,10 @@ public class SOMDemo  extends VQDemo {
 
                     if (++k % period == 0) {
                         plot.clear();
-                        plot.add(ScatterPlot.of(dataset[datasetIndex], pointLegend));
-                        plot.add(Grid.of(som.neurons()));
+                        plot.points(dataset[datasetIndex], pointLegend);
+                        plot.grid(som.neurons());
                         plot.setTitle("SOM");
-                        pane.repaint();
+                        plot.repaint();
 
                         try {
                             Thread.sleep(100);
@@ -124,9 +122,9 @@ public class SOMDemo  extends VQDemo {
             }
 
             double[][] umatrix = som.umatrix();
-            Canvas umatrixPlot = Hexmap.of(umatrix, Palette.jet(256)).canvas();
+            PlotCanvas umatrixPlot = Hexmap.plot(umatrix, Palette.jet(256));
             umatrixPlot.setTitle("U-Matrix");
-            pane.add(umatrixPlot.panel());
+            pane.add(umatrixPlot);
             pane.invalidate();
         });
         thread.start();

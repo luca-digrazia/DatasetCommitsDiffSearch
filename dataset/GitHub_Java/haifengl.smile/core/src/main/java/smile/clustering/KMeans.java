@@ -141,9 +141,10 @@ public class KMeans extends CentroidClustering<double[], double[]> {
         int d = data[0].length;
 
         int[] y = new int[n];
+        double[] dist = new double[n];
         double[][] medoids = new double[k][];
 
-        double distortion = MathEx.sum(seed(data, medoids, y, MathEx::squaredDistance));
+        double distortion = seed(data, medoids, y, dist, MathEx::squaredDistance);
         logger.info(String.format("Distortion after initialization: %.4f", distortion));
 
         // Initialize the centroids
@@ -196,9 +197,10 @@ public class KMeans extends CentroidClustering<double[], double[]> {
         int d = data[0].length;
 
         int[] y = new int[n];
+        double[] dist = new double[n];
         double[][] medoids = new double[k][];
 
-        double distortion = MathEx.sum(seed(data, medoids, y, MathEx::squaredDistanceWithMissingValues));
+        double distortion = seed(data, medoids, y, dist, MathEx::squaredDistanceWithMissingValues);
         logger.info(String.format("Distortion after initialization: %.4f", distortion));
 
         int[] size = new int[k];

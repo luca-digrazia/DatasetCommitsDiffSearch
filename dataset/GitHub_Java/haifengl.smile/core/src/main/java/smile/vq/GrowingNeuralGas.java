@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,14 +13,19 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.vq;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedList;
+import smile.clustering.Clustering;
+import smile.clustering.HierarchicalClustering;
+import smile.clustering.linkage.Linkage;
+import smile.clustering.linkage.UPGMALinkage;
 import smile.sort.HeapSelect;
-import smile.vq.hebb.Edge;
-import smile.vq.hebb.Neuron;
+import smile.math.MathEx;
 
 /**
  * Growing Neural Gas. As an extension of Neural Gas, Growing Neural Gas
@@ -49,8 +54,93 @@ import smile.vq.hebb.Neuron;
  * 
  * @author Haifeng Li
  */
-public class GrowingNeuralGas implements VectorQuantizer {
-    private static final long serialVersionUID = 2L;
+public class GrowingNeuralGas implements Clustering<double[]> {
+    /**
+     * The neuron vertex in the growing neural gas network.
+     */
+    public static class Neuron {
+        /**
+         * Reference vector.
+         */
+        public final double[] w;
+        /**
+         * Direct connected neighbors.
+         */
+        public final Neuron[] neighbors;
+        
+        /**
+         * Constructor.
+         */
+        public Neuron(double[] w, Neuron[] neighbors) {
+            this.w = w;
+            this.neighbors = neighbors;
+        }
+    }
+
+    /**
+     * Connection between neurons.
+     */
+    class Edge {
+        /**
+         * The end of an edges.
+         */
+        Node a;
+        /**
+         * The other end of an edges.
+         */
+        Node b;
+        /**
+         * The age of this edges.
+         */
+        int age = 0;
+        /**
+         * Constructor.
+         */
+        Edge(Node a, Node b) {
+            this.a = a;
+            this.b = b;
+        }
+    }
+
+    /**
+     * A class representing a neuron.
+     */
+    class Node implements Comparable<Node> {
+        /**
+         * The id of neuron.
+         */
+        int id;
+        /**
+         * Reference vector.
+         */
+        double[] w;
+        /**
+         * The distance between the neuron and an input signal.
+         */
+        double dist = Double.MAX_VALUE;
+        /**
+         * Local error measurement.
+         */
+        double error = 0.0;
+        /**
+         * Edges to neighbors.
+         */
+        LinkedList<Edge> edges;
+
+        /**
+         * Constructor.
+         */
+        Node(double[] w) {
+            this.w = w;
+            edges = new LinkedList<>();
+            id = m++;
+        }
+
+        @Override
+        public int compareTo(Node o) {
+            return Double.compare(dist, o.dist);
+        }
+    }
 
     /**
      * The dimensionality of signals.
@@ -59,41 +149,45 @@ public class GrowingNeuralGas implements VectorQuantizer {
     /**
      * The number of signals processed so far.
      */
-    private int t = 0;
+    private int n = 0;
     /**
-     * The learning rate to update best matching neuron.
+     * The number of neurons created so far.
      */
-    private double epsBest = 0.2;
+    private int m;
     /**
-     * The learning rate to update neighbors of best matching neuron.
+     * The fraction to update nearest neuron.
      */
-    private double epsNeighbor = 0.006;
+    private double epsBest = 0.05;
+    /**
+     * The fraction to update neighbors of nearest neuron.
+     */
+    private double epsNeighbor = 0.0006;
     /**
      * The maximum age of edges.
      */
-    private int edgeLifetime = 50;
+    private int maxEdgeAge = 88;
     /**
      * If the number of input signals so far is an integer multiple
      * of lambda, insert a new neuron.
      */
-    private int lambda = 100;
+    private int lambda = 300;
     /**
      * Decrease error variables by multiplying them with alpha
      * during inserting a new neuron.
      */
     private double alpha = 0.5;
     /**
-     * Decrease all error variables by multiply them with beta.
+     * Decrease all error variables by multiply them with de.
      */
-    private double beta = 0.995;
+    private double beta = 0.9995;
     /**
      * Neurons in the neural network.
      */
-    private ArrayList<Neuron> neurons = new ArrayList<>();
+    private LinkedList<Node> nodes = new LinkedList<>();
     /**
-     * The workspace to find nearest neighbors.
+     * Cluster labels of neurons.
      */
-    private Neuron[] top2 = new Neuron[2];
+    private int[] y;
 
     /**
      * Constructor.
@@ -106,155 +200,221 @@ public class GrowingNeuralGas implements VectorQuantizer {
     /**
      * Constructor.
      * @param d the dimensionality of signals.
-     * @param epsBest the learning rate to update best matching neuron.
-     * @param epsNeighbor the learning rate to update neighbors of best matching neuron.
-     * @param edgeLifetime the maximum age of edges.
+     * @param epsBest the fraction to update nearest neuron.
+     * @param epsNeighbor the fraction to update neighbors of nearest neuron.
+     * @param maxEdgeAge the maximum age of edges.
      * @param lambda if the number of input signals so far is an integer multiple
-     *               of lambda, insert a new neuron.
+     * of lambda, insert a new neuron.
      * @param alpha decrease error variables by multiplying them with alpha
-     *              during inserting a new neuron.
+     * during inserting a new neuron.
      * @param beta decrease all error variables by multiply them with beta.
      */
-    public GrowingNeuralGas(int d, double epsBest, double epsNeighbor, int edgeLifetime, int lambda, double alpha, double beta) {
+    public GrowingNeuralGas(int d, double epsBest, double epsNeighbor, int maxEdgeAge, int lambda, double alpha, double beta) {
         this.d = d;
         this.epsBest = epsBest;
         this.epsNeighbor = epsNeighbor;
-        this.edgeLifetime = edgeLifetime;
+        this.maxEdgeAge = maxEdgeAge;
         this.lambda = lambda;
         this.alpha = alpha;
         this.beta = beta;
     }
 
-    @Override
-    public void update(double[] x) {
-        t++;
+    /**
+     * Returns the neurons in the network.
+     * @return the neurons in the network. 
+     */
+    public Neuron[] neurons() {
+        HashMap<Integer, Neuron> hash = new HashMap<>();
+        Neuron[] neurons = new Neuron[nodes.size()];
+        
+        int i = 0;
+        for (Node node : nodes) {
+            Neuron[] neighbors = new Neuron[node.edges.size()];
+            neurons[i] = new Neuron(node.w, neighbors);
+            hash.put(node.id, neurons[i]);
+            i++;
+        }
 
-        if (neurons.size() < 2) {
-            neurons.add(new Neuron(x.clone()));
+        i = 0;
+        for (Node node : nodes) {
+            int j = 0;
+            for (Edge edge : node.edges) {
+                if (edge.a != node)
+                    neurons[i].neighbors[j++] = hash.get(edge.a.id);
+                else
+                    neurons[i].neighbors[j++] = hash.get(edge.b.id);
+            }
+            i++;
+        }
+        
+        return neurons;
+    }
+    
+    /**
+     * Update the Neural Gas with a new signal.
+     */
+    public void update(double[] x) {
+        n++;
+
+        if (nodes.size() < 2) {
+            nodes.add(new Node(x.clone()));
             return;
         }
 
         // Find the nearest (s1) and second nearest (s2) neuron to x.
-        neurons.stream().parallel().forEach(neuron -> neuron.distance(x));
-
-        Arrays.fill(top2, null);
-        HeapSelect<Neuron> heap = new HeapSelect<>(top2);
-        for (Neuron neuron : neurons) {
+        Node[] top2 = new Node[2];
+        HeapSelect<Node> heap = new HeapSelect<>(top2);
+        for (Node neuron : nodes) {
+            neuron.dist = MathEx.squaredDistance(neuron.w, x);
             heap.add(neuron);
         }
 
-        Neuron s1 = top2[1];
-        Neuron s2 = top2[0];
+        Node s1 = top2[1];
+        Node s2 = top2[0];
 
         // update s1
-        s1.update(x, epsBest);
-        // update local counter of squared distance
-        s1.counter += s1.distance * s1.distance;
-        // Increase the edge of all edges emanating from s1.
-        s1.age();
+        s1.error += s1.dist;
+        for (int i = 0; i < d; i++) {
+            s1.w[i] += epsBest * (x[i] - s1.w[i]);
+        }
 
         boolean addEdge = true;
         for (Edge edge : s1.edges) {
-            // Update s1's direct topological neighbors towards x.
-            Neuron neighbor = edge.neighbor;
-            neighbor.update(x, epsNeighbor);
+            // Update s1's direct topological neighbors twoards x.
+            if (edge.a != s1) {
+                for (int i = 0; i < d; i++) {
+                    edge.a.w[i] += epsNeighbor * (x[i] - edge.a.w[i]);
+                }
+            } else {
+                for (int i = 0; i < d; i++) {
+                    edge.b.w[i] += epsNeighbor * (x[i] - edge.b.w[i]);
+                }
+            }
+
+            // Increase the edge of all edges emanating from s1.
+            edge.age++;
 
             // Set the age to zero if s1 and s2 are already connected.
-            if (neighbor == s2) {
+            if (edge.a == s2 || edge.b == s2) {
                 edge.age = 0;
-                s2.setEdgeAge(s1, 0);
                 addEdge = false;
             }
         }
 
         // Connect s1 and s2 if they are not neighbor yet.
         if (addEdge) {
-            s1.addEdge(s2);
-            s2.addEdge(s1);
-            s2.update(x, epsNeighbor);
+            Edge edge = new Edge(s1, s2);
+            s1.edges.add(edge);
+            s2.edges.add(edge);
         }
 
         // Remove edges with an age larger than the threshold
         for (Iterator<Edge> iter = s1.edges.iterator(); iter.hasNext();) {
             Edge edge = iter.next();
-            if (edge.age > edgeLifetime) {
+            if (edge.age > maxEdgeAge) {
                 iter.remove();
-
-                Neuron neighbor = edge.neighbor;
-                neighbor.removeEdge(s1);
-                // Remove a neuron if it has no emanating edges
-                if (neighbor.edges.isEmpty()) {
-                    neurons.removeIf(neuron -> neuron == neighbor);
+                if (edge.a != s1) {
+                    edge.a.edges.remove(edge);
+                    // If it results in neuron having no emanating edges,
+                    // remove the neuron as well.
+                    if (edge.a.edges.isEmpty())
+                        nodes.remove(edge.a);
+                } else {
+                    edge.b.edges.remove(edge);
+                    if (edge.b.edges.isEmpty())
+                        nodes.remove(edge.b);
                 }
             }
         }
 
         // Add a new neuron if the number of input signals processed so far
         // is an integer multiple of lambda.
-        if (t % lambda == 0) {
-            // Determine the neuron with the maximum accumulated error.
-            Neuron q = neurons.get(0);
-            for (Neuron neuron : neurons) {
-                if (neuron.counter > q.counter) {
+        if (n % lambda == 0) {
+            // Determine the neuron qith the maximum accumulated error.
+            Node q = nodes.get(0);
+            for (Node neuron : nodes) {
+                if (neuron.error > q.error)
                     q = neuron;
-                }
             }
 
             // Find the neighbor of q with the largest error variable.
-            Neuron f = q.edges.get(0).neighbor;
+            Node f = null;
             for (Edge edge : q.edges) {
-                if (edge.neighbor.counter > f.counter) {
-                    f = edge.neighbor;
+                if (edge.a != q) {
+                    if (f == null || edge.a.error > f.error)
+                        f = edge.a;
+                } else {
+                    if (f == null || edge.b.error > f.error)
+                        f = edge.b;
                 }
             }
 
-            // Decrease the error variables of q and f.
-            q.counter *= alpha;
-            f.counter *= alpha;
-
             // Insert a new neuron halfway between q and f.
-            double[] w = new double[d];
-            for (int i = 0; i < d; i++) {
-                w[i] += (q.w[i] + f.w[i]) / 2;
+            if (f != null) {
+                double[] w = new double[d];
+                for (int i = 0; i < d; i++) {
+                    w[i] += (q.w[i] + f.w[i]) / 2;
+                }
+                Node r = new Node(w);
+
+                // Decrease the error variables of q and f.
+                q.error *= alpha;
+                f.error *= alpha;
+
+                // Initialize the error variable of new neuron with the one of q.
+                r.error = q.error;
+                nodes.add(r);
             }
-
-            Neuron r = new Neuron(w, q.counter);
-            neurons.add(r);
-
-            // Remove the connection (q, f) and add connections (q, r) and (r, f)
-            q.removeEdge(f);
-            f.removeEdge(q);
-            q.addEdge(r);
-            f.addEdge(r);
-            r.addEdge(q);
-            r.addEdge(f);
         }
 
         // Decrease all error variables.
-        for (Neuron neuron : neurons) {
-            neuron.counter *= beta;
+        for (Node neuron : nodes) {
+            neuron.error *= beta;
         }
     }
 
     /**
-     * Returns the neurons in the network.
-     * @return the neurons in the network.
+     * Clustering neurons into k clusters.
+     * @param k the number of clusters.
      */
-    public Neuron[] neurons() {
-        return neurons.toArray(new Neuron[neurons.size()]);
-    }
-
-    @Override
-    public double[] quantize(double[] x) {
-        neurons.stream().parallel().forEach(neuron -> neuron.distance(x));
-
-        Neuron bmu = neurons.get(0);
-        for (Neuron neuron : neurons) {
-            if (neuron.distance < bmu.distance) {
-                bmu = neuron;
-            }
+    public void partition(int k) {
+        double[][] x = new double[nodes.size()][];
+        for (int i = 0; i < x.length; i++) {
+            x[i] = nodes.get(i).w;
         }
 
-        return bmu.w;
+        Linkage linkage = UPGMALinkage.of(x);
+        HierarchicalClustering hc = HierarchicalClustering.fit(linkage);
+        y = hc.partition(k);
+    }
+
+    /**
+     * Cluster a new instance to the nearest neuron.
+     * @param x a new instance.
+     * @return the cluster label. If the method partition() was called,
+     * this is the cluster id of nearest neuron. Otherwise, it is just
+     * the index of neuron.
+     */
+    @Override
+    public int predict(double[] x) {
+        double minDist = Double.MAX_VALUE;
+        int bestCluster = 0;
+
+        int i = 0;
+        for (Node neuron : nodes) {
+            double dist = MathEx.squaredDistance(x, neuron.w);
+            if (dist < minDist) {
+                minDist = dist;
+                bestCluster = i;
+            }
+            i++;
+        }
+
+        if (y == null || y.length != nodes.size()) {
+            return bestCluster;
+        } else {
+
+            return y[bestCluster];
+        }
     }
 }

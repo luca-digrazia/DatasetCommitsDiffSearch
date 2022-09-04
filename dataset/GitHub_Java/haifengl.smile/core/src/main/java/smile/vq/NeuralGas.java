@@ -17,8 +17,8 @@
 
 package smile.vq;
 
-import java.io.Serializable;
 import java.util.Arrays;
+import java.util.Optional;
 import java.util.stream.IntStream;
 import smile.clustering.CentroidClustering;
 import smile.graph.AdjacencyMatrix;
@@ -26,7 +26,7 @@ import smile.graph.Graph;
 import smile.graph.Graph.Edge;
 import smile.math.MathEx;
 import smile.sort.QuickSort;
-import smile.math.TimeFunction;
+import smile.util.TimeFunction;
 
 /**
  * Neural Gas soft competitive learning algorithm. Neural Gas is inspired
@@ -65,12 +65,10 @@ import smile.math.TimeFunction;
  * @author Haifeng Li
  */
 public class NeuralGas implements VectorQuantizer {
-    private static final long serialVersionUID = 2L;
-
     /**
      * Neural Gas Neuron.
      */
-    private static class Neuron implements Serializable {
+    private static class Neuron {
         /** The weight vector. */
         public final double[] w;
         /** The index of neuron. */
@@ -145,8 +143,9 @@ public class NeuralGas implements VectorQuantizer {
     public static double[][] seed(int k, double[][] samples) {
         int n = samples.length;
         int[] y = new int[n];
+        double[] dist = new double[n];
         double[][] medoids = new double[k][];
-        CentroidClustering.seed(samples, medoids, y, MathEx::squaredDistance);
+        CentroidClustering.seed(samples, medoids, y, dist, MathEx::squaredDistance);
 
         return medoids;
     }
@@ -178,9 +177,7 @@ public class NeuralGas implements VectorQuantizer {
     public void update(double[] x) {
         int k = neurons.length;
         int d = x.length;
-
-        IntStream.range(0, neurons.length).parallel().forEach(i -> dist[i] = MathEx.distance(neurons[i].w, x));
-        QuickSort.sort(dist, neurons);
+        sortNeurons(x);
 
         double rate = alpha.of(t);
         for (int i = 0; i < k; i++) {
@@ -199,8 +196,14 @@ public class NeuralGas implements VectorQuantizer {
     }
 
     @Override
-    public double[] quantize(double[] x) {
+    public Optional<double[]> quantize(double[] x) {
+        sortNeurons(x);
+        return Optional.of(neurons[MathEx.whichMin(dist)].w);
+    }
+
+    /** Sorts the neurons by their distances to the input observation. */
+    private void sortNeurons(double[] x) {
         IntStream.range(0, neurons.length).parallel().forEach(i -> dist[i] = MathEx.distance(neurons[i].w, x));
-        return neurons[MathEx.whichMin(dist)].w;
+        QuickSort.sort(dist, neurons);
     }
 }

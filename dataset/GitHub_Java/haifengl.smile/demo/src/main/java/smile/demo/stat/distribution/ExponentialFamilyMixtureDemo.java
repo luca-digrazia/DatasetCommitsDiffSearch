@@ -19,14 +19,16 @@ package smile.demo.stat.distribution;
 
 import java.awt.Color;
 import java.awt.GridLayout;
+import java.util.ArrayList;
+import java.util.List;
+
 import javax.swing.JFrame;
 import javax.swing.JPanel;
 
 import smile.math.MathEx;
-import smile.plot.swing.Histogram;
-import smile.plot.swing.Canvas;
-import smile.plot.swing.LinePlot;
-import smile.plot.swing.QQPlot;
+import smile.plot.Histogram;
+import smile.plot.PlotCanvas;
+import smile.plot.QQPlot;
 import smile.stat.distribution.ExponentialDistribution;
 import smile.stat.distribution.ExponentialFamilyMixture;
 import smile.stat.distribution.GammaDistribution;
@@ -63,9 +65,9 @@ public class ExponentialFamilyMixtureDemo extends JPanel {
                 new Mixture.Component(0.5, new GammaDistribution(1.0, 2.0))
                 );
 
-        Canvas canvas = Histogram.of(data, 50, true).canvas();
+        PlotCanvas canvas = Histogram.plot(data, 50);
         canvas.setTitle("Mixture of Gaussian, Exponential, and Gamma");
-        add(canvas.panel());
+        add(canvas);
 
         double width = (MathEx.max(data) - MathEx.min(data)) / 50;
         double[][] p = new double[400][2];
@@ -74,11 +76,11 @@ public class ExponentialFamilyMixtureDemo extends JPanel {
             p[i][1] = mixture.p(p[i][0]) * width;
         }
 
-        canvas.add(LinePlot.of(p, Color.RED));
+        canvas.line(p, Color.RED);
 
-        canvas = QQPlot.of(data, mixture).canvas();
+        canvas = QQPlot.plot(data, mixture);
         canvas.setTitle("Q-Q Plot");
-        add(canvas.panel());
+        add(canvas);
     }
 
     @Override
@@ -111,8 +113,8 @@ public class ExponentialFamilyMixtureDemo extends JPanel {
 
         JFrame frame = new JFrame("Mixture of Exponential Family Distributions");
         frame.setSize(1000, 1000);
-        Canvas canvas = Histogram.of(data, 50, true).canvas();
-        frame.add(canvas.panel());
+        PlotCanvas canvas = Histogram.plot(data, 50);
+        frame.add(canvas);
 
         double width = (MathEx.max(data) - MathEx.min(data)) / 50;
         double[][] p = new double[400][2];
@@ -121,8 +123,10 @@ public class ExponentialFamilyMixtureDemo extends JPanel {
             p[i][1] = mixture.p(p[i][0]) * width;
         }
 
-        canvas.add(LinePlot.of(p, Color.RED));
-        frame.add(QQPlot.of(data, mixture).canvas().panel());
+        canvas.line(p, Color.RED);
+
+        frame.add(QQPlot.plot(data, mixture));
+
         frame.setVisible(true);
     }
 }

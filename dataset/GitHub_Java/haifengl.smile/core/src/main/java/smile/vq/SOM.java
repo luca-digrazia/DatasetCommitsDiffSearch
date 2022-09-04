@@ -17,14 +17,14 @@
 
 package smile.vq;
 
-import java.io.Serializable;
 import java.util.Arrays;
+import java.util.Optional;
 import java.util.stream.IntStream;
 import smile.clustering.CentroidClustering;
 import smile.math.MathEx;
 import smile.mds.MDS;
 import smile.sort.QuickSort;
-import smile.math.TimeFunction;
+import smile.util.TimeFunction;
 
 /**
  * Self-Organizing Map. An SOM is a unsupervised learning method to produce
@@ -86,12 +86,10 @@ import smile.math.TimeFunction;
  * @author Haifeng Li
  */
 public class SOM implements VectorQuantizer {
-    private static final long serialVersionUID = 2L;
-
     /**
      * Self-Organizing Map Neuron.
      */
-    private static class Neuron implements Serializable {
+    private static class Neuron {
         /** The weight vector. */
         public final double[] w;
         /** The row index of neuron in the lattice. */
@@ -185,8 +183,9 @@ public class SOM implements VectorQuantizer {
         int n = samples.length;
 
         int[] clusters = new int[n];
+        double[] dist = new double[n];
         double[][] medoids = new double[k][];
-        CentroidClustering.seed(samples, medoids, clusters, MathEx::squaredDistance);
+        CentroidClustering.seed(samples, medoids, clusters, dist, MathEx::squaredDistance);
 
         // Pair-wise distance matrix.
         double[][] pdist = MathEx.pdist(medoids);
@@ -287,8 +286,8 @@ public class SOM implements VectorQuantizer {
     }
 
     @Override
-    public double[] quantize(double[] x) {
-        return bmu(x).w;
+    public Optional<double[]> quantize(double[] x) {
+        return Optional.of(bmu(x).w);
     }
 
     /** Returns the best matching unit. */

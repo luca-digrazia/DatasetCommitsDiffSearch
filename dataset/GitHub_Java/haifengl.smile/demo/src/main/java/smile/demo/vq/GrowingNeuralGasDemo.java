@@ -17,17 +17,13 @@
 
 package smile.demo.vq;
 
-import java.util.Arrays;
 import java.awt.Dimension;
-import javax.swing.*;
-
-import smile.math.MathEx;
+import javax.swing.JComponent;
+import javax.swing.JFrame;
 import smile.vq.GrowingNeuralGas;
-import smile.vq.hebb.Edge;
-import smile.vq.hebb.Neuron;
-import smile.plot.swing.Canvas;
-import smile.plot.swing.LinePlot;
-import smile.plot.swing.ScatterPlot;
+import smile.plot.Palette;
+import smile.plot.PlotCanvas;
+import smile.plot.ScatterPlot;
 
 /**
  *
@@ -40,47 +36,32 @@ public class GrowingNeuralGasDemo extends VQDemo {
 
     @Override
     public JComponent learn() {
-        Canvas plot = ScatterPlot.of(dataset[datasetIndex], pointLegend).canvas();
+        long clock = System.currentTimeMillis();
+        GrowingNeuralGas gas = new GrowingNeuralGas(2, 0.05, 0.0006, 88, 200,  0.5, 0.9995);
 
-        JPanel panel = plot.panel();
-        int period = dataset[datasetIndex].length / 10;
-        Thread thread = new Thread(() -> {
-            try {
-                Thread.sleep(1000);
-            } catch (Exception e) {
-                e.printStackTrace();
+        for (int loop = 0; loop < 25; loop++) {
+            for (double[] x : dataset[datasetIndex]) {
+                gas.update(x);
             }
+        }
 
-            GrowingNeuralGas gas = new GrowingNeuralGas(2);
+        System.out.format("Growing Neural Gas clusterings %d samples in %dms\n", dataset[datasetIndex].length, System.currentTimeMillis()-clock);
 
-            for (int i = 0, k = 0; i < epochs; i++) {
-                for (int j : MathEx.permutate(dataset[datasetIndex].length)) {
-                    gas.update(dataset[datasetIndex][j]);
+        GrowingNeuralGas.Neuron[] neurons = gas.neurons();
+        double[][] x = new double[neurons.length][];
+        for (int i = 0; i < x.length; i++)
+            x[i] = neurons[i].w;
 
-                    if (++k % period == 0) {
-                        plot.clear();
-                        plot.add(ScatterPlot.of(dataset[datasetIndex], pointLegend));
-                        Neuron[] neurons = gas.neurons();
-                        double[][] w = Arrays.stream(neurons).map(neuron -> neuron.w).toArray(double[][]::new);
-                        plot.add(ScatterPlot.of(w, '@'));
+        PlotCanvas plot = ScatterPlot.plot(x, '@');
 
-                        double[][] lines = Arrays.stream(neurons).flatMap(neuron -> neuron.edges.stream().map(edge -> new double[][]{neuron.w, edge.neighbor.w})).toArray(double[][]::new);
-                        plot.add(LinePlot.of(lines));
-                        panel.repaint();
-
-                        try {
-                            Thread.sleep(100);
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                        }
-                    }
-                }
-                System.out.format("%s epoch finishes%n", smile.util.Strings.ordinal(i+1));
+        for (int i = 0; i < neurons.length; i++) {
+            for (int j = 0; j < neurons[i].neighbors.length; j++) {
+                plot.line(neurons[i].w, neurons[i].neighbors[j].w);
             }
-        });
-        thread.start();
+        }
+        plot.points(x, '@');
 
-        return panel;
+        return plot;
     }
 
     @Override
