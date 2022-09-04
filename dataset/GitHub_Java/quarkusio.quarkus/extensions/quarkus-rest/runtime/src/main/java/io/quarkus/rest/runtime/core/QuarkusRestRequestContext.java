@@ -127,8 +127,7 @@ public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRe
     private EntityWriter entityWriter;
     private QuarkusRestContainerRequestContextImpl containerRequestContext;
     private QuarkusRestContainerResponseContextImpl containerResponseContext;
-    private String method; // used to hold the explicitly set method performed by a ContainerRequestFilter
-    private String originalMethod; // store the original method as obtaining it from Vert.x isn't dirt cheap
+    private String method;
     // this is only set if we override the requestUri
     private String path;
     // this is cached, but only if we override the requestUri
@@ -590,10 +589,7 @@ public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRe
 
     public String getMethod() {
         if (method == null) {
-            if (originalMethod != null) {
-                return originalMethod;
-            }
-            return originalMethod = context.request().rawMethod();
+            return context.request().rawMethod();
         }
         return method;
     }

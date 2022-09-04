@@ -12,6 +12,7 @@ import io.quarkus.rest.runtime.core.SseUtil;
 import io.quarkus.rest.runtime.core.StreamingUtil;
 import io.quarkus.rest.runtime.jaxrs.QuarkusRestOutboundSseEvent;
 import io.smallrye.mutiny.Multi;
+import io.vertx.core.http.HttpServerResponse;
 
 public class MultiResponseHandler implements RestHandler {
 
@@ -150,7 +151,8 @@ public class MultiResponseHandler implements RestHandler {
     private void handleException(QuarkusRestRequestContext requestContext, Throwable t) {
         // in truth we can only send an exception if we haven't sent the headers yet, otherwise
         // it will appear to be an SSE value, which is incorrect, so we should only log it and close the connection
-        if (requestContext.getHttpServerResponse().headWritten()) {
+        HttpServerResponse response = requestContext.getContext().response();
+        if (response.headWritten()) {
             log.error("Exception in SSE server handling, impossible to send it to client", t);
         } else {
             // we can go through the abort chain

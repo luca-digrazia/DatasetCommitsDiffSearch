@@ -15,7 +15,6 @@ import io.quarkus.rest.runtime.core.QuarkusRestRequestContext;
 import io.quarkus.rest.runtime.core.Serialisers;
 import io.quarkus.rest.runtime.util.MediaTypeHelper;
 import io.vertx.core.http.HttpServerRequest;
-import io.vertx.core.http.HttpServerResponse;
 
 /**
  * Writer that is fully dynamic, and follows the spec defined resolution process
@@ -68,15 +67,14 @@ public class DynamicEntityWriter implements EntityWriter {
                 if (MediaTypeHelper.isUnsupportedWildcardSubtype(selectedMediaType) && !mediaTypeComesFromClient) { // spec says the acceptable wildcard subtypes are */* or application/*
                     Serialisers.encodeResponseHeaders(context);
                     // set the response header AFTER encodeResponseHeaders in order to override what Response has as we want this to be the final result
-                    HttpServerResponse httpServerResponse = context.getHttpServerResponse();
-                    httpServerResponse.setStatusCode(Response.Status.NOT_ACCEPTABLE.getStatusCode());
+                    context.getContext().response().setStatusCode(Response.Status.NOT_ACCEPTABLE.getStatusCode());
                     // spec says the response doesn't have a body so we just end the response here and return
-                    httpServerResponse.end();
+                    context.getContext().response().end();
                     return;
                 } else {
                     context.setResponseContentType(selectedMediaType);
                     // this will be used as the fallback if Response does NOT contain a type
-                    context.getHttpServerResponse().headers().add(HttpHeaders.CONTENT_TYPE, selectedMediaType.toString());
+                    context.getContext().response().headers().add(HttpHeaders.CONTENT_TYPE, selectedMediaType.toString());
                 }
             }
         } else {
