@@ -16,14 +16,14 @@
  */
 package org.graylog2.periodical;
 
-import javax.inject.Inject;
-import org.graylog2.Configuration;
+import com.google.inject.Inject;
 import org.graylog2.alarmcallbacks.AlarmCallbackConfiguration;
 import org.graylog2.alarmcallbacks.AlarmCallbackConfigurationService;
 import org.graylog2.alarmcallbacks.AlarmCallbackFactory;
 import org.graylog2.alarmcallbacks.EmailAlarmCallback;
 import org.graylog2.alerts.Alert;
 import org.graylog2.alerts.AlertService;
+import org.graylog2.indexer.Indexer;
 import org.graylog2.initializers.IndexerSetupService;
 import org.graylog2.plugin.alarms.AlertCondition;
 import org.graylog2.plugin.alarms.callbacks.AlarmCallback;
@@ -36,32 +36,34 @@ import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
+/**
+ * @author Lennart Koopmann <lennart@socketfeed.com>
+ */
 public class AlertScannerThread extends Periodical {
     private static final Logger LOG = LoggerFactory.getLogger(AlertScannerThread.class);
-
     private final StreamService streamService;
     private final AlarmCallbackConfigurationService alarmCallbackConfigurationService;
     private final AlarmCallbackFactory alarmCallbackFactory;
     private final EmailAlarmCallback emailAlarmCallback;
     private final IndexerSetupService indexerSetupService;
+    private final Indexer indexer;
     private final AlertService alertService;
-    private final Configuration configuration;
 
     @Inject
-    public AlertScannerThread(final AlertService alertService,
-                              final StreamService streamService,
-                              final AlarmCallbackConfigurationService alarmCallbackConfigurationService,
-                              final AlarmCallbackFactory alarmCallbackFactory,
-                              final EmailAlarmCallback emailAlarmCallback,
-                              final IndexerSetupService indexerSetupService,
-                              final Configuration configuration) {
+    public AlertScannerThread(AlertService alertService,
+                              StreamService streamService,
+                              AlarmCallbackConfigurationService alarmCallbackConfigurationService,
+                              AlarmCallbackFactory alarmCallbackFactory,
+                              EmailAlarmCallback emailAlarmCallback,
+                              IndexerSetupService indexerSetupService,
+                              Indexer indexer) {
         this.alertService = alertService;
         this.streamService = streamService;
         this.alarmCallbackConfigurationService = alarmCallbackConfigurationService;
         this.alarmCallbackFactory = alarmCallbackFactory;
         this.emailAlarmCallback = emailAlarmCallback;
         this.indexerSetupService = indexerSetupService;
-        this.configuration = configuration;
+        this.indexer = indexer;
     }
 
     @Override
@@ -70,14 +72,14 @@ public class AlertScannerThread extends Periodical {
             LOG.error("Indexer is not running, not checking streams for alerts.");
             return;
         }
-
         LOG.debug("Running alert checks.");
-        final List<Stream> alertedStreams = streamService.loadAllWithConfiguredAlertConditions();
+        List<Stream> alertedStreams = streamService.loadAllWithConfiguredAlertConditions();
 
         LOG.debug("There are {} streams with configured alert conditions.", alertedStreams.size());
 
         // Load all streams that have configured alert conditions.
         for (Stream stream : alertedStreams) {
+
             LOG.debug("Stream [{}] has [{}] configured alert conditions.", stream, streamService.getAlertConditions(stream).size());
 
             if(stream.isPaused()) {
@@ -88,28 +90,27 @@ public class AlertScannerThread extends Periodical {
             // Check if a threshold is reached.
             for (AlertCondition alertCondition : streamService.getAlertConditions(stream)) {
                 try {
-                    final AlertCondition.CheckResult result = alertService.triggered(alertCondition);
+                    AlertCondition.CheckResult result = alertService.triggered(alertCondition, indexer);
                     if (result.isTriggered()) {
                         // Alert is triggered!
                         LOG.debug("Alert condition [{}] is triggered. Sending alerts.", alertCondition);
 
                         // Persist alert.
-                        final Alert alert = alertService.factory(result);
+                        Alert alert = alertService.factory(result);
                         alertService.save(alert);
 
-                        final List<AlarmCallbackConfiguration> callConfigurations = alarmCallbackConfigurationService.getForStream(stream);
+                        List<AlarmCallbackConfiguration> callConfigurations = alarmCallbackConfigurationService.getForStream(stream);
                         if (callConfigurations.size() > 0)
                             for (AlarmCallbackConfiguration configuration : callConfigurations) {
-                                final AlarmCallback alarmCallback = alarmCallbackFactory.create(configuration);
+                                AlarmCallback alarmCallback = alarmCallbackFactory.create(configuration);
                                 try {
                                     alarmCallback.call(stream, result);
                                 } catch (Exception e) {
                                     LOG.warn("Alarm callback <{}> failed. Skipping. Error was: {}", alarmCallback.getName(), new ExceptionStringFormatter(e));
                                 }
                             }
-                        else {
+                        else
                             emailAlarmCallback.call(stream, result);
-                        }
                     } else {
                         // Alert not triggered.
                         LOG.debug("Alert condition [{}] is triggered.", alertCondition);
@@ -118,6 +119,7 @@ public class AlertScannerThread extends Periodical {
                     LOG.error("Skipping alert check that threw an exception.", e);
                 }
             }
+
         }
     }
 
@@ -158,6 +160,6 @@ public class AlertScannerThread extends Periodical {
 
     @Override
     public int getPeriodSeconds() {
-        return configuration.getAlertCheckInterval();
+        return 60;
     }
 }
