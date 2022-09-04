@@ -18,6 +18,7 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.AbstractAction;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.EnvironmentalExecException;
+import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ExecutionStrategy;
 import com.google.devtools.build.lib.actions.RunningActionEvent;
 import com.google.devtools.build.lib.actions.SpawnContinuation;
@@ -48,7 +49,8 @@ public final class FileWriteStrategy implements FileWriteActionContext {
       ActionExecutionContext actionExecutionContext,
       DeterministicWriter deterministicWriter,
       boolean makeExecutable,
-      boolean isRemotable) {
+      boolean isRemotable)
+      throws ExecException {
     actionExecutionContext.getEventHandler().post(new RunningActionEvent(action, "local"));
     // TODO(ulfjack): Consider acquiring local resources here before trying to write the file.
     try (AutoProfiler p =
@@ -66,7 +68,7 @@ public final class FileWriteStrategy implements FileWriteActionContext {
           outputPath.setExecutable(true);
         }
       } catch (IOException e) {
-        return SpawnContinuation.failedWithExecException(new EnvironmentalExecException(e));
+        throw new EnvironmentalExecException(e);
       }
     }
     return SpawnContinuation.immediate();

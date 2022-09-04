@@ -463,8 +463,7 @@ public abstract class AbstractRemoteActionCache implements AutoCloseable {
                 /* locationIndex= */ 1);
         childMetadata.put(p, r);
       }
-      metadataInjector.injectRemoteDirectory(
-          (Artifact.SpecialArtifact) output, childMetadata.build());
+      metadataInjector.injectRemoteDirectory(output, childMetadata.build());
     } else {
       FileMetadata outputMetadata = metadata.file(execRoot.getRelative(output.getExecPathString()));
       if (outputMetadata == null) {
@@ -659,11 +658,17 @@ public abstract class AbstractRemoteActionCache implements AutoCloseable {
       byte[] actionBlob = action.toByteArray();
       digestToChunkers.put(
           actionKey.getDigest(),
-          Chunker.builder().setInput(actionBlob).setChunkSize(actionBlob.length).build());
+          Chunker.builder(digestUtil)
+              .setInput(actionKey.getDigest(), actionBlob)
+              .setChunkSize(actionBlob.length)
+              .build());
       byte[] commandBlob = command.toByteArray();
       digestToChunkers.put(
           action.getCommandDigest(),
-          Chunker.builder().setInput(commandBlob).setChunkSize(commandBlob.length).build());
+          Chunker.builder(digestUtil)
+              .setInput(action.getCommandDigest(), commandBlob)
+              .setChunkSize(commandBlob.length)
+              .build());
     }
 
     /** Map of digests to file paths to upload. */
@@ -711,7 +716,8 @@ public abstract class AbstractRemoteActionCache implements AutoCloseable {
 
       byte[] blob = tree.build().toByteArray();
       Digest digest = digestUtil.compute(blob);
-      Chunker chunker = Chunker.builder().setInput(blob).setChunkSize(blob.length).build();
+      Chunker chunker =
+          Chunker.builder(digestUtil).setInput(digest, blob).setChunkSize(blob.length).build();
 
       if (result != null) {
         result
@@ -720,7 +726,7 @@ public abstract class AbstractRemoteActionCache implements AutoCloseable {
             .setTreeDigest(digest);
       }
 
-      digestToChunkers.put(digest, chunker);
+      digestToChunkers.put(chunker.digest(), chunker);
     }
 
     private Directory computeDirectory(Path path, Tree.Builder tree)

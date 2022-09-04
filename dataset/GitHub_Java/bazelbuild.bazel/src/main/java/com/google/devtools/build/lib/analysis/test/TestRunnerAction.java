@@ -94,7 +94,7 @@ public class TestRunnerAction extends AbstractAction
   private final Artifact cacheStatus;
   private final PathFragment testWarningsPath;
   private final PathFragment unusedRunfilesLogPath;
-  @Nullable private final PathFragment shExecutable;
+  private final PathFragment shExecutable;
   private final PathFragment splitLogsPath;
   private final PathFragment splitLogsDir;
   private final PathFragment undeclaredOutputsDir;
@@ -165,7 +165,7 @@ public class TestRunnerAction extends AbstractAction
       int runNumber,
       BuildConfiguration configuration,
       String workspaceName,
-      @Nullable PathFragment shExecutable) {
+      PathFragment shExecutable) {
     super(
         owner,
         /*tools=*/ ImmutableList.of(),
@@ -338,7 +338,7 @@ public class TestRunnerAction extends AbstractAction
     fp.addString(testProperties.getSize().toString());
     fp.addString(testProperties.getTimeout().toString());
     fp.addStrings(testProperties.getTags());
-    fp.addInt(testProperties.isRemotable() ? 1 : 0);
+    fp.addInt(testProperties.isLocal() ? 1 : 0);
     fp.addInt(shardNum);
     fp.addInt(executionSettings.getTotalShards());
     fp.addInt(runNumber);
@@ -827,8 +827,7 @@ public class TestRunnerAction extends AbstractAction
     return collectCoverageScript;
   }
 
-  @Nullable
-  public PathFragment getShExecutableMaybe() {
+  public PathFragment getShExecutable() {
     return shExecutable;
   }
 

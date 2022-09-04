@@ -91,9 +91,9 @@ public class IncludeScanning implements IncludeProcessing {
     Artifact mainSource = action.getMainIncludeScannerSource();
     Collection<Artifact> sources = action.getIncludeScannerSources();
 
+    Profiler profiler = Profiler.instance();
     try (SilentCloseable c =
-        Profiler.instance()
-            .profile(ProfilerTask.SCANNER, action.getSourceFile().getExecPathString())) {
+        profiler.profile(ProfilerTask.SCANNER, action.getSourceFile().getExecPathString())) {
       ListenableFuture<?> future =
           scanner.processAsync(
               mainSource,

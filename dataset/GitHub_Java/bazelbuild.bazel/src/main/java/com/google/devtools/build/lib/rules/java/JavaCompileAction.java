@@ -67,6 +67,7 @@ import com.google.devtools.build.lib.view.proto.Deps;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -201,7 +202,7 @@ public class JavaCompileAction extends AbstractAction
         direct.add(dep.getPath());
       }
     }
-    ImmutableList<Artifact> transitiveCollection = transitiveInputs.toList();
+    Collection<Artifact> transitiveCollection = transitiveInputs.toCollection();
     ImmutableList<Artifact> reducedJars =
         ImmutableList.copyOf(
             Iterables.filter(
@@ -321,7 +322,7 @@ public class JavaCompileAction extends AbstractAction
     sb.append(" (");
     boolean first = true;
     first = appendCount(sb, first, sourceFiles.size(), "source file");
-    appendCount(sb, first, sourceJars.size(), "source jar");
+    first = appendCount(sb, first, sourceJars.size(), "source jar");
     sb.append(")");
     sb.append(getProcessorNames(plugins.processorClasses()));
     return sb.toString();

@@ -29,6 +29,7 @@ import com.google.devtools.build.lib.actions.RunningActionEvent;
 import com.google.devtools.build.lib.actions.SandboxedSpawnActionContext;
 import com.google.devtools.build.lib.actions.SchedulingActionEvent;
 import com.google.devtools.build.lib.actions.Spawn;
+import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.actions.SpawnResult.Status;
 import com.google.devtools.build.lib.actions.Spawns;
@@ -49,7 +50,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.SortedMap;
 import java.util.concurrent.atomic.AtomicInteger;
-import javax.annotation.Nullable;
+import java.util.concurrent.atomic.AtomicReference;
 
 /** Abstract common ancestor for spawn strategies implementing the common parts. */
 public abstract class AbstractSpawnStrategy implements SandboxedSpawnActionContext {
@@ -96,13 +97,13 @@ public abstract class AbstractSpawnStrategy implements SandboxedSpawnActionConte
   public List<SpawnResult> exec(
       Spawn spawn,
       ActionExecutionContext actionExecutionContext,
-      @Nullable StopConcurrentSpawns stopConcurrentSpawns)
+      AtomicReference<Class<? extends SpawnActionContext>> writeOutputFiles)
       throws ExecException, InterruptedException {
     actionExecutionContext.maybeReportSubcommand(spawn);
 
     final Duration timeout = Spawns.getTimeout(spawn);
     SpawnExecutionContext context =
-        new SpawnExecutionContextImpl(spawn, actionExecutionContext, stopConcurrentSpawns, timeout);
+        new SpawnExecutionContextImpl(spawn, actionExecutionContext, writeOutputFiles, timeout);
     // TODO(ulfjack): Provide a way to disable the cache. We don't want the RemoteSpawnStrategy to
     // check the cache twice. Right now that can't happen because this is hidden behind an
     // experimental flag.
@@ -172,7 +173,7 @@ public abstract class AbstractSpawnStrategy implements SandboxedSpawnActionConte
   private final class SpawnExecutionContextImpl implements SpawnExecutionContext {
     private final Spawn spawn;
     private final ActionExecutionContext actionExecutionContext;
-    @Nullable private final StopConcurrentSpawns stopConcurrentSpawns;
+    private final AtomicReference<Class<? extends SpawnActionContext>> writeOutputFiles;
     private final Duration timeout;
 
     private final int id = execCount.incrementAndGet();
@@ -183,11 +184,11 @@ public abstract class AbstractSpawnStrategy implements SandboxedSpawnActionConte
     public SpawnExecutionContextImpl(
         Spawn spawn,
         ActionExecutionContext actionExecutionContext,
-        @Nullable StopConcurrentSpawns stopConcurrentSpawns,
+        AtomicReference<Class<? extends SpawnActionContext>> writeOutputFiles,
         Duration timeout) {
       this.spawn = spawn;
       this.actionExecutionContext = actionExecutionContext;
-      this.stopConcurrentSpawns = stopConcurrentSpawns;
+      this.writeOutputFiles = writeOutputFiles;
       this.timeout = timeout;
     }
 
@@ -227,14 +228,17 @@ public abstract class AbstractSpawnStrategy implements SandboxedSpawnActionConte
 
     @Override
     public void lockOutputFiles() throws InterruptedException {
-      if (stopConcurrentSpawns != null) {
-        stopConcurrentSpawns.stop();
+      Class<? extends SpawnActionContext> token = AbstractSpawnStrategy.this.getClass();
+      if (writeOutputFiles != null
+          && writeOutputFiles.get() != token
+          && !writeOutputFiles.compareAndSet(null, token)) {
+        throw new InterruptedException();
       }
     }
 
     @Override
     public boolean speculating() {
-      return stopConcurrentSpawns != null;
+      return writeOutputFiles != null;
     }
 
     @Override
