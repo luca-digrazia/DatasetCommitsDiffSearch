@@ -16,7 +16,6 @@
  */
 package org.graylog2.rest.resources.roles;
 
-import com.google.common.base.Optional;
 import com.google.common.collect.Sets;
 import com.wordnik.swagger.annotations.Api;
 import com.wordnik.swagger.annotations.ApiOperation;
@@ -87,7 +86,7 @@ public class RolesResource extends RestResource {
         final Set<Role> roles = roleService.loadAll();
         Set<RoleResponse> roleResponses = Sets.newHashSet();
         for (Role role : roles) {
-            roleResponses.add(RoleResponse.create(role.getName(), Optional.fromNullable(role.getDescription()), role.getPermissions()));
+            roleResponses.add(RoleResponse.create(role.getName(), role.getPermissions()));
         }
 
         return RolesResponse.create(roleResponses);
@@ -100,7 +99,7 @@ public class RolesResource extends RestResource {
         checkPermission(RestPermissions.ROLES_READ, name);
 
         final Role role = roleService.load(name);
-        return RoleResponse.create(role.getName(), Optional.fromNullable(role.getDescription()), role.getPermissions());
+        return RoleResponse.create(role.getName(), role.getPermissions());
     }
 
     @POST
@@ -127,9 +126,7 @@ public class RolesResource extends RestResource {
                 .path("{rolename}")
                 .build(role.getName());
 
-        return Response.created(uri).entity(RoleResponse.create(role.getName(),
-                                                                Optional.fromNullable(role.getDescription()),
-                                                                role.getPermissions())).build();
+        return Response.created(uri).entity(RoleResponse.create(role.getName(), role.getPermissions())).build();
     }
 
     @PUT
@@ -141,14 +138,13 @@ public class RolesResource extends RestResource {
         final Role roleToUpdate = roleService.load(name);
 
         roleToUpdate.setName(role.name());
-        roleToUpdate.setDescription(role.description().get());
         roleToUpdate.setPermissions(role.permissions());
         try {
             roleService.save(roleToUpdate);
         } catch (ValidationException e) {
             throw new BadRequestException(e);
         }
-        return RoleResponse.create(roleToUpdate.getName(), Optional.fromNullable(roleToUpdate.getDescription()), roleToUpdate.getPermissions());
+        return RoleResponse.create(roleToUpdate.getName(), roleToUpdate.getPermissions());
     }
 
     @DELETE
