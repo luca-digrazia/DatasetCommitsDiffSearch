@@ -462,8 +462,7 @@ public class CppOptions extends FragmentOptions {
             + "an auto profile. This flag also accepts files specified as labels, for "
             + "example //foo/bar:file.afdo. Such labels must refer to input files; you may "
             + "need to add an exports_files directive to the corresponding package to make "
-            + "the file visible to Bazel. It also accepts a raw or an indexed LLVM profile file. "
-            + "This flag will be superseded by fdo_profile rule."
+            + "the file visible to Bazel. It also accepts a raw or an indexed LLVM profile file."
   )
   /**
    * Never read FDO/LIPO options directly. This is because {@link #lipoConfigurationState}
@@ -638,14 +637,6 @@ public class CppOptions extends FragmentOptions {
   public Label getFdoProfileLabel() {
     return enableLipoSettings() ? fdoProfileLabel : null;
   }
-
-  @Option(
-      name = "enable_fdo_profile_absolute_path",
-      defaultValue = "true",
-      documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-      effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
-      help = "If set, use of fdo_absolute_profile_path will raise an error.")
-  public boolean enableFdoProfileAbsolutePath;
 
   @Option(
     name = "experimental_stl",

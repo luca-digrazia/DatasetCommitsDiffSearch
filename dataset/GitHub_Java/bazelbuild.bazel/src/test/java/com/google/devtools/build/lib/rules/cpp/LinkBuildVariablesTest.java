@@ -22,8 +22,9 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.util.AnalysisMock;
 import com.google.devtools.build.lib.packages.util.MockCcSupport;
-import com.google.devtools.build.lib.rules.cpp.CcToolchainVariables.LibraryToLinkValue;
-import com.google.devtools.build.lib.rules.cpp.CcToolchainVariables.VariableValue;
+import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables;
+import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables.LibraryToLinkValue;
+import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables.VariableValue;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.util.OsUtils;
 import java.util.List;
@@ -42,7 +43,7 @@ public class LinkBuildVariablesTest extends LinkBuildVariablesTestCase {
     scratch.file("x/a.cc");
 
     ConfiguredTarget target = getConfiguredTarget("//x:bin");
-    CcToolchainVariables variables = getLinkBuildVariables(target, Link.LinkTargetType.EXECUTABLE);
+    Variables variables = getLinkBuildVariables(target, Link.LinkTargetType.EXECUTABLE);
     String variableValue =
         getVariableValue(variables, LinkBuildVariables.FORCE_PIC.getVariableName());
     assertThat(variableValue).contains("");
@@ -57,8 +58,7 @@ public class LinkBuildVariablesTest extends LinkBuildVariablesTestCase {
     scratch.file("x/a.cc");
 
     ConfiguredTarget target = getConfiguredTarget("//x:foo");
-    CcToolchainVariables variables =
-        getLinkBuildVariables(target, LinkTargetType.NODEPS_DYNAMIC_LIBRARY);
+    Variables variables = getLinkBuildVariables(target, LinkTargetType.NODEPS_DYNAMIC_LIBRARY);
     VariableValue librariesToLinkSequence =
         variables.getVariable(LinkBuildVariables.LIBRARIES_TO_LINK.getVariableName());
     assertThat(librariesToLinkSequence).isNotNull();
@@ -87,7 +87,7 @@ public class LinkBuildVariablesTest extends LinkBuildVariablesTestCase {
     scratch.file("x/some-dir/bar.so");
 
     ConfiguredTarget target = getConfiguredTarget("//x:bin");
-    CcToolchainVariables variables = getLinkBuildVariables(target, Link.LinkTargetType.EXECUTABLE);
+    Variables variables = getLinkBuildVariables(target, Link.LinkTargetType.EXECUTABLE);
     List<String> variableValue =
         getSequenceVariableValue(
             variables, LinkBuildVariables.LIBRARY_SEARCH_DIRECTORIES.getVariableName());
@@ -103,7 +103,7 @@ public class LinkBuildVariablesTest extends LinkBuildVariablesTestCase {
     scratch.file("x/some-dir/bar.so");
 
     ConfiguredTarget target = getConfiguredTarget("//x:bin");
-    CcToolchainVariables variables = getLinkBuildVariables(target, Link.LinkTargetType.EXECUTABLE);
+    Variables variables = getLinkBuildVariables(target, Link.LinkTargetType.EXECUTABLE);
     String variableValue =
         getVariableValue(variables, LinkBuildVariables.LINKER_PARAM_FILE.getVariableName());
     assertThat(variableValue).matches(".*bin/x/bin" + OsUtils.executableExtension() + "-2.params$");
@@ -122,8 +122,7 @@ public class LinkBuildVariablesTest extends LinkBuildVariablesTestCase {
     scratch.file("x/a.cc");
 
     ConfiguredTarget target = getConfiguredTarget("//x:foo");
-    CcToolchainVariables variables =
-        getLinkBuildVariables(target, LinkTargetType.NODEPS_DYNAMIC_LIBRARY);
+    Variables variables = getLinkBuildVariables(target, LinkTargetType.NODEPS_DYNAMIC_LIBRARY);
 
     String interfaceLibraryBuilder =
         getVariableValue(variables, LinkBuildVariables.INTERFACE_LIBRARY_BUILDER.getVariableName());
@@ -171,7 +170,7 @@ public class LinkBuildVariablesTest extends LinkBuildVariablesTestCase {
         (CppLinkAction)
             getPredecessorByInputName(
                 backendAction, "x/libfoo.so.lto/x/_objs/foo/x/a.pic.o.thinlto.bc");
-    CcToolchainVariables variables = indexAction.getLinkCommandLine().getBuildVariables();
+    Variables variables = indexAction.getLinkCommandLine().getBuildVariables();
 
     String interfaceLibraryBuilder =
         getVariableValue(variables, LinkBuildVariables.INTERFACE_LIBRARY_BUILDER.getVariableName());
@@ -202,7 +201,7 @@ public class LinkBuildVariablesTest extends LinkBuildVariablesTestCase {
     scratch.file("x/a.cc");
 
     ConfiguredTarget target = getConfiguredTarget("//x:foo");
-    CcToolchainVariables variables = getLinkBuildVariables(target, LinkTargetType.STATIC_LIBRARY);
+    Variables variables = getLinkBuildVariables(target, LinkTargetType.STATIC_LIBRARY);
 
     String interfaceLibraryBuilder =
         getVariableValue(variables, LinkBuildVariables.INTERFACE_LIBRARY_BUILDER.getVariableName());
@@ -228,8 +227,7 @@ public class LinkBuildVariablesTest extends LinkBuildVariablesTestCase {
     scratch.file("x/a.cc");
 
     ConfiguredTarget target = getConfiguredTarget("//x:foo");
-    CcToolchainVariables variables =
-        getLinkBuildVariables(target, LinkTargetType.NODEPS_DYNAMIC_LIBRARY);
+    Variables variables = getLinkBuildVariables(target, LinkTargetType.NODEPS_DYNAMIC_LIBRARY);
 
     assertThat(getVariableValue(variables, LinkBuildVariables.OUTPUT_EXECPATH.getVariableName()))
         .endsWith("x/libfoo.so");
@@ -264,7 +262,7 @@ public class LinkBuildVariablesTest extends LinkBuildVariablesTestCase {
         (CppLinkAction)
             getPredecessorByInputName(
                 backendAction, "x/libfoo.so.lto/x/_objs/foo/x/a.pic.o.thinlto.bc");
-    CcToolchainVariables variables = indexAction.getLinkCommandLine().getBuildVariables();
+    Variables variables = indexAction.getLinkCommandLine().getBuildVariables();
 
     assertThat(variables.isAvailable(LinkBuildVariables.OUTPUT_EXECPATH.getVariableName()))
         .isFalse();
@@ -278,16 +276,14 @@ public class LinkBuildVariablesTest extends LinkBuildVariablesTestCase {
     scratch.file("x/a.cc");
 
     ConfiguredTarget testTarget = getConfiguredTarget("//x:foo_test");
-    CcToolchainVariables testVariables =
-        getLinkBuildVariables(testTarget, LinkTargetType.EXECUTABLE);
+    Variables testVariables = getLinkBuildVariables(testTarget, LinkTargetType.EXECUTABLE);
 
     assertThat(
             testVariables.getVariable(LinkBuildVariables.IS_CC_TEST.getVariableName()).isTruthy())
         .isTrue();
 
     ConfiguredTarget binaryTarget = getConfiguredTarget("//x:foo");
-    CcToolchainVariables binaryVariables =
-        getLinkBuildVariables(binaryTarget, LinkTargetType.EXECUTABLE);
+    Variables binaryVariables = getLinkBuildVariables(binaryTarget, LinkTargetType.EXECUTABLE);
 
     assertThat(
             binaryVariables.getVariable(LinkBuildVariables.IS_CC_TEST.getVariableName()).isTruthy())
@@ -314,7 +310,7 @@ public class LinkBuildVariablesTest extends LinkBuildVariablesTestCase {
       String stripMode, String compilationMode, boolean isEnabled) throws Exception {
     useConfiguration("--strip=" + stripMode, "--compilation_mode=" + compilationMode);
     ConfiguredTarget target = getConfiguredTarget("//x:foo");
-    CcToolchainVariables variables = getLinkBuildVariables(target, LinkTargetType.EXECUTABLE);
+    Variables variables = getLinkBuildVariables(target, LinkTargetType.EXECUTABLE);
     assertThat(variables.isAvailable(LinkBuildVariables.STRIP_DEBUG_SYMBOLS.getVariableName()))
         .isEqualTo(isEnabled);
   }
@@ -331,14 +327,13 @@ public class LinkBuildVariablesTest extends LinkBuildVariablesTestCase {
 
     useConfiguration("--fission=no");
     ConfiguredTarget target = getConfiguredTarget("//x:foo");
-    CcToolchainVariables variables = getLinkBuildVariables(target, LinkTargetType.EXECUTABLE);
+    Variables variables = getLinkBuildVariables(target, LinkTargetType.EXECUTABLE);
     assertThat(variables.isAvailable(LinkBuildVariables.IS_USING_FISSION.getVariableName()))
         .isFalse();
 
     useConfiguration("--fission=yes");
     ConfiguredTarget fissionTarget = getConfiguredTarget("//x:foo");
-    CcToolchainVariables fissionVariables =
-        getLinkBuildVariables(fissionTarget, LinkTargetType.EXECUTABLE);
+    Variables fissionVariables = getLinkBuildVariables(fissionTarget, LinkTargetType.EXECUTABLE);
     assertThat(fissionVariables.isAvailable(LinkBuildVariables.IS_USING_FISSION.getVariableName()))
         .isTrue();
   }
@@ -354,8 +349,7 @@ public class LinkBuildVariablesTest extends LinkBuildVariablesTestCase {
     scratch.file("x/a.cc");
 
     ConfiguredTarget testTarget = getConfiguredTarget("//x:foo");
-    CcToolchainVariables testVariables =
-        getLinkBuildVariables(testTarget, LinkTargetType.EXECUTABLE);
+    Variables testVariables = getLinkBuildVariables(testTarget, LinkTargetType.EXECUTABLE);
 
     assertThat(testVariables.isAvailable(CcCommon.SYSROOT_VARIABLE_NAME)).isTrue();
   }
