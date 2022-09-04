@@ -124,9 +124,9 @@ public class ArcAnnotationProcessor implements ResourceProcessor {
             BeanProcessor beanProcessor = builder.build();
             beanProcessor.process();
 
-            ArcContainer container = template.getContainer(null);
+            ArcContainer container = template.getContainer();
             template.initBeanContainer(container);
-            template.setupInjection(null, container);
+            template.setupInjection(container);
             template.setupRequestScope(null, null);
         }
     }
