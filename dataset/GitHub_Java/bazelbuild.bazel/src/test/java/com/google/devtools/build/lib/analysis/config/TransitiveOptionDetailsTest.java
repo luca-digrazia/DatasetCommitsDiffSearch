@@ -17,13 +17,12 @@ import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.devtools.common.options.Converter;
 import com.google.devtools.common.options.Option;
-import com.google.devtools.common.options.OptionDocumentationCategory;
-import com.google.devtools.common.options.OptionEffectTag;
-import com.google.devtools.common.options.OptionMetadataTag;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
+import com.google.devtools.common.options.OptionsParser.OptionUsageRestrictions;
 import java.util.List;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -64,63 +63,32 @@ public class TransitiveOptionDetailsTest {
 
   /** Example options class for testing options lookup. */
   public static final class Options extends OptionsBase {
-    @Option(
-      name = "boolean_option",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
-      defaultValue = "true"
-    )
+    @Option(name = "boolean_option", defaultValue = "true")
     public boolean booleanOption;
 
-    @Option(
-      name = "convertible_option",
-      converter = Optionalizer.class,
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
-      defaultValue = ""
-    )
+    @Option(name = "convertible_option", converter = Optionalizer.class, defaultValue = "")
     public Optional<String> convertibleOption;
 
-    @Option(
-      name = "null_default",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
-      defaultValue = "null"
-    )
+    @Option(name = "null_default", defaultValue = "null")
     public String nullDefault;
 
-    @Option(
-      name = "late_bound_default",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
-      defaultValue = "null"
-    )
+    @Option(name = "late_bound_default", defaultValue = "null")
     public String lateBoundDefault;
 
-    @Option(
-      name = "multi_option",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
-      defaultValue = "n/a (allows multiple)",
-      allowMultiple = true
-    )
+    @Option(name = "multi_option", defaultValue = "n/a (allows multiple)", allowMultiple = true)
     public List<String> multiOption;
 
     @Option(
       name = "internal option",
       defaultValue = "secret",
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = {OptionEffectTag.NO_OP},
-      metadataTags = {OptionMetadataTag.INTERNAL}
+      optionUsageRestrictions = OptionUsageRestrictions.INTERNAL
     )
     public String internalOption;
 
     @Option(
       name = "internal multi option",
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = {OptionEffectTag.NO_OP},
       defaultValue = "n/a",
-      metadataTags = {OptionMetadataTag.INTERNAL},
+      optionUsageRestrictions = OptionUsageRestrictions.INTERNAL,
       allowMultiple = true
     )
     public List<String> internalMultiOption;
@@ -128,12 +96,7 @@ public class TransitiveOptionDetailsTest {
 
   /** Additional options class for testing options lookup. */
   public static final class MoreOptions extends OptionsBase {
-    @Option(
-      name = "other_option",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
-      defaultValue = ""
-    )
+    @Option(name = "other_option", defaultValue = "")
     public String otherOption;
   }
 
@@ -141,7 +104,7 @@ public class TransitiveOptionDetailsTest {
   public void getOptionClass_ReturnsClassOfPresentOptions() throws Exception {
     TransitiveOptionDetails details =
         TransitiveOptionDetails.forOptionsWithDefaults(
-            parseOptions(ImmutableList.of(Options.class)));
+            parseOptions(ImmutableList.of(Options.class)), ImmutableMap.<String, Object>of());
     assertThat(details.getOptionClass("boolean_option")).isEqualTo(Options.class);
   }
 
@@ -149,7 +112,8 @@ public class TransitiveOptionDetailsTest {
   public void getOptionClass_SelectsCorrectClassWhenMultipleArePresent() throws Exception {
     TransitiveOptionDetails details =
         TransitiveOptionDetails.forOptionsWithDefaults(
-            parseOptions(ImmutableList.of(Options.class, MoreOptions.class)));
+            parseOptions(ImmutableList.of(Options.class, MoreOptions.class)),
+            ImmutableMap.<String, Object>of());
     assertThat(details.getOptionClass("boolean_option")).isEqualTo(Options.class);
     assertThat(details.getOptionClass("other_option")).isEqualTo(MoreOptions.class);
   }
@@ -158,15 +122,24 @@ public class TransitiveOptionDetailsTest {
   public void getOptionClass_ReturnsNullIfOptionsClassIsNotPartOfOptionDetails() throws Exception {
     TransitiveOptionDetails details =
         TransitiveOptionDetails.forOptionsWithDefaults(
-            parseOptions(ImmutableList.of(Options.class)));
+            parseOptions(ImmutableList.of(Options.class)), ImmutableMap.<String, Object>of());
     assertThat(details.getOptionClass("other_option")).isNull();
+  }
+
+  @Test
+  public void getOptionClass_SelectsCorrectClassEvenWhenOverridden() throws Exception {
+    TransitiveOptionDetails details =
+        TransitiveOptionDetails.forOptionsWithDefaults(
+            parseOptions(ImmutableList.of(Options.class)),
+            ImmutableMap.<String, Object>of("late_bound_default", "late bound replacement"));
+    assertThat(details.getOptionClass("late_bound_default")).isEqualTo(Options.class);
   }
 
   @Test
   public void getOptionClass_SelectsCorrectClassEvenWhenValueIsNull() throws Exception {
     TransitiveOptionDetails details =
         TransitiveOptionDetails.forOptionsWithDefaults(
-            parseOptions(ImmutableList.of(Options.class)));
+            parseOptions(ImmutableList.of(Options.class)), ImmutableMap.<String, Object>of());
     assertThat(details.getOptionClass("null_default")).isEqualTo(Options.class);
   }
 
@@ -174,7 +147,16 @@ public class TransitiveOptionDetailsTest {
   public void getOptionClass_ReturnsNullWhenOptionIsUndefined() throws Exception {
     TransitiveOptionDetails details =
         TransitiveOptionDetails.forOptionsWithDefaults(
-            parseOptions(ImmutableList.of(Options.class)));
+            parseOptions(ImmutableList.of(Options.class)), ImmutableMap.<String, Object>of());
+    assertThat(details.getOptionClass("undefined_option")).isNull();
+  }
+
+  @Test
+  public void getOptionClass_ReturnsNullWhenOptionIsUndefinedEvenWhenOverridden() throws Exception {
+    TransitiveOptionDetails details =
+        TransitiveOptionDetails.forOptionsWithDefaults(
+            parseOptions(ImmutableList.of(Options.class)),
+            ImmutableMap.<String, Object>of("undefined_option", "override"));
     assertThat(details.getOptionClass("undefined_option")).isNull();
   }
 
@@ -182,7 +164,7 @@ public class TransitiveOptionDetailsTest {
   public void getOptionClass_ReturnsNullIfOptionIsInternal() throws Exception {
     TransitiveOptionDetails details =
         TransitiveOptionDetails.forOptionsWithDefaults(
-            parseOptions(ImmutableList.of(Options.class)));
+            parseOptions(ImmutableList.of(Options.class)), ImmutableMap.<String, Object>of());
     assertThat(details.getOptionClass("internal option")).isNull();
   }
 
@@ -190,7 +172,7 @@ public class TransitiveOptionDetailsTest {
   public void getOptionValue_ReturnsDefaultValueIfNotSet() throws Exception {
     TransitiveOptionDetails details =
         TransitiveOptionDetails.forOptionsWithDefaults(
-            parseOptions(ImmutableList.of(Options.class)));
+            parseOptions(ImmutableList.of(Options.class)), ImmutableMap.<String, Object>of());
     assertThat(details.getOptionValue("boolean_option")).isEqualTo(true);
   }
 
@@ -198,7 +180,8 @@ public class TransitiveOptionDetailsTest {
   public void getOptionValue_ReturnsCommandLineValueIfSet() throws Exception {
     TransitiveOptionDetails details =
         TransitiveOptionDetails.forOptionsWithDefaults(
-            parseOptions(ImmutableList.of(Options.class), "--noboolean_option"));
+            parseOptions(ImmutableList.of(Options.class), "--noboolean_option"),
+            ImmutableMap.<String, Object>of());
     assertThat(details.getOptionValue("boolean_option")).isEqualTo(false);
   }
 
@@ -206,7 +189,8 @@ public class TransitiveOptionDetailsTest {
   public void getOptionValue_ReturnsEmptyListForUnspecifiedMultiOptions() throws Exception {
     TransitiveOptionDetails details =
         TransitiveOptionDetails.forOptionsWithDefaults(
-            parseOptions(ImmutableList.of(Options.class), "--noboolean_option"));
+            parseOptions(ImmutableList.of(Options.class), "--noboolean_option"),
+            ImmutableMap.<String, Object>of());
     assertThat(details.getOptionValue("multi_option")).isEqualTo(ImmutableList.<String>of());
   }
 
@@ -218,7 +202,8 @@ public class TransitiveOptionDetailsTest {
                 ImmutableList.of(Options.class),
                 "--multi_option=one",
                 "--multi_option=2",
-                "--multi_option=iii"));
+                "--multi_option=iii"),
+            ImmutableMap.<String, Object>of());
     assertThat(details.getOptionValue("multi_option"))
         .isEqualTo(ImmutableList.of("one", "2", "iii"));
   }
@@ -227,7 +212,8 @@ public class TransitiveOptionDetailsTest {
   public void getOptionValue_DrawsValuesFromAllOptionsClasses() throws Exception {
     TransitiveOptionDetails details =
         TransitiveOptionDetails.forOptionsWithDefaults(
-            parseOptions(ImmutableList.of(Options.class, MoreOptions.class), "--other_option=set"));
+            parseOptions(ImmutableList.of(Options.class, MoreOptions.class), "--other_option=set"),
+            ImmutableMap.<String, Object>of());
     assertThat(details.getOptionValue("other_option")).isEqualTo("set");
   }
 
@@ -235,7 +221,8 @@ public class TransitiveOptionDetailsTest {
   public void getOptionValue_UsesConvertersIfSpecified() throws Exception {
     TransitiveOptionDetails details =
         TransitiveOptionDetails.forOptionsWithDefaults(
-            parseOptions(ImmutableList.of(Options.class), "--convertible_option=Set"));
+            parseOptions(ImmutableList.of(Options.class), "--convertible_option=Set"),
+            ImmutableMap.<String, Object>of());
     assertThat(details.getOptionValue("convertible_option")).isEqualTo(Optional.of("Set"));
   }
 
@@ -243,7 +230,7 @@ public class TransitiveOptionDetailsTest {
   public void getOptionValue_UsesConvertersForDefaultsIfSpecified() throws Exception {
     TransitiveOptionDetails details =
         TransitiveOptionDetails.forOptionsWithDefaults(
-            parseOptions(ImmutableList.of(Options.class)));
+            parseOptions(ImmutableList.of(Options.class)), ImmutableMap.<String, Object>of());
     assertThat(details.getOptionValue("convertible_option")).isEqualTo(Optional.<String>absent());
   }
 
@@ -251,7 +238,7 @@ public class TransitiveOptionDetailsTest {
   public void getOptionValue_ReturnsNullIfOptionIsNotDefined() throws Exception {
     TransitiveOptionDetails details =
         TransitiveOptionDetails.forOptionsWithDefaults(
-            parseOptions(ImmutableList.of(Options.class)));
+            parseOptions(ImmutableList.of(Options.class)), ImmutableMap.<String, Object>of());
     assertThat(details.getOptionValue("undefined_option")).isNull();
   }
 
@@ -259,7 +246,7 @@ public class TransitiveOptionDetailsTest {
   public void getOptionValue_ReturnsNullIfOptionIsInternal() throws Exception {
     TransitiveOptionDetails details =
         TransitiveOptionDetails.forOptionsWithDefaults(
-            parseOptions(ImmutableList.of(Options.class)));
+            parseOptions(ImmutableList.of(Options.class)), ImmutableMap.<String, Object>of());
     assertThat(details.getOptionValue("internal option")).isNull();
   }
 
@@ -268,23 +255,62 @@ public class TransitiveOptionDetailsTest {
       throws Exception {
     TransitiveOptionDetails details =
         TransitiveOptionDetails.forOptionsWithDefaults(
-            parseOptions(ImmutableList.of(Options.class)));
+            parseOptions(ImmutableList.of(Options.class)), ImmutableMap.<String, Object>of());
     assertThat(details.getOptionValue("other_option")).isNull();
+  }
+
+  @Test
+  public void getOptionValue_ReturnsNullIfOptionIsNotDefinedEvenIfOverridden() throws Exception {
+    TransitiveOptionDetails details =
+        TransitiveOptionDetails.forOptionsWithDefaults(
+            parseOptions(ImmutableList.of(Options.class)),
+            ImmutableMap.<String, Object>of("undefined_option_with_override", "default"));
+    assertThat(details.getOptionValue("undefined_option_with_override")).isNull();
   }
 
   @Test
   public void getOptionValue_ReturnsNullIfOptionDefaultValueIsNull() throws Exception {
     TransitiveOptionDetails details =
         TransitiveOptionDetails.forOptionsWithDefaults(
-            parseOptions(ImmutableList.of(Options.class)));
+            parseOptions(ImmutableList.of(Options.class)), ImmutableMap.<String, Object>of());
     assertThat(details.getOptionValue("null_option")).isNull();
+  }
+
+  @Test
+  public void getOptionValue_ReturnsOverrideValueIfOptionIsOverriddenAndDefaultsNull()
+      throws Exception {
+    TransitiveOptionDetails details =
+        TransitiveOptionDetails.forOptionsWithDefaults(
+            parseOptions(ImmutableList.of(Options.class)),
+            ImmutableMap.<String, Object>of("late_bound_default", "late bound replacement"));
+    assertThat(details.getOptionValue("late_bound_default")).isEqualTo("late bound replacement");
+  }
+
+  @Test
+  public void getOptionValue_ReturnsCommandLineValueIfOptionIsSetOnCommandLineEvenIfOverridden()
+      throws Exception {
+    TransitiveOptionDetails details =
+        TransitiveOptionDetails.forOptionsWithDefaults(
+            parseOptions(ImmutableList.of(Options.class), "--late_bound_default=commando"),
+            ImmutableMap.<String, Object>of("late_bound_default", "late bound replacement"));
+    assertThat(details.getOptionValue("late_bound_default")).isEqualTo("commando");
+  }
+
+  @Test
+  public void getOptionValue_ReturnsDefaultValueIfOptionDefaultsNonNullEvenIfOverridden()
+      throws Exception {
+    TransitiveOptionDetails details =
+        TransitiveOptionDetails.forOptionsWithDefaults(
+            parseOptions(ImmutableList.of(Options.class)),
+            ImmutableMap.<String, Object>of("convertible_option", "late bound replacement"));
+    assertThat(details.getOptionValue("convertible_option")).isEqualTo(Optional.<String>absent());
   }
 
   @Test
   public void allowsMultipleValues_ReturnsFalseForUndefinedOption() throws Exception {
     TransitiveOptionDetails details =
         TransitiveOptionDetails.forOptionsWithDefaults(
-            parseOptions(ImmutableList.of(Options.class)));
+            parseOptions(ImmutableList.of(Options.class)), ImmutableMap.<String, Object>of());
     assertThat(details.allowsMultipleValues("undefined_option")).isFalse();
   }
 
@@ -292,7 +318,7 @@ public class TransitiveOptionDetailsTest {
   public void allowsMultipleValues_ReturnsFalseForNonMultiOption() throws Exception {
     TransitiveOptionDetails details =
         TransitiveOptionDetails.forOptionsWithDefaults(
-            parseOptions(ImmutableList.of(Options.class)));
+            parseOptions(ImmutableList.of(Options.class)), ImmutableMap.<String, Object>of());
     assertThat(details.allowsMultipleValues("boolean_option")).isFalse();
   }
 
@@ -300,7 +326,7 @@ public class TransitiveOptionDetailsTest {
   public void allowsMultipleValues_ReturnsFalseForInternalNonMultiOption() throws Exception {
     TransitiveOptionDetails details =
         TransitiveOptionDetails.forOptionsWithDefaults(
-            parseOptions(ImmutableList.of(Options.class)));
+            parseOptions(ImmutableList.of(Options.class)), ImmutableMap.<String, Object>of());
     assertThat(details.allowsMultipleValues("internal option")).isFalse();
   }
 
@@ -308,7 +334,7 @@ public class TransitiveOptionDetailsTest {
   public void allowsMultipleValues_ReturnsFalseForInternalMultiOption() throws Exception {
     TransitiveOptionDetails details =
         TransitiveOptionDetails.forOptionsWithDefaults(
-            parseOptions(ImmutableList.of(Options.class)));
+            parseOptions(ImmutableList.of(Options.class)), ImmutableMap.<String, Object>of());
     assertThat(details.allowsMultipleValues("internal multi option")).isFalse();
   }
 
@@ -316,7 +342,7 @@ public class TransitiveOptionDetailsTest {
   public void allowsMultipleValues_ReturnsTrueForMultiOption() throws Exception {
     TransitiveOptionDetails details =
         TransitiveOptionDetails.forOptionsWithDefaults(
-            parseOptions(ImmutableList.of(Options.class)));
+            parseOptions(ImmutableList.of(Options.class)), ImmutableMap.<String, Object>of());
     assertThat(details.allowsMultipleValues("multi_option")).isTrue();
   }
 }

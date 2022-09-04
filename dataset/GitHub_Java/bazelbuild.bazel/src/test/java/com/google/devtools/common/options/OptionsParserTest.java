@@ -27,7 +27,6 @@ import static org.junit.Assert.fail;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.common.options.Converters.CommaSeparatedOptionListConverter;
-import com.google.devtools.common.options.OptionsParser.ConstructionException;
 import com.google.devtools.common.options.OptionsParser.OptionUsageRestrictions;
 import com.google.devtools.common.options.OptionsParser.OptionValueDescription;
 import com.google.devtools.common.options.OptionsParser.UnparsedOptionValueDescription;
@@ -1404,7 +1403,7 @@ public class OptionsParserTest {
   public void illegalListType() throws Exception {
     try {
       OptionsParser.newOptionsParser(IllegalListTypeExample.class);
-    } catch (ConstructionException e) {
+    } catch (AssertionError e) {
       // Expected exception
       return;
     }

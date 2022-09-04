@@ -20,14 +20,16 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ListMultimap;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import com.google.common.escape.Escaper;
 import java.lang.reflect.Field;
 import java.nio.file.FileSystem;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
@@ -91,7 +93,7 @@ public class OptionsParser implements OptionsProvider {
    * options classes on the classpath.
    */
   private static final Map<ImmutableList<Class<? extends OptionsBase>>, OptionsData> optionsData =
-      new HashMap<>();
+      Maps.newHashMap();
 
   /**
    * Returns {@link OpaqueOptionsData} suitable for passing along to {@link
@@ -102,35 +104,32 @@ public class OptionsParser implements OptionsProvider {
    * construct lots of different {@link OptionsParser} instances).
    */
   public static OpaqueOptionsData getOptionsData(
-      List<Class<? extends OptionsBase>> optionsClasses) throws ConstructionException {
+      ImmutableList<Class<? extends OptionsBase>> optionsClasses) throws ConstructionException {
     return getOptionsDataInternal(optionsClasses);
   }
 
-  /**
-   * Returns the {@link OptionsData} associated with the given list of options classes.
-   */
-  static synchronized OptionsData getOptionsDataInternal(
-      List<Class<? extends OptionsBase>> optionsClasses) throws ConstructionException {
-    ImmutableList<Class<? extends OptionsBase>> immutableOptionsClasses =
-        ImmutableList.copyOf(optionsClasses);
-    OptionsData result = optionsData.get(immutableOptionsClasses);
+  private static synchronized OptionsData getOptionsDataInternal(
+      ImmutableList<Class<? extends OptionsBase>> optionsClasses) throws ConstructionException {
+    OptionsData result = optionsData.get(optionsClasses);
     if (result == null) {
       try {
-        result = OptionsData.from(immutableOptionsClasses);
+        result = OptionsData.from(optionsClasses);
       } catch (Exception e) {
         throw new ConstructionException(e.getMessage(), e);
       }
-      optionsData.put(immutableOptionsClasses, result);
+      optionsData.put(optionsClasses, result);
     }
     return result;
   }
 
   /**
-   * Returns the {@link OptionsData} associated with the given options class.
+   * Returns all the annotated fields for the given class, including inherited
+   * ones.
    */
-  static OptionsData getOptionsDataInternal(Class<? extends OptionsBase> optionsClass)
-      throws ConstructionException {
-    return getOptionsDataInternal(ImmutableList.<Class<? extends OptionsBase>>of(optionsClass));
+  static Collection<Field> getAllAnnotatedFields(Class<? extends OptionsBase> optionsClass) {
+    OptionsData data = getOptionsDataInternal(
+        ImmutableList.<Class<? extends OptionsBase>>of(optionsClass));
+    return data.getFieldsForClass(optionsClass);
   }
 
   /**
@@ -329,7 +328,7 @@ public class OptionsParser implements OptionsProvider {
         // The generic type of the list is not known at runtime, so we can't
         // use it here. It was already checked in the constructor, so this is
         // type-safe.
-        List result = new ArrayList<>();
+        List result = Lists.newArrayList();
         ListMultimap realValue = (ListMultimap) value;
         for (OptionPriority priority : OptionPriority.values()) {
           // If there is no mapping for this key, this check avoids object creation (because
@@ -537,12 +536,11 @@ public class OptionsParser implements OptionsProvider {
    */
   public String describeOptions(
       Map<String, String> categoryDescriptions, HelpVerbosity helpVerbosity) {
-    OptionsData data = impl.getOptionsData();
     StringBuilder desc = new StringBuilder();
-    if (!data.getOptionsClasses().isEmpty()) {
-      List<Field> allFields = new ArrayList<>();
-      for (Class<? extends OptionsBase> optionsClass : data.getOptionsClasses()) {
-        allFields.addAll(data.getFieldsForClass(optionsClass));
+    if (!impl.getOptionsClasses().isEmpty()) {
+      List<Field> allFields = Lists.newArrayList();
+      for (Class<? extends OptionsBase> optionsClass : impl.getOptionsClasses()) {
+        allFields.addAll(impl.getAnnotatedFieldsFor(optionsClass));
       }
       Collections.sort(allFields, OptionsUsage.BY_CATEGORY);
       String prevCategory = null;
@@ -581,12 +579,11 @@ public class OptionsParser implements OptionsProvider {
    *   of the category.
    */
   public String describeOptionsHtml(Map<String, String> categoryDescriptions, Escaper escaper) {
-    OptionsData data = impl.getOptionsData();
     StringBuilder desc = new StringBuilder();
-    if (!data.getOptionsClasses().isEmpty()) {
-      List<Field> allFields = new ArrayList<>();
-      for (Class<? extends OptionsBase> optionsClass : data.getOptionsClasses()) {
-        allFields.addAll(data.getFieldsForClass(optionsClass));
+    if (!impl.getOptionsClasses().isEmpty()) {
+      List<Field> allFields = Lists.newArrayList();
+      for (Class<? extends OptionsBase> optionsClass : impl.getOptionsClasses()) {
+        allFields.addAll(impl.getAnnotatedFieldsFor(optionsClass));
       }
       Collections.sort(allFields, OptionsUsage.BY_CATEGORY);
       String prevCategory = null;
@@ -623,13 +620,12 @@ public class OptionsParser implements OptionsProvider {
    * details on the format for the flag completion.
    */
   public String getOptionsCompletion() {
-    OptionsData data = impl.getOptionsData();
     StringBuilder desc = new StringBuilder();
 
     // List all options
-    List<Field> allFields = new ArrayList<>();
-    for (Class<? extends OptionsBase> optionsClass : data.getOptionsClasses()) {
-      allFields.addAll(data.getFieldsForClass(optionsClass));
+    List<Field> allFields = Lists.newArrayList();
+    for (Class<? extends OptionsBase> optionsClass : impl.getOptionsClasses()) {
+      allFields.addAll(impl.getAnnotatedFieldsFor(optionsClass));
     }
     // Sort field for deterministic ordering
     Collections.sort(allFields, new Comparator<Field>() {
