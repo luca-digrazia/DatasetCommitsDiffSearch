@@ -1740,7 +1740,7 @@ public class BuildConfiguration implements BuildConfigurationApi {
   }
 
   public boolean isExperimentalJavaCoverage() {
-    return true;
+    return options.experimentalJavaCoverage;
   }
 
   public boolean useGcovCoverage() {
