@@ -1,6 +1,5 @@
 package io.quarkus.redis.client.runtime;
 
-import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
@@ -30,11 +29,11 @@ class RedisAPIProducer {
         return REDIS_APIS.computeIfAbsent(name, new Function<String, RedisAPIContainer>() {
             @Override
             public RedisAPIContainer apply(String s) {
-                Duration timeout = Duration.ofSeconds(10);
+                long timeout = 10;
                 RedisConfiguration redisConfiguration = RedisClientUtil.getConfiguration(RedisAPIProducer.this.redisConfig,
                         name);
                 if (redisConfiguration.timeout.isPresent()) {
-                    timeout = redisConfiguration.timeout.get();
+                    timeout = redisConfiguration.timeout.get().getSeconds();
                 }
                 RedisOptions options = RedisClientUtil.buildOptions(redisConfiguration);
                 Redis redis = Redis.createClient(vertx, options);
