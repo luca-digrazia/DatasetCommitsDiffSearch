@@ -99,8 +99,6 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
 
     protected boolean mIsTouchWigetFull = true; //是否支持全屏滑动触摸有效
 
-    protected boolean mShowPauseCover = true;//是否显示暂停图片
-
     protected Context mContext;
 
     protected String mOriginUrl; //原来的url
@@ -365,7 +363,6 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
             gsyVideoPlayer.mShrinkImageRes = mShrinkImageRes;
             gsyVideoPlayer.mEnlargeImageRes = mEnlargeImageRes;
             gsyVideoPlayer.mRotate = mRotate;
-            gsyVideoPlayer.mShowPauseCover = mShowPauseCover;
             gsyVideoPlayer.setUp(mOriginUrl, mCache, mCachePath, mMapHeadData, mObjects);
             gsyVideoPlayer.setStateAndUi(mCurrentState);
             gsyVideoPlayer.addTextureView();
@@ -399,7 +396,6 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
     /**
      * 退出window层播放全屏效果
      */
-    @SuppressWarnings("ResourceType")
     public void clearFullscreenLayout() {
         mIfCurrentIsFullscreen = false;
         int delay = 0;
@@ -411,16 +407,6 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
                 mOrientationUtils = null;
             }
         }
-
-
-        final ViewGroup vp = getViewGroup();
-        final View oldF = vp.findViewById(FULLSCREEN_ID);
-        if (oldF != null) {
-            //此处fix bug#265，推出全屏的时候，虚拟按键问题
-            GSYVideoPlayer gsyVideoPlayer = (GSYVideoPlayer) oldF;
-            gsyVideoPlayer.mIfCurrentIsFullscreen = false;
-        }
-
         mHandler.postDelayed(new Runnable() {
             @Override
             public void run() {
@@ -475,7 +461,7 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
      */
     private void pauseFullCoverLogic() {
         if (mCurrentState == GSYVideoPlayer.CURRENT_STATE_PAUSE && mTextureView != null
-                && (mFullPauseBitmap == null || mFullPauseBitmap.isRecycled()) && mShowPauseCover) {
+                && (mFullPauseBitmap == null || mFullPauseBitmap.isRecycled())) {
             try {
                 mFullPauseBitmap = mTextureView.getBitmap(mTextureView.getSizeW(), mTextureView.getSizeH());
             } catch (Exception e) {
@@ -491,12 +477,12 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
     private void pauseFullBackCoverLogic(GSYBaseVideoPlayer gsyVideoPlayer) {
         //如果是暂停状态
         if (gsyVideoPlayer.mCurrentState == GSYVideoPlayer.CURRENT_STATE_PAUSE
-                && gsyVideoPlayer.mTextureView != null && mShowPauseCover) {
+                && gsyVideoPlayer.mTextureView != null) {
             //全屏的位图还在，说明没播放，直接用原来的
             if (gsyVideoPlayer.mFullPauseBitmap != null
-                    && !gsyVideoPlayer.mFullPauseBitmap.isRecycled() && mShowPauseCover) {
+                    && !gsyVideoPlayer.mFullPauseBitmap.isRecycled()) {
                 mFullPauseBitmap = gsyVideoPlayer.mFullPauseBitmap;
-            } else if (mShowPauseCover) {
+            } else {
                 //不在了说明已经播放过，还是暂停的话，我们拿回来就好
                 try {
                     mFullPauseBitmap = mTextureView.getBitmap(mTextureView.getSizeW(), mTextureView.getSizeH());
@@ -819,18 +805,4 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
     }
 
 
-    public boolean isShowPauseCover() {
-        return mShowPauseCover;
-    }
-
-    /**
-     * 是否需要加载显示暂停的cover图片
-     * 打开状态下，暂停退到后台，再回到前台不会显示黑屏，但可以对某些机型有概率出现OOM
-     * 关闭情况下，暂停退到后台，再回到前台显示黑屏
-     *
-     * @param showPauseCover 默认true
-     */
-    public void setShowPauseCover(boolean showPauseCover) {
-        this.mShowPauseCover = showPauseCover;
-    }
 }

@@ -99,9 +99,6 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
     private int mDialogProgressNormalColor = -11;
 
 
-    private int mDismissControlTime = 2500;
-
-
     public void setStandardVideoAllCallBack(StandardVideoAllCallBack standardVideoAllCallBack) {
         this.mStandardVideoAllCallBack = standardVideoAllCallBack;
         setVideoAllCallBack(standardVideoAllCallBack);
@@ -625,7 +622,7 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
 
 
     private void updatePauseCover() {
-        if ((mFullPauseBitmap == null || mFullPauseBitmap.isRecycled()) && mShowPauseCover) {
+        if (mFullPauseBitmap == null || mFullPauseBitmap.isRecycled()) {
             try {
                 mFullPauseBitmap = mTextureView.getBitmap(mTextureView.getSizeW(), mTextureView.getSizeH());
             } catch (Exception e) {
@@ -894,7 +891,7 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
         cancelDismissControlViewTimer();
         mDismissControlViewTimer = new Timer();
         mDismissControlViewTimerTask = new DismissControlViewTimerTask();
-        mDismissControlViewTimer.schedule(mDismissControlViewTimerTask, mDismissControlTime);
+        mDismissControlViewTimer.schedule(mDismissControlViewTimerTask, 2500);
     }
 
     private void cancelDismissControlViewTimer() {
@@ -1052,17 +1049,4 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
     public void setLockClickListener(LockClickListener lockClickListener) {
         this.mLockClickListener = lockClickListener;
     }
-
-    /**
-     * 设置触摸显示控制ui的消失时间
-     * @param dismissControlTime 毫秒，默认2500
-     */
-    public void setDismissControlTime(int dismissControlTime) {
-        this.mDismissControlTime = dismissControlTime;
-    }
-
-    public int getDismissControlTime() {
-        return mDismissControlTime;
-    }
-
 }
