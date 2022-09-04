@@ -41,7 +41,6 @@ import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
 import com.google.devtools.build.lib.analysis.config.DependencyEvaluationException;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.configuredtargets.MergedConfiguredTarget;
-import com.google.devtools.build.lib.analysis.starlark.StarlarkTransition.TransitionException;
 import com.google.devtools.build.lib.causes.Cause;
 import com.google.devtools.build.lib.causes.LabelCause;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -457,8 +456,7 @@ public final class AspectFunction implements SkyFunction {
                 targetPkg.getRepositoryMapping(),
                 unloadedToolchainContext,
                 targetDescription,
-                // TODO(161222568): Support exec groups on aspects.
-                depValueMap.get(DependencyKind.defaultExecGroupToolchain()));
+                depValueMap.get(DependencyKind.TOOLCHAIN_DEPENDENCY));
       }
 
       return createAspect(
@@ -480,10 +478,6 @@ public final class AspectFunction implements SkyFunction {
             new AspectCreationException(cause.getMessage(), cause.getRootCauses()));
       } else if (e.getCause() instanceof InconsistentAspectOrderException) {
         InconsistentAspectOrderException cause = (InconsistentAspectOrderException) e.getCause();
-        throw new AspectFunctionException(
-            new AspectCreationException(cause.getMessage(), key.getLabel(), aspectConfiguration));
-      } else if (e.getCause() instanceof TransitionException) {
-        TransitionException cause = (TransitionException) e.getCause();
         throw new AspectFunctionException(
             new AspectCreationException(cause.getMessage(), key.getLabel(), aspectConfiguration));
       } else {
