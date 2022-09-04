@@ -1,7 +1,5 @@
 package io.dropwizard.jersey.validation;
 
-import javax.validation.constraints.Min;
-
 import io.dropwizard.jersey.params.IntParam;
 import io.dropwizard.jersey.params.NonEmptyStringParam;
 import io.dropwizard.validation.Validated;
@@ -9,6 +7,7 @@ import org.hibernate.validator.constraints.Email;
 import org.hibernate.validator.constraints.Length;
 import org.hibernate.validator.constraints.NotEmpty;
 import org.hibernate.validator.valuehandling.UnwrapValidatedValue;
+
 import javax.servlet.ServletContext;
 import javax.validation.Valid;
 import javax.validation.constraints.NotNull;
@@ -37,12 +36,6 @@ public class ValidatingResource {
     @Path("barter")
     public String isnt(@QueryParam("name") @Length(min = 3) @UnwrapValidatedValue NonEmptyStringParam name) {
         return name.get().orNull();
-    }
-    
-    @GET
-    @Path("fhqwhgads")
-    public String everybody(@QueryParam("num") @Min(3L) @NotNull Long param) {
-        return param.toString();
     }
 
     @GET
