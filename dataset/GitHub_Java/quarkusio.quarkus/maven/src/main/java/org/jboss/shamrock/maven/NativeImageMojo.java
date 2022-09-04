@@ -35,9 +35,6 @@ import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
-import org.eclipse.microprofile.config.Config;
-
-import io.smallrye.config.SmallRyeConfigProviderResolver;
 
 @Mojo(name = "native-image", defaultPhase = LifecyclePhase.PACKAGE, requiresDependencyResolution = ResolutionScope.RUNTIME)
 public class NativeImageMojo extends AbstractMojo {
@@ -124,8 +121,6 @@ public class NativeImageMojo extends AbstractMojo {
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
 
-        Config config = SmallRyeConfigProviderResolver.instance().getConfig();
-        
         boolean vmVersionOutOfDate = isThisGraalVMRC7();
 
         HashMap<String, String> env = new HashMap<>(System.getenv());
@@ -173,13 +168,6 @@ public class NativeImageMojo extends AbstractMojo {
                     } else {
                         command.add("-J-D" + propertyName + "=" + propertyValue);
                     }
-                }
-            }
-            if(config != null) {
-                if(config.getOptionalValue("shamrock.ssl.native", Boolean.class).orElse(false)) {
-                    enableHttpsUrlHandler = true;
-                    enableJni = true;
-                    enableAllSecurityServices = true;
                 }
             }
             if (additionalBuildArgs != null) {
