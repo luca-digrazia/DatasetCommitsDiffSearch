@@ -1,6 +1,5 @@
 package io.dropwizard.jetty;
 
-import com.google.common.base.Charsets;
 import com.google.common.io.ByteStreams;
 import com.google.common.io.CharStreams;
 import com.google.common.io.Resources;
@@ -20,8 +19,11 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.util.zip.*;
+import java.nio.charset.StandardCharsets;
+import java.util.zip.Deflater;
+import java.util.zip.DeflaterOutputStream;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -36,6 +38,10 @@ public class BiDiGzipHandlerTest {
 
     @Before
     public void setUp() throws Exception {
+        request.setHeader(HttpHeaders.HOST, "localhost");
+        request.setHeader("Connection", "close");
+        request.setURI("/banner");
+
         gzipHandler.setExcludedAgentPatterns();
         gzipHandler.addIncludedMethods("POST");
 
@@ -52,7 +58,6 @@ public class BiDiGzipHandlerTest {
     @Test
     public void testCompressResponse() throws Exception {
         request.setMethod("GET");
-        request.setURI("/banner");
         request.setHeader(HttpHeaders.ACCEPT_ENCODING, "gzip");
 
         HttpTester.Response response = HttpTester.parseResponse(servletTester.getResponses(request.generate()));
@@ -68,61 +73,88 @@ public class BiDiGzipHandlerTest {
 
     @Test
     public void testDecompressRequest() throws Exception {
-        request.setMethod("POST");
-        request.setURI("/banner");
-        request.setHeader(HttpHeaders.CONTENT_ENCODING, "gzip");
-        request.setHeader(HttpHeaders.CONTENT_TYPE, PLAIN_TEXT_UTF_8);
-
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         try (GZIPOutputStream gz = new GZIPOutputStream(baos)) {
             Resources.copy(Resources.getResource("assets/new-banner.txt"), gz);
         }
-        request.setContent(baos.toByteArray());
+
+        setRequestPostGzipPlainText(baos.toByteArray());
 
         HttpTester.Response response = HttpTester.parseResponse(servletTester.getResponses(request.generate()));
-        System.out.println(response.getStatus());
-        System.out.println(response.getContent());
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThat(response.getContent()).isEqualTo("Banner has been updated");
 
     }
 
     @Test
-    public void testDecompressDeflateRequest() throws Exception {
-        request.setMethod("POST");
-        request.setURI("/banner");
-        request.setHeader(HttpHeaders.CONTENT_ENCODING, "deflate");
-        request.setHeader(HttpHeaders.CONTENT_TYPE, PLAIN_TEXT_UTF_8);
+    public void testDecompressBadRequest() throws Exception {
+        setRequestPostGzipPlainText("Non-gziped content".getBytes("UTF-8"));
+        testBadRequest("Invalid gzip data in request");
+    }
 
+    @Test
+    public void testDecompressDeflateRequestGzipIncompatible() throws Exception {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         try (DeflaterOutputStream deflate = new DeflaterOutputStream(baos)) {
             Resources.copy(Resources.getResource("assets/new-banner.txt"), deflate);
         }
-        byte[] output = baos.toByteArray();
-        request.setContent(output);
-
-        // Decompress the bytes
-        Inflater decompresser = new Inflater();
-        decompresser.setInput(output);
-
-        byte[] result = new byte[4096];
-        int resultLength = decompresser.inflate(result);
-        decompresser.end();
-
-        // Decode the bytes into a String
-        System.out.println(new String(result, 0, resultLength, "UTF-8"));
+        setRequestPostDeflatePlainText(baos.toByteArray());
+        gzipHandler.setInflateNoWrap(false);
 
         HttpTester.Response response = HttpTester.parseResponse(servletTester.getResponses(request.generate()));
-        System.out.println(response.getStatus());
-        System.out.println(response.getContent());
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThat(response.getContent()).isEqualTo("Banner has been updated");
+    }
 
+    @Test
+    public void testDecompressDeflateRequestGzipCompatible() throws Exception {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        try (DeflaterOutputStream deflate = new DeflaterOutputStream(baos,  new Deflater(-1, true))) {
+            Resources.copy(Resources.getResource("assets/new-banner.txt"), deflate);
+        }
+
+        setRequestPostDeflatePlainText(baos.toByteArray());
+
+        HttpTester.Response response = HttpTester.parseResponse(servletTester.getResponses(request.generate()));
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThat(response.getContent()).isEqualTo("Banner has been updated");
+    }
+
+    @Test
+    public void testDecompressDeflateBadRequest() throws Exception {
+        setRequestPostDeflatePlainText("Non-deflate content".getBytes("UTF-8"));
+        testBadRequest("Invalid deflate data in request");
+    }
+
+    private void testBadRequest(String responseContains) throws Exception {
+        HttpTester.Response response = HttpTester.parseResponse(servletTester.getResponses(request.generate()));
+        assertThat(response.getStatus()).isEqualTo(400);
+        assertThat(response.getContent()).contains(responseContains);
+    }
+
+    private void setRequestPostPlainText(byte[] content) {
+        request.setMethod("POST");
+        request.setHeader(HttpHeaders.CONTENT_TYPE, PLAIN_TEXT_UTF_8);
+        request.setContent(content);
+    }
+
+    private void setRequestPostDeflatePlainText(byte[] content) {
+        setRequestPostPlainText(content);
+        request.setHeader(HttpHeaders.CONTENT_ENCODING, "deflate");
+    }
+
+    private void setRequestPostGzipPlainText(byte[] content) {
+        setRequestPostPlainText(content);
+        request.setHeader(HttpHeaders.CONTENT_ENCODING, "gzip");
     }
 
     public static class BannerServlet extends HttpServlet {
 
         @Override
         protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-            resp.setCharacterEncoding(Charsets.UTF_8.toString());
+            resp.setCharacterEncoding(StandardCharsets.UTF_8.toString());
             resp.setContentType(PLAIN_TEXT_UTF_8);
-            Resources.asCharSource(Resources.getResource("assets/banner.txt"), Charsets.UTF_8)
+            Resources.asCharSource(Resources.getResource("assets/banner.txt"), StandardCharsets.UTF_8)
                     .copyTo(resp.getWriter());
         }
 
@@ -130,7 +162,11 @@ public class BiDiGzipHandlerTest {
         protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
             assertThat(req.getHeader(HttpHeaders.CONTENT_TYPE)).isEqualToIgnoringCase(PLAIN_TEXT_UTF_8);
             assertThat(req.getHeader(HttpHeaders.CONTENT_ENCODING)).isNull();
-            System.out.println(CharStreams.toString(req.getReader()));
+            assertThat(req.getHeader(HttpHeaders.CONTENT_LENGTH)).isNull();
+            assertThat(req.getContentLength()).isEqualTo(-1);
+            assertThat(req.getContentLengthLong()).isEqualTo(-1L);
+            assertThat(CharStreams.toString(req.getReader())).isEqualTo(
+                Resources.toString(Resources.getResource("assets/new-banner.txt"), StandardCharsets.UTF_8));
 
             resp.setContentType(PLAIN_TEXT_UTF_8);
             resp.getWriter().write("Banner has been updated");
