@@ -14,9 +14,9 @@
 package com.google.devtools.build.lib.collect.nestedset;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.collect.ImmutableSet;
+import com.google.devtools.build.lib.testutil.MoreAsserts;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -142,8 +142,10 @@ public class NestedSetViewTest {
   public void testSplitFails() {
     NestedSet<String> a = NestedSetBuilder.<String>stableOrder().add("a").add("b").build();
     NestedSetView<String> v = new NestedSetView<>(a);
-    assertThrows(IllegalArgumentException.class, () -> v.splitIfExceedsMaximumSize(-100));
-    assertThrows(IllegalArgumentException.class, () -> v.splitIfExceedsMaximumSize(1));
+    MoreAsserts.assertThrows(
+        IllegalArgumentException.class, () -> v.splitIfExceedsMaximumSize(-100));
+    MoreAsserts.assertThrows(
+        IllegalArgumentException.class, () -> v.splitIfExceedsMaximumSize(1));
   }
 
   @Test

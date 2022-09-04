@@ -40,14 +40,12 @@ public class ObjectCodecRegistryTest {
             .build();
 
     CodecDescriptor fooDescriptor = underTest.getCodecDescriptorForObject("hello");
-    assertThat(fooDescriptor.getCodec()).isSameInstanceAs(codec1);
-    assertThat(underTest.getCodecDescriptorByTag(fooDescriptor.getTag()))
-        .isSameInstanceAs(fooDescriptor);
+    assertThat(fooDescriptor.getCodec()).isSameAs(codec1);
+    assertThat(underTest.getCodecDescriptorByTag(fooDescriptor.getTag())).isSameAs(fooDescriptor);
 
     CodecDescriptor barDescriptor = underTest.getCodecDescriptorForObject(1);
-    assertThat(barDescriptor.getCodec()).isSameInstanceAs(codec2);
-    assertThat(underTest.getCodecDescriptorByTag(barDescriptor.getTag()))
-        .isSameInstanceAs(barDescriptor);
+    assertThat(barDescriptor.getCodec()).isSameAs(codec2);
+    assertThat(underTest.getCodecDescriptorByTag(barDescriptor.getTag())).isSameAs(barDescriptor);
 
     assertThat(barDescriptor.getTag()).isNotEqualTo(fooDescriptor.getTag());
 
@@ -68,16 +66,16 @@ public class ObjectCodecRegistryTest {
             .build();
 
     CodecDescriptor fooDescriptor = underTest.getCodecDescriptorForObject("value1");
-    assertThat(fooDescriptor.getCodec()).isSameInstanceAs(codec);
+    assertThat(fooDescriptor.getCodec()).isSameAs(codec);
 
     CodecDescriptor barDefaultDescriptor = underTest.getCodecDescriptorForObject(15);
     assertThat(barDefaultDescriptor.getCodec()).isNotSameInstanceAs(codec);
     assertThat(barDefaultDescriptor.getTag()).isNotEqualTo(fooDescriptor.getTag());
     assertThat(underTest.getCodecDescriptorByTag(barDefaultDescriptor.getTag()))
-        .isSameInstanceAs(barDefaultDescriptor);
+        .isSameAs(barDefaultDescriptor);
 
     assertThat(underTest.getCodecDescriptorForObject((byte) 9).getCodec().getClass())
-        .isSameInstanceAs(barDefaultDescriptor.getCodec().getClass());
+        .isSameAs(barDefaultDescriptor.getCodec().getClass());
 
     // Bogus tags still throw.
     assertThrows(NoCodecException.class, () -> underTest.getCodecDescriptorByTag(42));

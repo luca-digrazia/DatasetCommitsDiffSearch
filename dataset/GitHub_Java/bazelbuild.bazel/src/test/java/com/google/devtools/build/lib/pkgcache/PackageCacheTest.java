@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.pkgcache;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 import static org.junit.Assert.fail;
 
 import com.google.common.base.Optional;
@@ -194,9 +193,12 @@ public class PackageCacheTest extends FoundationTestCase {
 
   // Check that a substring is present in an error message.
   private void checkGetPackageFails(String packageName, String expectedMessage) throws Exception {
-    NoSuchPackageException e =
-        assertThrows(NoSuchPackageException.class, () -> getPackage(packageName));
-    assertThat(e).hasMessageThat().contains(expectedMessage);
+    try {
+      getPackage(packageName);
+      fail();
+    } catch (NoSuchPackageException e) {
+      assertThat(e).hasMessageThat().contains(expectedMessage);
+    }
   }
 
   @Test
@@ -206,7 +208,7 @@ public class PackageCacheTest extends FoundationTestCase {
     assertThat(pkg1.getName()).isEqualTo("pkg1");
     assertThat(pkg1.getFilename().asPath().getPathString()).isEqualTo("/workspace/pkg1/BUILD");
     assertThat(getPackageManager().getPackage(reporter, PackageIdentifier.createInMainRepo("pkg1")))
-        .isSameInstanceAs(pkg1);
+        .isSameAs(pkg1);
   }
 
   @Test
@@ -241,13 +243,16 @@ public class PackageCacheTest extends FoundationTestCase {
   @Test
   public void testGetNonexistentTarget() throws Exception {
     createPkg1();
-    NoSuchTargetException e =
-        assertThrows(NoSuchTargetException.class, () -> getTarget("//pkg1:not-there"));
-    assertThat(e)
-        .hasMessageThat()
-        .isEqualTo(
-            "no such target '//pkg1:not-there': target 'not-there' "
-                + "not declared in package 'pkg1' defined by /workspace/pkg1/BUILD");
+    try {
+      getTarget("//pkg1:not-there");
+      fail();
+    } catch (NoSuchTargetException e) {
+      assertThat(e)
+          .hasMessageThat()
+          .isEqualTo(
+              "no such target '//pkg1:not-there': target 'not-there' "
+                  + "not declared in package 'pkg1' defined by /workspace/pkg1/BUILD");
+    }
   }
 
   /**
@@ -298,9 +303,12 @@ public class PackageCacheTest extends FoundationTestCase {
     Path brokenBuildFile = scratch.file("broken/BUILD");
     brokenBuildFile.setReadable(false);
 
-    BuildFileContainsErrorsException e =
-        assertThrows(BuildFileContainsErrorsException.class, () -> getPackage("broken"));
-    assertThat(e).hasMessageThat().contains("/workspace/broken/BUILD (Permission denied)");
+    try {
+      getPackage("broken");
+      fail();
+    } catch (BuildFileContainsErrorsException e) {
+      assertThat(e).hasMessageThat().contains("/workspace/broken/BUILD (Permission denied)");
+    }
     eventCollector.clear();
 
     // Update the BUILD file on disk so "broken" is no longer broken:
@@ -323,7 +331,7 @@ public class PackageCacheTest extends FoundationTestCase {
     setOptions("--package_path=/workspace:/otherroot");
 
     Package oldPkg = getPackage("pkg");
-    assertThat(getPackage("pkg")).isSameInstanceAs(oldPkg); // change not yet visible
+    assertThat(getPackage("pkg")).isSameAs(oldPkg); // change not yet visible
     assertThat(oldPkg.getFilename().asPath()).isEqualTo(buildFile1);
     assertThat(oldPkg.getSourceRoot()).isEqualTo(Root.fromPath(rootDirectory));
 
@@ -524,11 +532,15 @@ public class PackageCacheTest extends FoundationTestCase {
 
     // c/d is no longer a subpackage--even though there's a BUILD file in the
     // second root:
-    NoSuchPackageException e = assertThrows(NoSuchPackageException.class, () -> getPackage("c/d"));
-    assertThat(e)
-        .hasMessageThat()
-        .isEqualTo(
-            "no such package 'c/d': Package is considered deleted due to --deleted_packages");
+    try {
+      getPackage("c/d");
+      fail();
+    } catch (NoSuchPackageException e) {
+      assertThat(e)
+          .hasMessageThat()
+          .isEqualTo(
+              "no such package 'c/d': Package is considered deleted due to --deleted_packages");
+    }
 
     // Labels in the subpackage are no longer valid...
     assertLabelValidity(false, "//c/d:x");

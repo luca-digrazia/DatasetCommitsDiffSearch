@@ -14,7 +14,7 @@
 package com.google.devtools.build.lib.pkgcache;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
@@ -124,7 +124,7 @@ public class IncrementalLoadingTest {
 
     tester.sync();
     Target newTarget = tester.getTarget("//base:hello");
-    assertThat(newTarget).isSameInstanceAs(oldTarget);
+    assertThat(newTarget).isSameAs(oldTarget);
   }
 
   @Test
@@ -149,7 +149,7 @@ public class IncrementalLoadingTest {
     tester.modifyFile("base/foo.txt", "other");
     tester.sync();
     Target newTarget = tester.getTarget("//base:hello");
-    assertThat(newTarget).isSameInstanceAs(oldTarget);
+    assertThat(newTarget).isSameAs(oldTarget);
   }
 
   @Test
@@ -162,7 +162,7 @@ public class IncrementalLoadingTest {
     tester.removeFile("base/foo.txt");
     tester.sync();
     Target newTarget = tester.getTarget("//base:hello");
-    assertThat(newTarget).isSameInstanceAs(oldTarget);
+    assertThat(newTarget).isSameAs(oldTarget);
   }
 
   @Test
@@ -244,7 +244,7 @@ public class IncrementalLoadingTest {
     tester.sync();
 
     Target fg2 = tester.getTarget("//a:fg");
-    assertThat(fg2).isSameInstanceAs(fg1);
+    assertThat(fg2).isSameAs(fg1);
   }
 
   @Test
@@ -310,7 +310,12 @@ public class IncrementalLoadingTest {
   public void testBuildFileWithSyntaxError() throws Exception {
     tester.addFile("a/BUILD", "sh_library(xyz='a')");
     tester.sync();
-    assertThrows(NoSuchThingException.class, () -> tester.getTarget("//a:a"));
+    try {
+      tester.getTarget("//a:a");
+      fail();
+    } catch (NoSuchThingException e) {
+      // Expected
+    }
 
     tester.modifyFile("a/BUILD", "sh_library(name='a')");
     tester.sync();
@@ -322,7 +327,12 @@ public class IncrementalLoadingTest {
     tester.addFile("a/BUILD.real", "sh_library(xyz='a')");
     tester.addSymlink("a/BUILD", "BUILD.real");
     tester.sync();
-    assertThrows(NoSuchThingException.class, () -> tester.getTarget("//a:a"));
+    try {
+      tester.getTarget("//a:a");
+      fail();
+    } catch (NoSuchThingException e) {
+      // Expected
+    }
     tester.modifyFile("a/BUILD.real", "sh_library(name='a')");
     tester.sync();
     tester.getTarget("//a:a");
@@ -335,7 +345,11 @@ public class IncrementalLoadingTest {
     tester.addFile("e/data.txt");
     throwOnReaddir = parentDir;
     tester.sync();
-    assertThrows(NoSuchPackageException.class, () -> tester.getTarget("//e:e"));
+    try {
+      tester.getTarget("//e:e");
+      fail("Expected exception");
+    } catch (NoSuchPackageException expected) {
+    }
     throwOnReaddir = null;
     tester.sync();
     Target target = tester.getTarget("//e:e");
@@ -354,14 +368,19 @@ public class IncrementalLoadingTest {
     // Write file in directory to force reload of top-level glob.
     tester.addFile("pkg/irrelevant_file");
     tester.addFile("pkg/bar/irrelevant_file"); // Subglob is also reloaded.
-    assertThat(tester.getTarget("//pkg:pkg").getPackage()).isSameInstanceAs(pkg);
+    assertThat(tester.getTarget("//pkg:pkg").getPackage()).isSameAs(pkg);
   }
 
   @Test
   public void testMissingPackages() throws Exception {
     tester.sync();
 
-    assertThrows(NoSuchThingException.class, () -> tester.getTarget("//a:a"));
+    try {
+      tester.getTarget("//a:a");
+      fail();
+    } catch (NoSuchThingException e) {
+      // expected
+    }
 
     tester.addFile("a/BUILD", "sh_library(name='a')");
     tester.sync();
@@ -383,7 +402,12 @@ public class IncrementalLoadingTest {
     tester.modifyFile("/b.bzl", "ERROR ERROR");
     tester.sync();
 
-    assertThrows(NoSuchThingException.class, () -> tester.getTarget("//a:BUILD"));
+    try {
+      tester.getTarget("//a:BUILD");
+      fail();
+    } catch (NoSuchThingException e) {
+      // expected
+    }
   }
 
 

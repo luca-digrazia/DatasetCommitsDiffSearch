@@ -15,7 +15,7 @@ package com.google.devtools.build.lib.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.actions.ActionInputHelper.asTreeFileArtifacts;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.common.base.Predicate;
 import com.google.common.base.Throwables;
@@ -213,12 +213,14 @@ public class TreeArtifactMetadataTest extends ArtifactFunctionTestCase {
             return super.statIfFound(path, followSymlinks);
           }
         });
-    Artifact artifact = createTreeArtifact("outOne");
-    Exception e =
-        assertThrows(
-            Exception.class,
-            () -> evaluateTreeArtifact(artifact, ImmutableList.of(PathFragment.create("one"))));
-    assertThat(Throwables.getRootCause(e)).hasMessageThat().contains(exception.getMessage());
+    try {
+      Artifact artifact = createTreeArtifact("outOne");
+      TreeArtifactValue value = evaluateTreeArtifact(artifact,
+          ImmutableList.of(PathFragment.create("one")));
+      fail("MissingInputFileException expected, got " + value);
+    } catch (Exception e) {
+      assertThat(Throwables.getRootCause(e)).hasMessageThat().contains(exception.getMessage());
+    }
   }
 
   private void file(Path path, String contents) throws Exception {

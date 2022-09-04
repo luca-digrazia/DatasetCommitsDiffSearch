@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.collect;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
@@ -153,8 +152,18 @@ public class CollectionUtilsTest {
     assertAllDifferent(Medium.class);
     assertAllDifferent(Large.class);
 
-    assertThrows(IllegalArgumentException.class, () -> CollectionUtils.toBits(TooLarge.T32));
+    try {
+      CollectionUtils.toBits(TooLarge.T32);
+      fail();
+    } catch (IllegalArgumentException e) {
+      // good
+    }
 
-    assertThrows(IllegalArgumentException.class, () -> CollectionUtils.fromBits(0, TooLarge.class));
+    try {
+      CollectionUtils.fromBits(0, TooLarge.class);
+      fail();
+    } catch (IllegalArgumentException e) {
+      // good
+    }
   }
 }
