@@ -20,7 +20,6 @@ import java.util.List;
 import java.util.Set;
 
 import javax.annotation.processing.ProcessingEnvironment;
-import javax.lang.model.element.Element;
 
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
@@ -156,10 +155,6 @@ public class AndroidAnnotationsEnvironment {
 
 	public JDefinedClass getDefinedClass(String fullyQualifiedName) {
 		return processHolder.definedClass(fullyQualifiedName);
-	}
-
-	public GeneratedClassHolder getGeneratedClassHolder(Element element) {
-		return processHolder.getGeneratedClassHolder(element);
 	}
 
 	public ProcessHolder.Classes getClasses() {

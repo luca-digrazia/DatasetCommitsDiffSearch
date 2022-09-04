@@ -62,7 +62,7 @@ public abstract class BaseGeneratedClassHolder implements GeneratedClassHolder {
 
 		if (annotatedElement.getNestingKind().isNested()) {
 			Element enclosingElement = annotatedElement.getEnclosingElement();
-			GeneratedClassHolder enclosingHolder = environment.getGeneratedClassHolder(enclosingElement);
+			GeneratedClassHolder enclosingHolder = processHolder().getGeneratedClassHolder(enclosingElement);
 			String generatedBeanSimpleName = annotatedElement.getSimpleName().toString() + classSuffix();
 			generatedClass = enclosingHolder.getGeneratedClass()._class(PUBLIC | FINAL | STATIC, generatedBeanSimpleName, ClassType.CLASS);
 		} else {
@@ -77,7 +77,7 @@ public abstract class BaseGeneratedClassHolder implements GeneratedClassHolder {
 		codeModelHelper.copyNonAAAnnotations(generatedClass, annotatedElement.getAnnotationMirrors());
 	}
 
-	protected JClass getAnnotatedClass() {
+	public JClass getAnnotatedClass() {
 		return annotatedClass;
 	}
 
@@ -96,9 +96,12 @@ public abstract class BaseGeneratedClassHolder implements GeneratedClassHolder {
 		return annotatedElement;
 	}
 
-	@Override
 	public AndroidAnnotationsEnvironment getEnvironment() {
 		return environment;
+	}
+
+	public ProcessHolder processHolder() {
+		return environment.getProcessHolder();
 	}
 
 	protected ProcessHolder.Classes getClasses() {
@@ -106,15 +109,20 @@ public abstract class BaseGeneratedClassHolder implements GeneratedClassHolder {
 	}
 
 	protected JCodeModel getCodeModel() {
-		return getEnvironment().getCodeModel();
+		return environment().getCodeModel();
 	}
 
 	protected JClass getJClass(String fullyQualifiedClassName) {
-		return getEnvironment().getJClass(fullyQualifiedClassName);
+		return environment().getJClass(fullyQualifiedClassName);
 	}
 
 	protected JClass getJClass(Class<?> clazz) {
-		return getEnvironment().getJClass(clazz);
+		return environment().getJClass(clazz);
+	}
+
+	@Override
+	public AndroidAnnotationsEnvironment environment() {
+		return environment;
 	}
 
 	public JClass narrow(JClass toNarrow) {

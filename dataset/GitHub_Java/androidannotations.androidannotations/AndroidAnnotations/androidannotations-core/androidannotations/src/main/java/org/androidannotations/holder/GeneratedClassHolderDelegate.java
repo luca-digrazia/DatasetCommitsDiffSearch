@@ -43,23 +43,23 @@ public abstract class GeneratedClassHolderDelegate<T extends GeneratedClassHolde
 	}
 
 	@Override
-	public AndroidAnnotationsEnvironment getEnvironment() {
-		return holder.getEnvironment();
+	public AndroidAnnotationsEnvironment environment() {
+		return holder.environment();
 	}
 
 	protected final Classes getClasses() {
-		return getEnvironment().getClasses();
+		return environment().getClasses();
 	}
 
 	protected final JCodeModel codeModel() {
-		return getEnvironment().getCodeModel();
+		return environment().getCodeModel();
 	}
 
 	protected final JClass refClass(String fullyQualifiedClassName) {
-		return getEnvironment().getJClass(fullyQualifiedClassName);
+		return environment().getJClass(fullyQualifiedClassName);
 	}
 
 	protected final JClass refClass(Class<?> clazz) {
-		return getEnvironment().getJClass(clazz);
+		return environment().getJClass(clazz);
 	}
 }
