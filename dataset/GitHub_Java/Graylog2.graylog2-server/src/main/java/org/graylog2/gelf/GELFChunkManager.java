@@ -20,17 +20,16 @@
 
 package org.graylog2.gelf;
 
-import java.io.ByteArrayOutputStream;
-import java.util.Map;
-import java.util.concurrent.TimeUnit;
-
-import org.graylog2.Core;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.google.common.collect.Maps;
 import com.yammer.metrics.Metrics;
 import com.yammer.metrics.core.Meter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.graylog2.Core;
+
+import java.io.ByteArrayOutputStream;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
@@ -41,9 +40,7 @@ public class GELFChunkManager extends Thread {
 
     private Map<String, Map<Integer, GELFMessageChunk>> chunks = Maps.newConcurrentMap();
     private GELFProcessor processor;
-    
-    @SuppressWarnings("unused")
-	private Core server;
+    private Core server;
 
     // The number of seconds a chunk is valid. Every message with chunks older than this will be dropped.
     public static final int SECONDS_VALID = 5;

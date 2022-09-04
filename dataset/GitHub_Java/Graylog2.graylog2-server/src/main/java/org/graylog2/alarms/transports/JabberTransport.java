@@ -19,11 +19,6 @@
  */
 package org.graylog2.alarms.transports;
 
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
-
-import org.elasticsearch.common.collect.Maps;
 import org.graylog2.plugin.alarms.Alarm;
 import org.graylog2.plugin.alarms.AlarmReceiver;
 import org.graylog2.plugin.alarms.transports.Transport;
@@ -39,6 +34,10 @@ import org.jivesoftware.smack.packet.Message;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
@@ -47,14 +46,11 @@ public class JabberTransport implements Transport {
     private static final Logger LOG = LoggerFactory.getLogger(JabberTransport.class);
     
     public static final String NAME = "Jabber/XMPP";
-    public static final String USER_FIELD_NAME = "Jabber/XMPP address";
     
     private Connection connection;
     
     private Map<String, String> configuration;
-    
-    @SuppressWarnings("serial")
-	public static final Set<String> REQUIRED_FIELDS = new HashSet<String>() {{ 
+    public static final Set<String> REQUIRED_FIELDS = new HashSet<String>() {{ 
         add("hostname");
         add("port");
         add("sasl_auth");
@@ -142,17 +138,6 @@ public class JabberTransport implements Transport {
     @Override
     public String getName() {
         return NAME;
-    }
-    
-    @Override
-    public String getUserFieldName() {
-        return USER_FIELD_NAME;
-    }
-    
-    @Override
-    public Map<String, String> getRequestedConfiguration() {
-        // This transport is built in and has it's own config way. Just for plugin compat.
-        return Maps.newHashMap();
     }
     
 }

@@ -20,7 +20,6 @@
 
 package org.graylog2;
 
-import org.graylog2.plugin.Tools;
 import com.beust.jcommander.JCommander;
 import com.github.joschi.jadconfig.JadConfig;
 import com.github.joschi.jadconfig.RepositoryException;
@@ -46,8 +45,6 @@ import org.graylog2.outputs.ElasticSearchOutput;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.Writer;
-import org.graylog2.plugin.initializers.InitializerConfigurationException;
-import org.graylog2.plugins.PluginInstaller;
 
 /**
  * Main class of Graylog2.
@@ -79,7 +76,16 @@ public final class Main {
             System.out.println("JRE: " + Tools.getSystemInformation());
             System.exit(0);
         }
-        
+
+        // Are we in debug mode?
+        if (commandLineArguments.isDebug()) {
+            LOG.info("Running in Debug mode");
+            org.apache.log4j.Logger.getRootLogger().setLevel(Level.ALL);
+            org.apache.log4j.Logger.getLogger(Main.class.getPackage().getName()).setLevel(Level.ALL);
+        }
+
+        LOG.info("Graylog2 {} starting up. (JRE: {})", Core.GRAYLOG2_VERSION, Tools.getSystemInformation());
+
         String configFile = commandLineArguments.getConfigFile();
         LOG.info("Using config file: {}", configFile);
 
@@ -96,39 +102,12 @@ public final class Main {
             LOG.error("Invalid configuration", e);
             System.exit(1);
         }
-        
-        if (commandLineArguments.isInstallPlugin()) {
-            System.out.println("Plugin installation requested.");
-            PluginInstaller installer = new PluginInstaller(
-                    commandLineArguments.getPluginShortname(),
-                    commandLineArguments.getPluginVersion(),
-                    configuration,
-                    commandLineArguments.isForcePlugin()
-            );
-            
-            installer.install();
-            System.exit(0);
-        }
-
-        // Are we in debug mode?
-        if (commandLineArguments.isDebug()) {
-            LOG.info("Running in Debug mode");
-            org.apache.log4j.Logger.getRootLogger().setLevel(Level.ALL);
-            org.apache.log4j.Logger.getLogger(Main.class.getPackage().getName()).setLevel(Level.ALL);
-        }
-
-        LOG.info("Graylog2 {} starting up. (JRE: {})", Core.GRAYLOG2_VERSION, Tools.getSystemInformation());
 
         // If we only want to check our configuration, we just initialize the rules engine to check if the rules compile
         if (commandLineArguments.isConfigTest()) {
             Core server = new Core();
-            server.setConfiguration(configuration);
-            DroolsInitializer drools = new DroolsInitializer();
-            try {
-                drools.initialize(server, null);
-            } catch (InitializerConfigurationException e) {
-                LOG.error("Drools initialization failed.", e);
-            }
+            DroolsInitializer drools = new DroolsInitializer(server, configuration);
+            drools.initialize();
             // rules have been checked, exit gracefully
             System.exit(0);
         }
@@ -171,23 +150,23 @@ public final class Main {
         if (configuration.isTransportJabberEnabled()) {  server.registerTransport(new JabberTransport()); }
 
         // Register initializers.
-        server.registerInitializer(new ServerValueWriterInitializer());
-        server.registerInitializer(new DroolsInitializer());
-        server.registerInitializer(new HostCounterCacheWriterInitializer());
-        server.registerInitializer(new MessageCounterInitializer());
-        server.registerInitializer(new AlarmScannerInitializer());
-        if (configuration.isEnableGraphiteOutput())       { server.registerInitializer(new GraphiteInitializer()); }
-        if (configuration.isEnableLibratoMetricsOutput()) { server.registerInitializer(new LibratoMetricsInitializer()); }
-        server.registerInitializer(new DeflectorThreadsInitializer());
-        server.registerInitializer(new AnonymousInformationCollectorInitializer());
+        server.registerInitializer(new ServerValueWriterInitializer(server, configuration));
+        server.registerInitializer(new DroolsInitializer(server, configuration));
+        server.registerInitializer(new HostCounterCacheWriterInitializer(server));
+        server.registerInitializer(new MessageCounterInitializer(server));
+        server.registerInitializer(new AlarmScannerInitializer(server));
+        if (configuration.isEnableGraphiteOutput())       { server.registerInitializer(new GraphiteInitializer(server)); }
+        if (configuration.isEnableLibratoMetricsOutput()) { server.registerInitializer(new LibratoMetricsInitializer(server)); }
+        server.registerInitializer(new DeflectorThreadsInitializer(server));
+        server.registerInitializer(new AnonymousInformationCollectorInitializer(server));
         if (configuration.performRetention() && commandLineArguments.performRetention()) {
-            server.registerInitializer(new IndexRetentionInitializer());
+            server.registerInitializer(new IndexRetentionInitializer(server));
         }
         if (configuration.isAmqpEnabled()) {
-            server.registerInitializer(new AMQPSyncInitializer());
+            server.registerInitializer(new AMQPSyncInitializer(server));
         }
-        server.registerInitializer(new BufferWatermarkInitializer());
-        if (commandLineArguments.isStats()) { server.registerInitializer(new StatisticsPrinterInitializer()); }
+        server.registerInitializer(new BufferWatermarkInitializer(server));
+        if (commandLineArguments.isStats()) { server.registerInitializer(new StatisticsPrinterInitializer(server)); }
         
         // Register inputs.
         if (configuration.isUseGELF()) {

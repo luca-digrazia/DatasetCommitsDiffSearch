@@ -30,7 +30,7 @@ import com.mongodb.DBObject;
 import org.bson.types.ObjectId;
 import org.elasticsearch.common.collect.Maps;
 import org.graylog2.Core;
-import org.graylog2.plugin.Tools;
+import org.graylog2.Tools;
 import org.graylog2.alarms.AlarmReceiverImpl;
 import org.graylog2.plugin.GraylogServer;
 import org.graylog2.plugin.alarms.AlarmReceiver;
@@ -147,16 +147,6 @@ public class StreamImpl implements Stream {
 
         streamCache.set(streams);
 
-        return streams;
-    }
-    
-    public static Map<String, String> nameMap(Core server) {
-        Map<String, String> streams = Maps.newHashMap();
-        
-        for(Stream stream : fetchAllEnabled(server)) {
-            streams.put(stream.getId().toString(), stream.getTitle());
-        }
-        
         return streams;
     }
 

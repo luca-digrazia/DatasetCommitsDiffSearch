@@ -21,36 +21,36 @@
 package org.graylog2.inputs.syslog;
 
 import com.yammer.metrics.Metrics;
-import java.net.InetSocketAddress;
-import java.util.concurrent.TimeUnit;
-import org.apache.log4j.Logger;
-import org.graylog2.GraylogServer;
+import com.yammer.metrics.core.Meter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.graylog2.Core;
 import org.jboss.netty.buffer.ChannelBuffer;
 import org.jboss.netty.channel.ChannelHandlerContext;
 import org.jboss.netty.channel.ExceptionEvent;
 import org.jboss.netty.channel.MessageEvent;
 import org.jboss.netty.channel.SimpleChannelHandler;
 
+import java.net.InetSocketAddress;
+import java.util.concurrent.TimeUnit;
+
 /**
- * SyslogDispatcher.java: 30.04.2012 00:13:02
- *
- * Describe me.
- *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class SyslogDispatcher extends SimpleChannelHandler {
 
-    private static final Logger LOG = Logger.getLogger(SyslogDispatcher.class);
+    private static final Logger LOG = LoggerFactory.getLogger(SyslogDispatcher.class);
 
     private SyslogProcessor processor;
+    private final Meter receivedMessages = Metrics.newMeter(SyslogDispatcher.class, "ReceivedMessages", "messages", TimeUnit.SECONDS);
 
-    public SyslogDispatcher(GraylogServer server) {
+    public SyslogDispatcher(Core server) {
         this.processor = new SyslogProcessor(server);
     }
 
     @Override
     public void messageReceived(ChannelHandlerContext ctx, MessageEvent e) throws Exception {
-        Metrics.newMeter(SyslogDispatcher.class, "ReceivedMessages", "messages", TimeUnit.SECONDS).mark();
+        receivedMessages.mark();
 
         InetSocketAddress remoteAddress = (InetSocketAddress) e.getRemoteAddress();
 

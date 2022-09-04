@@ -20,39 +20,46 @@
 
 package org.graylog2.periodical;
 
-import org.graylog2.Log;
-import org.graylog2.database.HostCounterCache;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.graylog2.Core;
 import org.graylog2.database.MongoBridge;
 
 
 /**
- * HostCounterCacheWriterThread.java: Feb 23, 2011 5:59:58 PM
- *
  * Periodically writes host counter cache to hosts collection.
  *
- * @author: Lennart Koopmann <lennart@socketfeed.com>
+ * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public class HostCounterCacheWriterThread extends Thread {
+public class HostCounterCacheWriterThread implements Runnable {
+
+    private static final Logger LOG = LoggerFactory.getLogger(HostCounterCacheWriterThread.class);
+
+    public static final int PERIOD = 5;
+    public static final int INITIAL_DELAY = 5;
+
+    private final Core graylogServer;
+
+    public HostCounterCacheWriterThread(Core graylogServer) {
+        this.graylogServer = graylogServer;
+    }
 
     /**
      * Start the thread. Runs forever.
      */
-    @Override public void run() {
-        // Run forever.
-        while (true) {
-            try {
-                MongoBridge m = new MongoBridge();
-                for (String host : HostCounterCache.getInstance().getAllHosts()) {
-                    m.upsertHostCount(host, HostCounterCache.getInstance().getCount(host));
-                    HostCounterCache.getInstance().reset(host);
-                }
-            } catch (Exception e) {
-                Log.warn("Error in HostCounterCacheWriterThread: " + e.toString());
+    @Override
+    public void run() {
+
+        try {
+            final MongoBridge m = graylogServer.getMongoBridge();
+            for (String host : graylogServer.getHostCounterCache().getAllHosts()) {
+                m.upsertHostCount(host, graylogServer.getHostCounterCache().getCount(host));
+                graylogServer.getHostCounterCache().reset(host);
             }
-            
-           // Run every 5 seconds.
-           try { Thread.sleep(5000); } catch(InterruptedException e) {}
+        } catch (Exception e) {
+            LOG.warn("Error in HostCounterCacheWriterThread: " + e.getMessage(), e);
         }
+
     }
 
 }

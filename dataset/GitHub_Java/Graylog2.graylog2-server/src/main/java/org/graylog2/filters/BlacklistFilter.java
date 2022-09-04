@@ -20,29 +20,36 @@
 
 package org.graylog2.filters;
 
-import java.util.List;
-import java.util.regex.Pattern;
-import org.apache.log4j.Logger;
-import org.graylog2.GraylogServer;
+import com.yammer.metrics.Metrics;
+import com.yammer.metrics.core.Timer;
+import com.yammer.metrics.core.TimerContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.graylog2.blacklists.Blacklist;
 import org.graylog2.blacklists.BlacklistRule;
-import org.graylog2.logmessage.LogMessage;
+import org.graylog2.plugin.GraylogServer;
+import org.graylog2.plugin.filters.MessageFilter;
+import org.graylog2.plugin.logmessage.LogMessage;
+
+import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 
 /**
- * BlacklistFilter.java: 19.04.2012 13:02:39
- *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class BlacklistFilter implements MessageFilter {
+    
+    private static final Logger LOG = LoggerFactory.getLogger(BlacklistFilter.class);
 
-    private static final Logger LOG = Logger.getLogger(BlacklistFilter.class);
-
+    private final Timer processTime = Metrics.newTimer(BlacklistFilter.class, "ProcessTime", TimeUnit.MICROSECONDS, TimeUnit.SECONDS);
+    
     @Override
     public boolean filter(LogMessage msg, GraylogServer server) {
+        TimerContext tcx = processTime.time();
         for (Blacklist blacklist : Blacklist.fetchAll()) {
             for (BlacklistRule rule : blacklist.getRules()) {
                 if (Pattern.compile(rule.getTerm(), Pattern.DOTALL).matcher(msg.getShortMessage()).matches()) {
-                    LOG.debug("Message <" + this.toString() + "> is blacklisted. First match on " + rule.getTerm());
+                    LOG.debug("Message <{}> is blacklisted. First match on {}", this, rule.getTerm());
 
                     // Done - This message is blacklisted.
                     return true;
@@ -50,7 +57,13 @@ public class BlacklistFilter implements MessageFilter {
             }
         }
 
+        tcx.stop();
         return false;
+    }
+    
+    @Override
+    public String getName() {
+        return "Blacklister";
     }
 
 }

@@ -22,23 +22,20 @@ package org.graylog2.inputs.gelf;
 
 
 
-import java.net.InetSocketAddress;
-import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.elasticsearch.common.netty.channel.ChannelException;
+import org.graylog2.Configuration;
 import org.graylog2.Core;
-import org.graylog2.plugin.GraylogServer;
-import org.graylog2.plugin.inputs.MessageInput;
+import org.graylog2.inputs.MessageInput;
 import org.jboss.netty.bootstrap.ConnectionlessBootstrap;
 import org.jboss.netty.channel.FixedReceiveBufferSizePredictorFactory;
 import org.jboss.netty.channel.socket.nio.NioDatagramChannelFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.collect.Maps;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import java.net.InetSocketAddress;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
@@ -53,12 +50,9 @@ public class GELFUDPInput implements MessageInput {
     private InetSocketAddress socketAddress;
     
     @Override
-    public void initialize(Map<String, String> configuration, GraylogServer graylogServer) {
-        this.graylogServer = (Core) graylogServer;
-        this.socketAddress = new InetSocketAddress(
-                    configuration.get("listen_address"),
-                    Integer.parseInt(configuration.get("listen_port"))
-        );
+    public void initialize(Configuration configuration, Core graylogServer) {
+        this.graylogServer = graylogServer;
+        this.socketAddress = new InetSocketAddress(configuration.getGelfListenAddress(), configuration.getGelfListenPort());
 
         spinUp();
     }
@@ -72,9 +66,8 @@ public class GELFUDPInput implements MessageInput {
         
         final ConnectionlessBootstrap bootstrap = new ConnectionlessBootstrap(new NioDatagramChannelFactory(workerThreadPool));
 
-        bootstrap.setOption("receiveBufferSizePredictorFactory", new FixedReceiveBufferSizePredictorFactory(
-                graylogServer.getConfiguration().getUdpRecvBufferSizes())
-        );
+        bootstrap.setOption("receiveBufferSize", 1048576);
+        bootstrap.setOption("receiveBufferSizePredictorFactory", new FixedReceiveBufferSizePredictorFactory(8192));
         bootstrap.setPipelineFactory(new GELFUDPPipelineFactory(graylogServer));
 
         try {
@@ -88,12 +81,6 @@ public class GELFUDPInput implements MessageInput {
     @Override
     public String getName() {
         return NAME;
-    }
-
-    @Override
-    public Map<String, String> getRequestedConfiguration() {
-        // Built in input. This is just for plugin compat. No special configuration required.
-        return Maps.newHashMap();
     }
     
 }

@@ -20,23 +20,27 @@
 
 package org.graylog2.logmessage;
 
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-
-import org.graylog2.Tools;
-import org.graylog2.indexer.EmbeddedElasticSearchClient;
-
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import org.elasticsearch.common.UUID;
+import org.graylog2.Tools;
+import org.graylog2.indexer.EmbeddedElasticSearchClient;
 import org.graylog2.plugin.logmessage.LogMessage;
 import org.graylog2.plugin.streams.Stream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.List;
+import java.util.Map;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class LogMessageImpl implements LogMessage {
 
+    private static final Logger LOG = LoggerFactory.getLogger(LogMessageImpl.class);
+    
     public static final int STANDARD_LEVEL = 1;
     public static final String STANDARD_FACILITY = "unknown";
 
@@ -55,9 +59,21 @@ public class LogMessageImpl implements LogMessage {
     private List<Stream> streams = Lists.newArrayList();
 
     private double createdAt = 0;
+    
+    private static final ImmutableSet<String> PROTECTED_KEYS = ImmutableSet.of(
+        "_id",
+        "_ttl",
+        "_source",
+        "_all",
+        "_index",
+        "_type",
+        "_score"
+    );
 
     public LogMessageImpl() {
-        this.id = UUID.randomUUID().toString();
+        // the elasticsearch version is the same as the "standard" one, except the encoding is different.
+        // to avoid recomputing it when submitting the message to elasticsearch we always use its method.
+        this.id = UUID.randomBase64UUID();
     }
 
     @Override
@@ -207,14 +223,17 @@ public class LogMessageImpl implements LogMessage {
     }
 
     @Override
-    public void addAdditionalData(String key, Object value) {       
-        this.additionalData.put(prepareAdditionalDataKey(key), value);
-    }
-    
-    @Override
-    public void addAdditionalData(String key, String value) {
-        this.additionalData.put(prepareAdditionalDataKey(key), value.trim());
-    }
+    public void addAdditionalData(String key, Object value) {
+        String pKey = prepareAdditionalDataKey(key);
+        
+        // Don't accept protected keys.
+        if (PROTECTED_KEYS.contains(pKey)) {
+            LOG.debug("Not accepting protected key <{}>", pKey);
+            return;
+        }
+        
+        this.additionalData.put(pKey, value);
+    }      
 
     @Override
     public void addAdditionalData(Map<String, String> fields) {

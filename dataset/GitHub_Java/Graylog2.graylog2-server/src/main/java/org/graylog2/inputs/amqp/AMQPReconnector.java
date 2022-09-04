@@ -22,8 +22,10 @@ package org.graylog2.inputs.amqp;
 import com.rabbitmq.client.ShutdownListener;
 import com.rabbitmq.client.ShutdownSignalException;
 import com.yammer.metrics.Metrics;
+import com.yammer.metrics.core.Meter;
 import java.util.concurrent.TimeUnit;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.graylog2.Core;
 import org.graylog2.activities.Activity;
 
@@ -32,12 +34,14 @@ import org.graylog2.activities.Activity;
  */
 public class AMQPReconnector implements ShutdownListener {
     
-    private static final Logger LOG = Logger.getLogger(AMQPReconnector.class);
+    private static final Logger LOG = LoggerFactory.getLogger(AMQPReconnector.class);
     
     public static final int DELAY_SECONDS = 5;
 
     private Core server;
     private AMQPQueueConfiguration queueConfig;
+    
+    private final Meter reconnectionAttempts = Metrics.newMeter(AMQPReconnector.class, "ReconnectionAttempts", "attempts", TimeUnit.SECONDS);
     
     public AMQPReconnector(Core server, AMQPQueueConfiguration config) {
         this.server = server;
@@ -48,7 +52,7 @@ public class AMQPReconnector implements ShutdownListener {
     public void shutdownCompleted(ShutdownSignalException cause) {
         // Only try to re-connect if this queue is still in the configuration.
         if (AMQPQueueConfiguration.fetchAllIds(server).contains(queueConfig.getId())) {
-            Metrics.newMeter(AMQPReconnector.class, "ReconnectionAttempts", "reconnections", TimeUnit.SECONDS).mark();
+            reconnectionAttempts.mark();
             
             String msg = "Looks like we lost connection to the AMQP broker. "
                     + "Trying to reconnect to " + this.queueConfig + " in " + DELAY_SECONDS + " seconds";

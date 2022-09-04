@@ -20,7 +20,6 @@
 
 package org.graylog2;
 
-import org.graylog2.plugin.Tools;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import org.graylog2.plugin.MessageCounter;
@@ -31,9 +30,6 @@ import org.slf4j.LoggerFactory;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Set;
-import org.graylog2.plugin.streams.Stream;
-import org.graylog2.streams.StreamImpl;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
@@ -41,19 +37,19 @@ import org.graylog2.streams.StreamImpl;
 public class LibratoMetricsFormatter {
 
     private static final Logger LOG = LoggerFactory.getLogger(LibratoMetricsFormatter.class);
-    
-    private MessageCounter counter;
-    private List<String> streamFilter;
-    private String hostFilter;
-    private String source;
-    private Map<String, String> streamNames;
 
-    public LibratoMetricsFormatter (MessageCounter counter, String prefix, List<String> streamFilter, String hostFilter, Map<String, String> streamNames) {
+    private static final String SOURCE = "graylog2";
+
+    private MessageCounter counter;
+    List<String> streamFilter;
+    String hostFilter;
+    String prefix;
+
+    public LibratoMetricsFormatter (MessageCounter counter, String prefix, List<String> streamFilter, String hostFilter) {
         this.counter = counter;
         this.streamFilter = streamFilter;
         this.hostFilter = hostFilter;
-        this.source = prefix + "graylog2-server";
-        this.streamNames = streamNames;
+        this.prefix = prefix;
     }
     
     /*
@@ -81,10 +77,10 @@ public class LibratoMetricsFormatter {
         // Overall
         Map<String, Object> overall = Maps.newHashMap();
         overall.put("value", counter.getTotalCount());
-        overall.put("source", source);
-        overall.put("name", "gl2-total");
+        overall.put("source", SOURCE);
+        overall.put("name", name("total"));
         gauges.add(overall);
-        
+
         // Streams.
         for(Entry<String, Integer> stream : counter.getStreamCounts().entrySet()) {
             if (streamFilter.contains(stream.getKey())) {
@@ -94,8 +90,8 @@ public class LibratoMetricsFormatter {
 
             Map<String, Object> s = Maps.newHashMap();
             s.put("value", stream.getValue());
-            s.put("source", source);
-            s.put("name", "gl2-stream-" + buildStreamMetricName(stream.getKey()));
+            s.put("source", SOURCE);
+            s.put("name", name("stream-" + stream.getKey()));
             gauges.add(s);
         }
 
@@ -108,8 +104,8 @@ public class LibratoMetricsFormatter {
 
             Map<String, Object> h = Maps.newHashMap();
             h.put("value", host.getValue());
-            h.put("source", source);
-            h.put("name", "gl2-host-" + Tools.decodeBase64(host.getKey()).replaceAll("[^a-zA-Z0-9]", ""));
+            h.put("source", SOURCE);
+            h.put("name", name("host-" + Tools.decodeBase64(host.getKey()).replaceAll("[^a-zA-Z0-9]", "")));
             gauges.add(h);
         }
 
@@ -118,12 +114,8 @@ public class LibratoMetricsFormatter {
         return JSONValue.toJSONString(m);
     }
 
-    private String buildStreamMetricName(String streamId) {
-        if (!streamNames.containsKey(streamId) || streamNames.get(streamId) == null || streamNames.get(streamId).isEmpty()) {
-            return "noname-" + streamId;
-        }
-        
-        return streamNames.get(streamId).toLowerCase().replaceAll("[^a-zA-Z0-9]", "");
+    private String name(String name) {
+        return prefix + "-" + name;
     }
-    
+
 }

@@ -25,6 +25,7 @@ import com.mongodb.DBCollection;
 import com.mongodb.DBCursor;
 import com.mongodb.DBObject;
 import java.util.Set;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.bson.types.ObjectId;
@@ -44,6 +45,8 @@ public class AMQPQueueConfiguration {
     private String routingKey;
     private int ttl;
     private InputType inputType;
+    private String gl2NodeId;
+    private String uuid;
     
     private String queueName;
     
@@ -89,6 +92,7 @@ public class AMQPQueueConfiguration {
         this.routingKey = routingKey;
         this.ttl = ttl;
         this.inputType = inputType;
+        this.gl2NodeId = gl2NodeId;
         
         queueName = generateQueueName();
     }

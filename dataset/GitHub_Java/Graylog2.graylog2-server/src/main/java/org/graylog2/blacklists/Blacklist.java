@@ -20,25 +20,27 @@
 
 package org.graylog2.blacklists;
 
+import com.google.common.collect.Lists;
 import com.mongodb.BasicDBList;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DBCollection;
 import com.mongodb.DBCursor;
 import com.mongodb.DBObject;
+import org.bson.types.ObjectId;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.ArrayList;
 import java.util.List;
-import org.bson.types.ObjectId;
-import org.graylog2.Log;
-import org.graylog2.database.MongoConnection;
 
 /**
- * Blacklist.java: Mar 30, 2011 10:05:34 PM
- *
  * Representing a blacklist stored in MongoDB.
  *
- * @author: Lennart Koopmann <lennart@socketfeed.com>
+ * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class Blacklist {
+
+    private static final Logger LOG = LoggerFactory.getLogger(Blacklist.class);
 
     private ObjectId id = null;
     private String title = null;
@@ -53,25 +55,27 @@ public class Blacklist {
         this.mongoObject = blacklist;
     }
 
-    public static ArrayList<Blacklist> fetchAll() throws Exception {
-        if (BlacklistCache.getInstance().valid()) {
-            return BlacklistCache.getInstance().get();
+    public static List<Blacklist> fetchAll() {
+        final BlacklistCache blacklistCache = BlacklistCache.getInstance();
+
+        if (blacklistCache.valid()) {
+            return blacklistCache.get();
         }
 
-        ArrayList<Blacklist> blacklists = new ArrayList<Blacklist>();
+        List<Blacklist> blacklists = Lists.newArrayList();
 
-        DBCollection coll = MongoConnection.getInstance().getDatabase().getCollection("blacklists");
+        DBCollection coll = blacklistCache.getGraylogServer().getMongoConnection().getDatabase().getCollection("blacklists");
         DBCursor cur = coll.find(new BasicDBObject());
 
         while (cur.hasNext()) {
             try {
                 blacklists.add(new Blacklist(cur.next()));
             } catch (Exception e) {
-                Log.warn("Can't fetch blacklist. Skipping. " + e.toString());
+                LOG.warn("Can't fetch blacklist. Skipping. " + e.getMessage(), e);
             }
         }
 
-        BlacklistCache.getInstance().set(blacklists);
+        blacklistCache.set(blacklists);
 
         return blacklists;
     }
@@ -98,13 +102,17 @@ public class Blacklist {
             return this.rules;
         }
 
-        ArrayList<BlacklistRule> tempRules = new ArrayList<BlacklistRule>();
+        ArrayList<BlacklistRule> tempRules = Lists.newArrayList();
 
         BasicDBList rawRules = (BasicDBList) this.mongoObject.get("blacklisted_terms");
         if (rawRules != null && rawRules.size() > 0) {
             for (Object ruleObj : rawRules) {
-                BlacklistRule rule = new BlacklistRule((DBObject) ruleObj);
-                tempRules.add(rule);
+                try {
+                    BlacklistRule rule = new BlacklistRule((DBObject) ruleObj);
+                    tempRules.add(rule);
+                } catch (Exception e) {
+                    LOG.warn("Skipping rule in Blacklist.getRules(): " + e.getMessage(), e);
+                }
             }
         }
 

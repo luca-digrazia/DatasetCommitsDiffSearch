@@ -20,24 +20,23 @@
 
 package org.graylog2.initializers;
 
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.graylog2.Configuration;
-import org.graylog2.GraylogServer;
-import org.graylog2.RulesEngine;
+import org.graylog2.Core;
+import org.graylog2.RulesEngineImpl;
 
 /**
- * DroolsInitializer.java: Apr 11, 2012 5:19:03 PM
- *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class DroolsInitializer implements Initializer {
 
-    private static final Logger LOG = Logger.getLogger(DroolsInitializer.class);
+    private static final Logger LOG = LoggerFactory.getLogger(DroolsInitializer.class);
 
     private final Configuration configuration;
-    private final GraylogServer graylogServer;
+    private final Core graylogServer;
 
-    public DroolsInitializer(GraylogServer server, Configuration configuration) {
+    public DroolsInitializer(Core server, Configuration configuration) {
         this.graylogServer = server;
         this.configuration = configuration;
     }
@@ -47,17 +46,22 @@ public class DroolsInitializer implements Initializer {
         try {
             String rulesFilePath = configuration.getDroolsRulesFile();
             if (rulesFilePath != null && !rulesFilePath.isEmpty()) {
-                RulesEngine drools = new RulesEngine();
+                RulesEngineImpl drools = new RulesEngineImpl();
                 drools.addRules(rulesFilePath);
                 graylogServer.setRulesEngine(drools);
-                LOG.info("Using rules: " + rulesFilePath);
+                LOG.info("Using rules: {}", rulesFilePath);
             } else {
                 LOG.info("Not using rules");
             }
         } catch (Exception e) {
-            LOG.fatal("Could not load rules engine: " + e.getMessage(), e);
+            LOG.error("Could not load rules engine: " + e.getMessage(), e);
             System.exit(1);
         }
+    }
+    
+    @Override
+    public boolean masterOnly() {
+        return false;
     }
 
 }

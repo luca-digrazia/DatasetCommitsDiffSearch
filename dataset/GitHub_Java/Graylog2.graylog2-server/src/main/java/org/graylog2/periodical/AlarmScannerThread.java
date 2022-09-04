@@ -22,7 +22,7 @@ package org.graylog2.periodical;
 import org.elasticsearch.common.collect.Maps;
 import org.graylog2.Core;
 import org.graylog2.SystemSettingAccessor;
-import org.graylog2.plugin.Tools;
+import org.graylog2.Tools;
 import org.graylog2.alarms.MessageCountAlarm;
 import org.graylog2.alarms.StreamAlarmChecker;
 import org.graylog2.plugin.alarms.Alarm;
@@ -127,6 +127,8 @@ public class AlarmScannerThread implements Runnable {
 
         for (AlarmCallback callback : graylogServer.getAlarmCallbacks()) {
             String typeclass = callback.getClass().getCanonicalName();
+System.out.println("forced: " + ssa.getForcedAlarmCallbacks());
+System.out.println("stream: " + stream.getAlarmCallbacks());
 
             // Only call if callback is forced for all streams or enabled for this particular stream.
             if (ssa.getForcedAlarmCallbacks().contains(typeclass) || stream.getAlarmCallbacks().contains(typeclass)) {

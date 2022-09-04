@@ -21,54 +21,77 @@
 package org.graylog2.buffers.processors;
 
 import com.lmax.disruptor.EventHandler;
-import org.apache.log4j.Logger;
-import org.graylog2.GraylogServer;
+import com.yammer.metrics.Metrics;
+import com.yammer.metrics.core.Meter;
+import com.yammer.metrics.core.Timer;
+import com.yammer.metrics.core.TimerContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.graylog2.Core;
 import org.graylog2.buffers.LogMessageEvent;
-import org.graylog2.filters.MessageFilter;
-import org.graylog2.logmessage.LogMessage;
+import org.graylog2.plugin.filters.MessageFilter;
+import org.graylog2.plugin.logmessage.LogMessage;
+
+import java.util.concurrent.TimeUnit;
 
 /**
- * ProcessBufferProcessor.java: 17.04.2012 16:19:19
- *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class ProcessBufferProcessor implements EventHandler<LogMessageEvent> {
 
-    private static final Logger LOG = Logger.getLogger(ProcessBufferProcessor.class);
+    private static final Logger LOG = LoggerFactory.getLogger(ProcessBufferProcessor.class);
 
-    private GraylogServer server;
+    private Core server;
+    private final Meter incomingMessages = Metrics.newMeter(ProcessBufferProcessor.class, "IncomingMessages", "messages", TimeUnit.SECONDS);
+    private final Meter incomingMessagesPerMinute = Metrics.newMeter(ProcessBufferProcessor.class, "IncomingMessagesMinutely", "messages", TimeUnit.MINUTES);
+    private final Timer processTime = Metrics.newTimer(ProcessBufferProcessor.class, "ProcessTime", TimeUnit.MICROSECONDS, TimeUnit.SECONDS);
+    private final Meter filteredOutMessages = Metrics.newMeter(ProcessBufferProcessor.class, "FilteredOutMessages", "messages", TimeUnit.SECONDS);
+    private final Meter outgoingMessages = Metrics.newMeter(ProcessBufferProcessor.class, "OutgoingMessages", "messages", TimeUnit.SECONDS);
 
-    public ProcessBufferProcessor(GraylogServer server) {
+    private final long ordinal;
+    private final long numberOfConsumers;
+    
+    public ProcessBufferProcessor(Core server, final long ordinal, final long numberOfConsumers) {
+        this.ordinal = ordinal;
+        this.numberOfConsumers = numberOfConsumers;
         this.server = server;
     }
 
     @Override
     public void onEvent(LogMessageEvent event, long sequence, boolean endOfBatch) throws Exception {
+        // Because Trisha said so. (http://code.google.com/p/disruptor/wiki/FrequentlyAskedQuestions)
+        if ((sequence % numberOfConsumers) != ordinal) {
+            return;
+        }
+        
+        server.processBufferWatermark().decrementAndGet();
+        
+        incomingMessages.mark();
+        incomingMessagesPerMinute.mark();
+        TimerContext tcx = processTime.time();
+
         LogMessage msg = event.getMessage();
 
-        LOG.debug("Starting to process message <" + msg.getId() + ">.");
+        LOG.debug("Starting to process message <{}>.", msg.getId());
 
-        for (Class filterType : server.getFilters()) {
+        for (MessageFilter filter : server.getFilters()) {
             try {
-                // Always create a new instance of this filter.
-                MessageFilter filter = (MessageFilter) filterType.newInstance();
-      
-                String name = filterType.getSimpleName();
-                LOG.debug("Applying filter [" + name +"] on message <" + msg.getId() + ">.");
+                LOG.debug("Applying filter [{}] on message <{}>.", filter.getName(), msg.getId());
 
-                filter.filter(msg, server);
-
-                if (filter.discardMessage()) {
-                    LOG.debug("Filter [" + name + "] marked message <" + msg.getId() + "> to be discarded. Dropping message.");
+                if (filter.filter(msg, server)) {
+                    LOG.debug("Filter [{}] marked message <{}> to be discarded. Dropping message.", filter.getName(), msg.getId());
+                    filteredOutMessages.mark();
                     return;
                 }
             } catch (Exception e) {
-                LOG.error("Could not apply filter [" + filterType.getSimpleName() +"] on message <" + msg.getId() +">: ", e);
+                LOG.error("Could not apply filter [" + filter.getName() +"] on message <" + msg.getId() +">: ", e);
             }
         }
 
         LOG.debug("Finished processing message. Writing to output buffer.");
+        outgoingMessages.mark();
         server.getOutputBuffer().insert(msg);
+        tcx.stop();
     }
 
 }

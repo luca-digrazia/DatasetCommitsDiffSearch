@@ -20,33 +20,48 @@
 
 package org.graylog2.filters;
 
-import java.util.List;
-import org.apache.log4j.Logger;
-import org.graylog2.GraylogServer;
-import org.graylog2.logmessage.LogMessage;
-import org.graylog2.streams.Stream;
+import com.yammer.metrics.Metrics;
+import com.yammer.metrics.core.Timer;
+import com.yammer.metrics.core.TimerContext;
+import org.graylog2.Core;
+import org.graylog2.plugin.GraylogServer;
+import org.graylog2.plugin.filters.MessageFilter;
+import org.graylog2.plugin.logmessage.LogMessage;
+import org.graylog2.plugin.streams.Stream;
 import org.graylog2.streams.StreamRouter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
- * StreamMatcherFilter.java: 19.04.2012 14:41:36
- *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class StreamMatcherFilter implements MessageFilter {
 
-    private static final Logger LOG = Logger.getLogger(StreamMatcherFilter.class);
+    private static final Logger LOG = LoggerFactory.getLogger(StreamMatcherFilter.class);
 
     private static final StreamRouter ROUTER = new StreamRouter();
+    private final Timer processTime = Metrics.newTimer(StreamMatcherFilter.class, "ProcessTime", TimeUnit.MICROSECONDS, TimeUnit.SECONDS);
 
     @Override
     public boolean filter(LogMessage msg, GraylogServer server) {
-        List<Stream> streams = ROUTER.route(msg);
+        TimerContext tcx = processTime.time();
+
+        List<Stream> streams = ROUTER.route((Core) server, msg);
         msg.setStreams(streams);
 
-        LOG.debug("Routed message <" + msg.getId() + "> to " + streams.size() + " streams.");
+        LOG.debug("Routed message <{}> to {} streams.", msg.getId(), streams.size());
 
-        // Do not discard message.
+        tcx.stop();
+        
         return false;
     }
 
+    @Override
+    public String getName() {
+        return "StreamMatcher";
+    }
+    
 }

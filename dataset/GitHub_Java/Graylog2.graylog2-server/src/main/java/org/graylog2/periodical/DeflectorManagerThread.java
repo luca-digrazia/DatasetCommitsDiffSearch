@@ -108,7 +108,6 @@ public class DeflectorManagerThread implements Runnable { // public class Klimpe
                 LOG.info(msg);
                 
                 graylogServer.getIndexer().deleteIndex(index);
-                graylogServer.getMongoBridge().removeIndexDateRange(index);
             }
         }
     }

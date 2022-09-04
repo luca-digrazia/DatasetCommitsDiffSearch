@@ -19,31 +19,38 @@
  */
 package org.graylog2.alarms.transports;
 
-import java.util.Map;
+import org.apache.commons.mail.EmailException;
+import org.apache.commons.mail.SimpleEmail;
 import org.graylog2.plugin.alarms.Alarm;
+import org.graylog2.plugin.alarms.AlarmReceiver;
 import org.graylog2.plugin.alarms.transports.Transport;
 import org.graylog2.plugin.alarms.transports.TransportConfigurationException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import org.apache.commons.mail.SimpleEmail;
-import org.apache.log4j.Logger;
-import org.graylog2.plugin.alarms.AlarmReceiver;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class EmailTransport implements Transport {
 
-    private static final Logger LOG = Logger.getLogger(EmailTransport.class);
+    private static final Logger LOG = LoggerFactory.getLogger(EmailTransport.class);
     
     private static final String NAME = "Email";
-    
-    private final String className;
-    
+
     private Map<String, String> configuration;
-    
-    public EmailTransport() {
-        this.className = this.getClass().getCanonicalName();
-    }
+    public static final Set<String> REQUIRED_FIELDS = new HashSet<String>() {{ 
+        add("subject_prefix");
+        add("hostname");
+        add("port");
+        add("use_tls");
+        add("use_auth");
+        add("from_email");
+        add("from_name");
+    }};
 
     @Override
     public void initialize(Map<String, String> configuration) throws TransportConfigurationException {
@@ -55,54 +62,53 @@ public class EmailTransport implements Transport {
     @Override
     public void transportAlarm(Alarm alarm) {
         try {
-            SimpleEmail email = new SimpleEmail();
-
-            email.setHostName(configuration.get("hostname"));
-            email.setSmtpPort(Integer.parseInt(configuration.get("port")));
-            
-            if (configuration.get("use_auth").equals("true")) {
-                email.setAuthentication(configuration.get("username"), configuration.get("password"));
-                if (configuration.get("use_tls").equals("true")) {
-                    email.setTLS(true);
-                }
-            }
-            
-            email.setFrom(configuration.get("from_email"), configuration.get("from_name"));
-            
             for (AlarmReceiver receiver : alarm.getReceivers(this)) {
-                email.addTo(receiver.getAddress(this));
+                send(alarm, receiver);
             }
-            
-            String subjectPrefix = configuration.get("subject_prefix");
-            String subject = alarm.getTopic();
-            
-            if (subjectPrefix != null && !subjectPrefix.isEmpty()) {
-                subject = subjectPrefix + " " + subject;
-            }
-            
-            email.setSubject(subject);
-            email.setMsg(alarm.getDescription());
-            email.send();
         } catch(Exception e) {
             LOG.warn("Could not send alarm email.", e);
         }
     }
+    
+    private void send(Alarm alarm, AlarmReceiver receiver) throws EmailException {
+        SimpleEmail email = new SimpleEmail();
 
-    private void checkConfiguration() throws TransportConfigurationException {
-        if (!configSet("subject_prefix")) { throw new TransportConfigurationException("Missing configuration option: subject_prefix"); }
-        if (!configSet("hostname")) { throw new TransportConfigurationException("Missing configuration option: hostname"); }
-        if (!configSet("port")) { throw new TransportConfigurationException("Missing configuration option: port"); }
-        if (!configSet("use_tls")) { throw new TransportConfigurationException("Missing configuration option: use_tls"); }
-        if (!configSet("from_email")) { throw new TransportConfigurationException("Missing configuration option: from_email"); }
-        if (!configSet("from_name")) { throw new TransportConfigurationException("Missing configuration option: from_name"); }
-        
-        if (configSet("use_auth")) {
-            if (configuration.get("use_auth").equals("true")) {
-                if (!configSet("username")) { throw new TransportConfigurationException("Missing configuration option: username"); }
-                if (!configSet("password")) { throw new TransportConfigurationException("Missing configuration option: password"); }
+        email.setHostName(configuration.get("hostname"));
+        email.setSmtpPort(Integer.parseInt(configuration.get("port")));
+
+        if (configuration.get("use_auth").equals("true")) {
+            email.setAuthentication(configuration.get("username"), configuration.get("password"));
+            if (configuration.get("use_tls").equals("true")) {
+                email.setTLS(true);
             }
-        } else {
-            throw new TransportConfigurationException("Missing configuration option: hostname");
+        }
+
+        email.setFrom(configuration.get("from_email"), configuration.get("from_name"));
+
+        
+        email.addTo(receiver.getAddress(this));
+
+        String subjectPrefix = configuration.get("subject_prefix");
+        String subject = alarm.getTopic();
+
+        if (subjectPrefix != null && !subjectPrefix.isEmpty()) {
+            subject = subjectPrefix + " " + subject;
+        }
+
+        email.setSubject(subject);
+        email.setMsg(alarm.getDescription());
+        email.send();
+    }
+
+    
+    private void checkConfiguration() throws TransportConfigurationException {
+        for (String field : REQUIRED_FIELDS) {
+            if (!configSet(field)) { throw new TransportConfigurationException("Missing configuration option: " + field); }
+        }
+        
+        if (configuration.get("use_auth").equals("true")) {
+            if (!configSet("username")) { throw new TransportConfigurationException("Missing configuration option: username"); }
+            if (!configSet("password")) { throw new TransportConfigurationException("Missing configuration option: password"); }
         }
     }
     

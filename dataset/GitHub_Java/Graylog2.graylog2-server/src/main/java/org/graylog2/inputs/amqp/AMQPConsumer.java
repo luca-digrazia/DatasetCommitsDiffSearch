@@ -108,10 +108,7 @@ public class AMQPConsumer implements Runnable {
             LOG.info(msg);
             server.getActivityWriter().write(new Activity(msg, AMQPConsumer.class));
         } catch(IOException e) {
-           String msg = "IO error on broker <" + queueConfig + ">. ("+ e.getMessage() + ")";
-           LOG.error(msg, e);
-           server.getActivityWriter().write(new Activity(msg, AMQPConsumer.class));
-           
+           LOG.error("IO error on broker <" + queueConfig + ">", e);
            disconnect();
         }
     }

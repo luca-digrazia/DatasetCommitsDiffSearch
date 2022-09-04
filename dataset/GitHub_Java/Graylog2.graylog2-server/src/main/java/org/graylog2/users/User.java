@@ -76,12 +76,8 @@ public class User {
     
     public static Set<User> fetchAll(Core server, Map<String, Object> additionalQueryOpts) {
         UserCache cache = UserCache.getInstance();
-        
-        // Only use the cache if we really fetch *all* users.
-        if (additionalQueryOpts == null || additionalQueryOpts.isEmpty()) {
-            if (cache.valid()) {
-                return cache.get();
-            }
+        if (cache.valid()) {
+            return cache.get();
         }
 
         Set<User> users = Sets.newHashSet();
@@ -104,9 +100,7 @@ public class User {
             }
         }
 
-        if (additionalQueryOpts == null || additionalQueryOpts.isEmpty()) {
-            cache.set(users);
-        }
+        cache.set(users);
 
         return users;
     }

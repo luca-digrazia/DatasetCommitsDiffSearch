@@ -20,6 +20,7 @@
 
 package org.graylog2.inputs.syslog;
 
+import java.net.InetAddress;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -36,10 +37,16 @@ public class StructuredSyslog {
 
     private static final Logger LOG = LoggerFactory.getLogger(StructuredSyslog.class);
 
-    public static Map<String, String> extractFields(StructuredSyslogServerEvent msg) {
+    public static Map<String, String> extractFields(byte[] rawSyslogMessage) {
         Map<String, String> fields = new HashMap<String, String>();
         try {
-            Map raw = msg.getStructuredMessage().getStructuredData();
+            StructuredSyslogServerEvent s = new StructuredSyslogServerEvent(
+                    rawSyslogMessage,
+                    rawSyslogMessage.length,
+                    InetAddress.getLocalHost()
+             );
+
+            Map raw = s.getStructuredMessage().getStructuredData();
             if (raw != null) {
                 Set ks = raw.keySet();
                 if (ks.size() > 0) {

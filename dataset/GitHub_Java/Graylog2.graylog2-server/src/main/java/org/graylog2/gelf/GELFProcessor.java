@@ -24,12 +24,11 @@ import com.yammer.metrics.Metrics;
 import com.yammer.metrics.core.Meter;
 import com.yammer.metrics.core.Timer;
 import com.yammer.metrics.core.TimerContext;
-import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.graylog2.Core;
-import org.graylog2.plugin.Tools;
-import org.graylog2.plugin.logmessage.LogMessage;
+import org.graylog2.Tools;
+import org.graylog2.logmessage.LogMessageImpl;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.JSONValue;
@@ -58,7 +57,7 @@ public class GELFProcessor {
         incomingMessages.mark();
         
         // Convert to LogMessage
-        LogMessage lm = parse(message.getJSON());
+        LogMessageImpl lm = parse(message.getJSON());
 
         if (!lm.isComplete()) {
             incompleteMessages.mark();
@@ -71,11 +70,11 @@ public class GELFProcessor {
         server.getProcessBuffer().insert(lm);
     }
 
-    private LogMessage parse(String message) {
+    private LogMessageImpl parse(String message) {
         TimerContext tcx = gelfParsedTime.time();
 
         JSONObject json;
-        LogMessage lm = new LogMessage();
+        LogMessageImpl lm = new LogMessageImpl();
         
         try {
             json = getJSON(message);
@@ -100,13 +99,13 @@ public class GELFProcessor {
         if (level > -1) {
             lm.setLevel(level);
         } else {
-            lm.setLevel(LogMessage.STANDARD_LEVEL);
+            lm.setLevel(LogMessageImpl.STANDARD_LEVEL);
         }
 
         // Facility is set by server if not specified by client.
         String facility = this.jsonToString(json.get("facility"));
         if (facility == null) {
-            lm.setFacility(LogMessage.STANDARD_FACILITY);
+            lm.setFacility(LogMessageImpl.STANDARD_FACILITY);
         } else {
             lm.setFacility(facility);
         }
@@ -124,17 +123,10 @@ public class GELFProcessor {
         for(Map.Entry<String, Object> entry : entrySet) {
 
             String key = entry.getKey();
-            Object value = entry.getValue();
 
             // Skip standard fields.
             if (!key.startsWith(GELFMessage.ADDITIONAL_FIELD_PREFIX)) {
                 continue;
-            }
-            
-            // Convert lists and maps to Strings.
-            
-            if (value instanceof List || value instanceof Map || value instanceof Set) {
-                value = value.toString();
             }
 
             // Don't allow to override _id. (just to make sure...)
@@ -144,7 +136,7 @@ public class GELFProcessor {
             }
 
             // Add to message.
-            lm.addAdditionalData(key, value);
+            lm.addAdditionalData(key, entry.getValue());
         }
 
         // Stop metrics timer.

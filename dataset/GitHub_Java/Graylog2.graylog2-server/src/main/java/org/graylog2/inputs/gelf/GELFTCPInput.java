@@ -20,33 +20,34 @@
 
 package org.graylog2.inputs.gelf;
 
-import java.net.InetSocketAddress;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import org.apache.log4j.Logger;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.graylog2.Configuration;
-import org.graylog2.GraylogServer;
+import org.graylog2.Core;
 import org.graylog2.inputs.MessageInput;
 import org.jboss.netty.bootstrap.ServerBootstrap;
 import org.jboss.netty.channel.ChannelException;
 import org.jboss.netty.channel.socket.nio.NioServerSocketChannelFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.net.InetSocketAddress;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
- * GELFTCPInput.java: 13.06.2012 15:26:43
- *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class GELFTCPInput implements MessageInput {
 
-    private static final Logger LOG = Logger.getLogger(GELFTCPInput.class);
+    private static final Logger LOG = LoggerFactory.getLogger(GELFTCPInput.class);
 
     private static final String NAME = "GELF TCP";
 
-    private GraylogServer graylogServer;
+    private Core graylogServer;
     private InetSocketAddress socketAddress;
 
     @Override
-    public void initialize(Configuration configuration, GraylogServer graylogServer) {
+    public void initialize(Configuration configuration, Core graylogServer) {
         this.graylogServer = graylogServer;
         this.socketAddress = new InetSocketAddress(configuration.getGelfListenAddress(), configuration.getGelfListenPort());
 
@@ -54,8 +55,15 @@ public class GELFTCPInput implements MessageInput {
     }
 
     private void spinUp() {
-        final ExecutorService bossThreadPool = Executors.newCachedThreadPool();
-        final ExecutorService workerThreadPool = Executors.newCachedThreadPool();
+        final ExecutorService bossThreadPool = Executors.newCachedThreadPool(
+                new ThreadFactoryBuilder()
+                .setNameFormat("input-gelftcp-boss-%d")
+                .build());
+        
+        final ExecutorService workerThreadPool = Executors.newCachedThreadPool(
+                new ThreadFactoryBuilder()
+                .setNameFormat("input-gelftcp-worker-%d")
+                .build());
 
         ServerBootstrap tcpBootstrap = new ServerBootstrap(
             new NioServerSocketChannelFactory(bossThreadPool, workerThreadPool)
@@ -65,9 +73,9 @@ public class GELFTCPInput implements MessageInput {
 
         try {
             tcpBootstrap.bind(socketAddress);
-            LOG.info("Started TCP GELF server on " + socketAddress);
+            LOG.info("Started TCP GELF server on {}", socketAddress);
         } catch (ChannelException e) {
-            LOG.fatal("Could not bind TCP GELF server to address " + socketAddress, e);
+            LOG.error("Could not bind TCP GELF server to address " + socketAddress, e);
         }
     }
 
