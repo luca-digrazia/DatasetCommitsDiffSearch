@@ -283,10 +283,20 @@ public class FdoSupport {
       PathFragment fdoInstrument,
       Path fdoProfile,
       LipoMode lipoMode,
+      boolean llvmFdo,
       Path execRoot,
-      String productName,
-      FdoMode fdoMode)
+      String productName)
       throws IOException, FdoException, InterruptedException {
+    FdoMode fdoMode;
+    if (fdoProfile != null && isAutoFdo(fdoProfile.getBaseName())) {
+      fdoMode = FdoMode.AUTO_FDO;
+    } else if (fdoProfile != null && llvmFdo) {
+      fdoMode = FdoMode.LLVM_FDO;
+    } else if (fdoProfile != null) {
+      fdoMode = FdoMode.VANILLA;
+    } else {
+      fdoMode = FdoMode.OFF;
+    }
 
     if (fdoProfile == null) {
       lipoMode = LipoMode.OFF;

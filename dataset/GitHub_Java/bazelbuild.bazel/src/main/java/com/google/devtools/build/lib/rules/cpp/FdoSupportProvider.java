@@ -17,6 +17,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
@@ -27,15 +28,17 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 @Immutable
 @AutoCodec
 public class FdoSupportProvider implements TransitiveInfoProvider {
+  public static final ObjectCodec<FdoSupportProvider> CODEC = new FdoSupportProvider_AutoCodec();
+
   private final FdoSupport fdoSupport;
-  private final ProfileArtifacts profileArtifacts;
+  private final Artifact profileArtifact;
   private final ImmutableMap<PathFragment, Artifact> gcdaArtifacts;
 
   @AutoCodec.Instantiator
-  public FdoSupportProvider(FdoSupport fdoSupport, ProfileArtifacts profileArtifacts,
+  public FdoSupportProvider(FdoSupport fdoSupport, Artifact profileArtifact,
       ImmutableMap<PathFragment, Artifact> gcdaArtifacts) {
     this.fdoSupport = fdoSupport;
-    this.profileArtifacts = profileArtifacts;
+    this.profileArtifact = profileArtifact;
     this.gcdaArtifacts = gcdaArtifacts;
   }
 
@@ -43,10 +46,7 @@ public class FdoSupportProvider implements TransitiveInfoProvider {
     return fdoSupport;
   }
   public Artifact getProfileArtifact() {
-    return profileArtifacts != null ? profileArtifacts.getProfileArtifact() : null;
-  }
-  public Artifact getPrefetchHintsArtifact() {
-    return profileArtifacts != null ? profileArtifacts.getPrefetchHintsArtifact() : null;
+    return profileArtifact;
   }
   public ImmutableMap<PathFragment, Artifact> getGcdaArtifacts() {
     return gcdaArtifacts;
