@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.common.collect.Interner;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
@@ -26,7 +25,6 @@ import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import java.util.Objects;
-import javax.annotation.Nullable;
 
 /**
  * A container for the path to the FDO profile.
@@ -48,26 +46,24 @@ public class CcSkyframeSupportValue implements SkyValue {
   public static class Key implements SkyKey {
     private static final Interner<Key> interner = BlazeInterners.newWeakInterner();
 
-    @Nullable private final PathFragment fdoZipPath;
-    @Nullable private final Label ccToolchainSuiteLabel;
+    private final PathFragment fdoZipPath;
+    private final PathFragment crosstoolPath;
 
-    private Key(PathFragment fdoZipPath, Label ccToolchainSuiteLabel) {
+    private Key(PathFragment fdoZipPath, PathFragment crosstoolPath) {
       this.fdoZipPath = fdoZipPath;
-      this.ccToolchainSuiteLabel = ccToolchainSuiteLabel;
+      this.crosstoolPath = crosstoolPath;
     }
 
     @AutoCodec.Instantiator
     @AutoCodec.VisibleForSerialization
-    static Key of(PathFragment fdoZipPath, Label ccToolchainSuiteLabel) {
-      return interner.intern(new Key(fdoZipPath, ccToolchainSuiteLabel));
+    static Key of(PathFragment fdoZipPath, PathFragment crosstoolPath) {
+      return interner.intern(new Key(fdoZipPath, crosstoolPath));
     }
 
-    @Nullable
-    public Label getCcToolchainSuiteLabel() {
-      return ccToolchainSuiteLabel;
+    public PathFragment getCrosstoolPath() {
+      return crosstoolPath;
     }
 
-    @Nullable
     public PathFragment getFdoZipPath() {
       return fdoZipPath;
     }
@@ -82,13 +78,13 @@ public class CcSkyframeSupportValue implements SkyValue {
       }
       Key key = (Key) o;
       return Objects.equals(fdoZipPath, key.fdoZipPath)
-          && Objects.equals(ccToolchainSuiteLabel, key.ccToolchainSuiteLabel);
+          && Objects.equals(crosstoolPath, key.crosstoolPath);
     }
 
     @Override
     public int hashCode() {
 
-      return Objects.hash(fdoZipPath, ccToolchainSuiteLabel);
+      return Objects.hash(fdoZipPath, crosstoolPath);
     }
 
     @Override
@@ -118,7 +114,7 @@ public class CcSkyframeSupportValue implements SkyValue {
     return crosstoolRelease;
   }
 
-  public static SkyKey key(PathFragment fdoZipPath, Label ccToolchainSuiteLabel) {
-    return Key.of(fdoZipPath, ccToolchainSuiteLabel);
+  public static SkyKey key(PathFragment fdoZipPath, PathFragment crosstoolPath) {
+    return Key.of(fdoZipPath, crosstoolPath);
   }
 }

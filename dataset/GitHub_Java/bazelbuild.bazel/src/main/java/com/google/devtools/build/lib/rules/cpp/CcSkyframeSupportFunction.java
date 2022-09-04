@@ -17,11 +17,10 @@ import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.actions.FileValue;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier;
-import com.google.devtools.build.lib.skyframe.PackageLookupValue;
+import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.lib.vfs.PathFragment;
+import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CrosstoolRelease;
 import com.google.devtools.build.skyframe.SkyFunction;
@@ -49,7 +48,6 @@ import javax.annotation.Nullable;
  * com.google.devtools.build.lib.analysis.RuleContext)} which needs a {@link Path}.
  */
 public class CcSkyframeSupportFunction implements SkyFunction {
-
   private final BlazeDirectories directories;
 
   public CcSkyframeSupportFunction(BlazeDirectories directories) {
@@ -62,42 +60,35 @@ public class CcSkyframeSupportFunction implements SkyFunction {
       throws InterruptedException, CcSkyframeSupportException {
     CcSkyframeSupportValue.Key key = (CcSkyframeSupportValue.Key) skyKey.argument();
     Path fdoZipPath = null;
+    CrosstoolRelease crosstoolRelease = null;
     if (key.getFdoZipPath() != null) {
       fdoZipPath = directories.getWorkspace().getRelative(key.getFdoZipPath());
     }
 
-    CrosstoolRelease crosstoolRelease = null;
-    if (key.getCcToolchainSuiteLabel() != null) {
+    if (key.getCrosstoolPath() != null) {
       try {
-        // 1. Lookup the package to handle multiple package roots (PackageLookupValue)
-        PackageIdentifier packageIdentifier = key.getCcToolchainSuiteLabel().getPackageIdentifier();
-        PackageLookupValue crosstoolPackageValue =
-            (PackageLookupValue) env.getValue(PackageLookupValue.key(packageIdentifier));
-        if (env.valuesMissing()) {
-          return null;
+        Root root;
+        // Dear reader, if your eye just twitched and the thought cannot escape your mind that
+        // I should've used execroot, beware, execroot is created after the analysis, and this
+        // function is executed during the analysis.
+        if (key.getCrosstoolPath().startsWith(Label.EXTERNAL_PACKAGE_NAME)) {
+          root = Root.fromPath(directories.getOutputBase());
+        } else {
+          root = Root.fromPath(directories.getWorkspace());
         }
-
-        // 2. Get crosstool file (FileValue)
-        PathFragment crosstool =
-            packageIdentifier
-                .getPackageFragment()
-                .getRelative(CrosstoolConfigurationLoader.CROSSTOOL_CONFIGURATION_FILENAME);
         FileValue crosstoolFileValue =
             (FileValue)
-                env.getValue(
-                    FileValue.key(
-                        RootedPath.toRootedPath(crosstoolPackageValue.getRoot(), crosstool)));
+                env.getValue(FileValue.key(RootedPath.toRootedPath(root, key.getCrosstoolPath())));
         if (env.valuesMissing()) {
           return null;
         }
 
-        // 3. Parse the crosstool file the into CrosstoolRelease
         Path crosstoolFile = crosstoolFileValue.realRootedPath().asPath();
         try (InputStream inputStream = crosstoolFile.getInputStream()) {
           String crosstoolContent = new String(FileSystemUtils.readContentAsLatin1(inputStream));
           crosstoolRelease =
               CrosstoolConfigurationLoader.toReleaseConfiguration(
-                  "CROSSTOOL file " + crosstool, () -> crosstoolContent, /* digestOrNull= */ null);
+                  "CROSSTOOL file " + key.getCrosstoolPath(), crosstoolContent);
         }
       } catch (IOException | InvalidConfigurationException e) {
         throw new CcSkyframeSupportException(e, key);
