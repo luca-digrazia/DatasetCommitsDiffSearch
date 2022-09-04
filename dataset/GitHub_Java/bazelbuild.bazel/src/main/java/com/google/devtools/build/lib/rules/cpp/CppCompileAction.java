@@ -61,7 +61,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
-import com.google.devtools.build.lib.packages.StarlarkSemanticsOptions;
 import com.google.devtools.build.lib.profiler.AutoProfiler;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
@@ -515,25 +514,11 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
    * This method returns null when a required SkyValue is missing and a Skyframe restart is
    * required.
    */
-  // Note: this function will be deleted in the migration cl.
   @Nullable
   private static IncludeScanningHeaderData.Builder createIncludeScanningHeaderData(
-      SkyFunction.Environment env,
-      List<CcCompilationContext.HeaderInfo> headerInfos,
-      Iterable<Artifact> inputs)
-      throws InterruptedException {
+      SkyFunction.Environment env, Iterable<Artifact> inputs) throws InterruptedException {
     Map<PathFragment, Artifact> pathToLegalOutputArtifact = new HashMap<>();
     ArrayList<Artifact> treeArtifacts = new ArrayList<>();
-    // Not using range-based for loops here and below as the additional overhead of the
-    // ImmutableList iterators has shown up in profiles.
-    for (CcCompilationContext.HeaderInfo headerInfo : headerInfos) {
-      for (Artifact a : headerInfo.modularHeaders) {
-        IncludeScanningHeaderDataHelper.handleArtifact(a, pathToLegalOutputArtifact, treeArtifacts);
-      }
-      for (Artifact a : headerInfo.textualHeaders) {
-        IncludeScanningHeaderDataHelper.handleArtifact(a, pathToLegalOutputArtifact, treeArtifacts);
-      }
-    }
     for (Artifact a : inputs) {
       IncludeScanningHeaderDataHelper.handleArtifact(a, pathToLegalOutputArtifact, treeArtifacts);
     }
@@ -558,7 +543,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
       List<CcCompilationContext.HeaderInfo> headerInfo)
       throws InterruptedException {
     if (alternateIncludeScanningDataInputs != null) {
-      return createIncludeScanningHeaderData(env, headerInfo, alternateIncludeScanningDataInputs);
+      return createIncludeScanningHeaderData(env, alternateIncludeScanningDataInputs);
     } else {
       return ccCompilationContext.createIncludeScanningHeaderData(
           env, usePic, useHeaderModules, headerInfo);
@@ -609,12 +594,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
                   .setCmdlineIncludes(getCmdlineIncludes(options))
                   .build());
       if (needsIncludeValidation) {
-        verifyActionIncludePaths(
-            systemIncludeDirs,
-            actionExecutionContext
-                .getOptions()
-                .getOptions(StarlarkSemanticsOptions.class)
-                .experimentalSiblingRepositoryLayout);
+        verifyActionIncludePaths(systemIncludeDirs);
       }
 
       if (!shouldScanIncludes) {
@@ -1055,8 +1035,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
   }
 
   @VisibleForTesting
-  void verifyActionIncludePaths(
-      List<PathFragment> systemIncludeDirs, boolean siblingRepositoryLayout)
+  void verifyActionIncludePaths(List<PathFragment> systemIncludeDirs)
       throws ActionExecutionException {
     ImmutableSet<PathFragment> ignoredDirs = ImmutableSet.copyOf(getValidationIgnoredDirs());
     // We currently do not check the output of:
@@ -1073,16 +1052,9 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
           || FileSystemUtils.startsWithAny(includePath, ignoredDirs)) {
         continue;
       }
-
-      // Two conditions:
-      // 1. Paths cannot be absolute (e.g. multiple uplevels to /etc/passwd)
-      // 2. For relative paths, one starting ../ is okay for getting to a sibling repository.
-      PathFragment prefix =
-          siblingRepositoryLayout
-              ? LabelConstants.EXPERIMENTAL_EXTERNAL_PATH_PREFIX
-              : LabelConstants.EXTERNAL_PATH_PREFIX;
-      if (includePath.startsWith(prefix)) {
-        includePath = includePath.relativeTo(prefix);
+      // One starting ../ is okay for getting to a sibling repository.
+      if (includePath.startsWith(LabelConstants.EXTERNAL_PATH_PREFIX)) {
+        includePath = includePath.relativeTo(LabelConstants.EXTERNAL_PATH_PREFIX);
       }
       if (includePath.isAbsolute() || includePath.containsUplevelReferences()) {
         throw new ActionExecutionException(
@@ -1493,8 +1465,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
       Path execRoot,
       ArtifactResolver artifactResolver,
       ShowIncludesFilter showIncludesFilterForStdout,
-      ShowIncludesFilter showIncludesFilterForStderr,
-      boolean siblingRepositoryLayout)
+      ShowIncludesFilter showIncludesFilterForStderr)
       throws ActionExecutionException {
     if (!needsDotdInputPruning) {
       return NestedSetBuilder.emptySet(Order.STABLE_ORDER);
@@ -1514,9 +1485,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
       discoveryBuilder.shouldValidateInclusions();
     }
 
-    return discoveryBuilder
-        .build()
-        .discoverInputsFromDependencies(execRoot, artifactResolver, siblingRepositoryLayout);
+    return discoveryBuilder.build().discoverInputsFromDependencies(execRoot, artifactResolver);
   }
 
   @VisibleForTesting
@@ -1524,8 +1493,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
       ActionExecutionContext actionExecutionContext,
       Path execRoot,
       ArtifactResolver artifactResolver,
-      byte[] dotDContents,
-      boolean siblingRepositoryLayout)
+      byte[] dotDContents)
       throws ActionExecutionException {
     if (!needsDotdInputPruning || getDotdFile() == null) {
       return NestedSetBuilder.emptySet(Order.STABLE_ORDER);
@@ -1543,9 +1511,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
       discoveryBuilder.shouldValidateInclusions();
     }
 
-    return discoveryBuilder
-        .build()
-        .discoverInputsFromDependencies(execRoot, artifactResolver, siblingRepositoryLayout);
+    return discoveryBuilder.build().discoverInputsFromDependencies(execRoot, artifactResolver);
   }
 
   public DependencySet processDepset(
@@ -1820,11 +1786,6 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
       CppIncludeExtractionContext scanningContext =
           actionExecutionContext.getContext(CppIncludeExtractionContext.class);
       Path execRoot = actionExecutionContext.getExecRoot();
-      boolean siblingRepositoryLayout =
-          actionExecutionContext
-              .getOptions()
-              .getOptions(StarlarkSemanticsOptions.class)
-              .experimentalSiblingRepositoryLayout;
 
       NestedSet<Artifact> discoveredInputs;
       if (featureConfiguration.isEnabled(CppRuleClasses.PARSE_SHOWINCLUDES)) {
@@ -1833,16 +1794,14 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
                 execRoot,
                 scanningContext.getArtifactResolver(),
                 showIncludesFilterForStdout,
-                showIncludesFilterForStderr,
-                siblingRepositoryLayout);
+                showIncludesFilterForStderr);
       } else {
         discoveredInputs =
             discoverInputsFromDotdFiles(
                 actionExecutionContext,
                 execRoot,
                 scanningContext.getArtifactResolver(),
-                dotDContents,
-                siblingRepositoryLayout);
+                dotDContents);
       }
       dotDContents = null; // Garbage collect in-memory .d contents.
 
