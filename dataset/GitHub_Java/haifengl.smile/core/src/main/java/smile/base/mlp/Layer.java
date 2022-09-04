@@ -37,22 +37,11 @@ public abstract class Layer implements Serializable {
     /**
      * The number of neurons in this layer
      */
-    protected final int n;
+    protected int n;
     /**
      * The number of input variables.
      */
-    protected final int p;
-    /**
-     * The dropout rate. Dropout randomly sets input units to 0 with this rate
-     * at each step during training time, which helps prevent overfitting.
-     */
-    protected final double dropoutRate;
-    /**
-     * The dropout scaling factor.
-     * Inputs not set to 0 are scaled up by 1/(1 - rate) such that the sum
-     * over all inputs is unchanged.
-     */
-    protected final double dropoutScale;
+    protected int p;
     /**
      * The affine transformation matrix.
      */
@@ -61,10 +50,6 @@ public abstract class Layer implements Serializable {
      * The bias.
      */
     protected double[] bias;
-    /**
-     * The input vector in case of batch normalization and/or dropout.
-     */
-    protected transient ThreadLocal<double[]> input;
     /**
      * The output vector.
      */
@@ -97,10 +82,6 @@ public abstract class Layer implements Serializable {
      * The bias update.
      */
     protected transient ThreadLocal<double[]> biasUpdate;
-    /**
-     * The dropout mask.
-     */
-    protected transient ThreadLocal<byte[]> dropoutMask;
 
     /**
      * Constructor. Randomly initialized weights and zero bias.
@@ -109,18 +90,7 @@ public abstract class Layer implements Serializable {
      * @param p the number of input variables (not including bias value).
      */
     public Layer(int n, int p) {
-        this(n, p, 0.0);
-    }
-
-    /**
-     * Constructor. Randomly initialized weights and zero bias.
-     *
-     * @param n the number of neurons.
-     * @param p the number of input variables (not including bias value).
-     * @param dropout the dropout rate.
-     */
-    public Layer(int n, int p, double dropout) {
-        this(Matrix.rand(n, p, -Math.sqrt(6.0 / (n+p)), Math.sqrt(6.0 / (n+p))), new double[n], dropout);
+        this(Matrix.rand(n, p, -Math.sqrt(6.0 / (n+p)), Math.sqrt(6.0 / (n+p))), new double[n]);
     }
 
     /**
@@ -129,26 +99,10 @@ public abstract class Layer implements Serializable {
      * @param bias the bias vector.
      */
     public Layer(Matrix weight, double[] bias) {
-        this(weight, bias, 0.0);
-    }
-
-    /**
-     * Constructor.
-     * @param weight the weight matrix.
-     * @param bias the bias vector.
-     * @param dropout the dropout rate.
-     */
-    public Layer(Matrix weight, double[] bias, double dropout) {
-        if (dropout < 0.0 || dropout >= 1.0) {
-            throw new IllegalArgumentException("Invalid dropout rate: " + dropout);
-        }
-
         this.n = weight.nrow();
         this.p = weight.ncol();
         this.weight = weight;
         this.bias = bias;
-        this.dropoutRate = dropout;
-        this.dropoutScale = dropout > 0 ? 1.0 / (1.0 - dropout) : 1.0;
 
         init();
     }
@@ -168,11 +122,6 @@ public abstract class Layer implements Serializable {
      * Initializes the workspace.
      */
     private void init() {
-        input = new ThreadLocal<double[]>() {
-            protected double[] initialValue() {
-                return new double[p];
-            }
-        };
         output = new ThreadLocal<double[]>() {
             protected double[] initialValue() {
                 return new double[n];
@@ -213,11 +162,6 @@ public abstract class Layer implements Serializable {
                 return new double[n];
             }
         };
-        dropoutMask = new ThreadLocal<byte[]>() {
-            protected byte[] initialValue() {
-                return new byte[p];
-            }
-        };
     }
 
     /**
@@ -255,29 +199,12 @@ public abstract class Layer implements Serializable {
     /**
      * Propagates signals from a lower layer to this layer.
      * @param x the lower layer signals.
-     * @param train true if this is in training pass.
      */
-    public void propagate(double[] x, boolean train) {
+    public void propagate(double[] x) {
         double[] output = this.output.get();
         System.arraycopy(bias, 0, output, 0, n);
         weight.mv(1.0, x, 1.0, output);
         f(output);
-    }
-
-    /**
-     * Dropout randomly sets output units to 0. It should only be applied
-     * during training.
-     */
-    public void dropout() {
-        if (dropoutRate > 0.0) {
-            double[] output = this.output.get();
-            byte[] mask = this.dropoutMask.get();
-            for (int i = 0; i < p; i++) {
-                byte retain = (byte) (MathEx.random() < dropoutRate ? 0 : 1);
-                mask[i] = retain;
-                output[i] *= retain * dropoutScale;
-            }
-        }
     }
 
     /**
@@ -291,19 +218,6 @@ public abstract class Layer implements Serializable {
      * @param lowerLayerGradient the gradient vector of lower layer.
      */
     public abstract void backpropagate(double[] lowerLayerGradient);
-
-    /**
-     * Propagates back the (implicit) dropout layer.
-     * @param lowerLayerGradient the gradient vector of lower layer.
-     */
-    public void backpopagateDropout(double[] lowerLayerGradient) {
-        if (dropoutRate > 0.0) {
-            byte[] mask = this.dropoutMask.get();
-            for (int i = 0; i < lowerLayerGradient.length; i++) {
-                lowerLayerGradient[i] *= mask[i] * dropoutScale;
-            }
-        }
-    }
 
     /**
      * Computes the parameter gradient and update the weights.

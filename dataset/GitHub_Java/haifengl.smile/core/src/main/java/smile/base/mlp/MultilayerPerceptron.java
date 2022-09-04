@@ -22,7 +22,6 @@ import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Properties;
 import java.util.stream.Collectors;
-import smile.math.MathEx;
 import smile.math.TimeFunction;
 
 /**
@@ -82,15 +81,9 @@ public abstract class MultilayerPerceptron implements Serializable {
      */
     protected double clipValue = 0.0;
     /**
-     * The gradient clipping norm.
+     * THe gradient clipping norm.
      */
     protected double clipNorm = 0.0;
-    /**
-     * Batch normalization standardizes the inputs to a layer for each mini-batch.
-     * This has the effect of stabilizing the learning process and dramatically
-     * reducing the number of training epochs required to train deep networks.
-     */
-    protected boolean batchNormalization = false;
     /**
      * The training iterations.
      */
@@ -230,17 +223,6 @@ public abstract class MultilayerPerceptron implements Serializable {
     }
 
     /**
-     * Turn on/off batch normalization. Batch normalization standardizes
-     * the inputs to a layer for each mini-batch. This has the effect of
-     * stabilizing the learning process and dramatically reducing the
-     * number of training epochs required to train deep networks.
-     * @param batchNormalization the flag to turn on/off batch normalization.
-     */
-    public void setBatchNormalization(boolean batchNormalization) {
-        this.batchNormalization = batchNormalization;
-    }
-
-    /**
      * Returns the learning rate.
      * @return the learning rate.
      */
@@ -281,14 +263,6 @@ public abstract class MultilayerPerceptron implements Serializable {
     }
 
     /**
-     * Returns true if batch normalization is on.
-     * @return True if batch normalization is on.
-     */
-    public boolean getBatchNormalization() {
-        return batchNormalization;
-    }
-
-    /**
      * Propagates the signals through the neural network.
      * @param x the input signal.
      */
@@ -302,31 +276,6 @@ public abstract class MultilayerPerceptron implements Serializable {
     }
 
     /**
-     * Gradient clipping prevents exploding gradients in very deep networks,
-     * usually in recurrent neural networks.
-     * @param gradient the gradient vector.
-     */
-    private void clipGradient(double[] gradient) {
-        if (clipNorm > 0.0) {
-            double norm = MathEx.norm(gradient);
-            if (norm > clipNorm) {
-                double scale = clipNorm / norm;
-                for (int j = 0; j < gradient.length; j++) {
-                    gradient[j] *= scale;
-                }
-            }
-        } else if (clipValue > 0.0) {
-            for (int j = 0; j < gradient.length; j++) {
-                if (gradient[j] > clipValue) {
-                    gradient[j] = clipValue;
-                } else if (gradient[j] < -clipValue) {
-                    gradient[j] = -clipValue;
-                }
-            }
-        }
-    }
-
-    /**
      * Propagates the errors back through the network.
      * @param x the input signal.
      * @param update the flag if update the weights directly.
@@ -336,11 +285,9 @@ public abstract class MultilayerPerceptron implements Serializable {
         output.computeOutputGradient(target.get(), 1.0);
 
         Layer upper = output;
-        clipGradient(upper.gradient());
         for (int i = net.length - 1; i >= 0; i--) {
             upper.backpropagate(net[i].gradient());
             upper = net[i];
-            clipGradient(upper.gradient());
         }
         // first hidden layer
         upper.backpropagate(null);
@@ -424,21 +371,6 @@ public abstract class MultilayerPerceptron implements Serializable {
         String momentum = prop.getProperty("smile.mlp.momentum");
         if (momentum != null) {
             setMomentum(TimeFunction.of(momentum));
-        }
-
-        String clipValue = prop.getProperty("smile.mlp.clip_value");
-        if (clipValue != null) {
-            setClipValue(Double.parseDouble(clipValue));
-        }
-
-        String clipNorm = prop.getProperty("smile.mlp.clip_norm");
-        if (clipNorm != null) {
-            setClipNorm(Double.parseDouble(clipNorm));
-        }
-
-        String batchNormalization = prop.getProperty("smile.mlp.batch_normalization");
-        if (batchNormalization != null) {
-            setBatchNormalization(Boolean.parseBoolean(batchNormalization));
         }
 
         String rho = prop.getProperty("smile.mlp.RMSProp.rho");
