@@ -25,7 +25,7 @@ import org.elasticsearch.index.query.QueryBuilders;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.indexer.ranges.IndexRange;
 import org.graylog2.indexer.ranges.IndexRangeService;
-import org.graylog2.plugin.indexer.searches.timeranges.TimeRange;
+import org.graylog2.indexer.searches.timeranges.TimeRange;
 import org.graylog2.plugin.Tools;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -104,6 +104,17 @@ public class IndexHelper {
         final ImmutableSortedSet.Builder<IndexRange> indices = ImmutableSortedSet.orderedBy(IndexRange.COMPARATOR);
         for (IndexRange indexRange : indexRangeService.find(range.getFrom(), range.getTo())) {
             indices.add(indexRange);
+        }
+
+        // Always include the deflector target
+        final String targetIndex = deflector.getCurrentActualTargetIndex();
+        if (targetIndex != null) {
+            try {
+                final IndexRange deflectorIndexRange = indexRangeService.get(targetIndex);
+                indices.add(deflectorIndexRange);
+            } catch (NotFoundException e) {
+                LOG.warn("Couldn't find latest deflector target index", e);
+            }
         }
 
         return indices.build();
