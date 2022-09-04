@@ -135,7 +135,8 @@ class KubernetesProcessor {
             Optional<KubernetesCommandBuildItem> commandBuildItem,
             Optional<KubernetesHealthLivenessPathBuildItem> kubernetesHealthLivenessPathBuildItem,
             Optional<KubernetesHealthReadinessPathBuildItem> kubernetesHealthReadinessPathBuildItem,
-            BuildProducer<GeneratedFileSystemResourceBuildItem> generatedResourceProducer) {
+            BuildProducer<GeneratedFileSystemResourceBuildItem> generatedResourceProducer,
+            BuildProducer<FeatureBuildItem> featureProducer) {
 
         if (kubernetesPortBuildItems.isEmpty()) {
             log.debug("The service is not an HTTP service so no Kubernetes manifests will be generated");
@@ -222,11 +223,7 @@ class KubernetesProcessor {
         } catch (IOException e) {
             log.debug("Unable to delete temporary directory " + root, e);
         }
-    }
-
-    @BuildStep
-    FeatureBuildItem produceFeature() {
-        return new FeatureBuildItem(FeatureBuildItem.KUBERNETES);
+        featureProducer.produce(new FeatureBuildItem(FeatureBuildItem.KUBERNETES));
     }
 
     /**
@@ -377,13 +374,14 @@ class KubernetesProcessor {
         String openshiftName = openshiftConfig.name.orElse(name);
         String knativeName = knativeConfig.name.orElse(name);
 
-        session.resources().decorate(KNATIVE, new AddMissingContainerNameDecorator(knativeName, knativeName));
-
-        containerImageBuildItem.ifPresent(c -> {
-            session.resources().decorate(OPENSHIFT, new ApplyContainerImageDecorator(openshiftName, c.getImage()));
-            session.resources().decorate(KUBERNETES, new ApplyContainerImageDecorator(kubernetesName, c.getImage()));
-            session.resources().decorate(KNATIVE, new ApplyContainerImageDecorator(knativeName, c.getImage()));
-        });
+        containerImageBuildItem.ifPresent(
+                c -> session.resources().decorate(KUBERNETES, new ApplyContainerImageDecorator(kubernetesName, c.getImage())));
+        containerImageBuildItem
+                .ifPresent(c -> session.resources().decorate(OPENSHIFT,
+                        new ApplyContainerImageDecorator(openshiftName, c.getImage())));
+        containerImageBuildItem
+                .ifPresent(c -> session.resources().decorate(KNATIVE,
+                        new ApplyContainerImageDecorator(knativeName, c.getImage())));
 
         //Handle Command and arguments
         commandBuildItem.ifPresent(c -> {
