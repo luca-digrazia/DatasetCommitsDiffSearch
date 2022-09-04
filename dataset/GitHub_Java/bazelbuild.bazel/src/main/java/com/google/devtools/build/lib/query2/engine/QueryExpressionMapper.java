@@ -97,7 +97,7 @@ public abstract class QueryExpressionMapper<C>
     return setExpression;
   }
 
-  public static QueryExpressionMapper<Void> identity() {
+  public static QueryExpressionMapper identity() {
     return IdentityMapper.INSTANCE;
   }
 

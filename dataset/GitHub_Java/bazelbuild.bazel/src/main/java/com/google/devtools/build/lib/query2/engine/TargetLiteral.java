@@ -13,8 +13,8 @@
 // limitations under the License.
 package com.google.devtools.build.lib.query2.engine;
 
-import com.google.devtools.build.lib.util.Preconditions;
-
+import com.google.common.base.Preconditions;
+import com.google.devtools.build.lib.query2.engine.QueryEnvironment.QueryTaskFuture;
 import java.util.Collection;
 import java.util.Set;
 
@@ -28,30 +28,47 @@ import java.util.Set;
  *
  * <pre>expr ::= NAME | WORD</pre>
  */
-final class TargetLiteral extends QueryExpression {
+public final class TargetLiteral extends QueryExpression {
 
   private final String pattern;
 
-  TargetLiteral(String pattern) {
+  public TargetLiteral(String pattern) {
     this.pattern = Preconditions.checkNotNull(pattern);
+  }
+
+  public String getPattern() {
+    return pattern;
   }
 
   public boolean isVariableReference() {
     return LetExpression.isValidVarReference(pattern);
   }
 
-  @Override
-  public <T> void eval(QueryEnvironment<T> env, Callback<T> callback)
-      throws QueryException, InterruptedException {
-    if (isVariableReference()) {
-      String varName = LetExpression.getNameFromReference(pattern);
-      Set<T> value = env.getVariable(varName);
-      if (value == null) {
-        throw new QueryException(this, "undefined variable '" + varName + "'");
-      }
+  private <T> QueryTaskFuture<Void> evalVarReference(
+      QueryEnvironment<T> env, VariableContext<T> context, Callback<T> callback) {
+    String varName = LetExpression.getNameFromReference(pattern);
+    Set<T> value = context.get(varName);
+    if (value == null) {
+      return env.immediateFailedFuture(
+          new QueryException(this, "undefined variable '" + varName + "'"));
+    }
+    try {
       callback.process(value);
+      return env.immediateSuccessfulFuture(null);
+    } catch (QueryException e) {
+      return env.immediateFailedFuture(e);
+    } catch (InterruptedException e) {
+      return env.immediateCancelledFuture();
+    }
+  }
+
+  @Override
+  public <T> QueryTaskFuture<Void> eval(
+      QueryEnvironment<T> env, VariableContext<T> context, Callback<T> callback) {
+    if (isVariableReference()) {
+      return evalVarReference(env, context, callback);
     } else {
-      callback.process(env.getTargetsMatchingPattern(this, pattern));
+      return env.getTargetsMatchingPattern(this, pattern, callback);
     }
   }
 
@@ -60,6 +77,11 @@ final class TargetLiteral extends QueryExpression {
     if (!isVariableReference()) {
       literals.add(pattern);
     }
+  }
+
+  @Override
+  public <T, C> T accept(QueryExpressionVisitor<T, C> visitor, C context) {
+    return visitor.visit(this, context);
   }
 
   @Override

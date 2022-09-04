@@ -19,8 +19,6 @@ import com.google.common.primitives.Booleans;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.Argument;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.ArgumentType;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.QueryFunction;
-import java.util.HashMap;
-import java.util.Map;
 
 /**
  * An implementation of {@link QueryExpressionVisitor} which recursively visits all nested {@link
@@ -31,24 +29,24 @@ public abstract class AggregatingQueryExpressionVisitor<T, C>
 
   @Override
   public T visit(BinaryOperatorExpression binaryOperatorExpression, C context) {
-    Map<QueryExpression, T> queryExpressionMapping = new HashMap<>();
+    ImmutableMap.Builder<QueryExpression, T> builder = ImmutableMap.builder();
     for (QueryExpression expr : binaryOperatorExpression.getOperands()) {
-      queryExpressionMapping.put(expr, expr.accept(this, context));
+      builder.put(expr, expr.accept(this, context));
     }
-    return aggregate(ImmutableMap.copyOf(queryExpressionMapping));
+
+    return aggregate(builder.build());
   }
 
   @Override
   public T visit(FunctionExpression functionExpression, C context) {
-    Map<QueryExpression, T> queryExpressionMapping = new HashMap<>();
+    ImmutableMap.Builder<QueryExpression, T> builder = ImmutableMap.builder();
     for (Argument argument : functionExpression.getArgs()) {
       if (argument.getType() == ArgumentType.EXPRESSION) {
-        queryExpressionMapping.put(
-            argument.getExpression(), argument.getExpression().accept(this, context));
+        builder.put(argument.getExpression(), argument.getExpression().accept(this, context));
       }
     }
 
-    return aggregate(ImmutableMap.copyOf(queryExpressionMapping));
+    return aggregate(builder.build());
   }
 
   @Override
@@ -61,12 +59,12 @@ public abstract class AggregatingQueryExpressionVisitor<T, C>
 
   @Override
   public T visit(SetExpression setExpression, C context) {
-    Map<QueryExpression, T> queryExpressionMapping = new HashMap<>();
+    ImmutableMap.Builder<QueryExpression, T> builder = ImmutableMap.builder();
     for (TargetLiteral targetLiteral : setExpression.getWords()) {
-      queryExpressionMapping.put(targetLiteral, targetLiteral.accept(this, context));
+      builder.put(targetLiteral, targetLiteral.accept(this, context));
     }
 
-    return aggregate(ImmutableMap.copyOf(queryExpressionMapping));
+    return aggregate(builder.build());
   }
 
   /**
