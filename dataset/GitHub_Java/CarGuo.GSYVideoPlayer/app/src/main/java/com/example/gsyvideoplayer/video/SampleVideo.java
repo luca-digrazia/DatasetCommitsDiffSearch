@@ -155,31 +155,11 @@ public class SampleVideo extends StandardGSYVideoPlayer {
     @Override
     public void onSurfaceTextureSizeChanged(SurfaceTexture surface, int width, int height) {
         super.onSurfaceTextureSizeChanged(surface, width, height);
-        releasePauseCoverWhenSizeChangeAndBitmap();
         resolveTransform();
     }
 
     /**
-     * 销毁暂停切换显示的bitmap
-     * 因为onSurfaceTextureSizeChanged的时候，bitmap大小不符合当前size的了
-     */
-    protected void releasePauseCoverWhenSizeChangeAndBitmap() {
-        try {
-            if (mFullPauseBitmap != null
-                    && !mFullPauseBitmap.isRecycled() && mShowPauseCover) {
-                mCoverImageView.setImageResource(com.shuyu.gsyvideoplayer.R.drawable.empty_drawable);
-                mCoverImageView.setVisibility(GONE);
-                mFullPauseBitmap.recycle();
-                mFullPauseBitmap = null;
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    /**
      * 处理镜像旋转
-     * 注意，暂停时
      */
     protected void resolveTransform() {
 
@@ -223,12 +203,12 @@ public class SampleVideo extends StandardGSYVideoPlayer {
      *
      * @param url           播放url
      * @param cacheWithPlay 是否边播边缓存
-     * @param title       title
+     * @param objects       object[0]目前为title
      * @return
      */
-    public boolean setUp(List<SwitchVideoModel> url, boolean cacheWithPlay, String title) {
+    public boolean setUp(List<SwitchVideoModel> url, boolean cacheWithPlay, Object... objects) {
         mUrlList = url;
-        return setUp(url.get(mSourcePosition).getUrl(), cacheWithPlay, title);
+        return setUp(url.get(mSourcePosition).getUrl(), cacheWithPlay, objects);
     }
 
     /**
@@ -237,12 +217,12 @@ public class SampleVideo extends StandardGSYVideoPlayer {
      * @param url           播放url
      * @param cacheWithPlay 是否边播边缓存
      * @param cachePath     缓存路径，如果是M3U8或者HLS，请设置为false
-     * @param title         title
+     * @param objects       object[0]目前为title
      * @return
      */
-    public boolean setUp(List<SwitchVideoModel> url, boolean cacheWithPlay, File cachePath, String title) {
+    public boolean setUp(List<SwitchVideoModel> url, boolean cacheWithPlay, File cachePath, Object... objects) {
         mUrlList = url;
-        return setUp(url.get(mSourcePosition).getUrl(), cacheWithPlay, cachePath, title);
+        return setUp(url.get(mSourcePosition).getUrl(), cacheWithPlay, cachePath, objects);
     }
 
     @Override
@@ -290,7 +270,7 @@ public class SampleVideo extends StandardGSYVideoPlayer {
             mSourcePosition = sampleVideo.mSourcePosition;
             mType = sampleVideo.mType;
             mTransformSize = sampleVideo.mTransformSize;
-            setUp(mUrlList, mCache, mCachePath, mTitle);
+            setUp(mUrlList, mCache, mCachePath, mObjects);
             resolveTypeUI();
         }
     }
@@ -379,7 +359,7 @@ public class SampleVideo extends StandardGSYVideoPlayer {
                         new Handler().postDelayed(new Runnable() {
                             @Override
                             public void run() {
-                                setUp(url, mCache, mCachePath, mTitle);
+                                setUp(url, mCache, mCachePath, mObjects);
                                 setSeekOnStart(currentPosition);
                                 startPlayLogic();
                                 cancelProgressTimer();
