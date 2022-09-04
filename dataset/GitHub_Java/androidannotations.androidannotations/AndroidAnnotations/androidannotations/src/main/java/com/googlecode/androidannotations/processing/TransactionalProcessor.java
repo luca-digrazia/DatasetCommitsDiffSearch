@@ -27,7 +27,6 @@ import com.sun.codemodel.JCatchBlock;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JExpr;
-import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JTryBlock;
@@ -62,9 +61,7 @@ public class TransactionalProcessor implements ElementProcessor {
 
 		JTryBlock tryBlock = body._try();
 
-		JExpression activitySuper = holder.eBean.staticRef("super");
-		JInvocation superCall = JExpr.invoke(activitySuper, method);
-
+		JInvocation superCall = JExpr.invoke(JExpr._super(), method);
 		for (JVar param : method.params()) {
 			superCall.arg(param);
 		}
