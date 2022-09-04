@@ -53,7 +53,8 @@ public final class DefStatement extends Statement {
     return identifier;
   }
 
-  public ImmutableList<Statement> getBody() {
+  // TODO(adonovan): rename to getBody.
+  public ImmutableList<Statement> getStatements() {
     return body;
   }
 
