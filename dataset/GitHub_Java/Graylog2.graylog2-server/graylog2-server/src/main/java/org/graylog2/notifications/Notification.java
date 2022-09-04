@@ -139,9 +139,4 @@ public class Notification extends Persisted {
         return Maps.newHashMap();
     }
 
-    @Override
-    protected Map<String, Validator> getEmbeddedValidations(String key) {
-        return Maps.newHashMap();
-    }
-
 }
