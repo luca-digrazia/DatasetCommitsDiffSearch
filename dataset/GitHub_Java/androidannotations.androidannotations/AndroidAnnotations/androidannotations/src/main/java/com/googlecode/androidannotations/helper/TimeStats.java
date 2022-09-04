@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2011 Pierre-Yves Ricau (py.ricau at gmail.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -18,7 +18,6 @@ package com.googlecode.androidannotations.helper;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.TreeMap;
 
 import javax.annotation.processing.Messager;
 import javax.tools.Diagnostic;
@@ -26,7 +25,7 @@ import javax.tools.Diagnostic;
 public class TimeStats {
 
 	private final Map<String, Long> measures = new HashMap<String, Long>();
-	private final Map<Long, String> durations = new TreeMap<Long, String>();
+	private final Map<String, Long> durations = new HashMap<String, Long>();
 	
 	private Messager messager;
 
@@ -40,7 +39,7 @@ public class TimeStats {
 		if (start != null) {
 			long end = System.currentTimeMillis();
 			Long duration = end - start;
-			durations.put(duration, key);
+			durations.put(key, duration);
 		}
 	}
 
@@ -49,11 +48,11 @@ public class TimeStats {
 
 		StringBuilder sb = new StringBuilder();
 		sb.append("Time measurements: ");
-		for (Entry<Long, String> entry : durations.entrySet()) {
+		for (Entry<String, Long> entry : durations.entrySet()) {
 			sb.append("[") //
-					.append(entry.getValue()) //
-					.append(" = ") //
 					.append(entry.getKey()) //
+					.append(" = ") //
+					.append(entry.getValue()) //
 					.append(" ms], ");
 		}
 
