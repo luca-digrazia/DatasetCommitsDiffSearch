@@ -23,9 +23,8 @@ import java.util.Objects;
 import java.util.Optional;
 import javax.annotation.Nullable;
 
-/** Wraps validated and packaged Android resource information */
-public class ValidatedAndroidResources extends MergedAndroidResources
-    implements ValidatedAndroidData {
+/** Wraps {@link AndroidResources} that have been validated, processed, and packaged. */
+public class ValidatedAndroidResources extends MergedAndroidResources {
   private final Artifact rTxt;
   private final Artifact sourceJar;
   private final Artifact apk;
@@ -118,26 +117,18 @@ public class ValidatedAndroidResources extends MergedAndroidResources
     this.staticLibrary = staticLibrary;
   }
 
-  public AndroidResourcesInfo toProvider() {
-    return getResourceDependencies().toInfo(this);
-  }
-
-  @Override
   public Artifact getRTxt() {
     return rTxt;
   }
 
-  @Override
-  public Artifact getJavaSourceJar() {
+  public Artifact getSourceJar() {
     return sourceJar;
   }
 
-  @Override
   public Artifact getApk() {
     return apk;
   }
 
-  @Override
   @Nullable
   public Artifact getAapt2RTxt() {
     return aapt2RTxt;
@@ -148,13 +139,11 @@ public class ValidatedAndroidResources extends MergedAndroidResources
     return aapt2SourceJar;
   }
 
-  @Override
   @Nullable
   public Artifact getStaticLibrary() {
     return staticLibrary;
   }
 
-  @Override
   public ValidatedAndroidResources filter(
       RuleErrorConsumer errorConsumer, ResourceFilter resourceFilter, boolean isDependency)
       throws RuleErrorException {
