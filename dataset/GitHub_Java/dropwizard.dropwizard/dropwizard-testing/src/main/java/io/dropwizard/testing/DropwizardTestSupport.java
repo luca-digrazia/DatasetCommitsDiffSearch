@@ -147,16 +147,7 @@ public class DropwizardTestSupport<C extends Configuration> {
 
     public void before() {
         applyConfigOverrides();
-        try {
-            startIfRequired();
-        } catch (Exception e) {
-
-            // If there's an exception when setting up the server / application,
-            // manually call after as junit does not call the after method if
-            // the `before` method throws.
-            after();
-            throw e;
-        }
+        startIfRequired();
     }
 
     public void after() {
