@@ -16,6 +16,12 @@ package com.google.devtools.build.android.desugar;
 import java.io.IOError;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Path;
+import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.zip.ZipEntry;
 import org.objectweb.asm.ClassReader;
@@ -35,27 +41,48 @@ import org.objectweb.asm.Opcodes;
  */
 class HeaderClassLoader extends ClassLoader {
 
-  private final IndexedJars indexedJars;
-  private final CoreLibraryRewriter rewriter;
+  private final Map<String, JarFile> jarfiles;
 
-  public HeaderClassLoader(
-      IndexedJars indexedJars, CoreLibraryRewriter rewriter, ClassLoader parent) {
+  /** Creates a classloader from the given classpath with the given parent. */
+  public static HeaderClassLoader fromClassPath(List<Path> classpath, ClassLoader parent)
+      throws IOException {
+    return new HeaderClassLoader(indexJars(classpath), parent);
+  }
+
+  /**
+   * Opens the given list of Jar files and returns an index of all classes in them, to avoid
+   * scanning all Jars over and over for each class in {@link #findClass}.
+   */
+  private static Map<String, JarFile> indexJars(List<Path> classpath) throws IOException {
+    HashMap<String, JarFile> result = new HashMap<>();
+    for (Path jarfile : classpath) {
+      JarFile jar = new JarFile(jarfile.toFile());
+      for (Enumeration<JarEntry> cur = jar.entries(); cur.hasMoreElements(); ) {
+        JarEntry entry = cur.nextElement();
+        if (entry.getName().endsWith(".class") && !result.containsKey(entry.getName())) {
+          result.put(entry.getName(), jar);
+        }
+      }
+    }
+    return result;
+  }
+
+  private HeaderClassLoader(Map<String, JarFile> jarfiles, ClassLoader parent) {
     super(parent);
-    this.rewriter = rewriter;
-    this.indexedJars = indexedJars;
+    this.jarfiles = jarfiles;
   }
 
   @Override
   protected Class<?> findClass(String name) throws ClassNotFoundException {
-    String filename = rewriter.unprefix(name.replace('.', '/') + ".class");
-    JarFile jarfile = indexedJars.getJarFile(filename);
+    String filename = name.replace('.', '/') + ".class";
+    JarFile jarfile = jarfiles.get(filename);
     if (jarfile == null) {
       throw new ClassNotFoundException();
     }
     ZipEntry entry = jarfile.getEntry(filename);
     byte[] bytecode;
     try (InputStream content = jarfile.getInputStream(entry)) {
-      ClassReader reader = rewriter.reader(content);
+      ClassReader reader = new ClassReader(content);
       // Have ASM compute maxs so we don't need to figure out how many formal parameters there are
       ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
       reader.accept(new CodeStubber(writer), 0);
