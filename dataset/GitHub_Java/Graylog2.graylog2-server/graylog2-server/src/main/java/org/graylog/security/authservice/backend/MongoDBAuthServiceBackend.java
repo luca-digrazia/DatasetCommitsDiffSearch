@@ -20,7 +20,6 @@ import com.unboundid.util.Base64;
 import org.graylog.security.authservice.AuthServiceBackend;
 import org.graylog.security.authservice.AuthServiceBackendDTO;
 import org.graylog.security.authservice.AuthServiceCredentials;
-import org.graylog.security.authservice.AuthenticationDetails;
 import org.graylog.security.authservice.ProvisionerService;
 import org.graylog.security.authservice.UserDetails;
 import org.graylog.security.authservice.test.AuthServiceBackendTestResult;
@@ -56,7 +55,7 @@ public class MongoDBAuthServiceBackend implements AuthServiceBackend {
     }
 
     @Override
-    public Optional<AuthenticationDetails> authenticateAndProvision(AuthServiceCredentials authCredentials,
+    public Optional<UserDetails> authenticateAndProvision(AuthServiceCredentials authCredentials,
                                                           ProvisionerService provisionerService) {
         final String username = authCredentials.username();
 
@@ -99,7 +98,7 @@ public class MongoDBAuthServiceBackend implements AuthServiceBackend {
                 .base64AuthServiceUid(Base64.encode(user.getId()))
                 .build());
 
-        return Optional.of(AuthenticationDetails.builder().userDetails(userDetails).build());
+        return Optional.of(userDetails);
     }
 
     private boolean isValidPassword(User user, EncryptedValue password) {

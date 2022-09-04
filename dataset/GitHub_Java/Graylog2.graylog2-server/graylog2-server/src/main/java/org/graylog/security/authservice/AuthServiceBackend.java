@@ -39,8 +39,7 @@ public interface AuthServiceBackend {
         return Optional.empty();
     }
 
-    default Optional<UserDetails> authenticateAndProvision(AuthServiceToken token,
-            ProvisionerService provisionerService) {
+    default Optional<UserDetails> authenticateAndProvision(String token, ProvisionerService provisionerService) {
         log.debug("Cannot authenticate by token. Token-based authentication is not supported by auth service backend " +
                 "type <" + backendTitle() + ">.");
         return Optional.empty();
