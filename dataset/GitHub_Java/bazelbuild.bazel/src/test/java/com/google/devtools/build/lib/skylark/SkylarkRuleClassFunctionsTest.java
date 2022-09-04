@@ -1098,9 +1098,7 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
   @Test
   public void testGetattrNoAttr() throws Exception {
     checkErrorContains(
-        "'struct' object has no attribute 'b'\nAvailable attributes: a",
-        "s = struct(a='val')",
-        "getattr(s, 'b')");
+        "object of type 'struct' has no attribute \"b\"", "s = struct(a='val')", "getattr(s, 'b')");
   }
 
   @Test
