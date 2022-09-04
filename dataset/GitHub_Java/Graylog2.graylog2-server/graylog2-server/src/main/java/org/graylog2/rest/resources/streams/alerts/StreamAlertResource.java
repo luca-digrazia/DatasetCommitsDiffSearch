@@ -38,7 +38,6 @@ import org.graylog2.rest.resources.RestResource;
 import org.graylog2.rest.resources.streams.alerts.requests.CreateConditionRequest;
 import org.graylog2.security.RestPermissions;
 import org.graylog2.streams.StreamImpl;
-import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -124,8 +123,7 @@ public class StreamAlertResource extends RestResource {
             @ApiResponse(code = 404, message = "Stream not found."),
             @ApiResponse(code = 400, message = "Invalid ObjectId.")
     })
-    public Response list(@ApiParam(title = "streamId", description = "The stream id this new alert condition belongs to.", required = true) @PathParam("streamId") String streamid,
-                         @ApiParam(title = "since", description = "Optional parameter to define a lower date boundary. (UNIX timestamp)", required = false) @QueryParam("since") int sinceTs) {
+    public Response list(@ApiParam(title = "streamId", description = "The stream id this new alert condition belongs to.", required = true) @PathParam("streamId") String streamid) {
         checkPermission(RestPermissions.STREAMS_READ, streamid);
 
         StreamImpl stream;
@@ -135,15 +133,8 @@ public class StreamAlertResource extends RestResource {
             throw new WebApplicationException(404);
         }
 
-        DateTime since;
-        if (sinceTs > 0) {
-            since = new DateTime(sinceTs*1000L);
-        } else {
-            since = null;
-        }
-
         List<Map<String,Object>> conditions = Lists.newArrayList();
-        for(Alert alert : Alert.loadRecentOfStream(core, stream.getId(), since)) {
+        for(Alert alert : Alert.loadRecentOfStream(core, stream.getId())) {
             conditions.add(alert.toMap());
         }
 
