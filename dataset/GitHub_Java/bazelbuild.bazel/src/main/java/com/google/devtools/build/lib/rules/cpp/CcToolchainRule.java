@@ -15,6 +15,7 @@ package com.google.devtools.build.lib.rules.cpp;
 
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
+import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
 import static com.google.devtools.build.lib.packages.BuildType.LICENSE;
 import static com.google.devtools.build.lib.packages.BuildType.NODEP_LABEL;
 import static com.google.devtools.build.lib.syntax.Type.BOOLEAN;
@@ -224,6 +225,8 @@ public final class CcToolchainRule implements RuleDefinition {
         /* <!-- #BLAZE_RULE(cc_toolchain).ATTRIBUTE(static_runtime_lib) -->
         Static library artifact for the C++ runtime library (e.g. libstdc++.a).
 
+        <p>When specified, this will take precedence over 'static_runtime_libs'.</p>
+
         <p>This will be used when 'static_link_cpp_runtimes' feature is enabled, and we're linking
         dependencies statically.</p>
         <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
@@ -231,10 +234,38 @@ public final class CcToolchainRule implements RuleDefinition {
         /* <!-- #BLAZE_RULE(cc_toolchain).ATTRIBUTE(dynamic_runtime_lib) -->
         Dynamic library artifact for the C++ runtime library (e.g. libstdc++.so).
 
+        <p>When specified, this will take precedence over 'dynamic_runtime_libs'.</p>
+
         <p>This will be used when 'static_link_cpp_runtimes' feature is enabled, and we're linking
         dependencies dynamically.</p>
         <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
         .add(attr("dynamic_runtime_lib", LABEL).legacyAllowAnyFileType())
+        /* <!-- #BLAZE_RULE(cc_toolchain).ATTRIBUTE(static_runtime_libs) -->
+        Deprecated, use <code>static_runtime_lib</code>
+        (see <a href="https://github.com/bazelbuild/bazel/issues/6942">#6942</a>).
+        A collection of artifacts for static libraries for the C++ runtime library
+        (e.g. libstdc++.a).
+
+        <p>cc_toolchain will select one of these libraries based on the label from
+        crosstool_proto.static_runtimes_filegroup field.</p>
+
+        <p>This will be used when 'static_link_cpp_runtimes' feature is enabled, and we're linking
+        dependencies statically.</p>
+        <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
+        .add(attr("static_runtime_libs", LABEL_LIST).legacyAllowAnyFileType())
+        /* <!-- #BLAZE_RULE(cc_toolchain).ATTRIBUTE(dynamic_runtime_libs) -->
+        Deprecated, use <code>dynamic_runtime_lib</code>
+        (see <a href="https://github.com/bazelbuild/bazel/issues/6942">#6942</a>).
+        A collection of artifacts for dynamic libraries for the C++ runtime library
+        (e.g. libstdc++.so).
+
+        <p>cc_toolchain will select one of these libraries based on the label from
+        crosstool_proto.dynamic_runtimes_filegroup field.</p>
+
+        <p>This will be used when 'static_link_cpp_runtimes' feature is enabled, and we're linking
+        dependencies dynamically.</p>
+        <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
+        .add(attr("dynamic_runtime_libs", LABEL_LIST).legacyAllowAnyFileType())
         /* <!-- #BLAZE_RULE(cc_toolchain).ATTRIBUTE(module_map) -->
         Module map artifact to be used for modular builds.
         <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
@@ -357,11 +388,21 @@ public final class CcToolchainRule implements RuleDefinition {
     </li>
   </ul>
 </p>
+
 <p>
-  Use <code>toolchain_config</code> attribute to configure the C++ toolchain.
-  See also this
-  <a href="https://docs.bazel.build/versions/master/cc-toolchain-config-reference.html">
+  When using CROSSTOOL to configure command line generation, use
+  <code>toolchain_identifier</code> attribute to match current <code>cc_toolchain</code> with
+  the corresponding <code>CROSSTOOL.toolchain</code>. See also this
+  <a href="https://docs.bazel.build/versions/master/crosstool-reference.html">
     page
-  </a> for elaborate C++ toolchain configuration and toolchain selection documentation.
+  </a> for elaborate CROSSTOOL documentation.
+</p>
+
+<p>
+  When using <code>CcToolchainConfigInfo</code> provider to configure command line generation,
+  use <code>toolchain_config</code> attribute to point to a rule that provides
+  <code>CcToolchainConfigInfo</code>. This will be the preferred way of configuring command line
+  generation once the issue <a href="https://github.com/bazelbuild/bazel/issues/5380">#5380</a>
+  is fixed.
 </p>
 <!-- #END_BLAZE_RULE -->*/
