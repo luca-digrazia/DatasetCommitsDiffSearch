@@ -321,7 +321,7 @@ public class SkylarkRuleImplementationFunctions {
             return new LocationExpander(
                     ctx.getRuleContext(),
                     makeLabelMap(targets.getContents(TransitiveInfoCollection.class, "targets")),
-                    LocationExpander.Options.EXEC_PATHS)
+                    false)
                 .expand(input);
           } catch (IllegalStateException ise) {
             throw new EvalException(loc, ise);
@@ -711,8 +711,7 @@ public class SkylarkRuleImplementationFunctions {
           String attribute =
               Type.STRING.convertOptional(attributeUnchecked, "attribute", ruleLabel);
           if (expandLocations) {
-            command = helper.resolveCommandAndExpandLabels(
-                command, attribute, /*allowDataInLabel=*/false);
+            command = helper.resolveCommandAndExpandLabels(command, attribute, false, false);
           }
           if (!EvalUtils.isNullOrNone(makeVariablesUnchecked)) {
             Map<String, String> makeVariables =
