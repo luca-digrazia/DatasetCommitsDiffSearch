@@ -1,5 +1,5 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * Copyright 2014 Lennart Koopmann <lennart@torch.sh>
  *
  * This file is part of Graylog2.
  *
@@ -15,18 +15,19 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 package org.graylog2.system.shutdown;
 
 import com.google.common.base.Stopwatch;
+import org.graylog2.ProcessingPauseLockedException;
+import org.graylog2.caches.Caches;
 import org.graylog2.Core;
 import org.graylog2.buffers.Buffers;
-import org.graylog2.caches.Caches;
+import org.graylog2.lifecycles.Lifecycle;
 import org.graylog2.periodical.Periodical;
 import org.graylog2.plugin.inputs.InputState;
 import org.graylog2.plugin.inputs.MessageInput;
-import org.graylog2.plugin.lifecycles.Lifecycle;
-import org.graylog2.shared.ProcessingPauseLockedException;
 import org.graylog2.system.activities.Activity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,25 +46,15 @@ public class GracefulShutdown implements Runnable {
     public final int SLEEP_SECS = 1;
 
     private final Core core;
-    private final Buffers bufferSynchronizer;
 
-    public GracefulShutdown(Core core, Buffers bufferSynchronizer) {
+    public GracefulShutdown(Core core) {
         this.core = core;
-        this.bufferSynchronizer = bufferSynchronizer;
     }
 
     @Override
     public void run() {
         LOG.info("Graceful shutdown initiated.");
         core.setLifecycle(Lifecycle.HALTING);
-
-        // Give possible load balancers time to recognize state change. State is DEAD because of HALTING.
-        LOG.info("Node status: [{}]. Waiting <{}sec> for possible load balancers to recognize state change.",
-                core.getLifecycle().toString(),
-                core.getConfiguration().getLoadBalancerRecognitionPeriodSeconds());
-        try {
-            Thread.sleep(core.getConfiguration().getLoadBalancerRecognitionPeriodSeconds()*1000);
-        } catch (InterruptedException ignored) { /* nope */ }
 
         core.getActivityWriter().write(
                 new Activity("Graceful shutdown initiated.", GracefulShutdown.class)
@@ -93,7 +84,7 @@ public class GracefulShutdown implements Runnable {
         Caches.waitForEmptyCaches(core);
 
         // Wait for buffers.
-        bufferSynchronizer.waitForEmptyBuffers();
+        Buffers.waitForEmptyBuffers(core);
 
         // Stop all threads that should be stopped.
         shutdownPeriodicals();

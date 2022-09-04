@@ -49,8 +49,6 @@ import org.graylog2.initializers.Initializers;
 import org.graylog2.inputs.BasicCache;
 import org.graylog2.inputs.Cache;
 import org.graylog2.inputs.ServerInputRegistry;
-import org.graylog2.shared.filters.FilterRegistry;
-import org.graylog2.shared.inputs.InputRegistry;
 import org.graylog2.inputs.gelf.gelf.GELFChunkManager;
 import org.graylog2.jersey.container.netty.NettyContainer;
 import org.graylog2.lifecycles.Lifecycle;
@@ -154,7 +152,6 @@ public class Core implements GraylogServer, InputHost, ProcessingHost {
     @Inject
     private FilterRegistry filterRegistry;
 
-    private List<MessageFilter> filters = Lists.newArrayList();
     private List<Transport> transports = Lists.newArrayList();
     private List<AlarmCallback> alarmCallbacks = Lists.newArrayList();
 
