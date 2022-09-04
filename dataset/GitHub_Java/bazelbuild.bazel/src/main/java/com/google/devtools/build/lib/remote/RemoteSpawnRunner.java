@@ -26,6 +26,7 @@ import com.google.devtools.build.lib.exec.SpawnResult.Status;
 import com.google.devtools.build.lib.exec.SpawnRunner;
 import com.google.devtools.build.lib.remote.Digests.ActionKey;
 import com.google.devtools.build.lib.remote.TreeNodeRepository.TreeNode;
+import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.remoteexecution.v1test.Action;
@@ -107,18 +108,22 @@ final class RemoteSpawnRunner implements SpawnRunner {
       if (result == null) {
         // Cache miss or we don't accept cache hits.
         // Upload the command and all the inputs into the remote cache.
-        remoteCache.ensureInputsPresent(repository, execRoot, inputRoot, command);
+        remoteCache.uploadBlob(command.toByteArray());
+        remoteCache.uploadTree(repository, execRoot, inputRoot);
         // TODO(olaola): set BuildInfo and input total bytes as well.
         ExecuteRequest.Builder request =
             ExecuteRequest.newBuilder()
                 .setInstanceName(options.remoteInstanceName)
                 .setAction(action)
+                .setWaitForCompletion(true)
                 .setTotalInputFileCount(inputMap.size())
                 .setSkipCacheLookup(!options.remoteAcceptCached);
         result = executor.executeRemotely(request.build()).getResult();
       }
 
-      remoteCache.download(result, execRoot, policy.getFileOutErr());
+      // TODO(ulfjack): Download stdout, stderr, and the output files in a single call.
+      passRemoteOutErr(remoteCache, result, policy.getFileOutErr());
+      remoteCache.downloadAllResults(result, execRoot);
       return new SpawnResult.Builder()
           .setStatus(Status.SUCCESS)  // Even if the action failed with non-zero exit code.
           .setExitCode(result.getExitCode())
@@ -157,5 +162,30 @@ final class RemoteSpawnRunner implements SpawnRunner {
       command.addEnvironmentVariablesBuilder().setName(var).setValue(environment.get(var));
     }
     return command.build();
+  }
+
+  private static void passRemoteOutErr(
+      RemoteActionCache cache, ActionResult result, FileOutErr outErr) throws IOException {
+    try {
+      if (!result.getStdoutRaw().isEmpty()) {
+        result.getStdoutRaw().writeTo(outErr.getOutputStream());
+        outErr.getOutputStream().flush();
+      } else if (result.hasStdoutDigest()) {
+        byte[] stdoutBytes = cache.downloadBlob(result.getStdoutDigest());
+        outErr.getOutputStream().write(stdoutBytes);
+        outErr.getOutputStream().flush();
+      }
+      if (!result.getStderrRaw().isEmpty()) {
+        result.getStderrRaw().writeTo(outErr.getErrorStream());
+        outErr.getErrorStream().flush();
+      } else if (result.hasStderrDigest()) {
+        byte[] stderrBytes = cache.downloadBlob(result.getStderrDigest());
+        outErr.getErrorStream().write(stderrBytes);
+        outErr.getErrorStream().flush();
+      }
+    } catch (CacheNotFoundException e) {
+      outErr.printOutLn("Failed to fetch remote stdout/err due to cache miss.");
+      outErr.getOutputStream().flush();
+    }
   }
 }
