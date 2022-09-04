@@ -92,7 +92,22 @@ abstract class DataHandler extends LitePalBase {
 					Constructor<?> constructor = findBestSuitConstructor(modelClass);
 					T modelInstance = (T) constructor
 							.newInstance(getConstructorParams(constructor));
-					setValueToModel(modelInstance, supportedFields, cursor);
+					for (Field field : supportedFields) {
+						String getMethodName = genGetColumnMethod(field);
+						int columnIndex = cursor.getColumnIndex(BaseUtility.changeCase(field
+								.getName()));
+						if (columnIndex != -1) {
+							Class<?> cursorClass = cursor.getClass();
+							Method method = cursorClass.getMethod(getMethodName, int.class);
+							Object value = method.invoke(cursor, columnIndex);
+							if (isIdColumn(field.getName())) {
+								DynamicExecutor.setField(modelInstance, field.getName(), value,
+										modelInstance.getClass());
+							} else {
+								setValueToModel(modelInstance, field, value);
+							}
+						}
+					}
 					dataList.add(modelInstance);
 				} while (cursor.moveToNext());
 			}
@@ -799,47 +814,33 @@ abstract class DataHandler extends LitePalBase {
 	}
 
 	/**
-	 * Get value from database by cursor, then set the value into modelInstance.
+	 * Set the value into modelInstance.
 	 * 
 	 * @param modelInstance
 	 *            The model to set into.
-	 * @param supportedFields
-	 *            Corresponding to each column in database.
-	 * @param cursor
-	 *            Use to get value from database.
+	 * @param field
+	 *            Use to generate setter method name.
+	 * @param value
+	 *            The value to set.
 	 * @throws SecurityException
 	 * @throws IllegalArgumentException
 	 * @throws NoSuchMethodException
 	 * @throws IllegalAccessException
 	 * @throws InvocationTargetException
 	 */
-	private void setValueToModel(Object modelInstance, List<Field> supportedFields, Cursor cursor)
+	private void setValueToModel(Object modelInstance, Field field, Object value)
 			throws SecurityException, IllegalArgumentException, NoSuchMethodException,
 			IllegalAccessException, InvocationTargetException {
-		for (Field field : supportedFields) {
-			String getMethodName = genGetColumnMethod(field);
-			int columnIndex = cursor.getColumnIndex(BaseUtility.changeCase(field.getName()));
-			if (columnIndex != -1) {
-				Class<?> cursorClass = cursor.getClass();
-				Method method = cursorClass.getMethod(getMethodName, int.class);
-				Object value = method.invoke(cursor, columnIndex);
-				if (isIdColumn(field.getName())) {
-					DynamicExecutor.setField(modelInstance, field.getName(), value,
-							modelInstance.getClass());
-				} else {
-					if (field.getType() == boolean.class || field.getType() == Boolean.class) {
-						if ("0".equals(String.valueOf(value))) {
-							value = false;
-						} else if ("1".equals(String.valueOf(value))) {
-							value = true;
-						}
-					} else if (field.getType() == char.class || field.getType() == Character.class) {
-						value = ((String) value).charAt(0);
-					}
-					putSetMethodValueByField((DataSupport) modelInstance, field, value);
-				}
+		if (field.getType() == boolean.class || field.getType() == Boolean.class) {
+			if ("0".equals(String.valueOf(value))) {
+				value = false;
+			} else if ("1".equals(String.valueOf(value))) {
+				value = true;
 			}
+		} else if (field.getType() == char.class || field.getType() == Character.class) {
+			value = ((String) value).charAt(0);
 		}
+		putSetMethodValueByField((DataSupport) modelInstance, field, value);
 	}
 
 }
