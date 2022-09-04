@@ -1,6 +1,7 @@
 package io.quarkus.qute;
 
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
 /**
@@ -16,7 +17,7 @@ public interface Mapper {
     }
 
     default CompletionStage<Object> getAsync(String key) {
-        return CompletedStage.of(get(key));
+        return CompletableFuture.completedFuture(get(key));
     }
 
     /**

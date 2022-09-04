@@ -86,7 +86,7 @@ final class TypeInfos {
                 typeInfo = typeInfo.substring(0, typeInfo.indexOf(LEFT_ANGLE));
             }
             if (part.isVirtualMethod() || Expressions.isVirtualMethod(typeInfo)) {
-                return new VirtualMethodInfo(typeInfo, part.asVirtualMethod(), hint);
+                return new VirtualMethodInfo(typeInfo, part.asVirtualMethod());
             }
             return new PropertyInfo(typeInfo, part, hint);
         }
@@ -191,10 +191,6 @@ final class TypeInfos {
             return false;
         }
 
-        boolean hasHints() {
-            return false;
-        }
-
         VirtualMethodInfo asVirtualMethod() {
             throw new IllegalArgumentException("Not a virtual method");
         }
@@ -205,10 +201,6 @@ final class TypeInfos {
 
         TypeInfo asTypeInfo() {
             throw new IllegalArgumentException("Not a type info: " + getClass().getName() + ":" + toString());
-        }
-
-        HintInfo asHintInfo() {
-            throw new IllegalArgumentException("Not a hint info");
         }
 
         @Override
@@ -241,11 +233,6 @@ final class TypeInfos {
 
         boolean hasHints() {
             return !hints.isEmpty();
-        }
-
-        @Override
-        HintInfo asHintInfo() {
-            return this;
         }
 
     }
@@ -294,12 +281,12 @@ final class TypeInfos {
 
     }
 
-    static class VirtualMethodInfo extends HintInfo {
+    static class VirtualMethodInfo extends Info {
 
         final String name;
 
-        VirtualMethodInfo(String value, Expression.VirtualMethodPart part, String hint) {
-            super(value, part, hint);
+        VirtualMethodInfo(String value, Expression.VirtualMethodPart part) {
+            super(value, part);
             this.name = part.getName();
         }
 

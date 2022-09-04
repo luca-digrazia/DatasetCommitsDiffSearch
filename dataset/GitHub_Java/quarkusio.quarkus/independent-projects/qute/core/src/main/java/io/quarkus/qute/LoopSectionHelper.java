@@ -2,10 +2,8 @@ package io.quarkus.qute;
 
 import static io.quarkus.qute.Parameter.EMPTY;
 
-import io.quarkus.qute.Results.Result;
 import java.lang.reflect.Array;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -36,11 +34,10 @@ public class LoopSectionHelper implements SectionHelper {
         return context.resolutionContext().evaluate(iterable).thenCompose(it -> {
             if (it == null) {
                 throw new TemplateException(String.format(
-                        "Loop error in template [%s] on line %s: {%s} resolved to null, use {%<s.orEmpty} to ignore this error",
+                        "Loop section error in template %s on line %s: [%s] resolved to [null] which is not iterable",
                         iterable.getOrigin().getTemplateId(), iterable.getOrigin().getLine(), iterable.toOriginalString()));
             }
-            // Try to extract the capacity for collections, maps and arrays to avoid resize
-            List<CompletionStage<ResultNode>> results = new ArrayList<>(extractSize(it));
+            List<CompletionStage<ResultNode>> results = new ArrayList<>();
             Iterator<?> iterator = extractIterator(it);
             int idx = 0;
             // Ideally, we should not block here but we still need to retain the order of results
@@ -72,19 +69,6 @@ public class LoopSectionHelper implements SectionHelper {
         });
     }
 
-    private static int extractSize(Object it) {
-        if (it instanceof Collection) {
-            return ((Collection<?>) it).size();
-        } else if (it instanceof Map) {
-            return ((Map<?, ?>) it).size();
-        } else if (it.getClass().isArray()) {
-            return Array.getLength(it);
-        } else if (it instanceof Integer) {
-            return ((Integer) it);
-        }
-        return 10;
-    }
-
     private Iterator<?> extractIterator(Object it) {
         if (it instanceof Iterable) {
             return ((Iterable<?>) it).iterator();
@@ -105,18 +89,10 @@ public class LoopSectionHelper implements SectionHelper {
             }
             return elements.iterator();
         } else {
-            String msg;
-            if (Result.NOT_FOUND.equals(it)) {
-                msg = String.format(
-                        "Loop error in template [%s] on line %s: {%s} not found, use {%<s.orEmpty} to ignore this error",
-                        iterable.getOrigin().getTemplateId(), iterable.getOrigin().getLine(), iterable.toOriginalString());
-            } else {
-                msg = String.format(
-                        "Loop error in template [%s] on line %s: {%s} resolved to [%s] which is not iterable",
-                        iterable.getOrigin().getTemplateId(), iterable.getOrigin().getLine(), iterable.toOriginalString(),
-                        it.getClass().getName());
-            }
-            throw new TemplateException(msg);
+            throw new TemplateException(String.format(
+                    "Loop section error in template %s on line %s: [%s] resolved to [%s] which is not iterable",
+                    iterable.getOrigin().getTemplateId(), iterable.getOrigin().getLine(), iterable.toOriginalString(),
+                    it.getClass().getName()));
         }
     }
 

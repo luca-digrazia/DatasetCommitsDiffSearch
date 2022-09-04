@@ -13,7 +13,6 @@ import java.util.function.Supplier;
 
 public class IncludeSectionHelper implements SectionHelper {
 
-    static final String DEFAULT_NAME = "$default$";
     private static final String TEMPLATE = "template";
 
     private final Supplier<Template> templateSupplier;
@@ -78,29 +77,12 @@ public class IncludeSectionHelper implements SectionHelper {
         }
 
         @Override
-        public Scope initializeBlock(Scope outerScope, BlockInfo block) {
-            if (block.getLabel().equals(MAIN_BLOCK_NAME)) {
-                for (Entry<String, String> entry : block.getParameters().entrySet()) {
-                    if (!entry.getKey().equals(TEMPLATE)) {
-                        block.addExpression(entry.getKey(), entry.getValue());
-                    }
-                }
-                return outerScope;
-            } else {
-                return outerScope;
-            }
-        }
-
-        @Override
         public IncludeSectionHelper initialize(SectionInitContext context) {
 
             Map<String, SectionBlock> extendingBlocks = new HashMap<>();
-            for (SectionBlock block : context.getBlocks()) {
-                String name = block.id.equals(MAIN_BLOCK_NAME) ? DEFAULT_NAME : block.label;
-                if (extendingBlocks.put(name, block) != null) {
-                    throw new TemplateException(context.getBlocks().get(0).origin, String.format(
-                            "Multiple blocks define the content for the insert section '%s' in template %s",
-                            name, block.origin.getTemplateId()));
+            if (context.getBlocks().size() > 1) {
+                for (SectionBlock block : context.getBlocks().subList(1, context.getBlocks().size())) {
+                    extendingBlocks.put(block.label, block);
                 }
             }
 
@@ -111,7 +93,7 @@ public class IncludeSectionHelper implements SectionHelper {
                 params = new HashMap<>();
                 for (Entry<String, String> entry : context.getParameters().entrySet()) {
                     if (!entry.getKey().equals(TEMPLATE)) {
-                        params.put(entry.getKey(), context.getExpression(entry.getKey()));
+                        params.put(entry.getKey(), context.parseValue(entry.getValue()));
                     }
                 }
             }
