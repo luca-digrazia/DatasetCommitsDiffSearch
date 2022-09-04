@@ -1136,7 +1136,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
    * {@link SkyframeActionExecutor#findAndStoreArtifactConflicts} to do the work, since any
    * conflicts found will only be reported during execution.
    */
-  protected ImmutableMap<ActionAnalysisMetadata, SkyframeActionExecutor.ConflictException>
+  ImmutableMap<ActionAnalysisMetadata, SkyframeActionExecutor.ConflictException>
       findArtifactConflicts() throws InterruptedException {
     if (skyframeBuildView.isSomeConfiguredTargetEvaluated()
         || skyframeBuildView.isSomeConfiguredTargetInvalidated()) {

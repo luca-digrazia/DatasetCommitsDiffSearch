@@ -232,6 +232,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
         SequencedSkyframeExecutor.create(
             pkgFactory,
             directories,
+            binTools,
             workspaceStatusActionFactory,
             ruleClassProvider.getBuildInfoFactories(),
             ImmutableList.<DiffAwareness.Factory>of(),

@@ -15,7 +15,6 @@ package com.google.devtools.build.skyframe;
 
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
-import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
@@ -23,6 +22,7 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.skyframe.Differencer.Diff;
 import com.google.devtools.build.skyframe.InvalidatingNodeVisitor.DeletingInvalidationState;
 import com.google.devtools.build.skyframe.InvalidatingNodeVisitor.DirtyingInvalidationState;
@@ -349,15 +349,11 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
         if (entry.isDone()) {
           out.print(keyFormatter.apply(key));
           out.print("|");
-          if (((InMemoryNodeEntry) entry).keepEdges() == NodeEntry.KeepEdgesPolicy.NONE) {
-            out.println(" (direct deps not stored)");
-          } else {
-            try {
-              out.println(
-                  Joiner.on('|').join(Iterables.transform(entry.getDirectDeps(), keyFormatter)));
-            } catch (InterruptedException e) {
-              throw new IllegalStateException("InMemoryGraph doesn't throw: " + entry, e);
-            }
+          try {
+            out.println(
+                Joiner.on('|').join(Iterables.transform(entry.getDirectDeps(), keyFormatter)));
+          } catch (InterruptedException e) {
+            throw new IllegalStateException("InMemoryGraph doesn't throw: " + entry, e);
           }
         }
       }
@@ -386,5 +382,17 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
         }
       };
 
-  public static final EvaluatorSupplier SUPPLIER = InMemoryMemoizingEvaluator::new;
+  public static final EvaluatorSupplier SUPPLIER =
+      new EvaluatorSupplier() {
+        @Override
+        public MemoizingEvaluator create(
+            ImmutableMap<SkyFunctionName, ? extends SkyFunction> skyFunctions,
+            Differencer differencer,
+            @Nullable EvaluationProgressReceiver progressReceiver,
+            EmittedEventState emittedEventState,
+            boolean keepEdges) {
+          return new InMemoryMemoizingEvaluator(
+              skyFunctions, differencer, progressReceiver, emittedEventState, keepEdges);
+        }
+      };
 }
