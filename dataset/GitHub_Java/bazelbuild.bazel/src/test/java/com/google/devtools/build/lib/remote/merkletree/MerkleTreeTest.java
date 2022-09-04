@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.FileArtifactValue;
-import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.clock.JavaClock;
 import com.google.devtools.build.lib.remote.util.DigestUtil;
 import com.google.devtools.build.lib.remote.util.StaticMetadataProvider;
@@ -146,10 +145,10 @@ public class MerkleTreeTest {
     Path p = execRoot.getRelative(path);
     Preconditions.checkNotNull(p.getParentDirectory()).createDirectoryAndParents();
     FileSystemUtils.writeContentAsLatin1(p, content);
-    Artifact a = ActionsTestUtil.createArtifact(artifactRoot, p);
+    Artifact a = new Artifact(p, artifactRoot);
 
     sortedInputs.put(PathFragment.create(path), a);
-    metadata.put(a, FileArtifactValue.createForTesting(a));
+    metadata.put(a, FileArtifactValue.create(a));
     return a;
   }
 
