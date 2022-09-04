@@ -1396,6 +1396,12 @@ public class CcBinaryThinLtoTest extends BuildViewTestCase {
    */
   @Test
   public void testFdoNoImplicitThinLto() throws Exception {
+    AnalysisMock.get()
+        .ccSupport()
+        .setupCcToolchainConfig(
+            mockToolsConfig,
+            CcToolchainConfig.builder()
+                .withFeatures(CppRuleClasses.THIN_LTO, CppRuleClasses.SUPPORTS_START_END_LIB));
     scratch.file(
         "pkg/BUILD",
         "",

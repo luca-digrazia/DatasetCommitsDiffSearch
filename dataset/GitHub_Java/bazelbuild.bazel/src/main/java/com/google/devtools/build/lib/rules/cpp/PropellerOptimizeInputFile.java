@@ -69,6 +69,11 @@ public final class PropellerOptimizeInputFile implements HasFileType {
 
   public static Artifact createAbsoluteArtifact(
       RuleContext ruleContext, PathFragment absolutePath) {
+    if (!ruleContext.getFragment(CppConfiguration.class).isFdoAbsolutePathEnabled()) {
+      ruleContext.ruleError(
+          "absolute paths cannot be used when --enable_fdo_profile_absolute_path is false");
+      return null;
+    }
     Artifact artifact =
         ruleContext.getUniqueDirectoryArtifact(
             "fdo", absolutePath.getBaseName(), ruleContext.getBinOrGenfilesDirectory());
@@ -84,11 +89,6 @@ public final class PropellerOptimizeInputFile implements HasFileType {
   public static Artifact getAbsolutePathArtifact(RuleContext ruleContext, String attributeName) {
     String pathString = ruleContext.getExpander().expand(attributeName);
     PathFragment absolutePath = PathFragment.create(pathString);
-    if (!ruleContext.getFragment(CppConfiguration.class).isFdoAbsolutePathEnabled()) {
-      ruleContext.ruleError(
-          "absolute paths cannot be used when --enable_fdo_profile_absolute_path is false");
-      return null;
-    }
     if (!absolutePath.isAbsolute()) {
       ruleContext.attributeError(
           attributeName, String.format("%s is not an absolute path", absolutePath.getPathString()));
@@ -139,11 +139,7 @@ public final class PropellerOptimizeInputFile implements HasFileType {
     } else if (isAbsLdProfile) {
       ldArtifact = getAbsolutePathArtifact(ruleContext, "absolute_ld_profile");
     }
-    if (ccArtifact != null || ldArtifact != null) {
-      return new PropellerOptimizeInputFile(ccArtifact, ldArtifact);
-    } else {
-      return null;
-    }
+    return new PropellerOptimizeInputFile(ccArtifact, ldArtifact);
   }
 
   @Override
