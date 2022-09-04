@@ -46,6 +46,7 @@ import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.EnvironmentalExecException;
 import com.google.devtools.build.lib.actions.ExecException;
+import com.google.devtools.build.lib.actions.FileArtifactValue.RemoteFileArtifactValue;
 import com.google.devtools.build.lib.actions.UserExecException;
 import com.google.devtools.build.lib.actions.cache.MetadataInjector;
 import com.google.devtools.build.lib.concurrent.ThreadSafety;
@@ -55,8 +56,6 @@ import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.remote.RemoteCache.ActionResultMetadata.DirectoryMetadata;
 import com.google.devtools.build.lib.remote.RemoteCache.ActionResultMetadata.FileMetadata;
 import com.google.devtools.build.lib.remote.RemoteCache.ActionResultMetadata.SymlinkMetadata;
-import com.google.devtools.build.lib.remote.common.RemoteActionExecutionContext;
-import com.google.devtools.build.lib.remote.common.RemoteActionFileArtifactValue;
 import com.google.devtools.build.lib.remote.common.RemoteCacheClient;
 import com.google.devtools.build.lib.remote.common.RemoteCacheClient.ActionKey;
 import com.google.devtools.build.lib.remote.options.RemoteOptions;
@@ -116,10 +115,9 @@ public class RemoteCache implements AutoCloseable {
     this.digestUtil = digestUtil;
   }
 
-  public ActionResult downloadActionResult(
-      RemoteActionExecutionContext context, ActionKey actionKey, boolean inlineOutErr)
+  public ActionResult downloadActionResult(ActionKey actionKey, boolean inlineOutErr)
       throws IOException, InterruptedException {
-    return getFromFuture(cacheProtocol.downloadActionResult(context, actionKey, inlineOutErr));
+    return getFromFuture(cacheProtocol.downloadActionResult(actionKey, inlineOutErr));
   }
 
   /**
@@ -129,7 +127,6 @@ public class RemoteCache implements AutoCloseable {
    * @throws ExecException if uploading any of the action outputs is not supported
    */
   public ActionResult upload(
-      RemoteActionExecutionContext context,
       ActionKey actionKey,
       Action action,
       Command command,
@@ -143,13 +140,12 @@ public class RemoteCache implements AutoCloseable {
     resultBuilder.setExitCode(exitCode);
     ActionResult result = resultBuilder.build();
     if (exitCode == 0 && !action.getDoNotCache()) {
-      cacheProtocol.uploadActionResult(context, actionKey, result);
+      cacheProtocol.uploadActionResult(actionKey, result);
     }
     return result;
   }
 
   public ActionResult upload(
-      RemoteActionExecutionContext context,
       ActionKey actionKey,
       Action action,
       Command command,
@@ -157,8 +153,7 @@ public class RemoteCache implements AutoCloseable {
       Collection<Path> outputs,
       FileOutErr outErr)
       throws ExecException, IOException, InterruptedException {
-    return upload(
-        context, actionKey, action, command, execRoot, outputs, outErr, /* exitCode= */ 0);
+    return upload(actionKey, action, command, execRoot, outputs, outErr, /* exitCode= */ 0);
   }
 
   private void uploadOutputs(
@@ -652,13 +647,12 @@ public class RemoteCache implements AutoCloseable {
       for (FileMetadata file : directory.files()) {
         TreeFileArtifact child =
             TreeFileArtifact.createTreeOutput(parent, file.path().relativeTo(parent.getPath()));
-        RemoteActionFileArtifactValue value =
-            new RemoteActionFileArtifactValue(
+        RemoteFileArtifactValue value =
+            new RemoteFileArtifactValue(
                 DigestUtil.toBinaryDigest(file.digest()),
                 file.digest().getSizeBytes(),
                 /*locationIndex=*/ 1,
-                actionId,
-                file.isExecutable());
+                actionId);
         tree.putChild(child, value);
       }
       metadataInjector.injectTree(parent, tree.build());
@@ -671,12 +665,11 @@ public class RemoteCache implements AutoCloseable {
       }
       metadataInjector.injectFile(
           output,
-          new RemoteActionFileArtifactValue(
+          new RemoteFileArtifactValue(
               DigestUtil.toBinaryDigest(outputMetadata.digest()),
               outputMetadata.digest().getSizeBytes(),
               /*locationIndex=*/ 1,
-              actionId,
-              outputMetadata.isExecutable()));
+              actionId));
     }
   }
 
