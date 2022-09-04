@@ -97,10 +97,8 @@ final class ProtocolBuffers2Support {
    */
   public ProtocolBuffers2Support registerCompilationActions()
       throws RuleErrorException, InterruptedException {
-    CompilationSupport compilationSupport =
-        new CompilationSupport.Builder().setRuleContext(ruleContext).doNotUseDeps().build();
-
-    compilationSupport.registerCompileAndArchiveActions(getCommon());
+    CompilationSupport.createWithoutDeps(ruleContext)
+        .registerCompileAndArchiveActions(getCommon());
     return this;
   }
 
