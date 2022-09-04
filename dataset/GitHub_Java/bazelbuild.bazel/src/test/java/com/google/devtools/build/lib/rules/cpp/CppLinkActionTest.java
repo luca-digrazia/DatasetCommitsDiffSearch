@@ -39,11 +39,11 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.util.ActionTester;
 import com.google.devtools.build.lib.analysis.util.ActionTester.ActionCombinationFactory;
+import com.google.devtools.build.lib.analysis.util.AnalysisMock;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.packages.util.Crosstool.CcToolchainConfig;
 import com.google.devtools.build.lib.packages.util.MockCcSupport;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainVariables.VariableValue;
@@ -138,7 +138,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
             "strip_tool",
             /* supportsInterfaceSharedLibraries= */ false);
 
-    return CcToolchainFeaturesTest.buildFeatures(features, actionConfigs)
+    return CcToolchainFeaturesTest.buildFeatures(ruleContext, features, actionConfigs)
         .getFeatureConfiguration(
             ImmutableSet.of(
                 "link_cpp_standard_library",
@@ -154,6 +154,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
 
     FeatureConfiguration featureConfiguration =
         CcToolchainFeaturesTest.buildFeatures(
+                ruleContext,
                 MockCcSupport.EMPTY_EXECUTABLE_ACTION_CONFIG,
                 "feature {",
                 "   name: 'a'",
@@ -183,6 +184,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
 
     FeatureConfiguration featureConfiguration =
         CcToolchainFeaturesTest.buildFeatures(
+                ruleContext,
                 "action_config {",
                 "   config_name: '" + LinkTargetType.EXECUTABLE.getActionName() + "'",
                 "   action_name: '" + LinkTargetType.EXECUTABLE.getActionName() + "'",
@@ -237,9 +239,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
   public void testLegacyWholeArchiveHasNoEffectOnDynamicModeDynamicLibraries() throws Exception {
     getAnalysisMock()
         .ccSupport()
-        .setupCcToolchainConfig(
-            mockToolsConfig,
-            CcToolchainConfig.builder().withFeatures(CppRuleClasses.SUPPORTS_DYNAMIC_LINKER));
+        .setupCrosstool(mockToolsConfig, MockCcSupport.SUPPORTS_DYNAMIC_LINKER_FEATURE);
     scratch.file(
         "x/BUILD",
         "cc_binary(",
@@ -256,9 +256,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
   public void testLegacyWholeArchive() throws Exception {
     getAnalysisMock()
         .ccSupport()
-        .setupCcToolchainConfig(
-            mockToolsConfig,
-            CcToolchainConfig.builder().withFeatures(CppRuleClasses.SUPPORTS_DYNAMIC_LINKER));
+        .setupCrosstool(mockToolsConfig, MockCcSupport.SUPPORTS_DYNAMIC_LINKER_FEATURE);
     scratch.file(
         "x/BUILD",
         "cc_binary(",
@@ -333,13 +331,11 @@ public class CppLinkActionTest extends BuildViewTestCase {
     }
     getAnalysisMock()
         .ccSupport()
-        .setupCcToolchainConfig(
+        .setupCrosstool(
             mockToolsConfig,
-            CcToolchainConfig.builder()
-                .withFeatures(
-                    CppRuleClasses.SUPPORTS_PIC,
-                    CppRuleClasses.SUPPORTS_DYNAMIC_LINKER,
-                    CppRuleClasses.SUPPORTS_INTERFACE_SHARED_LIBRARIES));
+            MockCcSupport.SUPPORTS_PIC_FEATURE,
+            MockCcSupport.SUPPORTS_DYNAMIC_LINKER_FEATURE,
+            MockCcSupport.SUPPORTS_INTERFACE_SHARED_LIBRARIES_FEATURE);
 
     scratch.file(
         "x/BUILD",
@@ -375,13 +371,11 @@ public class CppLinkActionTest extends BuildViewTestCase {
     }
     getAnalysisMock()
         .ccSupport()
-        .setupCcToolchainConfig(
+        .setupCrosstool(
             mockToolsConfig,
-            CcToolchainConfig.builder()
-                .withFeatures(
-                    CppRuleClasses.SUPPORTS_PIC,
-                    CppRuleClasses.SUPPORTS_DYNAMIC_LINKER,
-                    CppRuleClasses.SUPPORTS_INTERFACE_SHARED_LIBRARIES));
+            MockCcSupport.SUPPORTS_PIC_FEATURE,
+            MockCcSupport.SUPPORTS_DYNAMIC_LINKER_FEATURE,
+            MockCcSupport.SUPPORTS_INTERFACE_SHARED_LIBRARIES_FEATURE);
     scratch.file(
         "x/BUILD",
         "cc_test(name='a', srcs=['a.cc'], features=['dynamic_link_test_srcs'])",
@@ -425,10 +419,10 @@ public class CppLinkActionTest extends BuildViewTestCase {
     }
     getAnalysisMock()
         .ccSupport()
-        .setupCcToolchainConfig(
+        .setupCrosstool(
             mockToolsConfig,
-            CcToolchainConfig.builder()
-                .withFeatures(CppRuleClasses.SUPPORTS_DYNAMIC_LINKER, CppRuleClasses.SUPPORTS_PIC));
+            MockCcSupport.SUPPORTS_DYNAMIC_LINKER_FEATURE,
+            MockCcSupport.SUPPORTS_PIC_FEATURE);
     scratch.file(
         "x/BUILD", "cc_binary(name = 'a', srcs = ['a.cc'], features = ['-static_link_test_srcs'])");
     scratch.file("x/a.cc", "int main() {}");
@@ -450,6 +444,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
 
     FeatureConfiguration featureConfiguration =
         CcToolchainFeaturesTest.buildFeatures(
+                ruleContext,
                 MockCcSupport.EMPTY_EXECUTABLE_ACTION_CONFIG,
                 "feature {",
                 "   name: 'a'",
@@ -761,14 +756,12 @@ public class CppLinkActionTest extends BuildViewTestCase {
 
   @Test
   public void testInterfaceOutputForDynamicLibrary() throws Exception {
-    getAnalysisMock()
+    AnalysisMock.get()
         .ccSupport()
-        .setupCcToolchainConfig(
+        .setupCrosstool(
             mockToolsConfig,
-            CcToolchainConfig.builder()
-                .withFeatures(
-                    CppRuleClasses.SUPPORTS_DYNAMIC_LINKER,
-                    CppRuleClasses.SUPPORTS_INTERFACE_SHARED_LIBRARIES));
+            MockCcSupport.SUPPORTS_INTERFACE_SHARED_LIBRARIES_FEATURE,
+            MockCcSupport.SUPPORTS_DYNAMIC_LINKER_FEATURE);
     useConfiguration();
 
     scratch.file("foo/BUILD", "cc_library(name = 'foo', srcs = ['foo.cc'])");
@@ -789,6 +782,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
 
     FeatureConfiguration featureConfiguration =
         CcToolchainFeaturesTest.buildFeatures(
+                ruleContext,
                 MockCcSupport.SUPPORTS_INTERFACE_SHARED_LIBRARIES_FEATURE,
                 "feature {",
                 "   name: 'build_interface_libraries'",
@@ -1102,9 +1096,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
   public void testSplitExecutableLinkCommandStatic() throws Exception {
     getAnalysisMock()
         .ccSupport()
-        .setupCcToolchainConfig(
-            mockToolsConfig,
-            CcToolchainConfig.builder().withFeatures(CppRuleClasses.DO_NOT_SPLIT_LINKING_CMDLINE));
+        .setupCrosstool(mockToolsConfig, MockCcSupport.DO_NOT_SPLIT_LINKING_CMDLINE_FEATURE);
 
     RuleContext ruleContext = createDummyRuleContext();
 
@@ -1128,9 +1120,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
   public void testSplitExecutableLinkCommandDynamicWithNoSplitting() throws Exception {
     getAnalysisMock()
         .ccSupport()
-        .setupCcToolchainConfig(
-            mockToolsConfig,
-            CcToolchainConfig.builder().withFeatures(CppRuleClasses.DO_NOT_SPLIT_LINKING_CMDLINE));
+        .setupCrosstool(mockToolsConfig, MockCcSupport.DO_NOT_SPLIT_LINKING_CMDLINE_FEATURE);
     RuleContext ruleContext = createDummyRuleContext();
 
     FeatureConfiguration featureConfiguration = getMockFeatureConfiguration(ruleContext);

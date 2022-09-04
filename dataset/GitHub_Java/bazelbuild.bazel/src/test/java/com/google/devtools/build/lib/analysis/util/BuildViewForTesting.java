@@ -481,7 +481,6 @@ public class BuildViewForTesting {
             ConfiguredTargetKey.of(target.getLabel(), targetConfig),
             /*isSystemEnv=*/ false,
             targetConfig.extendedSanityChecks(),
-            targetConfig.allowAnalysisFailures(),
             eventHandler,
             /*env=*/ null);
     return getRuleContextForTesting(eventHandler, target, env, configurations);
