@@ -61,7 +61,6 @@ import org.graylog2.plugin.streams.Stream;
 import org.graylog2.plugins.PluginLoader;
 import org.graylog2.security.ShiroSecurityBinding;
 import org.graylog2.security.ShiroSecurityContextFactory;
-import org.graylog2.security.realm.LdapRealm;
 import org.graylog2.streams.StreamImpl;
 import org.graylog2.system.NodeId;
 import org.graylog2.system.activities.Activity;
@@ -154,7 +153,6 @@ public class Core implements GraylogServer {
     
     private DateTime startedAt;
     private MetricRegistry metricRegistry;
-    private LdapRealm ldapRealm;
 
     public void initialize(Configuration configuration, MetricRegistry metrics) {
     	startedAt = new DateTime(DateTimeZone.UTC);
@@ -488,15 +486,7 @@ public class Core implements GraylogServer {
     public SystemJobManager getSystemJobManager() {
         return this.systemJobManager;
     }
-
-    public void setLdapRealm(LdapRealm ldapRealm) {
-        this.ldapRealm = ldapRealm;
-    }
-
-    public LdapRealm getLdapRealm() {
-        return ldapRealm;
-    }
-
+    
     @Override
     public boolean isMaster() {
         return this.configuration.isMaster();
