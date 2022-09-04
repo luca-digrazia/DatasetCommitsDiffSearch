@@ -62,23 +62,11 @@ public class RolesService {
         return null;
     }
 
-    /**
-     * Creates a new role.
-     * @param newRole new role to create
-     * @return created role
-     * @throws APIException thrown for a bad request, which likely is "Role already exists"
-     */
     @Nullable
-    public RoleResponse create(RoleResponse newRole) throws APIException {
+    public RoleResponse create(RoleResponse newRole) {
         try {
             return api.path(routes.RolesResource().create(), RoleResponse.class).body(newRole).execute();
-        } catch (APIException e) {
-            log.error("Unable to create role " + newRole.name(), e);
-            if (e.getHttpCode() == 400) {
-                throw e;
-            }
-            return null;
-        } catch (IOException e) {
+        } catch (APIException | IOException e) {
             log.error("Unable to create role " + newRole.name(), e);
             return null;
         }
