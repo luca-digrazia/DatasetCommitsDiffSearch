@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -21,24 +21,76 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Should be used on touch listener methods in activity classes
+ * <p>
+ * This annotation is intended to be used on methods to receive events defined
+ * by
+ * {@link android.view.View.OnTouchListener#onTouch(android.view.View, android.view.MotionEvent)
+ * View.OnTouchListener#onTouch(View, MotionEvent)} when the view has been
+ * touched by the user.
+ * </p>
+ * <p>
+ * The annotation value should be one or several of R.id.* fields. If not set,
+ * the method name will be used as the R.id.* field name.
+ * </p>
+ * <p>
+ * The method may return a <code>boolean</code>, <code>void</code>, or a
+ * {@link Boolean}. If returning void, it will be considered as returning true
+ * (ie the method has handled the event).
+ * </p>
+ * <p>
+ * The method MAY have one or two parameters:
+ * </p>
+ * <ul>
+ * <li>A {@link android.view.View} (or a subclass) parameter to know which view
+ * has been clicked</li>
+ * <li>A {@link android.view.MotionEvent} parameter</li>
+ * </ul>
+ * <blockquote>
  * 
- * The method may have one or two parameters, the first parameter must be a
- * android.view.MotionEvent and the second one must be a android.view.View.
+ * Example :
  * 
- * The method may return a boolean, void, or a java.lang.Boolean. If returning
- * void, it will be considered as returning true (ie the method has handled the
- * event).
+ * <pre>
+ * &#064;Touch(<b>R.id.myButton</b>)
+ * void touchOnMyButton() {
+ * 	// Something Here
+ * }
  * 
- * The annotation value should be one of R.id.* fields. If not set, the method
- * name will be used as the R.id.* field name.
+ * &#064;Touch
+ * void <b>myButton</b>Touched(View view) {
+ * 	// Something Here
+ * }
  * 
- * @author Mathieu Boniface
+ * &#064;Touch
+ * void <b>myText</b>Touched(TextView view) {
+ * 	// Something Here
+ * }
+ * 
+ * &#064;Touch
+ * void <b>myButton</b>Touched(View view, MotionEvent motionEvent) {
+ * 	// Something Here
+ * }
+ * </pre>
+ * 
+ * </blockquote>
+ * 
+ * @see Click
+ * @see LongClick
  */
 @Retention(RetentionPolicy.CLASS)
 @Target(ElementType.METHOD)
 public @interface Touch {
+
+	/**
+	 * The R.id.* fields which refer to the Views.
+	 * 
+	 * @return the ids of the Views
+	 */
 	int[] value() default ResId.DEFAULT_VALUE;
 
+	/**
+	 * The resource names as strings which refer to the Views.
+	 * 
+	 * @return the resource names of the Views
+	 */
 	String[] resName() default "";
 }
