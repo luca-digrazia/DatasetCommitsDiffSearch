@@ -1,18 +1,18 @@
 /**
- * This file is part of Graylog.
+ * This file is part of Graylog2.
  *
- * Graylog is free software: you can redistribute it and/or modify
+ * Graylog2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * Graylog2 is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.users;
 
@@ -27,7 +27,6 @@ import org.graylog2.database.validators.FilledStringValidator;
 import org.graylog2.database.validators.LimitedOptionalStringValidator;
 import org.graylog2.database.validators.LimitedStringValidator;
 import org.graylog2.database.validators.ListValidator;
-import org.graylog2.plugin.database.users.User;
 import org.graylog2.plugin.database.validators.Validator;
 import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
@@ -39,7 +38,6 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import static com.google.common.base.MoreObjects.firstNonNull;
-import static com.google.common.base.Strings.nullToEmpty;
 
 @CollectionName("users")
 public class UserImpl extends PersistedImpl implements User {
@@ -54,8 +52,6 @@ public class UserImpl extends PersistedImpl implements User {
     public static final String TIMEZONE = "timezone";
     public static final String EXTERNAL_USER = "external_user";
     public static final String SESSION_TIMEOUT = "session_timeout_ms";
-    public static final String STARTPAGE = "startpage";
-    public static final String HASH_ALGORITHM = "SHA-1";
 
     public static final int MAX_USERNAME_LENGTH = 100;
     public static final int MAX_EMAIL_LENGTH = 254;
@@ -111,7 +107,8 @@ public class UserImpl extends PersistedImpl implements User {
 
     @Override
     public String getEmail() {
-        return nullToEmpty((String) fields.get(EMAIL));
+        final Object email = fields.get(EMAIL);
+        return email == null ? "" : email.toString();
     }
 
     @Override
@@ -145,9 +142,9 @@ public class UserImpl extends PersistedImpl implements User {
     public Map<String, String> getStartpage() {
         final Map<String, String> startpage = Maps.newHashMap();
 
-        if (fields.containsKey(STARTPAGE)) {
+        if (fields.containsKey("startpage")) {
             @SuppressWarnings("unchecked")
-            final Map<String, String> obj = (Map<String, String>) fields.get(STARTPAGE);
+            final Map<String, String> obj = (Map<String, String>) fields.get("startpage");
             startpage.put("type", obj.get("type"));
             startpage.put("id", obj.get("id"));
         }
@@ -184,14 +181,14 @@ public class UserImpl extends PersistedImpl implements User {
             // If no password is given, we leave the hashed password empty and we fail during validation.
             setHashedPassword("");
         } else {
-            final String newPassword = new SimpleHash(HASH_ALGORITHM, password, passwordSecret).toString();
+            final String newPassword = new SimpleHash("SHA-1", password, passwordSecret).toString();
             setHashedPassword(newPassword);
         }
     }
 
     @Override
     public boolean isUserPassword(final String password, final String passwordSecret) {
-        final String oldPasswordHash = new SimpleHash(HASH_ALGORITHM, password, passwordSecret).toString();
+        final String oldPasswordHash = new SimpleHash("SHA-1", password, passwordSecret).toString();
         return getHashedPassword().equals(oldPasswordHash);
     }
 
@@ -250,7 +247,7 @@ public class UserImpl extends PersistedImpl implements User {
             startpage.put("id", id);
         }
 
-        this.fields.put(STARTPAGE, startpage);
+        this.fields.put("startpage", startpage);
     }
 
     public static class LocalAdminUser extends UserImpl {
@@ -272,7 +269,7 @@ public class UserImpl extends PersistedImpl implements User {
         }
 
         public String getEmail() {
-            return configuration.getRootEmail();
+            return "none";
         }
 
         @Override
@@ -307,7 +304,7 @@ public class UserImpl extends PersistedImpl implements User {
 
         @Override
         public DateTimeZone getTimeZone() {
-            return configuration.getRootTimeZone();
+            return null;
         }
 
         @Override
