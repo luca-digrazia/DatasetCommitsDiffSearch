@@ -142,6 +142,10 @@ public class RidgeRegression {
         int n = X.nrows();
         int p = X.ncols();
 
+        if (n <= p) {
+            throw new IllegalArgumentException(String.format("The input matrix is not over determined: %d rows, %d columns", n, p));
+        }
+
         if (weights.length != n) {
             throw new IllegalArgumentException(String.format("Invalid weights vector size: %d != %d", weights.length, n));
         }
@@ -174,6 +178,11 @@ public class RidgeRegression {
             throw new IllegalArgumentException(String.format("Invalid beta0 vector size: %d != %d", beta0.length, p));
         }
 
+        LinearModel model = new LinearModel();
+        model.formula = formula;
+        model.schema = schema;
+        model.predictors = X.colNames();
+        model.p = p;
         double[] center = X.colMeans();
         double[] scale = X.colSds();
 
@@ -201,14 +210,21 @@ public class RidgeRegression {
         for (int i = 0; i < p; i++) {
             XtX.add(i, i, lambda[i]);
         }
-        Matrix.Cholesky cholesky = XtX.cholesky(true);
+        Matrix.Cholesky cholesky = XtX.cholesky();
 
-        double[] w = cholesky.solve(scaledY);
+        model.w = cholesky.solve(scaledY);
         for (int j = 0; j < p; j++) {
-            w[j] /= scale[j];
+            model.w[j] /= scale[j];
         }
 
-        double b = MathEx.mean(y) - MathEx.dot(w, center);
-        return new LinearModel(formula, schema, X, y, w, b);
+        double ym = MathEx.mean(y);
+        model.b = ym - MathEx.dot(model.w, center);
+
+        double[] fittedValues = new double[n];
+        Arrays.fill(fittedValues, model.b);
+        X.mv(1.0, model.w, 1.0, fittedValues);
+        model.fitness(fittedValues, y, ym);
+
+        return model;
     }
 }
