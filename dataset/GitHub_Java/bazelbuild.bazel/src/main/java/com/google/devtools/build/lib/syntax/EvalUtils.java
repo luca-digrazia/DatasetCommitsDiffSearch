@@ -28,6 +28,7 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.Concatable.Concatter;
 import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
+import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
 import com.google.devtools.build.lib.util.SpellChecker;
 import java.util.Collection;
 import java.util.IllegalFormatException;
@@ -94,7 +95,7 @@ public final class EvalUtils {
 
           if (o1 instanceof SkylarkList
               && o2 instanceof SkylarkList
-              && o1 instanceof Tuple == o2 instanceof Tuple) {
+              && ((SkylarkList) o1).isTuple() == ((SkylarkList) o2).isTuple()) {
             return compareLists((SkylarkList) o1, (SkylarkList) o2);
           }
 
@@ -649,7 +650,9 @@ public final class EvalUtils {
     } else {
       suffix =
           SpellChecker.didYouMean(
-              name, CallUtils.getStructFieldNames(semantics, object.getClass()));
+              name,
+              CallUtils.getStructFieldNames(
+                  semantics, object instanceof Class ? (Class<?>) object : object.getClass()));
     }
     if (suffix.isEmpty() && hasMethod(semantics, object, name)) {
       // If looking up the field failed, then we know that this method must have struct_field=false
@@ -669,7 +672,12 @@ public final class EvalUtils {
 
   /** Returns whether the given object has a method with the given name. */
   static boolean hasMethod(StarlarkSemantics semantics, Object object, String name) {
-    return CallUtils.getMethodNames(semantics, object.getClass()).contains(name);
+    Class<?> cls = object instanceof Class ? (Class<?>) object : object.getClass();
+    if (Runtime.getBuiltinRegistry().getFunctionNames(cls).contains(name)) {
+      return true;
+    }
+
+    return CallUtils.getMethodNames(semantics, cls).contains(name);
   }
 
   /** Evaluates an eager binary operation, {@code x op y}. (Excludes AND and OR.) */

@@ -25,11 +25,11 @@ import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.StarlarkDefinedConfigTransition;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.StructImpl;
-import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Mutability;
-import com.google.devtools.build.lib.syntax.NoneType;
-import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.syntax.Runtime;
+import com.google.devtools.build.lib.syntax.Runtime.NoneType;
+import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.common.options.OptionDefinition;
 import com.google.devtools.common.options.OptionsParser;
@@ -70,7 +70,8 @@ public class FunctionTransitionUtil {
     // TODO(waltl): consider building this once and use it across different split
     // transitions.
     Map<String, OptionInfo> optionInfoMap = buildOptionInfo(buildOptions);
-    Dict<String, Object> settings = buildSettings(buildOptions, optionInfoMap, starlarkTransition);
+    SkylarkDict<String, Object> settings =
+        buildSettings(buildOptions, optionInfoMap, starlarkTransition);
 
     ImmutableList.Builder<BuildOptions> splitBuildOptions = ImmutableList.builder();
 
@@ -148,7 +149,7 @@ public class FunctionTransitionUtil {
    * @throws EvalException if any of the specified transition inputs do not correspond to a valid
    *     build setting
    */
-  static Dict<String, Object> buildSettings(
+  static SkylarkDict<String, Object> buildSettings(
       BuildOptions buildOptions,
       Map<String, OptionInfo> optionInfoMap,
       StarlarkDefinedConfigTransition starlarkTransition)
@@ -156,7 +157,7 @@ public class FunctionTransitionUtil {
     LinkedHashSet<String> remainingInputs = Sets.newLinkedHashSet(starlarkTransition.getInputs());
 
     try (Mutability mutability = Mutability.create("build_settings")) {
-      Dict<String, Object> dict = Dict.of(mutability);
+      SkylarkDict<String, Object> dict = SkylarkDict.withMutability(mutability);
 
       // Add native options
       for (Map.Entry<String, OptionInfo> entry : optionInfoMap.entrySet()) {
@@ -174,7 +175,7 @@ public class FunctionTransitionUtil {
           FragmentOptions options = buildOptions.get(optionInfo.getOptionClass());
           Object optionValue = field.get(options);
 
-          dict.put(optionKey, optionValue == null ? Starlark.NONE : optionValue, /*loc=*/ null);
+          dict.put(optionKey, optionValue == null ? Runtime.NONE : optionValue, /*loc=*/ null);
         } catch (IllegalAccessException e) {
           // These exceptions should not happen, but if they do, throw a RuntimeException.
           throw new RuntimeException(e);

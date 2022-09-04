@@ -36,7 +36,7 @@ final class Eval {
 
   private final StarlarkThread thread;
   private final Debugger dbg;
-  private Object result = Starlark.NONE;
+  private Object result = Runtime.NONE;
 
   // ---- entry points ----
 
@@ -250,7 +250,7 @@ final class Eval {
     } else if (expr instanceof IndexExpression) {
       Object object = eval(thread, ((IndexExpression) expr).getObject());
       Object key = eval(thread, ((IndexExpression) expr).getKey());
-      assignItem(object, key, value, loc);
+      assignItem(object, key, value, thread, loc);
     } else if (expr instanceof ListExpression) {
       ListExpression list = (ListExpression) expr;
       assignList(list, value, thread, loc);
@@ -274,15 +274,16 @@ final class Eval {
    * @throws EvalException if the object is not a list or dict
    */
   @SuppressWarnings("unchecked")
-  private static void assignItem(Object object, Object key, Object value, Location loc)
+  private static void assignItem(
+      Object object, Object key, Object value, StarlarkThread thread, Location loc)
       throws EvalException {
-    if (object instanceof Dict) {
-      Dict<Object, Object> dict = (Dict<Object, Object>) object;
+    if (object instanceof SkylarkDict) {
+      SkylarkDict<Object, Object> dict = (SkylarkDict<Object, Object>) object;
       dict.put(key, value, loc);
-    } else if (object instanceof StarlarkList) {
-      StarlarkList<Object> list = (StarlarkList<Object>) object;
+    } else if (object instanceof SkylarkList.MutableList) {
+      SkylarkList.MutableList<Object> list = (SkylarkList.MutableList<Object>) object;
       int index = EvalUtils.getSequenceIndex(key, list.size(), loc);
-      list.set(index, value, loc);
+      list.set(index, value, loc, thread.mutability());
     } else {
       throw new EvalException(
           loc,
@@ -344,7 +345,7 @@ final class Eval {
       // Evaluate rhs after lhs.
       Object y = eval(thread, rhs);
       Object z = inplaceBinaryOp(op, x, y, thread, loc);
-      assignItem(object, key, z, loc);
+      assignItem(object, key, z, thread, loc);
     } else if (lhs instanceof ListExpression) {
       throw new EvalException(loc, "cannot perform augmented assignment on a list literal");
     } else {
@@ -358,8 +359,10 @@ final class Eval {
       throws EvalException, InterruptedException {
     // list += iterable  behaves like  list.extend(iterable)
     // TODO(b/141263526): following Python, allow list+=iterable (but not list+iterable).
-    if (op == TokenKind.PLUS && x instanceof StarlarkList && y instanceof StarlarkList) {
-      StarlarkList<?> list = (StarlarkList) x;
+    if (op == TokenKind.PLUS
+        && x instanceof SkylarkList.MutableList
+        && y instanceof SkylarkList.MutableList) {
+      SkylarkList.MutableList<?> list = (SkylarkList.MutableList) x;
       list.extend(y, location, thread);
       return list;
     }
@@ -441,7 +444,7 @@ final class Eval {
       case DICT_EXPR:
         {
           DictExpression dictexpr = (DictExpression) expr;
-          Dict<Object, Object> dict = Dict.of(thread);
+          SkylarkDict<Object, Object> dict = SkylarkDict.of(thread);
           Location loc = dictexpr.getLocation();
           for (DictExpression.Entry entry : dictexpr.getEntries()) {
             Object k = eval(thread, entry.getKey());
@@ -552,23 +555,23 @@ final class Eval {
             result.add(eval(thread, elem));
           }
           return list.isTuple()
-              ? Tuple.copyOf(result) // TODO(adonovan): opt: avoid copy
-              : StarlarkList.wrapUnsafe(thread, result);
+              ? SkylarkList.Tuple.copyOf(result) // TODO(adonovan): opt: avoid copy
+              : SkylarkList.MutableList.wrapUnsafe(thread, result);
         }
 
       case SLICE:
         {
           SliceExpression slice = (SliceExpression) expr;
           Object object = eval(thread, slice.getObject());
-          Object start = slice.getStart() == null ? Starlark.NONE : eval(thread, slice.getStart());
-          Object end = slice.getEnd() == null ? Starlark.NONE : eval(thread, slice.getEnd());
-          Object step = slice.getStep() == null ? Starlark.NONE : eval(thread, slice.getStep());
+          Object start = slice.getStart() == null ? Runtime.NONE : eval(thread, slice.getStart());
+          Object end = slice.getEnd() == null ? Runtime.NONE : eval(thread, slice.getEnd());
+          Object step = slice.getStep() == null ? Runtime.NONE : eval(thread, slice.getStep());
           Location loc = slice.getLocation();
 
           // TODO(adonovan): move the rest into a public EvalUtils.slice() operator.
 
-          if (object instanceof Sequence) {
-            return ((Sequence<?>) object).getSlice(start, end, step, loc, thread.mutability());
+          if (object instanceof SkylarkList) {
+            return ((SkylarkList<?>) object).getSlice(start, end, step, loc, thread.mutability());
           }
 
           if (object instanceof String) {
@@ -611,7 +614,7 @@ final class Eval {
 
   private static Object evalComprehension(StarlarkThread thread, Comprehension comp)
       throws EvalException, InterruptedException {
-    final Dict<Object, Object> dict = comp.isDict() ? Dict.of(thread) : null;
+    final SkylarkDict<Object, Object> dict = comp.isDict() ? SkylarkDict.of(thread) : null;
     final ArrayList<Object> list = comp.isDict() ? null : new ArrayList<>();
 
     // Save values of all variables bound in a 'for' clause
@@ -685,7 +688,7 @@ final class Eval {
       thread.updateInternal(name, value);
     }
 
-    return comp.isDict() ? dict : StarlarkList.copyOf(thread, list);
+    return comp.isDict() ? dict : SkylarkList.MutableList.copyOf(thread, list);
   }
 
   /** Returns an exception which should be thrown instead of the original one. */

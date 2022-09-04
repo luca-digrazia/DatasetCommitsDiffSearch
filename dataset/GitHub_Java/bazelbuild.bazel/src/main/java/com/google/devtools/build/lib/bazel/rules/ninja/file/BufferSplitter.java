@@ -30,23 +30,23 @@ import java.util.concurrent.Callable;
 public class BufferSplitter implements Callable<List<ByteFragmentAtOffset>> {
   private final ByteBufferFragment bufferFragment;
   private final DeclarationConsumer consumer;
-  private final SeparatorFinder separatorFinder;
+  private final SeparatorPredicate separatorPredicate;
   private final int offset;
 
   /**
    * @param bufferFragment {@link ByteBufferFragment}, fragment of which should be splitted
    * @param consumer declaration consumer
-   * @param separatorFinder finds declaration separators
+   * @param separatorPredicate predicate for separating declarations
    * @param offset start offset of <code>buffer</code> from the beginning of the file
    */
   public BufferSplitter(
       ByteBufferFragment bufferFragment,
       DeclarationConsumer consumer,
-      SeparatorFinder separatorFinder,
+      SeparatorPredicate separatorPredicate,
       int offset) {
     this.bufferFragment = bufferFragment;
     this.consumer = consumer;
-    this.separatorFinder = separatorFinder;
+    this.separatorPredicate = separatorPredicate;
     this.offset = offset;
   }
 
@@ -61,19 +61,22 @@ public class BufferSplitter implements Callable<List<ByteFragmentAtOffset>> {
   public List<ByteFragmentAtOffset> call() throws Exception {
     List<ByteFragmentAtOffset> fragments = Lists.newArrayList();
     int start = 0;
-    while (true) {
-      int end = separatorFinder.findNextSeparator(bufferFragment, start, -1);
-      if (end < 0) {
-        break;
+    for (int i = 0; i < bufferFragment.length() - 2; i++) {
+      byte previous = bufferFragment.byteAt(i);
+      byte current = bufferFragment.byteAt(i + 1);
+      byte next = bufferFragment.byteAt(i + 2);
+
+      if (!separatorPredicate.test(previous, current, next)) {
+        continue;
       }
-      ByteBufferFragment fragment = bufferFragment.subFragment(start, end + 1);
+      ByteBufferFragment fragment = bufferFragment.subFragment(start, i + 2);
       ByteFragmentAtOffset fragmentAtOffset = new ByteFragmentAtOffset(offset, fragment);
       if (start > 0) {
         consumer.declaration(fragmentAtOffset);
       } else {
         fragments.add(fragmentAtOffset);
       }
-      start = end + 1;
+      start = i + 2;
     }
     // There is always at least one byte at the bounds of the fragment.
     ByteBufferFragment lastFragment = bufferFragment.subFragment(start, bufferFragment.length());
