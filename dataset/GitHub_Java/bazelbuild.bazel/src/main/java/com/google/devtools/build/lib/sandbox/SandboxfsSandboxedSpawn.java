@@ -16,9 +16,6 @@ package com.google.devtools.build.lib.sandbox;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
-import com.google.common.base.Joiner;
-import com.google.devtools.build.lib.exec.TreeDeleter;
-import com.google.devtools.build.lib.sandbox.SandboxHelpers.SandboxInputs;
 import com.google.devtools.build.lib.sandbox.SandboxHelpers.SandboxOutputs;
 import com.google.devtools.build.lib.sandbox.SandboxfsProcess.Mapping;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -33,7 +30,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Logger;
-import javax.annotation.Nullable;
 
 /**
  * Creates an execRoot for a Spawn that contains all required input files by mounting a sandboxfs
@@ -55,7 +51,7 @@ class SandboxfsSandboxedSpawn implements SandboxedSpawn {
   private final Map<String, String> environment;
 
   /** Collection of input files to be made available to the spawn in read-only mode. */
-  private final SandboxInputs inputs;
+  private final Map<PathFragment, Path> inputs;
 
   /** Collection of output files to expect from the spawn. */
   private final SandboxOutputs outputs;
@@ -65,9 +61,6 @@ class SandboxfsSandboxedSpawn implements SandboxedSpawn {
 
   /** Map the targets of symlinks within the sandbox if true. */
   private final boolean mapSymlinkTargets;
-
-  /** Scheduler for tree deletions. */
-  private final TreeDeleter treeDeleter;
 
   /**
    * Writable directory where the spawn runner keeps control files and the execroot outside of the
@@ -90,8 +83,6 @@ class SandboxfsSandboxedSpawn implements SandboxedSpawn {
    */
   private final PathFragment innerExecRoot;
 
-  @Nullable private final Path statisticsPath;
-
   /**
    * Constructs a new sandboxfs-based spawn runner.
    *
@@ -104,19 +95,16 @@ class SandboxfsSandboxedSpawn implements SandboxedSpawn {
    * @param writableDirs directories where the spawn can write files to, relative to the sandbox's
    *     dynamically-allocated execroot
    * @param mapSymlinkTargets map the targets of symlinks within the sandbox if true
-   * @param treeDeleter scheduler for tree deletions
    */
   SandboxfsSandboxedSpawn(
       SandboxfsProcess process,
       Path sandboxPath,
       List<String> arguments,
       Map<String, String> environment,
-      SandboxInputs inputs,
+      Map<PathFragment, Path> inputs,
       SandboxOutputs outputs,
       Set<PathFragment> writableDirs,
-      boolean mapSymlinkTargets,
-      TreeDeleter treeDeleter,
-      @Nullable Path statisticsPath) {
+      boolean mapSymlinkTargets) {
     this.process = process;
     this.arguments = arguments;
     this.environment = environment;
@@ -133,7 +121,6 @@ class SandboxfsSandboxedSpawn implements SandboxedSpawn {
     }
     this.writableDirs = writableDirs;
     this.mapSymlinkTargets = mapSymlinkTargets;
-    this.treeDeleter = treeDeleter;
 
     this.sandboxPath = sandboxPath;
     this.sandboxScratchDir = sandboxPath.getRelative("scratch");
@@ -141,7 +128,6 @@ class SandboxfsSandboxedSpawn implements SandboxedSpawn {
     int id = lastId.getAndIncrement();
     this.execRoot = process.getMountPoint().getRelative("" + id);
     this.innerExecRoot = PathFragment.create("/" + id);
-    this.statisticsPath = statisticsPath;
   }
 
   @Override
@@ -157,11 +143,6 @@ class SandboxfsSandboxedSpawn implements SandboxedSpawn {
   @Override
   public Map<String, String> getEnvironment() {
     return environment;
-  }
-
-  @Override
-  public Path getStatisticsPath() {
-    return statisticsPath;
   }
 
   @Override
@@ -203,7 +184,7 @@ class SandboxfsSandboxedSpawn implements SandboxedSpawn {
     }
 
     try {
-      treeDeleter.deleteTree(sandboxPath);
+      sandboxPath.deleteTree();
     } catch (IOException e) {
       // This usually means that the Spawn itself exited but still has children running that
       // we couldn't wait for, which now block deletion of the sandbox directory.  (Those processes
@@ -282,7 +263,10 @@ class SandboxfsSandboxedSpawn implements SandboxedSpawn {
    * @throws IOException if we fail to resolve symbolic links
    */
   private static List<Mapping> createMappings(
-      PathFragment root, Path scratchDir, SandboxInputs inputs, boolean sandboxfsMapSymlinkTargets)
+      PathFragment root,
+      Path scratchDir,
+      Map<PathFragment, Path> inputs,
+      boolean sandboxfsMapSymlinkTargets)
       throws IOException {
     List<Mapping> mappings = new ArrayList<>();
 
@@ -305,7 +289,7 @@ class SandboxfsSandboxedSpawn implements SandboxedSpawn {
     // created once we encounter the first symlink in the list of inputs.
     Map<PathFragment, Path> symlinks = null;
 
-    for (Map.Entry<PathFragment, Path> entry : inputs.getFiles().entrySet()) {
+    for (Map.Entry<PathFragment, Path> entry : inputs.entrySet()) {
       PathFragment target;
       if (entry.getValue() == null) {
         if (emptyFile == null) {
@@ -332,7 +316,7 @@ class SandboxfsSandboxedSpawn implements SandboxedSpawn {
 
     if (symlinks != null) {
       for (Map.Entry<PathFragment, Path> entry : symlinks.entrySet()) {
-        if (!inputs.getFiles().containsKey(entry.getKey())) {
+        if (!inputs.containsKey(entry.getKey())) {
           mappings.add(
               Mapping.builder()
                   .setPath(root.getRelative(entry.getKey()))
@@ -341,13 +325,6 @@ class SandboxfsSandboxedSpawn implements SandboxedSpawn {
                   .build());
         }
       }
-    }
-
-    // sandboxfs probably doesn't support symlinks
-    if (!inputs.getSymlinks().isEmpty()) {
-      throw new IOException(
-          "sandboxfs sandbox does not support unresolved symlinks "
-              + Joiner.on(", ").join(inputs.getSymlinks().keySet()));
     }
 
     return mappings;

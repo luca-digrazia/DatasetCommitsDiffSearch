@@ -51,8 +51,11 @@ import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.util.MockToolsConfig;
 import com.google.devtools.build.lib.rules.repository.RepositoryDelegatorFunction;
 import com.google.devtools.build.lib.skyframe.BazelSkyframeExecutorConstants;
+import com.google.devtools.build.lib.skyframe.DiffAwareness;
 import com.google.devtools.build.lib.skyframe.PatternExpandingError;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
+import com.google.devtools.build.lib.skyframe.SequencedSkyframeExecutor;
+import com.google.devtools.build.lib.skyframe.SkyValueDirtinessChecker;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.TargetPatternPhaseValue;
 import com.google.devtools.build.lib.testutil.ManualClock;
@@ -1094,15 +1097,22 @@ public class LoadingPhaseRunnerTest {
         throw new RuntimeException(e);
       }
       skyframeExecutor =
-          BazelSkyframeExecutorConstants.newBazelSkyframeExecutorBuilder()
-              .setPkgFactory(pkgFactory)
-              .setFileSystem(fs)
-              .setDirectories(directories)
-              .setActionKeyContext(actionKeyContext)
-              .setBuildInfoFactories(ruleClassProvider.getBuildInfoFactories())
-              .setDefaultBuildOptions(defaultBuildOptions)
-              .setExtraSkyFunctions(analysisMock.getSkyFunctions(directories))
-              .build();
+          SequencedSkyframeExecutor.create(
+              pkgFactory,
+              fs,
+              directories,
+              actionKeyContext,
+              null, /* workspaceStatusActionFactory -- not used */
+              ruleClassProvider.getBuildInfoFactories(),
+              ImmutableList.<DiffAwareness.Factory>of(),
+              analysisMock.getSkyFunctions(directories),
+              ImmutableList.<SkyValueDirtinessChecker>of(),
+              BazelSkyframeExecutorConstants.HARDCODED_BLACKLISTED_PACKAGE_PREFIXES,
+              BazelSkyframeExecutorConstants.ADDITIONAL_BLACKLISTED_PACKAGE_PREFIXES_FILE,
+              BazelSkyframeExecutorConstants.CROSS_REPOSITORY_LABEL_VIOLATION_STRATEGY,
+              BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY,
+              BazelSkyframeExecutorConstants.ACTION_ON_IO_EXCEPTION_READING_BUILD_FILE,
+              defaultBuildOptions);
       TestConstants.processSkyframeExecutorForTesting(skyframeExecutor);
       PathPackageLocator pkgLocator =
           PathPackageLocator.create(

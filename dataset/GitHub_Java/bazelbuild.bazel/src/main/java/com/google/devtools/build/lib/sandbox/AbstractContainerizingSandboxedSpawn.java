@@ -16,8 +16,6 @@ package com.google.devtools.build.lib.sandbox;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.exec.TreeDeleter;
-import com.google.devtools.build.lib.sandbox.SandboxHelpers.SandboxInputs;
 import com.google.devtools.build.lib.sandbox.SandboxHelpers.SandboxOutputs;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.FileSystemUtils.MoveResult;
@@ -30,7 +28,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Logger;
-import javax.annotation.Nullable;
 
 /**
  * Implements the general flow of a sandboxed spawn that uses a container directory to build an
@@ -47,22 +44,18 @@ public abstract class AbstractContainerizingSandboxedSpawn implements SandboxedS
   private final Path sandboxExecRoot;
   private final List<String> arguments;
   private final Map<String, String> environment;
-  private final SandboxInputs inputs;
+  private final Map<PathFragment, Path> inputs;
   private final SandboxOutputs outputs;
   private final Set<Path> writableDirs;
-  private final TreeDeleter treeDeleter;
-  private final Path statisticsPath;
 
   public AbstractContainerizingSandboxedSpawn(
       Path sandboxPath,
       Path sandboxExecRoot,
       List<String> arguments,
       Map<String, String> environment,
-      SandboxInputs inputs,
+      Map<PathFragment, Path> inputs,
       SandboxOutputs outputs,
-      Set<Path> writableDirs,
-      TreeDeleter treeDeleter,
-      @Nullable Path statisticsPath) {
+      Set<Path> writableDirs) {
     this.sandboxPath = sandboxPath;
     this.sandboxExecRoot = sandboxExecRoot;
     this.arguments = arguments;
@@ -70,8 +63,6 @@ public abstract class AbstractContainerizingSandboxedSpawn implements SandboxedS
     this.inputs = inputs;
     this.outputs = outputs;
     this.writableDirs = writableDirs;
-    this.treeDeleter = treeDeleter;
-    this.statisticsPath = statisticsPath;
   }
 
   @Override
@@ -87,12 +78,6 @@ public abstract class AbstractContainerizingSandboxedSpawn implements SandboxedS
   @Override
   public Map<String, String> getEnvironment() {
     return environment;
-  }
-
-  @Override
-  @Nullable
-  public Path getStatisticsPath() {
-    return statisticsPath;
   }
 
   @Override
@@ -116,12 +101,7 @@ public abstract class AbstractContainerizingSandboxedSpawn implements SandboxedS
   private void createDirectories() throws IOException {
     LinkedHashSet<Path> dirsToCreate = new LinkedHashSet<>();
 
-    for (PathFragment path :
-        Iterables.concat(
-            inputs.getFiles().keySet(),
-            inputs.getSymlinks().keySet(),
-            outputs.files(),
-            outputs.dirs())) {
+    for (PathFragment path : Iterables.concat(inputs.keySet(), outputs.files(), outputs.dirs())) {
       Preconditions.checkArgument(!path.isAbsolute());
       Preconditions.checkArgument(!path.containsUplevelReferences());
       for (int i = 0; i < path.segmentCount(); i++) {
@@ -143,9 +123,9 @@ public abstract class AbstractContainerizingSandboxedSpawn implements SandboxedS
     }
   }
 
-  protected void createInputs(SandboxInputs inputs) throws IOException {
+  protected void createInputs(Map<PathFragment, Path> inputs) throws IOException {
     // All input files are relative to the execroot.
-    for (Map.Entry<PathFragment, Path> entry : inputs.getFiles().entrySet()) {
+    for (Map.Entry<PathFragment, Path> entry : inputs.entrySet()) {
       Path key = sandboxExecRoot.getRelative(entry.getKey());
       // A null value means that we're supposed to create an empty file as the input.
       if (entry.getValue() != null) {
@@ -153,11 +133,6 @@ public abstract class AbstractContainerizingSandboxedSpawn implements SandboxedS
       } else {
         FileSystemUtils.createEmptyFile(key);
       }
-    }
-
-    for (Map.Entry<PathFragment, PathFragment> entry : inputs.getSymlinks().entrySet()) {
-      Path key = sandboxExecRoot.getRelative(entry.getKey());
-      key.createSymbolicLink(entry.getValue());
     }
   }
 
@@ -214,7 +189,7 @@ public abstract class AbstractContainerizingSandboxedSpawn implements SandboxedS
   @Override
   public void delete() {
     try {
-      treeDeleter.deleteTree(sandboxPath);
+      sandboxPath.deleteTree();
     } catch (IOException e) {
       // This usually means that the Spawn itself exited, but still has children running that
       // we couldn't wait for, which now block deletion of the sandbox directory. On Linux this

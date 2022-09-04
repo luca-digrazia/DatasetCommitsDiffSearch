@@ -119,6 +119,8 @@ public class StandaloneSpawnStrategyTest {
     optionsParser.parse("--verbose_failures");
     LocalExecutionOptions localExecutionOptions = Options.getDefaults(LocalExecutionOptions.class);
 
+    EventBus bus = new EventBus();
+
     ResourceManager resourceManager = ResourceManager.instanceForTestingOnly();
     resourceManager.setAvailableResources(
         ResourceSet.create(/*memoryMb=*/1, /*cpuUsage=*/1, /*localTestCount=*/1));
@@ -128,6 +130,7 @@ public class StandaloneSpawnStrategyTest {
             fileSystem,
             execRoot,
             reporter,
+            bus,
             BlazeClock.instance(),
             optionsParser,
             SpawnActionContextMaps.createStub(
@@ -187,11 +190,11 @@ public class StandaloneSpawnStrategyTest {
         new SingleBuildFileCache(execRoot.getPathString(), execRoot.getFileSystem()),
         ActionInputPrefetcher.NONE,
         new ActionKeyContext(),
-        /*metadataHandler=*/ null,
+        null,
         outErr,
-        reporter,
-        /*clientEnv=*/ ImmutableMap.of(),
-        /*topLevelFilesets=*/ ImmutableMap.of(),
+        executor.getEventHandler(),
+        ImmutableMap.of(),
+        ImmutableMap.of(),
         SIMPLE_ARTIFACT_EXPANDER,
         /*actionFileSystem=*/ null,
         /*skyframeDepsResult=*/ null);

@@ -23,7 +23,6 @@ import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.actions.ActionExecutionMetadata;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.CommandLines.ParamFileActionInput;
-import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ResourceManager;
 import com.google.devtools.build.lib.actions.ResourceManager.ResourceHandle;
 import com.google.devtools.build.lib.actions.Spawn;
@@ -33,7 +32,6 @@ import com.google.devtools.build.lib.actions.Spawns;
 import com.google.devtools.build.lib.actions.cache.VirtualActionInput;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.exec.BinTools;
-import com.google.devtools.build.lib.exec.RunfilesTreeUpdater;
 import com.google.devtools.build.lib.exec.SpawnRunner;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
@@ -48,8 +46,6 @@ import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.OsUtils;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.errorprone.annotations.FormatMethod;
-import com.google.errorprone.annotations.FormatString;
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -71,7 +67,7 @@ public class LocalSpawnRunner implements SpawnRunner {
   private static final Joiner SPACE_JOINER = Joiner.on(' ');
   private static final String UNHANDLED_EXCEPTION_MSG = "Unhandled exception running a local spawn";
   private static final int LOCAL_EXEC_ERROR = -1;
-  private static final int POSIX_TIMEOUT_EXIT_CODE = /*SIGNAL_BASE=*/ 128 + /*SIGALRM=*/ 14;
+  private static final int POSIX_TIMEOUT_EXIT_CODE = /*SIGNAL_BASE=*/128 + /*SIGALRM=*/14;
 
   private static final Logger logger = Logger.getLogger(LocalSpawnRunner.class.getName());
 
@@ -87,8 +83,6 @@ public class LocalSpawnRunner implements SpawnRunner {
 
   private final LocalEnvProvider localEnvProvider;
   private final BinTools binTools;
-
-  private final RunfilesTreeUpdater runfilesTreeUpdater;
 
   // TODO(b/62588075): Move this logic to ProcessWrapperUtil?
   private static Path getProcessWrapper(BinTools binTools, OS localOs) {
@@ -110,8 +104,7 @@ public class LocalSpawnRunner implements SpawnRunner {
       boolean useProcessWrapper,
       OS localOs,
       LocalEnvProvider localEnvProvider,
-      BinTools binTools,
-      RunfilesTreeUpdater runfilesTreeUpdater) {
+      BinTools binTools) {
     this.execRoot = execRoot;
     this.processWrapper = getProcessWrapper(binTools, localOs);
     this.localExecutionOptions = Preconditions.checkNotNull(localExecutionOptions);
@@ -120,7 +113,6 @@ public class LocalSpawnRunner implements SpawnRunner {
     this.useProcessWrapper = useProcessWrapper;
     this.localEnvProvider = localEnvProvider;
     this.binTools = binTools;
-    this.runfilesTreeUpdater = runfilesTreeUpdater;
   }
 
   public LocalSpawnRunner(
@@ -128,8 +120,7 @@ public class LocalSpawnRunner implements SpawnRunner {
       LocalExecutionOptions localExecutionOptions,
       ResourceManager resourceManager,
       LocalEnvProvider localEnvProvider,
-      BinTools binTools,
-      RunfilesTreeUpdater runfilesTreeUpdater) {
+      BinTools binTools) {
     this(
         execRoot,
         localExecutionOptions,
@@ -137,8 +128,7 @@ public class LocalSpawnRunner implements SpawnRunner {
         OS.getCurrent() != OS.WINDOWS && processWrapperExists(binTools),
         OS.getCurrent(),
         localEnvProvider,
-        binTools,
-        runfilesTreeUpdater);
+        binTools);
   }
 
   @Override
@@ -148,19 +138,10 @@ public class LocalSpawnRunner implements SpawnRunner {
 
   @Override
   public SpawnResult exec(Spawn spawn, SpawnExecutionContext context)
-      throws IOException, InterruptedException, ExecException {
-
-    runfilesTreeUpdater.updateRunfilesDirectory(
-        execRoot,
-        spawn.getRunfilesSupplier(),
-        context.getPathResolver(),
-        binTools,
-        spawn.getEnvironment(),
-        context.getFileOutErr());
-
+      throws IOException, InterruptedException {
     try (SilentCloseable c =
-        Profiler.instance()
-            .profile(ProfilerTask.LOCAL_EXECUTION, spawn.getResourceOwner().getMnemonic())) {
+        Profiler.instance().profile(
+            ProfilerTask.LOCAL_EXECUTION, spawn.getResourceOwner().getMnemonic())) {
       ActionExecutionMetadata owner = spawn.getResourceOwner();
       context.report(ProgressStatus.SCHEDULING, getName());
       try (ResourceHandle handle =
@@ -208,25 +189,23 @@ public class LocalSpawnRunner implements SpawnRunner {
       try {
         return start();
       } catch (Error e) {
-        stepLog(SEVERE, e, UNHANDLED_EXCEPTION_MSG);
+        stepLog(SEVERE, UNHANDLED_EXCEPTION_MSG, e);
         throw e;
       } catch (IOException e) {
-        stepLog(SEVERE, e, "Local I/O error");
+        stepLog(SEVERE, "Local I/O error", e);
         throw e;
       } catch (RuntimeException e) {
-        stepLog(SEVERE, e, UNHANDLED_EXCEPTION_MSG);
+        stepLog(SEVERE, UNHANDLED_EXCEPTION_MSG, e);
         throw new RuntimeException(UNHANDLED_EXCEPTION_MSG, e);
       }
     }
 
-    @FormatMethod
-    private void stepLog(Level level, @FormatString String fmt, Object... args) {
-      stepLog(level, /*cause=*/ null, fmt, args);
+    private void stepLog(Level level, String fmt, Object... args) {
+      stepLog(level, fmt, /*cause=*/ null, args);
     }
 
-    @FormatMethod
-    private void stepLog(
-        Level level, @Nullable Throwable cause, @FormatString String fmt, Object... args) {
+    @SuppressWarnings("unused")
+    private void stepLog(Level level, String fmt, @Nullable Throwable cause, Object... args) {
       String msg = String.format(fmt, args);
       String toLog = String.format("%s (#%d %s)", msg, id, desc());
       logger.log(level, toLog, cause);
@@ -249,10 +228,9 @@ public class LocalSpawnRunner implements SpawnRunner {
       long stateTime = (stateTimeBoxed == null) ? 0 : stateTimeBoxed;
       stateTimes.put(currentState, stateTime + stepDelta);
 
-      logger.info(
-          String.format(
-              "Step #%d time: %.3f delta: %.3f state: %s --> %s",
-              id, totalDelta / 1000f, stepDelta / 1000f, currentState, newState));
+      logger.info(String.format(
+          "Step #%d time: %.3f delta: %.3f state: %s --> %s",
+          id, totalDelta / 1000f, stepDelta / 1000f, currentState, newState));
       currentState = newState;
     }
 
@@ -272,21 +250,11 @@ public class LocalSpawnRunner implements SpawnRunner {
       FileOutErr outErr = context.getFileOutErr();
       String actionType = spawn.getResourceOwner().getMnemonic();
       if (localExecutionOptions.allowedLocalAction != null
-          && !localExecutionOptions
-              .allowedLocalAction
-              .regexPattern()
-              .matcher(actionType)
-              .matches()) {
+          && !localExecutionOptions.allowedLocalAction.matcher(actionType).matches()) {
         setState(State.PERMANENT_ERROR);
-        outErr
-            .getErrorStream()
-            .write(
-                ("Action type "
-                        + actionType
-                        + " is not allowed to run locally due to regex filter: "
-                        + localExecutionOptions.allowedLocalAction.regexPattern()
-                        + "\n")
-                    .getBytes(UTF_8));
+        outErr.getErrorStream().write(
+            ("Action type " + actionType + " is not allowed to run locally due to regex filter: "
+                + localExecutionOptions.allowedLocalAction + "\n").getBytes(UTF_8));
         return new SpawnResult.Builder()
             .setRunnerName(getName())
             .setStatus(Status.EXECUTION_DENIED)
@@ -363,8 +331,8 @@ public class LocalSpawnRunner implements SpawnRunner {
         long startTime = System.currentTimeMillis();
         TerminationStatus terminationStatus;
         try (SilentCloseable c =
-            Profiler.instance()
-                .profile(ProfilerTask.PROCESS_TIME, spawn.getResourceOwner().getMnemonic())) {
+            Profiler.instance().profile(
+                ProfilerTask.PROCESS_TIME, spawn.getResourceOwner().getMnemonic())) {
           Subprocess subprocess = subprocessBuilder.start();
           subprocess.getOutputStream().close();
           try {
@@ -372,7 +340,7 @@ public class LocalSpawnRunner implements SpawnRunner {
             terminationStatus =
                 new TerminationStatus(subprocess.exitValue(), subprocess.timedout());
           } catch (InterruptedException e) {
-            subprocess.destroyAndWait();
+            subprocess.destroy();
             throw e;
           }
         } catch (IOException e) {
@@ -398,7 +366,9 @@ public class LocalSpawnRunner implements SpawnRunner {
                 || (useProcessWrapper && wasTimeout(context.getTimeout(), wallTime));
         int exitCode = wasTimeout ? POSIX_TIMEOUT_EXIT_CODE : terminationStatus.getRawExitCode();
         Status status =
-            wasTimeout ? Status.TIMEOUT : (exitCode == 0 ? Status.SUCCESS : Status.NON_ZERO_EXIT);
+            wasTimeout
+                ? Status.TIMEOUT
+                : (exitCode == 0 ? Status.SUCCESS : Status.NON_ZERO_EXIT);
         SpawnResult.Builder spawnResultBuilder =
             new SpawnResult.Builder()
                 .setRunnerName(getName())
@@ -432,10 +402,11 @@ public class LocalSpawnRunner implements SpawnRunner {
           // We can't handle this exception in any meaningful way, nor should we, but let's log it.
           stepLog(
               WARNING,
-              "failed to delete temp directory '%s'; this might indicate that the action "
-                  + "created subprocesses that didn't terminate and hold files open in that "
-                  + "directory",
-              tmpDir);
+              String.format(
+                  "failed to delete temp directory '%s'; this might indicate that the action "
+                      + "created subprocesses that didn't terminate and hold files open in that "
+                      + "directory",
+                  tmpDir));
         }
       }
     }

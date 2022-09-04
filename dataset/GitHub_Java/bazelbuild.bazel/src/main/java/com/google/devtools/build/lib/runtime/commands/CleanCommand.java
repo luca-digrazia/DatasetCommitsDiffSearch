@@ -21,7 +21,6 @@ import com.google.devtools.build.lib.buildtool.OutputDirectoryLinksUtils;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.runtime.BlazeCommand;
 import com.google.devtools.build.lib.runtime.BlazeCommandResult;
-import com.google.devtools.build.lib.runtime.BlazeRuntime;
 import com.google.devtools.build.lib.runtime.Command;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.shell.CommandException;
@@ -206,7 +205,6 @@ public final class CleanCommand implements BlazeCommand {
       CommandEnvironment env, Path outputBase, boolean expunge, boolean async, String symlinkPrefix)
       throws IOException, CommandException, ExecException,
           InterruptedException {
-    BlazeRuntime runtime = env.getRuntime();
     String workspaceDirectory = env.getWorkspace().getBaseName();
     if (env.getOutputService() != null) {
       env.getOutputService().clean();
@@ -214,7 +212,7 @@ public final class CleanCommand implements BlazeCommand {
     env.getBlazeWorkspace().clearCaches();
     if (expunge && !async) {
       logger.info("Expunging...");
-      runtime.prepareForAbruptShutdown();
+      env.getRuntime().prepareForAbruptShutdown();
       // Close java.log.
       LogManager.getLogManager().reset();
       // Close the default stdout/stderr.
@@ -236,7 +234,7 @@ public final class CleanCommand implements BlazeCommand {
       outputBase.deleteTree();
     } else if (expunge && async) {
       logger.info("Expunging asynchronously...");
-      runtime.prepareForAbruptShutdown();
+      env.getRuntime().prepareForAbruptShutdown();
       asyncClean(env, outputBase, "Output base");
     } else {
       logger.info("Output cleaning...");

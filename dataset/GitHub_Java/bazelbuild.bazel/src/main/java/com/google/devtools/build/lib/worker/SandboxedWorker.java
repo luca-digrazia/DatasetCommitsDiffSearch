@@ -14,26 +14,32 @@
 
 package com.google.devtools.build.lib.worker;
 
-import com.google.common.flogger.GoogleLogger;
-import com.google.devtools.build.lib.sandbox.SandboxHelpers.SandboxInputs;
 import com.google.devtools.build.lib.sandbox.SandboxHelpers.SandboxOutputs;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
+import java.util.Map;
 import java.util.Set;
 
-/** A {@link SingleplexWorker} that runs inside a sandboxed execution root. */
-final class SandboxedWorker extends SingleplexWorker {
-  private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
+/** A {@link Worker} that runs inside a sandboxed execution root. */
+final class SandboxedWorker extends Worker {
+  private final Path workDir;
   private WorkerExecRoot workerExecRoot;
 
   SandboxedWorker(WorkerKey workerKey, int workerId, Path workDir, Path logFile) {
     super(workerKey, workerId, workDir, logFile);
+    this.workDir = workDir;
+  }
+
+  @Override
+  void destroy() throws IOException {
+    super.destroy();
+    workDir.deleteTree();
   }
 
   @Override
   public void prepareExecution(
-      SandboxInputs inputFiles, SandboxOutputs outputs, Set<PathFragment> workerFiles)
+      Map<PathFragment, Path> inputFiles, SandboxOutputs outputs, Set<PathFragment> workerFiles)
       throws IOException {
     // Note that workerExecRoot isn't necessarily null at this point, so we can't do a Preconditions
     // check for it: If a WorkerSpawnStrategy gets interrupted, finishExecution is not guaranteed to
@@ -50,15 +56,5 @@ final class SandboxedWorker extends SingleplexWorker {
 
     workerExecRoot.copyOutputs(execRoot);
     workerExecRoot = null;
-  }
-
-  @Override
-  void destroy() {
-    super.destroy();
-    try {
-      workDir.deleteTree();
-    } catch (IOException e) {
-      logger.atWarning().withCause(e).log("Caught IOException while deleting workdir.");
-    }
   }
 }

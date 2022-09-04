@@ -37,6 +37,7 @@ import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.util.Fingerprint;
+import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.Symlinks;
@@ -379,9 +380,9 @@ public abstract class AbstractAction implements Action, ActionApi {
    *
    * @param execRoot the exec root in which this action is executed
    */
-  protected void deleteOutputs(Path execRoot) throws IOException {
+  protected void deleteOutputs(FileSystem fileSystem, Path execRoot) throws IOException {
     for (Artifact output : getOutputs()) {
-      deleteOutput(output);
+      deleteOutput(fileSystem, output);
     }
   }
 
@@ -389,7 +390,7 @@ public abstract class AbstractAction implements Action, ActionApi {
    * Helper method to remove an Artifact. If the Artifact refers to a directory recursively removes
    * the contents of the directory.
    */
-  protected void deleteOutput(Artifact output) throws IOException {
+  protected void deleteOutput(FileSystem fileSystem, Artifact output) throws IOException {
     Path path = output.getPath();
     try {
       // Optimize for the common case: output artifacts are files.
@@ -409,7 +410,7 @@ public abstract class AbstractAction implements Action, ActionApi {
       if (!parentDir.isWritable() && outputRoot.contains(parentDir)) {
         // Retry deleting after making the parent writable.
         parentDir.setWritable(true);
-        deleteOutput(output);
+        deleteOutput(fileSystem, output);
       } else if (path.isDirectory(Symlinks.NOFOLLOW)) {
         path.deleteTree();
       } else {
@@ -468,8 +469,8 @@ public abstract class AbstractAction implements Action, ActionApi {
   }
 
   @Override
-  public void prepare(Path execRoot) throws IOException {
-    deleteOutputs(execRoot);
+  public void prepare(FileSystem fileSystem, Path execRoot) throws IOException {
+    deleteOutputs(fileSystem, execRoot);
   }
 
   @Override

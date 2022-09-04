@@ -76,7 +76,7 @@ public final class MockToolsConfig {
         newContent.append(System.lineSeparator());
       }
 
-      if (!newContent.toString().trim().equals(existingContent.trim())) {
+      if (!newContent.toString().equals(existingContent)) {
         throw new IOException(
             "Conflict: '"
                 + relativePath

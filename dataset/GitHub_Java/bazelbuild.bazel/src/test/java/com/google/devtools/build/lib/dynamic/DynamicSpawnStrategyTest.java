@@ -14,7 +14,7 @@
 package com.google.devtools.build.lib.dynamic;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
@@ -30,6 +30,8 @@ import com.google.devtools.build.lib.actions.BaseSpawn;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ExecutionStrategy;
 import com.google.devtools.build.lib.actions.ExecutorInitException;
+import com.google.devtools.build.lib.actions.LocalHostCapacity;
+import com.google.devtools.build.lib.actions.ResourceManager;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.SandboxedSpawnActionContext;
 import com.google.devtools.build.lib.actions.Spawn;
@@ -45,6 +47,7 @@ import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.util.FileSystems;
 import java.io.IOException;
@@ -224,26 +227,24 @@ public class DynamicSpawnStrategyTest {
 
   @Before
   public void setUp() throws Exception {
+    ResourceManager.instance().setAvailableResources(LocalHostCapacity.getLocalHostCapacity());
+    ResourceManager.instance()
+        .setRamUtilizationPercentage(ResourceManager.DEFAULT_RAM_UTILIZATION_PERCENTAGE);
+    ResourceManager.instance().resetResourceUsage();
+
     fileSystem = FileSystems.getNativeFileSystem();
     testRoot = fileSystem.getPath(TestUtils.tmpDir());
     testRoot.deleteTreesBelow();
     executorService = Executors.newCachedThreadPool();
     inputArtifact =
-        ActionsTestUtil.createArtifact(
-            ArtifactRoot.asSourceRoot(Root.fromPath(testRoot)), "input.txt");
+        new Artifact(
+            PathFragment.create("input.txt"), ArtifactRoot.asSourceRoot(Root.fromPath(testRoot)));
     outputArtifact =
-        ActionsTestUtil.createArtifact(
-            ArtifactRoot.asSourceRoot(Root.fromPath(testRoot)), "output.txt");
+        new Artifact(
+            PathFragment.create("output.txt"), ArtifactRoot.asSourceRoot(Root.fromPath(testRoot)));
     outErr = new FileOutErr(testRoot.getRelative("stdout"), testRoot.getRelative("stderr"));
     actionExecutionContext =
-        ActionsTestUtil.createContext(
-            /*executor=*/ null,
-            /*eventHandler=*/ null,
-            actionKeyContext,
-            outErr,
-            testRoot,
-            /*metadataHandler=*/ null,
-            /*actionGraph=*/ null);
+        ActionsTestUtil.createContext(null, actionKeyContext, outErr, testRoot, null, null);
   }
 
   void createSpawnStrategy(int localDelay, int remoteDelay) throws ExecutorInitException {
@@ -371,10 +372,12 @@ public class DynamicSpawnStrategyTest {
     localStrategy.failsDuringExecution();
     remoteStrategy.beforeExecutionWaitFor(countDownLatch);
 
-    ExecException e =
-        assertThrows(
-            ExecException.class, () -> dynamicSpawnStrategy.exec(spawn, actionExecutionContext));
-    assertThat(e).hasMessageThat().matches("MockLocalSpawnStrategy failed to execute the Spawn");
+    try {
+      dynamicSpawnStrategy.exec(spawn, actionExecutionContext);
+      fail("Expected dynamicSpawnStrategy to throw an ExecException");
+    } catch (ExecException e) {
+      assertThat(e).hasMessageThat().matches("MockLocalSpawnStrategy failed to execute the Spawn");
+    }
 
     assertThat(localStrategy.getExecutedSpawn()).isEqualTo(spawn);
     assertThat(localStrategy.succeeded()).isFalse();
@@ -394,10 +397,12 @@ public class DynamicSpawnStrategyTest {
     remoteStrategy.beforeExecutionWaitFor(countDownLatch);
     remoteStrategy.failsDuringExecution();
 
-    ExecException e =
-        assertThrows(
-            ExecException.class, () -> dynamicSpawnStrategy.exec(spawn, actionExecutionContext));
-    assertThat(e).hasMessageThat().matches("MockRemoteSpawnStrategy failed to execute the Spawn");
+    try {
+      dynamicSpawnStrategy.exec(spawn, actionExecutionContext);
+      fail("Expected dynamicSpawnStrategy to throw an ExecException");
+    } catch (ExecException e) {
+      assertThat(e).hasMessageThat().matches("MockRemoteSpawnStrategy failed to execute the Spawn");
+    }
 
     assertThat(localStrategy.getExecutedSpawn()).isEqualTo(spawn);
     assertThat(localStrategy.succeeded()).isFalse();
@@ -418,12 +423,14 @@ public class DynamicSpawnStrategyTest {
     localStrategy.failsDuringExecution();
     remoteStrategy.failsDuringExecution();
 
-    ExecException e =
-        assertThrows(
-            ExecException.class, () -> dynamicSpawnStrategy.exec(spawn, actionExecutionContext));
-    assertThat(e)
-        .hasMessageThat()
-        .matches("Mock(Local|Remote)SpawnStrategy failed to execute the Spawn");
+    try {
+      dynamicSpawnStrategy.exec(spawn, actionExecutionContext);
+      fail("Expected dynamicSpawnStrategy to throw an ExecException");
+    } catch (ExecException e) {
+      assertThat(e)
+          .hasMessageThat()
+          .matches("Mock(Local|Remote)SpawnStrategy failed to execute the Spawn");
+    }
 
     assertThat(localStrategy.getExecutedSpawn()).isEqualTo(spawn);
     assertThat(localStrategy.succeeded()).isFalse();
@@ -594,10 +601,12 @@ public class DynamicSpawnStrategyTest {
     localStrategy.setExecute(execute);
     remoteStrategy.setExecute(execute);
 
-    ExecException e =
-        assertThrows(
-            ExecException.class, () -> dynamicSpawnStrategy.exec(spawn, actionExecutionContext));
-    assertThat(e).hasMessageThat().matches("java.lang.IllegalStateException: " + message);
+    try {
+      dynamicSpawnStrategy.exec(spawn, actionExecutionContext);
+      fail("Expected dynamicSpawnStrategy to throw an ExecException");
+    } catch (ExecException e) {
+      assertThat(e).hasMessageThat().matches("java.lang.IllegalStateException: " + message);
+    }
 
     Spawn executedSpawn = localStrategy.getExecutedSpawn();
     executedSpawn = executedSpawn == null ? remoteStrategy.getExecutedSpawn() : executedSpawn;
