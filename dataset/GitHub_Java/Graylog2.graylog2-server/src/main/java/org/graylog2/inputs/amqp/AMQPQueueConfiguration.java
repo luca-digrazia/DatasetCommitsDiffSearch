@@ -43,7 +43,6 @@ public class AMQPQueueConfiguration {
     private int ttl;
     private InputType inputType;
     private String gl2NodeId;
-    private String uuid;
     
     private String queueName;
     
@@ -80,7 +79,6 @@ public class AMQPQueueConfiguration {
         this.ttl = ttl;
         this.inputType = inputType;
         this.gl2NodeId = gl2NodeId;
-        this.uuid = UUID.randomUUID().toString();
         
         queueName = generateQueueName();
     }
@@ -117,10 +115,6 @@ public class AMQPQueueConfiguration {
         return InputType.UNKNOWN;
     }
     
-    public String getQueueUUID() {
-        return uuid;
-    }
-    
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
@@ -135,7 +129,7 @@ public class AMQPQueueConfiguration {
         StringBuilder sb = new StringBuilder();
         sb.append("gl2-").append(gl2NodeId).append("-q-")
                 .append(inputType.toString().toLowerCase())
-                .append("-").append(uuid);
+                .append("-").append(UUID.randomUUID().toString());
 
         return sb.toString();
     }
