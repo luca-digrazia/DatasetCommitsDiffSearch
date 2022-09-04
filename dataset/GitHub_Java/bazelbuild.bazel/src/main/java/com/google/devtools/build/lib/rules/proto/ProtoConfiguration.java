@@ -65,8 +65,8 @@ public class ProtoConfiguration extends Fragment {
 
     @Option(
       name = "proto_compiler",
-      defaultValue = "@com_google_protobuf//:protoc",
-      category = "flags",
+      defaultValue = "null",
+      category = "version",
       converter = BuildConfiguration.LabelConverter.class,
       help = "The label of the proto-compiler."
     )
@@ -109,6 +109,14 @@ public class ProtoConfiguration extends Fragment {
               + "used targets as dependencies."
     )
     public StrictDepsMode strictProtoDeps;
+
+    @Option(
+      name = "output_descriptor_set",
+      defaultValue = "true",
+      category = "experimental",
+      help = "ignored."
+    )
+    public boolean outputDescriptorSet;
 
     @Override
     public FragmentOptions getHost(boolean fallback) {
