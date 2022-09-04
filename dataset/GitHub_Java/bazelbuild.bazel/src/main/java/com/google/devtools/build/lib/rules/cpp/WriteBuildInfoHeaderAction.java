@@ -17,13 +17,13 @@ package com.google.devtools.build.lib.rules.cpp;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction;
 import com.google.devtools.build.lib.analysis.actions.AbstractFileWriteAction;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.Fingerprint;
@@ -31,6 +31,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -64,7 +65,7 @@ public final class WriteBuildInfoHeaderAction extends AbstractFileWriteAction {
    *     generated header
    */
   public WriteBuildInfoHeaderAction(
-      NestedSet<Artifact> inputs,
+      Collection<Artifact> inputs,
       Artifact primaryOutput,
       boolean writeVolatileInfo,
       boolean writeStableInfo) {
@@ -96,11 +97,11 @@ public final class WriteBuildInfoHeaderAction extends AbstractFileWriteAction {
     }
 
     final Map<String, String> values = new LinkedHashMap<>();
-    for (Artifact valueFile : getInputs().toList()) {
+    for (Artifact valueFile : getInputs()) {
       values.putAll(WorkspaceStatusAction.parseValues(ctx.getInputPath(valueFile)));
     }
 
-    final boolean redacted = getInputs().isEmpty();
+    final boolean redacted = Iterables.isEmpty(getInputs());
 
     return new DeterministicWriter() {
       @Override
@@ -157,7 +158,7 @@ public final class WriteBuildInfoHeaderAction extends AbstractFileWriteAction {
     // relinked because of other reasons.
     // Without inputs the contents of the header do not change, so there is no
     // point in executing the action again in that case.
-    return writeVolatileInfo && !getInputs().isEmpty();
+    return writeVolatileInfo && !Iterables.isEmpty(getInputs());
   }
 
   /**
