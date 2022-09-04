@@ -3,13 +3,14 @@ package org.graylog.plugins.enterprise.search.searchtypes;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeName;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.google.auto.value.AutoValue;
+import org.graylog.plugins.enterprise.search.Filter;
 import org.graylog.plugins.enterprise.search.SearchType;
 
 import javax.annotation.Nullable;
-import java.util.Map;
 
 @AutoValue
 @JsonTypeName(FieldMetric.NAME)
@@ -24,9 +25,14 @@ public abstract class FieldMetric implements SearchType {
     @Override
     public abstract String type();
 
+    @Override
     @Nullable
     @JsonProperty
     public abstract String id();
+
+    @Nullable
+    @Override
+    public abstract Filter filter();
 
     @JsonProperty
     public abstract String field();
@@ -41,12 +47,7 @@ public abstract class FieldMetric implements SearchType {
     public abstract Builder toBuilder();
 
     @Override
-    public SearchType withId(String id) {
-        return toBuilder().id(id).build();
-    }
-
-    @Override
-    public SearchType applyExecutionContext(ObjectMapper objectMapper, Map<String, Object> state) {
+    public SearchType applyExecutionContext(ObjectMapper objectMapper, JsonNode state) {
         return this;
     }
 
@@ -64,6 +65,9 @@ public abstract class FieldMetric implements SearchType {
         public abstract Builder id(@Nullable String id);
 
         @JsonProperty
+        public abstract Builder filter(@Nullable Filter filter);
+
+        @JsonProperty
         public abstract Builder field(String field);
 
         @JsonProperty
@@ -78,6 +82,7 @@ public abstract class FieldMetric implements SearchType {
         @JsonProperty
         public abstract String id();
 
+        @Override
         @JsonProperty
         public String type() {
             return NAME;
@@ -106,6 +111,7 @@ public abstract class FieldMetric implements SearchType {
         @JsonProperty
         public abstract String id();
 
+        @Override
         @JsonProperty
         public String type() {
             return NAME;

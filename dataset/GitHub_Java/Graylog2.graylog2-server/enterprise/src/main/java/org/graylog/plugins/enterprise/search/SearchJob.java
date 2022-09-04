@@ -21,16 +21,12 @@ import java.util.concurrent.CompletableFuture;
 @JsonPropertyOrder({"execution", "results"})
 public class SearchJob {
     private static final Logger LOG = LoggerFactory.getLogger(SearchJob.class);
-    static final String FIELD_OWNER = "owner";
 
     @JsonProperty
     private final String id;
 
     @JsonIgnore
     private final Search search;
-
-    @JsonProperty
-    private final String owner;
 
     @JsonIgnore
     private CompletableFuture<Void> resultFuture;
@@ -41,10 +37,9 @@ public class SearchJob {
     @JsonInclude(JsonInclude.Include.NON_EMPTY)
     private Set<SearchError> errors = Sets.newHashSet();
 
-    public SearchJob(String id, Search search, String owner) {
+    public SearchJob(String id, Search search) {
         this.id = id;
         this.search = search;
-        this.owner = owner;
     }
 
     public String getId() {
@@ -58,10 +53,6 @@ public class SearchJob {
     @JsonProperty("search_id")
     public String getSearchId() {
         return search.id();
-    }
-
-    public String getOwner() {
-        return owner;
     }
 
     public CompletableFuture<Void> getResultFuture() {

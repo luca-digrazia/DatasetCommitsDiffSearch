@@ -2,9 +2,11 @@ package org.graylog.plugins.enterprise.search.searchtypes;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeName;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.google.auto.value.AutoValue;
-import org.graylog.plugins.enterprise.search.ExecutionState;
+import org.graylog.plugins.enterprise.search.Filter;
 import org.graylog.plugins.enterprise.search.SearchType;
 import org.graylog2.rest.models.messages.responses.ResultMessageSummary;
 
@@ -18,18 +20,20 @@ public abstract class MessageList implements SearchType {
     public static final String NAME = "messages";
 
     @Override
-    @JsonProperty
     public abstract String type();
 
+    @Override
     @Nullable
     @JsonProperty
     public abstract String id();
 
-    @ExecutionState
+    @Nullable
+    @Override
+    public abstract Filter filter();
+
     @JsonProperty
     public abstract int limit();
 
-    @ExecutionState
     @JsonProperty
     public abstract int offset();
 
@@ -46,8 +50,20 @@ public abstract class MessageList implements SearchType {
     public abstract Builder toBuilder();
 
     @Override
-    public SearchType withId(String id) {
-        return toBuilder().id(id).build();
+    public SearchType applyExecutionContext(ObjectMapper objectMapper, JsonNode state) {
+        final boolean hasLimit = state.hasNonNull("limit");
+        final boolean hasOffset = state.hasNonNull("offset");
+        if (hasLimit || hasOffset) {
+            final Builder builder = toBuilder();
+            if (hasLimit) {
+                builder.limit(state.path("limit").asInt());
+            }
+            if (hasOffset) {
+                builder.offset(state.path("offset").asInt());
+            }
+            return builder.build();
+        }
+        return this;
     }
 
     @AutoValue.Builder
@@ -57,6 +73,9 @@ public abstract class MessageList implements SearchType {
 
         @JsonProperty
         public abstract Builder id(@Nullable String id);
+
+        @JsonProperty
+        public abstract Builder filter(@Nullable Filter filter);
 
         @JsonProperty
         public abstract Builder limit(int limit);
@@ -76,6 +95,12 @@ public abstract class MessageList implements SearchType {
         @Override
         @JsonProperty
         public abstract String id();
+
+        @Override
+        @JsonProperty
+        public String type() {
+            return NAME;
+        }
 
         @JsonProperty
         public abstract List<ResultMessageSummary> messages();

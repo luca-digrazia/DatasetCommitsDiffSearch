@@ -1,5 +1,6 @@
 package org.graylog.plugins.enterprise.search.searchtypes.pivot;
 
+
 import com.fasterxml.jackson.annotation.JsonAnyGetter;
 import com.fasterxml.jackson.annotation.JsonAnySetter;
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
@@ -7,43 +8,33 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.google.common.collect.Maps;
 
-import javax.annotation.Nullable;
 import java.util.Map;
 import java.util.Objects;
 
+/**
+ * BucketSpecs describe configurations for aggregation buckets.
+ */
 @JsonTypeInfo(
         use = JsonTypeInfo.Id.NAME,
         include = JsonTypeInfo.As.EXISTING_PROPERTY,
-        property = SeriesSpec.TYPE_FIELD,
+        property = BucketSpec.TYPE_FIELD,
         visible = true,
-        defaultImpl = SeriesSpec.Fallback.class)
-public interface SeriesSpec extends PivotSpec {
+        defaultImpl = BucketSpec.Fallback.class)
+public interface BucketSpec extends PivotSpec {
     String TYPE_FIELD = "type";
 
+    @JsonProperty
     String type();
 
-    @JsonProperty
-    @Nullable
-    String id();
-
     @JsonAutoDetect
-    class Fallback implements SeriesSpec {
+    class Fallback implements BucketSpec {
         @JsonProperty
         private String type;
-
-        @JsonProperty
-        private String id;
         private Map<String, Object> props = Maps.newHashMap();
 
         @Override
         public String type() {
             return type;
-        }
-
-        @Nullable
-        @Override
-        public String id() {
-            return id;
         }
 
         @JsonAnySetter
@@ -66,14 +57,13 @@ public interface SeriesSpec extends PivotSpec {
             }
             Fallback fallback = (Fallback) o;
             return Objects.equals(type, fallback.type) &&
-                    Objects.equals(id, fallback.id) &&
                     Objects.equals(props, fallback.props);
         }
 
         @Override
         public int hashCode() {
 
-            return Objects.hash(type, id, props);
+            return Objects.hash(type, props);
         }
     }
 }

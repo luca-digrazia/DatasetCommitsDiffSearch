@@ -21,7 +21,6 @@ import org.graylog.plugins.enterprise.search.params.QueryReferenceBinding;
 import org.graylog.plugins.enterprise.search.params.ValueBinding;
 import org.graylog.plugins.enterprise.search.searchtypes.DateHistogram;
 import org.graylog.plugins.enterprise.search.searchtypes.MessageList;
-import org.graylog2.indexer.ranges.IndexRangeService;
 import org.graylog2.plugin.indexer.searches.timeranges.InvalidRangeParametersException;
 import org.graylog2.plugin.indexer.searches.timeranges.RelativeRange;
 import org.graylog2.rest.models.messages.responses.ResultMessageSummary;
@@ -61,7 +60,7 @@ public class QueryPlanTest {
         bindingHandlers.put(QueryReferenceBinding.NAME, () -> new QueryReferenceBinding.Handler(new ObjectMapper()));
 
         final QueryStringParser queryStringParser = new QueryStringParser();
-        ElasticsearchBackend backend = new ElasticsearchBackend(handlers, bindingHandlers, queryStringParser, null, mock(IndexRangeService.class));
+        ElasticsearchBackend backend = new ElasticsearchBackend(handlers, bindingHandlers, queryStringParser, null);
         queryEngine = new QueryEngine(ImmutableMap.of("elasticsearch", backend));
     }
 
@@ -151,7 +150,7 @@ public class QueryPlanTest {
         bindingHandlers.put(QueryReferenceBinding.NAME, () -> new QueryReferenceBinding.Handler(new ObjectMapper()));
 
         final QueryStringParser queryStringParser = new QueryStringParser();
-        final ElasticsearchBackend esBackend = spy(new ElasticsearchBackend(handlers, bindingHandlers, queryStringParser, mock(JestClient.class), mock(IndexRangeService.class)));
+        final ElasticsearchBackend esBackend = spy(new ElasticsearchBackend(handlers, bindingHandlers, queryStringParser, mock(JestClient.class)));
 
         doReturn(QueryResult.builder()
                 .searchTypes(ImmutableMap.of("messages", MessageList.Result.builder()
