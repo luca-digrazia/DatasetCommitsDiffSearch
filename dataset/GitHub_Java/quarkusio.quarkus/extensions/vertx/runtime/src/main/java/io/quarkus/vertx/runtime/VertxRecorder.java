@@ -98,7 +98,7 @@ public class VertxRecorder {
                                     }
                                     event.complete();
                                 }
-                            }, invoker.isOrdered(), null);
+                            }, null);
                         } else {
                             try {
                                 invoker.invoke(m);

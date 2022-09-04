@@ -21,18 +21,14 @@ public abstract class EventConsumerInvoker {
     public void invoke(Message<Object> message) throws Exception {
         ManagedContext requestContext = Arc.container().requestContext();
         if (requestContext.isActive()) {
-            Object ret = invokeBean(message);
+            CompletionStage<Object> ret = invokeBean(message);
             if (ret != null) {
-                if (ret instanceof CompletionStage) {
-                    ((CompletionStage<?>) ret).whenComplete(new RequestActiveConsumer(message));
-                } else {
-                    message.reply(ret);
-                }
+                ret.whenComplete(new RequestActiveConsumer(message));
             }
         } else {
             // Activate the request context
             requestContext.activate();
-            Object ret;
+            CompletionStage<Object> ret;
             try {
                 ret = invokeBean(message);
             } catch (Exception e) {
@@ -41,24 +37,18 @@ public abstract class EventConsumerInvoker {
                 throw e;
             }
             if (ret == null) {
-                // No result - just terminate
+                // No async computation - just terminate
                 requestContext.terminate();
             } else {
-                if (ret instanceof CompletionStage) {
-                    // Capture the state, deactivate and destroy the context when the computation completes
-                    ContextState endState = requestContext.getState();
-                    requestContext.deactivate();
-                    ((CompletionStage<?>) ret).whenComplete(new RequestActivatedConsumer(message, requestContext, endState));
-                } else {
-                    // No async computation - just terminate and set reply
-                    requestContext.terminate();
-                    message.reply(ret);
-                }
+                // Capture the state, deactivate and destroy the context when the computation completes
+                ContextState endState = requestContext.getState();
+                requestContext.deactivate();
+                ret.whenComplete(new RequestActivatedConsumer(message, requestContext, endState));
             }
         }
     }
 
-    protected abstract Object invokeBean(Message<Object> message) throws Exception;
+    protected abstract CompletionStage<Object> invokeBean(Message<Object> message) throws Exception;
 
     private static class RequestActiveConsumer implements BiConsumer<Object, Throwable> {
 
