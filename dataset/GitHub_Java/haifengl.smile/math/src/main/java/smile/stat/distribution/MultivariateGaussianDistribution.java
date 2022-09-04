@@ -1,20 +1,18 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.stat.distribution;
 
 import smile.math.matrix.Cholesky;
@@ -29,46 +27,41 @@ import smile.math.matrix.DenseMatrix;
  *
  * @author Haifeng Li
  */
-public class MultivariateGaussianDistribution implements MultivariateDistribution, MultivariateExponentialFamily {
-    private static final long serialVersionUID = 2L;
+public class MultivariateGaussianDistribution extends AbstractMultivariateDistribution implements MultivariateExponentialFamily {
+    private static final long serialVersionUID = 1L;
 
     private static final double LOG2PIE = Math.log(2 * Math.PI * Math.E);
-
-    /** The mean vector. */
-    public final double[] mu;
-    /** The covariance matrix. */
-    public final DenseMatrix sigma;
-    /** True if the covariance matrix is diagonal. */
-    public final boolean diagonal;
-
+    double[] mu;
+    DenseMatrix sigma;
+    boolean diagonal;
     private int dim;
     private DenseMatrix sigmaInv;
     private DenseMatrix sigmaL;
     private double sigmaDet;
     private double pdfConstant;
-    private int length;
+    private int numParameters;
 
     /**
      * Constructor. The distribution will have a diagonal covariance matrix of
      * the same variance.
      *
      * @param mean mean vector.
-     * @param variance variance.
+     * @param var variance.
      */
-    public MultivariateGaussianDistribution(double[] mean, double variance) {
-        if (variance <= 0) {
-            throw new IllegalArgumentException("Variance is not positive: " + variance);
+    public MultivariateGaussianDistribution(double[] mean, double var) {
+        if (var <= 0) {
+            throw new IllegalArgumentException("Variance is not positive: " + var);
         }
 
         mu = new double[mean.length];
         sigma = Matrix.zeros(mu.length, mu.length);
         for (int i = 0; i < mu.length; i++) {
             mu[i] = mean[i];
-            sigma.set(i, i, variance);
+            sigma.set(i, i, var);
         }
 
         diagonal = true;
-        length = mu.length + 1;
+        numParameters = mu.length + 1;
 
         init();
     }
@@ -78,25 +71,25 @@ public class MultivariateGaussianDistribution implements MultivariateDistributio
      * Each element has different variance.
      *
      * @param mean mean vector.
-     * @param variance variance vector.
+     * @param var variance vector.
      */
-    public MultivariateGaussianDistribution(double[] mean, double[] variance) {
-        if (mean.length != variance.length) {
+    public MultivariateGaussianDistribution(double[] mean, double[] var) {
+        if (mean.length != var.length) {
             throw new IllegalArgumentException("Mean vector and covariance matrix have different dimension");
         }
 
         mu = new double[mean.length];
-        sigma = Matrix.diag(variance);
+        sigma = Matrix.diag(var);
         for (int i = 0; i < mu.length; i++) {
-            if (variance[i] <= 0) {
-                throw new IllegalArgumentException("Variance is not positive: " + variance[i]);
+            if (var[i] <= 0) {
+                throw new IllegalArgumentException("Variance is not positive: " + var[i]);
             }
 
             mu[i] = mean[i];
         }
 
         diagonal = true;
-        length = 2 * mu.length;
+        numParameters = 2 * mu.length;
 
         init();
     }
@@ -107,59 +100,58 @@ public class MultivariateGaussianDistribution implements MultivariateDistributio
      * @param mean mean vector.
      * @param cov covariance matrix.
      */
-    public MultivariateGaussianDistribution(double[] mean, DenseMatrix cov) {
-        if (mean.length != cov.nrows()) {
+    public MultivariateGaussianDistribution(double[] mean, double[][] cov) {
+        if (mean.length != cov.length) {
             throw new IllegalArgumentException("Mean vector and covariance matrix have different dimension");
         }
 
         mu = new double[mean.length];
-        sigma = cov;
+        sigma = Matrix.of(cov);
         for (int i = 0; i < mu.length; i++) {
             mu[i] = mean[i];
         }
 
         diagonal = false;
-        length = mu.length + mu.length * (mu.length + 1) / 2;
+        numParameters = mu.length + mu.length * (mu.length + 1) / 2;
 
         init();
     }
 
     /**
-     * Estimates the mean and diagonal covariance by MLE.
+     * Constructor. Mean and covariance will be estimated from the data by MLE.
      * @param data the training data.
      */
-    public static MultivariateGaussianDistribution fit(double[][] data) {
-        return fit(data, false);
+    public MultivariateGaussianDistribution(double[][] data) {
+        this(data, false);
     }
 
     /**
-     * Estimates the mean and covariance by MLE.
+     * Constructor. Mean and covariance will be estimated from the data by MLE.
      * @param data the training data.
      * @param diagonal true if covariance matrix is diagonal.
      */
-    public static MultivariateGaussianDistribution fit(double[][] data, boolean diagonal) {
-        double[] mu = MathEx.colMeans(data);
-        int n = data.length;
-        int d = mu.length;
+    public MultivariateGaussianDistribution(double[][] data, boolean diagonal) {
+        this.diagonal = diagonal;
+        mu = MathEx.colMeans(data);
 
         if (diagonal) {
-            double[] variance = new double[d];
-            for (int i = 0; i < n; i++) {
-                double[] x = data[i];
-                for (int j = 0; j < d; j++) {
-                    variance[j] += (x[j] - mu[j]) * (x[j] - mu[j]);
+            sigma = Matrix.zeros(data[0].length, data[0].length);
+            for (int i = 0; i < data.length; i++) {
+                for (int j = 0; j < mu.length; j++) {
+                    sigma.add(j, j, (data[i][j] - mu[j]) * (data[i][j] - mu[j]));
                 }
             }
 
-            int n1 = n - 1;
-            for (int j = 0; j < d; j++) {
-                variance[j] /= n1;
+            for (int j = 0; j < mu.length; j++) {
+                sigma.div(j, j, (data.length - 1));
             }
-
-            return new MultivariateGaussianDistribution(mu, variance);
         } else {
-            return new MultivariateGaussianDistribution(mu, Matrix.of(MathEx.cov(data, mu)));
+            sigma = Matrix.of(MathEx.cov(data, mu));
         }
+
+        numParameters = mu.length + mu.length * (mu.length + 1) / 2;
+
+        init();
     }
 
     /**
@@ -174,9 +166,17 @@ public class MultivariateGaussianDistribution implements MultivariateDistributio
         pdfConstant = (dim * Math.log(2 * Math.PI) + Math.log(sigmaDet)) / 2.0;
     }
 
+    /**
+     * Returns true if the covariance matrix is diagonal.
+     * @return true if the covariance matrix is diagonal
+     */
+    public boolean isDiagonal() {
+        return diagonal;
+    }
+
     @Override
-    public int length() {
-        return length;
+    public int npara() {
+        return numParameters;
     }
 
     @Override
@@ -190,8 +190,8 @@ public class MultivariateGaussianDistribution implements MultivariateDistributio
     }
 
     @Override
-    public DenseMatrix cov() {
-        return sigma;
+    public double[][] cov() {
+        return sigma.toArray();
     }
 
     /**
@@ -308,76 +308,61 @@ public class MultivariateGaussianDistribution implements MultivariateDistributio
         return pt;
     }
 
-    /**
-     * Generates a set of random numbers following this distribution.
-     */
-    public double[][] rand(int n) {
-        double[][] data = new double[n][];
-        for (int i = 0; i < n; i++) {
-            data[i] = rand();
-        }
-        return data;
-    }
-
     @Override
-    public MultivariateMixture.Component M(double[][] data, double[] posteriori) {
-        int n = data.length;
-        int d = data[0].length;
+    public MultivariateMixture.Component M(double[][] x, double[] posteriori) {
+        int n = x[0].length;
 
         double alpha = 0.0;
-        double[] mean = new double[d];
+        double[] mean = new double[n];
+        double[][] cov = new double[n][n];
 
-        for (int k = 0; k < n; k++) {
+        for (int k = 0; k < x.length; k++) {
             alpha += posteriori[k];
-            double[] x = data[k];
-            for (int i = 0; i < d; i++) {
-                mean[i] += x[i] * posteriori[k];
+            for (int i = 0; i < n; i++) {
+                mean[i] += x[k][i] * posteriori[k];
             }
         }
 
-        for (int i = 0; i < d; i++) {
+        for (int i = 0; i < mean.length; i++) {
             mean[i] /= alpha;
         }
 
-        MultivariateGaussianDistribution gaussian;
         if (diagonal) {
-            double[] variance = new double[d];
-            for (int k = 0; k < n; k++) {
-                double[] x = data[k];
-                for (int i = 0; i < d; i++) {
-                    variance[i] += (x[i] - mean[i]) * (x[i] - mean[i]) * posteriori[k];
+            for (int k = 0; k < x.length; k++) {
+                for (int i = 0; i < n; i++) {
+                    cov[i][i] += (x[k][i] - mean[i]) * (x[k][i] - mean[i]) * posteriori[k];
                 }
             }
 
-            for (int i = 0; i < d; i++) {
-                variance[i] /= alpha;
+            for (int i = 0; i < cov.length; i++) {
+                cov[i][i] /= alpha;
             }
-
-            gaussian = new MultivariateGaussianDistribution(mean, Matrix.of(variance));
         } else {
-            DenseMatrix cov = Matrix.zeros(d, d);
-            for (int k = 0; k < n; k++) {
-                double[] x = data[k];
-                for (int i = 0; i < d; i++) {
-                    for (int j = 0; j < d; j++) {
-                        cov.add(i, j, (x[i] - mean[i]) * (x[j] - mean[j]) * posteriori[k]);
+            for (int k = 0; k < x.length; k++) {
+                for (int i = 0; i < n; i++) {
+                    for (int j = 0; j < n; j++) {
+                        cov[i][j] += (x[k][i] - mean[i]) * (x[k][j] - mean[j]) * posteriori[k];
                     }
                 }
             }
 
-            for (int i = 0; i < d; i++) {
-                for (int j = 0; j < d; j++) {
-                    cov.div(i, j, alpha);
+            for (int i = 0; i < cov.length; i++) {
+                for (int j = 0; j < cov[i].length; j++) {
+                    cov[i][j] /= alpha;
                 }
 
                 // make sure the covariance matrix is positive definite.
-                cov.mul(i, i, 1.00001);
+                cov[i][i] *= 1.00001;
             }
-
-            gaussian = new MultivariateGaussianDistribution(mean, cov);
         }
 
-        return new MultivariateMixture.Component(alpha, gaussian);
+        MultivariateMixture.Component c = new MultivariateMixture.Component();
+        c.priori = alpha;
+        MultivariateGaussianDistribution g = new MultivariateGaussianDistribution(mean, cov);
+        g.diagonal = diagonal;
+        c.distribution = g;
+
+        return c;
     }
 
     @Override

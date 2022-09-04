@@ -16,14 +16,17 @@
 package smile.math;
 
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ForkJoinPool;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import smile.sort.QuickSelect;
 import smile.sort.QuickSort;
-import smile.sort.Sort;
+import smile.sort.SortUtils;
 
 /**
  * Extra basic numeric functions. The following functions are
@@ -44,25 +47,21 @@ import smile.sort.Sort;
  * @author Haifeng Li
  */
 public class MathEx {
-    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(MathEx.class);
+    private static final Logger logger = LoggerFactory.getLogger(MathEx.class);
 
-    /**
-     * Dynamically determines the machine parameters of the floating-point arithmetic.
-     */
-    private static final FPU fpu = new FPU();
     /**
      * The machine precision for the double type, which is the difference between 1
      * and the smallest value greater than 1 that is representable for the double type.
      */
-    public static final double EPSILON = fpu.EPSILON;
+    public static double EPSILON = Math.pow(2.0, -52.0);
     /**
      * The base of the exponent of the double type.
      */
-    public static final int RADIX = fpu.RADIX;
+    public static int RADIX = 2;
     /**
      * The number of digits (in radix base) in the mantissa.
      */
-    public static final int DIGITS = fpu.RADIX;
+    public static int DIGITS = 53;
     /**
      * Rounding style.
      * <ul>
@@ -74,26 +73,17 @@ public class MathEx {
      * <li> 5 if floating-point addition rounds in the IEEEE style, and there is partial underflow
      * </ul>
      */
-    public static final int ROUND_STYLE = fpu.ROUND_STYLE;
+    public static int ROUND_STYLE = 2;
     /**
      * The largest negative integer such that 1.0 + RADIX<sup>MACHEP</sup> &ne; 1.0,
      * except that machep is bounded below by -(DIGITS+3)
      */
-    public static final int MACHEP = fpu.MACHEP;
+    public static int MACHEP = -52;
     /**
      * The largest negative integer such that 1.0 - RADIX<sup>NEGEP</sup> &ne; 1.0,
      * except that negeps is bounded below by -(DIGITS+3)
      */
-    public static final int NEGEP = fpu.NEGEP;
-    /**
-     * Root finding algorithms.
-     */
-    public static final Root root = new Root();
-    /**
-     * The Broyden–Fletcher–Goldfarb–Shanno (BFGS) algorithm
-     * for unconstrained nonlinear optimization problems.
-     */
-    public static final BFGS BFGS = new BFGS();
+    public static int NEGEP = -53;
     /**
      * True when we create the first random number generator.
      */
@@ -131,92 +121,82 @@ public class MathEx {
     /**
      * Dynamically determines the machine parameters of the floating-point arithmetic.
      */
-    private static class FPU {
-        double EPSILON = Math.pow(2.0, -52.0);
-        int RADIX = 2;
-        int DIGITS = 53;
-        int ROUND_STYLE = 2;
-        int MACHEP = -52;
-        int NEGEP = -53;
+    static {
+        double beta, betain, betah, a, b, ZERO, ONE, TWO, temp, tempa, temp1;
+        int i, itemp;
 
-        FPU() {
-            double beta, betain, betah, a, b, ZERO, ONE, TWO, temp, tempa, temp1;
-            int i, itemp;
+        ONE = (double) 1;
+        TWO = ONE + ONE;
+        ZERO = ONE - ONE;
 
-            ONE = (double) 1;
-            TWO = ONE + ONE;
-            ZERO = ONE - ONE;
-
-            a = ONE;
-            temp1 = ONE;
-            while (temp1 - ONE == ZERO) {
-                a = a + a;
-                temp = a + ONE;
-                temp1 = temp - a;
-            }
-            b = ONE;
-            itemp = 0;
-            while (itemp == 0) {
-                b = b + b;
-                temp = a + b;
-                itemp = (int) (temp - a);
-            }
-            RADIX = itemp;
-            beta = (double) RADIX;
-
-            DIGITS = 0;
-            b = ONE;
-            temp1 = ONE;
-            while (temp1 - ONE == ZERO) {
-                DIGITS = DIGITS + 1;
-                b = b * beta;
-                temp = b + ONE;
-                temp1 = temp - b;
-            }
-            ROUND_STYLE = 0;
-            betah = beta / TWO;
-            temp = a + betah;
-            if (temp - a != ZERO) {
-                ROUND_STYLE = 1;
-            }
-            tempa = a + beta;
-            temp = tempa + betah;
-            if ((ROUND_STYLE == 0) && (temp - tempa != ZERO)) {
-                ROUND_STYLE = 2;
-            }
-
-            NEGEP = DIGITS + 3;
-            betain = ONE / beta;
-            a = ONE;
-            for (i = 0; i < NEGEP; i++) {
-                a = a * betain;
-            }
-            b = a;
-            temp = ONE - a;
-            while (temp - ONE == ZERO) {
-                a = a * beta;
-                NEGEP = NEGEP - 1;
-                temp = ONE - a;
-            }
-            NEGEP = -(NEGEP);
-
-            MACHEP = -(DIGITS) - 3;
-            a = b;
-            temp = ONE + a;
-            while (temp - ONE == ZERO) {
-                a = a * beta;
-                MACHEP = MACHEP + 1;
-                temp = ONE + a;
-            }
-            EPSILON = a;
+        a = ONE;
+        temp1 = ONE;
+        while (temp1 - ONE == ZERO) {
+            a = a + a;
+            temp = a + ONE;
+            temp1 = temp - a;
         }
+        b = ONE;
+        itemp = 0;
+        while (itemp == 0) {
+            b = b + b;
+            temp = a + b;
+            itemp = (int) (temp - a);
+        }
+        RADIX = itemp;
+        beta = (double) RADIX;
+
+        DIGITS = 0;
+        b = ONE;
+        temp1 = ONE;
+        while (temp1 - ONE == ZERO) {
+            DIGITS = DIGITS + 1;
+            b = b * beta;
+            temp = b + ONE;
+            temp1 = temp - b;
+        }
+        ROUND_STYLE = 0;
+        betah = beta / TWO;
+        temp = a + betah;
+        if (temp - a != ZERO) {
+            ROUND_STYLE = 1;
+        }
+        tempa = a + beta;
+        temp = tempa + betah;
+        if ((ROUND_STYLE == 0) && (temp - tempa != ZERO)) {
+            ROUND_STYLE = 2;
+        }
+
+        NEGEP = DIGITS + 3;
+        betain = ONE / beta;
+        a = ONE;
+        for (i = 0; i < NEGEP; i++) {
+            a = a * betain;
+        }
+        b = a;
+        temp = ONE - a;
+        while (temp - ONE == ZERO) {
+            a = a * beta;
+            NEGEP = NEGEP - 1;
+            temp = ONE - a;
+        }
+        NEGEP = -(NEGEP);
+
+        MACHEP = -(DIGITS) - 3;
+        a = b;
+        temp = ONE + a;
+        while (temp - ONE == ZERO) {
+            a = a * beta;
+            MACHEP = MACHEP + 1;
+            temp = ONE + a;
+        }
+        EPSILON = a;
     }
     
     /**
      * Private constructor.
      */
     private MathEx() {
-
     }
 
     /**
@@ -545,49 +525,65 @@ public class MathEx {
     }
 
     /** Merges multiple vectors into one. */
-    public static int[] c(int[]... list) {
-        int n = Arrays.stream(list).mapToInt(x -> x.length).sum();
+    public static int[] c(int[]... x) {
+        int n = 0;
+        for (int i = 0; i < x.length; i++) {
+            n += x.length;
+        }
+
         int[] y = new int[n];
-        int pos = 0;
-        for (int[] x: list) {
-            System.arraycopy(x, 0, y, pos, x.length);
-            pos += x.length;
+        for (int i = 0, k = 0; i < x.length; i++) {
+            for (int xi : x[i]) {
+                y[k++] = xi;
+            }
         }
         return y;
     }
 
     /** Merges multiple vectors into one. */
-    public static float[] c(float[]... list) {
-        int n = Arrays.stream(list).mapToInt(x -> x.length).sum();
+    public static float[] c(float[]... x) {
+        int n = 0;
+        for (int i = 0; i < x.length; i++) {
+            n += x.length;
+        }
+
         float[] y = new float[n];
-        int pos = 0;
-        for (float[] x: list) {
-            System.arraycopy(x, 0, y, pos, x.length);
-            pos += x.length;
+        for (int i = 0, k = 0; i < x.length; i++) {
+            for (float xi : x[i]) {
+                y[k++] = xi;
+            }
         }
         return y;
     }
 
     /** Merges multiple vectors into one. */
-    public static double[] c(double[]... list) {
-        int n = Arrays.stream(list).mapToInt(x -> x.length).sum();
+    public static double[] c(double[]... x) {
+        int n = 0;
+        for (int i = 0; i < x.length; i++) {
+            n += x.length;
+        }
+
         double[] y = new double[n];
-        int pos = 0;
-        for (double[] x: list) {
-            System.arraycopy(x, 0, y, pos, x.length);
-            pos += x.length;
+        for (int i = 0, k = 0; i < x.length; i++) {
+            for (double xi : x[i]) {
+                y[k++] = xi;
+            }
         }
         return y;
     }
 
-    /** Concatenates multiple vectors into one array of strings. */
-    public static String[] c(String[]... list) {
-        int n = Arrays.stream(list).mapToInt(x -> x.length).sum();
+    /** Merges multiple vectors into one. */
+    public static String[] c(String[]... x) {
+        int n = 0;
+        for (int i = 0; i < x.length; i++) {
+            n += x.length;
+        }
+
         String[] y = new String[n];
-        int pos = 0;
-        for (String[] x: list) {
-            System.arraycopy(x, 0, y, pos, x.length);
-            pos += x.length;
+        for (int i = 0, k = 0; i < x.length; i++) {
+            for (String xi : x[i]) {
+                y[k++] = xi;
+            }
         }
         return y;
     }
@@ -776,7 +772,7 @@ public class MathEx {
     public static void reverse(int[] a) {
         int i = 0, j = a.length - 1;
         while (i < j) {
-            Sort.swap(a, i++, j--);  // code for swap not shown, but easy enough
+            SortUtils.swap(a, i++, j--);  // code for swap not shown, but easy enough
         }
     }
 
@@ -787,7 +783,7 @@ public class MathEx {
     public static void reverse(float[] a) {
         int i = 0, j = a.length - 1;
         while (i < j) {
-            Sort.swap(a, i++, j--);  // code for swap not shown, but easy enough
+            SortUtils.swap(a, i++, j--);  // code for swap not shown, but easy enough
         }
     }
 
@@ -798,7 +794,7 @@ public class MathEx {
     public static void reverse(double[] a) {
         int i = 0, j = a.length - 1;
         while (i < j) {
-            Sort.swap(a, i++, j--);  // code for swap not shown, but easy enough
+            SortUtils.swap(a, i++, j--);  // code for swap not shown, but easy enough
         }
     }
 
@@ -809,7 +805,7 @@ public class MathEx {
     public static <T> void reverse(T[] a) {
         int i = 0, j = a.length - 1;
         while (i < j) {
-            Sort.swap(a, i++, j--);
+            SortUtils.swap(a, i++, j--);
         }
     }
 

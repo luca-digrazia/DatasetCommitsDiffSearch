@@ -20,7 +20,7 @@ import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import smile.math.Math;
+import smile.math.MathEx;
 
 import static org.junit.Assert.*;
 
@@ -79,6 +79,44 @@ public class JMatrixTest {
     }
 
     /**
+     * Test of colMean method, of class Math.
+     */
+    @Test
+    public void testColMeans() {
+        System.out.println("colMeans");
+        double[][] A = {
+                {0.7220180, 0.07121225, 0.6881997},
+                {-0.2648886, -0.89044952, 0.3700456},
+                {-0.6391588, 0.44947578, 0.6240573}
+        };
+        double[] r = {-0.06067647, -0.12325383, 0.56076753};
+
+        double[] result = new JMatrix(A).colMeans();
+        for (int i = 0; i < r.length; i++) {
+            assertEquals(result[i], r[i], 1E-7);
+        }
+    }
+
+    /**
+     * Test of rowMean method, of class Math.
+     */
+    @Test
+    public void testRowMeans() {
+        System.out.println("rowMeans");
+        double[][] A = {
+                {0.7220180, 0.07121225, 0.6881997},
+                {-0.2648886, -0.89044952, 0.3700456},
+                {-0.6391588, 0.44947578, 0.6240573}
+        };
+        double[] r = {0.4938100, -0.2617642, 0.1447914};
+
+        double[] result = new JMatrix(A).rowMeans();
+        for (int i = 0; i < r.length; i++) {
+            assertEquals(result[i], r[i], 1E-7);
+        }
+    }
+
+    /**
      * Test of get method, of class ColumnMajorMatrix.
      */
     @Test
@@ -106,6 +144,34 @@ public class JMatrixTest {
     }
 
     /**
+     * Test of axpy method, of class ColumnMajorMatrix.
+     */
+    @Test
+    public void testAxpy() {
+        System.out.println("axpy");
+        double[] d = new double[matrix.nrows()];
+        for (int i = 0; i < d.length; i++) d[i] = 1.0;
+        matrix.axpy(b, d);
+        assertEquals(1.65, d[0], 1E-10);
+        assertEquals(1.60, d[1], 1E-10);
+        assertEquals(1.55, d[2], 1E-10);
+    }
+
+    /**
+     * Test of axpy method, of class ColumnMajorMatrix.
+     */
+    @Test
+    public void testAxpy2() {
+        System.out.println("axpy b = 2");
+        double[] d = new double[matrix.nrows()];
+        for (int i = 0; i < d.length; i++) d[i] = 1.0;
+        matrix.axpy(b, d, 2.0);
+        assertEquals(2.65, d[0], 1E-10);
+        assertEquals(2.60, d[1], 1E-10);
+        assertEquals(2.55, d[2], 1E-10);
+    }
+
+    /**
      * Test of atx method, of class ColumnMajorMatrix.
      */
     @Test
@@ -116,6 +182,34 @@ public class JMatrixTest {
         assertEquals(0.65, d[0], 1E-10);
         assertEquals(0.60, d[1], 1E-10);
         assertEquals(0.55, d[2], 1E-10);
+    }
+
+    /**
+     * Test of atxpy method, of class JMatrix.
+     */
+    @Test
+    public void testAtxpy() {
+        System.out.println("atxpy");
+        double[] d = new double[matrix.nrows()];
+        for (int i = 0; i < d.length; i++) d[i] = 1.0;
+        matrix.atxpy(b, d);
+        assertEquals(1.65, d[0], 1E-10);
+        assertEquals(1.60, d[1], 1E-10);
+        assertEquals(1.55, d[2], 1E-10);
+    }
+
+    /**
+     * Test of atxpy method, of class JMatrix.
+     */
+    @Test
+    public void testAtxpy2() {
+        System.out.println("atxpy b = 2");
+        double[] d = new double[matrix.nrows()];
+        for (int i = 0; i < d.length; i++) d[i] = 1.0;
+        matrix.atxpy(b, d, 2.0);
+        assertEquals(2.65, d[0], 1E-10);
+        assertEquals(2.60, d[1], 1E-10);
+        assertEquals(2.55, d[2], 1E-10);
     }
 
     /**
@@ -132,6 +226,60 @@ public class JMatrixTest {
                 assertEquals(C[i][j], c.get(i, j), 1E-7);
             }
         }
+    }
+
+    /**
+     * Test of plusEquals method, of class JMatrix.
+     */
+    @Test
+    public void testAdd() {
+        System.out.println("add");
+        double[][] A = {
+                {0.7220180, 0.07121225, 0.6881997},
+                {-0.2648886, -0.89044952, 0.3700456},
+                {-0.6391588, 0.44947578, 0.6240573}
+        };
+        double[][] B = {
+                {0.6881997, -0.07121225, 0.7220180},
+                {0.3700456, 0.89044952, -0.2648886},
+                {0.6240573, -0.44947578, -0.6391588}
+        };
+        double[][] C = {
+                {1.4102177, 0, 1.4102177},
+                {0.1051570, 0, 0.1051570},
+                {-0.0151015, 0, -0.0151015}
+        };
+        JMatrix a = new JMatrix(A);
+        JMatrix b = new JMatrix(B);
+        JMatrix c = a.add(b);
+        assertTrue(MathEx.equals(C, c.toArray(), 1E-7));
+    }
+
+    /**
+     * Test of minusEquals method, of class JMatrix.
+     */
+    @Test
+    public void testSub() {
+        System.out.println("sub");
+        double[][] A = {
+                {0.7220180, 0.07121225, 0.6881997},
+                {-0.2648886, -0.89044952, 0.3700456},
+                {-0.6391588, 0.44947578, 0.6240573}
+        };
+        double[][] B = {
+                {0.6881997, -0.07121225, 0.7220180},
+                {0.3700456, 0.89044952, -0.2648886},
+                {0.6240573, -0.44947578, -0.6391588}
+        };
+        double[][] C = {
+                {0.0338183, 0.1424245, -0.0338183},
+                {-0.6349342, -1.7808990, 0.6349342},
+                {-1.2632161, 0.8989516, 1.2632161}
+        };
+        JMatrix a = new JMatrix(A);
+        JMatrix b = new JMatrix(B);
+        JMatrix c = a.sub(b);
+        assertTrue(MathEx.equals(C, c.toArray(), 1E-7));
     }
 
     /**
@@ -155,13 +303,24 @@ public class JMatrixTest {
                 {-0.2808735, -0.9403636, -0.19190231},
                 {0.1159052, 0.1652528, -0.97941688}
         };
+        double[][] D = {
+                { 0.9887140,  0.1482942, -0.0212965},
+                { 0.1482942, -0.9889421, -0.0015881},
+                {-0.0212965, -0.0015881, -0.9997719 }
+        };
+        double[][] E = {
+                {0.0000,  0.0000, 1.0000},
+                {0.0000, -1.0000, 0.0000},
+                {1.0000,  0.0000, 0.0000}
+        };
 
         JMatrix a = new JMatrix(A);
         JMatrix b = new JMatrix(B);
-        assertTrue(Math.equals(a.abmm(b).array(), C, 1E-7));
-        Math.abtmm(A, B, C);
-        assertTrue(Math.equals(a.abtmm(b).array(), C, 1E-7));
-        Math.atbmm(A, B, C);
-        assertTrue(Math.equals(a.atbmm(b).array(), C, 1E-7));
+        double[][] F = b.abmm(a).transpose().toArray();
+
+        assertTrue(MathEx.equals(a.abmm(b).toArray(), C, 1E-7));
+        assertTrue(MathEx.equals(a.abtmm(b).toArray(), D, 1E-7));
+        assertTrue(MathEx.equals(a.atbmm(b).toArray(), E, 1E-7));
+        assertTrue(MathEx.equals(a.atbtmm(b).toArray(), F, 1E-7));
     }
 }

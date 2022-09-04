@@ -1,20 +1,18 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010 Haifeng Li
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
-
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 package smile.math;
 
 /**
@@ -22,8 +20,58 @@ package smile.math;
  *
  * @author Haifeng Li
  */
-public interface Root {
-    org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(Root.class);
+public class Root {
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(Root.class);
+
+    /** The instance with default settings. */
+    private static Root instance = new Root();
+
+    /**
+     * The accuracy tolerance.
+     */
+    private double tol = 1E-7;
+    /**
+     * The maximum number of allowed iterations.
+     */
+    private int maxIter = 500;
+
+    /**
+     * Constructor with tol = 1E-7 and maxIter = 500.
+     */
+    public Root() {
+
+    }
+
+    /** Returns the instance with default settings. */
+    public static Root getInstance() {
+        return instance;
+    }
+
+    /**
+     * Sets the accuracy tolerance.
+     * @return return this object.
+     */
+    public Root setTolerance(double tol) {
+        if (tol <= 0.0) {
+            throw new IllegalArgumentException("Invalid tolerance: " + tol);
+        }
+
+        this.tol = tol;
+        return this;
+    }
+
+    /**
+     * Sets the maximum number of allowed iterations.
+     * @return return this object.
+     */
+    public Root setMaxIter(int maxIter) {
+        if (maxIter <= 0) {
+            throw new IllegalArgumentException("Invalid maximum number of iterations: " + maxIter);
+        }
+
+        this.maxIter = maxIter;
+        return this;
+    }
 
     /**
      * Brent's method for root-finding. It combines the bisection method,
@@ -40,19 +88,9 @@ public interface Root {
      * @param func the function to be evaluated.
      * @param x1 the left end of search interval.
      * @param x2 the right end of search interval.
-     * @param tol the desired accuracy (convergence tolerance).
-     * @param maxIter the maximum number of iterations.
      * @return the root.
      */
-    static double find(Function func, double x1, double x2, double tol, int maxIter) {
-        if (tol <= 0.0) {
-            throw new IllegalArgumentException("Invalid tolerance: " + tol);
-        }
-
-        if (maxIter <= 0) {
-            throw new IllegalArgumentException("Invalid maximum number of iterations: " + maxIter);
-        }
-
+    public double find(Function func, double x1, double x2) {
         double a = x1, b = x2, c = x2, d = 0, e = 0, fa = func.apply(a), fb = func.apply(b), fc, p, q, r, s, xm;
         if ((fa > 0.0 && fb > 0.0) || (fa < 0.0 && fb < 0.0)) {
             throw new IllegalArgumentException("Root must be bracketed.");
@@ -146,11 +184,9 @@ public interface Root {
      * @param func the function to be evaluated.
      * @param x1 the left end of search interval.
      * @param x2 the right end of search interval.
-     * @param tol the desired accuracy (convergence tolerance).
-     * @param maxIter the maximum number of iterations.
      * @return the root.
      */
-    static double find(DifferentiableFunction func, double x1, double x2, double tol, int maxIter) {
+    public double find(DifferentiableFunction func, double x1, double x2) {
         if (tol <= 0.0) {
             throw new IllegalArgumentException("Invalid tolerance: " + tol);
         }
