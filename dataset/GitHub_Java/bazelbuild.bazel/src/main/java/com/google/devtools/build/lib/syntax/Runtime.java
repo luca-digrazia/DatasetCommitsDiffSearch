@@ -160,22 +160,9 @@ public final class Runtime {
    * A registry of builtins, including both global builtins and builtins that are under some
    * namespace.
    *
-   * <p>Concurrency model: This object is thread-safe. Read accesses are always allowed, while write
-   * accesses are only allowed before this object has been frozen ({@link #freeze}). Prior to
-   * freezing, all operations are synchronized, while after freezing they are lockless.
+   * <p>This object is unsynchronized, but concurrent reads are fine.
    */
   public static class BuiltinRegistry {
-
-    /**
-     * Whether the registry's construction has completed.
-     *
-     * <p>Mutating methods may only be called while this is still false. Accessor methods may be
-     * called at any time.
-     *
-     * <p>We use {@code volatile} rather than {@link AtomicBoolean} because the bit flip only
-     * happens once, and doesn't require correlated reads and writes.
-     */
-    private volatile boolean frozen = false;
 
     /**
      * All registered builtins, keyed and sorted by an identifying (but otherwise unimportant)
@@ -190,36 +177,13 @@ public final class Runtime {
     /** All non-global builtin functions, keyed by their namespace class and their name. */
     private final Map<Class<?>, Map<String, BaseFunction>> functions = new HashMap<>();
 
-    /**
-     * Marks the registry as initialized, if it wasn't already.
-     *
-     * <p>It is guaranteed that after this method returns, all accessor methods are safe without
-     * synchronization; i.e. no mutation operation can touch the data structures.
-     */
-    public void freeze() {
-      // Similar to double-checked locking, but no need to check again on the inside since we don't
-      // care if two threads set the bit at once. The synchronized block is only to provide
-      // exclusion with mutations.
-      if (!this.frozen) {
-        synchronized (this) {
-          this.frozen = true;
-        }
-      }
-    }
-
     /** Registers a builtin with the given simple name, that was defined in the given Java class. */
-    public synchronized void registerBuiltin(Class<?> definingClass, String name, Object builtin) {
+    public void registerBuiltin(Class<?> definingClass, String name, Object builtin) {
       String key = String.format("%s.%s", definingClass.getName(), name);
       Preconditions.checkArgument(
           !allBuiltins.containsKey(key),
           "Builtin '%s' registered multiple times",
           key);
-
-      Preconditions.checkState(
-          !frozen,
-          "Attempted to register builtin '%s' after registry has already been frozen",
-          key);
-
       allBuiltins.put(key, builtin);
     }
 
@@ -228,7 +192,7 @@ public final class Runtime {
      *
      * <p>This is independent of {@link #registerBuiltin}.
      */
-    public synchronized void registerFunction(Class<?> namespace, BaseFunction function) {
+    public void registerFunction(Class<?> namespace, BaseFunction function) {
       Preconditions.checkNotNull(namespace);
       Preconditions.checkNotNull(function.getObjectType());
       Class<?> skylarkNamespace = getSkylarkNamespace(namespace);
@@ -236,26 +200,13 @@ public final class Runtime {
       Class<?> objType = getSkylarkNamespace(function.getObjectType());
       Preconditions.checkArgument(objType.equals(skylarkNamespace));
 
-      Preconditions.checkState(
-          !frozen,
-          "Attempted to register function '%s' in namespace '%s' after registry has already been "
-              + "frozen",
-          function,
-          namespace);
-
       functions.computeIfAbsent(namespace, k -> new HashMap<>());
       functions.get(namespace).put(function.getName(), function);
     }
 
     /** Returns a list of all registered builtins, in a deterministic order. */
     public ImmutableList<Object> getBuiltins() {
-      if (frozen) {
-        return ImmutableList.copyOf(allBuiltins.values());
-      } else {
-        synchronized (this) {
-          return ImmutableList.copyOf(allBuiltins.values());
-        }
-      }
+      return ImmutableList.copyOf(allBuiltins.values());
     }
 
     @Nullable
@@ -269,15 +220,8 @@ public final class Runtime {
      * <p>If the namespace does not exist or has no function with that name, returns null.
      */
     public BaseFunction getFunction(Class<?> namespace, String name) {
-      if (frozen) {
-        Map<String, BaseFunction> namespaceFunctions = getFunctionsInNamespace(namespace);
-        return namespaceFunctions != null ? namespaceFunctions.get(name) : null;
-      } else {
-        synchronized (this) {
-          Map<String, BaseFunction> namespaceFunctions = getFunctionsInNamespace(namespace);
-          return namespaceFunctions != null ? namespaceFunctions.get(name) : null;
-        }
-      }
+      Map<String, BaseFunction> namespaceFunctions = getFunctionsInNamespace(namespace);
+      return namespaceFunctions != null ? namespaceFunctions.get(name) : null;
     }
 
     /**
@@ -286,21 +230,11 @@ public final class Runtime {
      * <p>If the namespace does not exist, returns an empty set.
      */
     public ImmutableSet<String> getFunctionNames(Class<?> namespace) {
-      if (frozen) {
-        Map<String, BaseFunction> namespaceFunctions = getFunctionsInNamespace(namespace);
-        if (namespaceFunctions == null) {
-          return ImmutableSet.of();
-        }
-        return ImmutableSet.copyOf(namespaceFunctions.keySet());
-      } else {
-        synchronized (this) {
-          Map<String, BaseFunction> namespaceFunctions = getFunctionsInNamespace(namespace);
-          if (namespaceFunctions == null) {
-            return ImmutableSet.of();
-          }
-          return ImmutableSet.copyOf(namespaceFunctions.keySet());
-        }
+      Map<String, BaseFunction> namespaceFunctions = getFunctionsInNamespace(namespace);
+      if (namespaceFunctions == null) {
+        return ImmutableSet.of();
       }
+      return ImmutableSet.copyOf(namespaceFunctions.keySet());
     }
   }
 
