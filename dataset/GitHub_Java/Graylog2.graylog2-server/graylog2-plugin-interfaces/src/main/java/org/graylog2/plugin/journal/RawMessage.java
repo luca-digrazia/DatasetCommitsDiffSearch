@@ -130,12 +130,16 @@ public class RawMessage implements Serializable {
         msgBuilder.setCodec(codecBuilder.build());
     }
 
-    public JournalMessages.SourceNode addSourceNode(String sourceInputId, NodeId nodeId, boolean isServer) {
-        return  msgBuilder.addSourceNodesBuilder()
+    // XXX TODO After calling this once, getSourceNodes() returns two identical SourceNode objects and the
+    //          DecodingProcessor throws an exception!
+    public JournalMessage.Builder addSourceNode(String sourceInputId, NodeId nodeId, boolean isServer) {
+        return msgBuilder.addSourceNodes(
+                msgBuilder.addSourceNodesBuilder()
                         .setInputId(sourceInputId)
                         .setId(nodeId.toString())
                         .setType(isServer ? JournalMessages.SourceNode.Type.SERVER : JournalMessages.SourceNode.Type.RADIO)
-                        .build();
+                        .build()
+        );
     }
 
     public RawMessage(JournalMessage journalMessage, long sequenceNumber) {
