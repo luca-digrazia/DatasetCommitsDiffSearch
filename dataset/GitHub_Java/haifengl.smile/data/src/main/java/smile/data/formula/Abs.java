@@ -20,7 +20,6 @@ import java.util.List;
 import java.util.Set;
 import smile.data.type.DataType;
 import smile.data.type.DataTypes;
-import smile.data.type.StructType;
 
 /**
  * The term of abs function.
@@ -41,22 +40,12 @@ public class Abs<T> implements Factor<T, Double> {
     }
 
     @Override
-    public String name() {
-        return String.format("abs(%s)", child.name());
-    }
-
-    @Override
     public String toString() {
-        return name();
+        return String.format("abs(%s)", child);
     }
 
     @Override
-    public boolean equals(Object o) {
-        return name().equals(o);
-    }
-
-    @Override
-    public List<? extends Factor> factors() {
+    public List<Factor> factors() {
         return Collections.singletonList(this);
     }
 
@@ -73,10 +62,5 @@ public class Abs<T> implements Factor<T, Double> {
     @Override
     public DataType type() {
         return DataTypes.DoubleType;
-    }
-
-    @Override
-    public void bind(StructType schema) {
-        child.bind(schema);
     }
 }

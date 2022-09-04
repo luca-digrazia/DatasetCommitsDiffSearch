@@ -15,11 +15,10 @@
  *******************************************************************************/
 package smile.data.formula;
 
+import java.util.List;
+import smile.data.DataFrame;
+import smile.data.Dataset;
 import smile.data.Instance;
-import smile.data.Tuple;
-import smile.data.type.DataType;
-import smile.data.type.DataTypes;
-import smile.data.type.StructType;
 
 /**
  * A model specifies the predictors and the response.
@@ -28,90 +27,26 @@ import smile.data.type.StructType;
  *
  * @author Haifeng Li
  */
-public class Model extends Formula {
+public class Model {
     /** The response variable. */
     private Factor y;
-
-    /**
-     * Constructor.
-     * @param y the response variable. All other columns will be used as predictors.
-     */
-    public Model(Factor y) {
-        this(y, all());
-    }
+    /** The predictor terms. */
+    private List<Term> x;
 
     /**
      * Constructor.
      * @param y the response variable.
      * @param x the predictor terms.
      */
-    public Model(Factor y, Term... x) {
-        super(removey(y, x));
+    public Model(Factor y, List<Term> x) {
         this.y = y;
-
-        DataType type = y.type();
-        if (!type.isPrimitive()) {
-            throw new IllegalArgumentException(String.format("Invalid data type of y: %s", type));
-        }
-    }
-
-    /** Returns a new array of terms that includes x but removes y. */
-    private static Term[] removey(Factor y, Term... x) {
-        Term[] terms = new Term[x.length+1];
-        System.arraycopy(x, 0, terms, 0, x.length);
-        terms[x.length] = remove(y);
-        return terms;
-    }
-
-    @Override
-    public StructType bind(StructType inputSchema) {
-        y.bind(inputSchema);
-        return super.bind(inputSchema);
+        this.x = x;
     }
 
     /**
-     * Apply the formula on a tuple to generate the model data.
+     * Apply the formula on a DataFrame to generate the model data.
      */
-    public Instance<Tuple> map(Tuple o) {
-        DataType type = y.type();
-        if (type == DataTypes.DoubleObjectType || type == DataTypes.FloatType) {
-            return new Instance<Tuple>() {
-                @Override
-                public Tuple x() {
-                    return apply(o);
-                }
-
-                @Override
-                public double y() {
-                    return y.applyAsDouble(o);
-                }
-            };
-        } else {
-            return new Instance<Tuple>() {
-                @Override
-                public Tuple x() {
-                    return apply(o);
-                }
-
-                @Override
-                public int label() {
-                    return y.applyAsInt(o);
-                }
-            };
-        }
-    }
-
-    /**
-     * Returns the response variable of a sample.
-     */
-    public double y(Tuple o) {
-        return y.applyAsDouble(o);
-    }
-
-    /**
-     * Returns the class label of a sample.
-     */
-    public int label(Tuple o) {
-        return y.applyAsInt(o);
+    public Dataset<Instance> apply(DataFrame df) {
+        throw new UnsupportedOperationException();
     }
 }

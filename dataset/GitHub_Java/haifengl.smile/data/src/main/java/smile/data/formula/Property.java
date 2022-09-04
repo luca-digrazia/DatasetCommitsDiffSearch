@@ -17,7 +17,6 @@ package smile.data.formula;
 
 import smile.data.type.DataType;
 import smile.data.type.DataTypes;
-import smile.data.type.StructType;
 
 import java.util.function.Function;
 import java.util.Collections;
@@ -53,22 +52,12 @@ public class Property<T, R> implements Factor<T, R> {
     }
 
     @Override
-    public String name() {
+    public String toString() {
         return name;
     }
 
     @Override
-    public String toString() {
-        return name();
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        return name().equals(o);
-    }
-
-    @Override
-    public List<? extends Factor> factors() {
+    public List<Factor> factors() {
         return Collections.singletonList(this);
     }
 
@@ -85,10 +74,5 @@ public class Property<T, R> implements Factor<T, R> {
     @Override
     public DataType type() {
         return DataTypes.object(clazz);
-    }
-
-    @Override
-    public void bind(StructType schema) {
-        throw new UnsupportedOperationException("bind() should not be called on Property");
     }
 }

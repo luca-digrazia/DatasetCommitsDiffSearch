@@ -18,9 +18,7 @@ package smile.data.vector;
 
 import smile.data.type.DataType;
 import smile.data.type.DataTypes;
-import smile.data.type.DiscreteMeasure;
 
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 /**
@@ -34,25 +32,10 @@ public interface ByteVector extends BaseVector<Byte, Integer, IntStream> {
         return DataTypes.ByteType;
     }
 
-    /** Returns the scale of measure. Returns null if unknown. */
-    DiscreteMeasure getScale();
-
-    /** Sets the (optional) scale of measure. */
-    void setScale(DiscreteMeasure scale);
-
     /**
      * Returns the value at position i.
      */
     byte getByte(int i);
-
-    /**
-     * Returns the string representation of vector.
-     * @param n Number of elements to show
-     */
-    default String toString(int n) {
-        String suffix = n >= size() ? "]" : String.format(", ... %d more]", size() - n);
-        return stream().limit(n).mapToObj(String::valueOf).collect(Collectors.joining(", ", "[", suffix));
-    }
 
     /** Creates a named byte vector.
      *

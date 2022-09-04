@@ -17,7 +17,6 @@ package smile.data.formula;
 
 import smile.data.type.DataType;
 import smile.data.type.DataTypes;
-import smile.data.type.StructType;
 
 import java.util.Collections;
 import java.util.HashSet;
@@ -50,22 +49,12 @@ public class Mul<T> implements Factor<T, Double> {
     }
 
     @Override
-    public String name() {
-        return String.format("%s * %s", a.name(), b.name());
-    }
-
-    @Override
     public String toString() {
-        return name();
+        return String.format("%s * %s", a, b);
     }
 
     @Override
-    public boolean equals(Object o) {
-        return name().equals(o);
-    }
-
-    @Override
-    public List<? extends Factor> factors() {
+    public List<Factor> factors() {
         return Collections.singletonList(this);
     }
 
@@ -84,11 +73,5 @@ public class Mul<T> implements Factor<T, Double> {
     @Override
     public DataType type() {
         return DataTypes.DoubleType;
-    }
-
-    @Override
-    public void bind(StructType schema) {
-        a.bind(schema);
-        b.bind(schema);
     }
 }

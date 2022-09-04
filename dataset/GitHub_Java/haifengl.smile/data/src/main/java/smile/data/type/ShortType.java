@@ -47,9 +47,4 @@ public class ShortType implements DataType {
     public Short valueOf(String s) throws ParseException {
         return Short.valueOf(s);
     }
-
-    @Override
-    public boolean equals(Object o) {
-        return o instanceof ShortType;
-    }
 }

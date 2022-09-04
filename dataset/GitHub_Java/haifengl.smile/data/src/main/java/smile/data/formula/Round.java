@@ -17,7 +17,6 @@ package smile.data.formula;
 
 import smile.data.type.DataType;
 import smile.data.type.DataTypes;
-import smile.data.type.StructType;
 
 import java.util.Collections;
 import java.util.List;
@@ -42,22 +41,12 @@ public class Round<T> implements Factor<T, Long> {
     }
 
     @Override
-    public String name() {
-        return String.format("round(%s)", child.name());
-    }
-
-    @Override
     public String toString() {
-        return name();
+        return String.format("round(%s)", child);
     }
 
     @Override
-    public boolean equals(Object o) {
-        return name().equals(o);
-    }
-
-    @Override
-    public List<? extends Factor> factors() {
+    public List<Factor> factors() {
         return Collections.singletonList(this);
     }
 
@@ -74,10 +63,5 @@ public class Round<T> implements Factor<T, Long> {
     @Override
     public DataType type() {
         return DataTypes.LongType;
-    }
-
-    @Override
-    public void bind(StructType schema) {
-        child.bind(schema);
     }
 }

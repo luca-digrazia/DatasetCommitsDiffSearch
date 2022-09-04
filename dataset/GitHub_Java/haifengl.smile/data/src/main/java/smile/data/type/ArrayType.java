@@ -35,13 +35,6 @@ public class ArrayType implements DataType {
         this.type = type;
     }
 
-    /**
-     * Returns the type of array elements.
-     */
-    public DataType getComponentType() {
-        return type;
-    }
-
     @Override
     public String name() {
         return String.format("array[%s]", type.name());
@@ -67,12 +60,4 @@ public class ArrayType implements DataType {
         }
         return array;
     }
-
-    @Override
-    public boolean equals(Object o) {
-        if (o instanceof ArrayType) {
-            return type == ((ArrayType) o).getComponentType();
-        }
-
-        return false;
-    }}
+}

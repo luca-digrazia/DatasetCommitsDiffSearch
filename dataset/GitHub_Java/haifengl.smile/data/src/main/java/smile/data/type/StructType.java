@@ -18,7 +18,6 @@ package smile.data.type;
 import java.text.ParseException;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import smile.data.Tuple;
@@ -35,28 +34,16 @@ public class StructType implements DataType {
     /** Struct fields. */
     private final StructField[] fields;
     /** Field name to index map. */
-    private final Map<String, Integer> index = new HashMap<>();
+    private final Map<String, Integer> index;
 
     /**
      * Constructor.
      */
     public StructType(StructField... fields) {
         this.fields = fields;
-        initFieldIndex();
-    }
-
-    /**
-     * Constructor.
-     */
-    public StructType(List<StructField> fields) {
-        this.fields = fields.toArray(new StructField[fields.size()]);
-        initFieldIndex();
-    }
-
-    /** Initialize the field index mapping. */
-    private void initFieldIndex() {
-        for (int i = 0; i < this.fields.length; i++) {
-            StructField field = this.fields[i];
+        this.index = new HashMap<>();
+        for (int i = 0; i < fields.length; i++) {
+            StructField field = fields[i];
             index.put(field.name, i);
         }
     }

@@ -19,7 +19,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import smile.data.type.DataType;
-import smile.data.type.StructType;
 
 /**
  * Remove a factor from the formula.
@@ -40,22 +39,12 @@ public class Remove<T, R> implements Factor<T, R> {
     }
 
     @Override
-    public String name() {
-        return factor.name();
-    }
-
-    @Override
     public String toString() {
-        return String.format("remove(%s)", factor);
+        return String.format("- %s", factor);
     }
 
     @Override
-    public boolean equals(Object o) {
-        return name().equals(o);
-    }
-
-    @Override
-    public List<? extends Factor> factors() {
+    public List<Factor> factors() {
         return Collections.singletonList(factor);
     }
 
@@ -72,10 +61,5 @@ public class Remove<T, R> implements Factor<T, R> {
     @Override
     public DataType type() {
         throw new UnsupportedOperationException("Remove.type() should never be called");
-    }
-
-    @Override
-    public void bind(StructType schema) {
-        factor.bind(schema);
     }
 }
