@@ -1,7 +1,24 @@
+/*
+ * Copyright (C) 2020 Graylog, Inc.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the Server Side Public License, version 1,
+ * as published by MongoDB, Inc.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * Server Side Public License for more details.
+ *
+ * You should have received a copy of the Server Side Public License
+ * along with this program. If not, see
+ * <http://www.mongodb.com/licensing/server-side-public-license>.
+ */
 package org.graylog.storage.elasticsearch6;
 
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Iterables;
 import io.searchbox.client.JestClient;
 import io.searchbox.client.JestResult;
@@ -16,11 +33,11 @@ import org.graylog.storage.elasticsearch6.jest.JestUtils;
 import org.graylog2.indexer.IndexMapping;
 import org.graylog2.indexer.messages.ChunkedBulkIndexer;
 import org.graylog2.indexer.messages.DocumentNotFoundException;
+import org.graylog2.indexer.messages.Indexable;
 import org.graylog2.indexer.messages.IndexingRequest;
 import org.graylog2.indexer.messages.Messages;
 import org.graylog2.indexer.messages.MessagesAdapter;
 import org.graylog2.indexer.results.ResultMessage;
-import org.graylog2.plugin.Message;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,22 +60,27 @@ public class MessagesAdapterES6 implements MessagesAdapter {
     static final String INDEX_BLOCK_ERROR = "cluster_block_exception";
     static final String INDEX_BLOCK_REASON = "blocked by: [FORBIDDEN/12/index read-only / allow delete (api)];";
     static final String MAPPER_PARSING_EXCEPTION = "mapper_parsing_exception";
+    static final String UNAVAILABLE_SHARDS_EXCEPTION = "unavailable_shards_exception";
+    static final String PRIMARY_SHARD_NOT_ACTIVE_REASON = "primary shard is not active";
 
     private final JestClient client;
     private final boolean useExpectContinue;
 
     private final Meter invalidTimestampMeter;
     private final ChunkedBulkIndexer chunkedBulkIndexer;
+    private final ObjectMapper objectMapper;
 
     @Inject
     public MessagesAdapterES6(JestClient client,
                               @Named("elasticsearch_use_expect_continue") boolean useExpectContinue,
                               MetricRegistry metricRegistry,
-                              ChunkedBulkIndexer chunkedBulkIndexer) {
+                              ChunkedBulkIndexer chunkedBulkIndexer,
+                              ObjectMapper objectMapper) {
         this.client = client;
         this.useExpectContinue = useExpectContinue;
         invalidTimestampMeter = metricRegistry.meter(name(Messages.class, "invalid-timestamps"));
         this.chunkedBulkIndexer = chunkedBulkIndexer;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -92,15 +114,15 @@ public class MessagesAdapterES6 implements MessagesAdapter {
             return Collections.emptyList();
         }
 
-        final Map<String, Message> messageMap = messageList.stream()
+        final Map<String, Indexable> messageMap = messageList.stream()
                 .map(IndexingRequest::message)
                 .distinct()
-                .collect(Collectors.toMap(Message::getId, Function.identity()));
+                .collect(Collectors.toMap(Indexable::getId, Function.identity()));
         final List<Messages.IndexingError> indexFailures = new ArrayList<>(failedItems.size());
         for (BulkResult.BulkResultItem item : failedItems) {
             LOG.warn("Failed to index message: index=<{}> id=<{}> error=<{}>", item.index, item.id, item.error);
 
-            final Message messageEntry = messageMap.get(item.id);
+            final Indexable messageEntry = messageMap.get(item.id);
 
             final Messages.IndexingError indexFailure = indexingErrorFromResultItem(item, messageEntry);
 
@@ -110,7 +132,7 @@ public class MessagesAdapterES6 implements MessagesAdapter {
         return indexFailures;
     }
 
-    private Messages.IndexingError indexingErrorFromResultItem(BulkResult.BulkResultItem item, Message message) {
+    private Messages.IndexingError indexingErrorFromResultItem(BulkResult.BulkResultItem item, Indexable message) {
         return Messages.IndexingError.create(message, item.index, errorTypeFromResponse(item), item.errorReason);
     }
 
@@ -118,6 +140,7 @@ public class MessagesAdapterES6 implements MessagesAdapter {
         switch (item.errorType) {
             case INDEX_BLOCK_ERROR: return Messages.IndexingError.ErrorType.IndexBlocked;
             case MAPPER_PARSING_EXCEPTION: return Messages.IndexingError.ErrorType.MappingError;
+            case UNAVAILABLE_SHARDS_EXCEPTION: if (item.errorReason.contains(PRIMARY_SHARD_NOT_ACTIVE_REASON)) return Messages.IndexingError.ErrorType.IndexBlocked;
             default: return Messages.IndexingError.ErrorType.Unknown;
         }
     }
@@ -150,7 +173,12 @@ public class MessagesAdapterES6 implements MessagesAdapter {
                 throw new ChunkedBulkIndexer.EntityTooLargeException(indexedSuccessfully, indexingErrorsFrom(failedItems, messageList));
             }
 
-            // TODO should we check result.isSucceeded()?
+            // Checking `result.isSucceeded()` is always `false` if at least one item fails. Instead, we are checking the response code to
+            // to determine if the result failed in general.
+
+            if (result.getResponseCode() >= 400) {
+                throw JestUtils.specificException(() -> "Error during bulk indexing: ", result.getJsonObject().get("error"));
+            }
 
             indexedSuccessfully += chunk.size();
 
@@ -179,9 +207,9 @@ public class MessagesAdapterES6 implements MessagesAdapter {
         final Bulk.Builder bulk = new Bulk.Builder();
 
         for (IndexingRequest entry : chunk) {
-            final Message message = entry.message();
+            final Indexable message = entry.message();
 
-            bulk.addAction(new Index.Builder(message.toElasticSearchObject(invalidTimestampMeter))
+            bulk.addAction(new Index.Builder(message.toElasticSearchObject(objectMapper, invalidTimestampMeter))
                     .index(entry.indexSet().getWriteIndexAlias())
                     .type(IndexMapping.TYPE_MESSAGE)
                     .id(message.getId())
