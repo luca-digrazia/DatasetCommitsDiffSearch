@@ -699,10 +699,9 @@ public class FdoSupport {
     if (!featureConfiguration.isEnabled(CppRuleClasses.AUTOFDO)) {
       return null;
     }
-
-    Artifact profile = getFdoSupportProvider(ruleContext).getProfileArtifact();
-    buildVariables.addStringVariable("fdo_profile_path", profile.getExecPathString());
-    return profile;
+    buildVariables.addStringVariable("fdo_profile_path", getAutoProfilePath(
+        fdoProfile, fdoRootExecPath).getPathString());
+    return getFdoSupportProvider(ruleContext).getAutoProfileArtifact();
   }
 
   /**
@@ -717,7 +716,7 @@ public class FdoSupport {
   public FdoSupportProvider createFdoSupportProvider(
       RuleContext ruleContext) {
     if (fdoRoot == null) {
-      return new FdoSupportProvider(this, null, null);
+      return new FdoSupportProvider(this, null, null, null);
     }
 
     Preconditions.checkState(fdoPath != null);
@@ -727,6 +726,12 @@ public class FdoSupport {
     Artifact profileArtifact = ruleContext.getAnalysisEnvironment().getDerivedArtifact(
         fdoPath.getRelative(profileRootRelativePath), fdoRoot);
     ruleContext.registerAction(new FdoStubAction(ruleContext.getActionOwner(), profileArtifact));
+
+    Artifact autoProfileArtifact = ruleContext.getAnalysisEnvironment().getDerivedArtifact(
+        fdoPath.getRelative(getAutoProfileRootRelativePath(fdoProfile)), fdoRoot);
+    ruleContext.getAnalysisEnvironment().registerAction(
+        new FdoStubAction(ruleContext.getActionOwner(), autoProfileArtifact));
+
     Preconditions.checkState(fdoPath != null);
     ImmutableMap.Builder<PathFragment, Artifact> gcdaArtifacts = ImmutableMap.builder();
     for (PathFragment path : gcdaFiles) {
@@ -736,7 +741,8 @@ public class FdoSupport {
       gcdaArtifacts.put(path, gcdaArtifact);
     }
 
-    return new FdoSupportProvider(this, profileArtifact, gcdaArtifacts.build());
+    return new FdoSupportProvider(
+        this, profileArtifact, autoProfileArtifact, gcdaArtifacts.build());
   }
 
   private static FdoSupportProvider getFdoSupportProvider(RuleContext ruleContext) {

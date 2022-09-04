@@ -18,6 +18,8 @@ import com.google.devtools.build.lib.actions.AbstractAction;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.actions.Executor;
+import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.vfs.Path;
 
@@ -54,6 +56,11 @@ public final class FdoStubAction extends AbstractAction {
   @Override
   protected String computeKey() {
     return "fdoStubAction";
+  }
+
+  @Override
+  public ResourceSet estimateResourceConsumption(Executor executor) {
+    return ResourceSet.ZERO;
   }
 
   @Override
