@@ -83,19 +83,17 @@ public abstract class StarlarkSemantics {
     public static final String INCOMPATIBLE_NO_ATTR_LICENSE = "incompatible_no_attr_license";
     public static final String INCOMPATIBLE_ALLOW_TAGS_PROPAGATION =
         "incompatible_allow_tags_propagation";
+    public static final String INCOMPATIBLE_REMOVE_ENABLE_TOOLCHAIN_TYPES =
+        "incompatible_remove_enable_toolchain_types";
     public static final String INCOMPATIBLE_REQUIRE_LINKER_INPUT_CC_API =
         "incompatible_require_linker_input_cc_api";
-    public static final String INCOMPATIBLE_LINKOPTS_TO_LINKLIBS =
-        "incompatible_linkopts_to_linklibs";
-    public static final String RECORD_RULE_INSTANTIATION_CALLSTACK =
-        "record_rule_instantiation_callstack";
   }
 
   // TODO(adonovan): replace the fields of StarlarkSemantics
   // by a map from string to object, and make it the clients's job
   // to know the type. This function would then become simply:
   //  return Boolean.TRUE.equals(map.get(flag)).
-  public boolean flagValue(String flag) {
+  boolean flagValue(String flag) {
     switch (flag) {
       case FlagIdentifier.EXPERIMENTAL_ACTION_ARGS:
         return experimentalActionArgs();
@@ -137,12 +135,10 @@ public abstract class StarlarkSemantics {
         return incompatibleNoAttrLicense();
       case FlagIdentifier.INCOMPATIBLE_ALLOW_TAGS_PROPAGATION:
         return experimentalAllowTagsPropagation();
+      case FlagIdentifier.INCOMPATIBLE_REMOVE_ENABLE_TOOLCHAIN_TYPES:
+        return incompatibleRemoveEnabledToolchainTypes();
       case FlagIdentifier.INCOMPATIBLE_REQUIRE_LINKER_INPUT_CC_API:
         return incompatibleRequireLinkerInputCcApi();
-      case FlagIdentifier.INCOMPATIBLE_LINKOPTS_TO_LINKLIBS:
-        return incompatibleLinkoptsToLinkLibs();
-      case FlagIdentifier.RECORD_RULE_INSTANTIATION_CALLSTACK:
-        return recordRuleInstantiationCallstack();
       default:
         throw new IllegalArgumentException(flag);
     }
@@ -250,6 +246,8 @@ public abstract class StarlarkSemantics {
 
   public abstract boolean incompatibleNoTargetOutputGroup();
 
+  public abstract boolean incompatibleRemoveEnabledToolchainTypes();
+
   public abstract boolean incompatibleRestrictNamedParams();
 
   public abstract boolean incompatibleRunShellCommandString();
@@ -269,10 +267,6 @@ public abstract class StarlarkSemantics {
   public abstract boolean experimentalAllowTagsPropagation();
 
   public abstract boolean incompatibleUseCcConfigureFromRulesCc();
-
-  public abstract boolean incompatibleLinkoptsToLinkLibs();
-
-  public abstract boolean recordRuleInstantiationCallstack();
 
   @Memoized
   @Override
@@ -341,6 +335,7 @@ public abstract class StarlarkSemantics {
           .incompatibleNoRuleOutputsParam(false)
           .incompatibleNoSupportToolsInActionInputs(true)
           .incompatibleNoTargetOutputGroup(true)
+          .incompatibleRemoveEnabledToolchainTypes(true)
           .incompatibleRunShellCommandString(false)
           .incompatibleRestrictNamedParams(true)
           .incompatibleVisibilityPrivateAttributesAtDefinition(false)
@@ -350,8 +345,6 @@ public abstract class StarlarkSemantics {
           .incompatibleRequireLinkerInputCcApi(false)
           .incompatibleRestrictStringEscapes(false)
           .incompatibleUseCcConfigureFromRulesCc(false)
-          .incompatibleLinkoptsToLinkLibs(false)
-          .recordRuleInstantiationCallstack(false)
           .build();
 
   /** Builder for {@link StarlarkSemantics}. All fields are mandatory. */
@@ -427,6 +420,8 @@ public abstract class StarlarkSemantics {
 
     public abstract Builder incompatibleNoTargetOutputGroup(boolean value);
 
+    public abstract Builder incompatibleRemoveEnabledToolchainTypes(boolean value);
+
     public abstract Builder incompatibleRestrictNamedParams(boolean value);
 
     public abstract Builder incompatibleRunShellCommandString(boolean value);
@@ -444,10 +439,6 @@ public abstract class StarlarkSemantics {
     public abstract Builder incompatibleRestrictStringEscapes(boolean value);
 
     public abstract Builder incompatibleUseCcConfigureFromRulesCc(boolean value);
-
-    public abstract Builder incompatibleLinkoptsToLinkLibs(boolean value);
-
-    public abstract Builder recordRuleInstantiationCallstack(boolean value);
 
     public abstract StarlarkSemantics build();
   }
