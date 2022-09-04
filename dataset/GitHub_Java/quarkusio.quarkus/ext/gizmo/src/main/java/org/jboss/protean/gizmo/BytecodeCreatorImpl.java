@@ -1,19 +1,3 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package org.jboss.protean.gizmo;
 
 import java.lang.reflect.Method;
@@ -772,13 +756,13 @@ class BytecodeCreatorImpl implements BytecodeCreator {
                     methodVisitor.visitInsn(Opcodes.RETURN);
                 } else {
                     loadResultHandle(methodVisitor, resolvedReturnValue, BytecodeCreatorImpl.this, methodDescriptor.getReturnType());
-                    if (methodDescriptor.getReturnType().equals("S") || methodDescriptor.getReturnType().equals("Z") || methodDescriptor.getReturnType().equals("I") || methodDescriptor.getReturnType().equals("B")) {
+                    if (resolvedReturnValue.getType().equals("S") || resolvedReturnValue.getType().equals("Z") || resolvedReturnValue.getType().equals("I") || resolvedReturnValue.getType().equals("B")) {
                         methodVisitor.visitInsn(Opcodes.IRETURN);
-                    } else if (methodDescriptor.getReturnType().equals("J")) {
+                    } else if (resolvedReturnValue.getType().equals("J")) {
                         methodVisitor.visitInsn(Opcodes.LRETURN);
-                    } else if (methodDescriptor.getReturnType().equals("F")) {
+                    } else if (resolvedReturnValue.getType().equals("F")) {
                         methodVisitor.visitInsn(Opcodes.FRETURN);
-                    } else if (methodDescriptor.getReturnType().equals("D")) {
+                    } else if (resolvedReturnValue.getType().equals("D")) {
                         methodVisitor.visitInsn(Opcodes.DRETURN);
                     } else {
                         methodVisitor.visitInsn(Opcodes.ARETURN);
