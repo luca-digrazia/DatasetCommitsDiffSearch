@@ -18,6 +18,8 @@ package smile.classification;
 import java.io.Serializable;
 import java.util.*;
 import java.util.concurrent.Callable;
+import java.util.Map.Entry;
+
 import smile.data.Attribute;
 import smile.data.NominalAttribute;
 import smile.data.NumericAttribute;
@@ -94,7 +96,7 @@ import smile.util.MulticoreExecutor;
  * 
  * @author Haifeng Li
  */
-public class DecisionTree implements SoftClassifier<double[]> {
+public class DecisionTree implements SoftClassifier<double[]>, Serializable {
     private static final long serialVersionUID = 1L;
 
     /**
