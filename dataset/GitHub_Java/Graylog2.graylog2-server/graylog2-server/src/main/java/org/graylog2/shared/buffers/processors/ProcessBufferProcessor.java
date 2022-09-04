@@ -139,7 +139,7 @@ public class ProcessBufferProcessor implements WorkHandler<MessageEvent> {
             if (!message.hasField(Message.FIELD_GL2_MESSAGE_ID) || isNullOrEmpty(message.getFieldAs(String.class, Message.FIELD_GL2_MESSAGE_ID))) {
                 // Set the message ID once all message processors have finished
                 // See documentation of Message.FIELD_GL2_MESSAGE_ID for details
-                message.addField(Message.FIELD_GL2_MESSAGE_ID, ulid.nextULID());
+                message.addField(Message.FIELD_GL2_MESSAGE_ID, ulid.nextULID(message.getTimestamp().getMillis()));
             }
 
             // The processing time should only be set once all message processors have finished
