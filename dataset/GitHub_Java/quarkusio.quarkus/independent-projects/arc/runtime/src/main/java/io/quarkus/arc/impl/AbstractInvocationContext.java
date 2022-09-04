@@ -15,8 +15,6 @@ import java.util.function.Supplier;
 
 abstract class AbstractInvocationContext implements ArcInvocationContext, Supplier<Map<String, Object>> {
 
-    private static final Object[] EMPTY_PARAMS = new Object[0];
-
     protected final Method method;
     protected final Constructor<?> constructor;
     protected final Set<Annotation> interceptorBindings;
@@ -33,7 +31,7 @@ abstract class AbstractInvocationContext implements ArcInvocationContext, Suppli
         this.target = target;
         this.method = method;
         this.constructor = constructor;
-        this.parameters = parameters != null ? parameters : EMPTY_PARAMS;
+        this.parameters = parameters;
         this.contextData = contextData != null ? contextData : new LazyValue<>(this);
         this.interceptorBindings = interceptorBindings;
         this.chain = chain;
