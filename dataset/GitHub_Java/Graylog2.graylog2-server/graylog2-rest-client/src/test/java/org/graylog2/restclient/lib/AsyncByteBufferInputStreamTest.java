@@ -153,7 +153,7 @@ public class AsyncByteBufferInputStreamTest {
         reader.join();
         writer.join();
 
-        await().atMost(1, TimeUnit.SECONDS).untilTrue(caughtExceptionInReader);
+        assertTrue(caughtExceptionInReader.get());
         assertTrue(stream.getFailed() instanceof Exception);
         assertEquals("Some weird error", stream.getFailed().getMessage());
     }
