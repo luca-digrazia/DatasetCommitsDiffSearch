@@ -13,26 +13,37 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android;
 
-import static com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition.HOST;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
-import static com.google.devtools.build.lib.syntax.Type.BOOLEAN;
-import static com.google.devtools.build.lib.syntax.Type.STRING_LIST;
+import static com.google.devtools.build.lib.packages.Type.BOOLEAN;
+import static com.google.devtools.build.lib.packages.Type.STRING_LIST;
 
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
+import com.google.devtools.build.lib.analysis.config.ExecutionTransitionFactory;
 import com.google.devtools.build.lib.packages.RuleClass;
-import com.google.devtools.build.lib.packages.RuleClass.Builder;
 
 /** Rule definition for the {@code android_host_service_fixture} rule. */
 public class AndroidHostServiceFixtureRule implements RuleDefinition {
+
+  private final Class<? extends AndroidHostServiceFixture> factoryClass;
+
+  public AndroidHostServiceFixtureRule(Class<? extends AndroidHostServiceFixture> factoryClass) {
+    this.factoryClass = factoryClass;
+  }
+
   @Override
-  public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
+  public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment env) {
     return builder
         .setUndocumented()
-        .add(attr("executable", LABEL).exec().cfg(HOST).mandatory().allowedFileTypes())
+        .add(
+            attr("executable", LABEL)
+                .exec()
+                .cfg(ExecutionTransitionFactory.create())
+                .mandatory()
+                .allowedFileTypes())
         .add(attr("service_names", STRING_LIST))
         .add(
             attr("support_apks", LABEL_LIST)
@@ -47,8 +58,8 @@ public class AndroidHostServiceFixtureRule implements RuleDefinition {
   public Metadata getMetadata() {
     return RuleDefinition.Metadata.builder()
         .name("android_host_service_fixture")
-        .ancestors(BaseRuleClasses.RuleBase.class)
-        .factoryClass(AndroidHostServiceFixture.class)
+        .ancestors(BaseRuleClasses.NativeActionCreatingRule.class)
+        .factoryClass(factoryClass)
         .build();
   }
 }

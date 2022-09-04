@@ -19,10 +19,10 @@ import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
 
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
-import com.google.devtools.build.lib.analysis.config.HostTransition;
+import com.google.devtools.build.lib.analysis.config.ExecutionTransitionFactory;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
-import com.google.devtools.build.lib.packages.SkylarkProviderIdentifier;
+import com.google.devtools.build.lib.packages.StarlarkProviderIdentifier;
 import com.google.devtools.build.lib.util.FileTypeSet;
 
 /** Rule definition for the {@code android_instrumentation_test} rule. */
@@ -52,10 +52,10 @@ public class AndroidInstrumentationTestBaseRule implements RuleDefinition {
             attr("target_device", LABEL)
                 .mandatory()
                 .exec()
-                .cfg(HostTransition.INSTANCE)
+                .cfg(ExecutionTransitionFactory.create())
                 .allowedFileTypes(FileTypeSet.NO_FILE)
                 .mandatoryProviders(
-                    SkylarkProviderIdentifier.forKey(AndroidDeviceBrokerInfo.PROVIDER.getKey())))
+                    StarlarkProviderIdentifier.forKey(AndroidDeviceBrokerInfo.PROVIDER.getKey())))
         /* <!-- #BLAZE_RULE(android_instrumentation_test).ATTRIBUTE(support_apks) -->
         Other APKs to install on the device before the instrumentation test starts.
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
@@ -72,7 +72,7 @@ public class AndroidInstrumentationTestBaseRule implements RuleDefinition {
         .add(
             attr("$test_entry_point", LABEL)
                 .exec()
-                .cfg(HostTransition.INSTANCE)
+                .cfg(ExecutionTransitionFactory.create())
                 .value(
                     environment.getToolsLabel("//tools/android:instrumentation_test_entry_point")))
         .build();
@@ -98,7 +98,7 @@ public class AndroidInstrumentationTestBaseRule implements RuleDefinition {
   The <a href="${link android_instrumentation_test.test_app}">test_app</a> attribute specifies the
   <code>android_binary</code> which contains the test. This <code>android_binary</code> in turn
   specifies the <code>android_binary</code> application under test through its
-  <a href="${link android_binary.instruments">instruments</a> attribute.
+  <a href="${link android_binary.instruments}">instruments</a> attribute.
 </p>
 
 <h4 id="android_instrumentation_test_examples">Example</h4>
@@ -138,7 +138,7 @@ android_binary(
     name = "hello_world_test_app",
     instruments = "//java/com/samples/hello_world:hello_world_app",
     manifest = "AndroidManifest.xml",
-    deps = ["hello_world_test_lib"],
+    deps = [":hello_world_test_lib"],
 )
 
 android_instrumentation_test(
