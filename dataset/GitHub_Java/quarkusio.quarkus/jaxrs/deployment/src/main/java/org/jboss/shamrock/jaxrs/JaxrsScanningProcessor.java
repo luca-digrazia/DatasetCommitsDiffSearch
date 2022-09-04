@@ -22,20 +22,24 @@
 package org.jboss.shamrock.jaxrs;
 
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.lang.reflect.Modifier;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.security.AccessController;
+import java.security.PrivilegedExceptionAction;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Enumeration;
+import java.util.HashSet;
+import java.util.Set;
 
 import javax.servlet.Servlet;
 import javax.ws.rs.ext.Providers;
 
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
-import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.IndexView;
 import org.jboss.jandex.MethodInfo;
@@ -84,16 +88,16 @@ public class JaxrsScanningProcessor implements ResourceProcessor {
     public void process(ArchiveContext archiveContext, ProcessorContext processorContext) throws Exception {
         //this is pretty yuck, and does not really belong here, but it is needed to get the json-p
         //provider to work
-        processorContext.addReflectiveClass(true, false, "org.glassfish.json.JsonProviderImpl", "com.fasterxml.jackson.module.jaxb.JaxbAnnotationIntrospector");
+        processorContext.addReflectiveClass(true, false,"org.glassfish.json.JsonProviderImpl", "com.fasterxml.jackson.module.jaxb.JaxbAnnotationIntrospector");
 
-        IndexView index = archiveContext.getCombinedIndex();
+        IndexView index = archiveContext.getIndex();
         Collection<AnnotationInstance> app = index.getAnnotations(APPLICATION_PATH);
         if (app.isEmpty()) {
             return;
         }
         Collection<AnnotationInstance> xmlRoot = index.getAnnotations(XML_ROOT);
         if (!xmlRoot.isEmpty()) {
-            processorContext.addReflectiveClass(true, false, "com.sun.xml.bind.v2.ContextFactory", "com.sun.xml.internal.bind.v2.ContextFactory");
+            processorContext.addReflectiveClass(true, false,"com.sun.xml.bind.v2.ContextFactory", "com.sun.xml.internal.bind.v2.ContextFactory");
         }
         AnnotationInstance appPath = app.iterator().next();
         String path = appPath.value().asString();
@@ -101,42 +105,32 @@ public class JaxrsScanningProcessor implements ResourceProcessor {
             UndertowDeploymentTemplate undertow = recorder.getRecordingProxy(UndertowDeploymentTemplate.class);
             InjectionInstance<? extends Servlet> instanceFactory = (InjectionInstance<? extends Servlet>) recorder.newInstanceFactory(HttpServlet30Dispatcher.class.getName());
             InstanceFactory<? extends Servlet> factory = undertow.createInstanceFactory(instanceFactory);
-            undertow.registerServlet(null, JAX_RS_SERVLET_NAME, recorder.classProxy(HttpServlet30Dispatcher.class.getName()), true, 1, factory);
-            String mappingPath;
-            if(path.endsWith("/")) {
-                mappingPath = path + "*";
-            } else {
-                mappingPath = path + "/*";
-            }
-
-            undertow.addServletMapping(null, JAX_RS_SERVLET_NAME, mappingPath);
+            undertow.registerServlet(null, JAX_RS_SERVLET_NAME, recorder.classProxy(HttpServlet30Dispatcher.class.getName()), true, factory);
+            undertow.addServletMapping(null, JAX_RS_SERVLET_NAME, path + "/*");
             Collection<AnnotationInstance> paths = index.getAnnotations(PATH);
             if (paths != null) {
-                processorContext.addReflectiveClass(false, false, HttpServlet30Dispatcher.class.getName());
+                processorContext.addReflectiveClass(false,  false, HttpServlet30Dispatcher.class.getName());
                 StringBuilder sb = new StringBuilder();
                 boolean first = true;
                 for (AnnotationInstance annotation : paths) {
                     if (annotation.target().kind() == AnnotationTarget.Kind.CLASS) {
-                        ClassInfo clazz = annotation.target().asClass();
-                        if (!Modifier.isInterface(clazz.flags())) {
-                            if (first) {
-                                first = false;
-                            } else {
-                                sb.append(",");
-                            }
-                            String className = clazz.name().toString();
-                            sb.append(className);
-                            processorContext.addReflectiveClass(true, true, className);
+                        if (first) {
+                            first = false;
+                        } else {
+                            sb.append(",");
                         }
+                        String className = annotation.target().asClass().name().toString();
+                        sb.append(className);
+                        processorContext.addReflectiveClass(true, true, className);
                     }
                 }
 
-                if (sb.length() > 0) {
+                if(sb.length() > 0) {
                     undertow.addServletContextParameter(null, ResteasyContextParameters.RESTEASY_SCANNED_RESOURCES, sb.toString());
                 }
                 undertow.addServletContextParameter(null, "resteasy.servlet.mapping.prefix", path);
                 undertow.addServletContextParameter(null, "resteasy.injector.factory", ShamrockInjectorFactory.class.getName());
-
+                
             }
         }
         for (DotName annotationType : METHOD_ANNOTATIONS) {
@@ -149,38 +143,12 @@ public class JaxrsScanningProcessor implements ResourceProcessor {
                         processorContext.addReflectiveClass(true, true, className);
                     }
                 }
-                for (Type param : method.parameters()) {
-                    if (param.kind() != Type.Kind.PRIMITIVE) {
-                        String className = param.name().toString();
-                        if (!className.equals(String.class.getName())) {
-                            processorContext.addReflectiveClass(true, true, className);
-                        }
-                    }
-                }
             }
         }
 
         try (BytecodeRecorder recorder = processorContext.addStaticInitTask(RuntimePriority.JAXRS_DEPLOYMENT)) {
             JaxrsTemplate jaxrs = recorder.getRecordingProxy(JaxrsTemplate.class);
             jaxrs.setupIntegration(null);
-        }
-
-        //register providers for reflection
-        Enumeration<URL> resources = getClass().getClassLoader().getResources("META-INF/services/" + Providers.class.getName());
-        while (resources.hasMoreElements()) {
-            URL url = resources.nextElement();
-            try (InputStream in = url.openStream()) {
-                BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8));
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    if (line.contains("#")) {
-                        line = line.substring(line.indexOf("#"));
-                    }
-                    line = line.trim();
-                    if (line.equals("")) continue;
-                    processorContext.addReflectiveClass(false, false, line);
-                }
-            }
         }
     }
 
@@ -189,4 +157,43 @@ public class JaxrsScanningProcessor implements ResourceProcessor {
         return RuntimePriority.JAXRS_DEPLOYMENT;
     }
 
+    private Set<String> loadProviders() {
+
+        final Set<String> providers = new HashSet<>();
+        try {
+            Enumeration<URL> en;
+            en = Thread.currentThread().getContextClassLoader().getResources("META-INF/services/" + Providers.class.getName());
+
+            while (en.hasMoreElements()) {
+                final URL url = en.nextElement();
+                InputStream is;
+                if (System.getSecurityManager() == null) {
+                    is = url.openStream();
+                } else {
+                    is = AccessController.doPrivileged(new PrivilegedExceptionAction<InputStream>() {
+                        @Override
+                        public InputStream run() throws IOException {
+                            return url.openStream();
+                        }
+                    });
+                }
+
+                try {
+                    BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8));
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        line = line.trim();
+                        if (line.equals("")) continue;
+                        providers.add(line);
+                    }
+                } finally {
+                    is.close();
+                }
+            }
+            return Collections.unmodifiableSet(providers);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+
+    }
 }
