@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.skylarkbuildapi.android;
 
 import com.google.devtools.build.lib.skylarkbuildapi.ProviderApi;
 import com.google.devtools.build.lib.skylarkbuildapi.StructApi;
+import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcLinkParamsStoreApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcLinkingInfoApi;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
@@ -47,10 +48,10 @@ public interface AndroidCcLinkParamsProviderApi<T extends CcLinkingInfoApi> exte
         parameters = {
           @Param(
               name = "store",
-              doc = "The CcLinkingInfo provider.",
+              doc = "The cc link params store.",
               positional = true,
               named = false,
-              type = CcLinkingInfoApi.class),
+              type = CcLinkParamsStoreApi.class),
         },
         selfCall = true)
     @SkylarkConstructor(objectType = AndroidCcLinkParamsProviderApi.class)
