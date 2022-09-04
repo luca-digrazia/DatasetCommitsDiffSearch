@@ -32,11 +32,11 @@ import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.LabelExpander;
 import com.google.devtools.build.lib.analysis.LabelExpander.NotUniqueExpansionException;
 import com.google.devtools.build.lib.analysis.MakeVariableExpander.ExpansionException;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.FragmentCollection;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -1019,7 +1019,9 @@ public final class SkylarkRuleContext implements SkylarkValue {
   public String expandMakeVariables(String attributeName, String command,
       final Map<String, String> additionalSubstitutions) throws EvalException {
     checkMutable("expand_make_variables");
-    ConfigurationMakeVariableContext makeVariableContext =
+    return ruleContext.expandMakeVariables(
+        attributeName,
+        command,
         new ConfigurationMakeVariableContext(
             // TODO(lberki): This should be removed. But only after either verifying that no one
             // uses it or providing an alternative.
@@ -1034,8 +1036,7 @@ public final class SkylarkRuleContext implements SkylarkValue {
               return super.lookupMakeVariable(variableName);
             }
           }
-        };
-    return ruleContext.getExpander(makeVariableContext).expand(attributeName, command);
+        });
   }
 
 

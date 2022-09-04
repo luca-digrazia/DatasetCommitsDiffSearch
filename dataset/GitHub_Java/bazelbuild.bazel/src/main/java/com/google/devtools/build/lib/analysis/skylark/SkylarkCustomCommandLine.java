@@ -19,9 +19,9 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Interner;
 import com.google.common.collect.Lists;
+import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.analysis.actions.CommandLine;
-import com.google.devtools.build.lib.analysis.actions.CommandLineItem;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.events.EventHandler;
@@ -32,7 +32,7 @@ import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.SkylarkList;
-import com.google.devtools.build.lib.syntax.SkylarkSemantics;
+import com.google.devtools.build.lib.syntax.SkylarkSemanticsOptions;
 import java.util.ArrayList;
 import java.util.IllegalFormatException;
 import java.util.List;
@@ -40,7 +40,7 @@ import javax.annotation.Nullable;
 
 /** Supports ctx.actions.args() from Skylark. */
 class SkylarkCustomCommandLine extends CommandLine {
-  private final SkylarkSemantics skylarkSemantics;
+  private final SkylarkSemanticsOptions skylarkSemantics;
   private final EventHandler eventHandler;
   private final ImmutableList<Object> arguments;
 
@@ -116,7 +116,7 @@ class SkylarkCustomCommandLine extends CommandLine {
         List<Object> arguments,
         int argi,
         ImmutableList.Builder<String> builder,
-        SkylarkSemantics skylarkSemantics,
+        SkylarkSemanticsOptions skylarkSemantics,
         EventHandler eventHandler)
         throws CommandLineExpansionException {
       final List<Object> mutatedValues;
@@ -144,21 +144,11 @@ class SkylarkCustomCommandLine extends CommandLine {
                   null));
         }
         List resultAsList = (List) result;
-        if (resultAsList.size() != count) {
-          throw new CommandLineExpansionException(
-              errorMessage(
-                  String.format(
-                      "map_fn must return a list of the same length as the input. "
-                          + "Found list of length %d, expected %d.",
-                      resultAsList.size(), count),
-                  location,
-                  null));
-        }
         mutatedValues.clear();
         mutatedValues.addAll(resultAsList);
       }
       for (int i = 0; i < count; ++i) {
-        mutatedValues.set(i, CommandLineItem.expandToCommandLine(mutatedValues.get(i)));
+        mutatedValues.set(i, valueToString(mutatedValues.get(i)));
       }
       if (hasFormat) {
         String formatStr = (String) arguments.get(argi++);
@@ -292,7 +282,7 @@ class SkylarkCustomCommandLine extends CommandLine {
         List<Object> arguments,
         int argi,
         ImmutableList.Builder<String> builder,
-        SkylarkSemantics skylarkSemantics,
+        SkylarkSemanticsOptions skylarkSemantics,
         EventHandler eventHandler)
         throws CommandLineExpansionException {
       Object object = arguments.get(argi++);
@@ -301,7 +291,7 @@ class SkylarkCustomCommandLine extends CommandLine {
         BaseFunction mapFn = (BaseFunction) arguments.get(argi++);
         object = applyMapFn(mapFn, object, location, skylarkSemantics, eventHandler);
       }
-      object = CommandLineItem.expandToCommandLine(object);
+      object = valueToString(object);
       if (hasFormat) {
         String formatStr = (String) arguments.get(argi++);
         Formatter formatter = new Formatter(formatStr, location);
@@ -358,11 +348,11 @@ class SkylarkCustomCommandLine extends CommandLine {
   }
 
   static class Builder {
-    private final SkylarkSemantics skylarkSemantics;
+    private final SkylarkSemanticsOptions skylarkSemantics;
     private final ImmutableList.Builder<Object> arguments = ImmutableList.builder();
     private final EventHandler eventHandler;
 
-    public Builder(SkylarkSemantics skylarkSemantics, EventHandler eventHandler) {
+    public Builder(SkylarkSemanticsOptions skylarkSemantics, EventHandler eventHandler) {
       this.skylarkSemantics = skylarkSemantics;
       this.eventHandler = eventHandler;
     }
@@ -400,10 +390,18 @@ class SkylarkCustomCommandLine extends CommandLine {
       } else if (arg instanceof ScalarArg) {
         argi = ((ScalarArg) arg).eval(arguments, argi, result, skylarkSemantics, eventHandler);
       } else {
-        result.add(CommandLineItem.expandToCommandLine(arg));
+        result.add(valueToString(arg));
       }
     }
     return result.build();
+  }
+
+  private static String valueToString(Object value) {
+    if (value instanceof Artifact) {
+      Artifact artifact = (Artifact) value;
+      return artifact.getExecPath().getPathString();
+    }
+    return value.toString();
   }
 
   private static class Formatter {
@@ -432,7 +430,7 @@ class SkylarkCustomCommandLine extends CommandLine {
       BaseFunction mapFn,
       Object arg,
       Location location,
-      SkylarkSemantics skylarkSemantics,
+      SkylarkSemanticsOptions skylarkSemantics,
       EventHandler eventHandler)
       throws CommandLineExpansionException {
     ImmutableList<Object> args = ImmutableList.of(arg);

@@ -58,7 +58,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
@@ -1737,7 +1736,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     getConfiguredTarget("//test:silly");
   }
 
-  @Ignore
   @Test
   public void testLazyArgs() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
@@ -1792,7 +1790,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         .inOrder();
   }
 
-  @Ignore
   @Test
   public void testScalarJoinWithErrorMessage() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
@@ -1802,7 +1799,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         "args = ruleContext.actions.args()\n" + "args.add(1, join_with=':')");
   }
 
-  @Ignore
   @Test
   public void testScalarBeforeEachErrorMessage() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
@@ -1812,7 +1808,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         "args = ruleContext.actions.args()\n" + "args.add(1, before_each='illegal')");
   }
 
-  @Ignore
   @Test
   public void testLazyArgIllegalFormatString() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
@@ -1838,7 +1833,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     }
   }
 
-  @Ignore
   @Test
   public void testLazyArgBadMapFn() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
@@ -1865,7 +1859,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     }
   }
 
-  @Ignore
   @Test
   public void testLazyArgMapFnReturnsWrongType() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
@@ -1892,7 +1885,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     }
   }
 
-  @Ignore
   @Test
   public void createShellWithLazyArgs() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
