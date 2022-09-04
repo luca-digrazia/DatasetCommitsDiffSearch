@@ -50,7 +50,6 @@ import com.googlecode.androidannotations.annotations.EService;
 import com.googlecode.androidannotations.annotations.EView;
 import com.googlecode.androidannotations.annotations.EViewGroup;
 import com.googlecode.androidannotations.annotations.Extra;
-import com.googlecode.androidannotations.annotations.FragmentArg;
 import com.googlecode.androidannotations.annotations.FragmentById;
 import com.googlecode.androidannotations.annotations.FragmentByTag;
 import com.googlecode.androidannotations.annotations.FromHtml;
@@ -134,7 +133,6 @@ import com.googlecode.androidannotations.processing.EServiceProcessor;
 import com.googlecode.androidannotations.processing.EViewGroupProcessor;
 import com.googlecode.androidannotations.processing.EViewProcessor;
 import com.googlecode.androidannotations.processing.ExtraProcessor;
-import com.googlecode.androidannotations.processing.FragmentArgProcessor;
 import com.googlecode.androidannotations.processing.FragmentByIdProcessor;
 import com.googlecode.androidannotations.processing.FragmentByTagProcessor;
 import com.googlecode.androidannotations.processing.FromHtmlProcessor;
@@ -198,7 +196,6 @@ import com.googlecode.androidannotations.validation.EServiceValidator;
 import com.googlecode.androidannotations.validation.EViewGroupValidator;
 import com.googlecode.androidannotations.validation.EViewValidator;
 import com.googlecode.androidannotations.validation.ExtraValidator;
-import com.googlecode.androidannotations.validation.FragmentArgValidator;
 import com.googlecode.androidannotations.validation.FragmentByIdValidator;
 import com.googlecode.androidannotations.validation.FragmentByTagValidator;
 import com.googlecode.androidannotations.validation.FromHtmlValidator;
@@ -314,7 +311,6 @@ import com.googlecode.androidannotations.validation.rest.RestValidator;
 		AfterTextChange.class, //
 		OrmLiteDao.class, //
 		HttpsClient.class, //
-		FragmentArg.class, //
 		OnActivityResult.class //
 })
 @SupportedSourceVersion(SourceVersion.RELEASE_6)
@@ -446,7 +442,6 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 		}
 		modelValidator.register(new TransactionalValidator(processingEnv));
 		modelValidator.register(new ExtraValidator(processingEnv));
-		modelValidator.register(new FragmentArgValidator(processingEnv));
 		modelValidator.register(new SystemServiceValidator(processingEnv, androidSystemServices));
 		modelValidator.register(new SharedPrefValidator(processingEnv));
 		modelValidator.register(new PrefValidator(processingEnv));
@@ -536,7 +531,6 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 		}
 		modelProcessor.register(new TransactionalProcessor());
 		modelProcessor.register(new ExtraProcessor(processingEnv));
-		modelProcessor.register(new FragmentArgProcessor(processingEnv));
 		modelProcessor.register(new SystemServiceProcessor(androidSystemServices));
 		RestImplementationsHolder restImplementationHolder = new RestImplementationsHolder();
 		modelProcessor.register(new RestProcessor(restImplementationHolder));

@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -17,21 +17,33 @@ package com.googlecode.androidannotations.processing;
 
 import static com.googlecode.androidannotations.helper.ModelConstants.GENERATION_SUFFIX;
 import static com.googlecode.androidannotations.processing.EBeanProcessor.GET_INSTANCE_METHOD_NAME;
+import static com.sun.codemodel.JExpr._null;
 import static com.sun.codemodel.JExpr.cast;
 import static com.sun.codemodel.JExpr.ref;
 
 import java.lang.annotation.Annotation;
 
+import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
+import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeMirror;
 
 import com.googlecode.androidannotations.annotations.Bean;
+import com.googlecode.androidannotations.annotations.NonConfigurationInstance;
+import com.googlecode.androidannotations.helper.TargetAnnotationHelper;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
+import com.sun.codemodel.JFieldRef;
 import com.sun.codemodel.JInvocation;
 
-public class BeanProcessor implements ElementProcessor {
+public class BeanProcessor implements DecoratingElementProcessor {
+
+	private TargetAnnotationHelper annotationHelper;
+
+	public BeanProcessor(ProcessingEnvironment processingEnv) {
+		annotationHelper = new TargetAnnotationHelper(processingEnv, getTarget());
+	}
 
 	@Override
 	public Class<? extends Annotation> getTarget() {
@@ -39,23 +51,36 @@ public class BeanProcessor implements ElementProcessor {
 	}
 
 	@Override
-	public void process(Element element, JCodeModel codeModel, EBeansHolder eBeansHolder) {
-		EBeanHolder holder = eBeansHolder.getEnclosingEBeanHolder(element);
+	public void process(Element element, JCodeModel codeModel, EBeanHolder holder) {
+
+		DeclaredType targetAnnotationClassValue = annotationHelper.extractAnnotationClassParameter(element);
+
+		TypeMirror elementType;
+		if (targetAnnotationClassValue != null) {
+			elementType = targetAnnotationClassValue;
+		} else {
+			elementType = element.asType();
+		}
 
 		String fieldName = element.getSimpleName().toString();
 
-		TypeMirror elementType = element.asType();
-
 		String typeQualifiedName = elementType.toString();
 
-		JClass injectedClass = codeModel.ref(typeQualifiedName + GENERATION_SUFFIX);
+		JClass injectedClass = holder.refClass(typeQualifiedName + GENERATION_SUFFIX);
 
+		JFieldRef beanField = ref(fieldName);
 		{
 			// getInstance
 			JBlock body = holder.init.body();
 
+			boolean hasNonConfigurationInstanceAnnotation = element.getAnnotation(NonConfigurationInstance.class) != null;
+
+			if (hasNonConfigurationInstanceAnnotation) {
+				body = body._if(beanField.eq(_null()))._then();
+			}
+
 			JInvocation getInstance = injectedClass.staticInvoke(GET_INSTANCE_METHOD_NAME).arg(holder.contextRef);
-			body.assign(ref(fieldName), getInstance);
+			body.assign(beanField, getInstance);
 		}
 
 		{
@@ -63,7 +88,7 @@ public class BeanProcessor implements ElementProcessor {
 			if (holder.afterSetContentView != null) {
 				JBlock body = holder.afterSetContentView.body();
 
-				body.invoke(cast(injectedClass, ref(fieldName)), holder.afterSetContentView);
+				body.invoke(cast(injectedClass, beanField), holder.afterSetContentView);
 			}
 		}
 
