@@ -217,7 +217,10 @@ public class ConfigurationsForTargetsTest extends AnalysisTestCase {
   @Override
   protected AnalysisMock getAnalysisMock() {
     return new AnalysisMockWithComputeDepsFunction(
-        new LateBoundStateProvider(), () -> skyframeExecutor.getDefaultBuildOptions());
+        new LateBoundStateProvider(),
+        () -> {
+          return skyframeExecutor.getDefaultBuildOptions();
+        });
   }
 
   /** Returns the configured deps for a given target. */

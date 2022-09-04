@@ -21,6 +21,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Action;
+import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.actions.ActionTemplate;
@@ -212,7 +213,7 @@ public final class ActionTemplateExpansionFunctionTest extends FoundationTestCas
       ActionTemplate<?> actionTemplate) {
     return new NonRuleConfiguredTargetValue(
         Mockito.mock(ConfiguredTarget.class),
-        Actions.GeneratingActions.fromSingleAction(actionTemplate, CTKEY),
+        Actions.GeneratingActions.fromSingleAction(actionTemplate),
         NestedSetBuilder.<Package>stableOrder().build(),
         /*nonceVersion=*/ null);
   }
@@ -222,7 +223,7 @@ public final class ActionTemplateExpansionFunctionTest extends FoundationTestCas
     return new SpecialArtifact(
         ArtifactRoot.asDerivedRoot(rootDirectory, rootDirectory.getRelative("out")),
         execPath,
-        CTKEY,
+        ArtifactOwner.NullArtifactOwner.INSTANCE,
         SpecialArtifactType.TREE);
   }
 
@@ -232,13 +233,11 @@ public final class ActionTemplateExpansionFunctionTest extends FoundationTestCas
     Map<TreeFileArtifact, FileArtifactValue> treeFileArtifactMap = new LinkedHashMap<>();
 
     for (String childRelativePath : childRelativePaths) {
-      TreeFileArtifact treeFileArtifact =
-          ActionsTestUtil.createTreeFileArtifactWithNoGeneratingAction(
-              treeArtifact, childRelativePath);
+      TreeFileArtifact treeFileArtifact = ActionInputHelper.treeFileArtifact(
+          treeArtifact, PathFragment.create(childRelativePath));
       scratch.file(treeFileArtifact.getPath().toString(), childRelativePath);
       // We do not care about the FileArtifactValues in this test.
-      treeFileArtifactMap.put(
-          treeFileArtifact, FileArtifactValue.createForTesting(treeFileArtifact));
+      treeFileArtifactMap.put(treeFileArtifact, FileArtifactValue.create(treeFileArtifact));
     }
 
     artifactValueMap.put(

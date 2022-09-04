@@ -16,10 +16,11 @@ package com.google.devtools.build.lib.skyframe;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
 import static com.google.devtools.build.lib.skyframe.SkyframeExecutor.DEFAULT_THREAD_COUNT;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 import static com.google.devtools.build.skyframe.EvaluationResultSubjectFactory.assertThatEvaluationResult;
-import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
+import com.google.common.base.Function;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
@@ -43,6 +44,8 @@ import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ServerDirectories;
 import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.cmdline.LabelConstants;
+import com.google.devtools.build.lib.cmdline.PackageIdentifier;
+import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.events.NullEventHandler;
 import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.packages.WorkspaceFileValue;
@@ -50,17 +53,15 @@ import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.rules.repository.RepositoryDelegatorFunction;
 import com.google.devtools.build.lib.skyframe.ExternalFilesHelper.ExternalFileAction;
 import com.google.devtools.build.lib.skyframe.PackageLookupFunction.CrossRepositoryLabelViolationStrategy;
-import com.google.devtools.build.lib.skyframe.serialization.testutils.FsUtils;
-import com.google.devtools.build.lib.skyframe.serialization.testutils.SerializationTester;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.testutil.ManualClock;
 import com.google.devtools.build.lib.testutil.TestConstants;
-import com.google.devtools.build.lib.testutil.TestPackageFactoryBuilderFactory;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
+import com.google.devtools.build.lib.testutil.TestUtils;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
-import com.google.devtools.build.lib.vfs.FileAccessException;
 import com.google.devtools.build.lib.vfs.FileStatus;
+import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -68,6 +69,7 @@ import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.lib.vfs.UnixGlob;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
+import com.google.devtools.build.lib.vfs.util.FileSystems;
 import com.google.devtools.build.skyframe.BuildDriver;
 import com.google.devtools.build.skyframe.ErrorInfo;
 import com.google.devtools.build.skyframe.ErrorInfoSubject;
@@ -82,15 +84,20 @@ import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 import org.junit.Before;
 import org.junit.Test;
@@ -107,7 +114,7 @@ public class FileFunctionTest {
           .setEventHander(NullEventHandler.INSTANCE)
           .build();
 
-  private InMemoryFileSystem fs;
+  private CustomInMemoryFs fs;
   private Root pkgRoot;
   private Path outputBase;
   private PathPackageLocator pkgLocator;
@@ -131,7 +138,7 @@ public class FileFunctionTest {
             outputBase,
             ImmutableList.of(pkgRoot),
             BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY);
-    pkgRoot.asPath().createDirectoryAndParents();
+    FileSystemUtils.createDirectoryAndParents(pkgRoot.asPath());
   }
 
   private SequentialBuildDriver makeDriver() {
@@ -157,7 +164,7 @@ public class FileFunctionTest {
                 .put(
                     FileStateValue.FILE_STATE,
                     new FileStateFunction(
-                        new AtomicReference<>(),
+                        new AtomicReference<TimestampGranularityMonitor>(),
                         new AtomicReference<>(UnixGlob.DEFAULT_SYSCALLS),
                         externalFilesHelper))
                 .put(
@@ -169,40 +176,34 @@ public class FileFunctionTest {
                 .put(FileValue.FILE, new FileFunction(pkgLocatorRef))
                 .put(
                     SkyFunctions.PACKAGE,
-                    new PackageFunction(null, null, null, null, null, null, null, null))
+                    new PackageFunction(null, null, null, null, null, null, null))
                 .put(
                     SkyFunctions.PACKAGE_LOOKUP,
                     new PackageLookupFunction(
-                        new AtomicReference<>(ImmutableSet.of()),
+                        new AtomicReference<>(ImmutableSet.<PackageIdentifier>of()),
                         CrossRepositoryLabelViolationStrategy.ERROR,
-                        BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY,
-                        BazelSkyframeExecutorConstants.EXTERNAL_PACKAGE_HELPER))
+                        BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY))
                 .put(SkyFunctions.WORKSPACE_AST, new WorkspaceASTFunction(ruleClassProvider))
                 .put(
                     WorkspaceFileValue.WORKSPACE_FILE,
                     new WorkspaceFileFunction(
                         ruleClassProvider,
-                        TestPackageFactoryBuilderFactory.getInstance()
+                        TestConstants.PACKAGE_FACTORY_BUILDER_FACTORY_FOR_TESTING
                             .builder(directories)
                             .build(ruleClassProvider, fs),
                         directories,
-                        /*starlarkImportLookupFunctionForInlining=*/ null))
-                .put(
-                    SkyFunctions.EXTERNAL_PACKAGE,
-                    new ExternalPackageFunction(
-                        BazelSkyframeExecutorConstants.EXTERNAL_PACKAGE_HELPER))
-                .put(
-                    SkyFunctions.LOCAL_REPOSITORY_LOOKUP,
-                    new LocalRepositoryLookupFunction(
-                        BazelSkyframeExecutorConstants.EXTERNAL_PACKAGE_HELPER))
+                        /*skylarkImportLookupFunctionForInlining=*/ null))
+                .put(SkyFunctions.EXTERNAL_PACKAGE, new ExternalPackageFunction())
+                .put(SkyFunctions.LOCAL_REPOSITORY_LOOKUP, new LocalRepositoryLookupFunction())
                 .build(),
             differencer);
     PrecomputedValue.BUILD_ID.set(differencer, UUID.randomUUID());
     PrecomputedValue.PATH_PACKAGE_LOCATOR.set(differencer, pkgLocator);
-    RepositoryDelegatorFunction.REPOSITORY_OVERRIDES.set(differencer, ImmutableMap.of());
-    PrecomputedValue.STARLARK_SEMANTICS.set(differencer, StarlarkSemantics.DEFAULT);
+    RepositoryDelegatorFunction.REPOSITORY_OVERRIDES.set(
+        differencer, ImmutableMap.<RepositoryName, PathFragment>of());
+    PrecomputedValue.STARLARK_SEMANTICS.set(differencer, StarlarkSemantics.DEFAULT_SEMANTICS);
     RepositoryDelegatorFunction.RESOLVED_FILE_INSTEAD_OF_WORKSPACE.set(
-        differencer, Optional.absent());
+        differencer, Optional.<RootedPath>absent());
     return new SequentialBuildDriver(evaluator);
   }
 
@@ -214,7 +215,7 @@ public class FileFunctionTest {
     return valueForPathHelper(Root.absoluteRoot(fs), path, makeDriver());
   }
 
-  private static FileValue valueForPathHelper(Root root, Path path, SequentialBuildDriver driver)
+  private FileValue valueForPathHelper(Root root, Path path, SequentialBuildDriver driver)
       throws InterruptedException {
     PathFragment pathFragment = root.relativize(path);
     RootedPath rootedPath = RootedPath.toRootedPath(root, pathFragment);
@@ -394,7 +395,7 @@ public class FileFunctionTest {
   public void testAbsoluteSymlinkToExternal() throws Exception {
     String externalPath =
         outputBase
-            .getRelative(LabelConstants.EXTERNAL_REPOSITORY_LOCATION)
+            .getRelative(LabelConstants.EXTERNAL_PACKAGE_NAME)
             .getRelative("a/b")
             .getPathString();
     symlink("a", externalPath);
@@ -408,7 +409,6 @@ public class FileFunctionTest {
     assertThat(seenFiles)
         .containsExactly(
             rootedPath("WORKSPACE"),
-            rootedPath("WORKSPACE.bazel"),
             rootedPath("a"),
             rootedPath(""),
             RootedPath.toRootedPath(root, PathFragment.create("/")),
@@ -505,7 +505,7 @@ public class FileFunctionTest {
     createFsAndRoot(
         new CustomInMemoryFs(manualClock) {
           @Override
-          protected byte[] getFastDigest(Path path) {
+          protected byte[] getFastDigest(Path path) throws IOException {
             return digest;
           }
         });
@@ -538,7 +538,8 @@ public class FileFunctionTest {
 
   @Test
   public void testUnreadableFileWithFastDigest() throws Exception {
-    final byte[] expectedDigest = {1, 2, 3, 4};
+    final byte[] expectedDigest =
+        MessageDigest.getInstance("md5").digest("blah".getBytes(StandardCharsets.UTF_8));
 
     createFsAndRoot(
         new CustomInMemoryFs(manualClock) {
@@ -595,7 +596,7 @@ public class FileFunctionTest {
     p = symlink("file", "foo");
     FileValue b = valueForPath(p);
     p.delete();
-    pkgRoot.getRelative("file").createDirectoryAndParents();
+    FileSystemUtils.createDirectoryAndParents(pkgRoot.getRelative("file"));
     FileValue c = valueForPath(p);
     assertThat(a.equals(b)).isFalse();
     assertThat(b.equals(c)).isFalse();
@@ -804,10 +805,16 @@ public class FileFunctionTest {
     return ImmutableSet.copyOf(
         (Iterable<RootedPath>)
             (Iterable)
-                graph.getValues().keySet().stream()
-                    .filter(SkyFunctionName.functionIs(FileStateValue.FILE_STATE)::apply)
-                    .map(SkyKey::argument)
-                    .collect(Collectors.toList()));
+                Iterables.transform(
+                    Iterables.filter(
+                        graph.getValues().keySet(),
+                        SkyFunctionName.functionIs(FileStateValue.FILE_STATE)),
+                    new Function<SkyKey, Object>() {
+                      @Override
+                      public Object apply(SkyKey skyKey) {
+                        return skyKey.argument();
+                      }
+                    }));
   }
 
   @Test
@@ -892,7 +899,6 @@ public class FileFunctionTest {
 
   @Test
   public void testDoesntStatChildIfParentDoesntExist() throws Exception {
-    CustomInMemoryFs fs = (CustomInMemoryFs) this.fs;
     // Our custom filesystem says "a" does not exist, so FileFunction shouldn't bother trying to
     // think about "a/b". Test for this by having a stat of "a/b" fail with an io error, and
     // observing that we don't encounter the error.
@@ -903,7 +909,6 @@ public class FileFunctionTest {
 
   @Test
   public void testFilesystemInconsistencies_GetFastDigest() throws Exception {
-    CustomInMemoryFs fs = (CustomInMemoryFs) this.fs;
     file("a");
     // Our custom filesystem says "a/b" exists but "a" does not exist.
     fs.stubFastDigestError(path("a"), new IOException("nope"));
@@ -966,10 +971,10 @@ public class FileFunctionTest {
                 ImmutableList.of(rootedPath("c"), rootedPath("d"), rootedPath("e")))
             .put(
                 rootedPath("d"),
-                ImmutableList.of(rootedPath("d"), rootedPath("e"), rootedPath("c")))
+                ImmutableList.<RootedPath>of(rootedPath("d"), rootedPath("e"), rootedPath("c")))
             .put(
                 rootedPath("e"),
-                ImmutableList.of(rootedPath("e"), rootedPath("c"), rootedPath("d")))
+                ImmutableList.<RootedPath>of(rootedPath("e"), rootedPath("c"), rootedPath("d")))
             .put(
                 rootedPath("a/some/descendant"),
                 ImmutableList.of(rootedPath("c"), rootedPath("d"), rootedPath("e")))
@@ -978,29 +983,29 @@ public class FileFunctionTest {
                 ImmutableList.of(rootedPath("c"), rootedPath("d"), rootedPath("e")))
             .put(
                 rootedPath("d/some/descendant"),
-                ImmutableList.of(rootedPath("d"), rootedPath("e"), rootedPath("c")))
+                ImmutableList.<RootedPath>of(rootedPath("d"), rootedPath("e"), rootedPath("c")))
             .put(
                 rootedPath("e/some/descendant"),
-                ImmutableList.of(rootedPath("e"), rootedPath("c"), rootedPath("d")))
+                ImmutableList.<RootedPath>of(rootedPath("e"), rootedPath("c"), rootedPath("d")))
             .build();
     Map<RootedPath, ImmutableList<RootedPath>> startToPathToCycleMap =
         ImmutableMap.<RootedPath, ImmutableList<RootedPath>>builder()
             .put(rootedPath("a"), ImmutableList.of(rootedPath("a"), rootedPath("b")))
             .put(rootedPath("b"), ImmutableList.of(rootedPath("b")))
-            .put(rootedPath("d"), ImmutableList.of())
-            .put(rootedPath("e"), ImmutableList.of())
+            .put(rootedPath("d"), ImmutableList.<RootedPath>of())
+            .put(rootedPath("e"), ImmutableList.<RootedPath>of())
             .put(
                 rootedPath("a/some/descendant"), ImmutableList.of(rootedPath("a"), rootedPath("b")))
             .put(rootedPath("b/some/descendant"), ImmutableList.of(rootedPath("b")))
-            .put(rootedPath("d/some/descendant"), ImmutableList.of())
-            .put(rootedPath("e/some/descendant"), ImmutableList.of())
+            .put(rootedPath("d/some/descendant"), ImmutableList.<RootedPath>of())
+            .put(rootedPath("e/some/descendant"), ImmutableList.<RootedPath>of())
             .build();
     ImmutableList<SkyKey> keys;
     if (ancestorCycle && startInCycle) {
       keys = ImmutableList.of(skyKey("d/some/descendant"), skyKey("e/some/descendant"));
-    } else if (ancestorCycle) {
+    } else if (ancestorCycle && !startInCycle) {
       keys = ImmutableList.of(skyKey("a/some/descendant"), skyKey("b/some/descendant"));
-    } else if (startInCycle) {
+    } else if (!ancestorCycle && startInCycle) {
       keys = ImmutableList.of(skyKey("d"), skyKey("e"));
     } else {
       keys = ImmutableList.of(skyKey("a"), skyKey("b"));
@@ -1054,17 +1059,43 @@ public class FileFunctionTest {
 
   @Test
   public void testSerialization() throws Exception {
-    fs = FsUtils.TEST_FILESYSTEM;
-    pkgRoot = Root.absoluteRoot(fs);
-    FileValue a = valueForPath(fs.getPath("/"));
-    Path tmp = fs.getPath("/file.txt");
-    FileSystemUtils.writeContentAsLatin1(tmp, "test contents");
-    FileValue b = valueForPath(tmp);
-    Preconditions.checkState(b.isFile());
-    FileValue c = valueForPath(fs.getPath("/does/not/exist"));
-    SerializationTester serializationTester = new SerializationTester(a, b, c).makeMemoizing();
-    FsUtils.addDependencies(serializationTester);
-    serializationTester.runTests();
+    ByteArrayOutputStream bos = new ByteArrayOutputStream();
+    ObjectOutputStream oos = new ObjectOutputStream(bos);
+
+    FileSystem oldFileSystem = Path.getFileSystemForSerialization();
+    try {
+      // InMemoryFS is not supported for serialization.
+      FileSystem fs = FileSystems.getJavaIoFileSystem();
+      Path.setFileSystemForSerialization(fs);
+      pkgRoot = Root.absoluteRoot(fs);
+
+      FileValue a = valueForPath(fs.getPath("/"));
+
+      Path tmp = fs.getPath(TestUtils.tmpDirFile().getAbsoluteFile() + "/file.txt");
+
+      FileSystemUtils.writeContentAsLatin1(tmp, "test contents");
+
+      FileValue b = valueForPath(tmp);
+      Preconditions.checkState(b.isFile());
+      FileValue c = valueForPath(fs.getPath("/does/not/exist"));
+      oos.writeObject(a);
+      oos.writeObject(b);
+      oos.writeObject(c);
+
+      ByteArrayInputStream bis = new ByteArrayInputStream(bos.toByteArray());
+      ObjectInputStream ois = new ObjectInputStream(bis);
+
+      FileValue a2 = (FileValue) ois.readObject();
+      FileValue b2 = (FileValue) ois.readObject();
+      FileValue c2 = (FileValue) ois.readObject();
+
+      assertThat(a2).isEqualTo(a);
+      assertThat(b2).isEqualTo(b);
+      assertThat(c2).isEqualTo(c);
+      assertThat(a2.equals(b2)).isFalse();
+    } finally {
+      Path.setFileSystemForSerialization(oldFileSystem);
+    }
   }
 
   @Test
@@ -1299,7 +1330,6 @@ public class FileFunctionTest {
 
   @Test
   public void testInjectionOverIOException() throws Exception {
-    CustomInMemoryFs fs = (CustomInMemoryFs) this.fs;
     Path foo = file("foo");
     SkyKey fooKey = skyKey("foo");
     fs.stubStatError(foo, new IOException("bork"));
@@ -1385,8 +1415,7 @@ public class FileFunctionTest {
     assertThat(fileValue).isInstanceOf(SymlinkFileValueWithStoredChain.class);
     assertThat(fileValue.getUnresolvedLinkTarget()).isEqualTo(PathFragment.create("b"));
     assertThat(fileValue.logicalChainDuringResolution())
-        .containsExactly(rootedPath("a"), rootedPath("b"), rootedPath("c"))
-        .inOrder();
+        .isEqualTo(ImmutableList.of(rootedPath("a"), rootedPath("b"), rootedPath("c")));
   }
 
   @Test
@@ -1410,7 +1439,7 @@ public class FileFunctionTest {
     FileValue fileValue = valueForPath(path("a"));
     assertThat(fileValue).isInstanceOf(SymlinkFileValueWithoutStoredChain.class);
     assertThat(fileValue.getUnresolvedLinkTarget()).isEqualTo(PathFragment.create("b"));
-    assertThrows(IllegalStateException.class, fileValue::logicalChainDuringResolution);
+    assertThrows(IllegalStateException.class, () -> fileValue.logicalChainDuringResolution());
   }
 
   @Test
@@ -1421,7 +1450,7 @@ public class FileFunctionTest {
     FileValue fileValue = valueForPath(path("a/d"));
     assertThat(fileValue).isInstanceOf(DifferentRealPathFileValueWithoutStoredChain.class);
     assertThat(fileValue.realRootedPath()).isEqualTo(rootedPath("c/d"));
-    assertThrows(IllegalStateException.class, fileValue::logicalChainDuringResolution);
+    assertThrows(IllegalStateException.class, () -> fileValue.logicalChainDuringResolution());
   }
 
   @Test
@@ -1448,34 +1477,20 @@ public class FileFunctionTest {
         .inOrder();
   }
 
-  @Test
-  public void testFileAccessException() throws Exception {
-    CustomInMemoryFs fs = (CustomInMemoryFs) this.fs;
-    Path foo = file("foo");
-    FileAccessException fae = new FileAccessException("nope");
-    fs.stubStatError(foo, fae);
-    SkyKey skyKey = skyKey("foo");
-    BuildDriver driver = makeDriver();
-    EvaluationResult<FileValue> result =
-        driver.evaluate(ImmutableList.of(skyKey), EVALUATION_OPTIONS);
-    assertThat(result.hasError()).isTrue();
-    ErrorInfoSubject errorInfoSubject =
-        assertThatEvaluationResult(result).hasErrorEntryForKeyThat(skyKey);
-    errorInfoSubject.isTransient();
-    errorInfoSubject.hasExceptionThat().isSameInstanceAs(fae);
-  }
-
   /**
    * Returns a callback that, when executed, deletes the given path. Not meant to be called directly
    * by tests.
    */
-  private static Runnable makeDeletePathCallback(Path toDelete) {
-    return () -> {
-      try {
-        toDelete.delete();
-      } catch (IOException e) {
-        e.printStackTrace();
-        fail(e.getMessage());
+  private Runnable makeDeletePathCallback(final Path toDelete) {
+    return new Runnable() {
+      @Override
+      public void run() {
+        try {
+          toDelete.delete();
+        } catch (IOException e) {
+          e.printStackTrace();
+          fail(e.getMessage());
+        }
       }
     };
   }
@@ -1484,13 +1499,16 @@ public class FileFunctionTest {
    * Returns a callback that, when executed, writes the given bytes to the given file path. Not
    * meant to be called directly by tests.
    */
-  private static Runnable makeWriteFileContentCallback(Path toChange, byte[] contents) {
-    return () -> {
-      try (OutputStream outputStream = toChange.getOutputStream()) {
-        outputStream.write(contents);
-      } catch (IOException e) {
-        e.printStackTrace();
-        fail(e.getMessage());
+  private Runnable makeWriteFileContentCallback(final Path toChange, final byte[] contents) {
+    return new Runnable() {
+      @Override
+      public void run() {
+        try (OutputStream outputStream = toChange.getOutputStream()) {
+          outputStream.write(contents);
+        } catch (IOException e) {
+          e.printStackTrace();
+          fail(e.getMessage());
+        }
       }
     };
   }
@@ -1499,13 +1517,16 @@ public class FileFunctionTest {
    * Returns a callback that, when executed, creates the given directory path. Not meant to be
    * called directly by tests.
    */
-  private static Runnable makeCreateDirectoryCallback(Path toCreate) {
-    return () -> {
-      try {
-        toCreate.createDirectory();
-      } catch (IOException e) {
-        e.printStackTrace();
-        fail(e.getMessage());
+  private Runnable makeCreateDirectoryCallback(final Path toCreate) {
+    return new Runnable() {
+      @Override
+      public void run() {
+        try {
+          toCreate.createDirectory();
+        } catch (IOException e) {
+          e.printStackTrace();
+          fail(e.getMessage());
+        }
       }
     };
   }
@@ -1514,19 +1535,22 @@ public class FileFunctionTest {
    * Returns a callback that, when executed, makes {@code toLink} a symlink to {@code toTarget}. Not
    * meant to be called directly by tests.
    */
-  private static Runnable makeSymlinkCallback(Path toLink, PathFragment toTarget) {
-    return () -> {
-      try {
-        FileSystemUtils.ensureSymbolicLink(toLink, toTarget);
-      } catch (IOException e) {
-        e.printStackTrace();
-        fail(e.getMessage());
+  private Runnable makeSymlinkCallback(final Path toLink, final PathFragment toTarget) {
+    return new Runnable() {
+      @Override
+      public void run() {
+        try {
+          FileSystemUtils.ensureSymbolicLink(toLink, toTarget);
+        } catch (IOException e) {
+          e.printStackTrace();
+          fail(e.getMessage());
+        }
       }
     };
   }
 
   /** Returns the files that would be changed/created if {@code path} were to be changed/created. */
-  private static ImmutableList<String> filesTouchedIfTouched(Path path) {
+  private ImmutableList<String> filesTouchedIfTouched(Path path) {
     List<String> filesToBeTouched = Lists.newArrayList();
     do {
       filesToBeTouched.add(path.getPathString());
@@ -1661,7 +1685,14 @@ public class FileFunctionTest {
     ImmutableList<String> changedPathStrings = changeResult.first;
     Runnable undoCallback = changeResult.second;
     differencer.invalidate(
-        changedPathStrings.stream().map(this::fileStateSkyKey).collect(Collectors.toList()));
+        Iterables.transform(
+            changedPathStrings,
+            new Function<String, SkyKey>() {
+              @Override
+              public SkyKey apply(String input) {
+                return fileStateSkyKey(input);
+              }
+            }));
 
     result = driver.evaluate(ImmutableList.of(key), EVALUATION_OPTIONS);
     if (result.hasError()) {
@@ -1713,34 +1744,35 @@ public class FileFunctionTest {
         .that(result.hasError())
         .isTrue();
     assertThat(
-            !result.getError().getCycleInfo().isEmpty() || result.getError().getException() != null)
+            !Iterables.isEmpty(result.getError().getCycleInfo())
+                || result.getError().getException() != null)
         .isTrue();
     return filesSeen(driver.getGraphForTesting());
   }
 
   private Path file(String fileName) throws Exception {
     Path path = path(fileName);
-    path.getParentDirectory().createDirectoryAndParents();
+    FileSystemUtils.createDirectoryAndParents(path.getParentDirectory());
     FileSystemUtils.createEmptyFile(path);
     return path;
   }
 
   private Path file(String fileName, String contents) throws Exception {
     Path path = path(fileName);
-    path.getParentDirectory().createDirectoryAndParents();
+    FileSystemUtils.createDirectoryAndParents(path.getParentDirectory());
     FileSystemUtils.writeContentAsLatin1(path, contents);
     return path;
   }
 
   private Path directory(String directoryName) throws Exception {
     Path path = path(directoryName);
-    path.createDirectoryAndParents();
+    FileSystemUtils.createDirectoryAndParents(path);
     return path;
   }
 
   private Path symlink(String link, String target) throws Exception {
     Path path = path(link);
-    path.getParentDirectory().createDirectoryAndParents();
+    FileSystemUtils.createDirectoryAndParents(path.getParentDirectory());
     path.createSymbolicLink(PathFragment.create(target));
     return path;
   }
@@ -1773,11 +1805,11 @@ public class FileFunctionTest {
     private final Map<Path, IOException> stubbedStatErrors = Maps.newHashMap();
     private final Map<Path, IOException> stubbedFastDigestErrors = Maps.newHashMap();
 
-    CustomInMemoryFs(ManualClock manualClock) {
+    public CustomInMemoryFs(ManualClock manualClock) {
       super(manualClock);
     }
 
-    void stubFastDigestError(Path path, IOException error) {
+    public void stubFastDigestError(Path path, IOException error) {
       stubbedFastDigestErrors.put(path, error);
     }
 
@@ -1789,11 +1821,11 @@ public class FileFunctionTest {
       return fastDigest ? getDigest(path) : null;
     }
 
-    void stubStat(Path path, @Nullable FileStatus stubbedResult) {
+    public void stubStat(Path path, @Nullable FileStatus stubbedResult) {
       stubbedStats.put(path, stubbedResult);
     }
 
-    void stubStatError(Path path, IOException error) {
+    public void stubStatError(Path path, IOException error) {
       stubbedStatErrors.put(path, error);
     }
 

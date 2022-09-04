@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.common.truth.Truth.assertWithMessage;
 import static com.google.devtools.build.lib.actions.FilesetTraversalParams.PackageBoundaryMode.CROSS;
 import static com.google.devtools.build.lib.actions.FilesetTraversalParams.PackageBoundaryMode.DONT_CROSS;
 import static com.google.devtools.build.lib.actions.FilesetTraversalParams.PackageBoundaryMode.REPORT_ERROR;
@@ -29,11 +28,12 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
-import com.google.devtools.build.lib.actions.ActionLookupData;
+import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifactType;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
+import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.ArtifactSkyKey;
 import com.google.devtools.build.lib.actions.FileArtifactValue;
@@ -41,7 +41,6 @@ import com.google.devtools.build.lib.actions.FileStateValue;
 import com.google.devtools.build.lib.actions.FileValue;
 import com.google.devtools.build.lib.actions.FilesetTraversalParams.DirectTraversalRoot;
 import com.google.devtools.build.lib.actions.FilesetTraversalParams.PackageBoundaryMode;
-import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ServerDirectories;
@@ -83,10 +82,7 @@ import com.google.devtools.build.skyframe.SkyValue;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -109,11 +105,9 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
   private RecordingDifferencer differencer;
   private AtomicReference<PathPackageLocator> pkgLocator;
   private NonHermeticArtifactFakeFunction artifactFunction;
-  private List<Artifact.DerivedArtifact> artifacts;
 
   @Before
   public final void setUp() {
-    artifacts = new ArrayList<>();
     AnalysisMock analysisMock = AnalysisMock.get();
     pkgLocator =
         new AtomicReference<>(
@@ -182,7 +176,6 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
     // case of a generated directory, which we have test coverage for.
     skyFunctions.put(Artifact.ARTIFACT, new ArtifactFakeFunction());
     artifactFunction = new NonHermeticArtifactFakeFunction();
-    skyFunctions.put(ActionLookupData.NAME, new ActionFakeFunction());
     skyFunctions.put(NONHERMETIC_ARTIFACT, artifactFunction);
 
     progressReceiver = new RecordingEvaluationProgressReceiver();
@@ -194,44 +187,39 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
   }
 
   private Artifact sourceArtifact(String path) {
-    return ActionsTestUtil.createArtifact(
-        ArtifactRoot.asSourceRoot(Root.fromPath(rootDirectory)), path);
+    return new Artifact(
+        PathFragment.create(path), ArtifactRoot.asSourceRoot(Root.fromPath(rootDirectory)));
   }
 
   private Artifact sourceArtifactUnderPackagePath(String path, String packagePath) {
-    return ActionsTestUtil.createArtifact(
-        ArtifactRoot.asSourceRoot(Root.fromPath(rootDirectory.getRelative(packagePath))), path);
+    return new Artifact(
+        PathFragment.create(path),
+        ArtifactRoot.asSourceRoot(Root.fromPath(rootDirectory.getRelative(packagePath))));
   }
 
   private SpecialArtifact treeArtifact(String path) {
-    SpecialArtifact treeArtifact =
-        new SpecialArtifact(
-            ArtifactRoot.asDerivedRoot(rootDirectory, rootDirectory.getRelative("out")),
-            PathFragment.create("out/" + path),
-            ActionsTestUtil.NULL_ARTIFACT_OWNER,
-            SpecialArtifactType.TREE);
+    SpecialArtifact treeArtifact = new SpecialArtifact(
+        ArtifactRoot.asDerivedRoot(rootDirectory, rootDirectory.getRelative("out")),
+        PathFragment.create("out/" + path),
+        ArtifactOwner.NullArtifactOwner.INSTANCE,
+        SpecialArtifactType.TREE);
     assertThat(treeArtifact.isTreeArtifact()).isTrue();
     return treeArtifact;
   }
 
   private void addNewTreeFileArtifact(SpecialArtifact parent, String relatedPath)
       throws IOException {
-    TreeFileArtifact treeFileArtifact =
-        ActionsTestUtil.createTreeFileArtifactWithNoGeneratingAction(parent, relatedPath);
+    TreeFileArtifact treeFileArtifact = ActionInputHelper.treeFileArtifact(parent, relatedPath);
     artifactFunction.addNewTreeFileArtifact(treeFileArtifact);
   }
 
   private Artifact derivedArtifact(String path) {
     PathFragment execPath = PathFragment.create("out").getRelative(path);
-    Artifact.DerivedArtifact result =
-        (Artifact.DerivedArtifact)
-            ActionsTestUtil.createArtifactWithExecPath(
-                ArtifactRoot.asDerivedRoot(rootDirectory, rootDirectory.getRelative("out")),
-                execPath);
-    result.setGeneratingActionKey(
-        ActionLookupData.create(ActionsTestUtil.NULL_ARTIFACT_OWNER, artifacts.size()));
-    artifacts.add(result);
-    return result;
+    Artifact output =
+        new Artifact(
+            ArtifactRoot.asDerivedRoot(rootDirectory, rootDirectory.getRelative("out")),
+            execPath);
+    return output;
   }
 
   private static RootedPath rootedPath(Artifact artifact) {
@@ -351,9 +339,6 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
       Map<PathFragment, ResolvedFile> nameToActualResolvedFiles,
       ResolvedFile... expectedFilesIgnoringMetadata)
       throws Exception {
-    assertWithMessage("Expected files " + Arrays.toString(expectedFilesIgnoringMetadata))
-        .that(nameToActualResolvedFiles)
-        .hasSize(expectedFilesIgnoringMetadata.length);
     assertEquals(
         "Unequal number of ResolvedFiles in Actual and expected.",
         expectedFilesIgnoringMetadata.length,
@@ -397,7 +382,7 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
     SkyKey key =
         file.isSourceArtifact()
             ? FileStateValue.key(rootedPath(file))
-            : new NonHermeticArtifactSkyKey(file);
+            : new NonHermeticArtifactSkyKey(ArtifactSkyKey.key(file, true));
     appendToFile(rootedPath(file), key, content);
   }
 
@@ -411,7 +396,8 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
 
   private void invalidateOutputArtifact(Artifact output) {
     assertThat(output.isSourceArtifact()).isFalse();
-    differencer.invalidate(ImmutableList.of(new NonHermeticArtifactSkyKey(output)));
+    differencer.invalidate(
+        ImmutableList.of(new NonHermeticArtifactSkyKey(ArtifactSkyKey.key(output, true))));
   }
 
   private static final class RecordingEvaluationProgressReceiver
@@ -1042,24 +1028,6 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
     public SkyValue compute(SkyKey skyKey, Environment env)
         throws SkyFunctionException, InterruptedException {
       return env.getValue(new NonHermeticArtifactSkyKey(skyKey));
-    }
-
-    @Nullable
-    @Override
-    public String extractTag(SkyKey skyKey) {
-      return null;
-    }
-  }
-
-  private class ActionFakeFunction implements SkyFunction {
-    @Nullable
-    @Override
-    public SkyValue compute(SkyKey skyKey, Environment env)
-        throws SkyFunctionException, InterruptedException {
-      return env.getValue(
-          new NonHermeticArtifactSkyKey(
-              Preconditions.checkNotNull(
-                  artifacts.get(((ActionLookupData) skyKey).getActionIndex()), skyKey)));
     }
 
     @Nullable

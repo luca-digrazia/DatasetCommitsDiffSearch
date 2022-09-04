@@ -100,13 +100,10 @@ public class SkyframeLabelVisitorTest extends SkyframeLabelVisitorTestCase {
         scratch.file(
             "pkg/BUILD", "sh_library(name = 'x', deps = ['z', 'z'])", "sh_library(name = 'z')");
 
-    // We expect an error on "//pkg:x". However, we can still finish the evaluation and also return
-    // "//pkg:z" even without keep_going.
+    // In the first case below, we will hit see an error on "//pkg:x", and therefore
+    // not traverse into "//pkg:z" due to fail-fast.
     assertLabelsVisited(
-        ImmutableSet.of("//pkg:x", "//pkg:z"),
-        ImmutableSet.of("//pkg:x"),
-        EXPECT_ERROR,
-        !KEEP_GOING);
+        ImmutableSet.of("//pkg:x"), ImmutableSet.of("//pkg:x"), EXPECT_ERROR, !KEEP_GOING);
     assertContainsEvent("Label '//pkg:z' is duplicated in the 'deps' attribute of rule 'x'");
     assertLabelsVisitedWithErrors(
         ImmutableSet.of("//pkg:x", "//pkg:z"), ImmutableSet.of("//pkg:x"));
@@ -146,25 +143,11 @@ public class SkyframeLabelVisitorTest extends SkyframeLabelVisitorTestCase {
         "pkg/BUILD", "sh_library(name = 'x', deps = ['z', 'z'])", "sh_library(name = 'z')");
     buildFile.setLastModifiedTime(buildFile.getLastModifiedTime() + 1);
     syncPackages();
-    // We expect an error on "//pkg:x". However, we can still finish the evaluation and also return
-    // "//pkg:z" even without keep_going.
     assertLabelsVisited(
-        ImmutableSet.of("//pkg:x", "//pkg:z"),
-        ImmutableSet.of("//pkg:x"),
-        EXPECT_ERROR,
-        !KEEP_GOING);
+        ImmutableSet.of("//pkg:x"), ImmutableSet.of("//pkg:x"), EXPECT_ERROR, !KEEP_GOING);
     // Check stability (not redundant).
     assertLabelsVisited(
-        ImmutableSet.of("//pkg:x", "//pkg:z"),
-        ImmutableSet.of("//pkg:x"),
-        EXPECT_ERROR,
-        !KEEP_GOING);
-    // Also check keep-going.
-    assertLabelsVisited(
-        ImmutableSet.of("//pkg:x", "//pkg:z"),
-        ImmutableSet.of("//pkg:x"),
-        EXPECT_ERROR,
-        KEEP_GOING);
+        ImmutableSet.of("//pkg:x"), ImmutableSet.of("//pkg:x"), EXPECT_ERROR, !KEEP_GOING);
   }
 
   @Test
@@ -393,8 +376,8 @@ public class SkyframeLabelVisitorTest extends SkyframeLabelVisitorTestCase {
     scratch.file(
         "parent/BUILD",
         "sh_library(name = 'parent', deps = ['//child:child'])",
-        "x = 1//0"); // dynamic error
-    scratch.file("child/BUILD", "sh_library(name = 'child')", "x = 1//0"); // dynamic error
+        "invalidbuildsyntax");
+    scratch.file("child/BUILD", "sh_library(name = 'child')", "invalidbuildsyntax");
     assertLabelsVisited(
         ImmutableSet.of("//parent:parent", "//child:child"),
         ImmutableSet.of("//parent:parent"),
