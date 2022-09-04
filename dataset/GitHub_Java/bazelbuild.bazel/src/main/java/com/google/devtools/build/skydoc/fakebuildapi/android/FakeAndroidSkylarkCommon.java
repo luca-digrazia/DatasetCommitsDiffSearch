@@ -37,7 +37,7 @@ public class FakeAndroidSkylarkCommon
 
   @Override
   public AndroidSplitTransititionApi getAndroidSplitTransition() {
-    return new FakeAndroidSplitTransitition();
+    return null;
   }
 
   @Override
