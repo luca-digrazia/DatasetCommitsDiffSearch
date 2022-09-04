@@ -48,7 +48,8 @@ import io.quarkus.hibernate.orm.deployment.HibernateConfigUtil;
 import io.quarkus.hibernate.orm.deployment.HibernateOrmConfig;
 import io.quarkus.hibernate.orm.deployment.HibernateOrmConfigPersistenceUnit;
 import io.quarkus.hibernate.orm.deployment.HibernateOrmProcessor;
-import io.quarkus.hibernate.orm.deployment.JpaModelBuildItem;
+import io.quarkus.hibernate.orm.deployment.JpaEntitiesBuildItem;
+import io.quarkus.hibernate.orm.deployment.NonJpaModelBuildItem;
 import io.quarkus.hibernate.orm.deployment.PersistenceProviderSetUpBuildItem;
 import io.quarkus.hibernate.orm.deployment.PersistenceUnitDescriptorBuildItem;
 import io.quarkus.hibernate.orm.deployment.PersistenceXmlDescriptorBuildItem;
@@ -80,8 +81,8 @@ public final class HibernateReactiveProcessor {
     @BuildStep
     void registerBeans(BuildProducer<AdditionalBeanBuildItem> additionalBeans, CombinedIndexBuildItem combinedIndex,
             List<PersistenceUnitDescriptorBuildItem> descriptors,
-            JpaModelBuildItem jpaModel) {
-        if (!hasEntities(jpaModel)) {
+            JpaEntitiesBuildItem jpaEntities, List<NonJpaModelBuildItem> nonJpaModels) {
+        if (!hasEntities(jpaEntities, nonJpaModels)) {
             return;
         }
 
@@ -101,8 +102,9 @@ public final class HibernateReactiveProcessor {
     @Record(STATIC_INIT)
     public void build(RecorderContext recorderContext,
             HibernateReactiveRecorder recorder,
-            JpaModelBuildItem jpaModel) {
-        final boolean enableRx = hasEntities(jpaModel);
+            JpaEntitiesBuildItem jpaEntities,
+            List<NonJpaModelBuildItem> nonJpaModels) {
+        final boolean enableRx = hasEntities(jpaEntities, nonJpaModels);
         recorder.callHibernateReactiveFeatureInit(enableRx);
     }
 
@@ -113,7 +115,8 @@ public final class HibernateReactiveProcessor {
             List<PersistenceXmlDescriptorBuildItem> persistenceXmlDescriptors,
             ApplicationArchivesBuildItem applicationArchivesBuildItem,
             LaunchModeBuildItem launchMode,
-            JpaModelBuildItem jpaModel,
+            JpaEntitiesBuildItem domainObjects,
+            List<NonJpaModelBuildItem> nonJpaModelBuildItems,
             BuildProducer<SystemPropertyBuildItem> systemProperties,
             BuildProducer<NativeImageResourceBuildItem> nativeImageResources,
             BuildProducer<HotDeploymentWatchedFileBuildItem> hotDeploymentWatchedFiles,
@@ -121,7 +124,7 @@ public final class HibernateReactiveProcessor {
             List<DefaultDataSourceDbKindBuildItem> defaultDataSourceDbKindBuildItems,
             CurateOutcomeBuildItem curateOutcomeBuildItem) {
 
-        final boolean enableHR = hasEntities(jpaModel);
+        final boolean enableHR = hasEntities(domainObjects, nonJpaModelBuildItems);
         if (!enableHR) {
             // we have to bail out early as we might not have a Vertx pool configuration
             return;
@@ -148,7 +151,7 @@ public final class HibernateReactiveProcessor {
         if (dbKindOptional.isPresent()) {
             final String dbKind = dbKindOptional.get();
             ParsedPersistenceXmlDescriptor reactivePU = generateReactivePersistenceUnit(
-                    hibernateOrmConfig, jpaModel,
+                    hibernateOrmConfig, domainObjects,
                     dbKind, applicationArchivesBuildItem, launchMode.getLaunchMode(),
                     systemProperties, nativeImageResources, hotDeploymentWatchedFiles);
 
@@ -156,9 +159,7 @@ public final class HibernateReactiveProcessor {
             // - this is Reactive
             // - we don't support starting Hibernate Reactive from a persistence.xml
             // - we don't support Hibernate Envers with Hibernate Reactive
-            persistenceUnitDescriptors.produce(new PersistenceUnitDescriptorBuildItem(reactivePU,
-                    jpaModel.getXmlMappings(reactivePU.getName()),
-                    true, false));
+            persistenceUnitDescriptors.produce(new PersistenceUnitDescriptorBuildItem(reactivePU, true, false));
         }
 
     }
@@ -195,7 +196,7 @@ public final class HibernateReactiveProcessor {
      */
     private static ParsedPersistenceXmlDescriptor generateReactivePersistenceUnit(
             HibernateOrmConfig hibernateOrmConfig,
-            JpaModelBuildItem jpaModel,
+            JpaEntitiesBuildItem domainObjects,
             String dbKind,
             ApplicationArchivesBuildItem applicationArchivesBuildItem,
             LaunchMode launchMode,
@@ -218,7 +219,7 @@ public final class HibernateReactiveProcessor {
         desc.setTransactionType(PersistenceUnitTransactionType.RESOURCE_LOCAL);
         desc.getProperties().setProperty(AvailableSettings.DIALECT, dialectClassName);
         desc.setExcludeUnlistedClasses(true);
-        desc.addClasses(new ArrayList<>(jpaModel.getAllModelClassNames()));
+        desc.addClasses(new ArrayList<>(domainObjects.getAllModelClassNames()));
 
         // The storage engine has to be set as a system property.
         if (persistenceUnitConfig.dialect.storageEngine.isPresent()) {
@@ -344,8 +345,8 @@ public final class HibernateReactiveProcessor {
         }
     }
 
-    private boolean hasEntities(JpaModelBuildItem jpaModel) {
-        return !jpaModel.getEntityClassNames().isEmpty();
+    private boolean hasEntities(JpaEntitiesBuildItem jpaEntities, List<NonJpaModelBuildItem> nonJpaModels) {
+        return !jpaEntities.getEntityClassNames().isEmpty() || !nonJpaModels.isEmpty();
     }
 
 }
