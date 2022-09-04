@@ -11,8 +11,6 @@ public class ClusterQuery {
 	String[] mConditions;
 
 	String mOrderBy;
-	
-	String mOffset;
 
 	String mLimit;
 
@@ -29,13 +27,8 @@ public class ClusterQuery {
 		return this;
 	}
 
-	public ClusterQuery order(String column) {
-		mOrderBy = column;
-		return this;
-	}
-	
-	public ClusterQuery offset(int value) {
-		mOffset = String.valueOf(value);
+	public ClusterQuery order(String args) {
+		mOrderBy = args;
 		return this;
 	}
 
@@ -44,18 +37,9 @@ public class ClusterQuery {
 		return this;
 	}
 
-	public <T> List<T> run(Class<T> modelClass) {
+	public <T> List<T> execute(Class<T> modelClass) {
 		QueryHandler queryHandler = new QueryHandler(Connector.getDatabase());
-		String limit;
-		if (mOffset == null) {
-			limit = mLimit;
-		} else {
-			if (mLimit == null) {
-				mLimit = "0";
-			}
-			limit = mOffset + "," + mLimit;
-		}
-		return queryHandler.onFind(modelClass, mColumns, mConditions, mOrderBy, limit);
+		return queryHandler.onFind(modelClass, mColumns, mConditions, mOrderBy, mLimit);
 	}
 
 }

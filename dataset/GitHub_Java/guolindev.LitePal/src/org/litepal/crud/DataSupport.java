@@ -79,15 +79,9 @@ public class DataSupport {
 		return cQuery;
 	}
 
-	public static ClusterQuery order(String column) {
+	public static ClusterQuery order(String args) {
 		ClusterQuery cQuery = new ClusterQuery();
-		cQuery.mOrderBy = column;
-		return cQuery;
-	}
-	
-	public static ClusterQuery offset(String value) {
-		ClusterQuery cQuery = new ClusterQuery();
-		cQuery.mOffset = String.valueOf(value);
+		cQuery.mOrderBy = args;
 		return cQuery;
 	}
 
