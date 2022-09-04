@@ -67,6 +67,10 @@ public class ArtifactFactory implements ArtifactResolver {
         return artifact;
       }
 
+      int getIdOfBuild() {
+        return idOfBuild;
+      }
+
       boolean isArtifactValid() {
         return idOfBuild == buildId;
       }
