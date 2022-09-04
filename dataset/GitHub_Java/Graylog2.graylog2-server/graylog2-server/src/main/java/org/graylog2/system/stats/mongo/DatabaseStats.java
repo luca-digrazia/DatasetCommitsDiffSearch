@@ -1,24 +1,26 @@
 /**
- * This file is part of Graylog2.
+ * This file is part of Graylog.
  *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.system.stats.mongo;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.auto.value.AutoValue;
+
+import javax.annotation.Nullable;
 
 /**
  * @see <a href="http://docs.mongodb.org/manual/reference/command/dbStats/">Diagnostic Commands &gt; dbStats</a>
@@ -54,15 +56,19 @@ public abstract class DatabaseStats {
     public abstract long indexSize();
 
     @JsonProperty
-    public abstract long fileSize();
+    @Nullable
+    public abstract Long fileSize();
 
     @JsonProperty
-    public abstract long nsSizeMB();
+    @Nullable
+    public abstract Long nsSizeMB();
 
     @JsonProperty
+    @Nullable
     public abstract ExtentFreeList extentFreeList();
 
     @JsonProperty
+    @Nullable
     public abstract DataFileVersion dataFileVersion();
 
     public static DatabaseStats create(String db,
@@ -74,10 +80,10 @@ public abstract class DatabaseStats {
                                        long numExtents,
                                        long indexes,
                                        long indexSize,
-                                       long fileSize,
-                                       long nsSizeMB,
-                                       ExtentFreeList extentFreeList,
-                                       DataFileVersion dataFileVersion) {
+                                       @Nullable Long fileSize,
+                                       @Nullable Long nsSizeMB,
+                                       @Nullable ExtentFreeList extentFreeList,
+                                       @Nullable DataFileVersion dataFileVersion) {
         return new AutoValue_DatabaseStats(db, collections, objects, avgObjSize, dataSize, storageSize, numExtents,
                 indexes, indexSize, fileSize, nsSizeMB, extentFreeList, dataFileVersion);
     }

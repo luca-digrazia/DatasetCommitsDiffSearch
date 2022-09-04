@@ -62,9 +62,6 @@ public abstract class ServerStatus {
     @JsonProperty
     public abstract Memory memory();
 
-    @JsonProperty
-    public abstract StorageEngine storageEngine();
-
     public static ServerStatus create(String host,
                                       String version,
                                       String process,
@@ -75,10 +72,9 @@ public abstract class ServerStatus {
                                       DateTime localTime,
                                       Connections connections,
                                       Network network,
-                                      Memory memory,
-                                      StorageEngine storageEngine) {
+                                      Memory memory) {
         return new AutoValue_ServerStatus(host, version, process, pid, uptime, uptimeMillis, uptimeEstimate, localTime,
-                connections, network, memory, storageEngine);
+                connections, network, memory);
     }
 
     @JsonAutoDetect
@@ -148,19 +144,6 @@ public abstract class ServerStatus {
                                     int mapped,
                                     int mappedWithJournal) {
             return new AutoValue_ServerStatus_Memory(bits, resident, virtual, supported, mapped, mappedWithJournal);
-        }
-    }
-
-    @JsonAutoDetect
-    @AutoValue
-    public abstract static class StorageEngine {
-        public static final StorageEngine DEFAULT = create("mmapv1");
-
-        @JsonProperty
-        public abstract String name();
-
-        public static StorageEngine create(String name) {
-            return new AutoValue_ServerStatus_StorageEngine(name);
         }
     }
 
