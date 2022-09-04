@@ -16,8 +16,8 @@
 
 package io.quarkus.deployment.steps;
 
-import static io.quarkus.gizmo.MethodDescriptor.ofConstructor;
-import static io.quarkus.gizmo.MethodDescriptor.ofMethod;
+import static org.jboss.protean.gizmo.MethodDescriptor.ofConstructor;
+import static org.jboss.protean.gizmo.MethodDescriptor.ofMethod;
 
 import java.lang.reflect.Modifier;
 import java.util.List;
@@ -27,6 +27,14 @@ import java.util.stream.Collectors;
 
 import org.graalvm.nativeimage.ImageInfo;
 import org.jboss.builder.Version;
+import org.jboss.protean.gizmo.BytecodeCreator;
+import org.jboss.protean.gizmo.CatchBlockCreator;
+import org.jboss.protean.gizmo.ClassCreator;
+import org.jboss.protean.gizmo.FieldCreator;
+import org.jboss.protean.gizmo.MethodCreator;
+import org.jboss.protean.gizmo.MethodDescriptor;
+import org.jboss.protean.gizmo.ResultHandle;
+import org.jboss.protean.gizmo.TryBlock;
 
 import io.quarkus.deployment.ClassOutput;
 import io.quarkus.deployment.annotations.BuildProducer;
@@ -35,6 +43,7 @@ import io.quarkus.deployment.builditem.ApplicationClassNameBuildItem;
 import io.quarkus.deployment.builditem.BytecodeRecorderObjectLoaderBuildItem;
 import io.quarkus.deployment.builditem.ClassOutputBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
+import io.quarkus.deployment.builditem.HttpServerBuildItem;
 import io.quarkus.deployment.builditem.JavaLibraryPathAdditionalPathBuildItem;
 import io.quarkus.deployment.builditem.MainBytecodeRecorderBuildItem;
 import io.quarkus.deployment.builditem.MainClassBuildItem;
@@ -43,14 +52,6 @@ import io.quarkus.deployment.builditem.SslTrustStoreSystemPropertyBuildItem;
 import io.quarkus.deployment.builditem.StaticBytecodeRecorderBuildItem;
 import io.quarkus.deployment.builditem.SystemPropertyBuildItem;
 import io.quarkus.deployment.recording.BytecodeRecorderImpl;
-import io.quarkus.gizmo.BytecodeCreator;
-import io.quarkus.gizmo.CatchBlockCreator;
-import io.quarkus.gizmo.ClassCreator;
-import io.quarkus.gizmo.FieldCreator;
-import io.quarkus.gizmo.MethodCreator;
-import io.quarkus.gizmo.MethodDescriptor;
-import io.quarkus.gizmo.ResultHandle;
-import io.quarkus.gizmo.TryBlock;
 import io.quarkus.runtime.Application;
 import io.quarkus.runtime.StartupContext;
 import io.quarkus.runtime.StartupTask;
@@ -73,6 +74,7 @@ class MainClassBuildStep {
             List<SystemPropertyBuildItem> properties,
             List<JavaLibraryPathAdditionalPathBuildItem> javaLibraryPathAdditionalPaths,
             Optional<SslTrustStoreSystemPropertyBuildItem> sslTrustStoreSystemProperty,
+            Optional<HttpServerBuildItem> httpServer,
             List<FeatureBuildItem> features,
             BuildProducer<ApplicationClassNameBuildItem> appClassNameProducer,
             List<BytecodeRecorderObjectLoaderBuildItem> loaders,
@@ -188,10 +190,6 @@ class MainClassBuildStep {
         startupContext = mv.readStaticField(scField.getFieldDescriptor());
 
         tryBlock = mv.tryBlock();
-
-        // Load the run time configuration
-        tryBlock.invokeStaticMethod(ConfigurationSetup.CREATE_RUN_TIME_CONFIG);
-
         for (MainBytecodeRecorderBuildItem holder : mainMethod) {
             final BytecodeRecorderImpl recorder = holder.getBytecodeRecorder();
             if (!recorder.isEmpty()) {
@@ -210,9 +208,11 @@ class MainClassBuildStep {
                 .map(f -> f.getInfo())
                 .sorted()
                 .collect(Collectors.joining(", ")));
+        ResultHandle serverHandle = httpServer.isPresent() ? tryBlock.load("Listening on: http://" + httpServer.get()
+                .getHost() + ":" + httpServer.get().getPort()) : tryBlock.load("");
         tryBlock.invokeStaticMethod(
-                ofMethod(Timing.class, "printStartupTime", void.class, String.class, String.class),
-                tryBlock.load(Version.getVersion()), featuresHandle);
+                ofMethod(Timing.class, "printStartupTime", void.class, String.class, String.class, String.class),
+                tryBlock.load(Version.getVersion()), featuresHandle, serverHandle);
 
         cb = tryBlock.addCatch(Throwable.class);
         cb.invokeVirtualMethod(ofMethod(Throwable.class, "printStackTrace", void.class), cb.getCaughtException());
