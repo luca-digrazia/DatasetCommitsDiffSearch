@@ -44,7 +44,8 @@ public class AggregatingAttributeMapper extends AbstractAttributeMapper {
   private final Rule rule;
 
   private AggregatingAttributeMapper(Rule rule) {
-    super(rule);
+    super(rule.getPackage(), rule.getRuleClassObject(), rule.getLabel(),
+        rule.getAttributeContainer());
     this.rule = rule;
   }
 
