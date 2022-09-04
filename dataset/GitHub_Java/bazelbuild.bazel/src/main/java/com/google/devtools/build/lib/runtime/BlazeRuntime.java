@@ -344,7 +344,8 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
             clock,
             execStartTimeNanos,
             options.enableCpuUsageProfiling,
-            options.enableJsonProfileDiet);
+            options.enableJsonProfileDiet,
+            options.enableJsonMetadata);
         // Instead of logEvent() we're calling the low level function to pass the timings we took in
         // the launcher. We're setting the INIT phase marker so that it follows immediately the
         // LAUNCH phase.
@@ -463,20 +464,14 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
     return options;
   }
 
-  /**
-   * Returns the first module that is an instance of a given class or interface.
-   *
-   * @param moduleClass a class or interface that we want to match to a module
-   * @param <T> the type of the module's class
-   * @return a module that is an instance of this class or interface
-   */
   @SuppressWarnings("unchecked")
-  public <T> T getBlazeModule(Class<T> moduleClass) {
+  public <T extends BlazeModule> T getBlazeModule(Class<T> moduleClass) {
     for (BlazeModule module : blazeModules) {
-      if (moduleClass.isInstance(module)) {
+      if (module.getClass() == moduleClass) {
         return (T) module;
       }
     }
+
     return null;
   }
 
