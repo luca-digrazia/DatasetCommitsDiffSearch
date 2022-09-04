@@ -1,4 +1,6 @@
-/**
+/*
+ * Copyright 2012-2014 TORCH GmbH
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -14,13 +16,14 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
+
 package org.graylog2.periodical;
 
 import com.ning.http.client.AsyncHttpClient;
 import org.graylog2.plugin.periodical.Periodical;
 import org.graylog2.radio.Configuration;
 import org.graylog2.radio.cluster.Ping;
-import org.graylog2.plugin.ServerStatus;
+import org.graylog2.shared.ServerStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,7 +35,7 @@ import java.util.concurrent.ExecutionException;
  * @author Dennis Oelkers <dennis@torch.sh>
  */
 public class MasterPingPeriodical extends Periodical {
-    private static final Logger LOG = LoggerFactory.getLogger(MasterPingPeriodical.class);
+    private final Logger LOG = LoggerFactory.getLogger(MasterPingPeriodical.class);
 
     private final ServerStatus serverStatus;
     private final Configuration configuration;
