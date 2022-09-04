@@ -31,7 +31,6 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.collect.Lists;
-import org.graylog2.database.NotFoundException;
 import org.graylog2.inputs.Input;
 import org.graylog2.inputs.InputService;
 import org.graylog2.plugin.Message;
@@ -54,7 +53,7 @@ import java.util.concurrent.TimeUnit;
  * @author Bernd Ahlers <bernd@torch.sh>
  */
 public class MessageToJsonSerializer {
-    private static final Logger LOG = LoggerFactory.getLogger(MessageToJsonSerializer.class);
+    private final Logger LOG = LoggerFactory.getLogger(MessageToJsonSerializer.class);
 
     private final ObjectMapper mapper;
     private final SimpleModule simpleModule;
@@ -167,10 +166,16 @@ public class MessageToJsonSerializer {
                             @Override
                             public MessageInput load(String key) throws Exception {
                                 LOG.debug("Loading message input {}", key);
-                                try {
-                                    final Input input = inputService.find(key);
-                                    return inputService.buildMessageInput(input);
-                                } catch (NotFoundException | NoSuchInputTypeException e) {
+                                final Input input = inputService.find(key);
+
+                                if (input != null) {
+                                    try {
+                                        // TODO This might create lots of MessageInput instances. Can we avoid this?
+                                        return inputService.buildMessageInput(input);
+                                    } catch (NoSuchInputTypeException e) {
+                                        return null;
+                                    }
+                                } else {
                                     return null;
                                 }
                             }
