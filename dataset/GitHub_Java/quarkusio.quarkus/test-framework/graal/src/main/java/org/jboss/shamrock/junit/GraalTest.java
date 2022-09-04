@@ -42,7 +42,6 @@ public class GraalTest extends BlockJUnit4ClassRunner {
     }
 
     private void runInternal(RunNotifier notifier) {
-        boolean reportAtRuntime = Boolean.getBoolean("graal.reportAtRuntime");
         if (first) {
             first = false;
             String graal = System.getenv("GRAALVM_HOME");
@@ -66,27 +65,23 @@ public class GraalTest extends BlockJUnit4ClassRunner {
             String path = externalForm.substring(5, jar);
 
             try {
+                File temp = File.createTempFile("graal", "testImage");
+                temp.delete();
+                temp.mkdir();
 
-                String[] command;
-                if (reportAtRuntime) {
-                    command = new String[]{nativeImage, "-jar", path, "-H:+ReportUnsupportedElementsAtRuntime", "-H:IncludeResources=META-INF/.*"};
-                } else {
-                    command = new String[]{nativeImage, "-jar", path, "-H:IncludeResources=META-INF/.*"};
-                }
 
-                Process process = Runtime.getRuntime().exec(command, new String[]{}, new File(path.substring(0, path.lastIndexOf(File.separator))));
+                Process process = Runtime.getRuntime().exec(new String[]{nativeImage, "-jar", path}, new String[]{}, temp);
                 CompletableFuture<String> output = new CompletableFuture<>();
-                CompletableFuture<String> errorOutput = new CompletableFuture<>();
                 new Thread(new ProcessReader(process.getInputStream(), output)).start();
                 if (process.waitFor() != 0) {
                     notifier.fireTestFailure(new Failure(Description.createSuiteDescription(GraalTest.class), new RuntimeException("Image generation failed: " + output.get())));
                     return;
                 }
 
-                String outputFile = path.substring(0, path.lastIndexOf('.'));
-                System.out.println("Executing " + outputFile);
-                final Process testProcess = Runtime.getRuntime().exec(outputFile);
-                notifier.addListener(new RunListener() {
+                String absolutePath = temp.listFiles()[0].getAbsolutePath();
+                System.out.println("Executing " + absolutePath);
+                final Process testProcess = Runtime.getRuntime().exec(absolutePath);
+                notifier.addListener(new RunListener(){
                     @Override
                     public void testRunFinished(Result result) throws Exception {
                         super.testRunFinished(result);
@@ -94,24 +89,14 @@ public class GraalTest extends BlockJUnit4ClassRunner {
                     }
                 });
                 new Thread(new ProcessReader(testProcess.getInputStream(), output)).start();
-                new Thread(new ProcessReader(testProcess.getErrorStream(), errorOutput)).start();
+                new Thread(new ProcessReader(testProcess.getErrorStream(), output)).start();
                 output.whenComplete(new BiConsumer<String, Throwable>() {
                     @Override
                     public void accept(String s, Throwable throwable) {
-                        if (throwable != null) {
+                        if(throwable != null) {
                             throwable.printStackTrace();
                         } else {
                             System.out.println(s);
-                        }
-                    }
-                });
-                errorOutput.whenComplete(new BiConsumer<String, Throwable>() {
-                    @Override
-                    public void accept(String s, Throwable throwable) {
-                        if (throwable != null) {
-                            throwable.printStackTrace();
-                        } else {
-                            System.err.println(s);
                         }
                     }
                 });
@@ -143,6 +128,7 @@ public class GraalTest extends BlockJUnit4ClassRunner {
             try {
                 while ((i = inputStream.read(b)) > 0) {
                     out.write(b, 0, i);
+                    System.out.print(new String(b, 0 , i));
                 }
                 result.complete(new String(out.toByteArray()));
             } catch (IOException e) {
