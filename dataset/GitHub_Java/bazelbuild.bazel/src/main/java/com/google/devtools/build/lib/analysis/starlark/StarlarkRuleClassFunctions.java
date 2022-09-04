@@ -43,7 +43,6 @@ import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.config.StarlarkDefinedConfigTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.TransitionFactory;
-import com.google.devtools.build.lib.analysis.config.transitions.TransitionFactory.TransitionType;
 import com.google.devtools.build.lib.analysis.platform.ConstraintValueInfo;
 import com.google.devtools.build.lib.analysis.starlark.StarlarkAttrModule.Descriptor;
 import com.google.devtools.build.lib.analysis.test.TestConfiguration;
@@ -71,6 +70,7 @@ import com.google.devtools.build.lib.packages.Package.NameConflictException;
 import com.google.devtools.build.lib.packages.PackageFactory.PackageContext;
 import com.google.devtools.build.lib.packages.PredicateWithMessage;
 import com.google.devtools.build.lib.packages.Provider;
+import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.packages.RuleClass.ToolchainTransitionMode;
@@ -78,7 +78,6 @@ import com.google.devtools.build.lib.packages.RuleFactory;
 import com.google.devtools.build.lib.packages.RuleFactory.BuildLangTypedAttributeValuesMap;
 import com.google.devtools.build.lib.packages.RuleFactory.InvalidRuleException;
 import com.google.devtools.build.lib.packages.RuleFunction;
-import com.google.devtools.build.lib.packages.RuleTransitionData;
 import com.google.devtools.build.lib.packages.StarlarkAspect;
 import com.google.devtools.build.lib.packages.StarlarkCallbackHelper;
 import com.google.devtools.build.lib.packages.StarlarkDefinedAspect;
@@ -415,18 +414,9 @@ public class StarlarkRuleClassFunctions implements StarlarkRuleFunctionsApi<Arti
       } else if (cfg instanceof PatchTransition) {
         builder.cfg((PatchTransition) cfg);
       } else if (cfg instanceof TransitionFactory) {
-        TransitionFactory<? extends TransitionFactory.Data> transitionFactory =
-            (TransitionFactory<? extends TransitionFactory.Data>) cfg;
-        if (transitionFactory.transitionType().isCompatibleWith(TransitionType.RULE)) {
-          @SuppressWarnings("unchecked") // Actually checked due to above isCompatibleWith call.
-          TransitionFactory<RuleTransitionData> ruleTransitionFactory =
-              (TransitionFactory<RuleTransitionData>) transitionFactory;
-          builder.cfg(ruleTransitionFactory);
-        } else {
-          throw Starlark.errorf(
-              "`cfg` must be set to a transition appropriate for a rule, not an attribute-specific"
-                  + " transition.");
-        }
+        @SuppressWarnings("unchecked")
+        TransitionFactory<Rule> transitionFactory = (TransitionFactory<Rule>) cfg;
+        builder.cfg(transitionFactory);
       } else {
         // This is not technically true: it could also be a native transition, but this is the
         // most likely error case.
@@ -738,12 +728,7 @@ public class StarlarkRuleClassFunctions implements StarlarkRuleFunctionsApi<Arti
                   + "Rules may be instantiated only in a BUILD thread.");
         }
         RuleFactory.createAndAddRule(
-            pkgContext.getBuilder(),
-            ruleClass,
-            attributeValues,
-            pkgContext.getEventHandler(),
-            thread.getSemantics(),
-            thread.getCallStack());
+            pkgContext, ruleClass, attributeValues, thread.getSemantics(), thread.getCallStack());
       } catch (InvalidRuleException | NameConflictException e) {
         throw new EvalException(e);
       }
