@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -20,7 +20,6 @@ import static com.sun.codemodel.JExpr.ref;
 import static com.sun.codemodel.JMod.PRIVATE;
 import static com.sun.codemodel.JMod.PUBLIC;
 import static com.sun.codemodel.JMod.STATIC;
-import static org.androidannotations.helper.ModelConstants.generationSuffix;
 
 import java.util.List;
 
@@ -94,10 +93,10 @@ public class ActivityIntentBuilder extends IntentBuilder {
 
 	private void createAdditionalConstructor() {
 		if (hasFragmentInClasspath()) {
-			fragmentField = addFragmentConstructor(holder.classes().FRAGMENT, "fragment" + generationSuffix());
+			fragmentField = addFragmentConstructor(holder.classes().FRAGMENT, "fragment_");
 		}
 		if (hasFragmentSupportInClasspath()) {
-			fragmentSupportField = addFragmentConstructor(holder.classes().SUPPORT_V4_FRAGMENT, "fragmentSupport" + generationSuffix());
+			fragmentSupportField = addFragmentConstructor(holder.classes().SUPPORT_V4_FRAGMENT, "fragmentSupport_");
 		}
 	}
 
