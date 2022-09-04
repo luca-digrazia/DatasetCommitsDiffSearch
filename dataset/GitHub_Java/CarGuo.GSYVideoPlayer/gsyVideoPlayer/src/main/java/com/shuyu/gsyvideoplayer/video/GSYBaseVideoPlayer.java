@@ -101,12 +101,6 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
 
     protected boolean mShowPauseCover = true;//是否显示暂停图片
 
-    protected boolean mRotateWithSystem = true; //旋转使能后是否跟随系统设置
-
-    protected boolean mNetChanged = false; //是否发送了网络改变
-
-    protected String mNetSate = "NORMAL";
-
     protected Context mContext;
 
     protected String mOriginUrl; //原来的url
@@ -217,7 +211,6 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
         gsyVideoPlayer.setIfCurrentIsFullscreen(true);
         mOrientationUtils = new OrientationUtils((Activity) context, gsyVideoPlayer);
         mOrientationUtils.setEnable(mRotateViewAuto);
-        mOrientationUtils.setRotateWithSystem(mRotateWithSystem);
         gsyVideoPlayer.mOrientationUtils = mOrientationUtils;
 
         if (isShowFullAnimation()) {
@@ -259,8 +252,6 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
         mCurrentState = GSYVideoManager.instance().getLastState();
         if (gsyVideoPlayer != null) {
             mCurrentState = gsyVideoPlayer.getCurrentState();
-            mNetChanged = gsyVideoPlayer.mNetChanged;
-            mNetSate = gsyVideoPlayer.mNetSate;
         }
         GSYVideoManager.instance().setListener(GSYVideoManager.instance().lastListener());
         GSYVideoManager.instance().setLastListener(null);
@@ -378,9 +369,6 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
             gsyVideoPlayer.mRotate = mRotate;
             gsyVideoPlayer.mShowPauseCover = mShowPauseCover;
             gsyVideoPlayer.mSeekRatio = mSeekRatio;
-            gsyVideoPlayer.mNetChanged = mNetChanged;
-            gsyVideoPlayer.mNetSate = mNetSate;
-            gsyVideoPlayer.mRotateWithSystem = mRotateWithSystem;
             gsyVideoPlayer.setUp(mOriginUrl, mCache, mCachePath, mMapHeadData, mObjects);
             gsyVideoPlayer.setStateAndUi(mCurrentState);
             gsyVideoPlayer.addTextureView();
@@ -563,8 +551,6 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
 
             vp.addView(frameLayout, lpParent);
             gsyVideoPlayer.mHadPlay = mHadPlay;
-            gsyVideoPlayer.mNetChanged = mNetChanged;
-            gsyVideoPlayer.mNetSate = mNetSate;
             gsyVideoPlayer.setUp(mOriginUrl, mCache, mCachePath, mMapHeadData, mObjects);
             gsyVideoPlayer.setStateAndUi(mCurrentState);
             gsyVideoPlayer.addTextureView();
@@ -601,8 +587,6 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
         mCurrentState = GSYVideoManager.instance().getLastState();
         if (gsyVideoPlayer != null) {
             mCurrentState = gsyVideoPlayer.getCurrentState();
-            mNetChanged = gsyVideoPlayer.mNetChanged;
-            mNetSate = gsyVideoPlayer.mNetSate;
         }
         GSYVideoManager.instance().setListener(GSYVideoManager.instance().lastListener());
         GSYVideoManager.instance().setLastListener(null);
@@ -866,19 +850,6 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
 
     public float getSeekRatio() {
         return mSeekRatio;
-    }
-
-
-    public boolean isRotateWithSystem() {
-        return mRotateWithSystem;
-    }
-
-    /**
-     * 是否更新系统旋转，false的话，系统禁止旋转也会跟着旋转
-     * @param rotateWithSystem 默认true
-     */
-    public void setRotateWithSystem(boolean rotateWithSystem) {
-        this.mRotateWithSystem = rotateWithSystem;
     }
 
 }
