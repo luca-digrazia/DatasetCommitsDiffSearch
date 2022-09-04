@@ -48,7 +48,6 @@ public class DevModeMain {
 
     private static Closeable closeable;
     static volatile Throwable deploymentProblem;
-    static RuntimeUpdatesProcessor runtimeUpdatesProcessor;
 
     public static void main(String... args) throws Exception {
 
@@ -77,7 +76,7 @@ public class DevModeMain {
             }
         }
 
-        runtimeUpdatesProcessor = RuntimeCompilationSetup.setup();
+        RuntimeCompilationSetup.setup();
         //TODO: we can't handle an exception on startup with hot replacement, as Undertow might not have started
 
         doStart();
