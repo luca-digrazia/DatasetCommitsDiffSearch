@@ -22,7 +22,6 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
-import com.google.devtools.build.lib.bazel.rules.ninja.file.ByteBufferFragment;
 import com.google.devtools.build.lib.bazel.rules.ninja.file.ByteFragmentAtOffset;
 import com.google.devtools.build.lib.bazel.rules.ninja.file.CollectingListFuture;
 import com.google.devtools.build.lib.bazel.rules.ninja.file.GenericParsingException;
@@ -84,7 +83,7 @@ public class NinjaPipeline {
    * @return {@link Pair} of {@link NinjaScope} with rules and expanded variables (and child
    *     scopes), and list of {@link NinjaTarget}.
    */
-  public List<NinjaTarget> pipeline(Path mainFile)
+  public Pair<NinjaScope, List<NinjaTarget>> pipeline(Path mainFile)
       throws GenericParsingException, InterruptedException, IOException {
     NinjaFileParseResult result =
         waitForFutureAndGetWithCheckedException(
@@ -94,7 +93,7 @@ public class NinjaPipeline {
     NinjaScope scope = new NinjaScope();
     // This will cause additional parsing of included/subninja scopes, and their recursive expand.
     result.expandIntoScope(scope, rawTargets);
-    return iterateScopesScheduleTargetsParsing(scope, rawTargets);
+    return Pair.of(scope, iterateScopesScheduleTargetsParsing(scope, rawTargets));
   }
 
   /**
@@ -113,18 +112,12 @@ public class NinjaPipeline {
       NinjaScope currentScope = queue.removeFirst();
       List<ByteFragmentAtOffset> targetFragments = rawTargets.get(currentScope);
       Preconditions.checkNotNull(targetFragments);
-      for (ByteFragmentAtOffset byteFragmentAtOffset : targetFragments) {
+      for (ByteFragmentAtOffset fragment : targetFragments) {
         future.add(
             service.submit(
-                () -> {
-                  // Lexer should start at the beginning of fragment -> apply offset.
-                  ByteBufferFragment bufferFragment = byteFragmentAtOffset.getFragment();
-                  ByteBufferFragment subFragment =
-                      bufferFragment.subFragment(
-                          byteFragmentAtOffset.getOffset(), bufferFragment.length());
-                  return new NinjaParserStep(new NinjaLexer(subFragment))
-                      .parseNinjaTarget(currentScope, byteFragmentAtOffset.getRealStartOffset());
-                }));
+                () ->
+                    new NinjaParserStep(new NinjaLexer(fragment.getFragment()))
+                        .parseNinjaTarget(currentScope, fragment.getRealStartOffset())));
       }
       queue.addAll(currentScope.getIncludedScopes());
       queue.addAll(currentScope.getSubNinjaScopes());
