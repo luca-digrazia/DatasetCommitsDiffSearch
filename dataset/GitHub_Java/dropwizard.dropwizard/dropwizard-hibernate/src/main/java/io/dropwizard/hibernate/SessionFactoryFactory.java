@@ -1,10 +1,11 @@
 package io.dropwizard.hibernate;
 
-import com.google.common.collect.Sets;
-import io.dropwizard.db.DataSourceFactory;
 import io.dropwizard.db.ManagedDataSource;
+import io.dropwizard.db.PooledDataSourceFactory;
 import io.dropwizard.setup.Environment;
 import org.hibernate.SessionFactory;
+import org.hibernate.boot.registry.BootstrapServiceRegistry;
+import org.hibernate.boot.registry.BootstrapServiceRegistryBuilder;
 import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
 import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.cfg.Configuration;
@@ -18,30 +19,40 @@ import javax.sql.DataSource;
 import java.util.List;
 import java.util.Map;
 import java.util.SortedSet;
+import java.util.TreeSet;
 
 public class SessionFactoryFactory {
     private static final Logger LOGGER = LoggerFactory.getLogger(SessionFactoryFactory.class);
+    private static final String DEFAULT_NAME = "hibernate";
 
     public SessionFactory build(HibernateBundle<?> bundle,
                                 Environment environment,
-                                DataSourceFactory dbConfig,
-                                List<Class<?>> entities) throws ClassNotFoundException {
-        final ManagedDataSource dataSource = dbConfig.build(environment.metrics(), "hibernate");
+                                PooledDataSourceFactory dbConfig,
+                                List<Class<?>> entities) {
+        return build(bundle, environment, dbConfig, entities, DEFAULT_NAME);
+    }
+
+    public SessionFactory build(HibernateBundle<?> bundle,
+                                Environment environment,
+                                PooledDataSourceFactory dbConfig,
+                                List<Class<?>> entities,
+                                String name) {
+        final ManagedDataSource dataSource = dbConfig.build(environment.metrics(), name);
         return build(bundle, environment, dbConfig, dataSource, entities);
     }
 
     public SessionFactory build(HibernateBundle<?> bundle,
                                 Environment environment,
-                                DataSourceFactory dbConfig,
+                                PooledDataSourceFactory dbConfig,
                                 ManagedDataSource dataSource,
-                                List<Class<?>> entities) throws ClassNotFoundException {
+                                List<Class<?>> entities) {
         final ConnectionProvider provider = buildConnectionProvider(dataSource,
-                                                                    dbConfig.getProperties());
+            dbConfig.getProperties());
         final SessionFactory factory = buildSessionFactory(bundle,
-                                                           dbConfig,
-                                                           provider,
-                                                           dbConfig.getProperties(),
-                                                           entities);
+            dbConfig,
+            provider,
+            dbConfig.getProperties(),
+            entities);
         final SessionFactoryManager managedFactory = new SessionFactoryManager(factory, dataSource);
         environment.lifecycle().manage(managedFactory);
         return factory;
@@ -56,11 +67,15 @@ public class SessionFactoryFactory {
     }
 
     private SessionFactory buildSessionFactory(HibernateBundle<?> bundle,
-                                               DataSourceFactory dbConfig,
+                                               PooledDataSourceFactory dbConfig,
                                                ConnectionProvider connectionProvider,
                                                Map<String, String> properties,
                                                List<Class<?>> entities) {
-        final Configuration configuration = new Configuration();
+
+        final BootstrapServiceRegistry bootstrapServiceRegistry =
+            configureBootstrapServiceRegistryBuilder(new BootstrapServiceRegistryBuilder()).build();
+
+        final Configuration configuration = new Configuration(bootstrapServiceRegistry);
         configuration.setProperty(AvailableSettings.CURRENT_SESSION_CONTEXT_CLASS, "managed");
         configuration.setProperty(AvailableSettings.USE_SQL_COMMENTS, Boolean.toString(dbConfig.isAutoCommentsEnabled()));
         configuration.setProperty(AvailableSettings.USE_GET_GENERATED_KEYS, "true");
@@ -77,17 +92,26 @@ public class SessionFactoryFactory {
         addAnnotatedClasses(configuration, entities);
         bundle.configure(configuration);
 
-        final ServiceRegistry registry = new StandardServiceRegistryBuilder()
-                .addService(ConnectionProvider.class, connectionProvider)
-                .applySettings(properties)
-                .build();
+        final ServiceRegistry registry = new StandardServiceRegistryBuilder(bootstrapServiceRegistry)
+            .addService(ConnectionProvider.class, connectionProvider)
+            .applySettings(configuration.getProperties())
+            .build();
+
+        configure(configuration, registry);
 
         return configuration.buildSessionFactory(registry);
     }
 
+    protected void configure(Configuration configuration, ServiceRegistry registry) {
+    }
+
+    protected BootstrapServiceRegistryBuilder configureBootstrapServiceRegistryBuilder(BootstrapServiceRegistryBuilder builder) {
+        return builder;
+    }
+
     private void addAnnotatedClasses(Configuration configuration,
                                      Iterable<Class<?>> entities) {
-        final SortedSet<String> entityClasses = Sets.newTreeSet();
+        final SortedSet<String> entityClasses = new TreeSet<>();
         for (Class<?> klass : entities) {
             configuration.addAnnotatedClass(klass);
             entityClasses.add(klass.getCanonicalName());
