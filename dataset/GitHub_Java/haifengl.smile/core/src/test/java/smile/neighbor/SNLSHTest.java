@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,19 +13,16 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.neighbor;
 
 import org.junit.Before;
 import org.junit.Test;
-import smile.hash.SimHash;
-
 import java.io.IOException;
-import java.util.ArrayList;
+import java.nio.file.Files;
 import java.util.Arrays;
 
-import static org.junit.Assert.assertEquals;
 
 /**
  * Test data set: http://research.microsoft.com/en-us/downloads/607d14d9-20cd-47e3-85bc-a2f65cd28042/
@@ -34,12 +31,6 @@ import static org.junit.Assert.assertEquals;
  * @since 03/31/15
  */
 public class SNLSHTest {
-    private String[] texts = {
-            "This is a test case",
-            "This is another test case",
-            "This is another test case too",
-            "I want to be far from other cases"
-    };
 
     public SNLSHTest() {
 
@@ -50,37 +41,33 @@ public class SNLSHTest {
 
     }
 
+    private String[] loadData(String path) throws IOException {
+        return Files.lines(smile.util.Paths.getTestData(path)).skip(1).toArray(String[]::new);
+    }
+
     @Test(expected = Test.None.class)
     public void test() throws IOException {
         System.out.println("SNLSH");
 
-        SNLSH<String[], String> lsh = createLSH(texts);
+        String[] train = loadData("msrp/msr_paraphrase_train.txt");
+        String[] test = loadData("msrp/msr_paraphrase_test.txt");
 
-        ArrayList<Neighbor<String[], String>> neighbors = new ArrayList<>();
-        lsh.range(tokenize(texts[0]), 3, neighbors);
-        assertEquals(2, neighbors.size());
-        assertEquals(0, neighbors.get(0).index);
-        assertEquals(1, neighbors.get(1).index);
+        SNLSH<String> lsh = createLSH(train);
 
-        neighbors.clear();
-        lsh.range(tokenize(texts[1]), 3, neighbors);
-        assertEquals(2, neighbors.size());
-        assertEquals(0, neighbors.get(0).index);
-        assertEquals(1, neighbors.get(1).index);
+        for (String s : test) {
+            String[] t = tokenize(s);
+            Neighbor[] neighbors = lsh.knn(t, 3);
 
-        neighbors.clear();
-        lsh.range(tokenize(texts[2]), 3, neighbors);
-        assertEquals(1, neighbors.size());
-        assertEquals(2, neighbors.get(0).index);
-
-        neighbors.clear();
-        lsh.range(tokenize(texts[3]), 3, neighbors);
-        assertEquals(1, neighbors.size());
-        assertEquals(3, neighbors.get(0).index);
+            System.out.println("------------------");
+            System.out.println(s);
+            for (Neighbor n : neighbors) {
+                System.out.println(train[n.index]);
+            }
+        }
     }
 
-    private SNLSH<String[], String> createLSH(String[] data) {
-        SNLSH<String[], String> lsh = new SNLSH<>(8, SimHash.text());
+    private SNLSH<String> createLSH(String[] data) {
+        SNLSH<String> lsh = new SNLSH<>(8);
         for (String sentence : data) {
             String[] tokens = tokenize(sentence);
             lsh.put(tokens, sentence);
