@@ -1,31 +1,66 @@
+/*
+ * Copyright (C) 2020 Graylog, Inc.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the Server Side Public License, version 1,
+ * as published by MongoDB, Inc.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * Server Side Public License for more details.
+ *
+ * You should have received a copy of the Server Side Public License
+ * along with this program. If not, see
+ * <http://www.mongodb.com/licensing/server-side-public-license>.
+ */
 package org.graylog.plugins.views;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.inject.Scopes;
 import com.google.inject.assistedinject.FactoryModuleBuilder;
-import org.graylog.plugins.views.audit.EnterpriseAuditEventTypes;
-import org.graylog.plugins.views.migrations.V20180817120900_AddViewsUsers;
+import org.graylog.plugins.views.audit.ViewsAuditEventTypes;
 import org.graylog.plugins.views.migrations.V20181220133700_AddViewsAdminRole;
+import org.graylog.plugins.views.migrations.V20190127111728_MigrateWidgetFormatSettings;
 import org.graylog.plugins.views.migrations.V20190304102700_MigrateMessageListStructure;
+import org.graylog.plugins.views.migrations.V20190805115800_RemoveDashboardStateFromViews;
+import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.V20191125144500_MigrateDashboardsToViews;
+import org.graylog.plugins.views.migrations.V20191203120602_MigrateSavedSearchesToViewsSupport.V20191203120602_MigrateSavedSearchesToViews;
+import org.graylog.plugins.views.migrations.V20191204000000_RemoveLegacyViewsPermissions;
+import org.graylog.plugins.views.migrations.V20200204122000_MigrateUntypedViewsToDashboards.V20200204122000_MigrateUntypedViewsToDashboards;
+import org.graylog.plugins.views.migrations.V20200409083200_RemoveRootQueriesFromMigratedDashboards;
+import org.graylog.plugins.views.migrations.V20200730000000_AddGl2MessageIdFieldAliasForEvents;
+import org.graylog.plugins.views.providers.ExportBackendProvider;
 import org.graylog.plugins.views.search.SearchRequirements;
 import org.graylog.plugins.views.search.SearchRequiresParameterSupport;
+import org.graylog.plugins.views.search.ValueParameter;
 import org.graylog.plugins.views.search.db.InMemorySearchJobService;
 import org.graylog.plugins.views.search.db.SearchJobService;
 import org.graylog.plugins.views.search.db.SearchesCleanUpJob;
 import org.graylog.plugins.views.search.elasticsearch.ElasticsearchQueryString;
+import org.graylog.plugins.views.search.export.ChunkDecorator;
+import org.graylog.plugins.views.search.export.DecoratingMessagesExporter;
+import org.graylog.plugins.views.search.export.ExportBackend;
+import org.graylog.plugins.views.search.export.LegacyChunkDecorator;
+import org.graylog.plugins.views.search.export.MessagesExporter;
+import org.graylog.plugins.views.search.export.SimpleMessageChunkCsvWriter;
 import org.graylog.plugins.views.search.filter.AndFilter;
 import org.graylog.plugins.views.search.filter.OrFilter;
 import org.graylog.plugins.views.search.filter.QueryStringFilter;
 import org.graylog.plugins.views.search.filter.StreamFilter;
-import org.graylog.plugins.views.search.rest.EnterpriseSearchRestPermissions;
+import org.graylog.plugins.views.search.rest.DashboardsResource;
 import org.graylog.plugins.views.search.rest.FieldTypesResource;
+import org.graylog.plugins.views.search.rest.MessagesResource;
 import org.graylog.plugins.views.search.rest.PivotSeriesFunctionsResource;
+import org.graylog.plugins.views.search.rest.QualifyingViewsResource;
+import org.graylog.plugins.views.search.rest.SavedSearchesResource;
 import org.graylog.plugins.views.search.rest.SearchResource;
-import org.graylog.plugins.views.search.views.RequiresParameterSupport;
-import org.graylog.plugins.views.search.views.ViewRequirements;
-import org.graylog.plugins.views.search.rest.ViewSharingResource;
 import org.graylog.plugins.views.search.rest.ViewsResource;
+import org.graylog.plugins.views.search.rest.ViewsRestPermissions;
+import org.graylog.plugins.views.search.rest.exceptionmappers.MissingCapabilitiesExceptionMapper;
+import org.graylog.plugins.views.search.rest.exceptionmappers.PermissionExceptionMapper;
 import org.graylog.plugins.views.search.searchtypes.MessageList;
+import org.graylog.plugins.views.search.searchtypes.events.EventList;
 import org.graylog.plugins.views.search.searchtypes.pivot.Pivot;
 import org.graylog.plugins.views.search.searchtypes.pivot.PivotSort;
 import org.graylog.plugins.views.search.searchtypes.pivot.SeriesSort;
@@ -43,22 +78,23 @@ import org.graylog.plugins.views.search.searchtypes.pivot.series.StdDev;
 import org.graylog.plugins.views.search.searchtypes.pivot.series.Sum;
 import org.graylog.plugins.views.search.searchtypes.pivot.series.SumOfSquares;
 import org.graylog.plugins.views.search.searchtypes.pivot.series.Variance;
-import org.graylog.plugins.views.search.views.sharing.AllUsersOfInstance;
-import org.graylog.plugins.views.search.views.sharing.AllUsersOfInstanceStrategy;
-import org.graylog.plugins.views.search.views.sharing.SpecificRoles;
-import org.graylog.plugins.views.search.views.sharing.SpecificRolesStrategy;
-import org.graylog.plugins.views.search.views.sharing.SpecificUsers;
-import org.graylog.plugins.views.search.views.sharing.SpecificUsersStrategy;
+import org.graylog.plugins.views.search.views.RequiresParameterSupport;
+import org.graylog.plugins.views.search.views.ViewRequirements;
 import org.graylog.plugins.views.search.views.widgets.aggregation.AggregationConfigDTO;
+import org.graylog.plugins.views.search.views.widgets.aggregation.AreaVisualizationConfigDTO;
 import org.graylog.plugins.views.search.views.widgets.aggregation.AutoIntervalDTO;
 import org.graylog.plugins.views.search.views.widgets.aggregation.BarVisualizationConfigDTO;
+import org.graylog.plugins.views.search.views.widgets.aggregation.HeatmapVisualizationConfigDTO;
+import org.graylog.plugins.views.search.views.widgets.aggregation.LineVisualizationConfigDTO;
+import org.graylog.plugins.views.search.views.widgets.aggregation.NumberVisualizationConfigDTO;
 import org.graylog.plugins.views.search.views.widgets.aggregation.TimeHistogramConfigDTO;
 import org.graylog.plugins.views.search.views.widgets.aggregation.TimeUnitIntervalDTO;
 import org.graylog.plugins.views.search.views.widgets.aggregation.ValueConfigDTO;
 import org.graylog.plugins.views.search.views.widgets.aggregation.WorldMapVisualizationConfigDTO;
 import org.graylog.plugins.views.search.views.widgets.aggregation.sort.PivotSortConfig;
 import org.graylog.plugins.views.search.views.widgets.aggregation.sort.SeriesSortConfig;
-import org.graylog.plugins.views.search.views.widgets.messagelist.MessageListConfigDTO;import org.graylog2.plugin.PluginConfigBean;
+import org.graylog.plugins.views.search.views.widgets.messagelist.MessageListConfigDTO;
+import org.graylog2.plugin.PluginConfigBean;
 
 import java.util.Set;
 
@@ -70,13 +106,21 @@ public class ViewsBindings extends ViewsModule {
 
     @Override
     protected void configure() {
-        addRestResource(SearchResource.class);
-        addRestResource(ViewsResource.class);
-        addRestResource(FieldTypesResource.class);
-        addRestResource(PivotSeriesFunctionsResource.class);
-        addRestResource(ViewSharingResource.class);
+        registerExportBackendProvider();
 
-        addPermissions(EnterpriseSearchRestPermissions.class);
+        addSystemRestResource(DashboardsResource.class);
+        addSystemRestResource(FieldTypesResource.class);
+        addSystemRestResource(MessagesResource.class);
+        addSystemRestResource(PivotSeriesFunctionsResource.class);
+        addSystemRestResource(QualifyingViewsResource.class);
+        addSystemRestResource(SavedSearchesResource.class);
+        addSystemRestResource(SearchResource.class);
+        addSystemRestResource(ViewsResource.class);
+
+        addPermissions(ViewsRestPermissions.class);
+
+        // Calling this once to set up binder, so injection does not fail.
+        esQueryDecoratorBinder();
 
         // filter
         registerJacksonSubtype(AndFilter.class);
@@ -90,6 +134,7 @@ public class ViewsBindings extends ViewsModule {
         // search types
         registerJacksonSubtype(MessageList.class);
         registerJacksonSubtype(Pivot.class);
+        registerJacksonSubtype(EventList.class);
 
         // pivot specs
         registerJacksonSubtype(Values.class);
@@ -111,6 +156,8 @@ public class ViewsBindings extends ViewsModule {
         registerJacksonSubtype(AutoIntervalDTO.class);
 
         bind(SearchJobService.class).to(InMemorySearchJobService.class).in(Scopes.SINGLETON);
+        bind(ChunkDecorator.class).to(LegacyChunkDecorator.class);
+        bind(MessagesExporter.class).to(DecoratingMessagesExporter.class);
 
         registerWidgetConfigSubtypes();
 
@@ -118,15 +165,21 @@ public class ViewsBindings extends ViewsModule {
 
         addPeriodical(SearchesCleanUpJob.class);
 
-        addMigration(V20180817120900_AddViewsUsers.class);
         addMigration(V20181220133700_AddViewsAdminRole.class);
         addMigration(V20190304102700_MigrateMessageListStructure.class);
+        addMigration(V20190805115800_RemoveDashboardStateFromViews.class);
+        addMigration(V20191204000000_RemoveLegacyViewsPermissions.class);
+        addMigration(V20191125144500_MigrateDashboardsToViews.class);
+        addMigration(V20191203120602_MigrateSavedSearchesToViews.class);
+        addMigration(V20190127111728_MigrateWidgetFormatSettings.class);
+        addMigration(V20200204122000_MigrateUntypedViewsToDashboards.class);
+        addMigration(V20200409083200_RemoveRootQueriesFromMigratedDashboards.class);
+        addMigration(V20200730000000_AddGl2MessageIdFieldAliasForEvents.class);
 
-        addAuditEventTypes(EnterpriseAuditEventTypes.class);
+        addAuditEventTypes(ViewsAuditEventTypes.class);
 
-        registerViewSharingSubtypes();
-        registerSharingStrategies();
         registerSortConfigSubclasses();
+        registerParameterSubtypes();
 
         install(new FactoryModuleBuilder().build(ViewRequirements.Factory.class));
         install(new FactoryModuleBuilder().build(SearchRequirements.Factory.class));
@@ -137,6 +190,14 @@ public class ViewsBindings extends ViewsModule {
         // trigger capability binder once to set it up
         viewsCapabilityBinder();
         queryMetadataDecoratorBinder();
+
+        registerExceptionMappers();
+
+        jerseyAdditionalComponentsBinder().addBinding().toInstance(SimpleMessageChunkCsvWriter.class);
+    }
+
+    private void registerExportBackendProvider() {
+        binder().bind(ExportBackend.class).toProvider(ExportBackendProvider.class);
     }
 
     private void registerSortConfigSubclasses() {
@@ -157,16 +218,18 @@ public class ViewsBindings extends ViewsModule {
     private void registerVisualizationConfigSubtypes() {
         registerJacksonSubtype(WorldMapVisualizationConfigDTO.class);
         registerJacksonSubtype(BarVisualizationConfigDTO.class);
+        registerJacksonSubtype(NumberVisualizationConfigDTO.class);
+        registerJacksonSubtype(LineVisualizationConfigDTO.class);
+        registerJacksonSubtype(AreaVisualizationConfigDTO.class);
+        registerJacksonSubtype(HeatmapVisualizationConfigDTO.class);
     }
 
-    private void registerViewSharingSubtypes() {
-        registerJacksonSubtype(AllUsersOfInstance.class);
-        registerJacksonSubtype(SpecificRoles.class);
-        registerJacksonSubtype(SpecificUsers.class);
+    private void registerParameterSubtypes() {
+        registerJacksonSubtype(ValueParameter.class);
     }
 
-    private void registerSharingStrategies() {
-        registerSharingStrategy(AllUsersOfInstance.TYPE, AllUsersOfInstanceStrategy.class);
-        registerSharingStrategy(SpecificRoles.TYPE, SpecificRolesStrategy.class);
-        registerSharingStrategy(SpecificUsers.TYPE, SpecificUsersStrategy.class);
-    }}
+    private void registerExceptionMappers() {
+        addJerseyExceptionMapper(MissingCapabilitiesExceptionMapper.class);
+        addJerseyExceptionMapper(PermissionExceptionMapper.class);
+    }
+}
