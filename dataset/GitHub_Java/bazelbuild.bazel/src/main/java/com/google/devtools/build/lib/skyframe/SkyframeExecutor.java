@@ -172,6 +172,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Callable;
@@ -2120,7 +2121,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     LinkedHashMap<String, String> actionEnvironment = new LinkedHashMap<>();
     BuildConfiguration.Options opt = options.getOptions(BuildConfiguration.Options.class);
     if (opt != null) {
-      for (Map.Entry<String, String> v : opt.actionEnvironment) {
+      for (Entry<String, String> v : opt.actionEnvironment) {
         actionEnvironment.put(v.getKey(), v.getValue());
       }
     }

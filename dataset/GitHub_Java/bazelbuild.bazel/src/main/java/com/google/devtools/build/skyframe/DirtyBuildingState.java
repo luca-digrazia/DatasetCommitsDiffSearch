@@ -18,7 +18,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.util.GroupedList;
 import com.google.devtools.build.skyframe.NodeEntry.DirtyState;
-import com.google.devtools.build.skyframe.ThinNodeEntry.DirtyType;
 import java.util.Collection;
 import java.util.Set;
 
@@ -73,16 +72,16 @@ public abstract class DirtyBuildingState {
    */
   protected int dirtyDirectDepIndex;
 
-  protected DirtyBuildingState(DirtyType dirtyType) {
-    dirtyState = dirtyType.getInitialDirtyState();
+  protected DirtyBuildingState(boolean isChanged) {
+    dirtyState = isChanged ? DirtyState.NEEDS_REBUILDING : DirtyState.CHECK_DEPENDENCIES;
     // We need to iterate through the deps to see if they have changed, or to remove them if one
     // has. Initialize the iterating index.
     dirtyDirectDepIndex = 0;
   }
 
   static DirtyBuildingState create(
-      DirtyType dirtyType, GroupedList<SkyKey> lastBuildDirectDeps, SkyValue lastBuildValue) {
-    return new FullDirtyBuildingState(dirtyType, lastBuildDirectDeps, lastBuildValue);
+      boolean isChanged, GroupedList<SkyKey> lastBuildDirectDeps, SkyValue lastBuildValue) {
+    return new FullDirtyBuildingState(isChanged, lastBuildDirectDeps, lastBuildValue);
   }
 
   final void markChanged() {
@@ -91,33 +90,19 @@ public abstract class DirtyBuildingState {
     dirtyState = DirtyState.NEEDS_REBUILDING;
   }
 
-  final void markForceRebuild() {
-    if (dirtyState == DirtyState.CHECK_DEPENDENCIES || dirtyState == DirtyState.NEEDS_REBUILDING) {
-      dirtyState = DirtyState.NEEDS_REBUILDING;
-    }
-  }
-
-  final void forceRebuild() {
-    Preconditions.checkState(
-        (dirtyState == DirtyState.CHECK_DEPENDENCIES
-                && getNumOfGroupsInLastBuildDirectDeps() == dirtyDirectDepIndex)
-            || dirtyState == DirtyState.NEEDS_FORCED_REBUILDING,
-        this);
-    dirtyState = DirtyState.FORCED_REBUILDING;
+  final void forceChanged() {
+    Preconditions.checkState(dirtyState == DirtyState.CHECK_DEPENDENCIES, this);
+    Preconditions.checkState(getNumOfGroupsInLastBuildDirectDeps() == dirtyDirectDepIndex, this);
+    dirtyState = DirtyState.REBUILDING;
   }
 
   final boolean isChanged() {
-    return dirtyState == DirtyState.NEEDS_REBUILDING
-        || dirtyState == DirtyState.NEEDS_FORCED_REBUILDING
-        || dirtyState == DirtyState.REBUILDING
-        || dirtyState == DirtyState.FORCED_REBUILDING;
+    return dirtyState == DirtyState.NEEDS_REBUILDING || dirtyState == DirtyState.REBUILDING;
   }
 
   private void checkFinishedBuildingWhenAboutToSetValue() {
     Preconditions.checkState(
-        dirtyState == DirtyState.VERIFIED_CLEAN
-            || dirtyState == DirtyState.REBUILDING
-            || dirtyState == DirtyState.FORCED_REBUILDING,
+        dirtyState == DirtyState.VERIFIED_CLEAN || dirtyState == DirtyState.REBUILDING,
         "not done building %s",
         this);
   }
@@ -209,8 +194,7 @@ public abstract class DirtyBuildingState {
   }
 
   final void resetForRestartFromScratch() {
-    Preconditions.checkState(
-        dirtyState == DirtyState.REBUILDING || dirtyState == DirtyState.FORCED_REBUILDING, this);
+    Preconditions.checkState(dirtyState == DirtyState.REBUILDING, this);
     dirtyDirectDepIndex = 0;
   }
 
@@ -235,12 +219,12 @@ public abstract class DirtyBuildingState {
     private final SkyValue lastBuildValue;
 
     private FullDirtyBuildingState(
-        DirtyType dirtyType, GroupedList<SkyKey> lastBuildDirectDeps, SkyValue lastBuildValue) {
-      super(dirtyType);
+        boolean isChanged, GroupedList<SkyKey> lastBuildDirectDeps, SkyValue lastBuildValue) {
+      super(isChanged);
       this.lastBuildDirectDeps = lastBuildDirectDeps;
       Preconditions.checkState(
-          !dirtyType.equals(DirtyType.DIRTY) || getNumOfGroupsInLastBuildDirectDeps() > 0,
-          "%s is being marked dirty but has no children that could have dirtied it",
+          isChanged || getNumOfGroupsInLastBuildDirectDeps() > 0,
+          "%s is being marked dirty, not changed, but has no children that could have dirtied it",
           this);
       this.lastBuildValue = lastBuildValue;
     }

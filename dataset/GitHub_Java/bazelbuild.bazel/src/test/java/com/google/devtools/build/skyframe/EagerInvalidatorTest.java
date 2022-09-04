@@ -142,11 +142,9 @@ public class EagerInvalidatorTest {
             InMemoryMemoizingEvaluator.DEFAULT_STORED_EVENT_FILTER,
             ErrorInfoManager.UseChildErrorInfoIfNecessary.INSTANCE,
             keepGoing,
+            200,
             new DirtyTrackingProgressReceiver(null),
-            GraphInconsistencyReceiver.THROWING,
-            () -> AbstractQueueVisitor.createExecutorService(200),
-            new SimpleCycleDetector(),
-            EvaluationVersionBehavior.MAX_CHILD_VERSIONS);
+            GraphInconsistencyReceiver.THROWING);
     graphVersion = graphVersion.next();
     return evaluator.eval(ImmutableList.copyOf(keys));
   }
@@ -187,20 +185,19 @@ public class EagerInvalidatorTest {
       }
     });
     graph = new InMemoryGraphImpl();
-    SkyKey aKey = GraphTester.nonHermeticKey("a");
-    SkyKey bKey = GraphTester.nonHermeticKey("b");
-    tester.set(aKey, new StringValue("a"));
-    tester.set(bKey, new StringValue("b"));
-    tester.getOrCreate("ab").addDependency(aKey).addDependency(bKey).setComputedValue(CONCATENATE);
+    set("a", "a");
+    set("b", "b");
+    tester.getOrCreate("ab").addDependency("a").addDependency("b")
+        .setComputedValue(CONCATENATE);
     assertValueValue("ab", "ab");
 
-    tester.set(aKey, new StringValue("c"));
-    invalidateWithoutError(receiver, aKey);
-    assertThat(invalidated).containsExactly(aKey, skyKey("ab"));
+    set("a", "c");
+    invalidateWithoutError(receiver, skyKey("a"));
+    assertThat(invalidated).containsExactly(skyKey("a"), skyKey("ab"));
     assertValueValue("ab", "cb");
-    tester.set(bKey, new StringValue("d"));
-    invalidateWithoutError(receiver, bKey);
-    assertThat(invalidated).containsExactly(aKey, skyKey("ab"), bKey);
+    set("b", "d");
+    invalidateWithoutError(receiver, skyKey("b"));
+    assertThat(invalidated).containsExactly(skyKey("a"), skyKey("ab"), skyKey("b"));
   }
 
   @Test
@@ -218,16 +215,15 @@ public class EagerInvalidatorTest {
     // Given a graph consisting of two nodes, "a" and "ab" such that "ab" depends on "a",
     // And given "ab" is in error,
     graph = new InMemoryGraphImpl();
-    SkyKey aKey = GraphTester.nonHermeticKey("a");
-    tester.set(aKey, new StringValue("a"));
-    tester.getOrCreate("ab").addDependency(aKey).setHasError(true);
+    set("a", "a");
+    tester.getOrCreate("ab").addDependency("a").setHasError(true);
     eval(false, skyKey("ab"));
 
     // When "a" is invalidated,
-    invalidateWithoutError(receiver, aKey);
+    invalidateWithoutError(receiver, skyKey("a"));
 
     // Then the invalidation receiver is notified of both "a" and "ab"'s invalidations.
-    assertThat(invalidated).containsExactly(aKey, skyKey("ab"));
+    assertThat(invalidated).containsExactly(skyKey("a"), skyKey("ab"));
 
     // Note that this behavior isn't strictly required for correctness. This test is
     // meant to document current behavior and protect against programming error.
@@ -245,22 +241,20 @@ public class EagerInvalidatorTest {
       }
     });
     graph = new InMemoryGraphImpl();
-    SkyKey aKey = GraphTester.nonHermeticKey("a");
-    invalidateWithoutError(receiver, aKey);
+    invalidateWithoutError(receiver, skyKey("a"));
     assertThat(invalidated).isEmpty();
-    tester.set(aKey, new StringValue("a"));
-    StringValue value = (StringValue) eval(false, aKey);
-    assertThat(value.getValue()).isEqualTo("a");
-    invalidateWithoutError(receiver, GraphTester.nonHermeticKey("b"));
+    set("a", "a");
+    assertValueValue("a", "a");
+    invalidateWithoutError(receiver, skyKey("b"));
     assertThat(invalidated).isEmpty();
   }
 
   @Test
   public void invalidatedValuesAreGCedAsExpected() throws Exception {
-    SkyKey key = GraphTester.nonHermeticKey("a");
+    SkyKey key = GraphTester.skyKey("a");
     HeavyValue heavyValue = new HeavyValue();
     WeakReference<HeavyValue> weakRef = new WeakReference<>(heavyValue);
-    tester.set(key, heavyValue);
+    tester.set("a", heavyValue);
 
     graph = new InMemoryGraphImpl();
     eval(false, key);
@@ -284,34 +278,30 @@ public class EagerInvalidatorTest {
     set("a", "a");
     set("b", "b");
     set("c", "c");
-    SkyKey abKey = GraphTester.nonHermeticKey("ab");
-    tester.getOrCreate(abKey).addDependency("a").addDependency("b").setComputedValue(CONCATENATE);
+    tester.getOrCreate("ab").addDependency("a").addDependency("b").setComputedValue(CONCATENATE);
     tester.getOrCreate("bc").addDependency("b").addDependency("c").setComputedValue(CONCATENATE);
-    tester
-        .getOrCreate("ab_c")
-        .addDependency(abKey)
-        .addDependency("c")
+    tester.getOrCreate("ab_c").addDependency("ab").addDependency("c")
         .setComputedValue(CONCATENATE);
     eval(false, skyKey("ab_c"), skyKey("bc"));
 
     assertThat(graph.get(null, Reason.OTHER, skyKey("a")).getReverseDepsForDoneEntry())
-        .containsExactly(abKey);
+        .containsExactly(skyKey("ab"));
     assertThat(graph.get(null, Reason.OTHER, skyKey("b")).getReverseDepsForDoneEntry())
-        .containsExactly(abKey, skyKey("bc"));
+        .containsExactly(skyKey("ab"), skyKey("bc"));
     assertThat(graph.get(null, Reason.OTHER, skyKey("c")).getReverseDepsForDoneEntry())
         .containsExactly(skyKey("ab_c"), skyKey("bc"));
 
-    invalidateWithoutError(new DirtyTrackingProgressReceiver(null), abKey);
+    invalidateWithoutError(new DirtyTrackingProgressReceiver(null), skyKey("ab"));
     eval(false);
 
     // The graph values should be gone.
-    assertThat(isInvalidated(abKey)).isTrue();
+    assertThat(isInvalidated(skyKey("ab"))).isTrue();
     assertThat(isInvalidated(skyKey("abc"))).isTrue();
 
     // The reverse deps to ab and ab_c should have been removed if reverse deps are cleared.
     Set<SkyKey> reverseDeps = new HashSet<>();
     if (reverseDepsPresent()) {
-      reverseDeps.add(abKey);
+      reverseDeps.add(skyKey("ab"));
     }
     assertThat(graph.get(null, Reason.OTHER, skyKey("a")).getReverseDepsForDoneEntry())
         .containsExactlyElementsIn(reverseDeps);
@@ -331,9 +321,9 @@ public class EagerInvalidatorTest {
   public void interruptChild() throws Exception {
     graph = new InMemoryGraphImpl();
     int numValues = 50; // More values than the invalidator has threads.
-    SkyKey[] family = new SkyKey[numValues];
-    SkyKey child = GraphTester.nonHermeticKey("child");
-    StringValue childValue = new StringValue("child");
+    final SkyKey[] family = new SkyKey[numValues];
+    final SkyKey child = GraphTester.skyKey("child");
+    final StringValue childValue = new StringValue("child");
     tester.set(child, childValue);
     family[0] = child;
     for (int i = 1; i < numValues; i++) {
@@ -410,12 +400,11 @@ public class EagerInvalidatorTest {
     SkyKey[] values = new SkyKey[size];
     for (int i = 0; i < size; i++) {
       String iString = Integer.toString(i);
-      SkyKey iKey = GraphTester.nonHermeticKey(iString);
-      tester.set(iKey, new StringValue(iString));
+      SkyKey iKey = GraphTester.toSkyKey(iString);
       set(iString, iString);
       for (int j = 0; j < i; j++) {
         if (random.nextInt(3) == 0) {
-          tester.getOrCreate(iKey).addDependency(GraphTester.nonHermeticKey(Integer.toString(j)));
+          tester.getOrCreate(iKey).addDependency(Integer.toString(j));
         }
       }
       values[i] = iKey;
@@ -499,12 +488,11 @@ public class EagerInvalidatorTest {
 
   protected void setupInvalidatableGraph() throws Exception {
     graph = new InMemoryGraphImpl();
-    SkyKey aKey = GraphTester.nonHermeticKey("a");
-    tester.set(aKey, new StringValue("a"));
+    set("a", "a");
     set("b", "b");
-    tester.getOrCreate("ab").addDependency(aKey).addDependency("b").setComputedValue(CONCATENATE);
+    tester.getOrCreate("ab").addDependency("a").addDependency("b").setComputedValue(CONCATENATE);
     assertValueValue("ab", "ab");
-    tester.set(aKey, new StringValue("c"));
+    set("a", "c");
   }
 
   private static class HeavyValue implements SkyValue {
@@ -561,14 +549,20 @@ public class EagerInvalidatorTest {
           new EvaluationProgressReceiver.NullEvaluationProgressReceiver());
 
       // Dirty the node, and ensure that the tracker is aware of it:
-      ImmutableList<SkyKey> diff = ImmutableList.of(GraphTester.nonHermeticKey("a"));
+      Iterable<SkyKey> diff1 = ImmutableList.of(skyKey("a"));
       InvalidationState state1 = new DirtyingInvalidationState();
       Preconditions.checkNotNull(
-              EagerInvalidator.createInvalidatingVisitorIfNeeded(graph, diff, receiver, state1))
+              EagerInvalidator.createInvalidatingVisitorIfNeeded(
+                  graph,
+                  diff1,
+                  receiver,
+                  state1,
+                  AbstractQueueVisitor.EXECUTOR_FACTORY))
           .run();
-      assertThat(receiver.getUnenqueuedDirtyKeys()).containsExactly(diff.get(0), skyKey("ab"));
+      assertThat(receiver.getUnenqueuedDirtyKeys()).containsExactly(skyKey("a"), skyKey("ab"));
 
       // Delete the node, and ensure that the tracker is no longer tracking it:
+      Iterable<SkyKey> diff = ImmutableList.of(skyKey("a"));
       Preconditions.checkNotNull(EagerInvalidator.createDeletingVisitorIfNeeded(graph, diff,
           receiver, state, true)).run();
       assertThat(receiver.getUnenqueuedDirtyKeys()).isEmpty();
@@ -586,7 +580,12 @@ public class EagerInvalidatorTest {
         throws InterruptedException {
       Iterable<SkyKey> diff = ImmutableList.copyOf(keys);
       DirtyingNodeVisitor dirtyingNodeVisitor =
-          EagerInvalidator.createInvalidatingVisitorIfNeeded(graph, diff, progressReceiver, state);
+          EagerInvalidator.createInvalidatingVisitorIfNeeded(
+              graph,
+              diff,
+              progressReceiver,
+              state,
+              AbstractQueueVisitor.EXECUTOR_FACTORY);
       if (dirtyingNodeVisitor != null) {
         visitor.set(dirtyingNodeVisitor);
         dirtyingNodeVisitor.run();
@@ -625,7 +624,7 @@ public class EagerInvalidatorTest {
           new EvaluationProgressReceiver.NullEvaluationProgressReceiver());
 
       // Dirty the node, and ensure that the tracker is aware of it:
-      invalidate(graph, receiver, GraphTester.nonHermeticKey("a"));
+      invalidate(graph, receiver, skyKey("a"));
       assertThat(receiver.getUnenqueuedDirtyKeys()).hasSize(2);
     }
   }

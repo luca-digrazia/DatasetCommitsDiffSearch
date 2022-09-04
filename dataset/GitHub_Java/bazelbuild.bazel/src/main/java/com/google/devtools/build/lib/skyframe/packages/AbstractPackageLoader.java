@@ -23,8 +23,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.eventbus.EventBus;
-import com.google.devtools.build.lib.actions.FileStateValue;
-import com.google.devtools.build.lib.actions.FileValue;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ServerDirectories;
 import com.google.devtools.build.lib.clock.BlazeClock;
@@ -63,7 +61,6 @@ import com.google.devtools.build.lib.skyframe.PackageValue;
 import com.google.devtools.build.lib.skyframe.PerBuildSyscallCache;
 import com.google.devtools.build.lib.skyframe.PrecomputedFunction;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
-import com.google.devtools.build.lib.skyframe.RepositoryMappingFunction;
 import com.google.devtools.build.lib.skyframe.SkyFunctions;
 import com.google.devtools.build.lib.skyframe.SkylarkImportLookupFunction;
 import com.google.devtools.build.lib.skyframe.WorkspaceASTFunction;
@@ -150,10 +147,7 @@ public abstract class AbstractPackageLoader implements PackageLoader {
       Path devNull = workspaceDir.getFileSystem().getPath("/dev/null");
       directories =
           new BlazeDirectories(
-              new ServerDirectories(installBase, outputBase, devNull),
-              workspaceDir,
-              /* defaultSystemJavabase= */ null,
-              "blaze");
+              new ServerDirectories(installBase, outputBase, devNull), workspaceDir, "blaze");
 
       this.pkgLocator =
           new PathPackageLocator(
@@ -279,7 +273,6 @@ public abstract class AbstractPackageLoader implements PackageLoader {
     PrecomputedValue.DEFAULT_VISIBILITY.set(injectable, ConstantRuleVisibility.PRIVATE);
     PrecomputedValue.SKYLARK_SEMANTICS.set(injectable, skylarkSemantics);
     PrecomputedValue.DEFAULTS_PACKAGE_CONTENTS.set(injectable, defaultsPackageContents);
-    PrecomputedValue.ENABLE_DEFAULTS_PACKAGE.set(injectable, true);
     return new ImmutableDiff(ImmutableList.of(), valuesToInject);
   }
 
@@ -391,12 +384,12 @@ public abstract class AbstractPackageLoader implements PackageLoader {
     ImmutableMap.Builder<SkyFunctionName, SkyFunction> builder = ImmutableMap.builder();
     builder
         .put(SkyFunctions.PRECOMPUTED, new PrecomputedFunction())
-        .put(FileStateValue.FILE_STATE, new FileStateFunction(tsgm, externalFilesHelper))
+        .put(SkyFunctions.FILE_STATE, new FileStateFunction(tsgm, externalFilesHelper))
         .put(SkyFunctions.FILE_SYMLINK_CYCLE_UNIQUENESS, new FileSymlinkCycleUniquenessFunction())
         .put(
             SkyFunctions.FILE_SYMLINK_INFINITE_EXPANSION_UNIQUENESS,
             new FileSymlinkInfiniteExpansionUniquenessFunction())
-        .put(FileValue.FILE, new FileFunction(pkgLocatorRef))
+        .put(SkyFunctions.FILE, new FileFunction(pkgLocatorRef))
         .put(
             SkyFunctions.PACKAGE_LOOKUP,
             new PackageLookupFunction(
@@ -419,7 +412,6 @@ public abstract class AbstractPackageLoader implements PackageLoader {
             SkyFunctions.WORKSPACE_FILE,
             new WorkspaceFileFunction(ruleClassProvider, pkgFactory, directories))
         .put(SkyFunctions.EXTERNAL_PACKAGE, new ExternalPackageFunction())
-        .put(SkyFunctions.REPOSITORY_MAPPING, new RepositoryMappingFunction())
         .put(
             SkyFunctions.PACKAGE,
             new PackageFunction(

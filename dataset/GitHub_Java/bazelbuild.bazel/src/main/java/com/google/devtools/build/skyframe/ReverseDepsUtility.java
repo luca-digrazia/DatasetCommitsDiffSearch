@@ -46,8 +46,8 @@ import java.util.Set;
  * may never have their data forcibly consolidated, since their reverse deps will only be retrieved
  * as a whole if they are marked dirty. Thus, we consolidate periodically.
  *
- * <p>{@link InMemoryNodeEntry} manages pending reverse dep operations on a marked-dirty or
- * initially evaluating node itself, using similar logic tuned to those cases, and calls into {@link
+ * <p>{@link InMemoryNodeEntry} manages pending reverse dep operations on a marked-dirty or initally
+ * evaluating node itself, using similar logic tuned to those cases, and calls into {@link
  * #consolidateDataAndReturnNewElements(InMemoryNodeEntry, OpToStoreBare)} when transitioning to
  * done.
  */
@@ -81,6 +81,34 @@ abstract class ReverseDepsUtility {
 
   private static boolean isSingleReverseDep(InMemoryNodeEntry entry) {
     return !(entry.getReverseDepsRawForReverseDepsUtil() instanceof List);
+  }
+
+  /**
+   * We only check if reverse deps is small and there are no delayed data to consolidate, since then
+   * presence or absence would not be known.
+   */
+  static void maybeCheckReverseDepNotPresent(InMemoryNodeEntry entry, SkyKey reverseDep) {
+    if (entry.getReverseDepsDataToConsolidateForReverseDepsUtil() != null) {
+      return;
+    }
+    if (isSingleReverseDep(entry)) {
+      Preconditions.checkState(
+          !entry.getReverseDepsRawForReverseDepsUtil().equals(reverseDep),
+          "Reverse dep %s already present in %s",
+          reverseDep,
+          entry);
+      return;
+    }
+    @SuppressWarnings("unchecked")
+    List<SkyKey> asList = (List<SkyKey>) entry.getReverseDepsRawForReverseDepsUtil();
+    if (asList.size() < MAYBE_CHECK_THRESHOLD) {
+      Preconditions.checkState(
+          !asList.contains(reverseDep),
+          "Reverse dep %s already present in %s for %s",
+          reverseDep,
+          asList,
+          entry);
+    }
   }
 
   @SuppressWarnings("unchecked") // Cast to list.

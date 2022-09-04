@@ -558,7 +558,7 @@ public class ParallelEvaluatorTest {
               }
 
               @Override
-              public boolean storeEventsAndPosts() {
+              public boolean storeEvents() {
                 return true;
               }
             });

@@ -29,8 +29,7 @@ public interface GraphInconsistencyReceiver {
 
   /** The type of inconsistency detected. */
   enum Inconsistency {
-    RESET_REQUESTED,
-    CHILD_MISSING_FOR_DIRTY_NODE
+    RESET_REQUESTED
   }
 
   /** A {@link GraphInconsistencyReceiver} that crashes on any inconsistency. */
