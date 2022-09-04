@@ -1,5 +1,6 @@
 package com.yammer.dropwizard.hibernate;
 
+import com.yammer.dropwizard.util.Generics;
 import org.hibernate.*;
 
 import java.io.Serializable;
@@ -8,24 +9,22 @@ import java.util.List;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 /**
- * An abstract base class for Guice-injected Hibernate DAO classes.
+ * An abstract base class for Hibernate DAO classes.
  *
  * @param <E> the class which this DAO manages
- * @author coda
  */
 public class AbstractDAO<E> {
     private final SessionFactory provider;
-    private final Class<E> entityClass;
+    private final Class<?> entityClass;
 
     /**
      * Creates a new DAO with a given session provider.
      *
      * @param provider    a session provider
-     * @param entityClass the entity class this DAO manages
      */
-    public AbstractDAO(SessionFactory provider, Class<E> entityClass) {
+    public AbstractDAO(SessionFactory provider) {
         this.provider = checkNotNull(provider);
-        this.entityClass = checkNotNull(entityClass);
+        this.entityClass = Generics.getTypeParameter(getClass());
     }
 
     /**
@@ -63,8 +62,9 @@ public class AbstractDAO<E> {
      *
      * @return the entity class managed by this DAO
      */
+    @SuppressWarnings("unchecked")
     public Class<E> getEntityClass() {
-        return entityClass;
+        return (Class<E>) entityClass;
     }
 
     /**
@@ -148,5 +148,21 @@ public class AbstractDAO<E> {
     protected E persist(E entity) throws HibernateException {
         currentSession().saveOrUpdate(checkNotNull(entity));
         return entity;
+    }
+
+    /**
+     * Force initialization of a proxy or persistent collection.
+     * <p/>
+     * Note: This only ensures initialization of a proxy object or collection;
+     * it is not guaranteed that the elements INSIDE the collection will be initialized/materialized.
+     *
+     * @param proxy a persistable object, proxy, persistent collection or {@code null}
+     * @throws HibernateException if we can't initialize the proxy at this time, eg. the {@link Session} was closed
+     */
+    protected <T> T initialize(T proxy) throws HibernateException {
+        if (!Hibernate.isInitialized(proxy)) {
+            Hibernate.initialize(proxy);
+        }
+        return proxy;
     }
 }
