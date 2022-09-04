@@ -64,8 +64,9 @@ public class ProduceValidator implements ElementValidator {
 
 		validatorHelper.isNotFinal(element, valid);
 
-		validatorHelper.param.zeroParameter(executableElement, valid);
+		validatorHelper.zeroParameter(executableElement, valid);
 
 		return valid.isValid();
 	}
+
 }
