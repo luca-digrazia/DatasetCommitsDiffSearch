@@ -1,85 +1,124 @@
 package io.quarkus.reactive.datasource.runtime;
 
+import java.time.Duration;
 import java.util.Optional;
 import java.util.OptionalInt;
 
+import io.quarkus.runtime.annotations.ConfigGroup;
 import io.quarkus.runtime.annotations.ConfigItem;
-import io.quarkus.runtime.annotations.ConfigPhase;
-import io.quarkus.runtime.annotations.ConfigRoot;
 import io.quarkus.vertx.core.runtime.config.JksConfiguration;
 import io.quarkus.vertx.core.runtime.config.PemKeyCertConfiguration;
 import io.quarkus.vertx.core.runtime.config.PemTrustCertConfiguration;
 import io.quarkus.vertx.core.runtime.config.PfxConfiguration;
 
-/**
- * For now, the reactive extensions only support a default datasource.
- */
-@ConfigRoot(name = "datasource.reactive", phase = ConfigPhase.RUN_TIME)
+@ConfigGroup
 public class DataSourceReactiveRuntimeConfig {
+
+    /**
+     * Whether prepared statements should be cached on the client side.
+     */
+    @ConfigItem(defaultValue = "false")
+    public boolean cachePreparedStatements = false;
 
     /**
      * The datasource URL.
      */
     @ConfigItem
-    public Optional<String> url;
+    public Optional<String> url = Optional.empty();
 
     /**
      * The datasource pool maximum size.
+     * Note that a separate pool instance is started for each thread using it: the size limits each individual pool instance.
      */
     @ConfigItem
-    public OptionalInt maxSize;
+    public OptionalInt maxSize = OptionalInt.empty();
 
     /**
      * Whether all server certificates should be trusted.
      */
     @ConfigItem(defaultValue = "false")
-    public boolean trustAll;
+    public boolean trustAll = false;
 
     /**
      * Trust configuration in the PEM format.
      * <p>
-     * When enabled, {@link #trustCertificateJks} and {@link #trustCertificatePfx} must be disabled.
+     * When enabled, {@code #trust-certificate-jks} and {@code #trust-certificate-pfx} must be disabled.
      */
     @ConfigItem
-    public PemTrustCertConfiguration trustCertificatePem;
+    public PemTrustCertConfiguration trustCertificatePem = new PemTrustCertConfiguration();
 
     /**
      * Trust configuration in the JKS format.
      * <p>
-     * When enabled, {@link #trustCertificatePem} and {@link #trustCertificatePfx} must be disabled.
+     * When enabled, {@code #trust-certificate-pem} and {@code #trust-certificate-pfx} must be disabled.
      */
     @ConfigItem
-    public JksConfiguration trustCertificateJks;
+    public JksConfiguration trustCertificateJks = new JksConfiguration();
 
     /**
      * Trust configuration in the PFX format.
      * <p>
-     * When enabled, {@link #trustCertificateJks} and {@link #trustCertificatePem} must be disabled.
+     * When enabled, {@code #trust-certificate-jks} and {@code #trust-certificate-pem} must be disabled.
      */
     @ConfigItem
-    public PfxConfiguration trustCertificatePfx;
+    public PfxConfiguration trustCertificatePfx = new PfxConfiguration();
 
     /**
      * Key/cert configuration in the PEM format.
      * <p>
-     * When enabled, {@link #keyCertificateJks} and {@link #keyCertificatePfx} must be disabled.
+     * When enabled, {@code key-certificate-jks} and {@code #key-certificate-pfx} must be disabled.
      */
     @ConfigItem
-    public PemKeyCertConfiguration keyCertificatePem;
+    public PemKeyCertConfiguration keyCertificatePem = new PemKeyCertConfiguration();
 
     /**
      * Key/cert configuration in the JKS format.
      * <p>
-     * When enabled, {@link #keyCertificatePem} and {@link #keyCertificatePfx} must be disabled.
+     * When enabled, {@code #key-certificate-pem} and {@code #key-certificate-pfx} must be disabled.
      */
     @ConfigItem
-    public JksConfiguration keyCertificateJks;
+    public JksConfiguration keyCertificateJks = new JksConfiguration();
 
     /**
      * Key/cert configuration in the PFX format.
      * <p>
-     * When enabled, {@link #keyCertificateJks} and {@link #keyCertificatePem} must be disabled.
+     * When enabled, {@code key-certificate-jks} and {@code #key-certificate-pem} must be disabled.
      */
     @ConfigItem
-    public PfxConfiguration keyCertificatePfx;
+    public PfxConfiguration keyCertificatePfx = new PfxConfiguration();
+
+    /**
+     * Deprecated: this will be removed with no replacement.
+     * We always return a threadsafe pool now, using a separate Pool instance for each Thread.
+     * 
+     * @Deprecated
+     */
+    @ConfigItem
+    @Deprecated
+    public Optional<Boolean> threadLocal = Optional.empty();
+
+    /**
+     * The number of reconnection attempts when a pooled connection cannot be established on first try.
+     */
+    @ConfigItem(defaultValue = "0")
+    public int reconnectAttempts = 0;
+
+    /**
+     * The interval between reconnection attempts when a pooled connection cannot be established on first try.
+     */
+    @ConfigItem(defaultValue = "PT1S")
+    public Duration reconnectInterval = Duration.ofSeconds(1L);
+
+    /**
+     * The hostname verification algorithm to use in case the server's identity should be checked.
+     * Should be HTTPS, LDAPS or an empty string.
+     */
+    @ConfigItem
+    public Optional<String> hostnameVerificationAlgorithm = Optional.empty();
+
+    /**
+     * The maximum time a connection remains unused in the pool before it is closed.
+     */
+    @ConfigItem(defaultValueDocumentation = "no timeout")
+    public Optional<Duration> idleTimeout = Optional.empty();
 }
