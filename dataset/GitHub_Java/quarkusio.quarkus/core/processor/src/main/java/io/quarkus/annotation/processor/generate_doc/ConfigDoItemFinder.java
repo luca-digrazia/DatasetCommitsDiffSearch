@@ -108,7 +108,7 @@ class ConfigDoItemFinder {
             ConfigPhase configPhase = configRootInfo.getConfigPhase();
             final List<ConfigDocItem> configDocItems = recursivelyFindConfigItems(element, rootName, rootName, configPhase,
                     false, sectionLevel, true);
-            holder.addConfigRootItems(configRootInfo, configDocItems);
+            holder.addConfigRootItems(configRootInfo.getClazz().getQualifiedName().toString(), configDocItems);
         }
 
         return holder;

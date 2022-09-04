@@ -8,13 +8,35 @@ import java.util.Objects;
 
 final public class ConfigDocSection implements ConfigDocElement, Comparable<ConfigDocElement> {
     private String name;
+    private boolean optional;
     private boolean withinAMap;
     private String sectionDetails;
     private String sectionDetailsTitle;
     private ConfigPhase configPhase;
+    private String topLevelGrouping;
+    private String configGroupType;
+    private boolean showSection;
+
     private List<ConfigDocItem> configDocItems = new ArrayList<>();
+    private String anchorPrefix;
 
     public ConfigDocSection() {
+    }
+
+    public String getConfigGroupType() {
+        return configGroupType;
+    }
+
+    public void setConfigGroupType(String configGroupType) {
+        this.configGroupType = configGroupType;
+    }
+
+    public boolean isShowSection() {
+        return showSection;
+    }
+
+    public void setShowSection(boolean showSection) {
+        this.showSection = showSection;
     }
 
     public boolean isWithinAMap() {
@@ -65,6 +87,10 @@ final public class ConfigDocSection implements ConfigDocElement, Comparable<Conf
         this.configDocItems = configDocItems;
     }
 
+    public void addConfigDocItems(List<ConfigDocItem> configDocItems) {
+        this.configDocItems.addAll(configDocItems);
+    }
+
     @Override
     public void accept(Writer writer, DocFormatter docFormatter) throws IOException {
         docFormatter.format(writer, this);
@@ -82,26 +108,26 @@ final public class ConfigDocSection implements ConfigDocElement, Comparable<Conf
         if (o == null || getClass() != o.getClass())
             return false;
         ConfigDocSection that = (ConfigDocSection) o;
-        return withinAMap == that.withinAMap &&
-                Objects.equals(name, that.name) &&
-                Objects.equals(sectionDetails, that.sectionDetails) &&
-                configPhase == that.configPhase &&
-                Objects.equals(configDocItems, that.configDocItems);
+        return sectionDetailsTitle.equals(that.sectionDetailsTitle);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(name, withinAMap, sectionDetails, configPhase, configDocItems);
+        return Objects.hash(sectionDetailsTitle);
     }
 
     @Override
     public String toString() {
         return "ConfigDocSection{" +
-                ", name='" + name + '\'' +
+                "name='" + name + '\'' +
+                ", optional=" + optional +
                 ", withinAMap=" + withinAMap +
                 ", sectionDetails='" + sectionDetails + '\'' +
+                ", sectionDetailsTitle='" + sectionDetailsTitle + '\'' +
                 ", configPhase=" + configPhase +
+                ", topLevelGrouping='" + topLevelGrouping + '\'' +
                 ", configDocItems=" + configDocItems +
+                ", anchorPrefix='" + anchorPrefix + '\'' +
                 '}';
     }
 
@@ -119,5 +145,29 @@ final public class ConfigDocSection implements ConfigDocElement, Comparable<Conf
                 return true;
         }
         return false;
+    }
+
+    public void setAnchorPrefix(String anchorPrefix) {
+        this.anchorPrefix = anchorPrefix;
+    }
+
+    public String getAnchorPrefix() {
+        return anchorPrefix;
+    }
+
+    public boolean isOptional() {
+        return optional;
+    }
+
+    public void setOptional(boolean optional) {
+        this.optional = optional;
+    }
+
+    public String getTopLevelGrouping() {
+        return topLevelGrouping;
+    }
+
+    public void setTopLevelGrouping(String topLevelGrouping) {
+        this.topLevelGrouping = topLevelGrouping;
     }
 }

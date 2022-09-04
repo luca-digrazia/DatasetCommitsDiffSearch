@@ -21,10 +21,9 @@ import org.eclipse.aether.artifact.DefaultArtifact;
 import org.eclipse.aether.resolution.ArtifactRequest;
 import org.eclipse.aether.resolution.ArtifactResult;
 
-import com.fasterxml.jackson.core.json.JsonReadFeature;
+import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.PropertyNamingStrategies;
-import com.fasterxml.jackson.databind.json.JsonMapper;
+import com.fasterxml.jackson.databind.PropertyNamingStrategy;
 
 import io.quarkus.annotation.processor.generate_doc.ConfigDocGeneratedOutput;
 import io.quarkus.annotation.processor.generate_doc.ConfigDocItem;
@@ -32,12 +31,12 @@ import io.quarkus.annotation.processor.generate_doc.ConfigDocItemScanner;
 import io.quarkus.annotation.processor.generate_doc.ConfigDocSection;
 import io.quarkus.annotation.processor.generate_doc.ConfigDocWriter;
 import io.quarkus.annotation.processor.generate_doc.DocGeneratorUtil;
-import io.quarkus.bootstrap.resolver.maven.BootstrapMavenException;
+import io.quarkus.bootstrap.resolver.AppModelResolverException;
 import io.quarkus.bootstrap.resolver.maven.MavenArtifactResolver;
 import io.quarkus.docs.generation.ExtensionJson.Extension;
 
 public class AllConfigGenerator {
-    public static void main(String[] args) throws BootstrapMavenException, IOException {
+    public static void main(String[] args) throws AppModelResolverException, IOException {
         if (args.length != 2) {
             // exit 1 will break Maven
             throw new IllegalArgumentException("Usage: <version> <extension.json>");
@@ -52,11 +51,10 @@ public class AllConfigGenerator {
             // exit 0 will break Maven
             return;
         }
-        ObjectMapper mapper = JsonMapper.builder()
-                .enable(JsonReadFeature.ALLOW_JAVA_COMMENTS)
-                .enable(JsonReadFeature.ALLOW_LEADING_ZEROS_FOR_NUMBERS)
-                .propertyNamingStrategy(PropertyNamingStrategies.KEBAB_CASE)
-                .build();
+        ObjectMapper mapper = new ObjectMapper()
+                .enable(JsonParser.Feature.ALLOW_COMMENTS)
+                .enable(JsonParser.Feature.ALLOW_NUMERIC_LEADING_ZEROS)
+                .setPropertyNamingStrategy(PropertyNamingStrategy.KEBAB_CASE);
         MavenArtifactResolver resolver = MavenArtifactResolver.builder().setWorkspaceDiscovery(false).build();
 
         // let's read it (and ignore the fields we don't need)
@@ -132,9 +130,8 @@ public class AllConfigGenerator {
 
         // Temporary fix for https://github.com/quarkusio/quarkus/issues/5214 until we figure out how to fix it
         Extension openApi = extensionsByGav.get("io.quarkus:quarkus-smallrye-openapi");
-        if (openApi != null) {
+        if (openApi != null)
             extensionsByConfigRoots.put("io.quarkus.smallrye.openapi.common.deployment.SmallRyeOpenApiConfig", openApi);
-        }
 
         // sort extensions by name, assign their config items based on their config roots
         for (Entry<String, Extension> entry : extensionsByConfigRoots.entrySet()) {
