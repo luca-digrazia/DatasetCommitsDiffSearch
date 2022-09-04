@@ -109,7 +109,21 @@ public class ErrorMessageTest {
             "Error with log file\n\n"
                 + "---8<---8<--- Start of log, file at /nope.txt ---8<---8<---\n"
                 + "ERROR: IOException while trying to read log file:\n"
-                + "java.io.FileNotFoundException: /nope.txt (No such file or directory)\n");
+                + "java.io.FileNotFoundException: /nope.txt (No such file or directory)");
     assertThat(errorMessage.toString()).endsWith("---8<---8<--- End of log ---8<---8<---");
+  }
+
+  @Test
+  public void testErrorMessageWithException() {
+    ErrorMessage errorMessage =
+        ErrorMessage.builder()
+            .message("An exception occurred.")
+            .exception(new IllegalStateException("Hello World"))
+            .build();
+    assertThat(errorMessage.toString())
+        .startsWith(
+            "An exception occurred.\n\n"
+                + "---8<---8<--- Exception details ---8<---8<---\n"
+                + "java.lang.IllegalStateException: Hello World");
   }
 }
