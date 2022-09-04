@@ -626,20 +626,13 @@ public class OidcTenantConfig {
         public boolean removeRedirectParameters = true;
 
         /**
-         * Both ID and access tokens are fetched from the OIDC provider as part of the authorization code flow.
-         * ID token is always verified on every user request as the primary token which is used
-         * to represent the principal and extract the roles.
-         * Access token is not verified by default since it is meant to be propagated to the downstream services.
-         * The verification of the access token should be enabled if it is injected as a JWT token.
-         *
-         * Access tokens obtained as part of the code flow will always be verified if `quarkus.oidc.roles.source`
-         * property is set to `accesstoken` which means the authorization decision will be based on the roles extracted from the
-         * access token.
-         * 
-         * Bearer access tokens are always verified.
+         * Both ID and access tokens are verified as part of the authorization code flow and every time
+         * these tokens are retrieved from the user session. One should disable the access token verification if
+         * it is only meant to be propagated to the downstream services.
+         * Note the ID token will always be verified.
          */
-        @ConfigItem(defaultValue = "false")
-        public boolean verifyAccessToken;
+        @ConfigItem(defaultValue = "true")
+        public boolean verifyAccessToken = true;
 
         /**
          * Force 'https' as the 'redirect_uri' parameter scheme when running behind an SSL terminating reverse proxy.
@@ -672,26 +665,6 @@ public class OidcTenantConfig {
          */
         @ConfigItem(defaultValue = "false")
         public boolean userInfoRequired;
-
-        /**
-         * If this property is set to 'true' then a normal 302 redirect response will be returned
-         * if the request was initiated via XMLHttpRequest and the current user needs to be
-         * (re)authenticated which may not be desirable for Single Page Applications since
-         * XMLHttpRequest automatically following the redirect may not work given that OIDC
-         * authorization endpoints typically do not support CORS.
-         * If this property is set to `false` then a status code of '499' will be returned to allow
-         * the client to handle the redirect manually
-         */
-        @ConfigItem(defaultValue = "true")
-        public boolean xhrAutoRedirect = true;
-
-        public boolean isXhrAutoRedirect() {
-            return xhrAutoRedirect;
-        }
-
-        public void setXhrAutoredirect(boolean autoRedirect) {
-            this.xhrAutoRedirect = autoRedirect;
-        }
 
         public Optional<String> getRedirectPath() {
             return redirectPath;
@@ -796,12 +769,6 @@ public class OidcTenantConfig {
         public Optional<List<String>> audience = Optional.empty();
 
         /**
-         * Expected token type
-         */
-        @ConfigItem
-        public Optional<String> tokenType = Optional.empty();
-
-        /**
          * Life span grace period in seconds.
          * When checking token expiry, current time is allowed to be later than token expiration time by at most the configured
          * number of seconds.
@@ -881,14 +848,6 @@ public class OidcTenantConfig {
 
         public void setForcedJwkRefreshInterval(Duration forcedJwkRefreshInterval) {
             this.forcedJwkRefreshInterval = forcedJwkRefreshInterval;
-        }
-
-        public Optional<String> getTokenType() {
-            return tokenType;
-        }
-
-        public void setTokenType(String tokenType) {
-            this.tokenType = Optional.of(tokenType);
         }
     }
 

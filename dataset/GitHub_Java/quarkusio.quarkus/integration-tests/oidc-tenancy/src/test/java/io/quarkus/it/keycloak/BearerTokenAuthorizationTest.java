@@ -3,7 +3,6 @@ package io.quarkus.it.keycloak;
 import static org.awaitility.Awaitility.await;
 import static org.hamcrest.Matchers.equalTo;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.io.IOException;
@@ -54,28 +53,11 @@ public class BearerTokenAuthorizationTest {
     }
 
     @Test
-    public void testResolveTenantIdentifierWebAppDynamic() throws IOException {
-        try (final WebClient webClient = createWebClient()) {
-            HtmlPage page = webClient.getPage("http://localhost:8081/tenant/tenant-web-app-dynamic/api/user/webapp");
-            // State cookie is available but there must be no saved path parameter
-            // as the tenant-web-app-dynamic configuration does not set a redirect-path property
-            assertNull(getStateCookieSavedPath(webClient, "tenant-web-app-dynamic"));
-            assertEquals("Log in to quarkus-webapp", page.getTitleText());
-            HtmlForm loginForm = page.getForms().get(0);
-            loginForm.getInputByName("username").setValueAttribute("alice");
-            loginForm.getInputByName("password").setValueAttribute("alice");
-            page = loginForm.getInputByName("login").click();
-            assertEquals("tenant-web-app-dynamic:alice", page.getBody().asText());
-            webClient.getCookieManager().clearCookies();
-        }
-    }
-
-    @Test
     public void testResolveTenantIdentifierWebApp2() throws IOException {
         try (final WebClient webClient = createWebClient()) {
             HtmlPage page = webClient.getPage("http://localhost:8081/tenant/tenant-web-app2/api/user/webapp2");
             // State cookie is available but there must be no saved path parameter
-            // as the tenant-web-app2 configuration does not set a redirect-path property
+            // as the tenant-web-app configuration does not set a redirect-path property
             assertNull(getStateCookieSavedPath(webClient, "tenant-web-app2"));
             assertEquals("Log in to quarkus-webapp2", page.getTitleText());
             HtmlForm loginForm = page.getForms().get(0);
@@ -83,71 +65,6 @@ public class BearerTokenAuthorizationTest {
             loginForm.getInputByName("password").setValueAttribute("alice");
             page = loginForm.getInputByName("login").click();
             assertEquals("tenant-web-app2:alice", page.getBody().asText());
-            webClient.getCookieManager().clearCookies();
-        }
-    }
-
-    @Test
-    public void testHybridWebApp() throws IOException {
-        try (final WebClient webClient = createWebClient()) {
-            HtmlPage page = webClient.getPage("http://localhost:8081/tenants/tenant-hybrid/api/user");
-            assertNotNull(getStateCookie(webClient, "tenant-hybrid-webapp"));
-            assertEquals("Log in to quarkus-hybrid", page.getTitleText());
-            HtmlForm loginForm = page.getForms().get(0);
-            loginForm.getInputByName("username").setValueAttribute("alice");
-            loginForm.getInputByName("password").setValueAttribute("alice");
-            page = loginForm.getInputByName("login").click();
-            assertEquals("alice:web-app", page.getBody().asText());
-            webClient.getCookieManager().clearCookies();
-        }
-    }
-
-    @Test
-    public void testHybridService() {
-        RestAssured.given().auth().oauth2(getAccessToken("alice", "hybrid"))
-                .when().get("/tenants/tenant-hybrid/api/user")
-                .then()
-                .statusCode(200)
-                .body(equalTo("alice:service"));
-    }
-
-    @Test
-    public void testHybridWebAppService() throws IOException {
-        try (final WebClient webClient = createWebClient()) {
-            HtmlPage page = webClient.getPage("http://localhost:8081/tenants/tenant-hybrid-webapp-service/api/user");
-            assertNotNull(getStateCookie(webClient, "tenant-hybrid-webapp-service"));
-            assertEquals("Log in to quarkus-hybrid", page.getTitleText());
-            HtmlForm loginForm = page.getForms().get(0);
-            loginForm.getInputByName("username").setValueAttribute("alice");
-            loginForm.getInputByName("password").setValueAttribute("alice");
-            page = loginForm.getInputByName("login").click();
-            assertEquals("alice:web-app", page.getBody().asText());
-            webClient.getCookieManager().clearCookies();
-        }
-        RestAssured.given().auth().oauth2(getAccessToken("alice", "hybrid"))
-                .when().get("/tenants/tenant-hybrid-webapp-service/api/user")
-                .then()
-                .statusCode(200)
-                .body(equalTo("alice:service"));
-    }
-
-    @Test
-    public void testResolveTenantIdentifierWebAppNoDiscovery() throws IOException {
-        try (final WebClient webClient = createWebClient()) {
-            HtmlPage page = webClient
-                    .getPage("http://localhost:8081/tenant/tenant-web-app-no-discovery/api/user/webapp-no-discovery");
-            // State cookie is available but there must be no saved path parameter
-            // as the tenant-web-app configuration does not set a redirect-path property
-            assertNull(getStateCookieSavedPath(webClient, "tenant-web-app-no-discovery"));
-            assertEquals("Log in to quarkus-webapp", page.getTitleText());
-            HtmlForm loginForm = page.getForms().get(0);
-            loginForm.getInputByName("username").setValueAttribute("alice");
-            loginForm.getInputByName("password").setValueAttribute("alice");
-            page = loginForm.getInputByName("login").click();
-            assertEquals("tenant-web-app-no-discovery:alice", page.getBody().asText());
-
-            page = webClient.getPage("http://localhost:8081/tenant/tenant-web-app-no-discovery/api/user/webapp-no-discovery");
-            assertEquals("tenant-web-app-no-discovery:alice", page.getBody().asText());
             webClient.getCookieManager().clearCookies();
         }
     }
@@ -186,45 +103,11 @@ public class BearerTokenAuthorizationTest {
                 .statusCode(200)
                 .body(equalTo("tenant-b:alice"));
 
-        // should give a 401 given that access token from issuer b can not access tenant c
+        // should give a 403 given that access token from issuer b can not access tenant c
         RestAssured.given().auth().oauth2(getAccessToken("alice", "b"))
                 .when().get("/tenant/tenant-c/api/user")
                 .then()
-                .statusCode(401);
-    }
-
-    @Test
-    public void testCustomHeader() {
-        RestAssured.given().header("X-Forwarded-Authorization", getAccessToken("alice", "b"))
-                .when().get("/tenant/tenant-customheader/api/user")
-                .then()
-                .statusCode(200)
-                .body(equalTo("tenant-customheader:alice"));
-    }
-
-    @Test
-    public void testCustomHeaderBearerScheme() {
-        RestAssured.given().header("X-Forwarded-Authorization", "Bearer " + getAccessToken("alice", "b"))
-                .when().get("/tenant/tenant-customheader/api/user")
-                .then()
-                .statusCode(200)
-                .body(equalTo("tenant-customheader:alice"));
-    }
-
-    @Test
-    public void testWrongCustomHeader() {
-        RestAssured.given().header("X-Authorization", getAccessToken("alice", "b"))
-                .when().get("/tenant/tenant-customheader/api/user")
-                .then()
-                .statusCode(401);
-    }
-
-    @Test
-    public void testCustomHeaderCustomScheme() {
-        RestAssured.given().header("X-Forwarded-Authorization", "DPoP " + getAccessToken("alice", "b"))
-                .when().get("/tenant/tenant-customheader/api/user")
-                .then()
-                .statusCode(401);
+                .statusCode(403);
     }
 
     @Test
@@ -233,22 +116,13 @@ public class BearerTokenAuthorizationTest {
                 .when().get("/tenant/tenant-d/api/user")
                 .then()
                 .statusCode(200)
-                .body(equalTo("tenant-d:alice.alice"));
+                .body(equalTo("tenant-d:alice"));
 
-        // should give a 401 given that access token from issuer b can not access tenant c
+        // should give a 403 given that access token from issuer b can not access tenant c
         RestAssured.given().auth().oauth2(getAccessToken("alice", "b"))
                 .when().get("/tenant/tenant-d/api/user")
                 .then()
-                .statusCode(401);
-    }
-
-    @Test
-    public void testResolveTenantConfigNoDiscovery() {
-        RestAssured.given().auth().oauth2(getAccessToken("alice", "b"))
-                .when().get("/tenant/tenant-b-no-discovery/api/user/no-discovery")
-                .then()
-                .statusCode(200)
-                .body(equalTo("tenant-b-no-discovery:alice.alice"));
+                .statusCode(403);
     }
 
     @Test
@@ -290,11 +164,11 @@ public class BearerTokenAuthorizationTest {
                 .body(equalTo("tenant-oidc:alice"));
 
         // Get a token with kid '3' - it can only be verified via the introspection fallback since OIDC returns JWK set with kid '2'
-        // 401 since the introspection is not enabled
+        // 403 since the introspection is not enabled
         RestAssured.given().auth().oauth2(getAccessTokenFromSimpleOidc("3"))
                 .when().get("/tenant/tenant-oidc/api/user")
                 .then()
-                .statusCode(401);
+                .statusCode(403);
 
         // Enable introspection
         RestAssured.when().post("/oidc/introspection").then().body(equalTo("true"));
