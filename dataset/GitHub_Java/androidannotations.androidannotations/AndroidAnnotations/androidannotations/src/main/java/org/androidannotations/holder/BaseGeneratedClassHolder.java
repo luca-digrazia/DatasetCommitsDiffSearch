@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,26 +15,26 @@
  */
 package org.androidannotations.holder;
 
-import com.sun.codemodel.ClassType;
-import com.sun.codemodel.JClass;
-import com.sun.codemodel.JCodeModel;
-import com.sun.codemodel.JDefinedClass;
-import org.androidannotations.helper.APTCodeModelHelper;
-import org.androidannotations.helper.ModelConstants;
-import org.androidannotations.process.ProcessHolder;
+import static com.sun.codemodel.JMod.FINAL;
+import static com.sun.codemodel.JMod.PUBLIC;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.TypeParameterElement;
 
-import static com.sun.codemodel.JMod.FINAL;
-import static com.sun.codemodel.JMod.PUBLIC;
+import org.androidannotations.helper.APTCodeModelHelper;
+import org.androidannotations.helper.ModelConstants;
+import org.androidannotations.process.ProcessHolder;
+
+import com.sun.codemodel.ClassType;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JCodeModel;
+import com.sun.codemodel.JDefinedClass;
 
 public abstract class BaseGeneratedClassHolder implements GeneratedClassHolder {
 
 	protected final ProcessHolder processHolder;
 	protected JDefinedClass generatedClass;
-	protected JClass annotatedClass;
 	protected final TypeElement annotatedElement;
 	protected final APTCodeModelHelper codeModelHelper;
 
@@ -48,19 +48,14 @@ public abstract class BaseGeneratedClassHolder implements GeneratedClassHolder {
 	protected void setGeneratedClass() throws Exception {
 		String annotatedComponentQualifiedName = annotatedElement.getQualifiedName().toString();
 		String subComponentQualifiedName = annotatedComponentQualifiedName + ModelConstants.GENERATION_SUFFIX;
-		annotatedClass = codeModel().directClass(annotatedElement.asType().toString());
+		JClass annotatedComponent = codeModel().directClass(annotatedElement.asType().toString());
 
 		generatedClass = codeModel()._class(PUBLIC | FINAL, subComponentQualifiedName, ClassType.CLASS);
 		for (TypeParameterElement typeParam : annotatedElement.getTypeParameters()) {
 			JClass bound = codeModelHelper.typeBoundsToJClass(this, typeParam.getBounds());
 			generatedClass.generify(typeParam.getSimpleName().toString(), bound);
 		}
-		generatedClass._extends(annotatedClass);
-		codeModelHelper.addNonAAAnotations(generatedClass, annotatedElement.getAnnotationMirrors(), this);
-	}
-	
-	public JClass getAnnotatedClass() {
-		return annotatedClass;
+		generatedClass._extends(annotatedComponent);
 	}
 
 	@Override
