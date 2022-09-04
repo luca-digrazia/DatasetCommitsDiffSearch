@@ -1,5 +1,5 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
  *
  * This file is part of Graylog2.
  *
@@ -15,15 +15,15 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
-
 package org.graylog2.radio.inputs;
 
 import com.beust.jcommander.internal.Lists;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ning.http.client.AsyncHttpClient;
-import com.ning.http.client.Request;
 import com.ning.http.client.Response;
+import org.graylog2.plugin.InputHost;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationException;
 import org.graylog2.plugin.inputs.InputState;
@@ -31,15 +31,10 @@ import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.radio.inputs.api.InputSummaryResponse;
 import org.graylog2.radio.inputs.api.PersistedInputsResponse;
 import org.graylog2.radio.inputs.api.RegisterInputResponse;
-import org.graylog2.shared.ServerStatus;
-import org.graylog2.shared.buffers.ProcessBuffer;
 import org.graylog2.shared.inputs.InputRegistry;
-import org.graylog2.shared.inputs.MessageInputFactory;
 import org.graylog2.shared.inputs.NoSuchInputTypeException;
 import org.graylog2.shared.rest.resources.system.inputs.requests.RegisterInputRequest;
 import org.joda.time.DateTime;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.ws.rs.core.UriBuilder;
 import java.io.IOException;
@@ -52,42 +47,32 @@ import java.util.concurrent.Future;
  * @author Lennart Koopmann <lennart@torch.sh>
  */
 public class RadioInputRegistry extends InputRegistry {
-    private static final Logger log = LoggerFactory.getLogger(RadioInputRegistry.class);
-
     protected final ObjectMapper mapper = new ObjectMapper();
     protected final AsyncHttpClient httpclient;
     protected final URI serverUrl;
-    private final ServerStatus serverStatus;
 
-    public RadioInputRegistry(MessageInputFactory messageInputFactory,
-                              ProcessBuffer processBuffer,
-                              AsyncHttpClient httpclient,
-                              URI serverUrl,
-                              ServerStatus serverStatus) {
-        super(messageInputFactory, processBuffer);
+    public RadioInputRegistry(InputHost core, AsyncHttpClient httpclient, URI serverUrl) {
+        super(core);
         this.httpclient = httpclient;
         this.serverUrl = serverUrl;
-        this.serverStatus = serverStatus;
     }
 
     protected MessageInput getMessageInput(InputSummaryResponse isr) {
         MessageInput input;
         try {
-            input = this.create(isr.type);
+            input = InputRegistry.factory(isr.type);
 
-            Configuration inputConfig = new Configuration(isr.configuration);
             // Add all standard fields.
+            input.initialize(new Configuration(isr.configuration), core);
             input.setTitle(isr.title);
             input.setCreatorUserId(isr.creatorUserId);
             input.setPersistId(isr.id);
             input.setCreatedAt(new DateTime(isr.createdAt));
             input.setGlobal(isr.global);
 
-            input.checkConfiguration(inputConfig);
-            // initialize must run after all fields have been set. Why oh why isn't this done in the constructor/factory method?
-            input.initialize(inputConfig);
+            input.checkConfiguration();
         } catch (NoSuchInputTypeException e) {
-            LOG.warn("Cannot launch persisted input. No such type [{}]. Error: {}", isr.type, e);
+            LOG.warn("Cannot launch persisted input. No such type [{}].", isr.type);
             return null;
         } catch (ConfigurationException e) {
             LOG.error("Missing or invalid input input configuration.", e);
@@ -97,11 +82,11 @@ public class RadioInputRegistry extends InputRegistry {
     }
 
     // TODO make this use a generic ApiClient class that knows the graylog2-server node address(es) or something.
-    public RegisterInputResponse registerInCluster(MessageInput input) throws ExecutionException, InterruptedException, IOException {
+    public void registerInCluster(MessageInput input) throws ExecutionException, InterruptedException, IOException {
         final UriBuilder uriBuilder = UriBuilder.fromUri(serverUrl);
-        uriBuilder.path("/system/radios/" + serverStatus.getNodeId().toString() + "/inputs");
+        uriBuilder.path("/system/radios/" + core.getNodeId() + "/inputs");
 
-        RegisterInputRequest rir = new RegisterInputRequest(input, serverStatus.getNodeId().toString());
+        RegisterInputRequest rir = new RegisterInputRequest(input, core.getNodeId());
 
         String json;
         try {
@@ -124,13 +109,11 @@ public class RadioInputRegistry extends InputRegistry {
         if (r.getStatusCode() != 201) {
             throw new RuntimeException("Expected HTTP response [201] for input registration but got [" + r.getStatusCode() + "].");
         }
-
-        return response;
     }
 
     public void unregisterInCluster(MessageInput input) throws ExecutionException, InterruptedException, IOException {
         final UriBuilder uriBuilder = UriBuilder.fromUri(serverUrl);
-        uriBuilder.path("/system/radios/" + serverStatus.getNodeId().toString() + "/inputs/" + input.getPersistId());
+        uriBuilder.path("/system/radios/" + core.getNodeId() + "/inputs/" + input.getPersistId());
 
         Future<Response> f = httpclient.prepareDelete(uriBuilder.build().toString()).execute();
 
@@ -145,23 +128,18 @@ public class RadioInputRegistry extends InputRegistry {
     public List<MessageInput> getAllPersisted() {
         final List<MessageInput> result = Lists.newArrayList();
         final UriBuilder uriBuilder = UriBuilder.fromUri(serverUrl);
-        uriBuilder.path("/system/radios/" + serverStatus.getNodeId().toString() + "/inputs");
+        uriBuilder.path("/system/radios/" + core.getNodeId() + "/inputs");
 
         List<InputSummaryResponse> response;
         try {
-            Request request = httpclient.prepareGet(uriBuilder.build().toString()).build();
-            log.debug("API Request {} {}", request.getMethod(), request.getUrl());
-            Future<Response> f = httpclient.executeRequest(request);
+            Future<Response> f = httpclient.prepareGet(uriBuilder.build().toString()).execute();
 
             Response r = f.get();
 
             if (r.getStatusCode() != 200) {
                 throw new RuntimeException("Expected HTTP response [200] for list of persisted input but got [" + r.getStatusCode() + "].");
             }
-            String responseBody = r.getResponseBody();
-            PersistedInputsResponse persistedInputsResponse = mapper.readValue(responseBody,
-                                                                               PersistedInputsResponse.class);
-            response = persistedInputsResponse.inputs;
+            response = mapper.readValue(r.getResponseBody(), PersistedInputsResponse.class).inputs;
         } catch (IOException e) {
             LOG.error("Unable to get persisted inputs: ", e);
             return result;
@@ -176,7 +154,6 @@ public class RadioInputRegistry extends InputRegistry {
         for (InputSummaryResponse isr : response) {
             final MessageInput messageInput = getMessageInput(isr);
             if (messageInput != null) {
-                log.debug("Loaded message input {}", messageInput);
                 result.add(messageInput);
             }
         }
@@ -186,6 +163,14 @@ public class RadioInputRegistry extends InputRegistry {
 
     @Override
     protected void finishedLaunch(InputState state) {
+        MessageInput input = state.getMessageInput();
+        if (input.getPersistId() != null) {
+            try {
+                registerInCluster(input);
+            } catch (Exception e) {
+                LOG.error("Could not register input in Graylog2 cluster. It will be lost on next restart of this radio node.");
+            }
+        }
     }
 
     @Override
@@ -203,24 +188,5 @@ public class RadioInputRegistry extends InputRegistry {
         }
 
         LOG.info("Unregistered input [" + input.getName() + "] on server cluster.");
-    }
-
-    @Override
-    public InputState launch(MessageInput input, String id, boolean register) {
-        if (register) {
-            try {
-                final RegisterInputResponse response = registerInCluster(input);
-                if (response != null)
-                    input.setPersistId(response.persistId);
-            } catch (Exception e) {
-                LOG.error("Could not register input in Graylog2 cluster. It will be lost on next restart of this radio node.");
-                return null;
-            }
-        }
-        return super.launch(input, id, register);
-    }
-
-    @Override
-    protected void finishedStop(InputState inputState) {
     }
 }
