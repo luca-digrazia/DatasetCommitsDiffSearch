@@ -23,7 +23,6 @@ import com.google.devtools.build.lib.analysis.AnalysisOptions;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.SkyframePackageRootResolver;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.analysis.config.CoreOptions;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.packages.StarlarkSemanticsOptions;
@@ -189,7 +188,7 @@ public final class CommandEnvironment {
       // Compute the set of environment variables that are whitelisted on the commandline
       // for inheritance.
       for (Map.Entry<String, String> entry :
-          options.getOptions(CoreOptions.class).actionEnvironment) {
+          options.getOptions(BuildConfiguration.Options.class).actionEnvironment) {
         if (entry.getValue() == null) {
           visibleActionEnv.add(entry.getKey());
         } else {
@@ -198,7 +197,7 @@ public final class CommandEnvironment {
         }
       }
       for (Map.Entry<String, String> entry :
-          options.getOptions(CoreOptions.class).testEnvironment) {
+          options.getOptions(BuildConfiguration.Options.class).testEnvironment) {
         if (entry.getValue() == null) {
           visibleTestEnv.add(entry.getKey());
         }
@@ -206,7 +205,7 @@ public final class CommandEnvironment {
     }
 
     repoEnv.putAll(actionClientEnv);
-    CoreOptions configOpts = options.getOptions(CoreOptions.class);
+    BuildConfiguration.Options configOpts = options.getOptions(BuildConfiguration.Options.class);
     if (configOpts != null) {
       for (Map.Entry<String, String> entry : configOpts.repositoryEnvironment) {
         repoEnv.put(entry.getKey(), entry.getValue());
