@@ -3,7 +3,10 @@ package com.shuyu.gsyvideoplayer.video.base;
 import android.content.Context;
 import android.util.AttributeSet;
 
+import com.danikula.videocache.HttpProxyCacheServer;
 import com.shuyu.gsyvideoplayer.GSYVideoManager;
+
+import java.io.File;
 
 import tv.danmaku.ijk.media.player.IjkLibLoader;
 
@@ -39,8 +42,7 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer {
     }
 
     @Override
-    public GSYVideoViewBridge getGSYVideoManager() {
-        GSYVideoManager.instance().initContext(getContext().getApplicationContext());
+    protected GSYVideoViewBridge getGSYVideoManager() {
         return GSYVideoManager.instance();
     }
 
@@ -55,13 +57,7 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer {
     }
 
     @Override
-    protected int getFullId() {
-        return GSYVideoManager.FULLSCREEN_ID;
+    protected HttpProxyCacheServer getProxy(Context context, File file) {
+        return GSYVideoManager.getProxy(context, file);
     }
-
-    @Override
-    protected int getSmallId() {
-        return GSYVideoManager.SMALL_ID;
-    }
-
 }
