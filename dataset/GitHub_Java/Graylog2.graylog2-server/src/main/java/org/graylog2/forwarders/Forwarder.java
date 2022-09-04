@@ -20,10 +20,7 @@
 
 package org.graylog2.forwarders;
 
-import java.util.ArrayList;
-import java.util.List;
-import org.apache.log4j.Logger;
-import org.graylog2.messagehandlers.gelf.ChunkedGELFMessage;
+import org.graylog2.Log;
 import org.graylog2.messagehandlers.gelf.GELFMessage;
 import org.graylog2.streams.Stream;
 
@@ -35,8 +32,6 @@ import org.graylog2.streams.Stream;
  * @author: Lennart Koopmann <lennart@socketfeed.com>
  */
 public class Forwarder {
-
-    private static final Logger LOG = Logger.getLogger(Forwarder.class);
 
     /**
      * Forward a GELF message to it's streams forward endpoints.
@@ -52,18 +47,15 @@ public class Forwarder {
                 for (ForwardEndpoint endpoint : stream.getForwardedTo()) {
                     MessageForwarderIF launchPad = endpoint.getForwarder();
                     launchPad.forward(message);
-
-                    if (launchPad.succeeded()) {
-                        succeeded++;
-                    }
+                    succeeded++;
                 }
             } catch (Exception e) {
-                LOG.warn("Skipping forwarding of message for a stream: " + e.getMessage(), e);
+                Log.warn("Skipping forwarding of message for a stream: " + e.toString());
                 continue;
             }
         }
 
-        return succeeded;
+        return 0;
     }
 
 }

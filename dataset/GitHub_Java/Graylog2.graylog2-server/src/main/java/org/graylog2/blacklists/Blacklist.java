@@ -20,24 +20,25 @@
 
 package org.graylog2.blacklists;
 
-import com.mongodb.*;
-import org.apache.log4j.Logger;
-import org.bson.types.ObjectId;
-import org.graylog2.database.MongoConnection;
-
+import com.mongodb.BasicDBList;
+import com.mongodb.BasicDBObject;
+import com.mongodb.DBCollection;
+import com.mongodb.DBCursor;
+import com.mongodb.DBObject;
 import java.util.ArrayList;
 import java.util.List;
+import org.bson.types.ObjectId;
+import org.graylog2.Log;
+import org.graylog2.database.MongoConnection;
 
 /**
  * Blacklist.java: Mar 30, 2011 10:05:34 PM
  *
  * Representing a blacklist stored in MongoDB.
  *
- * @author Lennart Koopmann <lennart@socketfeed.com>
+ * @author: Lennart Koopmann <lennart@socketfeed.com>
  */
 public class Blacklist {
-
-    private static final Logger LOG = Logger.getLogger(Blacklist.class);
 
     private ObjectId id = null;
     private String title = null;
@@ -66,7 +67,7 @@ public class Blacklist {
             try {
                 blacklists.add(new Blacklist(cur.next()));
             } catch (Exception e) {
-                LOG.warn("Can't fetch blacklist. Skipping. " + e.getMessage(), e);
+                Log.warn("Can't fetch blacklist. Skipping. " + e.toString());
             }
         }
 
@@ -106,7 +107,7 @@ public class Blacklist {
                     BlacklistRule rule = new BlacklistRule((DBObject) ruleObj);
                     tempRules.add(rule);
                 } catch (Exception e) {
-                    LOG.warn("Skipping rule in Blacklist.getRules(): " + e.getMessage(), e);
+                    Log.warn("Skipping rule in Blacklist.getRules(): " + e.toString());
                 }
             }
         }

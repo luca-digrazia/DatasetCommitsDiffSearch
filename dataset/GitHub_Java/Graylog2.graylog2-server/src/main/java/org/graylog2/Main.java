@@ -20,31 +20,24 @@
 
 package org.graylog2;
 
-import org.apache.log4j.Layout;
-import org.apache.log4j.Logger;
-import org.apache.log4j.spi.ErrorHandler;
-import org.apache.log4j.spi.Filter;
-import org.apache.log4j.spi.LoggingEvent;
-import org.graylog2.database.MongoConnection;
-import org.graylog2.messagehandlers.amqp.AMQP;
-import org.graylog2.messagehandlers.amqp.AMQPBroker;
-import org.graylog2.messagehandlers.amqp.AMQPSubscribedQueue;
-import org.graylog2.messagehandlers.amqp.AMQPSubscriberThread;
-import org.graylog2.messagehandlers.gelf.GELF;
-import org.graylog2.messagehandlers.gelf.GELFMainThread;
-import org.graylog2.messagehandlers.syslog.SyslogServerThread;
-import org.graylog2.periodical.ChunkedGELFClientManagerThread;
-import org.graylog2.periodical.HostCounterCacheWriterThread;
-import org.graylog2.periodical.ServerValueWriterThread;
-import org.graylog2.periodical.ThroughputWriterThread;
-
 import java.io.BufferedWriter;
+import org.graylog2.messagehandlers.syslog.SyslogServerThread;
+import org.graylog2.messagehandlers.gelf.GELFMainThread;
+import org.graylog2.messagehandlers.gelf.GELF;
+import org.graylog2.database.MongoConnection;
 import java.io.FileInputStream;
 import java.io.FileWriter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
-import org.apache.log4j.Appender;
+import org.graylog2.messagehandlers.amqp.AMQP;
+import org.graylog2.messagehandlers.amqp.AMQPBroker;
+import org.graylog2.messagehandlers.amqp.AMQPSubscribedQueue;
+import org.graylog2.messagehandlers.amqp.AMQPSubscriberThread;
+import org.graylog2.periodical.ChunkedGELFClientManagerThread;
+import org.graylog2.periodical.HostCounterCacheWriterThread;
+import org.graylog2.periodical.ServerValueWriterThread;
+import org.graylog2.periodical.ThroughputWriterThread;
 
 /**
  * Main class of Graylog2.
@@ -53,7 +46,10 @@ import org.apache.log4j.Appender;
  */
 public final class Main {
 
-    private static final Logger LOG = Logger.getLogger(Main.class);
+    /**
+     * Controlled by parameter "debug". Enables more verbose output.
+     */
+    public static boolean debugMode = false;
 
     /**
      * This holds the configuration from /etc/graylog2.conf
@@ -73,24 +69,21 @@ public final class Main {
      * @param args the command line arguments
      */
     public static void main(String[] args) {
-
-        Logger.getRootLogger().addAppender(new TestAppender());
-        
-        LOG.info("[x] Graylog2 starting up. (JRE: " + Tools.getSystemInformation() + ")");
+        System.out.println("[x] Graylog2 starting up. (JRE: " + Tools.getSystemInformation() + ")");
 
         // Read config.
-        LOG.info("[x] Reading config.");
+        System.out.println("[x] Reading config.");
         Main.masterConfig = new Properties();
         // Allow -DconfigPath=/some/different/config.
         String configPath = System.getProperty("configPath", "/etc/graylog2.conf");
-        LOG.info("[x] Using config: " + configPath);
+        System.out.println("[x] Using config: " + configPath);
 
         try {
             FileInputStream configStream = new FileInputStream(configPath);
             Main.masterConfig.load(configStream);
             configStream.close();
         } catch(java.io.IOException e) {
-            LOG.error("Could not read config file: " + e.getMessage(), e);
+            System.out.println("Could not read config file: " + e.toString());
         }
         
         // Define required configuration fields.
@@ -113,14 +106,14 @@ public final class Main {
                     throw new Exception("Not set");
                 }
             } catch (Exception e) {
-                LOG.fatal("Missing configuration variable '" + requiredConfigField + "' - Terminating. (" + e.getMessage() + ")", e);
+                System.out.println("Missing configuration variable '" + requiredConfigField + "' - Terminating. (" + e.toString() + ")");
                 System.exit(1); // Exit with error.
             }
         }
 
         // Check if a MongoDB replica set or host is defined.
         if (Main.masterConfig.getProperty("mongodb_host") == null && Main.masterConfig.getProperty("mongodb_replica_set") == null) {
-            LOG.fatal("No MongoDB host (mongodb_host) or replica set (mongodb_replica_set) defined. Terminating.");
+            System.out.println("No MongoDB host (mongodb_host) or replica set (mongodb_replica_set) defined. Terminating.");
             System.exit(1); // Exit with error.
         }
 
@@ -129,13 +122,21 @@ public final class Main {
         allowedSyslogProtocols.add("tcp");
         allowedSyslogProtocols.add("udp");
         if(!allowedSyslogProtocols.contains(Main.masterConfig.getProperty("syslog_protocol"))) {
-            LOG.fatal("Invalid syslog_protocol: " + Main.masterConfig.getProperty("syslog_protocol"));
+            System.out.println("Invalid syslog_protocol: " + Main.masterConfig.getProperty("syslog_protocol"));
             System.exit(1); // Exit with error.
         }
 
         // Print out a deprecation warning if "rrd_storage_dir" is set.
         if (Main.masterConfig.getProperty("rrd_storage_dir") != null) {
-            LOG.warn("[!] Deprecation warning: Config parameter rrd_storage_dir is no longer needed.");
+            System.out.println("[!] Deprecation warning: Config parameter rrd_storage_dir is no longer needed.");
+        }
+
+        // Are we in debug mode?
+        if (args.length > 0 && args[0].equalsIgnoreCase("debug")) {
+            System.out.println("[x] Running in Debug mode");
+            Main.debugMode = true;
+        } else {
+            System.out.println("[x] Not in Debug mode.");
         }
 
         // Write a PID file.
@@ -150,7 +151,7 @@ public final class Main {
             out.write(pid);
             out.close();
         } catch (Exception e) {
-            LOG.fatal("Could not write PID file: " + e.getMessage(), e);
+            System.out.println("Could not write PID file: " + e.toString());
             System.exit(1); // Exit with error.
         }
 
@@ -165,7 +166,8 @@ public final class Main {
                     Configuration.getMongoDBReplicaSetServers(Main.masterConfig)
             );
         } catch (Exception e) {
-            LOG.fatal("Could not create MongoDB connection: " + e.getMessage(), e);
+            System.out.println("Could not create MongoDB connection: " + e.toString());
+            e.printStackTrace();
             System.exit(1); // Exit with error.
         }
 
@@ -183,12 +185,13 @@ public final class Main {
             if (rulesFilePath != null && !rulesFilePath.isEmpty()) {
                 Main.drools = new RulesEngine();
                 Main.drools.addRules(rulesFilePath);
-                LOG.info("[x] Using rules: " + rulesFilePath);
+                System.out.println("[x] Using rules: " + rulesFilePath);
             } else {
-                LOG.info("[x] Not using rules");
+                System.out.println("[x] Not using rules");
             }
         } catch (Exception e) {
-            LOG.fatal("Could not load rules engine: " + e.getMessage(), e);
+            System.out.println("Could not load rules engine: " + e.toString());
+            e.printStackTrace();
             System.exit(1); // Exit with error.
         }
 		
@@ -199,9 +202,9 @@ public final class Main {
         // Check if the thread started up completely.
         try { Thread.sleep(1000); } catch(InterruptedException e) {}
         if(syslogServerThread.getCoreThread().isAlive()) {
-            LOG.info("[x] Syslog server thread is up.");
+            System.out.println("[x] Syslog server thread is up.");
         } else {
-            LOG.fatal("Could not start syslog server core thread. Do you have permissions to listen on port " + Main.masterConfig.getProperty("syslog_listen_port") + "?");
+            System.out.println("Could not start syslog server core thread. Do you have permissions to listen on port " + Main.masterConfig.getProperty("syslog_listen_port") + "?");
             System.exit(1); // Exit with error.
         }
 
@@ -213,13 +216,13 @@ public final class Main {
             ChunkedGELFClientManagerThread gelfManager = new ChunkedGELFClientManagerThread();
             gelfManager.start();
             
-            LOG.info("[x] GELF threads are up.");
+            System.out.println("[x] GELF threads are up.");
         }
 
         // Host counter cache.
         HostCounterCacheWriterThread hostCounterCacheWriterThread = new HostCounterCacheWriterThread();
         hostCounterCacheWriterThread.start();
-        LOG.info("[x] Host count cache is up.");
+        System.out.println("[x] Host count cache is up.");
 
         // AMQP.
          if (AMQP.isEnabled(Main.masterConfig)) {
@@ -241,7 +244,7 @@ public final class Main {
                     amqpThread.start();
                 }
 
-                LOG.info("[x] AMQP threads are up. (" + amqpQueues.size() + " queues)");
+                System.out.println("[x] AMQP threads are up. (" + amqpQueues.size() + " queues)");
             }
         }
 
@@ -253,7 +256,7 @@ public final class Main {
         ServerValueWriterThread serverValueThread = new ServerValueWriterThread();
         serverValueThread.start();
 
-        LOG.info("[x] Graylog2 up and running.");
+        System.out.println("[x] Graylog2 up and running.");
     }
 
 }
