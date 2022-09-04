@@ -23,7 +23,6 @@ import static com.google.devtools.build.lib.syntax.Type.STRING;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
@@ -36,7 +35,6 @@ import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTr
 import com.google.devtools.build.lib.analysis.config.transitions.NoTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.SplitTransition;
-import com.google.devtools.build.lib.analysis.config.transitions.TransitionFactory;
 import com.google.devtools.build.lib.analysis.test.TestConfiguration;
 import com.google.devtools.build.lib.analysis.util.MockRule;
 import com.google.devtools.build.lib.analysis.util.TestAspects;
@@ -44,6 +42,7 @@ import com.google.devtools.build.lib.analysis.util.TestAspects.DummyRuleFactory;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
+import com.google.devtools.build.lib.packages.RuleTransitionFactory;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.testutil.Suite;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
@@ -156,9 +155,9 @@ public class ConfigurationsForTargetsWithTrimmedConfigurationsTest
 
   @AutoCodec.VisibleForSerialization
   @AutoCodec
-  static class SetsTestFilterFromAttributeTransitionFactory implements TransitionFactory<Rule> {
+  static class SetsTestFilterFromAttributeTransitionFactory implements RuleTransitionFactory {
     @Override
-    public PatchTransition create(Rule rule) {
+    public PatchTransition buildTransitionFor(Rule rule) {
       NonconfigurableAttributeMapper attributes = NonconfigurableAttributeMapper.of(rule);
       String value = attributes.get("sets_test_filter_to", STRING);
       if (Strings.isNullOrEmpty(value)) {
@@ -227,7 +226,7 @@ public class ConfigurationsForTargetsWithTrimmedConfigurationsTest
 
   @Test
   public void trimmingTransitionActivatesLastOnAllTargets() throws Exception {
-    TransitionFactory<Rule> trimmingTransitionFactory =
+    RuleTransitionFactory trimmingTransitionFactory =
         (rule) ->
             new AddArgumentToTestArgsTransition(
                 "trimming transition for " + rule.getLabel().toString());
@@ -321,11 +320,11 @@ public class ConfigurationsForTargetsWithTrimmedConfigurationsTest
 
   @Test
   public void trimmingTransitionsAreComposedInOrderOfAdding() throws Exception {
-    TransitionFactory<Rule> firstTrimmingTransitionFactory =
+    RuleTransitionFactory firstTrimmingTransitionFactory =
         (rule) ->
             new AddArgumentToTestArgsTransition(
                 "first trimming transition for " + rule.getLabel().toString());
-    TransitionFactory<Rule> secondTrimmingTransitionFactory =
+    RuleTransitionFactory secondTrimmingTransitionFactory =
         (rule) ->
             new AddArgumentToTestArgsTransition(
                 "second trimming transition for " + rule.getLabel().toString());
@@ -580,14 +579,9 @@ public class ConfigurationsForTargetsWithTrimmedConfigurationsTest
   private List<String> getTestFilterOptionValue(ConfigurationTransition transition)
       throws Exception {
     ImmutableList.Builder<String> outValues = ImmutableList.builder();
-    for (BuildOptions toOptions :
-        ConfigurationResolver.applyTransition(
-            getTargetConfiguration().getOptions(),
-            transition,
-            ruleClassProvider.getAllFragments(),
-            ruleClassProvider,
-            false,
-            ImmutableMap.of())) {
+    for (BuildOptions toOptions : ConfigurationResolver.applyTransition(
+        getTargetConfiguration().getOptions(), transition,
+        ruleClassProvider.getAllFragments(), ruleClassProvider, false)) {
       outValues.add(toOptions.get(TestConfiguration.TestOptions.class).testFilter);
     }
     return outValues.build();

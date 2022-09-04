@@ -71,11 +71,12 @@ import javax.annotation.concurrent.Immutable;
  * </code> may share many attributes in common).
  */
 @Immutable
+@AutoCodec
 public final class Attribute implements Comparable<Attribute> {
 
   public static final RuleClassNamePredicate ANY_RULE = RuleClassNamePredicate.unspecified();
 
-  private static final RuleClassNamePredicate NO_RULE = RuleClassNamePredicate.only();
+  public static final RuleClassNamePredicate NO_RULE = RuleClassNamePredicate.only();
 
   /** Wraps the information necessary to construct an Aspect. */
   @VisibleForSerialization
@@ -83,7 +84,7 @@ public final class Attribute implements Comparable<Attribute> {
     protected final C aspectClass;
     protected final Function<Rule, AspectParameters> parametersExtractor;
 
-    private RuleAspect(C aspectClass, Function<Rule, AspectParameters> parametersExtractor) {
+    protected RuleAspect(C aspectClass, Function<Rule, AspectParameters> parametersExtractor) {
       this.aspectClass = aspectClass;
       this.parametersExtractor = parametersExtractor;
     }
@@ -104,8 +105,8 @@ public final class Attribute implements Comparable<Attribute> {
   }
 
   private static class NativeRuleAspect extends RuleAspect<NativeAspectClass> {
-    NativeRuleAspect(
-        NativeAspectClass aspectClass, Function<Rule, AspectParameters> parametersExtractor) {
+    public NativeRuleAspect(NativeAspectClass aspectClass,
+        Function<Rule, AspectParameters> parametersExtractor) {
       super(aspectClass, parametersExtractor);
     }
 
@@ -116,13 +117,11 @@ public final class Attribute implements Comparable<Attribute> {
     }
   }
 
-  @VisibleForSerialization
   @AutoCodec
   static class SkylarkRuleAspect extends RuleAspect<SkylarkAspectClass> {
     private final SkylarkDefinedAspect aspect;
 
-    @VisibleForSerialization
-    SkylarkRuleAspect(SkylarkDefinedAspect aspect) {
+    public SkylarkRuleAspect(SkylarkDefinedAspect aspect) {
       super(aspect.getAspectClass(), aspect.getDefaultParametersExtractor());
       this.aspect = aspect;
     }
@@ -143,7 +142,7 @@ public final class Attribute implements Comparable<Attribute> {
   private static class PredefinedRuleAspect extends RuleAspect<AspectClass> {
     private final Aspect aspect;
 
-    PredefinedRuleAspect(Aspect aspect) {
+    public PredefinedRuleAspect(Aspect aspect) {
       super(aspect.getAspectClass(), null);
       this.aspect = aspect;
     }
@@ -154,7 +153,8 @@ public final class Attribute implements Comparable<Attribute> {
     }
   }
 
-  private enum PropertyFlag {
+  @VisibleForSerialization
+  enum PropertyFlag {
     MANDATORY,
     EXECUTABLE,
     UNDOCUMENTED,
@@ -274,9 +274,17 @@ public final class Attribute implements Comparable<Attribute> {
     String checkValid(Rule from, Rule to);
   }
 
-  @AutoCodec public static final ValidityPredicate ANY_EDGE = (from, to) -> null;
+  @AutoCodec
+  public static final ValidityPredicate ANY_EDGE =
+      new ValidityPredicate() {
+        @Override
+        public String checkValid(Rule from, Rule to) {
+          return null;
+        }
+      };
 
   /** A predicate class to check if the value of the attribute comes from a predefined set. */
+  @AutoCodec
   public static class AllowedValueSet implements PredicateWithMessage<Object> {
 
     private final Set<Object> allowedValues;
@@ -289,6 +297,12 @@ public final class Attribute implements Comparable<Attribute> {
       Preconditions.checkNotNull(values);
       Preconditions.checkArgument(!Iterables.isEmpty(values));
       allowedValues = ImmutableSet.copyOf(values);
+    }
+
+    @AutoCodec.Instantiator
+    @VisibleForSerialization
+    AllowedValueSet(Set<Object> allowedValues) {
+      this.allowedValues = allowedValues;
     }
 
     @Override
@@ -330,6 +344,7 @@ public final class Attribute implements Comparable<Attribute> {
   }
 
   /** A factory to generate {@link Attribute} instances. */
+  @AutoCodec
   public static class ImmutableAttributeFactory {
     private final Type<?> type;
     private final String doc;
@@ -347,7 +362,8 @@ public final class Attribute implements Comparable<Attribute> {
     private final RequiredProviders requiredProviders;
     private final ImmutableList<RuleAspect<?>> aspects;
 
-    private ImmutableAttributeFactory(
+    @AutoCodec.VisibleForSerialization
+    ImmutableAttributeFactory(
         Type<?> type,
         String doc,
         ImmutableSet<PropertyFlag> propertyFlags,
@@ -1382,6 +1398,7 @@ public final class Attribute implements Comparable<Attribute> {
    * calling {@link #computePossibleValues}, which returns a {@link SkylarkComputedDefault} that
    * contains a lookup table.
    */
+  @AutoCodec
   public static final class SkylarkComputedDefaultTemplate {
     private final Type<?> type;
     private final SkylarkCallbackFunction callback;
@@ -1525,6 +1542,7 @@ public final class Attribute implements Comparable<Attribute> {
    * {@link #getPossibleValues(Type, Rule)} and {@link #getDefault(AttributeMap)} do lookups in that
    * table.
    */
+  @AutoCodec
   static final class SkylarkComputedDefault extends ComputedDefault {
 
     private final List<Type<?>> dependencyTypes;
@@ -1578,9 +1596,10 @@ public final class Attribute implements Comparable<Attribute> {
     }
   }
 
+  @AutoCodec.VisibleForSerialization
   static class SimpleLateBoundDefault<FragmentT, ValueT>
       extends LateBoundDefault<FragmentT, ValueT> {
-    private final Resolver<FragmentT, ValueT> resolver;
+    @AutoCodec.VisibleForSerialization protected final Resolver<FragmentT, ValueT> resolver;
 
     private SimpleLateBoundDefault(boolean useHostConfiguration,
         Class<FragmentT> fragmentClass,
@@ -1712,9 +1731,7 @@ public final class Attribute implements Comparable<Attribute> {
     }
   }
 
-  @AutoCodec.VisibleForSerialization
-  static class AlwaysNullLateBoundDefault extends SimpleLateBoundDefault<Void, Void> {
-    @AutoCodec @AutoCodec.VisibleForSerialization
+  private static class AlwaysNullLateBoundDefault extends SimpleLateBoundDefault<Void, Void> {
     static final AlwaysNullLateBoundDefault INSTANCE = new AlwaysNullLateBoundDefault();
 
     private AlwaysNullLateBoundDefault() {
@@ -1723,9 +1740,10 @@ public final class Attribute implements Comparable<Attribute> {
   }
 
   /** A {@link LateBoundDefault} for a {@link Label}. */
+  @AutoCodec
   public static class LabelLateBoundDefault<FragmentT>
       extends SimpleLateBoundDefault<FragmentT, Label> {
-    @VisibleForTesting
+    @AutoCodec.VisibleForSerialization
     protected LabelLateBoundDefault(
         boolean useHostConfiguration,
         Class<FragmentT> fragmentClass,
@@ -1809,9 +1827,11 @@ public final class Attribute implements Comparable<Attribute> {
   }
 
   /** A {@link LateBoundDefault} for a {@link List} of {@link Label} objects. */
+  @AutoCodec
   public static class LabelListLateBoundDefault<FragmentT>
       extends SimpleLateBoundDefault<FragmentT, List<Label>> {
-    private LabelListLateBoundDefault(
+    @AutoCodec.VisibleForSerialization
+    LabelListLateBoundDefault(
         boolean useHostConfiguration,
         Class<FragmentT> fragmentClass,
         Resolver<FragmentT, List<Label>> resolver) {
@@ -1915,6 +1935,7 @@ public final class Attribute implements Comparable<Attribute> {
    * @param transitionFactory the configuration transition for this attribute (which must be of type
    *     LABEL, LABEL_LIST, NODEP_LABEL or NODEP_LABEL_LIST).
    */
+  @VisibleForSerialization
   Attribute(
       String name,
       String doc,
