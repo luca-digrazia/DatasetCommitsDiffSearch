@@ -91,11 +91,6 @@ public class IndicesResource extends RestResource {
     public Response single(@ApiParam(title = "index") @PathParam("index") String index) {
         checkPermission(RestPermissions.INDICES_READ, index);
 
-        if(!deflector.isGraylog2Index(index)) {
-            LOG.info("Index [{}] doesn't look like an index managed by Graylog2.", index);
-            return Response.status(Response.Status.NOT_FOUND).build();
-        }
-
         final ImmutableMap.Builder<String, Object> result = ImmutableMap.builder();
 
         try {
@@ -146,7 +141,7 @@ public class IndicesResource extends RestResource {
                 final IndexMetaData indexMeta = it.next();
 
                 // Only search in our indices.
-                if (!deflector.isGraylog2Index(indexMeta.getIndex())) {
+                if (!indexMeta.getIndex().startsWith(configuration.getElasticSearchIndexPrefix())) {
                     continue;
                 }
                 if (!isPermitted(RestPermissions.INDICES_READ, indexMeta.getIndex())) {
@@ -176,11 +171,6 @@ public class IndicesResource extends RestResource {
     @Produces(MediaType.APPLICATION_JSON)
     public Response reopen(@ApiParam(title = "index") @PathParam("index") String index) {
         checkPermission(RestPermissions.INDICES_CHANGESTATE, index);
-
-        if (!deflector.isGraylog2Index(index)) {
-            LOG.info("Index [{}] doesn't look like an index managed by Graylog2.", index);
-            return Response.status(Response.Status.NOT_FOUND).build();
-        }
 
         // Mark this index as re-opened. It will never be touched by retention.
         final UpdateSettingsRequest settings = new UpdateSettingsRequest(index);
@@ -213,11 +203,6 @@ public class IndicesResource extends RestResource {
     public Response close(@ApiParam(title = "index") @PathParam("index") String index) {
         checkPermission(RestPermissions.INDICES_CHANGESTATE, index);
 
-        if(!deflector.isGraylog2Index(index)) {
-            LOG.info("Index [{}] doesn't look like an index managed by Graylog2.", index);
-            return Response.status(Response.Status.NOT_FOUND).build();
-        }
-
         if (deflector.getCurrentActualTargetIndex(indexer).equals(index)) {
             return Response.status(Response.Status.FORBIDDEN).build();
         }
@@ -247,11 +232,6 @@ public class IndicesResource extends RestResource {
     })
     public Response delete(@ApiParam(title = "index") @PathParam("index") String index) {
         checkPermission(RestPermissions.INDICES_DELETE, index);
-
-        if(!deflector.isGraylog2Index(index)) {
-            LOG.info("Index [{}] doesn't look like an index managed by Graylog2.", index);
-            return Response.status(Response.Status.NOT_FOUND).build();
-        }
 
         if (deflector.getCurrentActualTargetIndex(indexer).equals(index)) {
             return Response.status(Response.Status.FORBIDDEN).build();
