@@ -12,7 +12,6 @@ import org.jboss.jandex.DotName;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.deployment.Capabilities;
-import io.quarkus.deployment.Capability;
 import io.quarkus.deployment.IsDevelopment;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
@@ -32,8 +31,6 @@ import io.quarkus.resteasy.server.common.deployment.ResteasyDeploymentBuildItem;
 import io.quarkus.security.spi.AdditionalSecuredClassesBuildIem;
 import io.quarkus.vertx.http.deployment.HttpRootPathBuildItem;
 import io.quarkus.vertx.http.deployment.devmode.NotFoundPageDisplayableEndpointBuildItem;
-import io.quarkus.vertx.http.deployment.devmode.RouteDescriptionBuildItem;
-import io.quarkus.vertx.http.runtime.devmode.RouteDescription;
 
 public class ResteasyBuiltinsProcessor {
 
@@ -41,7 +38,7 @@ public class ResteasyBuiltinsProcessor {
 
     @BuildStep
     CapabilityBuildItem capability() {
-        return new CapabilityBuildItem(Capability.RESTEASY);
+        return new CapabilityBuildItem(Capabilities.RESTEASY);
     }
 
     @BuildStep
@@ -73,7 +70,7 @@ public class ResteasyBuiltinsProcessor {
         providers.produce(new ResteasyJaxrsProviderBuildItem(UnauthorizedExceptionMapper.class.getName()));
         providers.produce(new ResteasyJaxrsProviderBuildItem(ForbiddenExceptionMapper.class.getName()));
         providers.produce(new ResteasyJaxrsProviderBuildItem(AuthenticationFailedExceptionMapper.class.getName()));
-        if (capabilities.isPresent(Capability.SECURITY)) {
+        if (capabilities.isCapabilityPresent(Capabilities.SECURITY)) {
             providers.produce(new ResteasyJaxrsProviderBuildItem(SecurityContextFilter.class.getName()));
             additionalBeanBuildItem.produce(AdditionalBeanBuildItem.unremovableOf(SecurityContextFilter.class));
         }
@@ -104,21 +101,11 @@ public class ResteasyBuiltinsProcessor {
             ExceptionMapperRecorder recorder, HttpRootPathBuildItem httpRoot) {
         List<String> endpoints = displayableEndpoints
                 .stream()
-                .map(displayableAdditionalBuildItem -> displayableAdditionalBuildItem.getEndpoint())
+                .map(displayableAdditionalBuildItem -> displayableAdditionalBuildItem.getEndpoint()
+                        .substring(1))
                 .sorted()
                 .collect(Collectors.toList());
 
         recorder.setAdditionalEndpoints(endpoints);
-    }
-
-    @Record(STATIC_INIT)
-    @BuildStep(onlyIf = IsDevelopment.class)
-    void addReactiveRoutesExceptionMapper(List<RouteDescriptionBuildItem> routeDescriptions,
-            ExceptionMapperRecorder recorder, HttpRootPathBuildItem httpRoot) {
-        List<RouteDescription> reactiveRoutes = new ArrayList<>();
-        for (RouteDescriptionBuildItem description : routeDescriptions) {
-            reactiveRoutes.add(description.getDescription());
-        }
-        recorder.setReactiveRoutes(reactiveRoutes);
     }
 }
