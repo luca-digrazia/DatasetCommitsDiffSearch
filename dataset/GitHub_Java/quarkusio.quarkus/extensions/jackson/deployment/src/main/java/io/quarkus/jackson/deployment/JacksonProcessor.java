@@ -4,7 +4,6 @@ import static org.jboss.jandex.AnnotationTarget.Kind.CLASS;
 import static org.jboss.jandex.AnnotationTarget.Kind.FIELD;
 import static org.jboss.jandex.AnnotationTarget.Kind.METHOD;
 
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -29,13 +28,11 @@ import com.fasterxml.jackson.databind.module.SimpleModule;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.GeneratedBeanBuildItem;
-import io.quarkus.arc.deployment.GeneratedBeanGizmoAdaptor;
-import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.ReflectiveHierarchyBuildItem;
+import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
+import io.quarkus.deployment.builditem.substrate.ReflectiveHierarchyBuildItem;
 import io.quarkus.gizmo.ClassCreator;
 import io.quarkus.gizmo.ClassOutput;
 import io.quarkus.gizmo.MethodCreator;
@@ -43,7 +40,6 @@ import io.quarkus.gizmo.MethodDescriptor;
 import io.quarkus.gizmo.ResultHandle;
 import io.quarkus.jackson.ObjectMapperCustomizer;
 import io.quarkus.jackson.ObjectMapperProducer;
-import io.quarkus.jackson.spi.ClassPathJacksonModuleBuildItem;
 import io.quarkus.jackson.spi.JacksonModuleBuildItem;
 
 public class JacksonProcessor {
@@ -51,14 +47,6 @@ public class JacksonProcessor {
     private static final DotName JSON_DESERIALIZE = DotName.createSimple(JsonDeserialize.class.getName());
     private static final DotName JSON_SERIALIZE = DotName.createSimple(JsonSerialize.class.getName());
     private static final DotName BUILDER_VOID = DotName.createSimple(Void.class.getName());
-
-    private static final String TIME_MODULE = "com.fasterxml.jackson.datatype.jsr310.JavaTimeModule";
-    private static final String JDK8_MODULE = "com.fasterxml.jackson.datatype.jdk8.Jdk8Module";
-    private static final String PARAMETER_NAMES_MODULE = "com.fasterxml.jackson.module.paramnames.ParameterNamesModule";
-
-    // this list can probably be enriched with more modules
-    private static final List<String> MODULES_NAMES_TO_AUTO_REGISTER = Arrays.asList(TIME_MODULE, JDK8_MODULE,
-            PARAMETER_NAMES_MODULE);
 
     @Inject
     BuildProducer<ReflectiveClassBuildItem> reflectiveClass;
@@ -75,7 +63,7 @@ public class JacksonProcessor {
     @Inject
     List<IgnoreJsonDeserializeClassBuildItem> ignoreJsonDeserializeClassBuildItems;
 
-    @BuildStep(providesCapabilities = Capabilities.JACKSON)
+    @BuildStep
     void register() {
         addReflectiveClass(true, false,
                 "com.fasterxml.jackson.module.jaxb.JaxbAnnotationIntrospector",
@@ -106,11 +94,12 @@ public class JacksonProcessor {
                         addReflectiveHierarchyClass(builderClassName);
                     }
                 }
-            }
-            AnnotationValue usingValue = deserializeInstance.value("using");
-            if (usingValue != null) {
-                // the Deserializers are constructed internally by Jackson using a no-args constructor
-                reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, usingValue.asClass().toString()));
+            } else if (FIELD.equals(annotationTarget.kind()) || METHOD.equals(annotationTarget.kind())) {
+                AnnotationValue usingValue = deserializeInstance.value("using");
+                if (usingValue != null) {
+                    // the Deserializers are constructed internally by Jackson using a no-args constructor
+                    reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, usingValue.asClass().toString()));
+                }
             }
         }
 
@@ -139,32 +128,21 @@ public class JacksonProcessor {
         reflectiveClass.produce(new ReflectiveClassBuildItem(methods, fields, className));
     }
 
-    @BuildStep
-    void autoRegisterModules(BuildProducer<ClassPathJacksonModuleBuildItem> classPathJacksonModules) {
-        for (String module : MODULES_NAMES_TO_AUTO_REGISTER) {
-            registerModuleIfOnClassPath(module, classPathJacksonModules);
-        }
-    }
-
-    private void registerModuleIfOnClassPath(String moduleClassName,
-            BuildProducer<ClassPathJacksonModuleBuildItem> classPathJacksonModules) {
-        try {
-            Class.forName(moduleClassName, false, Thread.currentThread().getContextClassLoader());
-            classPathJacksonModules.produce(new ClassPathJacksonModuleBuildItem(moduleClassName));
-        } catch (Exception ignored) {
-        }
-    }
-
-    // Generate a ObjectMapperCustomizer bean that registers each serializer / deserializer as well as detected modules with the ObjectMapper
+    // Generate a ObjectMapperCustomizer bean that registers each serializer / deserializer with ObjectMapper
     @BuildStep
     void generateCustomizer(BuildProducer<GeneratedBeanBuildItem> generatedBeans,
-            List<JacksonModuleBuildItem> jacksonModules, List<ClassPathJacksonModuleBuildItem> classPathJacksonModules) {
+            List<JacksonModuleBuildItem> jacksonModules) {
 
-        if (jacksonModules.isEmpty() && classPathJacksonModules.isEmpty()) {
+        if (jacksonModules.isEmpty()) {
             return;
         }
 
-        ClassOutput classOutput = new GeneratedBeanGizmoAdaptor(generatedBeans);
+        ClassOutput classOutput = new ClassOutput() {
+            @Override
+            public void write(String name, byte[] data) {
+                generatedBeans.produce(new GeneratedBeanBuildItem(name, data));
+            }
+        };
 
         try (ClassCreator classCreator = ClassCreator.builder().classOutput(classOutput)
                 .className("io.quarkus.jackson.customizer.RegisterSerializersAndDeserializersCustomizer")
@@ -221,20 +199,7 @@ public class JacksonProcessor {
                             objectMapper, module);
                 }
 
-                for (ClassPathJacksonModuleBuildItem classPathJacksonModule : classPathJacksonModules) {
-                    ResultHandle module = customize
-                            .newInstance(MethodDescriptor.ofConstructor(classPathJacksonModule.getModuleClassName()));
-                    customize.invokeVirtualMethod(
-                            MethodDescriptor.ofMethod(ObjectMapper.class, "registerModule", ObjectMapper.class, Module.class),
-                            objectMapper, module);
-                }
-
                 customize.returnValue(null);
-            }
-
-            // ensure that the things we auto-register have the lower priority - this ensures that user registered modules take priority
-            try (MethodCreator priority = classCreator.getMethodCreator("priority", int.class)) {
-                priority.returnValue(priority.load(ObjectMapperCustomizer.MINIMUM_PRIORITY));
             }
         }
     }
