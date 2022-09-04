@@ -16,8 +16,6 @@ public class JerseyClientConfiguration extends HttpClientConfiguration {
 
     private boolean gzipEnabled = true;
 
-    private boolean compressRequestEntity = true;
-
     public int getMinThreads() {
         return minThreads;
     }
@@ -42,22 +40,8 @@ public class JerseyClientConfiguration extends HttpClientConfiguration {
         this.gzipEnabled = enable;
     }
 
-    public boolean isCompressRequestEntity() {
-        return compressRequestEntity;
-    }
-
-    public void setCompressRequestEntity(boolean compressRequestEntity) {
-        this.compressRequestEntity = compressRequestEntity;
-    }
-
     @ValidationMethod(message = ".minThreads must be less than or equal to maxThreads")
     public boolean isThreadPoolSizedCorrectly() {
         return minThreads <= maxThreads;
     }
-    
-    @ValidationMethod(message = ".compressRequestEntity requires gzipEnabled set to true")
-    public boolean isCompressionConfigurationValid() {
-        return compressRequestEntity ? gzipEnabled : true; 
-    }
-    
 }
