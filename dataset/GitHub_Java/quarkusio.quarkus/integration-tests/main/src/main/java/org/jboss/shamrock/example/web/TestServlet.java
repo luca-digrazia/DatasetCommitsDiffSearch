@@ -34,11 +34,8 @@ public class TestServlet extends HttpServlet {
     @ConfigProperty(name = "web-message")
     String configMessage;
 
-    @Inject
-    HttpServletResponse injectedResponse;
-
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
-        injectedResponse.getWriter().write(configMessage);
+        resp.getWriter().write(configMessage);
     }
 }
