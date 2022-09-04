@@ -6,6 +6,7 @@ import java.util.Optional;
 import java.util.Random;
 import java.util.function.Supplier;
 
+import javax.inject.Inject;
 import javax.inject.Singleton;
 
 import org.jboss.logging.Logger;
@@ -41,6 +42,9 @@ class NettyProcessor {
         InternalLoggerFactory.setDefaultFactory(new JBossNettyLoggerFactory());
     }
 
+    @Inject
+    BuildProducer<ReflectiveClassBuildItem> reflectiveClass;
+
     @BuildStep
     public NativeImageSystemPropertyBuildItem limitMem() {
         //in native mode we limit the size of the epoll array
@@ -70,7 +74,7 @@ class NettyProcessor {
     }
 
     @BuildStep
-    NativeImageConfigBuildItem build(BuildProducer<ReflectiveClassBuildItem> reflectiveClass) {
+    NativeImageConfigBuildItem build() {
 
         reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, "io.netty.channel.socket.nio.NioSocketChannel"));
         reflectiveClass

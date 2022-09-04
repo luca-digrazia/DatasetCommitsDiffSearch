@@ -1,6 +1,9 @@
 package io.quarkus.deployment.logging;
 
-import org.jboss.builder.item.MultiBuildItem;
+import java.util.Arrays;
+import java.util.logging.Level;
+
+import io.quarkus.builder.item.MultiBuildItem;
 import io.quarkus.runtime.logging.LogCleanupFilterElement;
 
 /**
@@ -12,11 +15,21 @@ import io.quarkus.runtime.logging.LogCleanupFilterElement;
 public final class LogCleanupFilterBuildItem extends MultiBuildItem {
 
     private LogCleanupFilterElement filterElement;
-    
-    public LogCleanupFilterBuildItem(String loggerName, String messageStart) {
-        this.filterElement = new LogCleanupFilterElement(loggerName, messageStart);
+
+    public LogCleanupFilterBuildItem(String loggerName, String... messageStarts) {
+        if (messageStarts.length == 0) {
+            throw new IllegalArgumentException("messageStarts cannot be null");
+        }
+        this.filterElement = new LogCleanupFilterElement(loggerName, Arrays.asList(messageStarts));
     }
-    
+
+    public LogCleanupFilterBuildItem(String loggerName, Level targetLevel, String... messageStarts) {
+        if (messageStarts.length == 0) {
+            throw new IllegalArgumentException("messageStarts cannot be null");
+        }
+        this.filterElement = new LogCleanupFilterElement(loggerName, targetLevel, Arrays.asList(messageStarts));
+    }
+
     public LogCleanupFilterElement getFilterElement() {
         return filterElement;
     }

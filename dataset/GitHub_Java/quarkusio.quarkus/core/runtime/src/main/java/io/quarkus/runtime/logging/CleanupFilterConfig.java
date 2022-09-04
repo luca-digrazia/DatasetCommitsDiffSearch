@@ -12,11 +12,11 @@ public class CleanupFilterConfig {
      * The message starts to match
      */
     @ConfigItem(defaultValue = "inherit")
-    public List<String> ifStartsWith;
+    List<String> ifStartsWith;
 
     /**
      * The new log level for the filtered message, defaults to DEBUG
      */
     @ConfigItem(defaultValue = "DEBUG")
-    public Level targetLevel;
+    Level targetLevel;
 }
