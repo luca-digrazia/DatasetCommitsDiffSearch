@@ -16,14 +16,11 @@ package com.google.devtools.build.lib.analysis;
 
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.analysis.configuredtargets.InputFileConfiguredTarget;
-import com.google.devtools.build.lib.analysis.configuredtargets.PackageGroupConfiguredTarget;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.RequiredProviders;
-import com.google.devtools.build.lib.skyframe.BuildConfigurationValue;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
@@ -97,25 +94,13 @@ public interface TransitiveInfoCollection extends SkylarkIndexable, SkylarkProvi
    */
   Label getLabel();
 
-  /** Deprecated! Use {@link #getConfigurationKey} instead. */
-  @Deprecated
-  @Nullable
-  BuildConfiguration getConfiguration();
-
   /**
-   * Returns the {@link BuildConfigurationValue.Key} naming the {@link BuildConfiguration} for which
-   * this transitive info collection is defined. Configuration is defined for all configured targets
-   * with exception of {@link InputFileConfiguredTarget} and {@link PackageGroupConfiguredTarget}
-   * for which it is always <b>null</b>.
+   * <p>Returns the {@link BuildConfiguration} for which this transitive info collection is defined.
+   * Configuration is defined for all configured targets with exception of {@link
+   * InputFileConfiguredTarget} and {@link PackageGroupConfiguredTarget} for which it is always
+   * <b>null</b>.</p>
    */
-  @Nullable
-  default BuildConfigurationValue.Key getConfigurationKey() {
-    BuildConfiguration configuration = getConfiguration();
-    return configuration == null
-        ? null
-        : BuildConfigurationValue.key(
-            configuration.fragmentClasses(), configuration.getBuildOptionsDiff());
-  }
+  @Nullable BuildConfiguration getConfiguration();
 
   /**
    * Checks whether this {@link TransitiveInfoCollection} satisfies given {@link RequiredProviders}.
