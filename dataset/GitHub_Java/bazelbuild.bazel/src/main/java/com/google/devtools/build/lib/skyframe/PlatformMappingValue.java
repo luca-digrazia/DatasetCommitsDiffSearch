@@ -210,8 +210,12 @@ public final class PlatformMappingValue implements SkyValue {
     if (!originalOptions.get(PlatformOptions.class).platforms.isEmpty()) {
       List<Label> platforms = originalOptions.get(PlatformOptions.class).platforms;
 
-      // Platform mapping only supports a single target platform, others are ignored.
-      Label targetPlatform = Iterables.getFirst(platforms, null);
+      Preconditions.checkArgument(
+          platforms.size() == 1,
+          "Platform mapping only supports a single target platform but found %s",
+          platforms);
+
+      Label targetPlatform = Iterables.getOnlyElement(platforms);
       if (!platformsToFlags.containsKey(targetPlatform)) {
         // This can happen if the user has set the platform and any other flags that would normally
         // be mapped from it on the command line instead of relying on the mapping.
