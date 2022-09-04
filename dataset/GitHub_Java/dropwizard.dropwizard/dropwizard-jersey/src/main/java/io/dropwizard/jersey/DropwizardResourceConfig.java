@@ -1,5 +1,7 @@
 package io.dropwizard.jersey;
 
+import static java.util.Objects.requireNonNull;
+
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.jersey2.InstrumentedResourceMethodApplicationListener;
 import com.fasterxml.classmate.ResolvedType;
@@ -26,8 +28,6 @@ import org.glassfish.jersey.server.monitoring.RequestEventListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nullable;
-import javax.validation.constraints.NotNull;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -40,8 +40,7 @@ import java.util.TreeSet;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-
-import static java.util.Objects.requireNonNull;
+import javax.annotation.Nullable;
 
 public class DropwizardResourceConfig extends ResourceConfig {
     private static final Logger LOGGER = LoggerFactory.getLogger(DropwizardResourceConfig.class);
@@ -166,39 +165,11 @@ public class DropwizardResourceConfig extends ResourceConfig {
         return PATH_DIRTY_SLASHES.matcher(path).replaceAll("/").trim();
     }
 
-    private static String mergePaths(@NotNull String context, String... pathSegments) {
-        if (pathSegments == null || pathSegments.length == 0) {
-            return cleanUpPath(context);
-        }
-
-        final StringBuilder path = new StringBuilder();
-        if (context.endsWith("/")) {
-            path.append(context, 0, context.length() - 1);
-        } else {
-            path.append(context);
-        }
-
-        for (String segment : pathSegments) {
-            if (Strings.isNullOrEmpty(segment)) {
-                continue;
-            }
-            if ("/".equals(segment)) {
-                path.append('/');
-            } else {
-                final int startIndex = segment.startsWith("/") ? 1 : 0;
-                final int endIndex = segment.endsWith("/") ? segment.length() - 1 : segment.length();
-                path.append('/').append(segment, startIndex, endIndex);
-            }
-        }
-
-        return cleanUpPath(path.toString());
-    }
-
     public static class SpecificBinder extends AbstractBinder {
         private Object object;
-        private Class<?> clazz;
+        private Class clazz;
 
-        public SpecificBinder(Object object, Class<?> clazz) {
+        public SpecificBinder(Object object, Class clazz) {
             this.object = object;
             this.clazz = clazz;
         }
@@ -243,7 +214,7 @@ public class DropwizardResourceConfig extends ResourceConfig {
         private List<Resource> resources = Collections.emptyList();
         private Set<Class<?>> providers = Collections.emptySet();
 
-        ComponentLoggingListener(DropwizardResourceConfig config) {
+        public ComponentLoggingListener(DropwizardResourceConfig config) {
             this.config = config;
         }
 
@@ -274,7 +245,7 @@ public class DropwizardResourceConfig extends ResourceConfig {
                     continue;
                 }
 
-                final String path = mergePaths(contextPath, resource.getPath());
+                final String path = cleanUpPath(contextPath + Strings.nullToEmpty(resource.getPath()));
                 final Class<?> handler = method.getInvocable().getHandler().getHandlerClass();
                 switch (method.getType()) {
                     case RESOURCE_METHOD:
@@ -306,7 +277,7 @@ public class DropwizardResourceConfig extends ResourceConfig {
         private List<EndpointLogLine> logResourceLines(Resource resource, String contextPath) {
             final List<EndpointLogLine> resourceLines = new ArrayList<>();
             for (Resource child : resource.getChildResources()) {
-                resourceLines.addAll(logResourceLines(child, mergePaths(contextPath, resource.getPath())));
+                resourceLines.addAll(logResourceLines(child, cleanUpPath(contextPath + Strings.nullToEmpty(resource.getPath()))));
             }
 
             resourceLines.addAll(logMethodLines(resource, contextPath));
@@ -324,7 +295,7 @@ public class DropwizardResourceConfig extends ResourceConfig {
                     config.getUrlPattern().substring(0, config.getUrlPattern().length() - 1) :
                     config.getUrlPattern();
 
-            final String path = mergePaths(normalizedContextPath, pattern);
+            final String path = cleanUpPath(normalizedContextPath + pattern);
 
             msg.append("The following paths were found for the configured resources:");
             msg.append(NEWLINE).append(NEWLINE);
