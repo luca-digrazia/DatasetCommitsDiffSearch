@@ -139,13 +139,6 @@ public final class SpawnBuilder {
     return withOutput(ActionInputHelper.fromPath(name));
   }
 
-  public SpawnBuilder withOutputs(ActionInput... outputs) {
-    for (ActionInput output : outputs) {
-      withOutput(output);
-    }
-    return this;
-  }
-
   public SpawnBuilder withOutputs(String... names) {
     for (String name : names) {
       this.outputs.add(ActionInputHelper.fromPath(name));
