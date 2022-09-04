@@ -488,7 +488,7 @@ public final class Runfiles implements RunfilesApi {
     }
 
     private PathFragment getExternalPath(PathFragment path) {
-      return checkForWorkspace(path.subFragment(1));
+      return checkForWorkspace(path.relativeTo(LabelConstants.EXTERNAL_PACKAGE_NAME));
     }
 
     private PathFragment checkForWorkspace(PathFragment path) {
@@ -498,8 +498,7 @@ public final class Runfiles implements RunfilesApi {
     }
 
     private static boolean isUnderWorkspace(PathFragment path) {
-      return !path.startsWith(LabelConstants.EXTERNAL_PATH_PREFIX)
-          && !path.startsWith(LabelConstants.EXPERIMENTAL_EXTERNAL_PATH_PREFIX);
+      return !path.startsWith(LabelConstants.EXTERNAL_PACKAGE_NAME);
     }
   }
 

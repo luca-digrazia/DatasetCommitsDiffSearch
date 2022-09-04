@@ -71,17 +71,22 @@ import net.starlark.java.eval.StarlarkThread;
 /** Provides a Starlark interface for all action creation needs. */
 public class StarlarkActionFactory implements StarlarkActionFactoryApi {
   private final StarlarkRuleContext context;
+  private final StarlarkSemantics starlarkSemantics;
+  private RuleContext ruleContext;
   /** Counter for actions.run_shell helper scripts. Every script must have a unique name. */
   private int runShellOutputCounter = 0;
 
-  public StarlarkActionFactory(StarlarkRuleContext context) {
+  public StarlarkActionFactory(
+      StarlarkRuleContext context, StarlarkSemantics starlarkSemantics, RuleContext ruleContext) {
     this.context = context;
+    this.starlarkSemantics = starlarkSemantics;
+    this.ruleContext = ruleContext;
   }
 
   ArtifactRoot newFileRoot() {
     return context.isForAspect()
-        ? getRuleContext().getBinDirectory()
-        : getRuleContext().getBinOrGenfilesDirectory();
+        ? ruleContext.getBinDirectory()
+        : ruleContext.getBinOrGenfilesDirectory();
   }
 
   /**
@@ -96,7 +101,7 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
 
       @Override
       public void registerAction(ActionAnalysisMetadata... actions) {
-        getRuleContext().registerAction(actions);
+        ruleContext.registerAction(actions);
       }
 
       @Override
@@ -112,7 +117,6 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
   @Override
   public Artifact declareFile(String filename, Object sibling) throws EvalException {
     context.checkMutable("actions.declare_file");
-    RuleContext ruleContext = getRuleContext();
 
     PathFragment fragment;
     if (Starlark.NONE.equals(sibling)) {
@@ -121,7 +125,7 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
       PathFragment original =
           ((Artifact) sibling)
               .getOutputDirRelativePath(
-                  getSemantics().getBool(EXPERIMENTAL_SIBLING_REPOSITORY_LAYOUT));
+                  starlarkSemantics.getBool(EXPERIMENTAL_SIBLING_REPOSITORY_LAYOUT));
       fragment = original.replaceName(filename);
     }
 
@@ -136,7 +140,6 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
   @Override
   public Artifact declareDirectory(String filename, Object sibling) throws EvalException {
     context.checkMutable("actions.declare_directory");
-    RuleContext ruleContext = getRuleContext();
     PathFragment fragment;
 
     if (Starlark.NONE.equals(sibling)) {
@@ -145,7 +148,7 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
       PathFragment original =
           ((Artifact) sibling)
               .getOutputDirRelativePath(
-                  getSemantics().getBool(EXPERIMENTAL_SIBLING_REPOSITORY_LAYOUT));
+                  starlarkSemantics.getBool(EXPERIMENTAL_SIBLING_REPOSITORY_LAYOUT));
       fragment = original.replaceName(filename);
     }
 
@@ -166,7 +169,6 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
   @Override
   public Artifact declareSymlink(String filename, Object sibling) throws EvalException {
     context.checkMutable("actions.declare_symlink");
-    RuleContext ruleContext = getRuleContext();
 
     if (!ruleContext.getConfiguration().allowUnresolvedSymlinks()) {
       throw Starlark.errorf(
@@ -182,7 +184,7 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
       PathFragment original =
           ((Artifact) sibling)
               .getOutputDirRelativePath(
-                  getSemantics().getBool(EXPERIMENTAL_SIBLING_REPOSITORY_LAYOUT));
+                  starlarkSemantics.getBool(EXPERIMENTAL_SIBLING_REPOSITORY_LAYOUT));
       rootRelativePath = original.replaceName(filename);
     }
 
@@ -200,8 +202,6 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
   @Override
   public void doNothing(String mnemonic, Object inputs) throws EvalException {
     context.checkMutable("actions.do_nothing");
-    RuleContext ruleContext = getRuleContext();
-
     NestedSet<Artifact> inputSet =
         inputs instanceof Depset
             ? Depset.cast(inputs, Artifact.class, "inputs")
@@ -235,7 +235,6 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
       Object /* String or None */ progressMessageUnchecked)
       throws EvalException {
     context.checkMutable("actions.symlink");
-    RuleContext ruleContext = getRuleContext();
 
     if ((targetFile == Starlark.NONE) == (targetPath == Starlark.NONE)) {
       throw Starlark.errorf("Exactly one of \"target_file\" and \"target_path\" is required");
@@ -302,8 +301,6 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
   @Override
   public void write(FileApi output, Object content, Boolean isExecutable) throws EvalException {
     context.checkMutable("actions.write");
-    RuleContext ruleContext = getRuleContext();
-
     final Action action;
     if (content instanceof String) {
       action =
@@ -376,7 +373,7 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
   }
 
   private void validateActionCreation() throws EvalException {
-    if (getRuleContext().getRule().isAnalysisTest()) {
+    if (ruleContext.getRule().isAnalysisTest()) {
       throw Starlark.errorf(
           "implementation function of a rule with "
               + "analysis_test=true may not register actions. Analysis test rules may only return "
@@ -392,7 +389,7 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
    */
   public void registerAction(ActionAnalysisMetadata... actions) throws EvalException {
     validateActionCreation();
-    getRuleContext().registerAction(actions);
+    ruleContext.registerAction(actions);
   }
 
   /**
@@ -400,15 +397,11 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
    * #registerAction(ActionAnalysisMetadata...)}.
    */
   public ActionConstructionContext getActionConstructionContext() {
-    return context.getRuleContext();
+    return ruleContext;
   }
 
   public RuleContext getRuleContext() {
-    return context.getRuleContext();
-  }
-
-  private StarlarkSemantics getSemantics() {
-    return context.getStarlarkSemantics();
+    return ruleContext;
   }
 
   @Override
@@ -424,10 +417,10 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
       Object envUnchecked,
       Object executionRequirementsUnchecked,
       Object inputManifestsUnchecked,
-      Object execGroupUnchecked)
+      Object execGroupUnchecked,
+      StarlarkThread thread)
       throws EvalException {
     context.checkMutable("actions.run_shell");
-    RuleContext ruleContext = getRuleContext();
 
     Sequence<?> argumentList = (Sequence) arguments;
     StarlarkAction.Builder builder = new StarlarkAction.Builder();
@@ -455,11 +448,13 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
         }
       }
     } else if (commandUnchecked instanceof Sequence) {
-      if (getSemantics().getBool(BuildLanguageOptions.INCOMPATIBLE_RUN_SHELL_COMMAND_STRING)) {
+      if (thread
+          .getSemantics()
+          .getBool(BuildLanguageOptions.INCOMPATIBLE_RUN_SHELL_COMMAND_STRING)) {
         throw Starlark.errorf(
             "'command' must be of type string. passing a sequence of strings as 'command'"
                 + " is deprecated. To temporarily disable this check,"
-                + " set --incompatible_run_shell_command_string=false.");
+                + " set --incompatible_objc_framework_cleanup=false.");
       }
       Sequence<?> commandList = (Sequence) commandUnchecked;
       if (argumentList.size() > 0) {
@@ -607,13 +602,11 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
       builder.useDefaultShellEnvironment();
     }
 
-    RuleContext ruleContext = getRuleContext();
-
     ImmutableMap<String, String> executionInfo =
         TargetUtils.getFilteredExecutionInfo(
             executionRequirementsUnchecked,
             ruleContext.getRule(),
-            getSemantics().getBool(BuildLanguageOptions.EXPERIMENTAL_ALLOW_TAGS_PROPAGATION));
+            starlarkSemantics.getBool(BuildLanguageOptions.EXPERIMENTAL_ALLOW_TAGS_PROPAGATION));
     builder.setExecutionInfo(executionInfo);
 
     if (inputManifestsUnchecked != Starlark.NONE) {
@@ -638,7 +631,7 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
 
   private String getMnemonic(Object mnemonicUnchecked) {
     String mnemonic = mnemonicUnchecked == Starlark.NONE ? "Action" : (String) mnemonicUnchecked;
-    if (getRuleContext().getConfiguration().getReservedActionMnemonics().contains(mnemonic)) {
+    if (ruleContext.getConfiguration().getReservedActionMnemonics().contains(mnemonic)) {
       mnemonic = mangleMnemonic(mnemonic);
     }
     return mnemonic;
@@ -665,7 +658,7 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
     }
     TemplateExpansionAction action =
         new TemplateExpansionAction(
-            getRuleContext().getActionOwner(),
+            ruleContext.getActionOwner(),
             (Artifact) template,
             (Artifact) output,
             substitutionsBuilder.build(),
@@ -685,7 +678,7 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
 
   @Override
   public Args args(StarlarkThread thread) {
-    return Args.newArgs(thread.mutability(), getSemantics());
+    return Args.newArgs(thread.mutability(), thread.getSemantics());
   }
 
   @Override
@@ -697,5 +690,9 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
   public void repr(Printer printer) {
     printer.append("actions for");
     context.repr(printer);
+  }
+
+  void nullify() {
+    ruleContext = null;
   }
 }

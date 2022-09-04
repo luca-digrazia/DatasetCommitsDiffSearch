@@ -31,6 +31,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.packages.Type;
+import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -446,7 +447,11 @@ public class ProtoCommon {
               .getLabel()
               .getPackageIdentifier()
               .getRepository()
-              .getExecPath(ruleContext.getConfiguration().isSiblingRepositoryLayout())
+              .getExecPath(
+                  ruleContext
+                      .getAnalysisEnvironment()
+                      .getStarlarkSemantics()
+                      .getBool(BuildLanguageOptions.EXPERIMENTAL_SIBLING_REPOSITORY_LAYOUT))
               .getPathString();
       library =
           createLibraryWithoutVirtualSourceRoot(contextProtoSourceRoot, originalDirectProtoSources);
@@ -525,12 +530,17 @@ public class ProtoCommon {
       RuleContext ruleContext,
       ImmutableList<Artifact> protoSources,
       String extension,
-      boolean pythonNames) {
+      boolean pythonNames)
+      throws InterruptedException {
     ImmutableList.Builder<Artifact> outputsBuilder = new ImmutableList.Builder<>();
     ArtifactRoot genfiles = ruleContext.getGenfilesDirectory();
     for (Artifact src : protoSources) {
       PathFragment srcPath =
-          src.getOutputDirRelativePath(ruleContext.getConfiguration().isSiblingRepositoryLayout());
+          src.getOutputDirRelativePath(
+              ruleContext
+                  .getAnalysisEnvironment()
+                  .getStarlarkSemantics()
+                  .getBool(BuildLanguageOptions.EXPERIMENTAL_SIBLING_REPOSITORY_LAYOUT));
       if (pythonNames) {
         srcPath = srcPath.replaceName(srcPath.getBaseName().replace('-', '_'));
       }
@@ -552,7 +562,8 @@ public class ProtoCommon {
    *     ".pb.cc".
    */
   public static ImmutableList<Artifact> getGeneratedOutputs(
-      RuleContext ruleContext, ImmutableList<Artifact> protoSources, String extension) {
+      RuleContext ruleContext, ImmutableList<Artifact> protoSources, String extension)
+      throws InterruptedException {
     return getGeneratedOutputs(ruleContext, protoSources, extension, false);
   }
 

@@ -42,6 +42,7 @@ import com.google.devtools.build.lib.packages.Attribute.LabelLateBoundDefault;
 import com.google.devtools.build.lib.packages.NativeAspectClass;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.packages.TargetUtils;
+import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
 import com.google.devtools.build.lib.rules.cpp.AspectLegalCppSemantics;
 import com.google.devtools.build.lib.rules.cpp.CcCommon;
 import com.google.devtools.build.lib.rules.cpp.CcCompilationHelper;
@@ -344,7 +345,11 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
               .getLabel()
               .getPackageIdentifier()
               .getRepository()
-              .getExecPath(ruleContext.getConfiguration().isSiblingRepositoryLayout());
+              .getExecPath(
+                  ruleContext
+                      .getAnalysisEnvironment()
+                      .getStarlarkSemantics()
+                      .getBool(BuildLanguageOptions.EXPERIMENTAL_SIBLING_REPOSITORY_LAYOUT));
       if (protoRoot.equals(".") || protoRoot.equals(repositoryRoot.getPathString())) {
         return helper;
       }
@@ -359,7 +364,11 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
               .getLabel()
               .getPackageIdentifier()
               .getRepository()
-              .getExecPath(ruleContext.getConfiguration().isSiblingRepositoryLayout());
+              .getExecPath(
+                  ruleContext
+                      .getAnalysisEnvironment()
+                      .getStarlarkSemantics()
+                      .getBool(BuildLanguageOptions.EXPERIMENTAL_SIBLING_REPOSITORY_LAYOUT));
       if (protoRootFragment.startsWith(repositoryPath)) {
         protoRootFragment = protoRootFragment.relativeTo(repositoryPath);
       }
@@ -408,7 +417,8 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
           ccToolchainType);
     }
 
-    private ImmutableSet<Artifact> getOutputFiles(Iterable<String> suffixes) {
+    private ImmutableSet<Artifact> getOutputFiles(Iterable<String> suffixes)
+        throws InterruptedException {
       ImmutableSet.Builder<Artifact> result = ImmutableSet.builder();
       for (String suffix : suffixes) {
         result.addAll(
@@ -444,7 +454,8 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
       helper.addAdditionalExportedHeaders(headers.build());
     }
 
-    private void createProtoCompileAction(Collection<Artifact> outputs) {
+    private void createProtoCompileAction(Collection<Artifact> outputs)
+        throws InterruptedException {
       PathFragment protoRootFragment = PathFragment.create(protoInfo.getDirectProtoSourceRoot());
       String genfilesPath;
       PathFragment genfilesFragment = ruleContext.getGenfilesFragment();
