@@ -266,10 +266,10 @@ public class SharedPrefHandler extends BaseGeneratingAnnotationHandler<SharedPre
 			defaultValueExpr = extractResValue(holder, method, resType);
 			annotationClass = DefaultRes.class;
 		} else if (method.getAnnotation(DefaultStringSet.class) != null) {
-			defaultValueExpr = newEmptyStringHashSet();
+			defaultValueExpr = JExpr._null();
 			annotationClass = DefaultStringSet.class;
 		} else {
-			defaultValueExpr = defaultValue != null ? aptCodeModelHelper.litObject(defaultValue) : newEmptyStringHashSet();
+			defaultValueExpr = defaultValue != null ? aptCodeModelHelper.litObject(defaultValue) : JExpr._null();
 			annotationClass = null;
 		}
 
@@ -312,10 +312,6 @@ public class SharedPrefHandler extends BaseGeneratingAnnotationHandler<SharedPre
 			break;
 		}
 		return holder.getContextField().invoke("getResources").invoke(resourceGetMethodName).arg(idRef);
-	}
-
-	private JExpression newEmptyStringHashSet() {
-		return JExpr._new(classes().HASH_SET.narrow(classes().STRING)).arg(lit(0));
 	}
 
 }
