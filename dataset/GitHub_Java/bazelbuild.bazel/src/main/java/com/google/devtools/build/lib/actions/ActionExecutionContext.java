@@ -14,18 +14,17 @@
 
 package com.google.devtools.build.lib.actions;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
 import com.google.devtools.build.lib.actions.cache.MetadataHandler;
-import com.google.devtools.build.lib.clock.Clock;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.EventKind;
+import com.google.devtools.build.lib.util.Clock;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.io.FileOutErr;
-import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
@@ -43,7 +42,6 @@ public class ActionExecutionContext implements Closeable {
   private final Executor executor;
   private final ActionInputFileCache actionInputFileCache;
   private final ActionInputPrefetcher actionInputPrefetcher;
-  private final ActionKeyContext actionKeyContext;
   private final MetadataHandler metadataHandler;
   private final FileOutErr fileOutErr;
   private final ImmutableMap<String, String> clientEnv;
@@ -55,7 +53,6 @@ public class ActionExecutionContext implements Closeable {
       Executor executor,
       ActionInputFileCache actionInputFileCache,
       ActionInputPrefetcher actionInputPrefetcher,
-      ActionKeyContext actionKeyContext,
       MetadataHandler metadataHandler,
       FileOutErr fileOutErr,
       Map<String, String> clientEnv,
@@ -63,7 +60,6 @@ public class ActionExecutionContext implements Closeable {
       @Nullable SkyFunction.Environment env) {
     this.actionInputFileCache = actionInputFileCache;
     this.actionInputPrefetcher = actionInputPrefetcher;
-    this.actionKeyContext = actionKeyContext;
     this.metadataHandler = metadataHandler;
     this.fileOutErr = fileOutErr;
     this.clientEnv = ImmutableMap.copyOf(clientEnv);
@@ -76,7 +72,6 @@ public class ActionExecutionContext implements Closeable {
       Executor executor,
       ActionInputFileCache actionInputFileCache,
       ActionInputPrefetcher actionInputPrefetcher,
-      ActionKeyContext actionKeyContext,
       MetadataHandler metadataHandler,
       FileOutErr fileOutErr,
       Map<String, String> clientEnv,
@@ -85,7 +80,6 @@ public class ActionExecutionContext implements Closeable {
         executor,
         actionInputFileCache,
         actionInputPrefetcher,
-        actionKeyContext,
         metadataHandler,
         fileOutErr,
         clientEnv,
@@ -97,7 +91,6 @@ public class ActionExecutionContext implements Closeable {
       Executor executor,
       ActionInputFileCache actionInputFileCache,
       ActionInputPrefetcher actionInputPrefetcher,
-      ActionKeyContext actionKeyContext,
       MetadataHandler metadataHandler,
       FileOutErr fileOutErr,
       Map<String, String> clientEnv,
@@ -106,7 +99,6 @@ public class ActionExecutionContext implements Closeable {
         executor,
         actionInputFileCache,
         actionInputPrefetcher,
-        actionKeyContext,
         metadataHandler,
         fileOutErr,
         clientEnv,
@@ -126,28 +118,8 @@ public class ActionExecutionContext implements Closeable {
     return metadataHandler;
   }
 
-  public FileSystem getFileSystem() {
-    return executor.getFileSystem();
-  }
-
   public Path getExecRoot() {
     return executor.getExecRoot();
-  }
-
-  /**
-   * Returns the path for an ActionInput.
-   *
-   * <p>Notably, in the future, we want any action-scoped artifacts to resolve paths using this
-   * method instead of {@link Artifact#getPath} because that does not allow filesystem injection.
-   *
-   * <p>TODO(shahan): cleanup {@link Action}-scoped references to {@link Artifact.getPath}.
-   */
-  public Path getInputPath(ActionInput input) {
-    if (input instanceof Artifact) {
-      // TODO(shahan): replace this with actual logic once we understand what it is.
-      return ((Artifact) input).getPath();
-    }
-    return executor.getExecRoot().getRelative(input.getExecPath());
   }
 
   /**
@@ -239,10 +211,6 @@ public class ActionExecutionContext implements Closeable {
     return Preconditions.checkNotNull(env);
   }
 
-  public ActionKeyContext getActionKeyContext() {
-    return actionKeyContext;
-  }
-
   @Override
   public void close() throws IOException {
     fileOutErr.close();
@@ -257,7 +225,6 @@ public class ActionExecutionContext implements Closeable {
         executor,
         actionInputFileCache,
         actionInputPrefetcher,
-        actionKeyContext,
         metadataHandler,
         fileOutErr,
         clientEnv,

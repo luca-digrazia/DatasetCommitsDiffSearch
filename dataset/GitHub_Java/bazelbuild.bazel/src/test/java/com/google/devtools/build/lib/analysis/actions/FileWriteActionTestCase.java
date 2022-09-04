@@ -34,7 +34,6 @@ import com.google.devtools.build.lib.vfs.Path;
 import java.util.Collection;
 import org.junit.Before;
 
-/** Test cases for {@link FileWriteAction}. */
 public abstract class FileWriteActionTestCase extends BuildViewTestCase {
 
   private Action action;

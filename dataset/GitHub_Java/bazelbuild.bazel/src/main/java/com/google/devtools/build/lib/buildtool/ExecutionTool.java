@@ -229,7 +229,7 @@ public class ExecutionTool {
         
     this.actionContextProviders = builder.getActionContextProviders();
     for (ActionContextProvider provider : actionContextProviders) {
-      provider.init(fileCache);
+      provider.init(fileCache, prefetcher);
     }
 
     StrategyConverter strategyConverter = new StrategyConverter(actionContextProviders);
@@ -430,7 +430,6 @@ public class ExecutionTool {
           analysisResult.getParallelTests(),
           analysisResult.getExclusiveTests(),
           analysisResult.getTargetsToBuild(),
-          analysisResult.getTargetsToSkip(),
           analysisResult.getAspects(),
           executor,
           builtTargets,
@@ -468,10 +467,9 @@ public class ExecutionTool {
       try (AutoProfiler p = AutoProfiler.profiled("Show results", ProfilerTask.INFO)) {
         buildResult.setSuccessfulTargets(
             determineSuccessfulTargets(configuredTargets, builtTargets, timer));
-        buildResult.setSkippedTargets(analysisResult.getTargetsToSkip());
         BuildResultPrinter buildResultPrinter = new BuildResultPrinter(env);
-        buildResultPrinter.showBuildResult(request, buildResult, configuredTargets,
-            analysisResult.getTargetsToSkip(), analysisResult.getAspects());
+        buildResultPrinter.showBuildResult(
+            request, buildResult, configuredTargets, analysisResult.getAspects());
       }
 
       try (AutoProfiler p = AutoProfiler.profiled("Show artifacts", ProfilerTask.INFO)) {

@@ -40,9 +40,7 @@ import com.google.devtools.build.lib.exec.ActionContextProvider;
 import com.google.devtools.build.lib.exec.BlazeExecutor;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.exec.SingleBuildFileCache;
-import com.google.devtools.build.lib.exec.local.LocalEnvProvider;
 import com.google.devtools.build.lib.exec.local.LocalExecutionOptions;
-import com.google.devtools.build.lib.exec.local.LocalSpawnRunner;
 import com.google.devtools.build.lib.integration.util.IntegrationMock;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.testutil.TestUtils;
@@ -130,12 +128,8 @@ public class StandaloneSpawnStrategyTest {
             ImmutableMap.<String, SpawnActionContext>of(
                 "",
                 new StandaloneSpawnStrategy(
-                    new LocalSpawnRunner(
-                        execRoot,
-                        localExecutionOptions,
-                        resourceManager,
-                        "mock-product-name",
-                        LocalEnvProvider.UNMODIFIED))),
+                    execRoot, localExecutionOptions, /*verboseFailures=*/false, "mock-product-name",
+                    resourceManager)),
             ImmutableList.<ActionContextProvider>of());
 
     executor.getExecRoot().createDirectory();

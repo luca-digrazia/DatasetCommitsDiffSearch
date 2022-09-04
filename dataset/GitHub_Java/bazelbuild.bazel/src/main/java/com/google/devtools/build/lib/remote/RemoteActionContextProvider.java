@@ -17,6 +17,8 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.ActionContext;
+import com.google.devtools.build.lib.actions.ActionInputFileCache;
+import com.google.devtools.build.lib.actions.ActionInputPrefetcher;
 import com.google.devtools.build.lib.actions.ResourceManager;
 import com.google.devtools.build.lib.exec.ActionContextProvider;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
@@ -38,6 +40,7 @@ final class RemoteActionContextProvider extends ActionContextProvider {
   private final GrpcRemoteExecutor executor;
 
   private RemoteSpawnRunner spawnRunner;
+  private RemoteSpawnStrategy spawnStrategy;
 
   RemoteActionContextProvider(CommandEnvironment env, @Nullable RemoteActionCache cache,
       @Nullable GrpcRemoteExecutor executor) {
@@ -47,7 +50,8 @@ final class RemoteActionContextProvider extends ActionContextProvider {
   }
 
   @Override
-  public Iterable<? extends ActionContext> getActionContexts() {
+  public void init(
+      ActionInputFileCache actionInputFileCache, ActionInputPrefetcher actionInputPrefetcher) {
     ExecutionOptions executionOptions =
         checkNotNull(env.getOptions().getOptions(ExecutionOptions.class));
     RemoteOptions remoteOptions = checkNotNull(env.getOptions().getOptions(RemoteOptions.class));
@@ -55,17 +59,16 @@ final class RemoteActionContextProvider extends ActionContextProvider {
     spawnRunner = new RemoteSpawnRunner(
         env.getExecRoot(),
         remoteOptions,
-        createFallbackRunner(env),
+        createFallbackRunner(),
         cache,
         executor);
-    RemoteSpawnStrategy spawnStrategy =
+    spawnStrategy =
         new RemoteSpawnStrategy(
             spawnRunner,
             executionOptions.verboseFailures);
-    return ImmutableList.of(checkNotNull(spawnStrategy));
   }
 
-  private static SpawnRunner createFallbackRunner(CommandEnvironment env) {
+  private SpawnRunner createFallbackRunner() {
     LocalExecutionOptions localExecutionOptions =
         env.getOptions().getOptions(LocalExecutionOptions.class);
     LocalEnvProvider localEnvProvider = OS.getCurrent() == OS.DARWIN
@@ -81,10 +84,16 @@ final class RemoteActionContextProvider extends ActionContextProvider {
   }
 
   @Override
+  public Iterable<? extends ActionContext> getActionContexts() {
+    return ImmutableList.of(checkNotNull(spawnStrategy));
+  }
+
+  @Override
   public void executionPhaseEnding() {
     if (spawnRunner != null) {
       spawnRunner.close();
     }
     spawnRunner = null;
+    spawnStrategy = null;
   }
 }
