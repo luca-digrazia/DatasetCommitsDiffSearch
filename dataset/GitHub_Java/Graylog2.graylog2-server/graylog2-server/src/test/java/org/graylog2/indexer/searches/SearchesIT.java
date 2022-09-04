@@ -31,7 +31,6 @@ import org.graylog2.ElasticsearchBase;
 import org.graylog2.buffers.processors.fakestreams.FakeStream;
 import org.graylog2.indexer.IndexHelper;
 import org.graylog2.indexer.IndexSet;
-import org.graylog2.indexer.IndexSetRegistry;
 import org.graylog2.indexer.TestIndexSet;
 import org.graylog2.indexer.indexset.IndexSetConfig;
 import org.graylog2.indexer.indices.Indices;
@@ -91,7 +90,8 @@ public class SearchesIT extends ElasticsearchBase {
 
     private static final String INDEX_NAME = "graylog_0";
     private static final String STREAM_ID = "000000000000000000000001";
-    private static final ImmutableSortedSet<IndexRange> INDEX_RANGES = ImmutableSortedSet.orderedBy(new IndexRangeComparator())
+    private static final SortedSet<IndexRange> INDEX_RANGES = ImmutableSortedSet
+            .orderedBy(new IndexRangeComparator())
             .add(new IndexRange() {
                 @Override
                 public String indexName() {
@@ -152,9 +152,6 @@ public class SearchesIT extends ElasticsearchBase {
     @Mock
     private Indices indices;
 
-    @Mock
-    private IndexSetRegistry indexSetRegistry;
-
     private MetricRegistry metricRegistry;
     private Searches searches;
 
@@ -177,7 +174,6 @@ public class SearchesIT extends ElasticsearchBase {
             metricRegistry,
             streamService,
             indices,
-            indexSetRegistry,
             client(),
             new ScrollResult.Factory() {
                 @Override
@@ -683,10 +679,11 @@ public class SearchesIT extends ElasticsearchBase {
         final DateTime to = from.plusHours(1);
         final TimeRange timeRange = AbsoluteRange.create(from, to);
         final RangeQueryBuilder queryBuilder = (RangeQueryBuilder) IndexHelper.getTimestampRangeFilter(timeRange);
-        assertThat(queryBuilder).isNotNull();
-        assertThat(queryBuilder.fieldName()).isEqualTo("timestamp");
-        assertThat(queryBuilder.from()).isEqualTo(Tools.buildElasticSearchTimeFormat(from));
-        assertThat(queryBuilder.to()).isEqualTo(Tools.buildElasticSearchTimeFormat(to));
+        assertThat(queryBuilder)
+                .isNotNull()
+                .hasFieldOrPropertyWithValue("name", "timestamp")
+                .hasFieldOrPropertyWithValue("from", Tools.buildElasticSearchTimeFormat(from))
+                .hasFieldOrPropertyWithValue("to", Tools.buildElasticSearchTimeFormat(to));
     }
 
     @Test
@@ -769,23 +766,5 @@ public class SearchesIT extends ElasticsearchBase {
         assertThat(searchResult).isNotNull();
         assertThat(searchResult.getResults()).hasSize(1);
         assertThat(searchResult.getTotalResults()).isEqualTo(10L);
-    }
-
-    @Test
-    @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
-    public void scrollReturnsResultWithSelectiveFields() throws Exception {
-        when(indexSetRegistry.getForIndices(Collections.singleton("graylog_0"))).thenReturn(Collections.singleton(indexSet));
-        final AbsoluteRange range = AbsoluteRange.create(new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC).withZone(UTC), new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC).withZone(UTC));
-        final ScrollResult scrollResult = searches.scroll("*", range, 5, 0, Collections.singletonList("source"), null);
-
-        assertThat(scrollResult).isNotNull();
-        assertThat(scrollResult.getQueryHash()).isNotEmpty();
-        assertThat(scrollResult.totalHits()).isEqualTo(10L);
-
-        final ScrollResult.ScrollChunk firstChunk = scrollResult.nextChunk();
-        assertThat(firstChunk).isNotNull();
-        assertThat(firstChunk.getMessages()).hasSize(5);
-        assertThat(firstChunk.isFirstChunk()).isTrue();
-        assertThat(firstChunk.getFields()).containsExactly("source");
     }
 }
