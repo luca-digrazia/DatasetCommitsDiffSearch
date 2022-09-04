@@ -205,31 +205,18 @@ public final class DataBinding {
     if (DataBinding.isEnabled(ruleContext)) {
       dataBindingMetadataOutputs.addAll(getMetadataOutputs(ruleContext));
     }
-    dataBindingMetadataOutputs.addAll(getTransitiveMetadata(ruleContext, "exports"));
-    if (!LocalResourceContainer.definesAndroidResources(ruleContext.attributes())) {
-      // If this rule doesn't declare direct resources, no resource processing is run so no data
-      // binding outputs are produced. In that case, we need to explicitly propagate data binding
-      // outputs from the deps to make sure they continue up the build graph.
-      dataBindingMetadataOutputs.addAll(getTransitiveMetadata(ruleContext, "deps"));
-    }
-    if (!dataBindingMetadataOutputs.isEmpty()) {
-      builder.addProvider(UsesDataBindingProvider.class,
-          new UsesDataBindingProvider(dataBindingMetadataOutputs));
-    }
-  }
-
-  /**
-   * Returns the data binding resource processing output from deps under the given attribute.
-   */
-  private static List<Artifact> getTransitiveMetadata(RuleContext ruleContext, String attr) {
-    ImmutableList.Builder<Artifact> dataBindingMetadataOutputs = ImmutableList.builder();
-    if (ruleContext.attributes().has(attr, BuildType.LABEL_LIST)) {
-      for (UsesDataBindingProvider provider : ruleContext.getPrerequisites(attr,
+    if (ruleContext.attributes().has("exports", BuildType.LABEL_LIST)) {
+      for (UsesDataBindingProvider provider : ruleContext.getPrerequisites("exports",
           RuleConfiguredTarget.Mode.TARGET, UsesDataBindingProvider.class)) {
         dataBindingMetadataOutputs.addAll(provider.getMetadataOutputs());
       }
     }
-    return dataBindingMetadataOutputs.build();
+    if (!dataBindingMetadataOutputs.isEmpty()) {
+      // QUESTION(gregce): does a rule need to propagate the metadata outputs of its deps, or do
+      // they get integrated automatically into its own outputs?
+      builder.addProvider(UsesDataBindingProvider.class,
+          new UsesDataBindingProvider(dataBindingMetadataOutputs));
+    }
   }
 
   /**
@@ -248,11 +235,6 @@ public final class DataBinding {
    * jar, even though (due to resource merging) both modules compile against their own instances.
    */
   public static List<Artifact> getMetadataOutputs(RuleContext ruleContext) {
-    if (!LocalResourceContainer.definesAndroidResources(ruleContext.attributes())) {
-      // If this rule doesn't define local resources, no resource processing was done, so it
-      // doesn't produce data binding output.
-      return ImmutableList.<Artifact>of();
-    }
     ImmutableList.Builder<Artifact> outputs = ImmutableList.<Artifact>builder();
     String javaPackage = AndroidCommon.getJavaPackage(ruleContext);
     Label ruleLabel = ruleContext.getRule().getLabel();
@@ -281,12 +263,13 @@ public final class DataBinding {
   static ImmutableList<Artifact> processDeps(RuleContext ruleContext,
       JavaTargetAttributes.Builder attributes) {
     ImmutableList.Builder<Artifact> dataBindingJavaInputs = ImmutableList.<Artifact>builder();
-    if (LocalResourceContainer.definesAndroidResources(ruleContext.attributes())) {
-      dataBindingJavaInputs.add(DataBinding.getLayoutInfoFile(ruleContext));
-    }
-    for (Artifact dataBindingDepMetadata : getTransitiveMetadata(ruleContext, "deps")) {
-      attributes.addProcessorPathDir(dataBindingDepMetadata.getExecPath().getParentDirectory());
-      dataBindingJavaInputs.add(dataBindingDepMetadata);
+    dataBindingJavaInputs.add(DataBinding.getLayoutInfoFile(ruleContext));
+    for (UsesDataBindingProvider p : ruleContext.getPrerequisites("deps",
+        RuleConfiguredTarget.Mode.TARGET, UsesDataBindingProvider.class)) {
+      for (Artifact dataBindingDepMetadata : p.getMetadataOutputs()) {
+        attributes.addProcessorPathDir(dataBindingDepMetadata.getExecPath().getParentDirectory());
+        dataBindingJavaInputs.add(dataBindingDepMetadata);
+      }
     }
     return dataBindingJavaInputs.build();
   }
