@@ -6,6 +6,7 @@ import com.google.inject.assistedinject.AssistedInject;
 import org.graylog.plugins.cef.parser.CEFMessage;
 import org.graylog.plugins.cef.parser.CEFParser;
 import org.graylog2.plugin.Message;
+import org.graylog2.plugin.ResolvableInetSocketAddress;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
 import org.graylog2.plugin.configuration.fields.ConfigurationField;
@@ -21,28 +22,32 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.net.InetSocketAddress;
 
-public class CEFCodec extends BaseCEFCodec {
+public class CEFCodec implements Codec {
+
     public static final String NAME = "CEF";
 
     private static final Logger LOG = LoggerFactory.getLogger(CEFCodec.class);
+
     private static final String CK_TIMEZONE = "timezone";
 
+    private final Configuration configuration;
     private final CEFParser parser;
 
     @AssistedInject
     public CEFCodec(@Assisted Configuration configuration) {
-        super(configuration);
+        this.configuration = configuration;
 
         DateTimeZone timezone;
         try {
             timezone = DateTimeZone.forID(configuration.getString(CK_TIMEZONE));
-        } catch (Exception e) {
+        } catch(Exception e) {
             LOG.warn("Could not configure CEF input timezone. Falling back to local default. Please check the error message:", e);
             timezone = DateTimeZone.getDefault();
         }
 
-        this.parser = new CEFParser();
+        this.parser = new CEFParser(timezone);
     }
 
     @Nullable
@@ -51,7 +56,7 @@ public class CEFCodec extends BaseCEFCodec {
         try {
             // CEF standard says all messages are UTF-8 so I trust that.
             String s = new String(rawMessage.getPayload(), Charsets.UTF_8);
-            CEFMessage cef = parser.parse(s).build();
+            CEFMessage cef = parser.parse(s);
 
             // Build standard message.
             Message result = new Message(buildMessageSummary(cef), decideSource(cef, rawMessage), cef.timestamp());
@@ -65,16 +70,46 @@ public class CEFCodec extends BaseCEFCodec {
             result.addField("device_version", cef.deviceVersion());
             result.addField("event_class_id", cef.deviceEventClassId());
             result.addField("name", cef.name());
-            result.addField("severity", cef.severity().text());
-            result.addField("severity_number", cef.severity().numeric());
+            result.addField("severity", cef.humanReadableSeverity());
+            result.addField("severity_number", cef.severity());
 
             // Add msg field if the CEF message has one.
             result.addField("msg", cef.message());
 
             return result;
-        } catch (Exception e) {
+        } catch(Exception e) {
             throw new RuntimeException("Could not decode CEF message.", e);
         }
+    }
+
+    private String buildMessageSummary(CEFMessage cef) {
+        return new StringBuilder()
+                .append(cef.deviceProduct())
+                .append(": ")
+                .append("[").append(cef.deviceEventClassId()).append(", ")
+                .append(cef.humanReadableSeverity()).append("] ")
+                .append(cef.name())
+                .toString();
+    }
+
+    private String decideSource(CEFMessage cef, RawMessage raw) {
+        if(cef.fields() != null && cef.fields().containsKey("dvc")) {
+            String dvc = (String) cef.fields().get("dvc");
+            if (!dvc.isEmpty()) {
+                return dvc;
+            }
+        }
+
+        // Use raw message source information if we were not able to parse a source from the CEF extensions.
+        final ResolvableInetSocketAddress address = raw.getRemoteAddress();
+        final InetSocketAddress remoteAddress;
+        if (address == null) {
+            remoteAddress = null;
+        } else {
+            remoteAddress = address.getInetSocketAddress();
+        }
+
+        return remoteAddress == null ? "unknown" : remoteAddress.getAddress().toString();
     }
 
     @Nullable
