@@ -21,8 +21,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.Callable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
 import smile.association.FPTree.HeaderTableItem;
 import smile.association.FPTree.Node;
 import smile.util.MulticoreExecutor;
@@ -63,7 +62,6 @@ import smile.util.MulticoreExecutor;
  * @author Haifeng Li
  */
 public class FPGrowth {
-    private static final Logger logger = LoggerFactory.getLogger(FPGrowth.class);
 
     /**
      * The required minimum support of item sets.
@@ -301,7 +299,7 @@ public class FPGrowth {
                     n += i;
                 }
             } catch (Exception e) {
-                logger.error("Failed to run FPGrowth on multi-core", e);
+                System.err.println(e.getMessage());
             }         
             return n;
             
@@ -337,7 +335,7 @@ public class FPGrowth {
                 for (int i = 0; i < itemset.length; i++) {
                     out.format("%d ", itemset[i]);
                 }
-                out.format("(%d)%n", support);
+                out.format("(%d)\n", support);
             }
         }
         if (ttree != null) {
@@ -364,7 +362,7 @@ public class FPGrowth {
                             for (int i = 0; i < newItemset.length; i++) {
                                 out.format("%d ", newItemset[i]);
                             }
-                            out.format("(%d)%n", support);
+                            out.format("(%d)\n", support);
                         }
                     }
                     if (ttree != null) {
