@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.skydoc.fakebuildapi.config;
 
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkbuildapi.config.ConfigGlobalLibraryApi;
 import com.google.devtools.build.lib.skylarkbuildapi.config.ConfigurationTransitionApi;
 import com.google.devtools.build.lib.syntax.BaseFunction;
@@ -31,13 +32,14 @@ public class FakeConfigGlobalLibrary implements ConfigGlobalLibraryApi {
       BaseFunction implementation,
       Sequence<?> inputs,
       Sequence<?> outputs,
+      Location location,
       StarlarkThread thread) {
     return new FakeConfigurationTransition();
   }
 
   @Override
   public ConfigurationTransitionApi analysisTestTransition(
-      Dict<?, ?> changedSettings, StarlarkThread thread) {
+      Dict<?, ?> changedSettings, Location location) {
     return new FakeConfigurationTransition();
   }
 }

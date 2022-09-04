@@ -737,8 +737,11 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi<Constrain
   }
 
   @Override
-  public Artifact newFile(Object var1, Object var2, Object fileSuffix) throws EvalException {
-    checkDeprecated("ctx.actions.declare_file", "ctx.new_file", starlarkSemantics);
+  public Artifact newFile(Object var1,
+      Object var2,
+      Object fileSuffix,
+      Location loc) throws EvalException {
+    checkDeprecated("ctx.actions.declare_file", "ctx.new_file", null, starlarkSemantics);
     checkMutable("new_file");
 
     // Determine which of new_file's four signatures is being used. Yes, this is terrible.
@@ -746,10 +749,11 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi<Constrain
     if (fileSuffix != Starlark.UNBOUND) {
       // new_file(file_root, sibling_file, suffix)
       ArtifactRoot root =
-          assertTypeForNewFile(
-              var1, ArtifactRoot.class, "expected first param to be of type 'root'");
+          assertTypeForNewFile(var1, ArtifactRoot.class, loc,
+              "expected first param to be of type 'root'");
       Artifact siblingFile =
-          assertTypeForNewFile(var2, Artifact.class, "expected second param to be of type 'File'");
+          assertTypeForNewFile(var2, Artifact.class, loc,
+              "expected second param to be of type 'File'");
       PathFragment original = siblingFile.getRootRelativePath();
       PathFragment fragment = original.replaceName(original.getBaseName() + fileSuffix);
       return ruleContext.getDerivedArtifact(fragment, root);
@@ -757,12 +761,13 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi<Constrain
     } else if (var2 == Starlark.UNBOUND) {
       // new_file(filename)
       String filename =
-          assertTypeForNewFile(var1, String.class, "expected first param to be of type 'string'");
-      return actionFactory.declareFile(filename, Starlark.NONE);
+          assertTypeForNewFile(var1, String.class, loc,
+              "expected first param to be of type 'string'");
+      return actionFactory.declareFile(filename, Starlark.NONE, loc);
 
     } else {
-      String filename =
-          assertTypeForNewFile(var2, String.class, "expected second param to be of type 'string'");
+      String filename = assertTypeForNewFile(var2, String.class, loc,
+          "expected second param to be of type 'string'");
       if (var1 instanceof ArtifactRoot) {
         // new_file(root, filename)
         ArtifactRoot root = (ArtifactRoot) var1;
@@ -771,27 +776,27 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi<Constrain
       } else {
         // new_file(sibling_file, filename)
         Artifact siblingFile =
-            assertTypeForNewFile(
-                var1, Artifact.class, "expected first param to be of type 'File' or 'root'");
+            assertTypeForNewFile(var1, Artifact.class, loc,
+                "expected first param to be of type 'File' or 'root'");
 
-        return actionFactory.declareFile(filename, siblingFile);
+        return actionFactory.declareFile(filename, siblingFile, loc);
       }
     }
   }
 
-  private static <T> T assertTypeForNewFile(Object obj, Class<T> type, String errorMessage)
-      throws EvalException {
+  private static <T> T assertTypeForNewFile(Object obj, Class<T> type, Location loc,
+      String errorMessage) throws EvalException {
     if (type.isInstance(obj)) {
       return type.cast(obj);
     } else {
-      throw new EvalException(null, errorMessage);
+      throw new EvalException(loc, errorMessage);
     }
   }
 
   @Override
   public Artifact newDirectory(String name, Object siblingArtifactUnchecked) throws EvalException {
     checkDeprecated(
-        "ctx.actions.declare_directory", "ctx.experimental_new_directory", starlarkSemantics);
+        "ctx.actions.declare_directory", "ctx.experimental_new_directory", null, starlarkSemantics);
     checkMutable("experimental_new_directory");
     return actionFactory.declareDirectory(name, siblingArtifactUnchecked);
   }
@@ -885,13 +890,14 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi<Constrain
       Object envUnchecked,
       Object executionRequirementsUnchecked,
       Object inputManifestsUnchecked,
+      Location loc,
       StarlarkThread thread)
       throws EvalException {
     checkDeprecated(
-        "ctx.actions.run or ctx.actions.run_shell", "ctx.action", thread.getSemantics());
+        "ctx.actions.run or ctx.actions.run_shell", "ctx.action", loc, thread.getSemantics());
     checkMutable("action");
     if ((commandUnchecked == Starlark.NONE) == (executableUnchecked == Starlark.NONE)) {
-      throw Starlark.errorf("You must specify either 'command' or 'executable' argument");
+      throw new EvalException(loc, "You must specify either 'command' or 'executable' argument");
     }
     boolean hasCommand = commandUnchecked != Starlark.NONE;
     if (!hasCommand) {
@@ -908,7 +914,8 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi<Constrain
               useDefaultShellEnv,
               envUnchecked,
               executionRequirementsUnchecked,
-              inputManifestsUnchecked);
+              inputManifestsUnchecked,
+              loc);
 
     } else {
       actions()
@@ -924,14 +931,15 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi<Constrain
               envUnchecked,
               executionRequirementsUnchecked,
               inputManifestsUnchecked,
+              loc,
               thread);
     }
     return Starlark.NONE;
   }
 
   @Override
-  public String expandLocation(String input, Sequence<?> targets, StarlarkThread thread)
-      throws EvalException {
+  public String expandLocation(
+      String input, Sequence<?> targets, Location loc, StarlarkThread thread) throws EvalException {
     checkMutable("expand_location");
     try {
       return LocationExpander.withExecPaths(
@@ -939,26 +947,26 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi<Constrain
               makeLabelMap(targets.getContents(TransitiveInfoCollection.class, "targets")))
           .expand(input);
     } catch (IllegalStateException ise) {
-      throw new EvalException(null, ise);
+      throw new EvalException(loc, ise);
     }
   }
 
   @Override
   public NoneType fileAction(
-      FileApi output, String content, Boolean executable, StarlarkThread thread)
+      FileApi output, String content, Boolean executable, Location loc, StarlarkThread thread)
       throws EvalException {
-    checkDeprecated("ctx.actions.write", "ctx.file_action", thread.getSemantics());
+    checkDeprecated("ctx.actions.write", "ctx.file_action", loc, thread.getSemantics());
     checkMutable("file_action");
-    actions().write(output, content, executable);
+    actions().write(output, content, executable, loc);
     return Starlark.NONE;
   }
 
   @Override
-  public NoneType emptyAction(String mnemonic, Object inputs, StarlarkThread thread)
+  public NoneType emptyAction(String mnemonic, Object inputs, Location loc, StarlarkThread thread)
       throws EvalException {
-    checkDeprecated("ctx.actions.do_nothing", "ctx.empty_action", thread.getSemantics());
+    checkDeprecated("ctx.actions.do_nothing", "ctx.empty_action", loc, thread.getSemantics());
     checkMutable("empty_action");
-    actions().doNothing(mnemonic, inputs);
+    actions().doNothing(mnemonic, inputs, loc);
     return Starlark.NONE;
   }
 
@@ -968,11 +976,13 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi<Constrain
       FileApi output,
       Dict<?, ?> substitutionsUnchecked,
       Boolean executable,
+      Location loc,
       StarlarkThread thread)
       throws EvalException {
-    checkDeprecated("ctx.actions.expand_template", "ctx.template_action", thread.getSemantics());
+    checkDeprecated(
+        "ctx.actions.expand_template", "ctx.template_action", loc, thread.getSemantics());
     checkMutable("template_action");
-    actions().expandTemplate(template, output, substitutionsUnchecked, executable);
+    actions().expandTemplate(template, output, substitutionsUnchecked, executable, loc);
     return Starlark.NONE;
   }
 
@@ -983,7 +993,8 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi<Constrain
       Boolean collectData,
       Boolean collectDefault,
       Dict<?, ?> symlinks,
-      Dict<?, ?> rootSymlinks)
+      Dict<?, ?> rootSymlinks,
+      Location loc)
       throws EvalException, ConversionException {
     checkMutable("runfiles");
     Runfiles.Builder builder =
@@ -1034,11 +1045,12 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi<Constrain
       Sequence<?> tools,
       Dict<?, ?> labelDictUnchecked,
       Dict<?, ?> executionRequirementsUnchecked,
+      Location loc,
       StarlarkThread thread)
       throws ConversionException, EvalException {
     checkMutable("resolve_command");
     Label ruleLabel = getLabel();
-    Map<Label, Iterable<Artifact>> labelDict = checkLabelDict(labelDictUnchecked);
+    Map<Label, Iterable<Artifact>> labelDict = checkLabelDict(labelDictUnchecked, loc);
     // The best way to fix this probably is to convert CommandHelper to Skylark.
     CommandHelper helper =
         CommandHelper.builder(getRuleContext())
@@ -1105,13 +1117,13 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi<Constrain
    * corresponding map where any sets are replaced by iterables.
    */
   // TODO(bazel-team): find a better way to typecheck this argument.
-  private static Map<Label, Iterable<Artifact>> checkLabelDict(Map<?, ?> labelDict)
+  private static Map<Label, Iterable<Artifact>> checkLabelDict(Map<?, ?> labelDict, Location loc)
       throws EvalException {
     Map<Label, Iterable<Artifact>> convertedMap = new HashMap<>();
     for (Map.Entry<?, ?> entry : labelDict.entrySet()) {
       Object key = entry.getKey();
       if (!(key instanceof Label)) {
-        throw Starlark.errorf("invalid key %s in 'label_dict'", Starlark.repr(key));
+        throw new EvalException(loc, Starlark.format("invalid key %r in 'label_dict'", key));
       }
       ImmutableList.Builder<Artifact> files = ImmutableList.builder();
       Object val = entry.getValue();
@@ -1119,13 +1131,15 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi<Constrain
       if (val instanceof Iterable) {
         valIter = (Iterable<?>) val;
       } else {
-        throw Starlark.errorf(
-            "invalid value %s in 'label_dict': expected iterable, but got '%s'",
-            Starlark.repr(val), EvalUtils.getDataTypeName(val));
+        throw new EvalException(
+            loc,
+            Starlark.format(
+                "invalid value %r in 'label_dict': expected iterable, but got '%s'",
+                val, EvalUtils.getDataTypeName(val)));
       }
       for (Object file : valIter) {
         if (!(file instanceof Artifact)) {
-          throw Starlark.errorf("invalid value %s in 'label_dict'", Starlark.repr(val));
+          throw new EvalException(loc, Starlark.format("invalid value %r in 'label_dict'", val));
         }
         files.add((Artifact) file);
       }
@@ -1137,13 +1151,18 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi<Constrain
   /** suffix of script to be used in case the command is too long to fit on a single line */
   private static final String SCRIPT_SUFFIX = ".script.sh";
 
-  private static void checkDeprecated(String newApi, String oldApi, StarlarkSemantics semantics)
+  private static void checkDeprecated(
+      String newApi, String oldApi, Location loc, StarlarkSemantics semantics)
       throws EvalException {
     if (semantics.incompatibleNewActionsApi()) {
-      throw Starlark.errorf(
-          "Use %s instead of %s. \n"
-              + "Use --incompatible_new_actions_api=false to temporarily disable this check.",
-          newApi, oldApi);
+      throw new EvalException(
+          loc,
+          "Use "
+              + newApi
+              + " instead of "
+              + oldApi
+              + ". \n"
+              + "Use --incompatible_new_actions_api=false to temporarily disable this check.");
     }
   }
 

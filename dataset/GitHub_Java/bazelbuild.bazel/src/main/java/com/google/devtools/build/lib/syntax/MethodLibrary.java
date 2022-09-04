@@ -22,6 +22,7 @@ import com.google.common.collect.Ordering;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet.NestedSetDepthException;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.events.Event;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkGlobalLibrary;
@@ -203,7 +204,8 @@ class MethodLibrary {
         }
 
         Object callKeyFunc(Object x) throws EvalException, InterruptedException {
-          return Starlark.call(thread, keyfn, Collections.singletonList(x), ImmutableMap.of());
+          return Starlark.call(
+              thread, keyfn, Location.BUILTIN, Collections.singletonList(x), ImmutableMap.of());
         }
       }
 
@@ -739,10 +741,12 @@ class MethodLibrary {
             legacyNamed = true,
             noneable = true)
       },
+      useLocation = true,
       useStarlarkThread = true)
-  public Object getattr(Object obj, String name, Object defaultValue, StarlarkThread thread)
+  public Object getattr(
+      Object obj, String name, Object defaultValue, Location loc, StarlarkThread thread)
       throws EvalException, InterruptedException {
-    Object result = EvalUtils.getAttr(thread, obj, name);
+    Object result = EvalUtils.getAttr(thread, loc, obj, name);
     if (result == null) {
       if (defaultValue != Starlark.UNBOUND) {
         return defaultValue;
@@ -830,8 +834,10 @@ class MethodLibrary {
       },
       // NB: as compared to Python3, we're missing optional named-only arguments 'end' and 'file'
       extraPositionals = @Param(name = "args", doc = "The objects to print."),
+      useLocation = true,
       useStarlarkThread = true)
-  public NoneType print(String sep, Sequence<?> args, StarlarkThread thread) throws EvalException {
+  public NoneType print(String sep, Sequence<?> args, Location loc, StarlarkThread thread)
+      throws EvalException {
     try {
       Printer p = Printer.getPrinter();
       String separator = "";
@@ -846,7 +852,7 @@ class MethodLibrary {
       if (thread.getSemantics().internalSkylarkFlagTestCanary()) {
         p.append("<== skylark flag test ==>");
       }
-      thread.handleEvent(Event.debug(thread.getCallerLocation(), p.toString()));
+      thread.handleEvent(Event.debug(loc, p.toString()));
       return Starlark.NONE;
     } catch (NestedSetDepthException exception) {
       throw Starlark.errorf(
