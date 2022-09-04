@@ -14,258 +14,116 @@
 
 package com.google.devtools.build.lib.runtime;
 
-import static com.google.common.truth.Truth.assertThat;
-import static org.mockito.Matchers.any;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.exec.TestStrategy.TestSummaryFormat;
 import com.google.devtools.build.lib.runtime.TerminalTestResultNotifier.TestSummaryOptions;
 import com.google.devtools.build.lib.util.io.AnsiTerminalPrinter;
-import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.view.test.TestStatus.BlazeTestStatus;
 import com.google.devtools.build.lib.view.test.TestStatus.TestCase;
 import com.google.devtools.build.lib.view.test.TestStatus.TestCase.Status;
 import com.google.devtools.common.options.OptionsParsingResult;
+import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
+import java.util.HashSet;
+import java.util.Random;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 
-/** Tests for {@link TerminalTestResultNotifier}. */
+/** Tests {@link TerminalTestResultNotifier}. */
 @RunWith(JUnit4.class)
-public final class TerminalTestResultNotifierTest {
+public class TerminalTestResultNotifierTest {
 
-  private static final String ALL_TEST_CASES_PASSED_BUT_TARGET_FAILED_DISCLAIMER =
-      "however note that at least one target failed";
+  private final OptionsParsingResult optionsParsingResult =
+      Mockito.mock(OptionsParsingResult.class);
+  private final AnsiTerminalPrinter ansiTerminalPrinter = Mockito.mock(AnsiTerminalPrinter.class);
+  private final Random random = new Random();
 
-  private final OptionsParsingResult optionsParsingResult = mock(OptionsParsingResult.class);
-  private final AnsiTerminalPrinter ansiTerminalPrinter = mock(AnsiTerminalPrinter.class);
-
-  private BlazeTestStatus targetStatus;
-  private int numFailedTestCases;
-  private int numTotalTestCases;
-  private TestSummaryFormat testSummaryFormat;
-
-  @Test
-  public void testCaseOption_allPass() throws Exception {
-    testSummaryFormat = TestSummaryFormat.TESTCASE;
-    numFailedTestCases = 0;
-    numTotalTestCases = 10;
-    targetStatus = BlazeTestStatus.PASSED;
-
-    printTestCaseSummary();
-
-    String printed = getPrintedMessage();
-    assertThat(printed).contains(info("10 passing"));
-    assertThat(printed).contains("0 failing");
-    assertThat(printed).contains("out of 10 test cases");
-    assertThat(printed).doesNotContain(ALL_TEST_CASES_PASSED_BUT_TARGET_FAILED_DISCLAIMER);
-    assertThat(printed).doesNotContain(AnsiTerminalPrinter.Mode.ERROR.toString());
-  }
-
-  @Test
-  public void testCaseOption_allPassButTargetFails() throws Exception {
-    testSummaryFormat = TestSummaryFormat.TESTCASE;
-    numFailedTestCases = 0;
-    numTotalTestCases = 10;
-    targetStatus = BlazeTestStatus.FAILED;
-
-    printTestCaseSummary();
-
-    String printed = getPrintedMessage();
-    assertThat(printed).contains(info("10 passing"));
-    assertThat(printed).contains("0 failing");
-    assertThat(printed).contains("out of 10 test cases");
-    assertThat(printed).contains(ALL_TEST_CASES_PASSED_BUT_TARGET_FAILED_DISCLAIMER);
-    assertThat(printed).doesNotContain(AnsiTerminalPrinter.Mode.ERROR.toString());
-  }
-
-  @Test
-  public void testCaseOption_someFail() throws Exception {
-    testSummaryFormat = TestSummaryFormat.TESTCASE;
-    numFailedTestCases = 2;
-    numTotalTestCases = 10;
-    targetStatus = BlazeTestStatus.FAILED;
-
-    printTestCaseSummary();
-
-    String printed = getPrintedMessage();
-    assertThat(printed).contains(info("8 passing"));
-    assertThat(printed).contains(error("2 failing"));
-    assertThat(printed).contains("out of 10 test cases");
-    assertThat(printed).doesNotContain(ALL_TEST_CASES_PASSED_BUT_TARGET_FAILED_DISCLAIMER);
-  }
-
-  @Test
-  public void testCaseOption_allFail() throws Exception {
-    testSummaryFormat = TestSummaryFormat.TESTCASE;
-    numFailedTestCases = 10;
-    numTotalTestCases = 10;
-    targetStatus = BlazeTestStatus.FAILED;
-
-    printTestCaseSummary();
-
-    String printed = getPrintedMessage();
-    assertThat(printed).contains("0 passing");
-    assertThat(printed).contains(error("10 failing"));
-    assertThat(printed).contains("out of 10 test cases");
-    assertThat(printed).doesNotContain(ALL_TEST_CASES_PASSED_BUT_TARGET_FAILED_DISCLAIMER);
-    assertThat(printed).doesNotContain(AnsiTerminalPrinter.Mode.INFO.toString());
-  }
-
-  @Test
-  public void detailedOption_allPass() throws Exception {
-    testSummaryFormat = TestSummaryFormat.DETAILED;
-    numFailedTestCases = 0;
-    numTotalTestCases = 10;
-    targetStatus = BlazeTestStatus.PASSED;
-
-    printTestCaseSummary();
-
-    String printed = getPrintedMessage();
-    assertThat(printed).contains(info("10 passing"));
-    assertThat(printed).contains("0 failing");
-    assertThat(printed).contains("out of 10 test cases");
-    assertThat(printed).doesNotContain(ALL_TEST_CASES_PASSED_BUT_TARGET_FAILED_DISCLAIMER);
-    assertThat(printed).doesNotContain(AnsiTerminalPrinter.Mode.ERROR.toString());
-  }
-
-  @Test
-  public void detailedOption_allPassButTargetFails() throws Exception {
-    testSummaryFormat = TestSummaryFormat.DETAILED;
-    numFailedTestCases = 0;
-    numTotalTestCases = 10;
-    targetStatus = BlazeTestStatus.FAILED;
-
-    printTestCaseSummary();
-
-    String printed = getPrintedMessage();
-    assertThat(printed).contains(info("10 passing"));
-    assertThat(printed).contains("0 failing");
-    assertThat(printed).contains("out of 10 test cases");
-    assertThat(printed).contains(ALL_TEST_CASES_PASSED_BUT_TARGET_FAILED_DISCLAIMER);
-    assertThat(printed).doesNotContain(AnsiTerminalPrinter.Mode.ERROR.toString());
-  }
-
-  @Test
-  public void detailedOption_someFail() throws Exception {
-    testSummaryFormat = TestSummaryFormat.DETAILED;
-    numFailedTestCases = 2;
-    numTotalTestCases = 10;
-    targetStatus = BlazeTestStatus.FAILED;
-
-    printTestCaseSummary();
-
-    String printed = getPrintedMessage();
-    assertThat(printed).contains(info("8 passing"));
-    assertThat(printed).contains(error("2 failing"));
-    assertThat(printed).contains("out of 10 test cases");
-    assertThat(printed).doesNotContain(ALL_TEST_CASES_PASSED_BUT_TARGET_FAILED_DISCLAIMER);
-  }
-
-  @Test
-  public void detailedOption_allFail() throws Exception {
-    testSummaryFormat = TestSummaryFormat.DETAILED;
-    numFailedTestCases = 10;
-    numTotalTestCases = 10;
-    targetStatus = BlazeTestStatus.FAILED;
-
-    printTestCaseSummary();
-
-    String printed = getPrintedMessage();
-    assertThat(printed).contains("0 passing");
-    assertThat(printed).contains(error("10 failing"));
-    assertThat(printed).contains("out of 10 test cases");
-    assertThat(printed).doesNotContain(ALL_TEST_CASES_PASSED_BUT_TARGET_FAILED_DISCLAIMER);
-    assertThat(printed).doesNotContain(AnsiTerminalPrinter.Mode.INFO.toString());
-  }
-
-  @Test
-  public void shortOption_noSummaryPrinted() throws Exception {
-    testSummaryFormat = TestSummaryFormat.SHORT;
-    numFailedTestCases = 2;
-    numTotalTestCases = 10;
-    targetStatus = BlazeTestStatus.FAILED;
-
-    printTestCaseSummary();
-
-    verifyNoSummaryPrinted();
-  }
-
-  @Test
-  public void terseOption_noSummaryPrinted() throws Exception {
-    testSummaryFormat = TestSummaryFormat.TERSE;
-    numFailedTestCases = 2;
-    numTotalTestCases = 10;
-    targetStatus = BlazeTestStatus.FAILED;
-
-    printTestCaseSummary();
-
-    verifyNoSummaryPrinted();
-  }
-
-  @Test
-  public void noneOption_noSummaryPrinted() throws Exception {
-    testSummaryFormat = TestSummaryFormat.NONE;
-    numFailedTestCases = 2;
-    numTotalTestCases = 10;
-    targetStatus = BlazeTestStatus.FAILED;
-
-    printTestCaseSummary();
-
-    verifyNoSummaryPrinted();
-  }
-
-  private void printTestCaseSummary() throws LabelSyntaxException {
+  private void givenExecutionOption(TestSummaryFormat format) {
     ExecutionOptions executionOptions = ExecutionOptions.DEFAULTS;
-    executionOptions.testSummary = testSummaryFormat;
+    executionOptions.testSummary = format;
     when(optionsParsingResult.getOptions(ExecutionOptions.class)).thenReturn(executionOptions);
 
     TestSummaryOptions testSummaryOptions = new TestSummaryOptions();
     testSummaryOptions.verboseSummary = true;
     when(optionsParsingResult.getOptions(TestSummaryOptions.class)).thenReturn(testSummaryOptions);
+  }
 
-    TestSummary testSummary = mock(TestSummary.class);
-    when(testSummary.getTotalTestCases()).thenReturn(numTotalTestCases);
-    TestCase failedTestCase = TestCase.newBuilder().setStatus(Status.FAILED).build();
-    List<TestCase> failedTestCases = Collections.nCopies(numFailedTestCases, failedTestCase);
-
-    Label labelA = Label.parseAbsolute("//foo/bar:baz", ImmutableMap.of());
-    when(testSummary.getFailedTestCases()).thenReturn(failedTestCases);
-    when(testSummary.getStatus()).thenReturn(targetStatus);
-    when(testSummary.getLabel()).thenReturn(labelA);
+  private void runTest(Boolean shouldPrintTestCaseSummary) throws Exception {
+    int numOfTotalTestCases = random.nextInt(10) + 1;
+    int numOfFailedCases = random.nextInt(numOfTotalTestCases);
+    int numOfSuccessfulTestCases = numOfTotalTestCases - numOfFailedCases;
 
     TerminalTestResultNotifier terminalTestResultNotifier =
-        new TerminalTestResultNotifier(
-            ansiTerminalPrinter, Path::getPathString, optionsParsingResult);
-    terminalTestResultNotifier.notify(ImmutableSet.of(testSummary), 1);
+        new TerminalTestResultNotifier(ansiTerminalPrinter, optionsParsingResult);
+
+    TestSummary testSummary = Mockito.mock(TestSummary.class);
+    when(testSummary.getTotalTestCases()).thenReturn(numOfTotalTestCases);
+    TestCase failedTestCase = TestCase.newBuilder().setStatus(Status.FAILED).build();
+    ArrayList<TestCase> testCases =
+        new ArrayList<>(Collections.nCopies(numOfFailedCases, failedTestCase));
+
+    Label labelA = Label.parseAbsolute("//foo/bar:baz", ImmutableMap.of());
+    when(testSummary.getFailedTestCases()).thenReturn(testCases);
+    when(testSummary.getStatus()).thenReturn(BlazeTestStatus.FAILED);
+    when(testSummary.getLabel()).thenReturn(labelA);
+
+    HashSet<TestSummary> testSummaries = new HashSet<>();
+    testSummaries.add(testSummary);
+    terminalTestResultNotifier.notify(testSummaries, 1);
+
+    String summaryMessage =
+        String.format(
+            "Test cases: finished with %s%d passing%s and %s%d failing%s out of %d test cases",
+            numOfSuccessfulTestCases > 0 ? AnsiTerminalPrinter.Mode.INFO : "",
+            numOfSuccessfulTestCases,
+            AnsiTerminalPrinter.Mode.DEFAULT,
+            numOfFailedCases > 0 ? AnsiTerminalPrinter.Mode.ERROR : "",
+            numOfFailedCases,
+            AnsiTerminalPrinter.Mode.DEFAULT,
+            numOfTotalTestCases);
+
+    if (shouldPrintTestCaseSummary) {
+      verify(ansiTerminalPrinter).printLn(summaryMessage);
+    } else {
+      verify(ansiTerminalPrinter, never()).printLn(summaryMessage);
+    }
   }
 
-  private String getPrintedMessage() {
-    ArgumentCaptor<String> messageCaptor = ArgumentCaptor.forClass(String.class);
-    verify(ansiTerminalPrinter).printLn(messageCaptor.capture());
-    return messageCaptor.getValue();
+  @Test
+  public void testCasesDataVisibleInTestCaseOption() throws Exception {
+    givenExecutionOption(TestSummaryFormat.TESTCASE);
+    runTest(true);
   }
 
-  private void verifyNoSummaryPrinted() {
-    verify(ansiTerminalPrinter, never()).printLn(any());
+  @Test
+  public void testCasesDataVisibleInDetailedOption() throws Exception {
+    givenExecutionOption(TestSummaryFormat.DETAILED);
+    runTest(true);
   }
 
-  private static String info(String message) {
-    return AnsiTerminalPrinter.Mode.INFO + message + AnsiTerminalPrinter.Mode.DEFAULT;
+  @Test
+  public void testCasesDataInVisibleInShortOption() throws Exception {
+    givenExecutionOption(TestSummaryFormat.SHORT);
+    runTest(false);
   }
 
-  private static String error(String message) {
-    return AnsiTerminalPrinter.Mode.ERROR + message + AnsiTerminalPrinter.Mode.DEFAULT;
+  @Test
+  public void testCasesDataInVisibleInTerseOption() throws Exception {
+    givenExecutionOption(TestSummaryFormat.TERSE);
+    runTest(false);
+  }
+
+  @Test
+  public void testCasesDataInVisibleInNoneOption() throws Exception {
+    givenExecutionOption(TestSummaryFormat.NONE);
+    runTest(false);
   }
 }
