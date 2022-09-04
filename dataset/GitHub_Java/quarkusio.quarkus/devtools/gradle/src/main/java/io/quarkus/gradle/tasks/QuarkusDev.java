@@ -271,6 +271,9 @@ public class QuarkusDev extends QuarkusTask {
                     continue;
                 }
 
+                final AppArtifact appArtifact = AppModelGradleResolver.toAppArtifact(dependency);
+                final AppArtifactKey key = new AppArtifactKey(appArtifact.getGroupId(), appArtifact.getArtifactId());
+                projectDependencies.add(key);
                 Project dependencyProject = project.getRootProject()
                         .findProject(((ProjectComponentIdentifier) componentId).getProjectPath());
                 JavaPluginConvention javaConvention = dependencyProject.getConvention().findPlugin(JavaPluginConvention.class);
@@ -283,12 +286,7 @@ public class QuarkusDev extends QuarkusTask {
                 Set<String> sourcePaths = new HashSet<>();
 
                 for (File sourceDir : mainSourceSet.getAllJava().getSrcDirs()) {
-                    if (sourceDir.exists()) {
-                        sourcePaths.add(sourceDir.getAbsolutePath());
-                    }
-                }
-                if (sourcePaths.isEmpty()) {
-                    continue;
+                    sourcePaths.add(sourceDir.getAbsolutePath());
                 }
 
                 String resourcePaths = mainSourceSet.getResources().getSourceDirectories().getSingleFile().getAbsolutePath(); //TODO: multiple resource directories
@@ -301,10 +299,6 @@ public class QuarkusDev extends QuarkusTask {
                         resourcePaths);
 
                 context.getModules().add(wsModuleInfo);
-
-                final AppArtifact appArtifact = AppModelGradleResolver.toAppArtifact(dependency);
-                final AppArtifactKey key = new AppArtifactKey(appArtifact.getGroupId(), appArtifact.getArtifactId());
-                projectDependencies.add(key);
             }
 
             for (AppDependency appDependency : appModel.getFullDeploymentDeps()) {
