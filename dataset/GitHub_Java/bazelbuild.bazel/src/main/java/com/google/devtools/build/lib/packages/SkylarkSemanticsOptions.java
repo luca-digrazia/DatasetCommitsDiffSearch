@@ -96,12 +96,8 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
       name = "experimental_enable_repo_mapping",
       defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = OptionEffectTag.NO_OP,
-      deprecationWarning =
-          "This behavior is on by default and the flag is a no-op. You can remove its usage",
-      help =
-          "This flag is a no-op. The use of the `repo_mapping` attribute in repository rules "
-              + "is enabled by default.")
+      effectTags = OptionEffectTag.BUILD_FILE_SEMANTICS,
+      help = "If set to true, enables the use of the `repo_mapping` attribute in WORKSPACE files.")
   public boolean experimentalEnableRepoMapping;
 
   // This flag is declared in SkylarkSemanticsOptions instead of JavaOptions because there is no
@@ -116,6 +112,14 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
       metadataTags = {OptionMetadataTag.EXPERIMENTAL},
       help = "Passes list of packages that can use the java_common.create_provider Starlark API.")
   public List<String> experimentalJavaCommonCreateProviderEnabledPackages;
+
+  @Option(
+      name = "experimental_remap_main_repo",
+      defaultValue = "false",
+      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+      effectTags = OptionEffectTag.LOADING_AND_ANALYSIS,
+      help = "If set to true, will treat references to '@<main repo name>' the same as '@'.")
+  public boolean experimentalRemapMainRepo;
 
   @Option(
       name = "experimental_platforms_api",
@@ -345,7 +349,7 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
 
   @Option(
       name = "incompatible_expand_directories",
-      defaultValue = "true",
+      defaultValue = "false",
       category = "incompatible changes",
       documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
       effectTags = {OptionEffectTag.UNKNOWN},
@@ -441,19 +445,6 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
   public boolean incompatibleNoTransitiveLoads;
 
   @Option(
-      name = "incompatible_remap_main_repo",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.SKYLARK_SEMANTICS,
-      effectTags = OptionEffectTag.LOADING_AND_ANALYSIS,
-      metadataTags = {
-        OptionMetadataTag.INCOMPATIBLE_CHANGE,
-        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-      },
-      oldName = "experimental_remap_main_repo",
-      help = "If set to true, will treat references to '@<main repo name>' the same as '@'.")
-  public boolean incompatibleRemapMainRepo;
-
-  @Option(
       name = "incompatible_remove_native_maven_jar",
       defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.SKYLARK_SEMANTICS,
@@ -513,6 +504,7 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
         .experimentalCcSkylarkApiEnabledPackages(experimentalCcSkylarkApiEnabledPackages)
         .experimentalEnableAndroidMigrationApis(experimentalEnableAndroidMigrationApis)
         .experimentalEnableRepoMapping(experimentalEnableRepoMapping)
+        .experimentalRemapMainRepo(experimentalRemapMainRepo)
         .experimentalJavaCommonCreateProviderEnabledPackages(
             experimentalJavaCommonCreateProviderEnabledPackages)
         .experimentalPlatformsApi(experimentalPlatformsApi)
@@ -539,7 +531,6 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
         .incompatibleNoSupportToolsInActionInputs(incompatibleNoSupportToolsInActionInputs)
         .incompatibleNoTargetOutputGroup(incompatibleNoTargetOutputGroup)
         .incompatibleNoTransitiveLoads(incompatibleNoTransitiveLoads)
-        .incompatibleRemapMainRepo(incompatibleRemapMainRepo)
         .incompatibleRemoveNativeMavenJar(incompatibleRemoveNativeMavenJar)
         .incompatibleRequireFeatureConfigurationForPic(requireFeatureConfigurationForPic)
         .incompatibleStricArgumentOrdering(incompatibleStricArgumentOrdering)
@@ -548,3 +539,4 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
         .build();
   }
 }
+
