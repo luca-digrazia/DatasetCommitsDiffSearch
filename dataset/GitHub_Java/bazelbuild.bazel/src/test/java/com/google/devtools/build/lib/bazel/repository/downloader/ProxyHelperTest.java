@@ -169,18 +169,26 @@ public class ProxyHelperTest {
     Proxy proxy = ProxyHelper.createProxy("http://my.example.com");
     assertThat(proxy.type()).isEqualTo(Proxy.Type.HTTP);
     assertThat(proxy.toString()).endsWith(":80");
+    assertThat(System.getProperty("http.proxyHost")).isEqualTo("my.example.com");
+    assertThat(System.getProperty("http.proxyPort")).isEqualTo("80");
 
     proxy = ProxyHelper.createProxy("https://my.example.com");
     assertThat(proxy.toString()).endsWith(":443");
+    assertThat(System.getProperty("https.proxyHost")).isEqualTo("my.example.com");
+    assertThat(System.getProperty("https.proxyPort")).isEqualTo("443");
   }
 
   @Test
   public void testProxyExplicitPort() throws Exception {
     Proxy proxy = ProxyHelper.createProxy("http://my.example.com:12345");
     assertThat(proxy.toString()).endsWith(":12345");
+    assertThat(System.getProperty("http.proxyHost")).isEqualTo("my.example.com");
+    assertThat(System.getProperty("http.proxyPort")).isEqualTo("12345");
 
     proxy = ProxyHelper.createProxy("https://my.example.com:12345");
     assertThat(proxy.toString()).endsWith(":12345");
+    assertThat(System.getProperty("https.proxyHost")).isEqualTo("my.example.com");
+    assertThat(System.getProperty("https.proxyPort")).isEqualTo("12345");
   }
 
   @Test
@@ -222,9 +230,17 @@ public class ProxyHelperTest {
     Proxy proxy = ProxyHelper.createProxy("http://foo:barbaz@my.example.com");
     assertThat(proxy.type()).isEqualTo(Proxy.Type.HTTP);
     assertThat(proxy.toString()).endsWith(":80");
+    assertThat(System.getProperty("http.proxyHost")).isEqualTo("my.example.com");
+    assertThat(System.getProperty("http.proxyPort")).isEqualTo("80");
+    assertThat(System.getProperty("http.proxyUser")).isEqualTo("foo");
+    assertThat(System.getProperty("http.proxyPassword")).isEqualTo("barbaz");
 
     proxy = ProxyHelper.createProxy("https://biz:bat@my.example.com");
     assertThat(proxy.toString()).endsWith(":443");
+    assertThat(System.getProperty("https.proxyHost")).isEqualTo("my.example.com");
+    assertThat(System.getProperty("https.proxyPort")).isEqualTo("443");
+    assertThat(System.getProperty("https.proxyUser")).isEqualTo("biz");
+    assertThat(System.getProperty("https.proxyPassword")).isEqualTo("bat");
   }
 
   @Test
@@ -232,6 +248,10 @@ public class ProxyHelperTest {
     Proxy proxy = ProxyHelper.createProxy("http://foo:b%40rb%40z@my.example.com");
     assertThat(proxy.type()).isEqualTo(Proxy.Type.HTTP);
     assertThat(proxy.toString()).endsWith(":80");
+    assertThat(System.getProperty("http.proxyHost")).isEqualTo("my.example.com");
+    assertThat(System.getProperty("http.proxyPort")).isEqualTo("80");
+    assertThat(System.getProperty("http.proxyUser")).isEqualTo("foo");
+    assertThat(System.getProperty("http.proxyPassword")).isEqualTo("b@rb@z");
   }
 
   @Test
@@ -249,6 +269,8 @@ public class ProxyHelperTest {
     Proxy proxy = ProxyHelper.createProxy("http://localhost:3128/");
     assertThat(proxy.type()).isEqualTo(Proxy.Type.HTTP);
     assertThat(proxy.toString()).endsWith(":3128");
+    assertThat(System.getProperty("http.proxyHost")).isEqualTo("localhost");
+    assertThat(System.getProperty("http.proxyPort")).isEqualTo("3128");
   }
 
   @Test
@@ -256,5 +278,9 @@ public class ProxyHelperTest {
     Proxy proxy = ProxyHelper.createProxy("http://foo:bar@example.com:8000/");
     assertThat(proxy.type()).isEqualTo(Proxy.Type.HTTP);
     assertThat(proxy.toString()).endsWith(":8000");
+    assertThat(System.getProperty("http.proxyHost")).isEqualTo("example.com");
+    assertThat(System.getProperty("http.proxyPort")).isEqualTo("8000");
+    assertThat(System.getProperty("http.proxyUser")).isEqualTo("foo");
+    assertThat(System.getProperty("http.proxyPassword")).isEqualTo("bar");
   }
 }
