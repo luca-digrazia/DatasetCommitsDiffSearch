@@ -20,7 +20,6 @@ import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.rules.cpp.CcCommon;
@@ -52,7 +51,7 @@ public class ObjcImport implements RuleConfiguredTargetFactory {
     IntermediateArtifacts intermediateArtifacts =
         ObjcRuleClasses.intermediateArtifacts(ruleContext);
 
-    NestedSet<Artifact> publicHeaders = compilationAttributes.hdrs();
+    Iterable<Artifact> publicHeaders = compilationAttributes.hdrs();
     CppModuleMap moduleMap = intermediateArtifacts.moduleMap();
 
     new CompilationSupport.Builder()

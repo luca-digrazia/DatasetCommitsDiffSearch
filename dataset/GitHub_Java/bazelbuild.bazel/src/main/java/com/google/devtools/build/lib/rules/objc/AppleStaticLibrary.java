@@ -38,7 +38,6 @@ import com.google.devtools.build.lib.rules.cpp.CcInfo;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
 import com.google.devtools.build.lib.rules.objc.ObjcProvider.Key;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -117,7 +116,7 @@ public class AppleStaticLibrary implements RuleConfiguredTargetFactory {
 
       Optional<ObjcProvider> protosObjcProvider;
       if (ObjcRuleClasses.objcConfiguration(ruleContext).enableAppleBinaryNativeProtos()) {
-        Collection<ObjcProtoProvider> objcProtoProviders = objcProtoProvidersMap.get(childCpu);
+        Iterable<ObjcProtoProvider> objcProtoProviders = objcProtoProvidersMap.get(childCpu);
         ProtobufSupport protoSupport =
             new ProtobufSupport(
                     ruleContext,
@@ -164,9 +163,13 @@ public class AppleStaticLibrary implements RuleConfiguredTargetFactory {
               .build();
 
       compilationSupport
-          .registerCompileAndArchiveActions(common.getCompilationArtifacts().get(), objcProvider)
+          .registerCompileAndArchiveActions(
+              common.getCompilationArtifacts().get(), objcProvider, childToolchain)
           .registerFullyLinkAction(
-              objcProvider, intermediateArtifacts.strippedSingleArchitectureLibrary())
+              objcProvider,
+              intermediateArtifacts.strippedSingleArchitectureLibrary(),
+              childToolchain,
+              childToolchain.getFdoContext())
           .validateAttributes();
       ruleContext.assertNoErrors();
 

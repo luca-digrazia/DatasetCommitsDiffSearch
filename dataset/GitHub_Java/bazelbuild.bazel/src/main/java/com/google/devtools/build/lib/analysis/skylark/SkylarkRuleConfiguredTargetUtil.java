@@ -299,26 +299,16 @@ public final class SkylarkRuleConfiguredTargetUtil {
       }
       artifacts = nestedSetBuilder.build();
     } else {
-      SkylarkNestedSet artifactsSet =
+      artifacts =
           SkylarkType.cast(
-              objects,
-              SkylarkNestedSet.class,
-              Artifact.class,
-              loc,
-              typeErrorMessage,
-              outputGroup,
-              EvalUtils.getDataTypeName(objects, true));
-      try {
-        return artifactsSet.getSet(Artifact.class);
-      } catch (SkylarkNestedSet.TypeException exception) {
-        throw new EvalException(
-            loc,
-            String.format(
-                typeErrorMessage,
-                outputGroup,
-                "depset of type '" + artifactsSet.getContentType() + "'"),
-            exception);
-      }
+                  objects,
+                  SkylarkNestedSet.class,
+                  Artifact.class,
+                  loc,
+                  typeErrorMessage,
+                  outputGroup,
+                  EvalUtils.getDataTypeName(objects, true))
+              .getSet(Artifact.class);
     }
     return artifacts;
   }
@@ -591,12 +581,8 @@ public final class SkylarkRuleConfiguredTargetUtil {
     builder.setFilesToBuild(filesToBuild.build());
 
     if (files != null) {
-      try {
-        // If we specify files_to_build we don't have the executable in it by default.
-        builder.setFilesToBuild(files.getSet(Artifact.class));
-      } catch (SkylarkNestedSet.TypeException exception) {
-        throw new EvalException(loc, "'files' field must be a depset of 'file'", exception);
-      }
+      // If we specify files_to_build we don't have the executable in it by default.
+      builder.setFilesToBuild(files.getSet(Artifact.class));
     }
 
     if (statelessRunfiles == null && dataRunfiles == null && defaultRunfiles == null) {
