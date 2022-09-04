@@ -24,10 +24,9 @@ import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.RunfilesSupport;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
-import com.google.devtools.build.lib.packages.BuildType;
-import com.google.devtools.build.lib.packages.TriState;
 import com.google.devtools.build.lib.rules.cpp.CcCommon.CcFlagsSupplier;
 import com.google.devtools.build.lib.rules.cpp.CcInfo;
+import com.google.devtools.build.lib.syntax.Type;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -108,7 +107,7 @@ public abstract class PyExecutable implements RuleConfiguredTargetFactory {
         new RuleConfiguredTargetBuilder(ruleContext);
     common.addCommonTransitiveInfoProviders(builder, common.getFilesToBuild());
 
-    semantics.postInitExecutable(ruleContext, runfilesSupport, common, builder);
+    semantics.postInitExecutable(ruleContext, runfilesSupport, common);
 
     return builder
         .setFilesToBuild(common.getFilesToBuild())
@@ -116,31 +115,6 @@ public abstract class PyExecutable implements RuleConfiguredTargetFactory {
         .setRunfilesSupport(runfilesSupport, common.getExecutable())
         .addNativeDeclaredProvider(new PyCcLinkParamsProvider(ccInfo))
         .build();
-  }
-
-  /**
-   * If requested, creates empty __init__.py files for each manifest file.
-   *
-   * <p>We do this if the rule defines {@code legacy_create_init} and its value is true. Auto is
-   * treated as false iff {@code --incompatible_remove_legacy_Create_init_py} is given.
-   *
-   * <p>See {@link PythonUtils#getInitPyFiles} for details about how the files are created.
-   */
-  private static void maybeCreateInitFiles(RuleContext ruleContext, Runfiles.Builder builder) {
-    boolean createFiles;
-    if (!ruleContext.attributes().has("legacy_create_init", BuildType.TRISTATE)) {
-      createFiles = true;
-    } else {
-      TriState legacy = ruleContext.attributes().get("legacy_create_init", BuildType.TRISTATE);
-      if (legacy == TriState.AUTO) {
-        createFiles = !ruleContext.getFragment(PythonConfiguration.class).defaultToExplicitInitPy();
-      } else {
-        createFiles = legacy != TriState.NO;
-      }
-    }
-    if (createFiles) {
-      builder.setEmptyFilesSupplier(PythonUtils.GET_INIT_PY_FILES);
-    }
   }
 
   private static Runfiles collectCommonRunfiles(
@@ -157,8 +131,10 @@ public abstract class PyExecutable implements RuleConfiguredTargetFactory {
     semantics.collectDefaultRunfiles(ruleContext, builder);
     builder.add(ruleContext, PythonRunfilesProvider.TO_RUNFILES);
 
-    maybeCreateInitFiles(ruleContext, builder);
-
+    if (!ruleContext.attributes().has("legacy_create_init", Type.BOOLEAN)
+        || ruleContext.attributes().get("legacy_create_init", Type.BOOLEAN)) {
+      builder.setEmptyFilesSupplier(PythonUtils.GET_INIT_PY_FILES);
+    }
     semantics.collectRunfilesForBinary(ruleContext, builder, common, ccInfo);
     return builder.build();
   }
