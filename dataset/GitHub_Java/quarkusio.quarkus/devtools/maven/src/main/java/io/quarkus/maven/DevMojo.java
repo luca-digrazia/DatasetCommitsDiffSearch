@@ -190,7 +190,7 @@ public class DevMojo extends AbstractMojo {
         try {
             List<String> args = new ArrayList<>();
             String javaTool = findJavaTool();
-            getLog().debug("Using javaTool: " + javaTool);
+            getLog().info("Using javaTool: " + javaTool);
             args.add(javaTool);
             if (debug == null) {
                 // debug mode not specified
@@ -237,7 +237,7 @@ public class DevMojo extends AbstractMojo {
                 File servletRes = new File(f, "META-INF/resources");
                 if (servletRes.exists()) {
                     args.add("-D" + RESOURCES_PROP + "=" + servletRes.getAbsolutePath());
-                    getLog().debug("Using servlet resources: " + servletRes.getAbsolutePath());
+                    getLog().info("Using servlet resources " + servletRes.getAbsolutePath());
                     break;
                 }
             }
@@ -388,7 +388,7 @@ public class DevMojo extends AbstractMojo {
             Toolchain toolchain = getToolchainManager().getToolchainFromBuildContext("jdk", getSession());
             if (toolchain != null) {
                 java = toolchain.findTool("java");
-                getLog().debug("JVM from toolchain: " + java);
+                getLog().info("JVM from toolchain: " + java);
             }
         }
         if (java == null) {
