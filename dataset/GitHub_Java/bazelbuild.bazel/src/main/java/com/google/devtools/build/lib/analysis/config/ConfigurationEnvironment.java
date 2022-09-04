@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.analysis.config;
 
+import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
@@ -24,6 +25,7 @@ import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.LoadedPackageProvider;
 import com.google.devtools.build.lib.pkgcache.PackageProvider;
 import com.google.devtools.build.lib.vfs.Path;
+import javax.annotation.Nullable;
 
 /**
  * An environment to support creating BuildConfiguration instances in a hermetic fashion; all
@@ -81,15 +83,35 @@ public interface ConfigurationEnvironment {
   /** Returns fragment based on fragment class and build options. */
   <T extends Fragment> T getFragment(BuildOptions buildOptions, Class<T> fragmentType)
       throws InvalidConfigurationException, InterruptedException;
+
+  /**
+   * Returns global value of BlazeDirectories.
+   *
+   * @deprecated Do not use this method. Configuration fragments should be fairly dumb key-value
+   * pairs so that they are cheap and easy to create.
+   */
+  @Nullable
+  @Deprecated
+  BlazeDirectories getBlazeDirectories() throws InterruptedException;
+
   /**
    * An implementation backed by a {@link PackageProvider} instance.
    */
   public static final class TargetProviderEnvironment implements ConfigurationEnvironment {
     private final LoadedPackageProvider packageProvider;
+    private final BlazeDirectories blazeDirectories;
+
+    public TargetProviderEnvironment(
+        PackageProvider packageProvider,
+        ExtendedEventHandler eventHandler,
+        BlazeDirectories blazeDirectories) {
+      this.packageProvider = new LoadedPackageProvider(packageProvider, eventHandler);
+      this.blazeDirectories = blazeDirectories;
+    }
 
     public TargetProviderEnvironment(
         PackageProvider packageProvider, ExtendedEventHandler eventHandler) {
-      this.packageProvider = new LoadedPackageProvider(packageProvider, eventHandler);
+      this(packageProvider, eventHandler, null);
     }
 
     @Override
@@ -111,6 +133,11 @@ public interface ConfigurationEnvironment {
     @Override
     public <T extends Fragment> T getFragment(BuildOptions buildOptions, Class<T> fragmentType) {
       throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public BlazeDirectories getBlazeDirectories() {
+      return blazeDirectories;
     }
   }
 }
