@@ -34,6 +34,7 @@ import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.HEADERS;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.NON_ARC_SRCS_TYPE;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.PRECOMPILED_SRCS_TYPE;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.SRCS_TYPE;
+import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.STRIP;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
@@ -589,10 +590,8 @@ public class LegacyCompilationSupport extends CompilationSupport {
     return this;
   }
 
-  private StrippingType getStrippingType(CommandLine commandLine) {
-    return Iterables.contains(commandLine.arguments(), "-dynamiclib")
-        ? StrippingType.DYNAMIC_LIB
-        : StrippingType.DEFAULT;
+  private boolean isDynamicLib(CommandLine commandLine) {
+    return Iterables.contains(commandLine.arguments(), "-dynamiclib");
   }
 
   private void registerLinkAction(
@@ -642,8 +641,40 @@ public class LegacyCompilationSupport extends CompilationSupport {
             .build(ruleContext));
 
     if (objcConfiguration.shouldStripBinary()) {
-      registerBinaryStripAction(binaryToLink, getStrippingType(commandLine));
+      final Iterable<String> stripArgs;
+      if (TargetUtils.isTestRule(ruleContext.getRule())) {
+        // For test targets, only debug symbols are stripped off, since /usr/bin/strip is not able
+        // to strip off all symbols in XCTest bundle.
+        stripArgs = ImmutableList.of("-S");
+      } else if (isDynamicLib(commandLine)) {
+        // For dynamic libs must pass "-x" to strip only local symbols.
+        stripArgs = ImmutableList.of("-x");
+      } else {
+        stripArgs = ImmutableList.<String>of();
+      }
+
+      Artifact strippedBinary = intermediateArtifacts.strippedSingleArchitectureBinary();
+
+      ruleContext.registerAction(
+          ObjcRuleClasses.spawnAppleEnvActionBuilder(
+                  appleConfiguration, appleConfiguration.getSingleArchPlatform())
+              .setMnemonic("ObjcBinarySymbolStrip")
+              .setExecutable(xcrunwrapper(ruleContext))
+              .setCommandLine(symbolStripCommandLine(stripArgs, binaryToLink, strippedBinary))
+              .addOutput(strippedBinary)
+              .addInput(binaryToLink)
+              .build(ruleContext));
     }
+  }
+
+  private static CommandLine symbolStripCommandLine(
+      Iterable<String> extraFlags, Artifact unstrippedArtifact, Artifact strippedArtifact) {
+    return CustomCommandLine.builder()
+        .add(STRIP)
+        .add(extraFlags)
+        .addExecPath("-o", strippedArtifact)
+        .addPath(unstrippedArtifact.getExecPath())
+        .build();
   }
 
   private CommandLine linkCommandLine(
