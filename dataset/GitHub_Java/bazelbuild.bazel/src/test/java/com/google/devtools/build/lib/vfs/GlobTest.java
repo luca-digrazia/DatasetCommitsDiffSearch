@@ -14,7 +14,7 @@
 package com.google.devtools.build.lib.vfs;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
@@ -276,27 +276,11 @@ public class GlobTest {
     FileSystemUtils.createDirectoryAndParents(tmpPath2);
     Path aDotB = tmpPath2.getChild("a.b");
     FileSystemUtils.createEmptyFile(aDotB);
-    Path aPlusB = tmpPath2.getChild("a+b");
-    FileSystemUtils.createEmptyFile(aPlusB);
-    Path aWordCharacterB = tmpPath2.getChild("a\\wb");
-    FileSystemUtils.createEmptyFile(aWordCharacterB);
-    Path groupsAndBrackets = tmpPath2.getChild("(a|b){1,2}[ab]");
-    FileSystemUtils.createEmptyFile(groupsAndBrackets);
-    Path lineNoise = tmpPath2.getChild("\\|}{[(])(.+");
-    FileSystemUtils.createEmptyFile(lineNoise);
     FileSystemUtils.createEmptyFile(tmpPath2.getChild("aab"));
-    // Note: these contain two asterisks because otherwise a RE is not built,
+    // Note: this contains two asterisks because otherwise a RE is not built,
     // as an optimization.
-    assertThat(UnixGlob.forPath(tmpPath2).addPattern("*a.b*").globInterruptible())
-        .containsExactly(aDotB);
-    assertThat(UnixGlob.forPath(tmpPath2).addPattern("*a+b*").globInterruptible())
-        .containsExactly(aPlusB);
-    assertThat(UnixGlob.forPath(tmpPath2).addPattern("*a\\wb*").globInterruptible())
-        .containsExactly(aWordCharacterB);
-    assertThat(UnixGlob.forPath(tmpPath2).addPattern("*(a|b){1,2}[ab]*").globInterruptible())
-        .containsExactly(groupsAndBrackets);
-    assertThat(UnixGlob.forPath(tmpPath2).addPattern("*\\|}{[(])(.+*").globInterruptible())
-        .containsExactly(lineNoise);
+    assertThat(UnixGlob.forPath(tmpPath2).addPattern("*a.b*").globInterruptible()).containsExactly(
+        aDotB);
   }
 
   @Test
@@ -338,9 +322,9 @@ public class GlobTest {
   }
 
   private void assertIllegalPattern(String pattern) throws Exception {
-    UnixGlob.BadPattern e =
+    IllegalArgumentException e =
         assertThrows(
-            UnixGlob.BadPattern.class,
+            IllegalArgumentException.class,
             () -> new UnixGlob.Builder(tmpPath).addPattern(pattern).globInterruptible());
     assertThat(e).hasMessageThat().containsMatch("in glob pattern");
   }
@@ -350,13 +334,9 @@ public class GlobTest {
     for (String dir : ImmutableList.of(".hidden", "..also.hidden", "not.hidden")) {
       FileSystemUtils.createDirectoryAndParents(tmpPath.getRelative(dir));
     }
-
     // Note that these are not in the result: ".", ".."
     assertGlobMatches("*", "not.hidden", "foo", "fool", "food", ".hidden", "..also.hidden");
-
     assertGlobMatches("*.hidden", "not.hidden");
-
-    assertGlobMatches(".*also*", "..also.hidden");
   }
 
   @Test
@@ -458,15 +438,14 @@ public class GlobTest {
         .isTrue();
   }
 
-  private static Collection<String> removeExcludes(ImmutableList<String> paths, String... excludes)
-      throws UnixGlob.BadPattern {
+  private Collection<String> removeExcludes(ImmutableList<String> paths, String... excludes) {
     HashSet<String> pathSet = new HashSet<>(paths);
     UnixGlob.removeExcludes(pathSet, ImmutableList.copyOf(excludes));
     return pathSet;
   }
 
   @Test
-  public void testExcludeFiltering() throws UnixGlob.BadPattern {
+  public void testExcludeFiltering() {
     ImmutableList<String> paths = ImmutableList.of("a/A.java", "a/B.java", "a/b/C.java", "c.cc");
     assertThat(removeExcludes(paths, "**/*.java")).containsExactly("c.cc");
     assertThat(removeExcludes(paths, "a/**/*.java")).containsExactly("c.cc");
@@ -484,3 +463,4 @@ public class GlobTest {
         .containsExactly("a/b/*.java", "c.cc");
   }
 }
+

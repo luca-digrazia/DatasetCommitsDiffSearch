@@ -95,13 +95,12 @@ public class PerBuildSyscallCache implements UnixGlob.FilesystemCalls {
   }
 
   @Override
-  @SuppressWarnings("unchecked")
   public Collection<Dirent> readdir(Path path) throws IOException {
     Object result = readdirCache.getUnchecked(path);
     if (result instanceof IOException) {
       throw (IOException) result;
     }
-    return (Collection<Dirent>) result; // unchecked cast
+    return (Collection<Dirent>) result;
   }
 
   @Override
@@ -115,13 +114,12 @@ public class PerBuildSyscallCache implements UnixGlob.FilesystemCalls {
   }
 
   @Override
-  @SuppressWarnings("unchecked")
   public Dirent.Type getType(Path path, Symlinks symlinks) throws IOException {
     // Use a cached stat call if we have one. This is done first so that we don't need to iterate
     // over a list of directory entries as we do for cached readdir() entries. We don't ever expect
     // to get a cache hit if symlinks == Symlinks.NOFOLLOW and so we don't bother to check.
     if (symlinks == Symlinks.FOLLOW) {
-      Pair<Path, Symlinks> key = Pair.of(path, symlinks);
+      Pair key = Pair.of(path, symlinks);
       Object result = statCache.getIfPresent(key);
       if (result != null && !(result instanceof IOException)) {
         if (result == NO_STATUS) {
@@ -146,7 +144,7 @@ public class PerBuildSyscallCache implements UnixGlob.FilesystemCalls {
     // stat.
     Object result = readdirCache.getIfPresent(parent);
     if (result != null && !(result instanceof IOException)) {
-      for (Dirent dirent : (Collection<Dirent>) result) { // unchecked cast
+      for (Dirent dirent : (Collection<Dirent>) result) {
         // TODO(djasper): Dealing with filesystem case is a bit of a code smell. Figure out a better
         // way to store Dirents, e.g. with names normalized.
         if (path.getFileSystem().isFilePathCaseSensitive()
