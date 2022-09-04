@@ -22,7 +22,6 @@ import static com.google.devtools.build.lib.syntax.Type.STRING_LIST;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
@@ -70,9 +69,7 @@ public class MockRuleDefaults {
               .dontCheckConstraints(),
           attr(RuleClass.RESTRICTED_ENVIRONMENT_ATTR, LABEL_LIST)
               .allowedFileTypes(FileTypeSet.NO_FILE)
-              .dontCheckConstraints(),
-          attr(RuleClass.CONFIG_SETTING_DEPS_ATTRIBUTE, LABEL_LIST)
-              .nonconfigurable("stores configurability keys"));
+              .dontCheckConstraints());
 
   /**
    * The default configured target factory for mock rules.
@@ -81,8 +78,7 @@ public class MockRuleDefaults {
    * */
   public static class DefaultConfiguredTargetFactory implements RuleConfiguredTargetFactory {
     @Override
-    public ConfiguredTarget create(RuleContext ruleContext)
-        throws InterruptedException, RuleErrorException, ActionConflictException {
+    public ConfiguredTarget create(RuleContext ruleContext) throws InterruptedException {
       NestedSet<Artifact> filesToBuild =
           NestedSetBuilder.wrap(Order.STABLE_ORDER, ruleContext.getOutputArtifacts());
       for (Artifact artifact : ruleContext.getOutputArtifacts()) {

@@ -45,11 +45,12 @@ public class AndroidInstrumentationTestRule implements RuleDefinition {
                 .exec()
                 .cfg(HostTransition.INSTANCE)
                 .allowedFileTypes(FileTypeSet.NO_FILE)
-                .mandatoryProviders(DeviceBrokerInfo.PROVIDER.id()))
+                .allowedRuleClasses("android_device"))
         .add(
             attr("support_apks", LABEL_LIST)
                 .allowedFileTypes(AndroidRuleClasses.APK)
                 .allowedRuleClasses("android_binary"))
+        .add(attr("test_args", STRING_DICT))
         .add(
             attr("fixtures", LABEL_LIST)
                 .allowedFileTypes(FileTypeSet.NO_FILE)

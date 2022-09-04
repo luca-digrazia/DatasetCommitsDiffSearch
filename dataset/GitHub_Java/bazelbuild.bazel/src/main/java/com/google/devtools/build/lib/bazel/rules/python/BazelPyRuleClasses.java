@@ -27,8 +27,9 @@ import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.bazel.rules.cpp.BazelCppRuleClasses;
+import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute.AllowedValueSet;
-import com.google.devtools.build.lib.packages.Attribute.LabelLateBoundDefault;
+import com.google.devtools.build.lib.packages.Attribute.LateBoundDefault;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.packages.TriState;
@@ -43,8 +44,8 @@ import com.google.devtools.build.lib.util.FileType;
 public final class BazelPyRuleClasses {
   public static final FileType PYTHON_SOURCE = FileType.of(".py");
 
-  public static final LabelLateBoundDefault<?> PY_INTERPRETER =
-      LabelLateBoundDefault.fromTargetConfiguration(
+  public static final LateBoundDefault<?, Label> PY_INTERPRETER =
+      LateBoundDefault.fromTargetConfiguration(
           BazelPythonConfiguration.class,
           null,
           (rule, attributes, bazelPythonConfig) -> bazelPythonConfig.getPythonTop());

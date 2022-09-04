@@ -15,14 +15,13 @@
 package com.google.devtools.build.lib.skylark;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.expectThrows;
+import static org.junit.Assert.fail;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransitionProxy;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkAttr;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkAttr.Descriptor;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkFileType;
@@ -32,6 +31,7 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.AdvertisedProviderSet;
 import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.Attribute;
+import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.Info;
@@ -99,23 +99,33 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
   @Test
   public void testCannotOverrideBuiltInAttribute() throws Exception {
     ev.setFailFast(false);
-    evalAndExport(
-        "def impl(ctx):",
-        "  return",
-        "r = rule(impl, attrs = {'tags': attr.string_list()})");
-    ev.assertContainsError(
-        "There is already a built-in attribute 'tags' which cannot be overridden");
+    try {
+      evalAndExport(
+          "def impl(ctx): return", "r = rule(impl, attrs = {'tags': attr.string_list()})");
+      fail("Expected error '"
+          + "There is already a built-in attribute 'tags' which cannot be overridden"
+          + "' but got no error");
+    } catch (AssertionError e) {
+      assertThat(e)
+          .hasMessageThat()
+          .contains("There is already a built-in attribute 'tags' which cannot be overridden");
+    }
   }
 
   @Test
   public void testCannotOverrideBuiltInAttributeName() throws Exception {
     ev.setFailFast(false);
-    evalAndExport(
-        "def impl(ctx):",
-        "  return",
-        "r = rule(impl, attrs = {'name': attr.string()})");
-    ev.assertContainsError(
-        "There is already a built-in attribute 'name' which cannot be overridden");
+    try {
+      evalAndExport(
+          "def impl(ctx): return", "r = rule(impl, attrs = {'name': attr.string()})");
+      fail("Expected error '"
+          + "There is already a built-in attribute 'name' which cannot be overridden"
+          + "' but got no error");
+    } catch (AssertionError e) {
+      assertThat(e)
+          .hasMessageThat()
+          .contains("There is already a built-in attribute 'name' which cannot be overridden");
+    }
   }
 
   @Test
@@ -539,13 +549,13 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
   @Test
   public void testAttrCfgData() throws Exception {
     Attribute attr = buildAttribute("a1", "attr.label(cfg = 'data', allow_files = True)");
-    assertThat(attr.getConfigurationTransition()).isEqualTo(ConfigurationTransitionProxy.DATA);
+    assertThat(attr.getConfigurationTransition()).isEqualTo(ConfigurationTransition.DATA);
   }
 
   @Test
   public void testAttrCfgTarget() throws Exception {
     Attribute attr = buildAttribute("a1", "attr.label(cfg = 'target', allow_files = True)");
-    assertThat(attr.getConfigurationTransition()).isEqualTo(ConfigurationTransitionProxy.NONE);
+    assertThat(attr.getConfigurationTransition()).isEqualTo(ConfigurationTransition.NONE);
   }
 
   @Test
@@ -1041,7 +1051,7 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
         "y = struct(c = 1, d = 2)",
         "z = x + y\n");
     Info z = (Info) lookup("z");
-    assertThat(z.getFieldNames()).isEqualTo(ImmutableSet.of("a", "b", "c", "d"));
+    assertThat(z.getKeys()).isEqualTo(ImmutableSet.of("a", "b", "c", "d"));
   }
 
   @Test
@@ -1059,7 +1069,7 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
 
   @Test
   public void testStructConcatenationCommonFields() throws Exception {
-    checkErrorContains("Cannot use '+' operator on provider instances with overlapping field(s): a",
+    checkErrorContains("Cannot concat structs with common field(s): a",
         "x = struct(a = 1, b = 2)", "y = struct(c = 1, a = 2)", "z = x + y\n");
   }
 
@@ -1247,7 +1257,7 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
         "data2 = provider()"
     );
 
-    checkEvalError("Cannot use '+' operator on instances of different providers (data1 and data2)",
+    checkEvalError("Cannot concat data1 with data2",
         "d1 = data1(x = 1)",
         "d2 = data2(y = 2)",
         "d = d1 + d2"
@@ -1271,7 +1281,7 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
   public void declaredProvidersWithFieldsConcatError() throws Exception {
     evalAndExport("data1 = provider(fields=['f1', 'f2'])", "data2 = provider(fields=['f3'])");
     checkEvalError(
-        "Cannot use '+' operator on instances of different providers (data1 and data2)",
+        "Cannot concat data1 with data2",
         "d1 = data1(f1=1, f2=2)",
         "d2 = data2(f3=3)",
         "d = d1 + d2");
@@ -1281,7 +1291,7 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
   public void declaredProvidersWithOverlappingFieldsConcatError() throws Exception {
     evalAndExport("data = provider(fields=['f1', 'f2'])");
     checkEvalError(
-        "Cannot use '+' operator on provider instances with overlapping field(s): f1",
+        "Cannot concat structs with common field(s): f1",
         "d1 = data(f1 = 4)",
         "d2 = data(f1 = 5)",
         "d1 + d2");
@@ -1598,11 +1608,14 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
       "my_rule(name = 'main', exe = ':tool.sh')"
     );
 
-    AssertionError expected = expectThrows(
-        AssertionError.class,
-        () -> createRuleContext("//third_party/foo:main"));
-    assertThat(expected).hasMessageThat()
-        .contains("cfg parameter is mandatory when executable=True is provided.");
+    try {
+      createRuleContext("//third_party/foo:main");
+      fail();
+    } catch (AssertionError e) {
+      assertThat(e)
+          .hasMessageThat()
+          .contains("cfg parameter is mandatory when executable=True is " + "provided.");
+    }
   }
 
   @Test

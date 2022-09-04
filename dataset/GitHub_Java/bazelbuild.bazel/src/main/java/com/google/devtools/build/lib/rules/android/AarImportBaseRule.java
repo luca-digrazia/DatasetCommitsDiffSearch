@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.packages.SkylarkProviderIdentifier;
 import com.google.devtools.build.lib.rules.android.AndroidRuleClasses.AndroidBaseRule;
-import com.google.devtools.build.lib.rules.java.JavaConfiguration;
 import com.google.devtools.build.lib.rules.java.JavaInfo;
 import com.google.devtools.build.lib.util.FileType;
 
@@ -69,17 +68,11 @@ public class AarImportBaseRule implements RuleDefinition {
                 .cfg(HostTransition.INSTANCE)
                 .exec()
                 .value(env.getToolsLabel("//tools/android:aar_resources_extractor")))
-        .add(
-            attr("$import_deps_checker", LABEL)
-                .cfg(HostTransition.INSTANCE)
-                .exec()
-                .value(env.getToolsLabel("//tools/android:aar_import_deps_checker")))
         .add(attr(ZIPPER, LABEL)
             .cfg(HostTransition.INSTANCE)
             .exec()
             .value(env.getToolsLabel("//tools/zip:zipper")))
         .advertiseSkylarkProvider(SkylarkProviderIdentifier.forKey(JavaInfo.PROVIDER.getKey()))
-        .requiresConfigurationFragments(JavaConfiguration.class)
         .build();
   }
 

@@ -36,18 +36,7 @@ import java.util.List;
 /**
  * Rule definition for {@code java_toolchain}
  */
-public final class JavaToolchainRule<C extends JavaToolchain> implements RuleDefinition {
-
-  private final Class<C> ruleClass;
-
-  public static <C extends JavaToolchain> JavaToolchainRule create(Class<C> ruleClass){
-      return new JavaToolchainRule(ruleClass);
-  }
-
-  private JavaToolchainRule(Class<C> ruleClass) {
-    this.ruleClass = ruleClass;
-  }
-
+public final class JavaToolchainRule implements RuleDefinition {
   @Override
   public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
     return builder
@@ -232,7 +221,7 @@ public final class JavaToolchainRule<C extends JavaToolchain> implements RuleDef
     return RuleDefinition.Metadata.builder()
         .name("java_toolchain")
         .ancestors(BaseRuleClasses.BaseRule.class)
-        .factoryClass(ruleClass)
+        .factoryClass(JavaToolchain.class)
         .build();
   }
 }

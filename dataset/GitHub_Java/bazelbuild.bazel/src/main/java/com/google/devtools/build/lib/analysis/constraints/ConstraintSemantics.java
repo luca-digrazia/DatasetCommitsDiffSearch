@@ -21,7 +21,6 @@ import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
-import com.google.devtools.build.lib.analysis.LabelAndLocation;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.configuredtargets.OutputFileConfiguredTarget;
@@ -500,26 +499,25 @@ public class ConstraintSemantics {
    *
    * <ul>
    *   <li>Static environment checking: if this rule supports environment E, all deps outside
-   *       selects must also support E
+   *     selects must also support E
    *   <li>Refined environment computation: this rule's refined environments are its static
-   *       environments intersected with the refined environments of all dependencies (including
-   *       chosen deps in selects)
+   *     environments intersected with the refined environments of all dependencies (including
+   *     chosen deps in selects)
    *   <li>Refined environment checking: no environment groups can be "emptied" due to refinement
    * </ul>
    *
    * @param ruleContext the rule to analyze
-   * @param staticEnvironments the rule's supported environments, as defined by the return value of
-   *     {@link #getSupportedEnvironments}. In particular, for any environment group that's not in
-   *     this collection, the rule is assumed to support the defaults for that group.
+   * @param staticEnvironments the rule's supported environments, as defined by the return
+   *     value of {@link #getSupportedEnvironments}. In particular, for any environment group that's
+   *     not in this collection, the rule is assumed to support the defaults for that group.
    * @param refinedEnvironments a builder for populating this rule's refined environments
    * @param removedEnvironmentCulprits a builder for populating the core dependencies that trigger
    *     pruning away environments through refinement. If multiple dependencies qualify (e.g.
+   *     two direct deps under the current rule), one is arbitrarily chosen.
    */
-  public static void checkConstraints(
-      RuleContext ruleContext,
-      EnvironmentCollection staticEnvironments,
-      EnvironmentCollection.Builder refinedEnvironments,
-      Map<Label, LabelAndLocation> removedEnvironmentCulprits) {
+  public static void checkConstraints(RuleContext ruleContext,
+      EnvironmentCollection staticEnvironments, EnvironmentCollection.Builder refinedEnvironments,
+      Map<Label, Target> removedEnvironmentCulprits) {
     Set<EnvironmentWithGroup> refinedEnvironmentsSoFar = new LinkedHashSet<>();
     // Start with the full set of static environments:
     refinedEnvironmentsSoFar.addAll(staticEnvironments.getGroupedEnvironments());
@@ -584,7 +582,7 @@ public class ConstraintSemantics {
       Map<Label, EnvironmentWithGroup> labelsToEnvironments,
       Set<EnvironmentWithGroup> refinedEnvironmentsSoFar,
       Set<EnvironmentGroup> groupsWithEnvironmentsRemoved,
-      Map<Label, LabelAndLocation> removedEnvironmentCulprits) {
+      Map<Label, Target> removedEnvironmentCulprits) {
 
     SupportedEnvironmentsProvider depEnvironments =
         dep.getProvider(SupportedEnvironmentsProvider.class);
@@ -634,8 +632,8 @@ public class ConstraintSemantics {
    * Helper method for {@link #checkConstraints}: performs refined environment constraint checking.
    *
    * <p>Refined environment expectations: no environment group should be emptied out due to
-   * refining. This reflects the idea that some of the static declared environments get pruned out
-   * by the build configuration, but <i>all</i> environments shouldn't be pruned out.
+   * refining. This reflects the idea that some of the static declared environments get pruned
+   * out by the build configuration, but <i>all</i> environments shouldn't be pruned out.
    *
    * <p>Violations of this expectation trigger rule analysis errors.
    */
@@ -644,7 +642,7 @@ public class ConstraintSemantics {
       Set<EnvironmentGroup> groupsWithEnvironmentsRemoved,
       Set<EnvironmentWithGroup> refinedEnvironmentsSoFar,
       EnvironmentCollection.Builder refinedEnvironments,
-      Map<Label, LabelAndLocation> removedEnvironmentCulprits) {
+      Map<Label, Target> removedEnvironmentCulprits) {
     Set<EnvironmentGroup> refinedGroups = new LinkedHashSet<>();
     for (EnvironmentWithGroup envWithGroup : refinedEnvironmentsSoFar) {
       refinedEnvironments.put(envWithGroup.group(), envWithGroup.environment());
@@ -659,12 +657,11 @@ public class ConstraintSemantics {
   }
 
   /**
-   * Constructs an error message for when all environments have been pruned out of one or more
-   * environment groups due to refining.
+   * Constructs an error message for when all environments have been pruned out of one
+   * or more environment groups due to refining.
    */
-  private static String getOverRefinementError(
-      Set<EnvironmentGroup> newlyEmptyGroups,
-      Map<Label, LabelAndLocation> removedEnvironmentCulprits) {
+  private static String getOverRefinementError(Set<EnvironmentGroup> newlyEmptyGroups,
+      Map<Label, Target> removedEnvironmentCulprits) {
     StringBuilder message = new StringBuilder("the current command-line flags disqualify "
         + "all supported environments because of incompatible select() paths:");
     for (EnvironmentGroup group : newlyEmptyGroups) {
@@ -672,7 +669,7 @@ public class ConstraintSemantics {
         message.append("\n\nenvironment group: " + group.getLabel() + ":");
       }
       for (Label prunedEnvironment : group.getEnvironments()) {
-        LabelAndLocation culprit = removedEnvironmentCulprits.get(prunedEnvironment);
+        Target culprit = removedEnvironmentCulprits.get(prunedEnvironment);
         if (culprit != null) { // Only environments this rule declared support for have culprits.
           message.append("\n environment: " + prunedEnvironment
               + " removed by: " + culprit.getLabel() + " (" + culprit.getLocation() + ")");
@@ -688,19 +685,18 @@ public class ConstraintSemantics {
    *
    * <p>For example, say we have R -> D1 -> D2 and all rules support environment E. If the
    * refinement happens because D2 has
-   *
    * <pre>
    *   deps = select({":foo": ["restricted_to_E"], ":bar": ["restricted_to_F"]}}  # Choose F.
    * </pre>
    *
    * <p>then D2 is the original refiner (even though D1 and R inherit the same pruning).
    */
-  private static LabelAndLocation findOriginalRefiner(
-      RuleContext ruleContext, SupportedEnvironmentsProvider dep, EnvironmentWithGroup envToPrune) {
-    LabelAndLocation depCulprit = dep.getRemovedEnvironmentCulprit(envToPrune.environment());
+  private static Target findOriginalRefiner(RuleContext ruleContext,
+      SupportedEnvironmentsProvider dep, EnvironmentWithGroup envToPrune) {
+    Target depCulprit = dep.getRemovedEnvironmentCulprit(envToPrune.environment());
     // If the dep has no record of this environment being refined, that means the current rule
     // is the culprit.
-    return depCulprit == null ? LabelAndLocation.of(ruleContext.getTarget()) : depCulprit;
+    return depCulprit == null ? ruleContext.getTarget() : depCulprit;
   }
 
   /**

@@ -26,12 +26,15 @@ import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.packages.Attribute.ComputedDefault;
 import com.google.devtools.build.lib.packages.Attribute.LateBoundDefault;
+import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.BundlingRule;
+import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileType;
 
 /**
@@ -64,7 +67,7 @@ public class IosTestRule implements RuleDefinition {
                 .allowedRuleClasses("ios_device")
                 .value(env.getToolsLabel("//tools/objc/sim_devices:default")))
         /* <!-- #BLAZE_RULE(ios_test).ATTRIBUTE(xctest) -->
-        Deprecated. Does not affect how the test is built.
+        Whether this target contains tests using the XCTest testing framework.
         <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
         .add(attr(IosTest.IS_XCTEST_ATTR, BOOLEAN).value(true))
         /* <!-- #BLAZE_RULE(ios_test).ATTRIBUTE(xctest_app) -->
@@ -73,12 +76,34 @@ public class IosTestRule implements RuleDefinition {
         <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
         .add(
             attr(IosTest.XCTEST_APP_ATTR, LABEL)
-                .value(env.getLabel("//tools/objc:xctest_app"))
+                .value(
+                    new ComputedDefault(IosTest.IS_XCTEST_ATTR) {
+                      @Override
+                      public Object getDefault(AttributeMap rule) {
+                        return rule.get(IosTest.IS_XCTEST_ATTR, Type.BOOLEAN)
+                            // No TOOLS_REPOSITORY prefix for the xctest_app tool; xcode projects
+                            // referencing a dependency under a repository do not work. Thus,
+                            // this target must be available in the target depot.
+                            ? env.getLabel("//tools/objc:xctest_app")
+                            : null;
+                      }
+                    })
                 .allowedFileTypes()
                 .mandatoryProviders(XcTestAppProvider.SKYLARK_CONSTRUCTOR.id()))
         .override(
             attr(BundlingRule.INFOPLIST_ATTR, LABEL)
-                .value(env.getLabel("//tools/objc:xctest_infoplist"))
+                .value(
+                    new ComputedDefault(IosTest.IS_XCTEST_ATTR) {
+                      @Override
+                      public Object getDefault(AttributeMap rule) {
+                        return rule.get(IosTest.IS_XCTEST_ATTR, Type.BOOLEAN)
+                            // No TOOLS_REPOSITORY prefix for the xctest_app tool; xcode projects
+                            // referencing a dependency under a repository do not work. Thus,
+                            // this target must be available in the target depot.
+                            ? env.getLabel("//tools/objc:xctest_infoplist")
+                            : null;
+                      }
+                    })
                 .allowedFileTypes(ObjcRuleClasses.PLIST_TYPE))
         /* <!-- #BLAZE_RULE(ios_test).ATTRIBUTE(ios_test_target_device) -->
         The device against how to run the test. If this attribute is defined, the test will run on
@@ -150,7 +175,7 @@ public class IosTestRule implements RuleDefinition {
 (<a href="https://github.com/bazelbuild/rules_apple">https://github.com/bazelbuild/rules_apple</a>)
 to build Apple targets.</p>
 
-<p>This rule provides a way to build iOS unit tests written in the XCTest test framework
+<p>This rule provides a way to build iOS unit tests written in KIF, GTM and XCTest test frameworks
 on both iOS simulator and real devices.
 </p>
 

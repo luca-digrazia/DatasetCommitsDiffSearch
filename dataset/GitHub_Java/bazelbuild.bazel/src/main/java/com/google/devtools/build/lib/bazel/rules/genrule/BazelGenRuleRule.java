@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppRuleClasses;
 import com.google.devtools.build.lib.rules.genrule.GenRuleBaseRule;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
-import com.google.devtools.build.lib.rules.java.JavaRuntimeInfo;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
 
 /**
@@ -60,8 +59,7 @@ public final class BazelGenRuleRule implements RuleDefinition {
                 .value(GenRuleBaseRule.ccToolchainTypeAttribute(env)))
         .add(attr(":host_jdk", LABEL)
             .cfg(HostTransition.INSTANCE)
-            .value(JavaSemantics.hostJdkAttribute(env))
-            .mandatoryProviders(JavaRuntimeInfo.PROVIDER.id()))
+            .value(JavaSemantics.hostJdkAttribute(env)))
         .addRequiredToolchains(CppRuleClasses.ccToolchainTypeAttribute(env))
         .build();
   }

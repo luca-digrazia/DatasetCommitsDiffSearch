@@ -45,10 +45,8 @@ import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.Attribute.LateBoundDefault;
 import com.google.devtools.build.lib.packages.NativeAspectClass;
 import com.google.devtools.build.lib.skyframe.AspectValue;
-import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndTarget;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
-import com.google.devtools.build.lib.vfs.Root;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
@@ -218,8 +216,8 @@ public class AspectTest extends AnalysisTestCase {
             .add("bind(name='b', actual='//a:b')")
             .build());
 
-    skyframeExecutor.invalidateFilesUnderPathForTesting(
-        reporter, ModifiedFileSet.EVERYTHING_MODIFIED, Root.fromPath(rootDirectory));
+    skyframeExecutor.invalidateFilesUnderPathForTesting(reporter,
+        ModifiedFileSet.EVERYTHING_MODIFIED, rootDirectory);
 
     ConfiguredTarget a = getConfiguredTarget("//a:a");
     assertThat(a.getProvider(RuleInfo.class).getData())
@@ -428,7 +426,7 @@ public class AspectTest extends AnalysisTestCase {
 
       @Override
       public ConfiguredAspect create(
-          ConfiguredTargetAndTarget ctatBase, RuleContext ruleContext, AspectParameters parameters)
+          ConfiguredTarget base, RuleContext ruleContext, AspectParameters parameters)
           throws InterruptedException {
         Object lateBoundPrereq = ruleContext.getPrerequisite(":late", TARGET);
         return new ConfiguredAspect.Builder(this, parameters, ruleContext)
@@ -480,10 +478,12 @@ public class AspectTest extends AnalysisTestCase {
         return new AspectDefinition.Builder(this).build();
       }
 
+
+
       @Override
       public ConfiguredAspect create(
-          ConfiguredTargetAndTarget ctatBase, RuleContext ruleContext, AspectParameters parameters)
-          throws InterruptedException {
+          ConfiguredTarget base, RuleContext ruleContext, AspectParameters parameters)
+              throws InterruptedException {
         ruleContext.registerAction(new NullAction(ruleContext.createOutputArtifact()));
         return new ConfiguredAspect.Builder(this, parameters, ruleContext).build();
       }

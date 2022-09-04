@@ -41,8 +41,7 @@ public class JavaImportBaseRule implements RuleDefinition {
         .requiresConfigurationFragments(JavaConfiguration.class, CppConfiguration.class)
         .add(attr(":host_jdk", LABEL)
             .cfg(HostTransition.INSTANCE)
-            .value(JavaSemantics.hostJdkAttribute(environment))
-            .mandatoryProviders(JavaRuntimeInfo.PROVIDER.id()))
+            .value(JavaSemantics.hostJdkAttribute(environment)))
         /* <!-- #BLAZE_RULE($java_import_base).ATTRIBUTE(jars) -->
         The list of JAR files provided to Java targets that depend on this target.
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
