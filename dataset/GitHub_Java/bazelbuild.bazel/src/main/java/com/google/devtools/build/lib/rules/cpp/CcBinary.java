@@ -88,11 +88,9 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 import net.starlark.java.annot.StarlarkBuiltin;
-import net.starlark.java.annot.StarlarkMethod;
 import net.starlark.java.eval.EvalException;
 import net.starlark.java.eval.Sequence;
 import net.starlark.java.eval.Starlark;
-import net.starlark.java.eval.StarlarkThread;
 import net.starlark.java.eval.Tuple;
 
 /**
@@ -168,21 +166,8 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       return ccCompilationOutputs;
     }
 
-    @StarlarkMethod(name = "compilation_outputs", documented = false, useStarlarkThread = true)
-    public CcCompilationOutputs getCcCompilationOutputsStarlark(StarlarkThread thread)
-        throws EvalException {
-      CcModule.checkPrivateStarlarkificationAllowlist(thread);
-      return ccCompilationOutputs;
-    }
-
     public CcInfo getCcInfo(RuleContext ruleContext) {
       checkRestrictedUsage(ruleContext);
-      return ccInfo;
-    }
-
-    @StarlarkMethod(name = "cc_info", documented = false, useStarlarkThread = true)
-    public CcInfo getCcInfoForStarlark(StarlarkThread thread) throws EvalException {
-      CcModule.checkPrivateStarlarkificationAllowlist(thread);
       return ccInfo;
     }
 

@@ -859,23 +859,23 @@ public interface CcModuleApi<
             named = true,
             defaultValue = "unbound"),
         @Param(
-            name = "direct_textual_headers",
+            name = "textual_hdrs",
             documented = false,
             positional = false,
             named = true,
-            defaultValue = "[]"),
+            defaultValue = "unbound"),
         @Param(
-            name = "direct_public_headers",
+            name = "modular_public_hdrs",
             documented = false,
             positional = false,
             named = true,
-            defaultValue = "[]"),
+            defaultValue = "unbound"),
         @Param(
-            name = "direct_private_headers",
+            name = "modular_private_hdrs",
             documented = false,
             positional = false,
             named = true,
-            defaultValue = "[]"),
+            defaultValue = "unbound"),
         @Param(
             name = "purpose",
             documented = false,
@@ -891,9 +891,9 @@ public interface CcModuleApi<
       Object frameworkIncludes,
       Object defines,
       Object localDefines,
-      Sequence<?> directTextualHdrs,
-      Sequence<?> directPublicHdrs,
-      Sequence<?> directPrivateHdrs,
+      Object textualHdrs,
+      Object modularPublicHdrs,
+      Object modularPrivateHdrs,
       Object purpose,
       StarlarkThread thread)
       throws EvalException;
