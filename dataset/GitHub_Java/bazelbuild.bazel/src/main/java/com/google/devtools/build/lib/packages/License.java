@@ -23,14 +23,14 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
-import com.google.devtools.build.lib.starlarkbuildapi.LicenseApi;
+import com.google.devtools.build.lib.skylarkbuildapi.LicenseApi;
+import com.google.devtools.build.lib.syntax.Printer;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
-import net.starlark.java.eval.Printer;
 
 /** Support for license and distribution checking. */
 @Immutable
@@ -44,7 +44,7 @@ public final class License implements LicenseApi {
    * The error that's thrown if a build file contains an invalid license string.
    */
   public static class LicenseParsingException extends Exception {
-    LicenseParsingException(String s) {
+    public LicenseParsingException(String s) {
       super(s);
     }
   }
@@ -241,11 +241,6 @@ public final class License implements LicenseApi {
   @Override
   public int hashCode() {
     return licenseTypes.hashCode() * 43 + exceptions.hashCode();
-  }
-
-  @Override
-  public boolean isImmutable() {
-    return true; // licences are Starlark-hashable
   }
 
   @Override
