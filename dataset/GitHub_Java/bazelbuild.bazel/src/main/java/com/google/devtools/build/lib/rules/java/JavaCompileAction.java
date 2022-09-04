@@ -543,10 +543,9 @@ public class JavaCompileAction extends AbstractAction
           throw new ActionExecutionException(e, JavaCompileAction.this, /*catastrophe=*/ false);
         }
         return new JavaFallbackActionContinuation(
-                actionExecutionContext,
-                results,
-                SpawnContinuation.ofBeginExecution(spawn, actionExecutionContext))
-            .execute();
+            actionExecutionContext,
+            results,
+            SpawnContinuation.ofBeginExecution(spawn, actionExecutionContext));
       } catch (IOException e) {
         throw printIOExceptionAndConvertToActionExecutionException(actionExecutionContext, e);
       } catch (ExecException e) {
