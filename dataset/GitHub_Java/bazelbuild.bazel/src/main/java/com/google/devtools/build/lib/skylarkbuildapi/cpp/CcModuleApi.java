@@ -467,7 +467,7 @@ public interface CcModuleApi<
 
   @SkylarkCallable(
       name = "create_library_to_link",
-      doc = "Creates <code>LibraryToLink</code>",
+      documented = false,
       useLocation = true,
       useEnvironment = true,
       parameters = {
@@ -476,22 +476,22 @@ public interface CcModuleApi<
             type = SkylarkActionFactoryApi.class,
             positional = false,
             named = true,
-            doc = "<code>actions</code> object."),
+            doc = "Actions."),
         @Param(
             name = "feature_configuration",
-            doc = "<code>feature_configuration</code> to be queried.",
+            doc = "Feature configuration to be queried.",
             positional = false,
             named = true,
             type = FeatureConfigurationApi.class),
         @Param(
             name = "cc_toolchain",
-            doc = "<code>CcToolchainInfo</code> provider to be used.",
+            doc = "C++ toolchain provider to be used.",
             positional = false,
             named = true,
             type = CcToolchainProviderApi.class),
         @Param(
             name = "static_library",
-            doc = "<code>Artifact</code> of static library to be linked.",
+            doc = "Library to be linked.",
             positional = false,
             named = true,
             noneable = true,
@@ -499,7 +499,7 @@ public interface CcModuleApi<
             type = Artifact.class),
         @Param(
             name = "pic_static_library",
-            doc = "<code>Artifact</code> of pic static library to be linked.",
+            doc = "Library to be linked.",
             positional = false,
             named = true,
             noneable = true,
@@ -507,9 +507,7 @@ public interface CcModuleApi<
             type = Artifact.class),
         @Param(
             name = "dynamic_library",
-            doc =
-                "<code>Artifact</code> of dynamic library to be linked. Always used for runtime "
-                    + "and used for linking if <code>interface_library</code> is not passed.",
+            doc = "Library to be linked.",
             positional = false,
             named = true,
             noneable = true,
@@ -517,7 +515,7 @@ public interface CcModuleApi<
             type = Artifact.class),
         @Param(
             name = "interface_library",
-            doc = "<code>Artifact</code> of interface library to be linked.",
+            doc = "Library to be linked.",
             positional = false,
             named = true,
             noneable = true,
@@ -525,7 +523,7 @@ public interface CcModuleApi<
             type = Artifact.class),
         @Param(
             name = "alwayslink",
-            doc = "Whether to link the static library/objects in the --whole_archive block.",
+            doc = "Alwayslink.",
             positional = false,
             named = true,
             defaultValue = "False"),
@@ -545,13 +543,13 @@ public interface CcModuleApi<
 
   @SkylarkCallable(
       name = "create_linking_context",
-      doc = "Creates a <code>LinkingContext</code>.",
+      documented = false,
       useLocation = true,
       useEnvironment = true,
       parameters = {
         @Param(
             name = "libraries_to_link",
-            doc = "List of <code>LibraryToLink</code>.",
+            doc = "The libraries to link",
             positional = false,
             named = true,
             noneable = true,
@@ -559,7 +557,7 @@ public interface CcModuleApi<
             type = SkylarkList.class),
         @Param(
             name = "user_link_flags",
-            doc = "List of user link flags passed as strings.",
+            doc = "User link flags",
             positional = false,
             named = true,
             noneable = true,
@@ -675,72 +673,6 @@ public interface CcModuleApi<
       })
   CcSkylarkInfoT createCcSkylarkInfo(Object skylarkRuleContextObject)
       throws EvalException, InterruptedException;
-
-  @SkylarkCallable(
-      name = "merge_cc_infos",
-      doc = "Merges a list of <code>CcInfo</code>s into one.",
-      parameters = {
-        @Param(
-            name = "cc_infos",
-            doc = "List of <code>CcInfo</code>s to be merged.",
-            positional = false,
-            named = true,
-            defaultValue = "[]",
-            type = SkylarkList.class)
-      })
-  CcInfoApi mergeCcInfos(SkylarkList<CcInfoApi> ccInfos) throws EvalException;
-
-  @SkylarkCallable(
-      name = "create_compilation_context",
-      doc = "Creates a <code>CompilationContext</code>.",
-      parameters = {
-        @Param(
-            name = "headers",
-            doc = "Set of headers needed to compile this target",
-            positional = false,
-            named = true,
-            defaultValue = "unbound",
-            type = Object.class),
-        @Param(
-            name = "system_includes",
-            doc =
-                "Set of search paths for header files referenced by angle brackets, i.e. "
-                    + "#include <foo/bar/header.h>. They can be either relative to the exec root "
-                    + "or absolute. Usually passed with -isystem",
-            positional = false,
-            named = true,
-            defaultValue = "unbound",
-            type = Object.class),
-        @Param(
-            name = "includes",
-            doc =
-                "Set of search paths for header files referenced both by angle bracket and quotes."
-                    + "Usually passed with -I",
-            positional = false,
-            named = true,
-            defaultValue = "unbound",
-            type = Object.class),
-        @Param(
-            name = "quote_includes",
-            doc =
-                "Set of search paths for header files referenced by quotes, i.e. "
-                    + "#include \"foo/bar/header.h\". They can be either relative to the exec "
-                    + "root or absolute. Usually passed with -iquote",
-            positional = false,
-            named = true,
-            defaultValue = "unbound",
-            type = Object.class),
-        @Param(
-            name = "defines",
-            doc = "Set of defines needed to compile this target. Each define is a string",
-            positional = false,
-            named = true,
-            defaultValue = "unbound",
-            type = Object.class)
-      })
-  CcCompilationContextApi createCcCompilationContext(
-      Object headers, Object systemIncludes, Object includes, Object quoteIncludes, Object defines)
-      throws EvalException;
 
   // TODO(b/65151735): Remove when cc_flags is entirely set from features.
   // This should only be called from the cc_flags_supplier rule.

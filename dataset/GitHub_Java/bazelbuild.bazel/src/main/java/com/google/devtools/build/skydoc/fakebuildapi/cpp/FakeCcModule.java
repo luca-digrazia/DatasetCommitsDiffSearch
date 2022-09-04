@@ -21,7 +21,6 @@ import com.google.devtools.build.lib.skylarkbuildapi.ProviderApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.BazelCcModuleApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcCompilationContextApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcCompilationOutputsApi;
-import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcInfoApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcLinkParamsApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcLinkingInfoApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcModuleApi;
@@ -155,18 +154,6 @@ public class FakeCcModule
   @Override
   public CcSkylarkInfoApi createCcSkylarkInfo(Object skylarkRuleContextObject)
       throws EvalException, InterruptedException {
-    return null;
-  }
-
-  @Override
-  public CcInfoApi mergeCcInfos(SkylarkList<CcInfoApi> ccInfos) {
-    return null;
-  }
-
-  @Override
-  public CcCompilationContextApi createCcCompilationContext(
-      Object headers, Object systemIncludes, Object includes, Object quoteIncludes, Object defines)
-      throws EvalException {
     return null;
   }
 
