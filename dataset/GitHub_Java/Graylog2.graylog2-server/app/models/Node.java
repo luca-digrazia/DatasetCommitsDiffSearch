@@ -29,7 +29,6 @@ import lib.ExclusiveInputException;
 import lib.metrics.Metric;
 import models.api.requests.InputLaunchRequest;
 import models.api.responses.BuffersResponse;
-import models.api.responses.EmptyResponse;
 import models.api.responses.cluster.NodeSummaryResponse;
 import models.api.responses.SystemOverviewResponse;
 import models.api.responses.metrics.MetricsListResponse;
@@ -64,7 +63,6 @@ public class Node extends ClusterEntity {
     private final ApiClient api;
 
     private final Input.Factory inputFactory;
-    private final InputState.Factory inputStateFactory;
 
     private final URI transportAddress;
     private DateTime lastSeen;
@@ -82,17 +80,13 @@ public class Node extends ClusterEntity {
 
     /* for initial set up in test */
     public Node(NodeSummaryResponse r) {
-        this(null, null, null, r);
+        this(null, null, r);
     }
 
     @AssistedInject
-    public Node(ApiClient api,
-                Input.Factory inputFactory,
-                InputState.Factory inputStateFactory,
-                @Assisted NodeSummaryResponse r) {
+    public Node(ApiClient api, Input.Factory inputFactory, @Assisted NodeSummaryResponse r) {
         this.api = api;
         this.inputFactory = inputFactory;
-        this.inputStateFactory = inputStateFactory;
 
         transportAddress = normalizeUriPath(r.transportAddress);
         lastSeen = new DateTime(r.lastSeen, DateTimeZone.UTC);
@@ -103,13 +97,9 @@ public class Node extends ClusterEntity {
     }
 
     @AssistedInject
-    public Node(ApiClient api,
-                Input.Factory inputFactory,
-                InputState.Factory inputStateFactory,
-                @Assisted URI transportAddress) {
+    public Node(ApiClient api, Input.Factory inputFactory, @Assisted URI transportAddress) {
         this.api = api;
         this.inputFactory = inputFactory;
-        this.inputStateFactory = inputStateFactory;
 
         this.transportAddress = normalizeUriPath(transportAddress);
         lastSeen = null;
@@ -190,19 +180,11 @@ public class Node extends ClusterEntity {
                 .execute();
     }
 
-    public List<InputState> getInputStates() {
-        List<InputState> inputStates = Lists.newArrayList();
-        for (InputStateSummaryResponse issr : inputs().inputs) {
-            inputStates.add(inputStateFactory.fromSummaryResponse(issr, this));
-        }
-        return inputStates;
-    }
-
     public List<Input> getInputs() {
         List<Input> inputs = Lists.newArrayList();
 
-        for (InputState input : getInputStates()) {
-            inputs.add(input.getInput());
+        for (InputSummaryResponse input : inputs().inputs) {
+            inputs.add(inputFactory.fromSummaryResponse(input, this));
         }
 
         return inputs;
@@ -217,8 +199,7 @@ public class Node extends ClusterEntity {
         return inputs().total;
     }
 
-    @Override
-    public InputLaunchResponse launchInput(String title, String type, Boolean global, Map<String, Object> configuration, User creator, boolean isExclusive) throws ExclusiveInputException {
+    public boolean launchInput(String title, String type, Map<String, Object> configuration, User creator, boolean isExclusive) throws ExclusiveInputException {
         if (isExclusive) {
             for (Input input : getInputs()) {
                 if (input.getType().equals(type)) {
@@ -230,39 +211,22 @@ public class Node extends ClusterEntity {
         InputLaunchRequest request = new InputLaunchRequest();
         request.title = title;
         request.type = type;
-        request.global = global;
         request.configuration = configuration;
         request.creatorUserId = creator.getId();
 
-        InputLaunchResponse ilr = null;
         try {
-            ilr = api.post(InputLaunchResponse.class)
+            api.post()
                     .path("/system/inputs")
                     .node(this)
                     .body(request)
                     .expect(Http.Status.ACCEPTED)
                     .execute();
-        } catch (APIException e) {
-            log.error("Could not launch input " + title, e);
-        } catch (IOException e) {
-            log.error("Could not launch input " + title, e);
-        }
-        return ilr;
-    }
-
-    public boolean launchExistingInput(String inputId) {
-        try {
-            api.get(EmptyResponse.class).path("/system/inputs/{0}/launch", inputId)
-                    .node(this)
-                    .expect(Http.Status.ACCEPTED)
-                    .execute();
             return true;
         } catch (APIException e) {
-            log.error("Could not launch input " + inputId, e);
+            log.error("Could not launch input " + title, e);
         } catch (IOException e) {
-            log.error("Could not launch input " + inputId, e);
+            log.error("Could not launch input " + title, e);
         }
-
         return false;
     }
 
@@ -391,9 +355,7 @@ public class Node extends ClusterEntity {
                 .path("/system/metrics/namespace/{0}", namespace)
                 .expect(200, 404)
                 .execute();
-        if (response == null) {
-            return Maps.newHashMap();
-        }
+
         return response.getMetrics();
     }
 
