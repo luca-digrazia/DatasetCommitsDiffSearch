@@ -1,9 +1,7 @@
 package io.quarkus.resteasy.runtime.standalone;
 
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Consumer;
 
 import org.jboss.logging.Logger;
 import org.jboss.resteasy.spi.ResteasyDeployment;
@@ -16,7 +14,7 @@ import io.quarkus.runtime.ShutdownContext;
 import io.quarkus.runtime.annotations.Recorder;
 import io.vertx.core.Handler;
 import io.vertx.core.Vertx;
-import io.vertx.ext.web.Route;
+import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
 import io.vertx.ext.web.handler.StaticHandler;
 
@@ -35,6 +33,15 @@ public class ResteasyStandaloneRecorder {
     protected static final int BUFFER_SIZE = 8 * 1024;
 
     private static boolean useDirect = true;
+
+    private static Handler<RoutingContext> ROOT_HANDLER = new Handler<RoutingContext>() {
+        @Override
+        public void handle(RoutingContext httpServerRequest) {
+            currentRoot.handle(httpServerRequest);
+        }
+    };
+
+    private volatile static Handler<RoutingContext> currentRoot = null;
 
     //TODO: clean this up
     private static BufferAllocator ALLOCATOR = new BufferAllocator() {
@@ -82,7 +89,7 @@ public class ResteasyStandaloneRecorder {
 
     }
 
-    public Consumer<Route> startResteasy(RuntimeValue<Vertx> vertxValue,
+    public Handler<RoutingContext> startResteasy(RuntimeValue<Vertx> vertxValue,
             String contextPath,
             ShutdownContext shutdown,
             BeanContainer beanContainer,
@@ -97,16 +104,17 @@ public class ResteasyStandaloneRecorder {
         });
         Vertx vertx = vertxValue.getValue();
         useDirect = !isVirtual;
-        List<Handler<RoutingContext>> handlers = new ArrayList<>();
 
+        Router router = null;
         if (hotDeploymentResourcePaths != null && !hotDeploymentResourcePaths.isEmpty()) {
+            router = router == null ? Router.router(vertx) : router;
             for (Path resourcePath : hotDeploymentResourcePaths) {
                 String root = resourcePath.toAbsolutePath().toString();
                 StaticHandler staticHandler = StaticHandler.create();
                 staticHandler.setCachingEnabled(false);
                 staticHandler.setAllowRootFileSystemAccess(true);
                 staticHandler.setWebRoot(root);
-                handlers.add(event -> {
+                router.route().handler(event -> {
                     try {
                         staticHandler.handle(event);
                     } catch (Exception e) {
@@ -118,21 +126,27 @@ public class ResteasyStandaloneRecorder {
             }
         }
         if (hasClasspathResources) {
-            handlers.add(StaticHandler.create(META_INF_RESOURCES));
+            router = router == null ? Router.router(vertx) : router;
+            router.route().handler(StaticHandler.create(META_INF_RESOURCES));
         }
 
         VertxRequestHandler requestHandler = new VertxRequestHandler(vertx, beanContainer, deployment, contextPath, ALLOCATOR);
 
-        handlers.add(requestHandler);
-        return new Consumer<Route>() {
-
-            @Override
-            public void accept(Route route) {
-                for (Handler<RoutingContext> i : handlers) {
-                    route.handler(i);
+        // We don't to add a Router if we don't have to
+        if (router == null) {
+            currentRoot = requestHandler;
+        } else {
+            router.route().handler(requestHandler);
+            Router finalRouter = router;
+            currentRoot = new Handler<RoutingContext>() {
+                @Override
+                public void handle(RoutingContext event) {
+                    finalRouter.handle(event.request());
                 }
-            }
-        };
+            };
+        }
+
+        return ROOT_HANDLER;
     }
 
 }

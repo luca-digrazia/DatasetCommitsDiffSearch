@@ -854,11 +854,9 @@ public class BeanGenerator extends AbstractGenerator {
                             create.getThis());
                     ResultHandle interceptorProvider = create.invokeInterfaceMethod(
                             MethodDescriptors.SUPPLIER_GET, interceptorProviderSupplier);
-                    ResultHandle childCtxHandle = create.invokeStaticMethod(MethodDescriptors.CREATIONAL_CTX_CHILD,
-                            create.getMethodParam(0));
                     ResultHandle interceptorInstanceHandle = create.invokeInterfaceMethod(
                             MethodDescriptors.INJECTABLE_REF_PROVIDER_GET, interceptorProvider,
-                            childCtxHandle);
+                            create.getMethodParam(0));
                     interceptorToResultHandle.put(interceptor, interceptorInstanceHandle);
                     ResultHandle wrapHandle = create.invokeStaticMethod(
                             MethodDescriptor.ofMethod(InitializedInterceptor.class, "of",
