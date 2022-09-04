@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Set;
 
 import javax.lang.model.element.Element;
+import javax.lang.model.element.ExecutableElement;
 
 import com.googlecode.androidannotations.annotations.Id;
 import com.googlecode.androidannotations.model.AnnotationElements;
@@ -122,6 +123,19 @@ public class IdValidatorHelper extends ValidatorHelper {
 				}
 			}
 		}
+	}
+
+	public void idListenerMethod(Element element, AnnotationElements validatedElements, IsValid valid) {
+
+		enclosingElementHasEnhancedViewSupportAnnotation(element, validatedElements, valid);
+
+		idsExists(element, Res.ID, valid);
+
+		isNotPrivate(element, valid);
+
+		doesntThrowException((ExecutableElement) element, valid);
+
+		uniqueId(element, validatedElements, valid);
 	}
 
 }
