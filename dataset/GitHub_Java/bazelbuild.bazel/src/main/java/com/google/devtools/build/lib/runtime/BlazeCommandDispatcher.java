@@ -158,22 +158,22 @@ public class BlazeCommandDispatcher {
    * Only some commands work if cwd != workspaceSuffix in Blaze. In that case, also check if Blaze
    * was called from the output directory and fail if it was.
    */
-  private ExitCode checkCwdInWorkspace(BlazeWorkspace workspace, Command commandAnnotation,
+  private ExitCode checkCwdInWorkspace(CommandEnvironment env, Command commandAnnotation,
       String commandName, EventHandler eventHandler) {
     if (!commandAnnotation.mustRunInWorkspace()) {
       return ExitCode.SUCCESS;
     }
 
-    if (!workspace.getDirectories().inWorkspace()) {
+    if (!env.inWorkspace()) {
       eventHandler.handle(
           Event.error(
               "The '" + commandName + "' command is only supported from within a workspace."));
       return ExitCode.COMMAND_LINE_ERROR;
     }
 
-    Path workspacePath = workspace.getWorkspace();
+    Path workspace = env.getWorkspace();
     // TODO(kchodorow): Remove this once spaces are supported.
-    if (workspacePath.getPathString().contains(" ")) {
+    if (workspace.getPathString().contains(" ")) {
       eventHandler.handle(
           Event.error(
               runtime.getProductName() + " does not currently work properly from paths "
@@ -181,7 +181,7 @@ public class BlazeCommandDispatcher {
       return ExitCode.LOCAL_ENVIRONMENTAL_ERROR;
     }
 
-    Path doNotBuild = workspacePath.getParentDirectory().getRelative(
+    Path doNotBuild = workspace.getParentDirectory().getRelative(
         BlazeWorkspace.DO_NOT_BUILD_FILE_NAME);
 
     if (doNotBuild.exists()) {
@@ -228,9 +228,7 @@ public class BlazeCommandDispatcher {
 
     parseOptionsForCommand(rcfileNotes, commandAnnotation, optionsParser, optionsMap, null, null);
     if (commandAnnotation.builds()) {
-      ProjectFileSupport.handleProjectFiles(
-          eventHandler, env.getEventBus(), runtime.getProjectFileProvider(), env.getWorkspace(),
-          env.getWorkingDirectory(), optionsParser, commandAnnotation.name());
+      ProjectFileSupport.handleProjectFiles(env, optionsParser, commandAnnotation.name());
     }
 
     // Fix-point iteration until all configs are loaded.
@@ -359,8 +357,7 @@ public class BlazeCommandDispatcher {
     long execStartTimeNanos = runtime.getClock().nanoTime();
 
     // The initCommand call also records the start time for the timestamp granularity monitor.
-    BlazeWorkspace workspace = runtime.getWorkspace();
-    CommandEnvironment env = workspace.initCommand(commandAnnotation);
+    CommandEnvironment env = runtime.getWorkspace().initCommand(commandAnnotation);
     // Record the command's starting time for use by the commands themselves.
     env.recordCommandStartTime(firstContactTime);
 
@@ -391,7 +388,7 @@ public class BlazeCommandDispatcher {
     }
 
     try {
-      Path commandLog = getCommandLogPath(workspace.getOutputBase());
+      Path commandLog = getCommandLogPath(env.getOutputBase());
 
       // Unlink old command log from previous build, if present, so scripts
       // reading it don't conflate it with the command log we're about to write.
@@ -399,7 +396,7 @@ public class BlazeCommandDispatcher {
       logOutputStream = null;
       commandLog.delete();
 
-      if (workspace.getRuntime().writeCommandLog() && commandAnnotation.writeCommandLog()) {
+      if (env.getRuntime().writeCommandLog() && commandAnnotation.writeCommandLog()) {
         logOutputStream = commandLog.getOutputStream();
         outErr = tee(outErr, OutErr.create(logOutputStream, logOutputStream));
       }
@@ -408,7 +405,7 @@ public class BlazeCommandDispatcher {
     }
 
     EventHandler eventHandler = new PrintingEventHandler(outErr, EventKind.ALL_EVENTS);
-    ExitCode result = checkCwdInWorkspace(workspace, commandAnnotation, commandName, eventHandler);
+    ExitCode result = checkCwdInWorkspace(env, commandAnnotation, commandName, eventHandler);
     if (!result.equals(ExitCode.SUCCESS)) {
       return result.getNumericExitCode();
     }
@@ -425,8 +422,6 @@ public class BlazeCommandDispatcher {
       return ExitCode.BLAZE_INTERNAL_ERROR.getNumericExitCode();
     }
     try {
-      // TODO(ulfjack): parseArgsAndConfigs calls env.getWorkingDirectory, which isn't set correctly
-      // at this point in the code - it's initialized to the workspace root, which usually works.
       ExitCode parseResult =
           parseArgsAndConfigs(
               env, optionsParser, commandAnnotation, args, rcfileNotes, eventHandler);
