@@ -17,7 +17,6 @@ import org.jboss.jandex.DotName;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Persistable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -64,8 +63,6 @@ public final class DotNames {
             .createSimple(Param.class.getName());
     public static final DotName SPRING_DATA_MODIFYING = DotName
             .createSimple(Modifying.class.getName());
-    public static final DotName SPRING_DATA_PERSISTABLE = DotName
-            .createSimple(Persistable.class.getName());
 
     public static final DotName JPA_ID = DotName.createSimple(Id.class.getName());
     public static final DotName VERSION = DotName.createSimple(Version.class.getName());
@@ -81,7 +78,6 @@ public final class DotNames {
     public static final DotName ITERATOR = DotName.createSimple(Iterator.class.getName());
     public static final DotName COLLECTION = DotName.createSimple(Collection.class.getName());
     public static final DotName LIST = DotName.createSimple(List.class.getName());
-    public static final DotName SET = DotName.createSimple(Set.class.getName());
     public static final DotName STREAM = DotName.createSimple(Stream.class.getName());
     public static final DotName OPTIONAL = DotName.createSimple(Optional.class.getName());
     public static final DotName OBJECT = DotName.createSimple(Object.class.getName());
