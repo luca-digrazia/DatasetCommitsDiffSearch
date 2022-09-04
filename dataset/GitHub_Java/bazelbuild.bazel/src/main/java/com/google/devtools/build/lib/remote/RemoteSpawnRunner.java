@@ -52,6 +52,7 @@ import com.google.devtools.build.lib.exec.SpawnExecException;
 import com.google.devtools.build.lib.exec.SpawnRunner;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
+import com.google.devtools.build.lib.remote.Retrier.RetryException;
 import com.google.devtools.build.lib.remote.TreeNodeRepository.TreeNode;
 import com.google.devtools.build.lib.remote.util.DigestUtil;
 import com.google.devtools.build.lib.remote.util.DigestUtil.ActionKey;
@@ -143,7 +144,6 @@ class RemoteSpawnRunner implements SpawnRunner {
     if (!Spawns.mayBeExecutedRemotely(spawn)) {
       return execLocally(spawn, context);
     }
-    boolean spawnCachable = Spawns.mayBeCached(spawn);
 
     context.report(ProgressStatus.EXECUTING, getName());
     // Temporary hack: the TreeNodeRepository should be created and maintained upstream!
@@ -172,7 +172,7 @@ class RemoteSpawnRunner implements SpawnRunner {
               digestUtil.compute(command),
               repository.getMerkleDigest(inputRoot),
               context.getTimeout(),
-              spawnCachable);
+              Spawns.mayBeCached(spawn));
       actionKey = digestUtil.computeActionKey(action);
     }
 
@@ -181,8 +181,8 @@ class RemoteSpawnRunner implements SpawnRunner {
         TracingMetadataUtils.contextWithMetadata(buildRequestId, commandId, actionKey);
     Context previous = withMetadata.attach();
     try {
-      boolean acceptCachedResult = remoteOptions.remoteAcceptCached && spawnCachable;
-      boolean uploadLocalResults = remoteOptions.remoteUploadLocalResults && spawnCachable;
+      boolean acceptCachedResult = remoteOptions.remoteAcceptCached && Spawns.mayBeCached(spawn);
+      boolean uploadLocalResults = remoteOptions.remoteUploadLocalResults;
 
       try {
         // Try to lookup the action in the action cache.
@@ -203,7 +203,10 @@ class RemoteSpawnRunner implements SpawnRunner {
                 .setCacheHit(true)
                 .setRunnerName("remote cache hit")
                 .build();
-          } catch (CacheNotFoundException e) {
+          } catch (RetryException e) {
+            if (!AbstractRemoteActionCache.causedByCacheMiss(e)) {
+              throw e;
+            }
             // No cache hit, so we fall through to local or remote execution.
             // We set acceptCachedResult to false in order to force the action re-execution.
             acceptCachedResult = false;
@@ -353,7 +356,9 @@ class RemoteSpawnRunner implements SpawnRunner {
     if (Thread.currentThread().isInterrupted()) {
       throw new InterruptedException();
     }
-    if (remoteOptions.remoteLocalFallback && !RemoteRetrierUtils.causedByExecTimeout(cause)) {
+    if (remoteOptions.remoteLocalFallback
+        && !(cause instanceof RetryException
+            && RemoteRetrierUtils.causedByExecTimeout((RetryException) cause))) {
       return execLocallyAndUpload(
           spawn, context, inputMap, remoteCache, actionKey, action, command, uploadLocalResults);
     }
@@ -362,8 +367,9 @@ class RemoteSpawnRunner implements SpawnRunner {
 
   private SpawnResult handleError(IOException exception, FileOutErr outErr, ActionKey actionKey)
       throws ExecException, InterruptedException, IOException {
-    if (exception.getCause() instanceof ExecutionStatusException) {
-      ExecutionStatusException e = (ExecutionStatusException) exception.getCause();
+    final Throwable cause = exception.getCause();
+    if (cause instanceof ExecutionStatusException) {
+      ExecutionStatusException e = (ExecutionStatusException) cause;
       if (e.getResponse() != null) {
         ExecuteResponse resp = e.getResponse();
         maybeDownloadServerLogs(resp, actionKey);
@@ -381,9 +387,11 @@ class RemoteSpawnRunner implements SpawnRunner {
       }
     }
     final Status status;
-    if (RemoteRetrierUtils.causedByStatus(exception, Code.UNAVAILABLE)) {
+    if (exception instanceof RetryException
+        && RemoteRetrierUtils.causedByStatus((RetryException) exception, Code.UNAVAILABLE)) {
       status = Status.EXECUTION_FAILED_CATASTROPHICALLY;
-    } else if (exception instanceof CacheNotFoundException) {
+    } else if (exception instanceof CacheNotFoundException
+        || cause instanceof CacheNotFoundException) {
       status = Status.REMOTE_CACHE_FAILED;
     } else {
       status = Status.EXECUTION_FAILED;
@@ -537,7 +545,10 @@ class RemoteSpawnRunner implements SpawnRunner {
     if (!uploadLocalResults) {
       return result;
     }
-    boolean uploadAction = Status.SUCCESS.equals(result.status()) && result.exitCode() == 0;
+    boolean uploadAction =
+        Spawns.mayBeCached(spawn)
+            && Status.SUCCESS.equals(result.status())
+            && result.exitCode() == 0;
     Collection<Path> outputFiles = resolveActionInputs(execRoot, spawn.getOutputFiles());
     try (SilentCloseable c = Profiler.instance().profile("Remote.upload")) {
       remoteCache.upload(
