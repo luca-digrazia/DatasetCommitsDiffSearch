@@ -7,21 +7,21 @@ import javax.ws.rs.container.ContainerResponseContext;
 import javax.ws.rs.core.MediaType;
 
 import org.jboss.resteasy.reactive.server.ServerResponseFilter;
-import org.jboss.resteasy.reactive.server.spi.QuarkusRestContainerRequestContext;
+import org.jboss.resteasy.reactive.server.spi.ResteasyReactiveContainerRequestContext;
 
 import io.quarkus.qute.TemplateInstance;
 import io.quarkus.qute.Variant;
+import io.smallrye.mutiny.Uni;
 
 public class TemplateResponseFilter {
 
     @ServerResponseFilter
-    public void filter(QuarkusRestContainerRequestContext requestContext, ContainerResponseContext responseContext) {
+    public Uni<Void> filter(ResteasyReactiveContainerRequestContext requestContext, ContainerResponseContext responseContext) {
         Object entity = responseContext.getEntity();
         if (!(entity instanceof TemplateInstance)) {
-            return;
+            return null;
         }
 
-        requestContext.suspend();
         MediaType mediaType;
         TemplateInstance instance = (TemplateInstance) entity;
         Object variantsAttr = instance.getAttribute(TemplateInstance.VARIANTS);
@@ -38,32 +38,19 @@ public class TemplateResponseFilter {
                         new Variant(selected.getLanguage(), selected.getMediaType().toString(), selected.getEncoding()));
                 mediaType = selected.getMediaType();
             } else {
-                // TODO we should use the default
-                mediaType = null;
+                mediaType = responseContext.getMediaType();
             }
         } else {
-            // TODO how to get media type from non-variant templates?
-            mediaType = null;
+            mediaType = responseContext.getMediaType();
         }
 
-        try {
-            instance.renderAsync()
-                    .whenComplete((r, t) -> {
-                        if (t == null) {
-                            // make sure we avoid setting a null media type because that causes
-                            // an NPE further down
-                            if (mediaType != null) {
-                                responseContext.setEntity(r, null, mediaType);
-                            } else {
-                                responseContext.setEntity(r);
-                            }
-                            requestContext.resume();
-                        } else {
-                            requestContext.resume(t);
-                        }
-                    });
-        } catch (Throwable t) {
-            requestContext.resume(t);
-        }
+        return instance.createUni().chain(r -> {
+            if (mediaType != null) {
+                responseContext.setEntity(r, null, mediaType);
+            } else {
+                responseContext.setEntity(r);
+            }
+            return Uni.createFrom().nullItem();
+        });
     }
 }
