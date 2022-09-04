@@ -49,9 +49,7 @@ public class AbstractDAO<E> {
      *
      * @return a new {@link Criteria} query
      * @see Session#createCriteria(Class)
-     * @deprecated Use {@link AbstractDAO#criteriaQuery()} instead.
      */
-    @Deprecated
     protected Criteria criteria() {
         return currentSession().createCriteria(entityClass);
     }

@@ -26,7 +26,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@SuppressWarnings("deprecation")
 public class AbstractDAOTest {
     private static class MockDAO extends AbstractDAO<String> {
         MockDAO(SessionFactory factory) {
