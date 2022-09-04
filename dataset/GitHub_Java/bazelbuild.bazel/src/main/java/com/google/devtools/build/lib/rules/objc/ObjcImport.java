@@ -52,7 +52,7 @@ public class ObjcImport implements RuleConfiguredTargetFactory {
         new ObjcCommon.Builder(ObjcCommon.Purpose.COMPILE_AND_LINK, ruleContext)
             .setCompilationArtifacts(compilationArtifacts)
             .setCompilationAttributes(compilationAttributes)
-            .addDeps(ruleContext.getPrerequisites("deps"))
+            .addDeps(ruleContext.getPrerequisiteConfiguredTargets("deps"))
             .setIntermediateArtifacts(intermediateArtifacts)
             .setAlwayslink(ruleContext.attributes().get("alwayslink", Type.BOOLEAN))
             .setHasModuleMap()
