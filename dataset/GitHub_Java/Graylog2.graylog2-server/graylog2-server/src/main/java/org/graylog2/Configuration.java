@@ -124,14 +124,8 @@ public class Configuration extends BaseConfiguration {
     @Parameter(value = "default_message_output_class")
     private String defaultMessageOutputClass = "";
 
-    @Parameter(value = "collector_expiration_threshold", validator = PositiveIntegerValidator.class)
-    private Duration collectorExpirationThreshold = Duration.days(14);
-
-    @Parameter(value = "collector_inactive_threshold", validator = PositiveIntegerValidator.class)
-    private Duration collectorInactiveThreshold = Duration.minutes(1);
-
-    @Parameter(value = "dashboard_widget_default_cache_time", validator = PositiveIntegerValidator.class)
-    private int dashboardWidgetDefaultCacheTime = 10;
+    @Parameter(value = "agent_expiration_threshold", validator = PositiveIntegerValidator.class)
+    private Duration agentExpirationThreshold = Duration.days(14);
 
     public boolean isMaster() {
         return isMaster;
@@ -258,15 +252,7 @@ public class Configuration extends BaseConfiguration {
         return defaultMessageOutputClass;
     }
 
-    public Duration getCollectorExpirationThreshold() {
-        return collectorExpirationThreshold;
-    }
-
-    public Duration getCollectorInactiveThreshold() {
-        return collectorInactiveThreshold;
-    }
-
-    public int getDashboardWidgetDefaultCacheTime() {
-        return dashboardWidgetDefaultCacheTime;
+    public Duration getAgentExpirationThreshold() {
+        return agentExpirationThreshold;
     }
 }
