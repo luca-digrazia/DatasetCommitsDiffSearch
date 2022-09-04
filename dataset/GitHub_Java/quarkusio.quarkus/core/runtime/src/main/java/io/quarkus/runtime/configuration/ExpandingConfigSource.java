@@ -5,32 +5,31 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.UnaryOperator;
 
 import org.eclipse.microprofile.config.spi.ConfigSource;
-import org.wildfly.common.Assert;
 import org.wildfly.common.expression.Expression;
+
+import io.smallrye.config.SmallRyeConfigBuilder;
 
 /**
  * A value-expanding configuration source, which allows (limited) recursive expansion.
  */
 public class ExpandingConfigSource extends AbstractDelegatingConfigSource {
+    // this is a cache of compiled expressions, NOT a cache of expanded values
+    private final ConcurrentHashMap<String, Expression> exprCache = new ConcurrentHashMap<>();
 
     private static final ThreadLocal<Boolean> NO_EXPAND = new ThreadLocal<>();
 
-    public static UnaryOperator<ConfigSource> wrapper(Cache cache) {
-        return configSource -> new ExpandingConfigSource(configSource, cache);
-    }
-
-    private final Cache cache;
+    /**
+     * A wrapper suitable for passing in to {@link SmallRyeConfigBuilder#withWrapper(UnaryOperator)}.
+     */
+    public static final UnaryOperator<ConfigSource> WRAPPER = ExpandingConfigSource::new;
 
     /**
      * Construct a new instance.
      *
      * @param delegate the delegate config source (must not be {@code null})
-     * @param cache the cache instance to use (must not be {@code null})
      */
-    public ExpandingConfigSource(final ConfigSource delegate, final Cache cache) {
+    public ExpandingConfigSource(final ConfigSource delegate) {
         super(delegate);
-        Assert.checkNotNullParam("cache", cache);
-        this.cache = cache;
     }
 
     @Override
@@ -47,13 +46,13 @@ public class ExpandingConfigSource extends AbstractDelegatingConfigSource {
     String expand(final String value) {
         if (value == null)
             return null;
-        final Expression compiled = cache.exprCache.computeIfAbsent(value,
+        final Expression compiled = exprCache.computeIfAbsent(value,
                 str -> Expression.compile(str, Expression.Flag.LENIENT_SYNTAX));
         return compiled.evaluate(ConfigExpander.INSTANCE);
     }
 
     public void flush() {
-        cache.flush();
+        exprCache.clear();
     }
 
     private static boolean isExpanding() {
@@ -69,20 +68,6 @@ public class ExpandingConfigSource extends AbstractDelegatingConfigSource {
             } else {
                 NO_EXPAND.set(Boolean.TRUE);
             }
-        }
-    }
-
-    /**
-     * An expression cache to use with {@link ExpandingConfigSource}.
-     */
-    public static final class Cache {
-        // this is a cache of compiled expressions, NOT a cache of expanded values
-        final ConcurrentHashMap<String, Expression> exprCache = new ConcurrentHashMap<>();
-
-        public Cache() {}
-
-        public void flush() {
-            exprCache.clear();
         }
     }
 }
