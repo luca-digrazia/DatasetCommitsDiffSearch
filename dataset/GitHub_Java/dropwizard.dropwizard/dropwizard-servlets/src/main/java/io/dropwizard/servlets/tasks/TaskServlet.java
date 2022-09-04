@@ -153,12 +153,7 @@ public class TaskServlet extends HttpServlet {
 
         public void executeTask(ImmutableMultimap<String, String> params, String body, PrintWriter output) throws Exception {
             try {
-                if (task instanceof PostBodyTask) {
-                    PostBodyTask postBodyTask = (PostBodyTask) task;
-                    postBodyTask.execute(params, body, output);
-                } else {
-                    task.execute(params, output);
-                }
+                task.execute(params, body, output);
             } catch (Exception e) {
                 throw e;
             }
@@ -219,7 +214,7 @@ public class TaskServlet extends HttpServlet {
         @Override
         public void executeTask(ImmutableMultimap<String, String> params, String body, PrintWriter output) throws Exception {
             try {
-                underlying.executeTask(params, body, output);
+                underlying.executeTask(params, body,  output);
             } catch (Exception e) {
                 if (exceptionMeter != null) {
                     if (exceptionClass.isAssignableFrom(e.getClass()) ||

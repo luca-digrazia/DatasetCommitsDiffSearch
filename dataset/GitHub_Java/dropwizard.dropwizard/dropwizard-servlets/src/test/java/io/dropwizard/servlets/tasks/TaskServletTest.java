@@ -18,6 +18,7 @@ import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 
+import static org.mockito.Matchers.anyString;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -26,11 +27,11 @@ import static org.mockito.Mockito.when;
 
 public class TaskServletTest {
     private final Task gc = mock(Task.class);
-    private final PostBodyTask printJSON = mock(PostBodyTask.class);
+    private final Task clearCache = mock(Task.class);
 
     {
         when(gc.getName()).thenReturn("gc");
-        when(printJSON.getName()).thenReturn("print-json");
+        when(clearCache.getName()).thenReturn("clear-cache");
     }
 
     private final TaskServlet servlet = new TaskServlet(new MetricRegistry());
@@ -40,7 +41,7 @@ public class TaskServletTest {
     @Before
     public void setUp() throws Exception {
         servlet.add(gc);
-        servlet.add(printJSON);
+        servlet.add(clearCache);
     }
 
     @Test
@@ -66,7 +67,7 @@ public class TaskServletTest {
 
         servlet.service(request, response);
 
-        verify(gc).execute(ImmutableMultimap.of(), output);
+        verify(gc).execute(ImmutableMultimap.of(), "", output);
     }
 
     @Test
@@ -83,24 +84,24 @@ public class TaskServletTest {
 
         servlet.service(request, response);
 
-        verify(gc).execute(ImmutableMultimap.of("runs", "1"), output);
+        verify(gc).execute(ImmutableMultimap.of("runs", "1"), "", output);
     }
 
     @Test
-    public void passesPostBodyAlongToPostBodyTasks() throws Exception {
+    public void passesPostBodyAlong() throws Exception {
         String body = "{\"json\": true}";
         final PrintWriter output = mock(PrintWriter.class);
         final ServletInputStream bodyStream = new TestServletInputStream(new ByteArrayInputStream(body.getBytes(StandardCharsets.UTF_8)));
 
         when(request.getMethod()).thenReturn("POST");
-        when(request.getPathInfo()).thenReturn("/print-json");
+        when(request.getPathInfo()).thenReturn("/gc");
         when(request.getParameterNames()).thenReturn(Collections.enumeration(ImmutableList.of()));
         when(request.getInputStream()).thenReturn(bodyStream);
         when(response.getWriter()).thenReturn(output);
 
         servlet.service(request, response);
 
-        verify(printJSON).execute(ImmutableMultimap.of(), body, output);
+        verify(gc).execute(ImmutableMultimap.of(), body, output);
     }
 
     @Test
@@ -115,7 +116,7 @@ public class TaskServletTest {
 
         final RuntimeException ex = new RuntimeException("whoops");
 
-        doThrow(ex).when(gc).execute(any(ImmutableMultimap.class), any(PrintWriter.class));
+        doThrow(ex).when(gc).execute(any(ImmutableMultimap.class), anyString(), any(PrintWriter.class));
 
         servlet.service(request, response);
 
@@ -129,18 +130,9 @@ public class TaskServletTest {
     @Test
     public void verifyTaskExecuteMethod() {
         try {
-            Task.class.getMethod("execute", ImmutableMultimap.class, PrintWriter.class);
+            Task.class.getMethod("execute", ImmutableMultimap.class, String.class, PrintWriter.class);
         } catch (NoSuchMethodException e) {
             Assert.fail("Execute method for " + Task.class.getName() + " not found");
-        }
-    }
-
-    @Test
-    public void verifyPostBodyTaskExecuteMethod() {
-        try {
-            PostBodyTask.class.getMethod("execute", ImmutableMultimap.class, String.class, PrintWriter.class);
-        } catch (NoSuchMethodException e) {
-            Assert.fail("Execute method for " + PostBodyTask.class.getName() + " not found");
         }
     }
 
