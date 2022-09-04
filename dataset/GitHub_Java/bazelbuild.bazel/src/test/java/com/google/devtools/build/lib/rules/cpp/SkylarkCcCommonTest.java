@@ -1224,8 +1224,6 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
     assertThat(dynamicLibrary.getFilename()).isEqualTo("a.so");
     Artifact interfaceLibrary = info.getValue("interface_library", Artifact.class);
     assertThat(interfaceLibrary.getFilename()).isEqualTo("a.ifso");
-    boolean alwayslink = info.getValue("alwayslink", Boolean.class);
-    assertThat(alwayslink).isTrue();
 
     ConfiguredTarget bin = getConfiguredTarget("//a:bin");
     assertThat(bin).isNotNull();
@@ -1244,7 +1242,6 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
         "   dynamic_library = 'a.so',",
         "   interface_library = 'a.ifso',",
         "   user_link_flags = ['-la', '-lc2'],",
-        "   alwayslink = True,",
         "   deps = [':c', ':dep2', ':b'],",
         ")",
         "crule(name='b',",
@@ -1260,7 +1257,6 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
         ")",
         "crule(name='d',",
         "   static_library = 'd.a',",
-        "   alwayslink = True,",
         "   deps = [':e'],",
         ")",
         "crule(name='e',",
@@ -1314,8 +1310,7 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
         "       static_library = library_to_link.static_library,",
         "       pic_static_library = library_to_link.pic_static_library,",
         "       dynamic_library = library_to_link.dynamic_library,",
-        "       interface_library = library_to_link.interface_library,",
-        "       alwayslink = library_to_link.alwayslink),",
+        "       interface_library = library_to_link.interface_library),",
         "     providers = [merged_cc_info]",
         "  )",
         "crule = rule(",
