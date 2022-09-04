@@ -19,10 +19,12 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import smile.data.Attribute;
 import smile.data.NominalAttribute;
 import smile.data.NumericAttribute;
-import smile.math.MathEx;
+import smile.math.Math;
 import smile.regression.RegressionTree;
 import smile.sort.QuickSort;
 import smile.util.MulticoreExecutor;
@@ -58,7 +60,7 @@ import smile.util.MulticoreExecutor;
  * @author Haifeng Li
  */
 public class CRF implements SequenceLabeler<double[]>, Serializable {
-    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(CRF.class);
+    private static final Logger logger = LoggerFactory.getLogger(CRF.class);
 
     /**
      * The number of classes.
