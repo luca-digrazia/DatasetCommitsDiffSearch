@@ -59,7 +59,7 @@ public abstract class ConfiguredCommand<T extends Configuration> extends Command
 
     @Override
     @SuppressWarnings("unchecked")
-    public void run(Bootstrap<?> bootstrap, Namespace namespace) throws Exception {
+    public final void run(Bootstrap<?> bootstrap, Namespace namespace) throws Exception {
         configuration = parseConfiguration(((Bootstrap<T>)bootstrap).getConfigurationFactoryFactory(),
                                            bootstrap.getConfigurationSourceProvider(),
                                            bootstrap.getValidatorFactory().getValidator(),

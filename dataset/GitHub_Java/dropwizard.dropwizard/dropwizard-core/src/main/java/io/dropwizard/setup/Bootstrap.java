@@ -60,11 +60,11 @@ public class Bootstrap<T extends Configuration> {
         this.commands = Lists.newArrayList();
         this.metricRegistry = new MetricRegistry();
         this.validatorFactory = Validation.buildDefaultValidatorFactory();
-        getMetricRegistry().register("jvm.buffers", new BufferPoolMetricSet(ManagementFactory
+        metricRegistry.register("jvm.buffers", new BufferPoolMetricSet(ManagementFactory
                                                                                .getPlatformMBeanServer()));
-        getMetricRegistry().register("jvm.gc", new GarbageCollectorMetricSet());
-        getMetricRegistry().register("jvm.memory", new MemoryUsageGaugeSet());
-        getMetricRegistry().register("jvm.threads", new ThreadStatesGaugeSet());
+        metricRegistry.register("jvm.gc", new GarbageCollectorMetricSet());
+        metricRegistry.register("jvm.memory", new MemoryUsageGaugeSet());
+        metricRegistry.register("jvm.threads", new ThreadStatesGaugeSet());
 
         this.configurationSourceProvider = new FileConfigurationSourceProvider();
         this.classLoader = Thread.currentThread().getContextClassLoader();
