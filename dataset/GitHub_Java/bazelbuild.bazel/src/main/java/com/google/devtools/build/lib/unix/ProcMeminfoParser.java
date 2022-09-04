@@ -21,11 +21,13 @@ import com.google.common.io.Files;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.Charset;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * Parse and return information from /proc/meminfo.
+ * Parse and return information from /proc/meminfo. In case of duplicate entries the first one is
+ * used and other values are skipped.
  */
 public class ProcMeminfoParser {
 
@@ -44,7 +46,7 @@ public class ProcMeminfoParser {
   @VisibleForTesting
   public ProcMeminfoParser(String fileName) throws IOException {
     List<String> lines = Files.readLines(new File(fileName), Charset.defaultCharset());
-    ImmutableMap.Builder<String, Long> builder = ImmutableMap.builder();
+    Map<String, Long> newMemInfo = new HashMap<>();
     for (String line : lines) {
       int colon = line.indexOf(':');
       if (colon == -1) {
@@ -54,29 +56,25 @@ public class ProcMeminfoParser {
       String valString = line.substring(colon + 1);
       try {
         long val =  Long.parseLong(CharMatcher.inRange('0', '9').retainFrom(valString));
-        builder.put(keyword, val);
+        newMemInfo.putIfAbsent(keyword, val);
       } catch (NumberFormatException e) {
         // Ignore: we'll fail later if somebody tries to capture this value.
       }
     }
-    memInfo = builder.build();
+    memInfo = ImmutableMap.copyOf(newMemInfo);
   }
 
-  /**
-   * Gets a named field in KB.
-   */
-  public long getRamKb(String keyword) {
+  /** Gets a named field in KB. */
+  long getRamKb(String keyword) throws KeywordNotFoundException {
     Long val = memInfo.get(keyword);
     if (val == null) {
-      throw new IllegalArgumentException("Can't locate " + keyword + " in the /proc/meminfo");
+      throw new KeywordNotFoundException(keyword);
     }
     return val;
   }
 
-  /**
-   * Return the total physical memory.
-   */
-  public long getTotalKb() {
+  /** Return the total physical memory. */
+  public long getTotalKb() throws KeywordNotFoundException {
     return getRamKb("MemTotal");
   }
 
@@ -92,7 +90,24 @@ public class ProcMeminfoParser {
    * why this is better than trying to figure it out ourselves. This corresponds to the MemAvailable
    * line in /proc/meminfo.
    */
-  public long getFreeRamKb() {
-    return getRamKb("MemAvailable");
+  public long getFreeRamKb() throws KeywordNotFoundException {
+    if (memInfo.containsKey("MemAvailable")) {
+      return getRamKb("MemAvailable");
+    }
+    // We have no MemAvailable in /proc/meminfo; fall back to the previous estimation.
+    return getRamKb("MemTotal")
+        - getRamKb("Active")
+        // Blaze doesn't want to use more than a third of inactive ram...
+        - (long) (getRamKb("Inactive") * 0.3)
+        // ...and doesn't want to assume more than 80% of the slab memory can be reallocated.
+        - (long) (getRamKb("Slab") * 0.8);
+    // That said, this estimate will be more inaccurate as it diverges from kernel internals.
+  }
+
+  /** Exception thrown when /proc/meminfo does not have a requested key. Should be tolerated. */
+  public static class KeywordNotFoundException extends IOException {
+    private KeywordNotFoundException(String keyword) {
+      super("Can't locate " + keyword + " in the /proc/meminfo");
+    }
   }
 }
