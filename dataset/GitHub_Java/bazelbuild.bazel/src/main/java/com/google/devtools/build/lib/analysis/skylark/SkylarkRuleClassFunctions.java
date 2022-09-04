@@ -46,6 +46,7 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.LabelValidator;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.AttributeContainer;
 import com.google.devtools.build.lib.packages.AttributeMap;
@@ -85,13 +86,11 @@ import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
 import com.google.devtools.build.lib.syntax.Identifier;
-import com.google.devtools.build.lib.syntax.Location;
 import com.google.devtools.build.lib.syntax.Module;
 import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.syntax.Starlark;
-import com.google.devtools.build.lib.syntax.StarlarkCallable;
 import com.google.devtools.build.lib.syntax.StarlarkFunction;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.syntax.Tuple;
@@ -101,12 +100,12 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
-/** A helper class to provide an easier API for Starlark rule definitions. */
+/** A helper class to provide an easier API for Skylark rule definitions. */
 public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifact> {
 
   // TODO(bazel-team): Copied from ConfiguredRuleClassProvider for the transition from built-in
-  // rules to Starlark extensions. Using the same instance would require a large refactoring.
-  // If we don't want to support old built-in rules and Starlark simultaneously
+  // rules to skylark extensions. Using the same instance would require a large refactoring.
+  // If we don't want to support old built-in rules and Skylark simultaneously
   // (except for transition phase) it's probably OK.
   private static final LoadingCache<String, Label> labelCache =
       CacheBuilder.newBuilder()
@@ -126,13 +125,13 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
               });
 
   // TODO(bazel-team): Remove the code duplication (BaseRuleClasses and this class).
-  /** Parent rule class for non-executable non-test Starlark rules. */
+  /** Parent rule class for non-executable non-test Skylark rules. */
   public static final RuleClass baseRule =
       BaseRuleClasses.commonCoreAndSkylarkAttributes(
               BaseRuleClasses.nameAttribute(
                       new RuleClass.Builder("$base_rule", RuleClassType.ABSTRACT, true))
                   .add(attr("expect_failure", STRING)))
-          // TODO(skylark-team): Allow Starlark rules to extend native rules and remove duplication.
+          // TODO(skylark-team): Allow Skylark rules to extend native rules and remove duplication.
           .add(
               attr("toolchains", LABEL_LIST)
                   .allowedFileTypes(FileTypeSet.NO_FILE)
@@ -146,14 +145,14 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
                   .value(ImmutableList.of()))
           .build();
 
-  /** Parent rule class for executable non-test Starlark rules. */
+  /** Parent rule class for executable non-test Skylark rules. */
   public static final RuleClass binaryBaseRule =
       new RuleClass.Builder("$binary_base_rule", RuleClassType.ABSTRACT, true, baseRule)
           .add(attr("args", STRING_LIST))
           .add(attr("output_licenses", LICENSE))
           .build();
 
-  /** Parent rule class for test Starlark rules. */
+  /** Parent rule class for test Skylark rules. */
   public static final RuleClass getTestBaseRule(RuleDefinitionContext env) {
     String toolsRepository = env.getToolsRepository();
     return new RuleClass.Builder("$test_base_rule", RuleClassType.ABSTRACT, true, baseRule)
@@ -279,7 +278,7 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
 
   // TODO(bazel-team): implement attribute copy and other rule properties
   @Override
-  public StarlarkCallable rule(
+  public BaseFunction rule(
       StarlarkFunction implementation,
       Boolean test,
       Object attrs,
@@ -368,10 +367,6 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
         thread.getTransitiveContentHashCode());
 
     builder.addRequiredToolchains(parseToolchains(toolchains, thread));
-
-    if (execGroups != Starlark.NONE) {
-      builder.addExecGroups(castMap(execGroups, String.class, ExecGroup.class, "exec_group"));
-    }
 
     if (!buildSetting.equals(Starlark.NONE) && !cfg.equals(Starlark.NONE)) {
       throw Starlark.errorf(
@@ -584,7 +579,7 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
   }
 
   /**
-   * The implementation for the magic function "rule" that creates Starlark rule classes.
+   * The implementation for the magic function "rule" that creates Skylark rule classes.
    *
    * <p>Exactly one of {@link #builder} or {@link #ruleClass} is null except inside {@link #export}.
    */
@@ -646,7 +641,7 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
       }
 
       for (Attribute attribute : ruleClass.getAttributes()) {
-        // TODO(dslomov): If a Starlark parameter extractor is specified for this aspect, its
+        // TODO(dslomov): If a Skylark parameter extractor is specified for this aspect, its
         // attributes may not be required.
         for (Map.Entry<String, ImmutableSet<String>> attrRequirements :
             attribute.getRequiredAspectParameters().entrySet()) {
@@ -683,7 +678,7 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
       return Starlark.NONE;
     }
 
-    /** Export a RuleFunction from a Starlark file with a given name. */
+    /** Export a RuleFunction from a Skylark file with a given name. */
     public void export(Label skylarkLabel, String ruleClassName) throws EvalException {
       Preconditions.checkState(ruleClass == null && builder != null);
       this.skylarkLabel = skylarkLabel;
