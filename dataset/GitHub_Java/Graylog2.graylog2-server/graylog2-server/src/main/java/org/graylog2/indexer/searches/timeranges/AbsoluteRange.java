@@ -22,7 +22,6 @@ import org.graylog2.plugin.Tools;
 import org.joda.time.DateTime;
 import org.joda.time.format.ISODateTimeFormat;
 
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
@@ -67,7 +66,7 @@ public class AbsoluteRange implements TimeRange {
     @Override
     public Map<String, Object> getPersistedConfig() {
         return ImmutableMap.<String, Object>of(
-                "type", getType().toString().toLowerCase(Locale.ENGLISH),
+                "type", getType().toString().toLowerCase(),
                 "from", getFrom(),
                 "to", getTo());
     }
