@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,6 +15,7 @@
  */
 package com.googlecode.androidannotations.processing;
 
+import static com.googlecode.androidannotations.helper.ModelConstants.GENERATION_SUFFIX;
 import static com.sun.codemodel.JExpr._new;
 import static com.sun.codemodel.JExpr._null;
 import static com.sun.codemodel.JExpr._super;
@@ -25,11 +26,15 @@ import static com.sun.codemodel.JMod.PUBLIC;
 
 import java.lang.annotation.Annotation;
 
+import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
+import javax.lang.model.element.TypeElement;
 
 import com.googlecode.androidannotations.annotations.Bean;
 import com.googlecode.androidannotations.annotations.NonConfigurationInstance;
 import com.googlecode.androidannotations.helper.APTCodeModelHelper;
+import com.googlecode.androidannotations.helper.AnnotationHelper;
+import com.googlecode.androidannotations.helper.CanonicalNameConstants;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JClassAlreadyExistsException;
@@ -39,11 +44,13 @@ import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
 import com.sun.codemodel.JVar;
 
-public class NonConfigurationInstanceProcessor implements ElementProcessor {
+public class NonConfigurationInstanceProcessor implements DecoratingElementProcessor {
 
 	private APTCodeModelHelper aptCodeModelHelper;
+	private AnnotationHelper annotationHelper;
 
-	public NonConfigurationInstanceProcessor() {
+	public NonConfigurationInstanceProcessor(ProcessingEnvironment processingEnv) {
+		annotationHelper = new AnnotationHelper(processingEnv);
 		aptCodeModelHelper = new APTCodeModelHelper();
 	}
 
@@ -53,8 +60,7 @@ public class NonConfigurationInstanceProcessor implements ElementProcessor {
 	}
 
 	@Override
-	public void process(Element element, JCodeModel codeModel, EBeansHolder activitiesHolder) throws JClassAlreadyExistsException {
-		EBeanHolder holder = activitiesHolder.getEnclosingEBeanHolder(element);
+	public void process(Element element, JCodeModel codeModel, EBeanHolder holder) throws JClassAlreadyExistsException {
 
 		NonConfigurationHolder ncHolder = holder.nonConfigurationHolder;
 
@@ -63,7 +69,7 @@ public class NonConfigurationInstanceProcessor implements ElementProcessor {
 			ncHolder = new NonConfigurationHolder();
 			holder.nonConfigurationHolder = ncHolder;
 
-			ncHolder.holderClass = holder.eBean._class(JMod.PRIVATE | JMod.STATIC, "NonConfigurationInstancesHolder");
+			ncHolder.holderClass = holder.generatedClass._class(JMod.PRIVATE | JMod.STATIC, "NonConfigurationInstancesHolder");
 
 			JFieldVar superNonConfigurationInstanceField = ncHolder.holderClass.field(PUBLIC | FINAL, Object.class, "superNonConfigurationInstance");
 
@@ -74,16 +80,27 @@ public class NonConfigurationInstanceProcessor implements ElementProcessor {
 			ncHolder.holderConstructor.body() //
 					.assign(_this().ref(superNonConfigurationInstanceField), superNonConfigurationInstanceParam);
 
+			TypeElement fragmentActivityTypeElement = annotationHelper.typeElementFromQualifiedName(CanonicalNameConstants.FRAGMENT_ACTIVITY);
+			TypeElement typeElement = annotationHelper.typeElementFromQualifiedName(holder.generatedClass._extends().fullName());
+
+			String getLastNonConfigurationInstanceName = "getLastNonConfigurationInstance";
+			String onRetainNonConfigurationInstanceName = "onRetainNonConfigurationInstance";
+			if (fragmentActivityTypeElement != null && annotationHelper.isSubtype(typeElement.asType(), fragmentActivityTypeElement.asType())) {
+				getLastNonConfigurationInstanceName = "getLastCustomNonConfigurationInstance";
+				onRetainNonConfigurationInstanceName = "onRetainCustomNonConfigurationInstance";
+			}
+
 			{
 				// init()
 				JBlock initBody = holder.init.body();
-				ncHolder.initNonConfigurationInstance = initBody.decl(ncHolder.holderClass, "nonConfigurationInstance", cast(ncHolder.holderClass, _super().invoke("getLastNonConfigurationInstance")));
-				ncHolder.initIfNonConfiguration = initBody._if(ncHolder.initNonConfigurationInstance.ne(_null()))._then();
+				ncHolder.initNonConfigurationInstance = initBody.decl(ncHolder.holderClass, "nonConfigurationInstance", cast(ncHolder.holderClass, _super().invoke(getLastNonConfigurationInstanceName)));
+				ncHolder.initIfNonConfigurationNotNullBody = initBody._if(ncHolder.initNonConfigurationInstance.ne(_null()))._then();
 			}
 
 			{
 				// getLastNonConfigurationInstance()
-				JMethod getLastNonConfigurationInstance = holder.eBean.method(PUBLIC, Object.class, "getLastNonConfigurationInstance");
+				JMethod getLastNonConfigurationInstance = holder.generatedClass.method(PUBLIC, Object.class, getLastNonConfigurationInstanceName);
+
 				getLastNonConfigurationInstance.annotate(Override.class);
 				JBlock body = getLastNonConfigurationInstance.body();
 
@@ -96,7 +113,8 @@ public class NonConfigurationInstanceProcessor implements ElementProcessor {
 
 			{
 				// onRetainNonConfigurationInstance()
-				JMethod onRetainNonConfigurationInstance = holder.eBean.method(PUBLIC, ncHolder.holderClass, "onRetainNonConfigurationInstance");
+				JMethod onRetainNonConfigurationInstance = holder.generatedClass.method(PUBLIC, ncHolder.holderClass, onRetainNonConfigurationInstanceName);
+
 				onRetainNonConfigurationInstance.annotate(Override.class);
 				ncHolder.newHolder = _new(ncHolder.holderClass);
 				ncHolder.newHolder.arg(_super().invoke(onRetainNonConfigurationInstance));
@@ -115,15 +133,14 @@ public class NonConfigurationInstanceProcessor implements ElementProcessor {
 
 		ncHolder.newHolder.arg(field);
 
-		ncHolder.initIfNonConfiguration.assign(field, ncHolder.initNonConfigurationInstance.ref(field));
+		ncHolder.initIfNonConfigurationNotNullBody.assign(field, ncHolder.initNonConfigurationInstance.ref(field));
 
 		boolean hasBeanAnnotation = element.getAnnotation(Bean.class) != null;
 		if (hasBeanAnnotation) {
-			JClass fieldGeneratedBeanClass = holder.refClass(fieldType.fullName() + "_");
+			JClass fieldGeneratedBeanClass = holder.refClass(fieldType.fullName() + GENERATION_SUFFIX);
 
-			ncHolder.initIfNonConfiguration.invoke(cast(fieldGeneratedBeanClass, field), "rebind").arg(_this());
+			ncHolder.initIfNonConfigurationNotNullBody.invoke(cast(fieldGeneratedBeanClass, field), "rebind").arg(_this());
 		}
 
 	}
-
 }
