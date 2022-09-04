@@ -20,20 +20,14 @@ import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.bazel.rules.cpp.BazelCppRuleClasses;
 import com.google.devtools.build.lib.bazel.rules.sh.BazelShRuleClasses;
-import com.google.devtools.build.lib.remote.options.RemoteOptions;
 import com.google.devtools.build.lib.rules.cpp.CcSkyframeCrosstoolSupportFunction;
 import com.google.devtools.build.lib.rules.cpp.CcSkyframeCrosstoolSupportValue;
 import com.google.devtools.build.lib.rules.cpp.CcSkyframeFdoSupportFunction;
 import com.google.devtools.build.lib.rules.cpp.CcSkyframeFdoSupportValue;
-import com.google.devtools.build.lib.rules.cpp.CppOptions;
-import com.google.devtools.build.lib.rules.java.JavaOptions;
 import com.google.devtools.build.lib.runtime.BlazeModule;
 import com.google.devtools.build.lib.runtime.BlazeRuntime;
 import com.google.devtools.build.lib.runtime.Command;
-import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.runtime.WorkspaceBuilder;
-import com.google.devtools.build.lib.util.AbruptExitException;
-import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.ResourceFileLoader;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
@@ -48,19 +42,6 @@ import java.io.IOException;
 public class BazelRulesModule extends BlazeModule {
   /** This is where deprecated options go to die. */
   public static class GraveyardOptions extends OptionsBase {
-
-    @Option(
-        name = "incompatible_disable_crosstool_file",
-        defaultValue = "true",
-        documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-        effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
-        metadataTags = {
-          OptionMetadataTag.DEPRECATED,
-          OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES,
-          OptionMetadataTag.INCOMPATIBLE_CHANGE
-        },
-        help = "Deprecated no-op.")
-    public boolean disableCrosstool;
 
     @Option(
         name = "incompatible_disable_legacy_crosstool_fields",
@@ -273,22 +254,6 @@ public class BazelRulesModule extends BlazeModule {
         help = "Obsolete, no effect.")
     public boolean disableLegacyToolchainSkylarkApi;
 
-    @Option(
-        name = "incompatible_cc_coverage",
-        defaultValue = "true",
-        documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-        effectTags = {
-          OptionEffectTag.UNKNOWN,
-        },
-        oldName = "experimental_cc_coverage",
-        metadataTags = {
-          OptionMetadataTag.INCOMPATIBLE_CHANGE,
-          OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES,
-          OptionMetadataTag.DEPRECATED
-        },
-        help = "Obsolete, no effect.")
-    public boolean useGcovCoverage;
-
     @Deprecated
     @Option(
         name = "direct_run",
@@ -359,11 +324,6 @@ public class BazelRulesModule extends BlazeModule {
   }
 
   @Override
-  public void beforeCommand(CommandEnvironment env) throws AbruptExitException {
-    validateRemoteOutputsMode(env);
-  }
-
-  @Override
   public void workspaceInit(
       BlazeRuntime runtime, BlazeDirectories directories, WorkspaceBuilder builder) {
     builder.addSkyFunction(
@@ -382,28 +342,5 @@ public class BazelRulesModule extends BlazeModule {
   public Iterable<Class<? extends OptionsBase>> getCommandOptions(Command command) {
     return "build".equals(command.name())
         ? ImmutableList.of(GraveyardOptions.class) : ImmutableList.of();
-  }
-
-  private static void validateRemoteOutputsMode(CommandEnvironment env) throws AbruptExitException {
-    RemoteOptions remoteOptions = env.getOptions().getOptions(RemoteOptions.class);
-    if (remoteOptions == null) {
-      return;
-    }
-    if (!remoteOptions.remoteOutputsMode.downloadAllOutputs()) {
-      JavaOptions javaOptions = env.getOptions().getOptions(JavaOptions.class);
-      if (javaOptions != null && !javaOptions.inmemoryJdepsFiles) {
-        throw new AbruptExitException(
-            "--experimental_remote_download_outputs=minimal requires"
-                + " --experimental_inmemory_jdeps_files to be enabled",
-            ExitCode.COMMAND_LINE_ERROR);
-      }
-      CppOptions cppOptions = env.getOptions().getOptions(CppOptions.class);
-      if (cppOptions != null && !cppOptions.inmemoryDotdFiles) {
-        throw new AbruptExitException(
-            "--experimental_remote_download_outputs=minimal requires"
-                + " --experimental_inmemory_dotd_files to be enabled",
-            ExitCode.COMMAND_LINE_ERROR);
-      }
-    }
   }
 }

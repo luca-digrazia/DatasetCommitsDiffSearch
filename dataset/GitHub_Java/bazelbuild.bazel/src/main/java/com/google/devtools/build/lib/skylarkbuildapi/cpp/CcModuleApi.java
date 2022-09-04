@@ -190,8 +190,7 @@ public interface CcModuleApi<
   SkylarkList<String> getCommandLine(
       FeatureConfigurationT featureConfiguration,
       String actionName,
-      CcToolchainVariablesT variables)
-      throws EvalException;
+      CcToolchainVariablesT variables);
 
   @SkylarkCallable(
       name = "get_environment_variables",
@@ -220,8 +219,7 @@ public interface CcModuleApi<
   SkylarkDict<String, String> getEnvironmentVariable(
       FeatureConfigurationT featureConfiguration,
       String actionName,
-      CcToolchainVariablesT variables)
-      throws EvalException;
+      CcToolchainVariablesT variables);
 
   @SkylarkCallable(
       name = "create_compile_variables",

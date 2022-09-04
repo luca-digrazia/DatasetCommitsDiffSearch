@@ -296,7 +296,7 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
   }
 
   /** An empty variables instance. */
-  public static final CcToolchainVariables EMPTY = builder().build();
+  public static final CcToolchainVariables EMPTY = new CcToolchainVariables.Builder().build();
 
   private Map<String, VariableValue> cache;
 
@@ -1059,14 +1059,6 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
     }
   }
 
-  public static Builder builder() {
-    return new Builder(null);
-  }
-
-  public static Builder builder(@Nullable CcToolchainVariables parent) {
-    return new Builder(parent);
-  }
-
   /** Builder for {@code Variables}. */
   // TODO(b/65472725): Forbid sequences with empty string in them.
   public static class Builder {
@@ -1074,8 +1066,11 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
     private final Map<String, String> stringVariablesMap = new LinkedHashMap<>();
     private final CcToolchainVariables parent;
 
-    private Builder(@Nullable CcToolchainVariables parent) {
-      // private to avoid class initialization deadlock between this class and its outer class
+    public Builder() {
+      parent = null;
+    }
+
+    public Builder(@Nullable CcToolchainVariables parent) {
       this.parent = parent;
     }
 

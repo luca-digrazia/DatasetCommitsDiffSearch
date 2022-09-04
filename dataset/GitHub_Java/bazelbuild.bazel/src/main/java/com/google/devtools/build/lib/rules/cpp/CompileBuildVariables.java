@@ -18,7 +18,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
@@ -106,8 +105,6 @@ public enum CompileBuildVariables {
       RuleErrorConsumer ruleErrorConsumer,
       FeatureConfiguration featureConfiguration,
       CcToolchainProvider ccToolchainProvider,
-      BuildOptions buildOptions,
-      CppConfiguration cppConfiguration,
       String sourceFile,
       String outputFile,
       String gcnoFile,
@@ -132,8 +129,6 @@ public enum CompileBuildVariables {
       return setupVariablesOrThrowEvalException(
           featureConfiguration,
           ccToolchainProvider,
-          buildOptions,
-          cppConfiguration,
           sourceFile,
           outputFile,
           gcnoFile,
@@ -163,8 +158,6 @@ public enum CompileBuildVariables {
   public static CcToolchainVariables setupVariablesOrThrowEvalException(
       FeatureConfiguration featureConfiguration,
       CcToolchainProvider ccToolchainProvider,
-      BuildOptions buildOptions,
-      CppConfiguration cppConfiguration,
       String sourceFile,
       // TODO(b/76195763): Remove once blaze with cl/189769259 is released and crosstools are
       // updated.
@@ -194,8 +187,7 @@ public enum CompileBuildVariables {
     Preconditions.checkNotNull(systemIncludeDirs);
     Preconditions.checkNotNull(defines);
     CcToolchainVariables.Builder buildVariables =
-        new CcToolchainVariables.Builder(
-            ccToolchainProvider.getBuildVariables(buildOptions, cppConfiguration));
+        new CcToolchainVariables.Builder(ccToolchainProvider.getBuildVariables());
 
     buildVariables.addStringSequenceVariable(
         USER_COMPILE_FLAGS.getVariableName(), userCompileFlags);

@@ -351,7 +351,6 @@ public class CppLinkActionBuilder {
     LtoBackendArtifacts ltoArtifact =
         createSharedNonLto
             ? new LtoBackendArtifacts(
-                ruleContext,
                 ltoOutputRootPrefix,
                 bitcodeFile,
                 actionConstructionContext,
@@ -365,7 +364,6 @@ public class CppLinkActionBuilder {
                 toolchain.shouldCreatePerObjectDebugInfo(featureConfiguration, cppConfiguration),
                 argv)
             : new LtoBackendArtifacts(
-                ruleContext,
                 ltoOutputRootPrefix,
                 bitcodeFile,
                 allBitcode,
@@ -833,9 +831,7 @@ public class CppLinkActionBuilder {
 
     // Add build variables necessary to template link args into the crosstool.
     CcToolchainVariables.Builder buildVariablesBuilder =
-        new CcToolchainVariables.Builder(
-            toolchain.getBuildVariables(
-                ruleContext.getConfiguration().getOptions(), cppConfiguration));
+        new CcToolchainVariables.Builder(toolchain.getBuildVariables());
     Preconditions.checkState(!isLtoIndexing || allowLtoIndexing);
     Preconditions.checkState(allowLtoIndexing || thinltoParamFile == null);
     Preconditions.checkState(allowLtoIndexing || thinltoMergedObjectFile == null);
@@ -887,7 +883,6 @@ public class CppLinkActionBuilder {
               mustKeepDebug,
               toolchain,
               cppConfiguration,
-              ruleContext.getConfiguration().getOptions(),
               featureConfiguration,
               useTestOnlyFlags,
               isLtoIndexing,

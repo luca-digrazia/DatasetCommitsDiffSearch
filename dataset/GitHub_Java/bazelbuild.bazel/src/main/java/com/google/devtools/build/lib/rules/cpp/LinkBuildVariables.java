@@ -17,7 +17,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainVariables.SequenceBuilder;
 import com.google.devtools.build.lib.syntax.EvalException;
@@ -98,7 +97,6 @@ public enum LinkBuildVariables {
       boolean mustKeepDebug,
       CcToolchainProvider ccToolchainProvider,
       CppConfiguration cppConfiguration,
-      BuildOptions buildOptions,
       FeatureConfiguration featureConfiguration,
       boolean useTestOnlyFlags,
       boolean isLtoIndexing,
@@ -114,8 +112,7 @@ public enum LinkBuildVariables {
       boolean addIfsoRelatedVariables)
       throws EvalException {
     CcToolchainVariables.Builder buildVariables =
-        new CcToolchainVariables.Builder(
-            ccToolchainProvider.getBuildVariables(buildOptions, cppConfiguration));
+        new CcToolchainVariables.Builder(ccToolchainProvider.getBuildVariables());
 
     // pic
     if (cppConfiguration.forcePic()) {

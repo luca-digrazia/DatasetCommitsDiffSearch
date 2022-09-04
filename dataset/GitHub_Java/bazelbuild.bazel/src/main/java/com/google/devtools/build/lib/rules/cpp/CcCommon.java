@@ -955,15 +955,13 @@ public final class CcCommon {
   private static List<String> computeCcFlagsFromFeatureConfig(
       RuleContext ruleContext, CcToolchainProvider toolchainProvider) {
     FeatureConfiguration featureConfiguration = null;
-    CppConfiguration cppConfiguration;
-    if (toolchainProvider.requireCtxInConfigureFeatures()) {
+    CppConfiguration cppConfiguration =
+        toolchainProvider.getCppConfigurationEvenThoughItCanBeDifferentThatWhatTargetHas();
+    if (cppConfiguration.requireCtxInConfigureFeatures()) {
       // When this is flipped, this whole method will go away. But I'm keeping it there
       // so we can experiment with flags before they are flipped.
-      Preconditions.checkArgument(toolchainProvider.disableGenruleCcToolchainDependency());
+      Preconditions.checkArgument(cppConfiguration.disableGenruleCcToolchainDependency());
       cppConfiguration = ruleContext.getFragment(CppConfiguration.class);
-    } else {
-      cppConfiguration =
-          toolchainProvider.getCppConfigurationEvenThoughItCanBeDifferentThatWhatTargetHas();
     }
     try {
       featureConfiguration =
@@ -976,9 +974,7 @@ public final class CcCommon {
       ruleContext.ruleError(e.getMessage());
     }
     if (featureConfiguration.actionIsConfigured(CppActionNames.CC_FLAGS_MAKE_VARIABLE)) {
-      CcToolchainVariables buildVariables =
-          toolchainProvider.getBuildVariables(
-              ruleContext.getConfiguration().getOptions(), cppConfiguration);
+      CcToolchainVariables buildVariables = toolchainProvider.getBuildVariables();
       return featureConfiguration.getCommandLine(
           CppActionNames.CC_FLAGS_MAKE_VARIABLE, buildVariables);
     }

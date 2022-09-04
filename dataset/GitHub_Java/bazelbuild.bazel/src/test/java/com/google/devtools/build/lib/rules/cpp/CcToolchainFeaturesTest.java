@@ -85,7 +85,7 @@ public class CcToolchainFeaturesTest extends BuildViewTestCase {
     for (int i = 0; i < entries.length; i += 2) {
       entryMap.put(entries[i], entries[i + 1]);
     }
-    CcToolchainVariables.Builder variables = CcToolchainVariables.builder();
+    CcToolchainVariables.Builder variables = new CcToolchainVariables.Builder();
     for (String name : entryMap.keySet()) {
       Collection<String> value = entryMap.get(name);
       if (value.size() == 1) {
@@ -405,7 +405,7 @@ public class CcToolchainFeaturesTest extends BuildViewTestCase {
     assertThat(
             getCommandLineForFlagGroups(
                 "flag_group{ iterate_over: 'v' flag: '%{v}' }",
-                CcToolchainVariables.builder()
+                new CcToolchainVariables.Builder()
                     .addStringSequenceVariable("v", ImmutableList.<String>of())
                     .build()))
         .isEmpty();
@@ -419,11 +419,11 @@ public class CcToolchainFeaturesTest extends BuildViewTestCase {
     for (StructureBuilder value : values) {
       builder.addValue(value.build());
     }
-    return CcToolchainVariables.builder().addCustomBuiltVariable(name, builder).build();
+    return new CcToolchainVariables.Builder().addCustomBuiltVariable(name, builder).build();
   }
 
   private CcToolchainVariables createStructureVariables(String name, StructureBuilder value) {
-    return CcToolchainVariables.builder().addCustomBuiltVariable(name, value).build();
+    return new CcToolchainVariables.Builder().addCustomBuiltVariable(name, value).build();
   }
 
   @Test
@@ -544,7 +544,7 @@ public class CcToolchainFeaturesTest extends BuildViewTestCase {
                     + "    }"
                     + "  }"
                     + "}",
-                CcToolchainVariables.builder()
+                new CcToolchainVariables.Builder()
                     .addCustomBuiltVariable(
                         "struct",
                         new StructureBuilder()
@@ -867,7 +867,7 @@ public class CcToolchainFeaturesTest extends BuildViewTestCase {
   }
 
   private CcToolchainVariables createNestedVariables(String name, int depth, int count) {
-    return CcToolchainVariables.builder()
+    return new CcToolchainVariables.Builder()
         .addCustomBuiltVariable(name, createNestedSequence(depth, count, ""))
         .build();
   }
