@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.CollidingProv
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.CrosstoolSelectable;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Feature;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
-import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -102,9 +101,6 @@ class FeatureSelection {
    */
   private final ImmutableMultimap<CrosstoolSelectable, CrosstoolSelectable> requiredBy;
 
-  /** Location of the cc_toolchain in use. */
-  private final PathFragment ccToolchainPath;
-
   FeatureSelection(
       ImmutableSet<String> requestedFeatures,
       ImmutableMap<String, CrosstoolSelectable> selectablesByName,
@@ -114,8 +110,7 @@ class FeatureSelection {
       ImmutableMultimap<CrosstoolSelectable, CrosstoolSelectable> impliedBy,
       ImmutableMultimap<CrosstoolSelectable, ImmutableSet<CrosstoolSelectable>> requires,
       ImmutableMultimap<CrosstoolSelectable, CrosstoolSelectable> requiredBy,
-      ImmutableMap<String, ActionConfig> actionConfigsByActionName,
-      PathFragment ccToolchainPath) {
+      ImmutableMap<String, ActionConfig> actionConfigsByActionName) {
     ImmutableSet.Builder<CrosstoolSelectable> builder = ImmutableSet.builder();
     for (String name : requestedFeatures) {
       if (selectablesByName.containsKey(name)) {
@@ -130,7 +125,6 @@ class FeatureSelection {
     this.requires = requires;
     this.requiredBy = requiredBy;
     this.actionConfigsByActionName = actionConfigsByActionName;
-    this.ccToolchainPath = ccToolchainPath;
   }
 
   /**
@@ -185,10 +179,7 @@ class FeatureSelection {
     }
 
     return new FeatureConfiguration(
-        enabledFeaturesInOrder,
-        enabledActionConfigNames.build(),
-        actionConfigsByActionName,
-        ccToolchainPath);
+        enabledFeaturesInOrder, enabledActionConfigNames.build(), actionConfigsByActionName);
   }
 
   /**
