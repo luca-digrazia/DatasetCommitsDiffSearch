@@ -55,11 +55,9 @@ import io.smallrye.faulttolerance.ExecutorFactory;
 import io.smallrye.faulttolerance.ExecutorProvider;
 import io.smallrye.faulttolerance.FaultToleranceBinding;
 import io.smallrye.faulttolerance.FaultToleranceInterceptor;
-import io.smallrye.faulttolerance.internal.RequestContextControllerProvider;
 import io.smallrye.faulttolerance.internal.StrategyCache;
 import io.smallrye.faulttolerance.metrics.MetricsCollectorFactory;
 import io.smallrye.faulttolerance.propagation.ContextPropagationExecutorFactory;
-import io.smallrye.faulttolerance.propagation.ContextPropagationRequestContextControllerProvider;
 
 public class SmallRyeFaultToleranceProcessor {
 
@@ -88,8 +86,6 @@ public class SmallRyeFaultToleranceProcessor {
 
         serviceProvider.produce(new ServiceProviderBuildItem(ExecutorFactory.class.getName(),
                 ContextPropagationExecutorFactory.class.getName()));
-        serviceProvider.produce(new ServiceProviderBuildItem(RequestContextControllerProvider.class.getName(),
-                ContextPropagationRequestContextControllerProvider.class.getName()));
 
         IndexView index = combinedIndexBuildItem.getIndex();
 
@@ -205,12 +201,6 @@ public class SmallRyeFaultToleranceProcessor {
     }
 
     private boolean hasFTAnnotations(IndexView index, AnnotationStore annotationStore, ClassInfo info) {
-        if (info == null) {
-            //should not happen, but guard against it
-            //happens in this case due to a bug involving array types
-
-            return false;
-        }
         // first check annotations on type
         if (annotationStore.hasAnyAnnotation(info, FT_ANNOTATIONS)) {
             return true;
@@ -225,13 +215,11 @@ public class SmallRyeFaultToleranceProcessor {
 
         // then check on the parent
         DotName parentClassName = info.superName();
-        if (parentClassName == null || parentClassName.equals(DotNames.OBJECT)) {
-            return false;
-        }
         ClassInfo parentClassInfo = index.getClassByName(parentClassName);
-        if (parentClassInfo == null) {
-            return false;
+        if (parentClassName.equals(DotNames.OBJECT) || parentClassInfo == null) {
+            return false; //no more parents
         }
+
         return hasFTAnnotations(index, annotationStore, parentClassInfo);
     }
 
