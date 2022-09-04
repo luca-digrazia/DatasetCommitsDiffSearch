@@ -8,7 +8,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.jboss.classfilewriter.AccessFlag;
@@ -17,7 +16,16 @@ import org.jboss.classfilewriter.ClassMethod;
 import org.jboss.classfilewriter.code.CodeAttribute;
 import org.jboss.invocation.proxy.ProxyConfiguration;
 import org.jboss.invocation.proxy.ProxyFactory;
+import org.jboss.jandex.FieldInfo;
+import org.jboss.jandex.MethodInfo;
 import org.jboss.shamrock.core.ClassOutput;
+import org.jboss.shamrock.injection.Injection;
+import org.jboss.shamrock.injection.InjectionInstance;
+import org.jboss.shamrock.reflection.ConstructorHandle;
+import org.jboss.shamrock.reflection.FieldHandle;
+import org.jboss.shamrock.reflection.MethodHandle;
+import org.jboss.shamrock.reflection.ReflectionContext;
+import org.jboss.shamrock.reflection.RuntimeReflection;
 import org.jboss.shamrock.startup.StartupContext;
 
 public class BytecodeRecorder implements AutoCloseable {
@@ -27,42 +35,93 @@ public class BytecodeRecorder implements AutoCloseable {
     private final String className;
     private final Class<?> serviceType;
     private final ClassOutput classOutput;
-    private final Map<Method, MethodRecorder> methods = new HashMap<>();
+    private final MethodRecorder methodRecorder;
+    private final Method method;
+    private final boolean runtime;
 
-    public BytecodeRecorder(String className, Class<?> serviceType, ClassOutput classOutput) {
+    public BytecodeRecorder(String className, Class<?> serviceType, ClassOutput classOutput, boolean runtime) {
         this.className = className;
         this.serviceType = serviceType;
         this.classOutput = classOutput;
+        this.runtime = runtime;
+        MethodRecorder mr = null;
+        Method m = null;
         for (Method method : serviceType.getMethods()) {
             if (method.getDeclaringClass() != Object.class) {
-                methods.put(method, new MethodRecorder(method));
+                if (mr != null) {
+                    throw new RuntimeException("Invalid type, must have a single method");
+                }
+                mr = new MethodRecorder();
+                m = method;
+            }
+        }
+        methodRecorder = mr;
+        method = m;
+    }
+
+    public Class<?> getServiceType() {
+        return serviceType;
+    }
+
+
+    public void executeRuntime(StartupContext startupContext) {
+        for (BytecodeInstruction instructionSet : methodRecorder.storedMethodCalls) {
+            if(instructionSet instanceof StoredMethodCall) {
+                StoredMethodCall m = (StoredMethodCall) instructionSet;
+                Object[] params = new Object[m.method.getParameterTypes().length];
+                for (int i = 0; i < params.length; ++i) {
+                    Class<?> type = m.method.getParameterTypes()[i];
+                    String contextName = findContextName(m.method.getParameterAnnotations()[i]);
+                    if (type == StartupContext.class) {
+                        params[i] = startupContext;
+                    } else if (contextName != null) {
+                        params[i] = startupContext.getValue(contextName);
+                    } else {
+                        params[i] = m.parameters[i];
+                    }
+                }
+                try {
+                    Object instance = m.method.getDeclaringClass().newInstance();
+                    Object result = m.method.invoke(instance, params);
+                    ContextObject co = m.method.getAnnotation(ContextObject.class);
+                    if (co != null) {
+                        startupContext.putValue(co.value(), result);
+                    }
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            } else if(instructionSet instanceof NewInstance) {
+                throw new RuntimeException("NYI");
+            } else {
+                throw new RuntimeException("unknown instruction " + instructionSet);
             }
         }
     }
 
-    public MethodRecorder getMethodRecorder(Method method) {
-        if (!methods.containsKey(method)) {
-            throw new RuntimeException("Method not found");
+    private String findContextName(Annotation[] annotations) {
+        for (Annotation a : annotations) {
+            if (a.annotationType() == ContextObject.class) {
+                return ((ContextObject) a).value();
+            }
         }
-        return methods.get(method);
+        return null;
     }
 
-    public MethodRecorder getMethodRecorder() {
-        if (methods.size() != 1) {
-            throw new RuntimeException("More than one method present, the method must be specified explicitly");
-        }
-        return methods.values().iterator().next();
+    public InjectionInstance<?> newInstanceFactory(String className) {
+        String injectionFactory = Injection.getInstanceFactoryName(className, classOutput);
+        NewInstance instance = new NewInstance(injectionFactory);
+        methodRecorder.storedMethodCalls.add(instance);
+        return instance;
     }
 
-    public class MethodRecorder {
+    public <T> T getRecordingProxy(Class<T> theClass) {
+        return methodRecorder.getRecordingProxy(theClass);
+    }
+
+    private class MethodRecorder {
 
         private final Map<Class<?>, Object> existingProxyClasses = new HashMap<>();
-        private final List<StoredMethodCall> storedMethodCalls = new ArrayList<>();
-        private final Method method;
-
-        MethodRecorder(Method method) {
-            this.method = method;
-        }
+        private final List<BytecodeInstruction> storedMethodCalls = new ArrayList<>();
 
         public <T> T getRecordingProxy(Class<T> theClass) {
             if (existingProxyClasses.containsKey(theClass)) {
@@ -100,6 +159,9 @@ public class BytecodeRecorder implements AutoCloseable {
             if (type.isPrimitive() || type.equals(String.class) || type.equals(Class.class) || type.equals(StartupContext.class)) {
                 continue;
             }
+            if(type.isAssignableFrom(NewInstance.class)) {
+                continue;
+            }
             Annotation[] annotations = method.getParameterAnnotations()[i];
             boolean found = false;
             for (Annotation j : annotations) {
@@ -118,32 +180,30 @@ public class BytecodeRecorder implements AutoCloseable {
 
     @Override
     public void close() throws IOException {
+        if (runtime) {
+            //runtime we don't do this stuff
+            return;
+        }
         ClassFile file = new ClassFile(className, AccessFlag.PUBLIC, Object.class.getName(), getClass().getClassLoader(), serviceType.getName());
-        for (Map.Entry<Method, MethodRecorder> entry : methods.entrySet()) {
-            ClassMethod method = file.addMethod(entry.getKey());
-            CodeAttribute ca = method.getCodeAttribute();
+        ClassMethod method = file.addMethod(this.method);
+        CodeAttribute ca = method.getCodeAttribute();
 
-            //first we need to create the context map
-            ca.newInstruction(HashMap.class);
-            ca.dup();
-            ca.invokespecial(HashMap.class.getName(), "<init>", "()V");
-            //figure out where we can start using local variables
-            int localVarCounter = 1;
-            for(Class<?> t : entry.getKey().getParameterTypes()) {
-                if(t == double.class || t == long.class) {
-                    localVarCounter+=2;
-                } else {
-                    localVarCounter++;
-                }
+        //figure out where we can start using local variables
+        int localVarCounter = 1;
+        for (Class<?> t : this.method.getParameterTypes()) {
+            if (t == double.class || t == long.class) {
+                localVarCounter += 2;
+            } else {
+                localVarCounter++;
             }
-            final int contextPos = localVarCounter++;
-            //store the context map in a variable
-            ca.astore(contextPos);
+        }
 
-            //now create instances of all the classes we invoke on and store them in variables as well
-            Map<Class, Integer> classInstanceVariables = new HashMap<>();
-            for(StoredMethodCall call : entry.getValue().storedMethodCalls) {
-                if(classInstanceVariables.containsKey(call.theClass)) {
+        //now create instances of all the classes we invoke on and store them in variables as well
+        Map<Class, Integer> classInstanceVariables = new HashMap<>();
+        for (BytecodeInstruction set : this.methodRecorder.storedMethodCalls) {
+            if(set instanceof StoredMethodCall) {
+                StoredMethodCall call = (StoredMethodCall) set;
+                if (classInstanceVariables.containsKey(call.theClass)) {
                     continue;
                 }
                 ca.newInstruction(call.theClass);
@@ -151,73 +211,93 @@ public class BytecodeRecorder implements AutoCloseable {
                 ca.invokespecial(call.theClass.getName(), "<init>", "()V");
                 ca.astore(localVarCounter);
                 classInstanceVariables.put(call.theClass, localVarCounter++);
+            } else if(set instanceof NewInstance) {
+                ((NewInstance) set).varPos = localVarCounter++;
             }
-            //now we invoke the actual method call
-            for(StoredMethodCall call : entry.getValue().storedMethodCalls) {
+        }
+        //now we invoke the actual method call
+        for (BytecodeInstruction set : methodRecorder.storedMethodCalls) {
+            if(set instanceof StoredMethodCall) {
+                StoredMethodCall call = (StoredMethodCall) set;
                 ca.aload(classInstanceVariables.get(call.theClass));
                 ca.checkcast(call.theClass);
-                for(int i = 0; i < call.parameters.length; ++ i) {
+                for (int i = 0; i < call.parameters.length; ++i) {
                     Class<?> targetType = call.method.getParameterTypes()[i];
                     Annotation[] annotations = call.method.getParameterAnnotations()[i];
                     String contextName = null;
-                    if(annotations != null) {
-                        for(Annotation a : annotations) {
-                            if(a.annotationType() == ContextObject.class) {
+                    if (annotations != null) {
+                        for (Annotation a : annotations) {
+                            if (a.annotationType() == ContextObject.class) {
                                 ContextObject obj = (ContextObject) a;
                                 contextName = obj.value();
                                 break;
                             }
                         }
                     }
-                    if(call.parameters[i] != null) {
+                    if (call.parameters[i] != null) {
                         Object param = call.parameters[i];
-                        if(param instanceof String) {
+                        if (param instanceof String) {
                             ca.ldc((String) param);
+                        } else if (param instanceof Boolean) {
+                            ca.ldc((boolean) param ? 1 : 0);
+                        } else if(param instanceof NewInstance) {
+                            ca.aload(((NewInstance) param).varPos);
                         } else {
                             //TODO: rest of primities
-                            ca.ldc((int)param);
+                            ca.ldc((int) param);
                         }
-                    } else if(targetType == StartupContext.class) { //hack, as this is tied to StartupTask
+                    } else if (targetType == StartupContext.class) { //hack, as this is tied to StartupTask
                         ca.aload(1);
-                    } else if(contextName != null) {
-                        ca.aload(contextPos);
+                    } else if (contextName != null) {
+                        ca.aload(1);
                         ca.ldc(contextName);
-                        ca.invokeinterface(Map.class.getName(), "get", "(Ljava/lang/Object;)Ljava/lang/Object;");
+                        ca.invokevirtual(StartupContext.class.getName(), "getValue", "(Ljava/lang/String;)Ljava/lang/Object;");
                         ca.checkcast(targetType);
                     } else {
                         ca.aconstNull();
                     }
                 }
                 ca.invokevirtual(call.method);
-                if(call.method.getReturnType() != void.class) {
+                if (call.method.getReturnType() != void.class) {
                     ContextObject annotation = call.method.getAnnotation(ContextObject.class);
-                    if(annotation != null) {
-                        ca.aload(contextPos);
+                    if (annotation != null) {
+                        ca.aload(1);
                         ca.swap();
                         ca.ldc(annotation.value());
                         ca.swap();
-                        ca.invokeinterface(Map.class.getName(), "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;");
-                    } else if(call.method.getReturnType() == long.class || call.method.getReturnType() == double.class){
+                        ca.invokevirtual(StartupContext.class.getName(), "putValue", "(Ljava/lang/String;Ljava/lang/Object;)V");
+                    } else if (call.method.getReturnType() == long.class || call.method.getReturnType() == double.class) {
                         ca.pop2();
                     } else {
                         ca.pop();
                     }
                 }
+            } else if(set instanceof NewInstance) {
+                NewInstance ni = (NewInstance) set;
+                ca.newInstruction(ni.className);
+                ca.dup();
+                ca.invokespecial(ni.className, "<init>", "()V");
+                ca.astore(ni.varPos);
+            } else {
+                throw new RuntimeException("unkown type " + set);
             }
-
-            ca.returnInstruction();
-
-
         }
+
+        ca.returnInstruction();
+
         ClassMethod ctor = file.addMethod(AccessFlag.PUBLIC, "<init>", "V");
-        CodeAttribute ca = ctor.getCodeAttribute();
+        ca = ctor.getCodeAttribute();
         ca.aload(0);
         ca.invokespecial(Object.class.getName(), "<init>", "()V");
         ca.returnInstruction();
         classOutput.writeClass(file.getName(), file.toBytecode());
     }
 
-    static final class StoredMethodCall {
+    interface BytecodeInstruction {
+
+    }
+
+    static final class StoredMethodCall implements BytecodeInstruction {
         final Class<?> theClass;
         final Method method;
         final Object[] parameters;
@@ -226,6 +306,20 @@ public class BytecodeRecorder implements AutoCloseable {
             this.theClass = theClass;
             this.method = method;
             this.parameters = parameters;
+        }
+    }
+
+    static final class NewInstance implements BytecodeInstruction, InjectionInstance {
+        final String className;
+        int varPos = -1;
+
+        NewInstance(String className) {
+            this.className = className;
+        }
+
+        @Override
+        public Object newInstance() {
+            throw new RuntimeException();
         }
     }
 

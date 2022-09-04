@@ -35,27 +35,22 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import javax.servlet.Servlet;
 import javax.ws.rs.ext.Providers;
 
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.Index;
-import org.jboss.jandex.MethodInfo;
-import org.jboss.jandex.Type;
 import org.jboss.resteasy.plugins.server.servlet.HttpServlet30Dispatcher;
 import org.jboss.resteasy.plugins.server.servlet.ResteasyBootstrapClasses;
 import org.jboss.resteasy.plugins.server.servlet.ResteasyContextParameters;
-import org.jboss.shamrock.deployment.ArchiveContext;
-import org.jboss.shamrock.deployment.ProcessorContext;
-import org.jboss.shamrock.deployment.ResourceProcessor;
-import org.jboss.shamrock.deployment.RuntimePriority;
-import org.jboss.shamrock.deployment.codegen.BytecodeRecorder;
-import org.jboss.shamrock.runtime.InjectionInstance;
+import org.jboss.shamrock.codegen.BytecodeRecorder;
+import org.jboss.shamrock.core.ArchiveContext;
+import org.jboss.shamrock.core.ProcessorContext;
+import org.jboss.shamrock.core.ResourceProcessor;
+import org.jboss.shamrock.core.RuntimePriority;
+import org.jboss.shamrock.injection.InjectionInstance;
 import org.jboss.shamrock.undertow.runtime.UndertowDeploymentTemplate;
-
-import io.undertow.servlet.api.InstanceFactory;
 
 /**
  * Processor that finds jax-rs classes in the deployment
@@ -71,15 +66,6 @@ public class JaxrsScanningProcessor implements ResourceProcessor {
 
     public static final Set<String> BOOT_CLASSES = new HashSet<String>();
     public static final Set<String> BUILTIN_PROVIDERS;
-
-    private static final DotName[] METHOD_ANNOTATIONS = {DotName.createSimple("javax.ws.rs.GET"),
-            DotName.createSimple("javax.ws.rs.HEAD"),
-            DotName.createSimple("javax.ws.rs.DELETE"),
-            DotName.createSimple("javax.ws.rs.OPTIONS"),
-            DotName.createSimple("javax.ws.rs.PATCH"),
-            DotName.createSimple("javax.ws.rs.POST"),
-            DotName.createSimple("javax.ws.rs.PUT"),
-    };
 
     static {
         Collections.addAll(BOOT_CLASSES, ResteasyBootstrapClasses.BOOTSTRAP_CLASSES);
@@ -136,16 +122,16 @@ public class JaxrsScanningProcessor implements ResourceProcessor {
 
         Index index = archiveContext.getIndex();
         List<AnnotationInstance> app = index.getAnnotations(APPLICATION_PATH);
-        if (app.isEmpty()) {
+        if (app == null || app.isEmpty()) {
             return;
         }
         AnnotationInstance appPath = app.get(0);
         String path = appPath.value().asString();
-        try (BytecodeRecorder recorder = processorContext.addStaticInitTask(RuntimePriority.JAXRS_DEPLOYMENT)) {
+        try (BytecodeRecorder recorder = processorContext.addDeploymentTask(RuntimePriority.JAXRS_DEPLOYMENT)) {
             UndertowDeploymentTemplate undertow = recorder.getRecordingProxy(UndertowDeploymentTemplate.class);
-            InjectionInstance<? extends Servlet> instanceFactory = (InjectionInstance<? extends Servlet>) recorder.newInstanceFactory(HttpServlet30Dispatcher.class.getName());
-            InstanceFactory<? extends Servlet> factory = undertow.createInstanceFactory(instanceFactory);
-            undertow.registerServlet(null, JAX_RS_SERVLET_NAME, recorder.classProxy(HttpServlet30Dispatcher.class.getName()), true, factory);
+            InjectionInstance<?> instanceFactory = recorder.newInstanceFactory(HttpServlet30Dispatcher.class.getName());
+            undertow.createInstanceFactory(instanceFactory);
+            undertow.registerServlet(null, JAX_RS_SERVLET_NAME, HttpServlet30Dispatcher.class.getName(), true, null);
             undertow.addServletMapping(null, JAX_RS_SERVLET_NAME, path + "/*");
             List<AnnotationInstance> paths = index.getAnnotations(PATH);
             if (paths != null) {
@@ -172,17 +158,8 @@ public class JaxrsScanningProcessor implements ResourceProcessor {
                     processorContext.addReflectiveClass(i);
                 }
             }
-        }
-        for (DotName annotationType : METHOD_ANNOTATIONS) {
-            List<AnnotationInstance> instances = index.getAnnotations(annotationType);
-            for (AnnotationInstance instance : instances) {
-                MethodInfo method = instance.target().asMethod();
-                if (method.returnType().kind() == Type.Kind.CLASS) {
-                    processorContext.addReflectiveClass(method.returnType().asClassType().name().toString());
-                }
-            }
-        }
 
+        }
     }
 
     @Override
