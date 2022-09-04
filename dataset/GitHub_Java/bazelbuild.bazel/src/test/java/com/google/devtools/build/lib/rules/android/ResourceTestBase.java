@@ -57,7 +57,6 @@ public abstract class ResourceTestBase extends AndroidBuildViewTestCase {
           "static_aapt_tool",
           "aapt.static",
           "aapt",
-          "static_aapt2_tool",
           "aapt2",
           "empty.sh",
           "android_blaze.jar",
@@ -177,14 +176,14 @@ public abstract class ResourceTestBase extends AndroidBuildViewTestCase {
       assertThat(attributeErrorMessage).isNull();
       assertThat(attributeErrorAttribute).isNull();
     }
-  }
+  };
 
   public FakeRuleErrorConsumer errorConsumer;
   public FileSystem fileSystem;
   public ArtifactRoot root;
 
   @Before
-  public void setup() throws Exception {
+  public void setup() {
     errorConsumer = new FakeRuleErrorConsumer();
     fileSystem = new InMemoryFileSystem();
     root = ArtifactRoot.asSourceRoot(Root.fromPath(fileSystem.getPath("/")));
@@ -214,7 +213,7 @@ public abstract class ResourceTestBase extends AndroidBuildViewTestCase {
 
   private Artifact getArtifact(String subdir, String pathString) {
     Path path = fileSystem.getPath("/" + subdir + "/" + pathString);
-    return new Artifact.SourceArtifact(
+    return new Artifact(
         root, root.getExecPath().getRelative(root.getRoot().relativize(path)), OWNER);
   }
 

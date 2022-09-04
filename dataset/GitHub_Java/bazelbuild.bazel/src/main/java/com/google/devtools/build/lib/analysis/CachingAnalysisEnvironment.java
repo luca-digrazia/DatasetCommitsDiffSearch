@@ -340,7 +340,9 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
 
   @Override
   public ImmutableList<Artifact> getBuildInfo(
-      boolean stamp, BuildInfoKey key, BuildConfiguration config) throws InterruptedException {
+      RuleContext ruleContext, BuildInfoKey key, BuildConfiguration config)
+      throws InterruptedException {
+    boolean stamp = AnalysisUtils.isStampingEnabled(ruleContext, config);
     BuildInfoCollectionValue collectionValue =
         (BuildInfoCollectionValue) skyframeEnv.getValue(BuildInfoCollectionValue.key(key, config));
     if (collectionValue == null) {
