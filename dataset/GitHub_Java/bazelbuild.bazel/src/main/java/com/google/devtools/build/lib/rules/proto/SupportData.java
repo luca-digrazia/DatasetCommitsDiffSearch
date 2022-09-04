@@ -21,28 +21,23 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 
-/** A helper class for the *Support classes containing some data from ProtoLibrary. */
-@AutoCodec
+/**
+ * A helper class for the *Support classes containing some data from ProtoLibrary.
+ */
 @AutoValue
 @Immutable
 public abstract class SupportData {
-  @AutoCodec.Instantiator
   public static SupportData create(
       Predicate<TransitiveInfoCollection> nonWeakDepsPredicate,
-      ImmutableList<Artifact> directProtoSources,
+      ImmutableList<Artifact> protoSources,
       NestedSet<Artifact> protosInDirectDeps,
       NestedSet<Artifact> transitiveImports,
       NestedSet<String> transitiveProtoPathFlags,
       boolean hasProtoSources) {
     return new AutoValue_SupportData(
-        nonWeakDepsPredicate,
-        directProtoSources,
-        transitiveImports,
-        protosInDirectDeps,
-        transitiveProtoPathFlags,
-        hasProtoSources);
+        nonWeakDepsPredicate, protoSources, transitiveImports, protosInDirectDeps,
+        transitiveProtoPathFlags, hasProtoSources);
   }
 
   public abstract Predicate<TransitiveInfoCollection> getNonWeakDepsPredicate();

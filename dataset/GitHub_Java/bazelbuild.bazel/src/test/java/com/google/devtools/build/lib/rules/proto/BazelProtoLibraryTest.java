@@ -251,7 +251,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
     );
     ConfiguredTarget protoTarget = getConfiguredTarget("//x/foo:nodeps");
     ProtoSourcesProvider sourcesProvider = protoTarget.getProvider(ProtoSourcesProvider.class);
-    assertThat(sourcesProvider.getTransitiveProtoSourceRoots()).containsExactly("x/foo");
+    assertThat(sourcesProvider.getTransitiveProtoPathFlags()).containsExactly("x/foo");
 
     SupportData supportData =
         protoTarget.getProvider(ProtoSupportDataProvider.class).getSupportData();
@@ -304,7 +304,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
     );
     ConfiguredTarget protoTarget = getConfiguredTarget("//x/foo:withdeps");
     ProtoSourcesProvider sourcesProvider = protoTarget.getProvider(ProtoSourcesProvider.class);
-    assertThat(sourcesProvider.getTransitiveProtoSourceRoots()).containsExactly("x/foo");
+    assertThat(sourcesProvider.getTransitiveProtoPathFlags()).containsExactly("x/foo");
 
     SupportData supportData =
         protoTarget.getProvider(ProtoSupportDataProvider.class).getSupportData();
@@ -341,7 +341,8 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
     );
     ConfiguredTarget protoTarget = getConfiguredTarget("//x/foo:withdeps");
     ProtoSourcesProvider sourcesProvider = protoTarget.getProvider(ProtoSourcesProvider.class);
-    assertThat(sourcesProvider.getTransitiveProtoSourceRoots()).containsExactly("x/foo", "x/bar");
+    assertThat(sourcesProvider.getTransitiveProtoPathFlags())
+        .containsExactly("x/foo", "x/bar");
 
     SupportData supportData =
         protoTarget.getProvider(ProtoSupportDataProvider.class).getSupportData();
