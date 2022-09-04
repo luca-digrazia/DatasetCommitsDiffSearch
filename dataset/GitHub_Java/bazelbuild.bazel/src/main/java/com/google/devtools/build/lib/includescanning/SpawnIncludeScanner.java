@@ -130,7 +130,8 @@ public class SpawnIncludeScanner {
     // Files written remotely that are not locally available should be scanned remotely to avoid the
     // bandwidth and disk space penalty of bringing them across. Also, enable include scanning
     // remotely when explicitly directed to via a flag.
-    if (remoteExtractionThreshold == 0 || (outputService != null && !file.isSourceArtifact())) {
+    if (remoteExtractionThreshold == 0
+        || (outputService != null && outputService.isRemoteFile(file))) {
       return true;
     }
     FileStatus status = syscallCache.get().statIfFound(file.getPath(), Symlinks.FOLLOW);
