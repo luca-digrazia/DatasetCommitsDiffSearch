@@ -59,14 +59,19 @@ public class ConfiguredTargetCycleReporterTest extends BuildViewTestCase {
 
     SkyKey aspectKey =
         AspectValueKey.AspectKey.createAspectKey(
-            ctKey, ImmutableList.of(), null, BuildConfigurationValue.key(targetConfig));
+            makeLabel("//foo:a"),
+            ctKey,
+            ImmutableList.of(),
+            null,
+            BuildConfigurationValue.key(targetConfig),
+            /*aspectConfigurationIsHost=*/ false);
     assertThat(cycleReporter.getAdditionalMessageAboutCycle(reporter, aspectKey, cycle))
         .contains(
             "The cycle is caused by a visibility edge from //foo:b to the non-package-group "
                 + "target //foo:c");
 
     SkyKey starlarkAspectKey =
-        AspectValueKey.createStarlarkAspectKey(
+        AspectValueKey.createSkylarkAspectKey(
             makeLabel("//foo:a"),
             targetConfig,
             targetConfig,
