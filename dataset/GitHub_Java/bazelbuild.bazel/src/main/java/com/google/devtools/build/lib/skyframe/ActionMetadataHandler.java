@@ -120,7 +120,6 @@ public class ActionMetadataHandler implements MetadataHandler {
    * Use {@link #getTimestampGranularityMonitor(Artifact)} to fetch this member.
    */
   private final TimestampGranularityMonitor tsgm;
-  private final ArtifactPathResolver artifactPathResolver;
 
   /**
    * Whether the action is being executed or not; this flag is set to true in
@@ -132,12 +131,10 @@ public class ActionMetadataHandler implements MetadataHandler {
   public ActionMetadataHandler(
       InputArtifactData inputArtifactData,
       Iterable<Artifact> outputs,
-      TimestampGranularityMonitor tsgm,
-      ArtifactPathResolver artifactPathResolver)  {
+      TimestampGranularityMonitor tsgm) {
     this.inputArtifactData = Preconditions.checkNotNull(inputArtifactData);
     this.outputs = ImmutableSet.copyOf(outputs);
     this.tsgm = tsgm;
-    this.artifactPathResolver = artifactPathResolver;
   }
 
   /**
@@ -393,8 +390,7 @@ public class ActionMetadataHandler implements MetadataHandler {
       throws IOException {
     Preconditions.checkState(artifact.isTreeArtifact(), artifact);
 
-    if (!artifactPathResolver.toPath(artifact).isDirectory()
-        || artifactPathResolver.toPath(artifact).isSymbolicLink()) {
+    if (!artifact.getPath().isDirectory() || artifact.getPath().isSymbolicLink()) {
       return TreeArtifactValue.MISSING_TREE_ARTIFACT;
     }
 
@@ -584,7 +580,7 @@ public class ActionMetadataHandler implements MetadataHandler {
       setPathReadOnlyAndExecutable(artifact);
     }
 
-    FileValue value = fileValueFromArtifact(artifact, artifactPathResolver, statNoFollow,
+    FileValue value = fileValueFromArtifact(artifact, statNoFollow,
         getTimestampGranularityMonitor(artifact));
     FileValue oldFsValue = outputArtifactData.putIfAbsent(artifact, value);
     checkInconsistentData(artifact, oldFsValue, value);
@@ -595,18 +591,9 @@ public class ActionMetadataHandler implements MetadataHandler {
   static FileValue fileValueFromArtifact(Artifact artifact,
       @Nullable FileStatusWithDigest statNoFollow, @Nullable TimestampGranularityMonitor tsgm)
       throws IOException {
-    return fileValueFromArtifact(artifact, ArtifactPathResolver.IDENTITY, statNoFollow, tsgm);
-  }
-
-  private static FileValue fileValueFromArtifact(Artifact artifact,
-      ArtifactPathResolver artifactPathResolver,
-      @Nullable FileStatusWithDigest statNoFollow, @Nullable TimestampGranularityMonitor tsgm)
-      throws IOException {
-    Path path = artifactPathResolver.toPath(artifact);
+    Path path = artifact.getPath();
     RootedPath rootedPath =
-        RootedPath.toRootedPath(
-            artifactPathResolver.transformRoot(artifact.getRoot().getRoot()),
-            artifact.getRootRelativePath());
+        RootedPath.toRootedPath(artifact.getRoot().getRoot(), artifact.getRootRelativePath());
     if (statNoFollow == null) {
       statNoFollow = FileStatusWithDigestAdapter.adapt(path.statIfFound(Symlinks.NOFOLLOW));
       if (statNoFollow == null) {
@@ -627,8 +614,7 @@ public class ActionMetadataHandler implements MetadataHandler {
     }
     RootedPath realRootedPath =
         RootedPath.toRootedPathMaybeUnderRoot(
-            realPath,
-            ImmutableList.of(artifactPathResolver.transformRoot(artifact.getRoot().getRoot())));
+            realPath, ImmutableList.of(artifact.getRoot().getRoot()));
     FileStateValue fileStateValue =
         FileStateValue.createWithStatNoFollow(rootedPath, statNoFollow, tsgm);
     // TODO(bazel-team): consider avoiding a 'stat' here when the symlink target hasn't changed
@@ -645,7 +631,7 @@ public class ActionMetadataHandler implements MetadataHandler {
     if (injectedFiles.contains(artifact)) {
       return;
     }
-    Path path = artifactPathResolver.toPath(artifact);
+    Path path = artifact.getPath();
     if (path.isFile(Symlinks.NOFOLLOW)) { // i.e. regular files only.
       // We trust the files created by the execution engine to be non symlinks with expected
       // chmod() settings already applied.
@@ -655,7 +641,7 @@ public class ActionMetadataHandler implements MetadataHandler {
 
   private void setTreeReadOnlyAndExecutable(SpecialArtifact parent, PathFragment subpath)
       throws IOException {
-    Path path = artifactPathResolver.toPath(parent).getRelative(subpath);
+    Path path = parent.getPath().getRelative(subpath);
     if (path.isDirectory()) {
       path.chmod(0555);
       for (Path child : path.getDirectoryEntries()) {

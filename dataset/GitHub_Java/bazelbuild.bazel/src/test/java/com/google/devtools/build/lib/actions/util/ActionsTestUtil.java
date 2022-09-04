@@ -46,11 +46,11 @@ import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.actions.ArtifactResolver;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.Executor;
-import com.google.devtools.build.lib.actions.FileArtifactValue;
 import com.google.devtools.build.lib.actions.MutableActionGraph;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.actions.PackageRootResolver;
 import com.google.devtools.build.lib.actions.cache.Md5Digest;
+import com.google.devtools.build.lib.actions.cache.Metadata;
 import com.google.devtools.build.lib.actions.cache.MetadataHandler;
 import com.google.devtools.build.lib.actions.cache.Protos.ActionCacheStatistics.MissDetail;
 import com.google.devtools.build.lib.actions.cache.Protos.ActionCacheStatistics.MissReason;
@@ -69,7 +69,6 @@ import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.ResourceUsage;
 import com.google.devtools.build.lib.util.io.FileOutErr;
-import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileStatus;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -79,7 +78,6 @@ import com.google.devtools.build.skyframe.AbstractSkyFunctionEnvironment;
 import com.google.devtools.build.skyframe.BuildDriver;
 import com.google.devtools.build.skyframe.ErrorInfo;
 import com.google.devtools.build.skyframe.EvaluationResult;
-import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import com.google.devtools.build.skyframe.ValueOrUntypedException;
@@ -259,8 +257,7 @@ public final class ActionsTestUtil {
   public static final Artifact DUMMY_ARTIFACT =
       new Artifact(
           PathFragment.create("/dummy"),
-          ArtifactRoot.asSourceRoot(
-              Root.absoluteRoot(new InMemoryFileSystem(DigestHashFunction.MD5))));
+          ArtifactRoot.asSourceRoot(Root.absoluteRoot(new InMemoryFileSystem())));
 
   public static final ActionOwner NULL_ACTION_OWNER =
       ActionOwner.create(
@@ -712,12 +709,7 @@ public final class ActionsTestUtil {
    */
   public static class FakeMetadataHandlerBase implements MetadataHandler {
     @Override
-    public FileArtifactValue getMetadata(ActionInput input) throws IOException {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public ActionInput getInput(String execPath) {
+    public Metadata getMetadata(Artifact artifact) throws IOException {
       throw new UnsupportedOperationException();
     }
 
