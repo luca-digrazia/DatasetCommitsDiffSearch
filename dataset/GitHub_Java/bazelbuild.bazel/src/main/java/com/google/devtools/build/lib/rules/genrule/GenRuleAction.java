@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.rules.genrule;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.AbstractAction;
@@ -77,7 +78,7 @@ public class GenRuleAction extends SpawnAction {
     if (!TrackSourceDirectoriesFlag.trackSourceDirectories()) {
       checkInputsForDirectories(reporter, actionExecutionContext.getMetadataProvider());
     }
-    List<SpawnResult> spawnResults;
+    List<SpawnResult> spawnResults = ImmutableList.of();
     try {
       spawnResults = super.internalExecute(actionExecutionContext);
     } catch (CommandLineExpansionException e) {
