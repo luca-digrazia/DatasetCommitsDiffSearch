@@ -37,7 +37,6 @@ import java.net.URI;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@Ignore
 public class OkHttpClientProviderTest {
     private final MockWebServer server = new MockWebServer();
 
