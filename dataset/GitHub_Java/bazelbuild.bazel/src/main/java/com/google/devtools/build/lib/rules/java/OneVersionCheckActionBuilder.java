@@ -127,11 +127,12 @@ public final class OneVersionCheckActionBuilder {
           args.accept(jar.getExecPathString() + "," + getArtifactOwnerGeneralizedLabel(jar));
 
   private static String getArtifactOwnerGeneralizedLabel(Artifact artifact) {
-    Label label = checkNotNull(artifact.getOwnerLabel(), artifact);
-    return label.getPackageIdentifier().getRepository().isDefault()
+    Label label = checkNotNull(artifact.getArtifactOwner(), artifact).getLabel();
+    return
+        label.getPackageIdentifier().getRepository().isDefault()
             || label.getPackageIdentifier().getRepository().isMain()
-        ? label.toString()
-        // Escape '@' prefix for .params file.
-        : "@" + label;
+            ? label.toString()
+            // Escape '@' prefix for .params file.
+            : "@" + label;
   }
 }

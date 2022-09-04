@@ -310,7 +310,7 @@ public class DeployArchiveBuilder {
       }
     }
 
-    Iterable<Artifact> runtimeJars = runtimeJarsBuilder.build();
+    IterablesChain<Artifact> runtimeJars = runtimeJarsBuilder.build();
 
     // TODO(kmb): Consider not using getArchiveInputs, specifically because we don't want/need to
     // transform anything but the runtimeClasspath and b/c we currently do it twice here and below
