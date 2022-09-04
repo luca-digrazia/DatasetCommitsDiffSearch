@@ -17,26 +17,23 @@
 package org.jboss.shamrock.arc.runtime;
 
 import java.lang.annotation.Annotation;
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.List;
 import java.util.function.Supplier;
 
-import org.jboss.logging.Logger;
 import org.jboss.protean.arc.Arc;
 import org.jboss.protean.arc.ArcContainer;
 import org.jboss.protean.arc.InstanceHandle;
 import org.jboss.protean.arc.ManagedContext;
+import org.jboss.shamrock.runtime.InjectionFactory;
+import org.jboss.shamrock.runtime.InjectionInstance;
 import org.jboss.shamrock.runtime.ShutdownContext;
-import org.jboss.shamrock.runtime.annotations.Template;
+import org.jboss.shamrock.runtime.Template;
 
 /**
  * @author Martin Kouba
  */
 @Template
 public class ArcDeploymentTemplate {
-    
-    private static final Logger LOGGER = Logger.getLogger(ArcDeploymentTemplate.class.getName());
 
     public ArcContainer getContainer(ShutdownContext shutdown) throws Exception {
         ArcContainer container = Arc.initialize();
@@ -49,41 +46,19 @@ public class ArcDeploymentTemplate {
         return container;
     }
 
-    public BeanContainer initBeanContainer(ArcContainer container, List<BeanContainerListener> listeners, Collection<String> removedBeanTypes)
-            throws Exception {
+    public BeanContainer initBeanContainer(ArcContainer container, List<BeanContainerListener> listeners) throws Exception {
         BeanContainer beanContainer = new BeanContainer() {
-            @SuppressWarnings("unchecked")
+
             @Override
             public <T> Factory<T> instanceFactory(Class<T> type, Annotation... qualifiers) {
-                Supplier<InstanceHandle<T>> handleSupplier = container.instanceSupplier(type, qualifiers);
-                if (handleSupplier == null) {
-                    if (removedBeanTypes.contains(type.getName())) {
-                        // Note that this only catches the simplest use cases
-                        LOGGER.warnf(
-                                "Bean matching %s was marked as unused and removed during build.\nExtensions can eliminate false positives using:\n\t- a custom UnremovableBeanBuildItem\n\t- AdditionalBeanBuildItem(false, beanClazz)",
-                                type);
-                    } else {
-                        LOGGER.debugf(
-                                "No matching bean found for type %s and qualifiers %s. The bean might have been marked as unused and removed during build.",
-                                type, Arrays.toString(qualifiers));
-                    }
-                    return new DefaultInstanceFactory<>(type);
+                Supplier<InstanceHandle<T>> handle = container.instanceSupplier(type, qualifiers);
+                if (handle == null) {
+                    return null;
                 }
                 return new Factory<T>() {
                     @Override
-                    public Instance<T> create() {
-                        InstanceHandle<T> handle = handleSupplier.get();
-                        return new Instance<T>() {
-                            @Override
-                            public T get() {
-                                return handle.get();
-                            }
-
-                            @Override
-                            public void close() {
-                                handle.close();
-                            }
-                        };
+                    public T get() {
+                        return handle.get().get();
                     }
                 };
             }
@@ -99,6 +74,34 @@ public class ArcDeploymentTemplate {
         return beanContainer;
     }
 
+    public InjectionFactory setupInjection(ArcContainer container) {
+        return new InjectionFactory() {
+            @Override
+            public <T> InjectionInstance<T> create(Class<T> type) {
+                Supplier<InstanceHandle<T>> instance = container.instanceSupplier(type);
+                if (instance != null) {
+                    return new InjectionInstance<T>() {
+                        @Override
+                        public T newInstance() {
+                            return instance.get().get();
+                        }
+                    };
+                } else {
+                    return new InjectionInstance<T>() {
+                        @Override
+                        public T newInstance() {
+                            try {
+                                return type.newInstance();
+                            } catch (Exception e) {
+                                throw new RuntimeException(e);
+                            }
+                        }
+                    };
+                }
+            }
+        };
+    }
+
     public void handleLifecycleEvents(ShutdownContext context, BeanContainer beanContainer) {
         LifecycleEventRunner instance = beanContainer.instance(LifecycleEventRunner.class);
         instance.fireStartupEvent();
@@ -108,30 +111,6 @@ public class ArcDeploymentTemplate {
                 instance.fireShutdownEvent();
             }
         });
-    }
-
-    private static final class DefaultInstanceFactory<T> implements BeanContainer.Factory<T> {
-
-        final Class<T> type;
-
-        private DefaultInstanceFactory(Class<T> type) {
-            this.type = type;
-        }
-
-        @Override
-        public BeanContainer.Instance<T> create() {
-            try {
-                T instance = type.newInstance();
-                return new BeanContainer.Instance<T>() {
-                    @Override
-                    public T get() {
-                        return instance;
-                    }
-                };
-            } catch (InstantiationException | IllegalAccessException e) {
-                throw new RuntimeException(e);
-            }
-        }
     }
 
 }

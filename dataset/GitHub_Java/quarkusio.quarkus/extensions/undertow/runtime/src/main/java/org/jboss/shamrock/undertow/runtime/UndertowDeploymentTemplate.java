@@ -16,12 +16,13 @@
 
 package org.jboss.shamrock.undertow.runtime;
 
-import java.net.SocketAddress;
 import java.nio.file.Paths;
 import java.security.SecureRandom;
 import java.util.EventListener;
 import java.util.List;
 import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import javax.servlet.DispatcherType;
 import javax.servlet.Filter;
@@ -30,14 +31,13 @@ import javax.servlet.Servlet;
 import javax.servlet.ServletContext;
 import javax.servlet.ServletException;
 
-import org.jboss.logging.Logger;
 import org.jboss.protean.arc.ManagedContext;
 import org.jboss.shamrock.arc.runtime.BeanContainer;
 import org.jboss.shamrock.runtime.InjectionFactory;
 import org.jboss.shamrock.runtime.InjectionInstance;
 import org.jboss.shamrock.runtime.RuntimeValue;
 import org.jboss.shamrock.runtime.ShutdownContext;
-import org.jboss.shamrock.runtime.annotations.Template;
+import org.jboss.shamrock.runtime.Template;
 
 import io.undertow.Undertow;
 import io.undertow.server.HandlerWrapper;
@@ -73,7 +73,7 @@ import io.undertow.servlet.handlers.ServletPathMatches;
 @Template
 public class UndertowDeploymentTemplate {
 
-    private static final Logger log = Logger.getLogger("org.jboss.shamrock.undertow");
+    private static final Logger log = Logger.getLogger(UndertowDeploymentTemplate.class.getName());
 
     public static final HttpHandler ROOT_HANDLER = new HttpHandler() {
         @Override
@@ -112,15 +112,6 @@ public class UndertowDeploymentTemplate {
         d.addServlet(new ServletInfo(ServletPathMatches.DEFAULT_SERVLET_NAME, DefaultServlet.class).setAsyncSupported(true));
 
         return new RuntimeValue<>(d);
-    }
-
-    public static SocketAddress getHttpAddress() {
-        for (Undertow.ListenerInfo info : undertow.getListenerInfo()) {
-            if (info.getProtcol().equals("http") && info.getSslContext() == null) {
-                return info.getAddress();
-            }
-        }
-        return null;
     }
 
     public <T> InstanceFactory<T> createInstanceFactory(InjectionInstance<T> injectionInstance) {
@@ -234,7 +225,7 @@ public class UndertowDeploymentTemplate {
      */
     public static void startUndertowEagerly(HttpConfig config, HandlerWrapper hotDeploymentWrapper) throws ServletException {
         if (undertow == null) {
-            log.debugf("Starting Undertow on port %d", config.port);
+            log.log(Level.FINE, "Starting Undertow on port " + config.port);
             HttpHandler rootHandler = new CanonicalPathHandler(ROOT_HANDLER);
             if (hotDeploymentWrapper != null) {
                 rootHandler = hotDeploymentWrapper.wrap(rootHandler);
@@ -244,10 +235,10 @@ public class UndertowDeploymentTemplate {
                     .addHttpListener(config.port, config.host)
                     .setHandler(rootHandler);
             if (config.ioThreads.isPresent()) {
-                builder.setIoThreads(config.ioThreads.getAsInt());
+                builder.setIoThreads(config.ioThreads.get());
             }
             if (config.workerThreads.isPresent()) {
-                builder.setWorkerThreads(config.workerThreads.getAsInt());
+                builder.setWorkerThreads(config.workerThreads.get());
             }
             undertow = builder
                     .build();
