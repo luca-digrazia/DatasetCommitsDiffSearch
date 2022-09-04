@@ -17,8 +17,6 @@
 package org.graylog2.rest.resources.system.bundles;
 
 import com.codahale.metrics.annotation.Timed;
-import com.google.common.collect.ImmutableSetMultimap;
-import com.google.common.collect.Multimap;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.graylog2.bundles.BundleService;
 import org.graylog2.bundles.ConfigurationBundle;
@@ -47,6 +45,7 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriBuilder;
 import java.net.URI;
+import java.util.Set;
 
 @RequiresAuthentication
 @Api(value = "System/Bundles", description = "Configuration bundles")
@@ -88,14 +87,8 @@ public class BundleResource extends RestResource {
     @ApiResponses(value = {
             @ApiResponse(code = 500, message = "Error loading configuration bundles")
     })
-    public Multimap<String, ConfigurationBundle> listBundles() {
-        final ImmutableSetMultimap.Builder<String, ConfigurationBundle> categoryBundleMap = ImmutableSetMultimap.builder();
-
-        for(final ConfigurationBundle bundle : bundleService.loadAll()) {
-            categoryBundleMap.put(bundle.getCategory(), bundle);
-        }
-
-        return categoryBundleMap.build();
+    public Set<ConfigurationBundle> listBundles() {
+        return bundleService.loadAll();
     }
 
     @GET
