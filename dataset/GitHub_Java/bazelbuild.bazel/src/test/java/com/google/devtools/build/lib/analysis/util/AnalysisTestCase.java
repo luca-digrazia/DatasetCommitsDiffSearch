@@ -13,15 +13,9 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis.util;
 
-import static com.google.common.collect.ImmutableMap.toImmutableMap;
-import static com.google.common.collect.ImmutableMultiset.toImmutableMultiset;
-import static com.google.common.truth.Truth.assertThat;
-
-import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableMultiset;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Iterables;
 import com.google.common.eventbus.EventBus;
@@ -79,14 +73,12 @@ import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
-import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.common.options.InvocationPolicyEnforcer;
 import com.google.devtools.common.options.Options;
 import com.google.devtools.common.options.OptionsParser;
 import java.util.Arrays;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.Before;
@@ -170,16 +162,6 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
         new AnalysisTestUtil.DummyWorkspaceStatusActionFactory(directories);
 
     mockToolsConfig = new MockToolsConfig(rootDirectory);
-    mockToolsConfig.create("/bazel_tools_workspace/WORKSPACE", "workspace(name = 'bazel_tools')");
-    mockToolsConfig.create("/bazel_tools_workspace/tools/build_defs/repo/BUILD");
-    mockToolsConfig.create(
-        "/bazel_tools_workspace/tools/build_defs/repo/http.bzl",
-        "def http_archive(**kwargs):",
-        "  pass",
-        "",
-        "def http_file(**kwargs):",
-        "  pass");
-
     analysisMock.setupMockClient(mockToolsConfig);
     analysisMock.setupMockWorkspaceFiles(directories.getEmbeddedBinariesRoot());
 
@@ -241,9 +223,6 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
     skyframeExecutor.setActionEnv(ImmutableMap.<String, String>of());
     skyframeExecutor.injectExtraPrecomputedValues(
         ImmutableList.of(
-            PrecomputedValue.injected(
-                RepositoryDelegatorFunction.RESOLVED_FILE_INSTEAD_OF_WORKSPACE,
-                Optional.<RootedPath>absent()),
             PrecomputedValue.injected(
                 RepositoryDelegatorFunction.REPOSITORY_OVERRIDES,
                 ImmutableMap.<RepositoryName, PathFragment>of()),
@@ -528,23 +507,8 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
     return buildView.getSkyframeEvaluatedTargetKeysForTesting();
   }
 
-  protected void assertNumberOfAnalyzedConfigurationsOfTargets(
-      Map<String, Integer> targetsWithCounts) {
-    ImmutableMultiset<Label> actualSet =
-        getSkyframeEvaluatedTargetKeys().stream()
-            .filter(key -> key instanceof ConfiguredTargetKey)
-            .map(key -> ((ConfiguredTargetKey) key).getLabel())
-            .collect(toImmutableMultiset());
-    ImmutableMap<Label, Integer> expected =
-        targetsWithCounts.entrySet().stream()
-            .collect(
-                toImmutableMap(
-                    entry -> Label.parseAbsoluteUnchecked(entry.getKey()),
-                    entry -> entry.getValue()));
-    ImmutableMap<Label, Integer> actual =
-        expected.keySet().stream()
-            .collect(toImmutableMap(label -> label, label -> actualSet.count(label)));
-    assertThat(actual).containsExactlyEntriesIn(expected);
+  protected int getTargetsVisited() {
+    return buildView.getTargetsVisited();
   }
 
   protected String getAnalysisError() {

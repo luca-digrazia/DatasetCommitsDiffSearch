@@ -605,7 +605,8 @@ public final class SkyframeBuildView {
         isSystemEnv,
         extendedSanityChecks,
         eventHandler,
-        env);
+        env,
+        skyframeExecutor.getSourceDependencyListener((SkyKey) owner));
   }
 
   /**
