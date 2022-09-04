@@ -42,6 +42,7 @@ import com.google.devtools.build.lib.analysis.actions.ParameterFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.collect.ImmutableIterable;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
@@ -170,7 +171,8 @@ public class JavaHeaderCompileAction extends SpawnAction {
     private final Collection<Artifact> sourceJars = new ArrayList<>();
     private NestedSet<Artifact> classpathEntries =
         NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER);
-    private ImmutableList<Artifact> bootclasspathEntries = ImmutableList.<Artifact>of();
+    private ImmutableIterable<Artifact> bootclasspathEntries =
+        ImmutableIterable.from(ImmutableList.<Artifact>of());
     @Nullable private String ruleKind;
     @Nullable private Label targetLabel;
     private PathFragment tempDirectory;
@@ -248,7 +250,7 @@ public class JavaHeaderCompileAction extends SpawnAction {
     }
 
     /** Sets the compilation bootclasspath entries. */
-    public Builder setBootclasspathEntries(ImmutableList<Artifact> bootclasspathEntries) {
+    public Builder setBootclasspathEntries(ImmutableIterable<Artifact> bootclasspathEntries) {
       checkNotNull(bootclasspathEntries, "bootclasspathEntries must not be null");
       this.bootclasspathEntries = bootclasspathEntries;
       return this;
@@ -528,7 +530,7 @@ public class JavaHeaderCompileAction extends SpawnAction {
       result.addExecPaths("--sources", sourceFiles);
 
       if (!sourceJars.isEmpty()) {
-        result.addExecPaths("--source_jars", ImmutableList.copyOf(sourceJars));
+        result.addExecPaths("--source_jars", sourceJars);
       }
 
       result.add("--javacopts", javacOpts);
@@ -541,11 +543,11 @@ public class JavaHeaderCompileAction extends SpawnAction {
         result.add("--target_label");
         if (targetLabel.getPackageIdentifier().getRepository().isDefault()
             || targetLabel.getPackageIdentifier().getRepository().isMain()) {
-          result.add(targetLabel);
+          result.add(targetLabel.toString());
         } else {
           // @-prefixed strings will be assumed to be params filenames and expanded,
           // so add an extra @ to escape it.
-          result.addWithPrefix("@", targetLabel);
+          result.add("@" + targetLabel);
         }
       }
       result.addExecPaths("--classpath", classpathEntries);
@@ -557,10 +559,10 @@ public class JavaHeaderCompileAction extends SpawnAction {
       CustomCommandLine.Builder result = CustomCommandLine.builder();
       baseCommandLine(result, classpathEntries);
       if (!processorNames.isEmpty()) {
-        result.add("--processors", ImmutableList.copyOf(processorNames));
+        result.add("--processors", processorNames);
       }
       if (!processorFlags.isEmpty()) {
-        result.add("--javacopts", ImmutableList.copyOf(processorFlags));
+        result.add("--javacopts", processorFlags);
       }
       if (!processorPath.isEmpty()) {
         result.addExecPaths("--processorpath", processorPath);

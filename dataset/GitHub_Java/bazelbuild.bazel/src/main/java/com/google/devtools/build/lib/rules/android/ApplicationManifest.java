@@ -505,11 +505,7 @@ public final class ApplicationManifest {
             .setAssetsAndResourcesFrom(data)
             .setManifest(getManifest())
             .setSymbols(symbols)
-            .setRTxt(rTxt)
-            // Request an APK so it can be inherited when a library is used in a binary's
-            // resources attr.
-            // TODO(b/30307842): Remove this once it is no longer needed for resources migration.
-            .setApk(ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_LIBRARY_APK));
+            .setRTxt(rTxt);
 
     if (targetAaptVersion == AndroidAaptVersion.AAPT2) {
 
@@ -635,7 +631,6 @@ public final class ApplicationManifest {
               .withPrimary(merged)
               .setRTxtOut(merged.getRTxt())
               .setSourceJarOut(merged.getJavaSourceJar())
-              .setApkOut(resourceContainer.getApk())
               // aapt2 related artifacts. Will be generated if the targetAaptVersion is AAPT2.
               .withDependencies(resourceDeps)
               .setCompiledSymbols(merged.getCompiledSymbols())

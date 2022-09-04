@@ -33,6 +33,7 @@ import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.StrictDepsMode;
+import com.google.devtools.build.lib.collect.ImmutableIterable;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.AttributeMap;
@@ -167,16 +168,18 @@ public final class JavaCompilationHelper {
    *
    * @param outputJar the class jar Artifact to create with the Action
    * @param manifestProtoOutput the output artifact for the manifest proto emitted from JavaBuilder
-   * @param gensrcOutputJar the generated sources jar Artifact to create with the Action (null if no
-   *     sources will be generated).
-   * @param outputDepsProto the compiler-generated jdeps file to create with the Action (null if not
-   *     requested)
+   * @param gensrcOutputJar the generated sources jar Artifact to create with the Action
+   *        (null if no sources will be generated).
+   * @param outputDepsProto the compiler-generated jdeps file to create with the Action
+   *        (null if not requested)
+   * @param outputMetadata metadata file (null if no instrumentation is needed).
    */
   public void createCompileAction(
       Artifact outputJar,
       Artifact manifestProtoOutput,
       @Nullable Artifact gensrcOutputJar,
-      @Nullable Artifact outputDepsProto) {
+      @Nullable Artifact outputDepsProto,
+      @Nullable Artifact outputMetadata) {
 
     JavaTargetAttributes attributes = getAttributes();
 
@@ -209,7 +212,7 @@ public final class JavaCompilationHelper {
     builder.setGensrcOutputJar(gensrcOutputJar);
     builder.setOutputDepsProto(outputDepsProto);
     builder.setAdditionalOutputs(attributes.getAdditionalOutputs());
-    builder.setFileWithPathsForCoverage(maybeCreateFileWithPathsForCoverage(outputJar));
+    builder.setMetadata(outputMetadata);
     builder.setInstrumentationJars(jacocoInstrumentation);
     builder.setSourceFiles(attributes.getSourceFiles());
     builder.addSourceJars(attributes.getSourceJars());
@@ -254,15 +257,65 @@ public final class JavaCompilationHelper {
     }
   }
 
-  private Artifact maybeCreateFileWithPathsForCoverage(Artifact outputJar) {
-    if (!shouldInstrumentJar()) {
-      return null;
+  /**
+   * Returns the instrumentation metadata files to be generated for a given output jar.
+   *
+   * <p>Only called if the output jar actually needs to be instrumented.
+   */
+  @Nullable
+  private static Artifact createInstrumentationMetadataArtifact(
+      RuleContext ruleContext, Artifact outputJar) {
+    PathFragment packageRelativePath = outputJar.getRootRelativePath().relativeTo(
+        ruleContext.getPackageDirectory());
+    return ruleContext.getPackageRelativeArtifact(
+        FileSystemUtils.replaceExtension(packageRelativePath, ".em"), outputJar.getRoot());
+  }
+
+  /**
+   * Creates the Action that compiles Java source files and optionally instruments them for
+   * coverage.
+   *
+   * @param outputJar the class jar Artifact to create with the Action
+   * @param manifestProtoOutput the output artifact for the manifest proto emitted from JavaBuilder
+   * @param gensrcJar the generated sources jar Artifact to create with the Action
+   * @param outputDepsProto the compiler-generated jdeps file to create with the Action
+   * @param javaArtifactsBuilder the build to store the instrumentation metadata in
+   */
+  public void createCompileActionWithInstrumentation(
+      Artifact outputJar,
+      Artifact manifestProtoOutput,
+      @Nullable Artifact gensrcJar,
+      @Nullable Artifact outputDepsProto,
+      JavaCompilationArtifacts.Builder javaArtifactsBuilder) {
+    createCompileAction(
+        outputJar,
+        manifestProtoOutput,
+        gensrcJar,
+        outputDepsProto,
+        createInstrumentationMetadata(outputJar, javaArtifactsBuilder));
+  }
+
+  /**
+   * Creates the instrumentation metadata artifact if needed.
+   *
+   * @return the instrumentation metadata artifact or null if instrumentation is
+   *         disabled
+   */
+  @Nullable
+  public Artifact createInstrumentationMetadata(Artifact outputJar,
+      JavaCompilationArtifacts.Builder javaArtifactsBuilder) {
+    // If we need to instrument the jar, add additional output (the coverage metadata file) to the
+    // JavaCompileAction.
+    Artifact instrumentationMetadata = null;
+    if (shouldInstrumentJar()) {
+      instrumentationMetadata = createInstrumentationMetadataArtifact(
+          getRuleContext(), outputJar);
+
+      if (instrumentationMetadata != null) {
+        javaArtifactsBuilder.addInstrumentationMetadata(instrumentationMetadata);
+      }
     }
-    PathFragment packageRelativePath =
-        outputJar.getRootRelativePath().relativeTo(ruleContext.getPackageDirectory());
-    PathFragment path =
-        FileSystemUtils.replaceExtension(packageRelativePath, "-paths-for-coverage.txt");
-    return ruleContext.getPackageRelativeArtifact(path, outputJar.getRoot());
+    return instrumentationMetadata;
   }
 
   private boolean shouldInstrumentJar() {
@@ -320,7 +373,7 @@ public final class JavaCompilationHelper {
     builder.addSourceJars(attributes.getSourceJars());
     builder.setClasspathEntries(attributes.getCompileTimeClassPath());
     builder.setBootclasspathEntries(
-        ImmutableList.copyOf(Iterables.concat(getBootclasspathOrDefault(), getExtdirInputs())));
+        ImmutableIterable.from(Iterables.concat(getBootclasspathOrDefault(), getExtdirInputs())));
 
     // only run API-generating annotation processors during header compilation
     builder.setProcessorPaths(attributes.getApiGeneratingProcessorPath());

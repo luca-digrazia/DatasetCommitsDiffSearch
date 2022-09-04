@@ -341,7 +341,7 @@ public class AndroidIdlHelper {
                     .addExecPath("--output_source_jar", idlSourceJar)
                     .add("--temp_dir")
                     .addPath(idlTempDir)
-                    .addExecPaths(ImmutableList.copyOf(generatedIdlJavaFiles))
+                    .addExecPaths(generatedIdlJavaFiles)
                     .build())
             .useParameterFile(ParameterFileType.SHELL_QUOTED)
             .setProgressMessage("Building idl jars %s", idlClassJar.prettyPrint())

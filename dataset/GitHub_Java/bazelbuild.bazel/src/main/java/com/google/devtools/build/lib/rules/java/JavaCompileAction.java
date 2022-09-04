@@ -27,6 +27,7 @@ import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionEnvironment;
 import com.google.devtools.build.lib.actions.ActionOwner;
@@ -43,7 +44,6 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.CustomMultiArgv;
-import com.google.devtools.build.lib.analysis.actions.LazyWriteExecPathsFileAction;
 import com.google.devtools.build.lib.analysis.actions.ParameterFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
@@ -431,7 +431,7 @@ public final class JavaCompileAction extends SpawnAction {
               .addJoinExecPaths(
                   "-cp",
                   pathDelimiter,
-                  ImmutableList.builder().addAll(instrumentationJars).add(javaBuilderJar).build())
+                  Iterables.concat(instrumentationJars, ImmutableList.of(javaBuilderJar)))
               .add(javaBuilderMainClass);
         } else {
           // If there are no instrumentation jars, use simpler '-jar' option to launch JavaBuilder.
@@ -482,7 +482,7 @@ public final class JavaCompileAction extends SpawnAction {
     private Artifact outputDepsProto;
     private Collection<Artifact> additionalOutputs;
     private Artifact paramFile;
-    private Artifact fileWithPathsForCoverage;
+    private Artifact metadata;
     private ImmutableSet<Artifact> sourceFiles = ImmutableSet.of();
     private final Collection<Artifact> sourceJars = new ArrayList<>();
     private BuildConfiguration.StrictDepsMode strictJavaDeps =
@@ -576,6 +576,7 @@ public final class JavaCompileAction extends SpawnAction {
           .addAll(
               new ArrayList<>(Collections2.filter(Arrays.asList(
                   outputJar,
+                  metadata,
                   gensrcOutputJar,
                   manifestProtoOutput,
                   outputDepsProto), Predicates.notNull())));
@@ -598,11 +599,6 @@ public final class JavaCompileAction extends SpawnAction {
               semantics.getJavaBuilderMainClass(),
               pathSeparator);
 
-      if (fileWithPathsForCoverage != null) {
-        analysisEnvironment.registerAction(
-            new LazyWriteExecPathsFileAction(owner, fileWithPathsForCoverage, sourceFiles));
-      }
-
       // The actual params-file-based command line executed for a compile action.
       CommandLine javaBuilderCommandLine = CustomCommandLine.builder()
           .add(spawnCommandLineBase)
@@ -617,7 +613,7 @@ public final class JavaCompileAction extends SpawnAction {
               .addAll(instrumentationJars)
               .build();
 
-      NestedSetBuilder<Artifact> inputsBuilder =
+      NestedSet<Artifact> inputs =
           NestedSetBuilder.<Artifact>stableOrder()
               .addTransitive(classpathEntries)
               .addTransitive(compileTimeDependencyArtifacts)
@@ -629,12 +625,8 @@ public final class JavaCompileAction extends SpawnAction {
               .addAll(sourcePathEntries)
               .addAll(extdirInputs)
               .add(paramFile)
-              .addTransitive(tools);
-      if (fileWithPathsForCoverage != null) {
-        inputsBuilder.add(fileWithPathsForCoverage);
-      }
-
-      NestedSet<Artifact> inputs = inputsBuilder.build();
+              .addTransitive(tools)
+              .build();
 
       return new JavaCompileAction(
           owner,
@@ -700,19 +692,19 @@ public final class JavaCompileAction extends SpawnAction {
         result.addExecPaths("--processorpath", processorPath);
       }
       if (!processorNames.isEmpty()) {
-        result.add("--processors", ImmutableList.copyOf(processorNames));
+        result.add("--processors", processorNames);
       }
       if (!processorFlags.isEmpty()) {
-        result.add("--javacopts", ImmutableList.copyOf(processorFlags));
+        result.add("--javacopts", processorFlags);
       }
       if (!sourceJars.isEmpty()) {
-        result.addExecPaths("--source_jars", ImmutableList.copyOf(sourceJars));
+        result.addExecPaths("--source_jars", sourceJars);
       }
       if (!sourceFiles.isEmpty()) {
         result.addExecPaths("--sources", sourceFiles);
       }
       if (!javacOpts.isEmpty()) {
-        result.add("--javacopts", ImmutableList.copyOf(javacOpts));
+        result.add("--javacopts", javacOpts);
       }
       if (ruleKind != null) {
         result.add("--rule_kind");
@@ -722,11 +714,11 @@ public final class JavaCompileAction extends SpawnAction {
         result.add("--target_label");
         if (targetLabel.getPackageIdentifier().getRepository().isDefault()
             || targetLabel.getPackageIdentifier().getRepository().isMain()) {
-          result.add(targetLabel);
+          result.add(targetLabel.toString());
         } else {
           // @-prefixed strings will be assumed to be filenames and expanded by
           // {@link JavaLibraryBuildRequest}, so add an extra &at; to escape it.
-          result.addWithPrefix("@", targetLabel);
+          result.add("@" + targetLabel);
         }
       }
       if (testOnly) {
@@ -753,9 +745,9 @@ public final class JavaCompileAction extends SpawnAction {
           }
         }
       }
-      if (fileWithPathsForCoverage != null) {
+      if (metadata != null) {
         result.add("--post_processor");
-        result.addExecPath(JACOCO_INSTRUMENTATION_PROCESSOR, fileWithPathsForCoverage);
+        result.addExecPath(JACOCO_INSTRUMENTATION_PROCESSOR, metadata);
         result.addPath(
             configuration
                 .getCoverageMetadataDirectory(targetLabel.getPackageIdentifier().getRepository())
@@ -865,8 +857,8 @@ public final class JavaCompileAction extends SpawnAction {
       return this;
     }
 
-    public Builder setFileWithPathsForCoverage(Artifact fileWithExecPathsForCoverage) {
-      this.fileWithPathsForCoverage = fileWithExecPathsForCoverage;
+    public Builder setMetadata(Artifact metadata) {
+      this.metadata = metadata;
       return this;
     }
 
@@ -1012,5 +1004,3 @@ public final class JavaCompileAction extends SpawnAction {
     }
   }
 }
-
-

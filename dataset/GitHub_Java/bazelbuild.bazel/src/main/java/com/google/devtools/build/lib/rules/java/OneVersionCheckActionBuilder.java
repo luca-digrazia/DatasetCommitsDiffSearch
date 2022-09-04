@@ -89,8 +89,8 @@ public final class OneVersionCheckActionBuilder {
 
     CustomCommandLine.Builder oneVersionArgsBuilder =
         CustomCommandLine.builder()
-            .add("--output", outputArtifact)
-            .add("--whitelist", oneVersionWhitelist);
+            .addExecPath("--output", outputArtifact)
+            .addExecPath("--whitelist", oneVersionWhitelist);
     if (enforcementLevel == OneVersionEnforcementLevel.WARNING) {
       oneVersionArgsBuilder.add("--succeed_on_found_violations");
     }

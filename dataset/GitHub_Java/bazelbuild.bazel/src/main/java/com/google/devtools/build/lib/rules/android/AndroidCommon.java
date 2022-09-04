@@ -31,7 +31,6 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
-import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector.InstrumentationSpec;
 import com.google.devtools.build.lib.collect.IterablesChain;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -66,6 +65,7 @@ import com.google.devtools.build.lib.rules.java.JavaSourceJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaTargetAttributes;
 import com.google.devtools.build.lib.rules.java.JavaUtil;
 import com.google.devtools.build.lib.rules.java.proto.GeneratedExtensionRegistryProvider;
+import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector.InstrumentationSpec;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.Preconditions;
@@ -743,8 +743,7 @@ public class AndroidCommon {
       ResourceApk resourceApk,
       Artifact zipAlignedApk,
       Iterable<Artifact> apksUnderTest,
-      NativeLibs nativeLibs,
-      boolean isResourcesOnly) {
+      NativeLibs nativeLibs) {
 
     idlHelper.addTransitiveInfoProviders(builder, classJar, manifestProtoOutput);
 
@@ -778,16 +777,14 @@ public class AndroidCommon {
         .setFilesToBuild(filesToBuild)
         .addSkylarkTransitiveInfo(
             JavaSkylarkApiProvider.NAME, JavaSkylarkApiProvider.fromRuleContext())
-        .addProvider(JavaRuleOutputJarsProvider.class, ruleOutputJarsProvider)
-        .addProvider(JavaSourceJarsProvider.class, sourceJarsProvider)
-        .addProvider(
+        .add(JavaRuleOutputJarsProvider.class, ruleOutputJarsProvider)
+        .add(JavaSourceJarsProvider.class, sourceJarsProvider)
+        .add(
             JavaRuntimeJarProvider.class,
             new JavaRuntimeJarProvider(javaCommon.getJavaCompilationArtifacts().getRuntimeJars()))
-        .addProvider(RunfilesProvider.class, RunfilesProvider.simple(getRunfiles()))
-        .addProvider(
-            AndroidResourcesProvider.class,
-            resourceApk.toResourceProvider(ruleContext.getLabel(), isResourcesOnly))
-        .addProvider(
+        .add(RunfilesProvider.class, RunfilesProvider.simple(getRunfiles()))
+        .add(AndroidResourcesProvider.class, resourceApk.toResourceProvider(ruleContext.getLabel()))
+        .add(
             AndroidIdeInfoProvider.class,
             createAndroidIdeInfoProvider(
                 ruleContext,
@@ -799,7 +796,7 @@ public class AndroidCommon {
                 zipAlignedApk,
                 apksUnderTest,
                 nativeLibs))
-        .addProvider(JavaCompilationArgsProvider.class, compilationArgsProvider)
+        .add(JavaCompilationArgsProvider.class, compilationArgsProvider)
         .addSkylarkTransitiveInfo(AndroidSkylarkApiProvider.NAME, new AndroidSkylarkApiProvider())
         .addOutputGroup(
             OutputGroupProvider.HIDDEN_TOP_LEVEL, collectHiddenTopLevelArtifacts(ruleContext))
@@ -834,24 +831,10 @@ public class AndroidCommon {
     if (prerequisite == null) {
       return null;
     }
-
-    AndroidResourcesProvider provider = prerequisite.getProvider(AndroidResourcesProvider.class);
-
-    if (!provider.getIsResourcesOnly()) {
-      ruleContext.attributeError(
-          "resources",
-          "android_library target "
-              + prerequisite.getLabel()
-              + " cannot be used in the 'resources' attribute as it specifies information (probably"
-              + " 'srcs' or 'deps') not directly related to android_resources. Consider moving this"
-              + " target from 'resources' to 'deps'.");
-      return null;
-    }
-
     ruleContext.ruleWarning(
         "The use of the android_resources rule and the resources attribute is deprecated. "
             + "Please use the resource_files, assets, and manifest attributes of android_library.");
-    return provider;
+    return prerequisite.getProvider(AndroidResourcesProvider.class);
   }
 
   /**

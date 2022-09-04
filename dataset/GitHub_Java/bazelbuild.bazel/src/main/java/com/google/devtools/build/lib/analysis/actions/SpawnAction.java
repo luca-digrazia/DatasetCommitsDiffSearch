@@ -59,7 +59,6 @@ import com.google.devtools.build.lib.util.LazyString;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.ShellEscaper;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.errorprone.annotations.CompileTimeConstant;
 import com.google.errorprone.annotations.FormatMethod;
 import com.google.errorprone.annotations.FormatString;
 import com.google.protobuf.GeneratedMessage.GeneratedExtension;
@@ -1125,12 +1124,8 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
      * <p>If you are formatting the string in any way, prefer one of the overloads that do the
      * formatting lazily. This helps save memory by delaying the construction of the progress
      * message string.
-     *
-     * <p>If you cannot use simple formatting, try {@link Builder#setProgressMessage(LazyString)}.
-     *
-     * <p>If you must eagerly compute the string, use {@link Builder#setProgressMessageNonLazy}.
      */
-    public Builder setProgressMessage(@CompileTimeConstant String progressMessage) {
+    public Builder setProgressMessage(String progressMessage) {
       this.progressMessage = progressMessage;
       return this;
     }
@@ -1223,16 +1218,6 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
      * do use this overload, take care not to capture anything expensive.
      */
     public Builder setProgressMessage(LazyString progressMessage) {
-      this.progressMessage = progressMessage;
-      return this;
-    }
-
-    /**
-     * Sets an eagerly computed progress message.
-     *
-     * <p>Prefer one of the lazy overloads whenever possible, as it will generally save memory.
-     */
-    public Builder setProgressMessageNonLazy(String progressMessage) {
       this.progressMessage = progressMessage;
       return this;
     }

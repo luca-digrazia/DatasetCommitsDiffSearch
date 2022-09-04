@@ -27,10 +27,8 @@ import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionOwner;
-import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactResolver;
-import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.RunfilesSupplier;
@@ -44,8 +42,8 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
+import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform;
-import com.google.devtools.build.lib.rules.apple.XcodeConfigProvider;
 import com.google.devtools.build.lib.rules.cpp.CppCompileAction.DotdFile;
 import com.google.devtools.build.lib.rules.cpp.CppFileTypes;
 import com.google.devtools.build.lib.rules.cpp.HeaderDiscovery;
@@ -80,8 +78,8 @@ public class ObjcCompileAction extends SpawnAction {
    */
   public class ObjcCompileActionSpawn extends ActionSpawn {
 
-    public ObjcCompileActionSpawn(ImmutableList<String> arguments, Map<String, String> clientEnv) {
-      super(arguments, clientEnv);
+    public ObjcCompileActionSpawn(Map<String, String> clientEnv) {
+      super(clientEnv);
     }
 
     @Override
@@ -174,12 +172,7 @@ public class ObjcCompileAction extends SpawnAction {
 
   @Override
   public final Spawn getSpawn(Map<String, String> clientEnv) {
-    try {
-      return new ObjcCompileActionSpawn(
-          ImmutableList.copyOf(getCommandLine().arguments()), clientEnv);
-    } catch (CommandLineExpansionException e) {
-      throw new AssertionError("ObjcCompileAction command line expansion cannot fail");
-    }
+    return new ObjcCompileActionSpawn(clientEnv);
   }
 
   @Override
@@ -214,9 +207,9 @@ public class ObjcCompileAction extends SpawnAction {
   }
 
   @Override
-  public ActionResult execute(ActionExecutionContext actionExecutionContext)
+  public void execute(ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException, InterruptedException {
-    ActionResult actionResult = super.execute(actionExecutionContext);
+    super.execute(actionExecutionContext);
 
     if (dotdPruningPlan == HeaderDiscovery.DotdPruningMode.USE) {
       IncludeScanningContext scanningContext =
@@ -233,8 +226,6 @@ public class ObjcCompileAction extends SpawnAction {
       // haven't quite managed to get that right yet.
       updateActionInputs(getInputs());
     }
-
-    return actionResult;
   }
 
   @VisibleForTesting
@@ -305,12 +296,7 @@ public class ObjcCompileAction extends SpawnAction {
 
   @Override
   protected SpawnInfo getExtraActionSpawnInfo() {
-    SpawnInfo.Builder info = null;
-    try {
-      info = SpawnInfo.newBuilder(super.getExtraActionSpawnInfo());
-    } catch (CommandLineExpansionException e) {
-      throw new AssertionError("ObjcCompileAction command line expansion cannot fail");
-    }
+    SpawnInfo.Builder info = SpawnInfo.newBuilder(super.getExtraActionSpawnInfo());
     if (!inputsDiscovered()) {
       for (Artifact headerArtifact : filterHeaderFiles()) {
         // As in SpawnAction#getExtraActionSpawnInfo explicitly ignore middleman artifacts here.
@@ -326,11 +312,7 @@ public class ObjcCompileAction extends SpawnAction {
   public String computeKey() {
     Fingerprint f = new Fingerprint();
     f.addString(GUID);
-    try {
-      f.addString(super.computeKey());
-    } catch (CommandLineExpansionException e) {
-      throw new AssertionError("ObjcCompileAction command line expansion cannot fail");
-    }
+    f.addString(super.computeKey());
     f.addBoolean(dotdFile == null || dotdFile.artifact() == null);
     f.addBoolean(dotdPruningPlan == HeaderDiscovery.DotdPruningMode.USE);
     f.addBoolean(headersListFile == null);
@@ -355,12 +337,12 @@ public class ObjcCompileAction extends SpawnAction {
      * needed by the apple toolchain.
      */
     public static ObjcCompileAction.Builder createObjcCompileActionBuilderWithAppleEnv(
-        XcodeConfigProvider xcodeConfigProvider, ApplePlatform targetPlatform) {
+        AppleConfiguration appleConfiguration, ApplePlatform targetPlatform) {
       return (Builder)
           new ObjcCompileAction.Builder()
               .setExecutionInfo(ObjcRuleClasses.darwinActionExecutionRequirement())
               .setEnvironment(
-                  ObjcRuleClasses.appleToolchainEnvironment(xcodeConfigProvider, targetPlatform));
+                  ObjcRuleClasses.appleToolchainEnvironment(appleConfiguration, targetPlatform));
     }
 
     @Override

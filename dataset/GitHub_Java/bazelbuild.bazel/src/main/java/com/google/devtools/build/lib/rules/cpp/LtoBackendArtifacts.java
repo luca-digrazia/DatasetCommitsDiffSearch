@@ -111,9 +111,7 @@ public final class LtoBackendArtifacts {
       CcToolchainProvider ccToolchain,
       FdoSupportProvider fdoSupport,
       boolean usePic,
-      boolean generateDwo,
-      BuildConfiguration configuration,
-      CppLinkAction.LinkArtifactFactory linkArtifactFactory) {
+      boolean generateDwo) {
     LtoBackendAction.Builder builder = new LtoBackendAction.Builder();
     builder.addImportsInfo(bitcodeFiles, imports);
 
@@ -148,11 +146,7 @@ public final class LtoBackendArtifacts {
     }
 
     if (generateDwo) {
-      Artifact dwoFile =
-          linkArtifactFactory.create(
-              ruleContext,
-              configuration,
-              FileSystemUtils.replaceExtension(objectFile.getRootRelativePath(), ".dwo"));
+      Artifact dwoFile = ruleContext.getRelatedArtifact(objectFile.getRootRelativePath(), ".dwo");
       builder.addOutput(dwoFile);
       buildVariablesBuilder.addStringVariable(
           "per_object_debug_info_file", dwoFile.getExecPathString());

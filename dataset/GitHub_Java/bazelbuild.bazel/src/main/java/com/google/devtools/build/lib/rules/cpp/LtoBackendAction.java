@@ -22,7 +22,6 @@ import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.RunfilesSupplier;
 import com.google.devtools.build.lib.analysis.actions.CommandLine;
@@ -161,14 +160,16 @@ public final class LtoBackendAction extends SpawnAction {
   }
 
   @Override
+  public void execute(ActionExecutionContext actionExecutionContext)
+      throws ActionExecutionException, InterruptedException {
+    super.execute(actionExecutionContext);
+  }
+
+  @Override
   protected String computeKey() {
     Fingerprint f = new Fingerprint();
     f.addString(GUID);
-    try {
-      f.addStrings(getArguments());
-    } catch (CommandLineExpansionException e) {
-      throw new AssertionError("LtoBackendAction command line expansion cannot fail");
-    }
+    f.addStrings(getArguments());
     f.addString(getMnemonic());
     f.addPaths(getRunfilesSupplier().getRunfilesDirs());
     ImmutableList<Artifact> runfilesManifests = getRunfilesSupplier().getManifests();

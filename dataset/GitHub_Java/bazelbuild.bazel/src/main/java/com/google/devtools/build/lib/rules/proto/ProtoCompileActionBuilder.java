@@ -596,7 +596,7 @@ public class ProtoCompileActionBuilder {
     }
 
     for (Artifact src : protosToCompile) {
-      cmdLine.addPath(src.getExecPath());
+      cmdLine.addPath(src.getRootRelativePath());
     }
 
     if (!allowServices) {
