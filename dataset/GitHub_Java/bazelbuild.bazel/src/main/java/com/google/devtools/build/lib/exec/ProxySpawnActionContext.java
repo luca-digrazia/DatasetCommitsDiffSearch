@@ -102,8 +102,8 @@ public final class ProxySpawnActionContext implements SpawnActionContext {
   }
 
   @Override
-  public boolean canExec(Spawn spawn, ActionContextRegistry actionContextRegistry) {
+  public boolean canExec(Spawn spawn, ActionExecutionContext actionExecutionContext) {
     return spawnActionContextMaps.getSpawnActionContexts(spawn, NullEventHandler.INSTANCE).stream()
-        .anyMatch(spawnActionContext -> spawnActionContext.canExec(spawn, actionContextRegistry));
+        .anyMatch(spawnActionContext -> spawnActionContext.canExec(spawn, actionExecutionContext));
   }
 }

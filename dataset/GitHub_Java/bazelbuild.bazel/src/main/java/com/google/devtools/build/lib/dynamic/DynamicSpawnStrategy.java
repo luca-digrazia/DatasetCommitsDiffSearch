@@ -26,6 +26,7 @@ import com.google.common.util.concurrent.SettableFuture;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.DynamicStrategyRegistry;
 import com.google.devtools.build.lib.actions.ExecException;
+import com.google.devtools.build.lib.actions.ExecutionStrategy;
 import com.google.devtools.build.lib.actions.SandboxedSpawnActionContext;
 import com.google.devtools.build.lib.actions.SandboxedSpawnActionContext.StopConcurrentSpawns;
 import com.google.devtools.build.lib.actions.Spawn;
@@ -62,8 +63,10 @@ import javax.annotation.Nullable;
  * save 0.5s of time, when it then takes us 5 seconds to upload the results to remote executors for
  * another action that's scheduled to run there.
  */
+@ExecutionStrategy(
+    name = {"dynamic", "dynamic_worker"},
+    contextType = SpawnActionContext.class)
 public class DynamicSpawnStrategy implements SpawnActionContext {
-
   private static final Logger logger = Logger.getLogger(DynamicSpawnStrategy.class.getName());
 
   private final ListeningExecutorService executorService;
@@ -327,20 +330,20 @@ public class DynamicSpawnStrategy implements SpawnActionContext {
   }
 
   @Override
-  public boolean canExec(Spawn spawn, ActionContextRegistry actionContextRegistry) {
+  public boolean canExec(Spawn spawn, ActionExecutionContext actionExecutionContext) {
     DynamicStrategyRegistry dynamicStrategyRegistry =
-        actionContextRegistry.getContext(DynamicStrategyRegistry.class);
+        actionExecutionContext.getContext(DynamicStrategyRegistry.class);
     for (SandboxedSpawnActionContext strategy :
         dynamicStrategyRegistry.getDynamicSpawnActionContexts(
             spawn, DynamicStrategyRegistry.DynamicMode.LOCAL)) {
-      if (strategy.canExec(spawn, actionContextRegistry)) {
+      if (strategy.canExec(spawn, actionExecutionContext)) {
         return true;
       }
     }
     for (SandboxedSpawnActionContext strategy :
         dynamicStrategyRegistry.getDynamicSpawnActionContexts(
             spawn, DynamicStrategyRegistry.DynamicMode.REMOTE)) {
-      if (strategy.canExec(spawn, actionContextRegistry)) {
+      if (strategy.canExec(spawn, actionExecutionContext)) {
         return true;
       }
     }

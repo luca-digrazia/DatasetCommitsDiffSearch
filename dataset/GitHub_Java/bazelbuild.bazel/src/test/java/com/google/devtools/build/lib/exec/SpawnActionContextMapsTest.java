@@ -18,9 +18,11 @@ import static org.mockito.Mockito.when;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.eventbus.EventBus;
+import com.google.devtools.build.lib.actions.ActionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionMetadata;
 import com.google.devtools.build.lib.actions.ExecException;
+import com.google.devtools.build.lib.actions.ExecutionStrategy;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.actions.SpawnResult;
@@ -52,11 +54,8 @@ public class SpawnActionContextMapsTest {
       ImmutableList.of(
           new ActionContextProvider() {
             @Override
-            public void registerActionContexts(ActionContextCollector collector) {
-              collector
-                  .forType(SpawnActionContext.class)
-                  .registerContext(ac1, "ac1")
-                  .registerContext(ac2, "ac2");
+            public Iterable<? extends ActionContext> getActionContexts() {
+              return ImmutableList.of(ac1, ac2);
             }
           });
 
@@ -126,6 +125,7 @@ public class SpawnActionContextMapsTest {
     return mockSpawn;
   }
 
+  @ExecutionStrategy(contextType = SpawnActionContext.class, name = "ac1")
   private static class AC1 implements SpawnActionContext {
     @Override
     public ImmutableList<SpawnResult> exec(
@@ -135,11 +135,12 @@ public class SpawnActionContextMapsTest {
     }
 
     @Override
-    public boolean canExec(Spawn spawn, ActionContextRegistry actionContextRegistry) {
+    public boolean canExec(Spawn spawn, ActionExecutionContext actionExecutionContext) {
       return true;
     }
   }
 
+  @ExecutionStrategy(contextType = SpawnActionContext.class, name = "ac2")
   private static class AC2 implements SpawnActionContext {
     @Override
     public ImmutableList<SpawnResult> exec(
@@ -149,7 +150,7 @@ public class SpawnActionContextMapsTest {
     }
 
     @Override
-    public boolean canExec(Spawn spawn, ActionContextRegistry actionContextRegistry) {
+    public boolean canExec(Spawn spawn, ActionExecutionContext actionExecutionContext) {
       return true;
     }
   }
