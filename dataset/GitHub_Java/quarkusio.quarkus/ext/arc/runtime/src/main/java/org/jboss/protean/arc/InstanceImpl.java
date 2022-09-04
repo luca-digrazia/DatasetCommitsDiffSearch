@@ -7,8 +7,10 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Set;
 
+import javax.enterprise.context.Dependent;
 import javax.enterprise.inject.AmbiguousResolutionException;
 import javax.enterprise.inject.Instance;
 import javax.enterprise.inject.UnsatisfiedResolutionException;
@@ -28,8 +30,6 @@ class InstanceImpl<T> implements Instance<T> {
 
     private final CreationalContextImpl<?> creationalContext;
 
-    private final Set<InjectableBean<?>> beans;
-
     InstanceImpl(Type type, Set<Annotation> qualifiers, CreationalContextImpl<?> creationalContext) {
         if (type instanceof ParameterizedType) {
             this.type = ((ParameterizedType) type).getActualTypeArguments()[0];
@@ -38,30 +38,23 @@ class InstanceImpl<T> implements Instance<T> {
         }
         this.qualifiers = qualifiers != null ? qualifiers : Collections.emptySet();
         this.creationalContext = creationalContext;
-
-        if (qualifiers.isEmpty() && Object.class.equals(type)) {
-            // Do not prefetch the beans for Instance<Object> with no qualifiers
-            this.beans = null;
-        } else {
-            this.beans = resolve();
-        }
     }
 
     @Override
     public Iterator<T> iterator() {
-        return new InstanceIterator(beans());
+        return new InstanceIterator(getBeans());
     }
 
     @SuppressWarnings("unchecked")
     @Override
     public T get() {
-        Set<InjectableBean<?>> beans = beans();
+        List<InjectableBean<?>> beans = getBeans();
         if (beans.isEmpty()) {
             throw new UnsatisfiedResolutionException();
         } else if (beans.size() > 1) {
             throw new AmbiguousResolutionException();
         }
-        return getBeanInstance((InjectableBean<T>) beans.iterator().next());
+        return getBeanInstance((InjectableBean<T>) beans.get(0));
     }
 
     @Override
@@ -87,12 +80,12 @@ class InstanceImpl<T> implements Instance<T> {
 
     @Override
     public boolean isUnsatisfied() {
-        return beans().isEmpty();
+        return getBeans().isEmpty();
     }
 
     @Override
     public boolean isAmbiguous() {
-        return beans().size() > 1;
+        return getBeans().size() > 1;
     }
 
     @Override
@@ -108,15 +101,14 @@ class InstanceImpl<T> implements Instance<T> {
         CreationalContextImpl<T> ctx = creationalContext.child();
         // TODO current injection point?
         T instance = bean.get(ctx);
+        if (Dependent.class.equals(bean.getScope())) {
+            creationalContext.addDependentInstance(bean, instance, ctx);
+        }
         return instance;
     }
 
-    private Set<InjectableBean<?>> beans() {
-        return beans != null ? beans : resolve();
-    }
-
-    private Set<InjectableBean<?>> resolve() {
-        return ArcContainerImpl.instance().getResolvedBeans(type, qualifiers.toArray(EMPTY_ANNOTATION_ARRAY));
+    private List<InjectableBean<?>> getBeans() {
+        return ArcContainerImpl.unwrap(Arc.container()).geBeans(type, qualifiers.toArray(EMPTY_ANNOTATION_ARRAY));
     }
 
     class InstanceIterator implements Iterator<T> {
