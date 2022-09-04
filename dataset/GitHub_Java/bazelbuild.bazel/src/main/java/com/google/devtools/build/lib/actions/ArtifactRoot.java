@@ -15,16 +15,21 @@
 package com.google.devtools.build.lib.actions;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Interner;
 import com.google.common.collect.Interners;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.skyframe.serialization.DeserializationContext;
+import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
+import com.google.devtools.build.lib.skyframe.serialization.SerializationContext;
+import com.google.devtools.build.lib.skyframe.serialization.SerializationException;
 import com.google.devtools.build.lib.skylarkbuildapi.FileRootApi;
-import com.google.devtools.build.lib.syntax.Printer;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
+import com.google.protobuf.CodedInputStream;
+import com.google.protobuf.CodedOutputStream;
+import java.io.IOException;
 import java.io.Serializable;
 import java.util.Objects;
 
@@ -44,10 +49,10 @@ import java.util.Objects;
  * <p>The derived roots must have paths that point inside the exec root, i.e. below the directory
  * that is the root of the merged directory tree.
  */
-@AutoCodec
 @Immutable
 public final class ArtifactRoot implements Comparable<ArtifactRoot>, Serializable, FileRootApi {
   private static final Interner<ArtifactRoot> INTERNER = Interners.newWeakInterner();
+
   /**
    * Do not use except in tests and in {@link
    * com.google.devtools.build.lib.skyframe.SkyframeExecutor}.
@@ -59,20 +64,13 @@ public final class ArtifactRoot implements Comparable<ArtifactRoot>, Serializabl
   }
 
   /**
-   * Constructs an ArtifactRoot given the output prefixes. (eg, "bin"), and (eg, "testlogs")
-   * relative to the execRoot.
+   * Returns the given path as a derived root, relative to the given exec root. The root must be a
+   * proper sub-directory of the exec root (i.e. not equal). Neither may be {@code null}.
    *
    * <p>Be careful with this method - all derived roots must be registered with the artifact factory
    * before the analysis phase.
    */
-  public static ArtifactRoot asDerivedRoot(Path execRoot, String... prefixes) {
-    Path root = execRoot;
-    for (String prefix : prefixes) {
-      // Tests can have empty segments here, be gentle to them.
-      if (!prefix.isEmpty()) {
-        root = root.getChild(prefix);
-      }
-    }
+  public static ArtifactRoot asDerivedRoot(Path execRoot, Path root) {
     Preconditions.checkArgument(root.startsWith(execRoot));
     Preconditions.checkArgument(!root.equals(execRoot));
     PathFragment execPath = root.relativeTo(execRoot);
@@ -87,14 +85,7 @@ public final class ArtifactRoot implements Comparable<ArtifactRoot>, Serializabl
     return INTERNER.intern(new ArtifactRoot(Root.fromPath(root), execPath, RootType.Middleman));
   }
 
-  @AutoCodec.VisibleForSerialization
-  @AutoCodec.Instantiator
-  static ArtifactRoot createForSerialization(Root root, PathFragment execPath, RootType rootType) {
-    return INTERNER.intern(new ArtifactRoot(root, execPath, rootType));
-  }
-
-  @AutoCodec.VisibleForSerialization
-  enum RootType {
+  private enum RootType {
     Source,
     Output,
     Middleman
@@ -127,9 +118,6 @@ public final class ArtifactRoot implements Comparable<ArtifactRoot>, Serializabl
     return getExecPath().getPathString();
   }
 
-  public ImmutableList<String> getComponents() {
-    return execPath.getSegments();
-  }
 
   public boolean isSourceRoot() {
     return rootType == RootType.Source;
@@ -167,7 +155,52 @@ public final class ArtifactRoot implements Comparable<ArtifactRoot>, Serializabl
   }
 
   @Override
-  public void repr(Printer printer) {
+  public void repr(SkylarkPrinter printer) {
     printer.append(isSourceRoot() ? "<source root>" : "<derived root>");
+  }
+
+  /** Custom codec that replaces output base with local output base on deserialization. */
+  private static class ArtifactRootCodec implements ObjectCodec<ArtifactRoot> {
+    @Override
+    public Class<ArtifactRoot> getEncodedClass() {
+      return ArtifactRoot.class;
+    }
+
+    @Override
+    public void serialize(
+        SerializationContext context, ArtifactRoot input, CodedOutputStream codedOut)
+        throws SerializationException, IOException {
+      context.serialize(input.rootType, codedOut);
+      switch (input.rootType) {
+        case Source:
+          context.serialize(input.root, codedOut);
+          break;
+        case Output: // fall-through, same behavior as Middleman
+        case Middleman:
+          Path outputBase = context.getDependency(OutputBaseSupplier.class).get();
+          context.serialize(input.root.asPath().relativeTo(outputBase), codedOut);
+          break;
+      }
+      context.serialize(input.execPath, codedOut);
+    }
+
+    @Override
+    public ArtifactRoot deserialize(DeserializationContext context, CodedInputStream codedIn)
+        throws SerializationException, IOException {
+      ArtifactRoot.RootType rootType = context.deserialize(codedIn);
+      Root root = null;
+      switch (rootType) {
+        case Source:
+          root = context.deserialize(codedIn);
+          break;
+        case Output: // fall-through, same behavior as Middleman
+        case Middleman:
+          Path outputBase = context.getDependency(OutputBaseSupplier.class).get();
+          PathFragment relativeRoot = context.deserialize(codedIn);
+          root = Root.fromPath(outputBase.getRelative(relativeRoot));
+          break;
+      }
+      return INTERNER.intern(new ArtifactRoot(root, context.deserialize(codedIn), rootType));
+    }
   }
 }

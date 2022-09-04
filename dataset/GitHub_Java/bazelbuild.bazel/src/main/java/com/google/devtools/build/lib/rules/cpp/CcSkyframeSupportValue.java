@@ -14,7 +14,7 @@
 package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.common.collect.Interner;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier;
+import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
@@ -49,22 +49,22 @@ public class CcSkyframeSupportValue implements SkyValue {
     private static final Interner<Key> interner = BlazeInterners.newWeakInterner();
 
     @Nullable private final PathFragment fdoZipPath;
-    @Nullable private final PackageIdentifier packageWithCrosstoolInIt;
+    @Nullable private final Label ccToolchainSuiteLabel;
 
-    private Key(PathFragment fdoZipPath, PackageIdentifier packageWithCrosstoolInIt) {
+    private Key(PathFragment fdoZipPath, Label ccToolchainSuiteLabel) {
       this.fdoZipPath = fdoZipPath;
-      this.packageWithCrosstoolInIt = packageWithCrosstoolInIt;
+      this.ccToolchainSuiteLabel = ccToolchainSuiteLabel;
     }
 
     @AutoCodec.Instantiator
     @AutoCodec.VisibleForSerialization
-    static Key of(PathFragment fdoZipPath, PackageIdentifier packageWithCrosstoolInIt) {
-      return interner.intern(new Key(fdoZipPath, packageWithCrosstoolInIt));
+    static Key of(PathFragment fdoZipPath, Label ccToolchainSuiteLabel) {
+      return interner.intern(new Key(fdoZipPath, ccToolchainSuiteLabel));
     }
 
     @Nullable
-    public PackageIdentifier getPackageWithCrosstoolInIt() {
-      return packageWithCrosstoolInIt;
+    public Label getCcToolchainSuiteLabel() {
+      return ccToolchainSuiteLabel;
     }
 
     @Nullable
@@ -82,13 +82,13 @@ public class CcSkyframeSupportValue implements SkyValue {
       }
       Key key = (Key) o;
       return Objects.equals(fdoZipPath, key.fdoZipPath)
-          && Objects.equals(packageWithCrosstoolInIt, key.packageWithCrosstoolInIt);
+          && Objects.equals(ccToolchainSuiteLabel, key.ccToolchainSuiteLabel);
     }
 
     @Override
     public int hashCode() {
 
-      return Objects.hash(fdoZipPath, packageWithCrosstoolInIt);
+      return Objects.hash(fdoZipPath, ccToolchainSuiteLabel);
     }
 
     @Override
@@ -118,7 +118,7 @@ public class CcSkyframeSupportValue implements SkyValue {
     return crosstoolRelease;
   }
 
-  public static SkyKey key(PathFragment fdoZipPath, PackageIdentifier packageWithCrosstoolInIt) {
-    return Key.of(fdoZipPath, packageWithCrosstoolInIt);
+  public static SkyKey key(PathFragment fdoZipPath, Label ccToolchainSuiteLabel) {
+    return Key.of(fdoZipPath, ccToolchainSuiteLabel);
   }
 }
