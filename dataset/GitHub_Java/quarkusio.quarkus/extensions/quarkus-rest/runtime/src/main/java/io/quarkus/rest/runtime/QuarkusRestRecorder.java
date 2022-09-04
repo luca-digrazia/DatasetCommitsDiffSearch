@@ -1,10 +1,12 @@
 package io.quarkus.rest.runtime;
 
+import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -22,8 +24,10 @@ import javax.ws.rs.client.WebTarget;
 import javax.ws.rs.container.ContainerRequestFilter;
 import javax.ws.rs.container.ContainerResponseFilter;
 import javax.ws.rs.container.DynamicFeature;
+import javax.ws.rs.core.Application;
 import javax.ws.rs.core.Feature;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.ext.MessageBodyWriter;
 import javax.ws.rs.ext.ReaderInterceptor;
@@ -40,8 +44,10 @@ import io.quarkus.rest.runtime.core.ExceptionMapping;
 import io.quarkus.rest.runtime.core.Features;
 import io.quarkus.rest.runtime.core.GenericTypeMapping;
 import io.quarkus.rest.runtime.core.LazyMethod;
+import io.quarkus.rest.runtime.core.ParamConverterProviders;
 import io.quarkus.rest.runtime.core.QuarkusRestDeployment;
 import io.quarkus.rest.runtime.core.Serialisers;
+import io.quarkus.rest.runtime.core.SingletonBeanFactory;
 import io.quarkus.rest.runtime.core.parameters.AsyncResponseExtractor;
 import io.quarkus.rest.runtime.core.parameters.BeanParamExtractor;
 import io.quarkus.rest.runtime.core.parameters.BodyParamExtractor;
@@ -50,9 +56,12 @@ import io.quarkus.rest.runtime.core.parameters.CookieParamExtractor;
 import io.quarkus.rest.runtime.core.parameters.FormParamExtractor;
 import io.quarkus.rest.runtime.core.parameters.HeaderParamExtractor;
 import io.quarkus.rest.runtime.core.parameters.MatrixParamExtractor;
+import io.quarkus.rest.runtime.core.parameters.NullParamExtractor;
 import io.quarkus.rest.runtime.core.parameters.ParameterExtractor;
 import io.quarkus.rest.runtime.core.parameters.PathParamExtractor;
 import io.quarkus.rest.runtime.core.parameters.QueryParamExtractor;
+import io.quarkus.rest.runtime.core.parameters.converters.ParameterConverter;
+import io.quarkus.rest.runtime.core.parameters.converters.RuntimeResolvedConverter;
 import io.quarkus.rest.runtime.core.serialization.DynamicEntityWriter;
 import io.quarkus.rest.runtime.core.serialization.FixedEntityWriter;
 import io.quarkus.rest.runtime.core.serialization.FixedEntityWriterArray;
@@ -60,6 +69,7 @@ import io.quarkus.rest.runtime.handlers.AbortChainHandler;
 import io.quarkus.rest.runtime.handlers.BlockingHandler;
 import io.quarkus.rest.runtime.handlers.ClassRoutingHandler;
 import io.quarkus.rest.runtime.handlers.CompletionStageResponseHandler;
+import io.quarkus.rest.runtime.handlers.ExceptionHandler;
 import io.quarkus.rest.runtime.handlers.InputHandler;
 import io.quarkus.rest.runtime.handlers.InstanceHandler;
 import io.quarkus.rest.runtime.handlers.InterceptorHandler;
@@ -72,15 +82,15 @@ import io.quarkus.rest.runtime.handlers.QuarkusRestInitialHandler;
 import io.quarkus.rest.runtime.handlers.ReadBodyHandler;
 import io.quarkus.rest.runtime.handlers.RequestDeserializeHandler;
 import io.quarkus.rest.runtime.handlers.ResourceLocatorHandler;
-import io.quarkus.rest.runtime.handlers.ResourceRequestInterceptorHandler;
-import io.quarkus.rest.runtime.handlers.ResourceResponseInterceptorHandler;
+import io.quarkus.rest.runtime.handlers.ResourceRequestFilterHandler;
+import io.quarkus.rest.runtime.handlers.ResourceResponseFilterHandler;
 import io.quarkus.rest.runtime.handlers.ResponseHandler;
 import io.quarkus.rest.runtime.handlers.ResponseWriterHandler;
-import io.quarkus.rest.runtime.handlers.RestHandler;
+import io.quarkus.rest.runtime.handlers.ServerRestHandler;
 import io.quarkus.rest.runtime.handlers.SseResponseWriterHandler;
 import io.quarkus.rest.runtime.handlers.UniResponseHandler;
+import io.quarkus.rest.runtime.handlers.VariableProducesHandler;
 import io.quarkus.rest.runtime.headers.FixedProducesHandler;
-import io.quarkus.rest.runtime.headers.VariableProducesHandler;
 import io.quarkus.rest.runtime.jaxrs.QuarkusRestConfiguration;
 import io.quarkus.rest.runtime.jaxrs.QuarkusRestDynamicFeatureContext;
 import io.quarkus.rest.runtime.jaxrs.QuarkusRestFeatureContext;
@@ -88,6 +98,7 @@ import io.quarkus.rest.runtime.jaxrs.QuarkusRestResourceMethod;
 import io.quarkus.rest.runtime.mapping.RequestMapper;
 import io.quarkus.rest.runtime.mapping.RuntimeResource;
 import io.quarkus.rest.runtime.mapping.URITemplate;
+import io.quarkus.rest.runtime.model.HasPriority;
 import io.quarkus.rest.runtime.model.MethodParameter;
 import io.quarkus.rest.runtime.model.ParameterType;
 import io.quarkus.rest.runtime.model.ResourceClass;
@@ -105,8 +116,13 @@ import io.quarkus.rest.runtime.model.ResourceWriter;
 import io.quarkus.rest.runtime.model.ResourceWriterInterceptor;
 import io.quarkus.rest.runtime.spi.BeanFactory;
 import io.quarkus.rest.runtime.spi.EndpointInvoker;
+import io.quarkus.rest.runtime.spi.QuarkusRestMessageBodyWriter;
+import io.quarkus.rest.runtime.util.QuarkusMultivaluedHashMap;
+import io.quarkus.rest.runtime.util.RuntimeResourceVisitor;
+import io.quarkus.rest.runtime.util.ScoreSystem;
 import io.quarkus.rest.runtime.util.ServerMediaType;
 import io.quarkus.runtime.ExecutorRecorder;
+import io.quarkus.runtime.LaunchMode;
 import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.runtime.ShutdownContext;
 import io.quarkus.runtime.annotations.Recorder;
@@ -133,7 +149,7 @@ public class QuarkusRestRecorder {
     private static final LinkedHashMap<ResourceResponseInterceptor, ContainerResponseFilter> EMPTY_INTERCEPTOR_RESPONSE_MAP = new LinkedHashMap<>();
     private static final LinkedHashMap<ResourceReaderInterceptor, ReaderInterceptor> EMPTY_INTERCEPTOR_READER_MAP = new LinkedHashMap<>();
     private static final LinkedHashMap<ResourceWriterInterceptor, WriterInterceptor> EMPTY_INTERCEPTOR_WRITER_MAP = new LinkedHashMap<>();
-    public static final RestHandler[] EMPTY_REST_HANDLER_ARRAY = new RestHandler[0];
+    public static final ServerRestHandler[] EMPTY_REST_HANDLER_ARRAY = new ServerRestHandler[0];
 
     private static volatile QuarkusRestDeployment currentDeployment;
 
@@ -178,7 +194,13 @@ public class QuarkusRestRecorder {
             ContextResolvers ctxResolvers, Features features, DynamicFeatures dynamicFeatures, Serialisers serialisers,
             List<ResourceClass> resourceClasses, List<ResourceClass> locatableResourceClasses, BeanContainer beanContainer,
             ShutdownContext shutdownContext, QuarkusRestConfig quarkusRestConfig, HttpBuildTimeConfig vertxConfig,
-            Map<String, RuntimeValue<Function<WebTarget, ?>>> clientImplementations, GenericTypeMapping genericTypeMapping) {
+            String applicationPath, Map<String, RuntimeValue<Function<WebTarget, ?>>> clientImplementations,
+            GenericTypeMapping genericTypeMapping,
+            ParamConverterProviders paramConverterProviders, BeanFactory<QuarkusRestInitialiser> initClassFactory,
+            Class<? extends Application> applicationClass, boolean applicationSingletonClassesEmpty) {
+
+        Supplier<Application> applicationSupplier = handleApplication(applicationClass, applicationSingletonClassesEmpty);
+
         DynamicEntityWriter dynamicEntityWriter = new DynamicEntityWriter(serialisers);
 
         QuarkusRestConfiguration quarkusRestConfiguration = configureFeatures(features, interceptors, exceptionMapping,
@@ -209,10 +231,16 @@ public class QuarkusRestRecorder {
         Map<ResourceWriterInterceptor, WriterInterceptor> nameWriterInterceptorsMap = createWriterInterceptorInstances(
                 interceptors.getNameResourceWriterInterceptors(), shutdownContext);
 
-        ResourceResponseInterceptorHandler globalResourceResponseInterceptorHandler = new ResourceResponseInterceptorHandler(
-                globalResponseInterceptorsMap.values());
-        ResourceRequestInterceptorHandler globalRequestInterceptorsHandler = new ResourceRequestInterceptorHandler(
-                globalRequestInterceptorsMap.values(), false);
+        Collection<ContainerResponseFilter> responseFilters = globalResponseInterceptorsMap.values();
+        List<ResourceResponseFilterHandler> globalResponseInterceptorHandlers = new ArrayList<>(responseFilters.size());
+        for (ContainerResponseFilter responseFilter : responseFilters) {
+            globalResponseInterceptorHandlers.add(new ResourceResponseFilterHandler(responseFilter));
+        }
+        Collection<ContainerRequestFilter> requestFilters = globalRequestInterceptorsMap.values();
+        List<ResourceRequestFilterHandler> globalRequestInterceptorHandlers = new ArrayList<>(requestFilters.size());
+        for (ContainerRequestFilter requestFilter : requestFilters) {
+            globalRequestInterceptorHandlers.add(new ResourceRequestFilterHandler(requestFilter, false));
+        }
 
         InterceptorHandler globalInterceptorHandler = null;
         if (!globalReaderInterceptorsMap.isEmpty() ||
@@ -248,15 +276,16 @@ public class QuarkusRestRecorder {
                 RuntimeResource runtimeResource = buildResourceMethod(serialisers, quarkusRestConfig,
                         globalRequestInterceptorsMap,
                         globalResponseInterceptorsMap,
-                        globalRequestInterceptorsHandler, globalResourceResponseInterceptorHandler,
+                        globalRequestInterceptorHandlers, globalResponseInterceptorHandlers,
                         nameRequestInterceptorsMap, nameResponseInterceptorsMap,
                         Collections.emptyMap(), Collections.emptyMap(),
                         globalReaderInterceptorsMap,
                         globalWriterInterceptorsMap,
                         nameReaderInterceptorsMap,
-                        nameWriterInterceptorsMap, globalInterceptorHandler, clazz,
+                        nameWriterInterceptorsMap, globalInterceptorHandler, Collections.emptyMap(), Collections.emptyMap(),
+                        clazz,
                         resourceLocatorHandler, method,
-                        true, classPathTemplate, dynamicEntityWriter, beanContainer);
+                        true, classPathTemplate, dynamicEntityWriter, beanContainer, paramConverterProviders);
 
                 buildMethodMapper(templates, method, runtimeResource);
             }
@@ -280,6 +309,10 @@ public class QuarkusRestRecorder {
                         .emptyMap();
                 Map<ResourceResponseInterceptor, ContainerResponseFilter> methodSpecificResponseInterceptorsMap = Collections
                         .emptyMap();
+                Map<ResourceReaderInterceptor, ReaderInterceptor> methodSpecificReaderInterceptorsMap = Collections
+                        .emptyMap();
+                Map<ResourceWriterInterceptor, WriterInterceptor> methodSpecificWriterInterceptorsMap = Collections
+                        .emptyMap();
 
                 if (dynamicFeaturesExist) {
                     // we'll basically just use this as a way to capture the registering of filters
@@ -302,20 +335,29 @@ public class QuarkusRestRecorder {
                         methodSpecificResponseInterceptorsMap = createContainerResponseFilterInstances(
                                 dynamicallyConfiguredInterceptors.getGlobalResponseInterceptors(), shutdownContext);
                     }
+                    if (!dynamicallyConfiguredInterceptors.getGlobalResourceReaderInterceptors().isEmpty()) {
+                        methodSpecificReaderInterceptorsMap = createReaderInterceptorInstances(
+                                dynamicallyConfiguredInterceptors.getGlobalResourceReaderInterceptors(), shutdownContext);
+                    }
+                    if (!dynamicallyConfiguredInterceptors.getGlobalResourceWriterInterceptors().isEmpty()) {
+                        methodSpecificWriterInterceptorsMap = createWriterInterceptorInstances(
+                                dynamicallyConfiguredInterceptors.getGlobalResourceWriterInterceptors(), shutdownContext);
+                    }
                 }
 
                 RuntimeResource runtimeResource = buildResourceMethod(serialisers, quarkusRestConfig,
                         globalRequestInterceptorsMap,
                         globalResponseInterceptorsMap,
-                        globalRequestInterceptorsHandler, globalResourceResponseInterceptorHandler, nameRequestInterceptorsMap,
+                        globalRequestInterceptorHandlers, globalResponseInterceptorHandlers, nameRequestInterceptorsMap,
                         nameResponseInterceptorsMap, methodSpecificRequestInterceptorsMap,
                         methodSpecificResponseInterceptorsMap,
                         globalReaderInterceptorsMap,
                         globalWriterInterceptorsMap,
                         nameReaderInterceptorsMap,
                         nameWriterInterceptorsMap, globalInterceptorHandler,
+                        methodSpecificReaderInterceptorsMap, methodSpecificWriterInterceptorsMap,
                         clazz, resourceLocatorHandler, method,
-                        false, classTemplate, dynamicEntityWriter, beanContainer);
+                        false, classTemplate, dynamicEntityWriter, beanContainer, paramConverterProviders);
 
                 buildMethodMapper(perClassMappers, method, runtimeResource);
             }
@@ -338,33 +380,105 @@ public class QuarkusRestRecorder {
                 }
             }
             classMappers.add(new RequestMapper.RequestPath<>(true, classTemplate,
-                    new QuarkusRestInitialHandler.InitialMatch(new RestHandler[] { classRoutingHandler },
+                    new QuarkusRestInitialHandler.InitialMatch(new ServerRestHandler[] { classRoutingHandler },
                             maxMethodTemplateNameCount + classTemplateNameCount)));
         }
 
-        List<RestHandler> abortHandlingChain = new ArrayList<>();
+        List<ServerRestHandler> abortHandlingChain = new ArrayList<>();
 
+        if (globalInterceptorHandler != null) {
+            abortHandlingChain.add(globalInterceptorHandler);
+        }
+        abortHandlingChain.add(new ExceptionHandler());
         if (!interceptors.getGlobalResponseInterceptors().isEmpty()) {
-            abortHandlingChain.add(globalResourceResponseInterceptorHandler);
+            abortHandlingChain.addAll(globalResponseInterceptorHandlers);
         }
         abortHandlingChain.add(new ResponseHandler());
         abortHandlingChain.add(new ResponseWriterHandler(dynamicEntityWriter));
+        // sanitise the prefix for our usage to make it either an empty string, or something which starts with a / and does not
+        // end with one
+        String prefix = vertxConfig.rootPath;
+        if (prefix != null) {
+            prefix = sanitizePathPrefix(prefix);
+        } else {
+            prefix = "";
+        }
+        if ((applicationPath != null) && !applicationPath.isEmpty()) {
+            prefix = prefix + sanitizePathPrefix(applicationPath);
+        }
         QuarkusRestDeployment deployment = new QuarkusRestDeployment(exceptionMapping, ctxResolvers, serialisers,
                 abortHandlingChain.toArray(EMPTY_REST_HANDLER_ARRAY), dynamicEntityWriter,
                 createClientImpls(clientImplementations),
-                vertxConfig.rootPath, genericTypeMapping);
+                prefix, genericTypeMapping, paramConverterProviders, quarkusRestConfiguration, applicationSupplier);
+
+        initClassFactory.createInstance().getInstance().init(deployment);
 
         currentDeployment = deployment;
 
         //pre matching interceptors are run first
-        ResourceRequestInterceptorHandler preMatchHandler = null;
+        List<ResourceRequestFilterHandler> preMatchHandlers = null;
         if (!interceptors.getResourcePreMatchRequestInterceptors().isEmpty()) {
             Map<ResourceRequestInterceptor, ContainerRequestFilter> preMatchContainerRequestFilters = createContainerRequestFilterInstances(
                     interceptors.getResourcePreMatchRequestInterceptors(), shutdownContext);
-            preMatchHandler = new ResourceRequestInterceptorHandler(preMatchContainerRequestFilters.values(), true);
+            preMatchHandlers = new ArrayList<>(preMatchContainerRequestFilters.size());
+            for (ContainerRequestFilter containerRequestFilter : preMatchContainerRequestFilters.values()) {
+                preMatchHandlers.add(new ResourceRequestFilterHandler(containerRequestFilter, true));
+            }
         }
 
-        return new QuarkusRestInitialHandler(new RequestMapper<>(classMappers), deployment, preMatchHandler);
+        if (LaunchMode.current() == LaunchMode.DEVELOPMENT) {
+            NotFoundExceptionMapper.classMappers = classMappers;
+            RuntimeResourceVisitor.visitRuntimeResources(classMappers, ScoreSystem.ScoreVisitor);
+        }
+
+        return new QuarkusRestInitialHandler(new RequestMapper<>(classMappers), deployment, preMatchHandlers);
+    }
+
+    // TODO: don't use reflection to instantiate Application
+    private Supplier<Application> handleApplication(final Class<? extends Application> applicationClass,
+            final boolean singletonClassesEmpty) {
+        Supplier<Application> applicationSupplier;
+        if (singletonClassesEmpty) {
+            applicationSupplier = new Supplier<Application>() {
+                @Override
+                public Application get() {
+                    try {
+                        return applicationClass.getConstructor().newInstance();
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+            };
+        } else {
+            try {
+                final Application application = applicationClass.getConstructor().newInstance();
+                for (Object i : application.getSingletons()) {
+                    SingletonBeanFactory.setInstance(i.getClass().getName(), i);
+                }
+                applicationSupplier = new Supplier<Application>() {
+                    @Override
+                    public Application get() {
+                        return application;
+                    }
+                };
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
+        return applicationSupplier;
+    }
+
+    private String sanitizePathPrefix(String prefix) {
+        prefix = prefix.trim();
+        if (prefix.equals("/"))
+            prefix = "";
+        // add leading slash
+        if (!prefix.startsWith("/"))
+            prefix = "/" + prefix;
+        // remove trailing slash
+        if (prefix.endsWith("/"))
+            prefix = prefix.substring(0, prefix.length() - 1);
+        return prefix;
     }
 
     private ClientProxies createClientImpls(Map<String, RuntimeValue<Function<WebTarget, ?>>> clientImplementations) {
@@ -538,7 +652,7 @@ public class QuarkusRestRecorder {
                     //so we don't want to add any extra latency into the common case
                     RuntimeResource fake = new RuntimeResource(i.getKey(), entry.getKey(), null, null, Collections.emptyList(),
                             null, null,
-                            new RestHandler[] { mapper }, null, new Class[0], null, false, null, null, null);
+                            new ServerRestHandler[] { mapper }, null, new Class[0], null, false, null, null, null, null);
                     result.add(new RequestMapper.RequestPath<>(false, fake.getPath(), fake));
                 }
             }
@@ -547,12 +661,16 @@ public class QuarkusRestRecorder {
         return mappersByMethod;
     }
 
+    public QuarkusRestRecorder() {
+        super();
+    }
+
     public RuntimeResource buildResourceMethod(Serialisers serialisers,
             QuarkusRestConfig quarkusRestConfig,
             Map<ResourceRequestInterceptor, ContainerRequestFilter> globalRequestInterceptorsMap,
             Map<ResourceResponseInterceptor, ContainerResponseFilter> globalResponseInterceptorsMap,
-            ResourceRequestInterceptorHandler globalRequestInterceptorsHandler,
-            ResourceResponseInterceptorHandler globalResponseInterceptorHandler,
+            List<ResourceRequestFilterHandler> globalRequestInterceptorHandlers,
+            List<ResourceResponseFilterHandler> globalResponseInterceptorHandlers,
             Map<ResourceRequestInterceptor, ContainerRequestFilter> nameRequestInterceptorsMap,
             Map<ResourceResponseInterceptor, ContainerResponseFilter> nameResponseInterceptorsMap,
             Map<ResourceRequestInterceptor, ContainerRequestFilter> methodSpecificRequestInterceptorsMap,
@@ -562,14 +680,18 @@ public class QuarkusRestRecorder {
             Map<ResourceReaderInterceptor, ReaderInterceptor> nameReaderInterceptorsMap,
             Map<ResourceWriterInterceptor, WriterInterceptor> nameWriterInterceptorsMap,
             InterceptorHandler globalInterceptorHandler,
-            ResourceClass clazz, ResourceLocatorHandler resourceLocatorHandler,
+            Map<ResourceReaderInterceptor, ReaderInterceptor> methodSpecificReaderInterceptorsMap,
+            Map<ResourceWriterInterceptor, WriterInterceptor> methodSpecificWriterInterceptorsMap, ResourceClass clazz,
+            ResourceLocatorHandler resourceLocatorHandler,
             ResourceMethod method, boolean locatableResource, URITemplate classPathTemplate,
-            DynamicEntityWriter dynamicEntityWriter, BeanContainer beanContainer) {
+            DynamicEntityWriter dynamicEntityWriter, BeanContainer beanContainer,
+            ParamConverterProviders paramConverterProviders) {
         URITemplate methodPathTemplate = new URITemplate(method.getPath(), false);
-        List<RestHandler> abortHandlingChain = new ArrayList<>();
+        List<ServerRestHandler> abortHandlingChain = new ArrayList<>();
+        MultivaluedMap<ScoreSystem.Category, ScoreSystem.Diagnostic> score = new QuarkusMultivaluedHashMap<>();
 
         Map<String, Integer> pathParameterIndexes = buildParamIndexMap(classPathTemplate, methodPathTemplate);
-        List<RestHandler> handlers = new ArrayList<>();
+        List<ServerRestHandler> handlers = new ArrayList<>();
         List<MediaType> consumesMediaTypes;
         if (method.getConsumes() == null) {
             consumesMediaTypes = Collections.emptyList();
@@ -581,28 +703,249 @@ public class QuarkusRestRecorder {
         }
 
         //setup reader and writer interceptors first
-        if (method.getNameBindingNames().isEmpty() && nameReaderInterceptorsMap.isEmpty()
-                && nameWriterInterceptorsMap.isEmpty()) {
+        setupInterceptorHandler(globalReaderInterceptorsMap, globalWriterInterceptorsMap, nameReaderInterceptorsMap,
+                nameWriterInterceptorsMap, globalInterceptorHandler, methodSpecificReaderInterceptorsMap,
+                methodSpecificWriterInterceptorsMap, method, handlers);
+        //at this point the handler chain only has interceptors
+        //which we also want in the abort handler chain
+        abortHandlingChain.addAll(handlers);
+
+        setupRequestFilterHandler(globalRequestInterceptorsMap, globalRequestInterceptorHandlers, nameRequestInterceptorsMap,
+                methodSpecificRequestInterceptorsMap, method, handlers);
+
+        Class<?>[] parameterTypes = new Class[method.getParameters().length];
+        for (int i = 0; i < method.getParameters().length; ++i) {
+            parameterTypes[i] = loadClass(method.getParameters()[i].declaredType);
+        }
+        // some parameters need the body to be read
+        MethodParameter[] parameters = method.getParameters();
+        // body can only be in a parameter
+        MethodParameter bodyParameter = null;
+        int bodyParameterIndex = -1;
+        for (int i = 0; i < parameters.length; i++) {
+            MethodParameter param = parameters[i];
+            if (param.parameterType == ParameterType.BODY) {
+                bodyParameter = param;
+                bodyParameterIndex = i;
+                break;
+            }
+        }
+        // form params can be everywhere (field, beanparam, param)
+        if (method.isFormParamRequired()) {
+            // read the body as multipart in one go
+            handlers.add(new ReadBodyHandler(bodyParameter != null));
+        } else if (bodyParameter != null) {
+            // allow the body to be read by chunks
+            handlers.add(new InputHandler(quarkusRestConfig.inputBufferSize.asLongValue(), EXECUTOR_SUPPLIER));
+        }
+        // if we need the body, let's deserialise it
+        if (bodyParameter != null) {
+            handlers.add(new RequestDeserializeHandler(loadClass(bodyParameter.type),
+                    consumesMediaTypes.isEmpty() ? null : consumesMediaTypes.get(0), serialisers, bodyParameterIndex));
+        }
+
+        // given that we may inject form params in the endpoint we need to make sure we read the body before
+        // we create/inject our endpoint
+        EndpointInvoker invoker = method.getInvoker().get();
+        if (!locatableResource) {
+            if (clazz.isPerRequestResource()) {
+                handlers.add(new PerRequestInstanceHandler(clazz.getFactory()));
+                score.add(ScoreSystem.Category.Resource, ScoreSystem.Diagnostic.ResourcePerRequest);
+            } else {
+                handlers.add(new InstanceHandler(clazz.getFactory()));
+                score.add(ScoreSystem.Category.Resource, ScoreSystem.Diagnostic.ResourceSingleton);
+            }
+        }
+
+        Class<Object> resourceClass = loadClass(clazz.getClassName());
+        LazyMethod lazyMethod = new LazyMethod(method.getName(), resourceClass, parameterTypes);
+
+        for (int i = 0; i < parameters.length; i++) {
+            MethodParameter param = parameters[i];
+            boolean single = param.isSingle();
+            ParameterExtractor extractor = parameterExtractor(pathParameterIndexes, param.parameterType, param.type, param.name,
+                    single, beanContainer, param.encoded);
+            ParameterConverter converter = null;
+            boolean userProviderConvertersExist = !paramConverterProviders.getParamConverterProviders().isEmpty();
+            if (param.converter != null) {
+                converter = param.converter.get();
+                if (userProviderConvertersExist) {
+                    Method javaMethod = lazyMethod.getMethod();
+                    // Workaround our lack of support for generic params by not doing this init if there are not runtime
+                    // param converter providers
+                    converter.init(paramConverterProviders, javaMethod.getParameterTypes()[i],
+                            javaMethod.getGenericParameterTypes()[i],
+                            javaMethod.getParameterAnnotations()[i]);
+                    // make sure we give the user provided resolvers the chance to convert
+                    converter = new RuntimeResolvedConverter(converter);
+                    converter.init(paramConverterProviders, javaMethod.getParameterTypes()[i],
+                            javaMethod.getGenericParameterTypes()[i],
+                            javaMethod.getParameterAnnotations()[i]);
+                }
+            }
+
+            handlers.add(new ParameterHandler(i, param.getDefaultValue(), extractor,
+                    converter, param.parameterType,
+                    param.isObtainedAsCollection()));
+        }
+        if (method.isBlocking()) {
+            handlers.add(new BlockingHandler(EXECUTOR_SUPPLIER));
+            score.add(ScoreSystem.Category.Execution, ScoreSystem.Diagnostic.ExecutionBlocking);
+        } else {
+            score.add(ScoreSystem.Category.Execution, ScoreSystem.Diagnostic.ExecutionNonBlocking);
+        }
+        handlers.add(new InvocationHandler(invoker, method.isCDIRequestScopeRequired()));
+
+        Type returnType = TypeSignatureParser.parse(method.getReturnType());
+        Class<?> rawReturnType = getRawType(returnType);
+        Type nonAsyncReturnType = getNonAsyncReturnType(returnType);
+        Class<?> rawNonAsyncReturnType = getRawType(nonAsyncReturnType);
+
+        if (CompletionStage.class.isAssignableFrom(rawReturnType)) {
+            handlers.add(new CompletionStageResponseHandler());
+        } else if (Uni.class.isAssignableFrom(rawReturnType)) {
+            handlers.add(new UniResponseHandler());
+        } else if (Multi.class.isAssignableFrom(rawReturnType)) {
+            handlers.add(new MultiResponseHandler());
+        }
+        ServerMediaType serverMediaType = null;
+        if (method.getProduces() != null && method.getProduces().length > 0) {
+            serverMediaType = new ServerMediaType(method.getProduces(), StandardCharsets.UTF_8.name());
+        }
+        if (method.getHttpMethod() == null) {
+            //this is a resource locator method
+            handlers.add(resourceLocatorHandler);
+        } else if (!Response.class.isAssignableFrom(rawNonAsyncReturnType)) {
+            //try and statically determine the media type and response writer
+            //we can't do this for all cases, but we can do it for the most common ones
+            //in practice this should work for the majority of endpoints
+            if (method.getProduces() != null && method.getProduces().length > 0) {
+                //the method can only produce a single content type, which is the most common case
+                if (method.getProduces().length == 1) {
+                    MediaType mediaType = MediaType.valueOf(method.getProduces()[0]);
+                    //its a wildcard type, makes it hard to determine statically
+                    if (mediaType.isWildcardType() || mediaType.isWildcardSubtype()) {
+                        handlers.add(new VariableProducesHandler(serverMediaType, serialisers));
+                        score.add(ScoreSystem.Category.Writer, ScoreSystem.Diagnostic.WriterRunTime);
+                    } else if (rawNonAsyncReturnType != Void.class
+                            && rawNonAsyncReturnType != void.class) {
+                        List<MessageBodyWriter<?>> buildTimeWriters = serialisers.findBuildTimeWriters(rawNonAsyncReturnType,
+                                RuntimeType.SERVER, method.getProduces());
+                        if (buildTimeWriters == null) {
+                            //if this is null this means that the type cannot be resolved at build time
+                            //this happens when the method returns a generic type (e.g. Object), so there
+                            //are more specific mappers that could be invoked depending on the actual return value
+                            handlers.add(new FixedProducesHandler(mediaType, dynamicEntityWriter));
+                            score.add(ScoreSystem.Category.Writer, ScoreSystem.Diagnostic.WriterRunTime);
+                        } else if (buildTimeWriters.isEmpty()) {
+                            //we could not find any writers that can write a response to this endpoint
+                            log.warn("Cannot find any combination of response writers for the method " + clazz.getClassName()
+                                    + "#" + method.getName() + "(" + Arrays.toString(method.getParameters()) + ")");
+                            handlers.add(new VariableProducesHandler(serverMediaType, serialisers));
+                            score.add(ScoreSystem.Category.Writer, ScoreSystem.Diagnostic.WriterRunTime);
+                        } else if (buildTimeWriters.size() == 1) {
+                            //only a single handler that can handle the response
+                            //this is a very common case
+                            MessageBodyWriter<?> writer = buildTimeWriters.get(0);
+                            handlers.add(new FixedProducesHandler(mediaType, new FixedEntityWriter(
+                                    writer, serialisers)));
+                            if (writer instanceof QuarkusRestMessageBodyWriter)
+                                score.add(ScoreSystem.Category.Writer,
+                                        ScoreSystem.Diagnostic.WriterBuildTimeDirect(writer));
+                            else
+                                score.add(ScoreSystem.Category.Writer,
+                                        ScoreSystem.Diagnostic.WriterBuildTime(writer));
+                        } else {
+                            //multiple writers, we try them in the proper order which had already been created
+                            handlers.add(new FixedProducesHandler(mediaType,
+                                    new FixedEntityWriterArray(buildTimeWriters.toArray(new MessageBodyWriter[0]),
+                                            serialisers)));
+                            score.add(ScoreSystem.Category.Writer,
+                                    ScoreSystem.Diagnostic.WriterBuildTimeMultiple(buildTimeWriters));
+                        }
+                    } else {
+                        score.add(ScoreSystem.Category.Writer, ScoreSystem.Diagnostic.WriterNotRequired);
+                    }
+                } else {
+                    //there are multiple possibilities
+                    //we could optimise this more in future
+                    handlers.add(new VariableProducesHandler(serverMediaType, serialisers));
+                    score.add(ScoreSystem.Category.Writer, ScoreSystem.Diagnostic.WriterRunTime);
+                }
+            } else {
+                score.add(ScoreSystem.Category.Writer, ScoreSystem.Diagnostic.WriterRunTime);
+            }
+        } else {
+            score.add(ScoreSystem.Category.Writer, ScoreSystem.Diagnostic.WriterRunTime);
+        }
+
+        //the response filter handlers, they need to be added to both the abort and
+        //normal chains. At the moment this only has one handler added to it but
+        //in future there will be one per filter
+        List<ServerRestHandler> responseFilterHandlers = new ArrayList<>();
+        if (method.isSse()) {
+            handlers.add(new SseResponseWriterHandler());
+        } else {
+            handlers.add(new ResponseHandler());
+
+            setupResponseFilterHandler(globalResponseInterceptorsMap, globalResponseInterceptorHandlers,
+                    nameResponseInterceptorsMap, methodSpecificResponseInterceptorsMap, method, responseFilterHandlers);
+            handlers.addAll(responseFilterHandlers);
+            handlers.add(new ResponseWriterHandler(dynamicEntityWriter));
+        }
+        abortHandlingChain.add(new ExceptionHandler());
+        abortHandlingChain.add(new ResponseHandler());
+        abortHandlingChain.addAll(responseFilterHandlers);
+
+        abortHandlingChain.add(new ResponseWriterHandler(dynamicEntityWriter));
+        handlers.add(0, new AbortChainHandler(abortHandlingChain.toArray(EMPTY_REST_HANDLER_ARRAY)));
+
+        RuntimeResource runtimeResource = new RuntimeResource(method.getHttpMethod(), methodPathTemplate,
+                classPathTemplate,
+                method.getProduces() == null ? null : serverMediaType,
+                consumesMediaTypes, invoker,
+                clazz.getFactory(), handlers.toArray(EMPTY_REST_HANDLER_ARRAY), method.getName(), parameterTypes,
+                nonAsyncReturnType, method.isBlocking(), resourceClass,
+                lazyMethod,
+                pathParameterIndexes, score);
+        return runtimeResource;
+    }
+
+    private void setupInterceptorHandler(Map<ResourceReaderInterceptor, ReaderInterceptor> globalReaderInterceptorsMap,
+            Map<ResourceWriterInterceptor, WriterInterceptor> globalWriterInterceptorsMap,
+            Map<ResourceReaderInterceptor, ReaderInterceptor> nameReaderInterceptorsMap,
+            Map<ResourceWriterInterceptor, WriterInterceptor> nameWriterInterceptorsMap,
+            InterceptorHandler globalInterceptorHandler,
+            Map<ResourceReaderInterceptor, ReaderInterceptor> methodSpecificReaderInterceptorsMap,
+            Map<ResourceWriterInterceptor, WriterInterceptor> methodSpecificWriterInterceptorsMap, ResourceMethod method,
+            List<ServerRestHandler> handlers) {
+        if (method.getNameBindingNames().isEmpty() && methodSpecificReaderInterceptorsMap.isEmpty()
+                && methodSpecificWriterInterceptorsMap.isEmpty()) {
             if (globalInterceptorHandler != null) {
                 handlers.add(globalInterceptorHandler);
             }
-        } else if (nameReaderInterceptorsMap.isEmpty() && nameWriterInterceptorsMap.isEmpty()) {
+        } else if (nameReaderInterceptorsMap.isEmpty() && nameWriterInterceptorsMap.isEmpty()
+                && methodSpecificReaderInterceptorsMap.isEmpty() && methodSpecificWriterInterceptorsMap.isEmpty()) {
             // in this case there are no filters that match the qualifiers, so let's just reuse the global handler
             if (globalInterceptorHandler != null) {
                 handlers.add(globalInterceptorHandler);
             }
         } else {
-            TreeMap<ResourceReaderInterceptor, ReaderInterceptor> readerInterceptorsToUse = new TreeMap<>();
+            TreeMap<ResourceReaderInterceptor, ReaderInterceptor> readerInterceptorsToUse = new TreeMap<>(
+                    HasPriority.TreeMapComparator.INSTANCE);
             readerInterceptorsToUse.putAll(globalReaderInterceptorsMap);
-
-            TreeMap<ResourceWriterInterceptor, WriterInterceptor> writerInterceptorsToUse = new TreeMap<>();
-            writerInterceptorsToUse.putAll(globalWriterInterceptorsMap);
+            readerInterceptorsToUse.putAll(methodSpecificReaderInterceptorsMap);
             for (ResourceReaderInterceptor nameInterceptor : nameReaderInterceptorsMap.keySet()) {
                 // in order to the interceptor to be used, the method needs to have all the "qualifiers" that the interceptor has
                 if (method.getNameBindingNames().containsAll(nameInterceptor.getNameBindingNames())) {
                     readerInterceptorsToUse.put(nameInterceptor, nameReaderInterceptorsMap.get(nameInterceptor));
                 }
             }
+
+            TreeMap<ResourceWriterInterceptor, WriterInterceptor> writerInterceptorsToUse = new TreeMap<>(
+                    HasPriority.TreeMapComparator.INSTANCE);
+            writerInterceptorsToUse.putAll(globalWriterInterceptorsMap);
+            writerInterceptorsToUse.putAll(methodSpecificWriterInterceptorsMap);
             for (ResourceWriterInterceptor nameInterceptor : nameWriterInterceptorsMap.keySet()) {
                 // in order to the interceptor to be used, the method needs to have all the "qualifiers" that the interceptor has
                 if (method.getNameBindingNames().containsAll(nameInterceptor.getNameBindingNames())) {
@@ -627,18 +970,26 @@ public class QuarkusRestRecorder {
             }
             handlers.add(new InterceptorHandler(writers, readers));
         }
-        //at this point the handler chain only has interceptors
-        //which we also want in the abort handler chain
-        abortHandlingChain.addAll(handlers);
+    }
 
+    private void setupRequestFilterHandler(Map<ResourceRequestInterceptor, ContainerRequestFilter> globalRequestInterceptorsMap,
+            List<ResourceRequestFilterHandler> globalRequestInterceptorsHandlers,
+            Map<ResourceRequestInterceptor, ContainerRequestFilter> nameRequestInterceptorsMap,
+            Map<ResourceRequestInterceptor, ContainerRequestFilter> methodSpecificRequestInterceptorsMap, ResourceMethod method,
+            List<ServerRestHandler> handlers) {
         // according to the spec, global request filters apply everywhere
         // and named request filters only apply to methods with exactly matching "qualifiers"
         if (method.getNameBindingNames().isEmpty() && methodSpecificRequestInterceptorsMap.isEmpty()) {
-            handlers.add(globalRequestInterceptorsHandler);
+            if (!globalRequestInterceptorsHandlers.isEmpty()) {
+                handlers.addAll(globalRequestInterceptorsHandlers);
+            }
         } else if (nameRequestInterceptorsMap.isEmpty() && methodSpecificRequestInterceptorsMap.isEmpty()) {
             // in this case there are no filters that match the qualifiers, so let's just reuse the global handler
-            handlers.add(globalRequestInterceptorsHandler);
+            if (!globalRequestInterceptorsHandlers.isEmpty()) {
+                handlers.addAll(globalRequestInterceptorsHandlers);
+            }
         } else {
+            // TODO: refactor to use the TreeMap procedure used above for interceptors
             List<ResourceRequestInterceptor> interceptorsToUse = new ArrayList<>(
                     globalRequestInterceptorsMap.size() + nameRequestInterceptorsMap.size()
                             + methodSpecificRequestInterceptorsMap.size());
@@ -652,7 +1003,6 @@ public class QuarkusRestRecorder {
             }
             // since we have now mixed global, name and method specific interceptors, we need to sort
             Collections.sort(interceptorsToUse);
-            List<ContainerRequestFilter> filtersToUse = new ArrayList<>(interceptorsToUse.size());
             for (ResourceRequestInterceptor interceptor : interceptorsToUse) {
                 Map<ResourceRequestInterceptor, ContainerRequestFilter> properMap;
                 if (interceptor.getNameBindingNames().isEmpty()) {
@@ -664,233 +1014,94 @@ public class QuarkusRestRecorder {
                 } else {
                     properMap = nameRequestInterceptorsMap;
                 }
-                filtersToUse.add(properMap.get(interceptor));
-            }
-            handlers.add(new ResourceRequestInterceptorHandler(filtersToUse, false));
-        }
-
-        Class<?>[] parameterTypes = new Class[method.getParameters().length];
-        for (int i = 0; i < method.getParameters().length; ++i) {
-            parameterTypes[i] = loadClass(method.getParameters()[i].declaredType);
-        }
-        // some parameters need the body to be read
-        MethodParameter[] parameters = method.getParameters();
-        // body can only be in a parameter
-        MethodParameter bodyParameter = null;
-        for (int i = 0; i < parameters.length; i++) {
-            MethodParameter param = parameters[i];
-            if (param.parameterType == ParameterType.BODY) {
-                bodyParameter = param;
-                break;
+                handlers.add(new ResourceRequestFilterHandler(properMap.get(interceptor), false));
             }
         }
-        // form params can be everywhere (field, beanparam, param)
-        if (method.isFormParamRequired()) {
-            // read the body as multipart in one go
-            handlers.add(new ReadBodyHandler(bodyParameter != null));
-        } else if (bodyParameter != null) {
-            // allow the body to be read by chunks
-            handlers.add(new InputHandler(quarkusRestConfig.inputBufferSize.asLongValue(), EXECUTOR_SUPPLIER));
-        }
-        // if we need the body, let's deserialise it
-        if (bodyParameter != null) {
-            handlers.add(new RequestDeserializeHandler(loadClass(bodyParameter.type),
-                    consumesMediaTypes.isEmpty() ? null : consumesMediaTypes.get(0), serialisers));
-        }
+    }
 
-        // given that we may inject form params in the endpoint we need to make sure we read the body before
-        // we create/inject our endpoint
-        EndpointInvoker invoker = method.getInvoker().get();
-        if (!locatableResource) {
-            if (clazz.isPerRequestResource()) {
-                handlers.add(new PerRequestInstanceHandler(clazz.getFactory()));
-            } else {
-                handlers.add(new InstanceHandler(clazz.getFactory()));
+    private void setupResponseFilterHandler(
+            Map<ResourceResponseInterceptor, ContainerResponseFilter> globalResponseInterceptorsMap,
+            List<ResourceResponseFilterHandler> globalResponseInterceptorHandlers,
+            Map<ResourceResponseInterceptor, ContainerResponseFilter> nameResponseInterceptorsMap,
+            Map<ResourceResponseInterceptor, ContainerResponseFilter> methodSpecificResponseInterceptorsMap,
+            ResourceMethod method, List<ServerRestHandler> responseFilterHandlers) {
+        // according to the spec, global request filters apply everywhere
+        // and named request filters only apply to methods with exactly matching "qualifiers"
+        if (method.getNameBindingNames().isEmpty() && methodSpecificResponseInterceptorsMap.isEmpty()) {
+            if (!globalResponseInterceptorHandlers.isEmpty()) {
+                responseFilterHandlers.addAll(globalResponseInterceptorHandlers);
             }
-        }
-
-        for (int i = 0; i < parameters.length; i++) {
-            MethodParameter param = parameters[i];
-            boolean single = param.isSingle();
-            ParameterExtractor extractor = parameterExtractor(pathParameterIndexes, param.parameterType, param.type, param.name,
-                    single, beanContainer);
-            handlers.add(new ParameterHandler(i, param.getDefaultValue(), extractor,
-                    param.converter == null ? null : param.converter.get(), param.parameterType,
-                    param.isObtainedAsCollection()));
-        }
-        if (method.isBlocking()) {
-            handlers.add(new BlockingHandler(EXECUTOR_SUPPLIER));
-        }
-        handlers.add(new InvocationHandler(invoker));
-
-        Type returnType = TypeSignatureParser.parse(method.getReturnType());
-        Type nonAsyncReturnType = getNonAsyncReturnType(returnType);
-        Class<Object> rawNonAsyncReturnType = (Class<Object>) getRawType(nonAsyncReturnType);
-
-        // FIXME: those two should not be in sequence unless we intend to support CompletionStage<Uni<String>>
-        handlers.add(new CompletionStageResponseHandler());
-        handlers.add(new UniResponseHandler());
-        handlers.add(new MultiResponseHandler());
-        ServerMediaType serverMediaType = null;
-        if (method.getProduces() != null && method.getProduces().length > 0) {
-            serverMediaType = new ServerMediaType(method.getProduces(), StandardCharsets.UTF_8.name());
-        }
-        if (method.getHttpMethod() == null) {
-            //this is a resource locator method
-            handlers.add(resourceLocatorHandler);
-        } else if (!Response.class.isAssignableFrom(rawNonAsyncReturnType)) {
-            //try and statically determine the media type and response writer
-            //we can't do this for all cases, but we can do it for the most common ones
-            //in practice this should work for the majority of endpoints
-            if (method.getProduces() != null && method.getProduces().length > 0) {
-                //the method can only produce a single content type, which is the most common case
-                if (method.getProduces().length == 1) {
-                    MediaType mediaType = MediaType.valueOf(method.getProduces()[0]);
-                    //its a wildcard type, makes it hard to determine statically
-                    if (mediaType.isWildcardType() || mediaType.isWildcardSubtype()) {
-                        handlers.add(new VariableProducesHandler(serverMediaType, serialisers));
+        } else if (nameResponseInterceptorsMap.isEmpty() && methodSpecificResponseInterceptorsMap.isEmpty()) {
+            // in this case there are no filters that match the qualifiers, so let's just reuse the global handler
+            if (!globalResponseInterceptorHandlers.isEmpty()) {
+                responseFilterHandlers.addAll(globalResponseInterceptorHandlers);
+            }
+        } else {
+            List<ResourceResponseInterceptor> interceptorsToUse = new ArrayList<>(
+                    globalResponseInterceptorsMap.size() + nameResponseInterceptorsMap.size()
+                            + methodSpecificResponseInterceptorsMap.size());
+            interceptorsToUse.addAll(globalResponseInterceptorsMap.keySet());
+            interceptorsToUse.addAll(methodSpecificResponseInterceptorsMap.keySet());
+            for (ResourceResponseInterceptor nameInterceptor : nameResponseInterceptorsMap.keySet()) {
+                // in order to the interceptor to be used, the method needs to have all the "qualifiers" that the interceptor has
+                if (method.getNameBindingNames().containsAll(nameInterceptor.getNameBindingNames())) {
+                    interceptorsToUse.add(nameInterceptor);
+                }
+            }
+            // since we have now mixed global, name and method specific interceptors, we need to sort
+            Collections.sort(interceptorsToUse);
+            for (ResourceResponseInterceptor interceptor : interceptorsToUse) {
+                Map<ResourceResponseInterceptor, ContainerResponseFilter> properMap;
+                if (interceptor.getNameBindingNames().isEmpty()) {
+                    if (methodSpecificResponseInterceptorsMap.containsKey(interceptor)) {
+                        properMap = methodSpecificResponseInterceptorsMap;
                     } else {
-                        List<ResourceWriter> buildTimeWriters = serialisers.findBuildTimeWriters(rawNonAsyncReturnType,
-                                RuntimeType.SERVER, method.getProduces());
-                        if (buildTimeWriters == null) {
-                            //if this is null this means that the type cannot be resolved at build time
-                            //this happens when the method returns a generic type (e.g. Object), so there
-                            //are more specific mappers that could be invoked depending on the actual return value
-                            handlers.add(new FixedProducesHandler(mediaType, dynamicEntityWriter));
-                        } else if (buildTimeWriters.isEmpty()) {
-                            //we could not find any writers that can write a response to this endpoint
-                            log.warn("Cannot find any combination of response writers for the method " + clazz.getClassName()
-                                    + "#" + method.getName() + "(" + Arrays.toString(method.getParameters()) + ")");
-                            handlers.add(new VariableProducesHandler(serverMediaType, serialisers));
-                        } else if (buildTimeWriters.size() == 1) {
-                            //only a single handler that can handle the response
-                            //this is a very common case
-                            handlers.add(new FixedProducesHandler(mediaType, new FixedEntityWriter(
-                                    buildTimeWriters.get(0).getInstance(), mediaType)));
-                        } else {
-                            //multiple writers, we try them in order
-                            List<MessageBodyWriter<?>> list = new ArrayList<>();
-                            for (ResourceWriter i : buildTimeWriters) {
-                                list.add(i.getInstance());
-                            }
-                            handlers.add(new FixedProducesHandler(mediaType,
-                                    new FixedEntityWriterArray(list.toArray(new MessageBodyWriter[0]))));
-                        }
+                        properMap = globalResponseInterceptorsMap;
                     }
                 } else {
-                    //there are multiple possibilities
-                    //we could optimise this more in future
-                    handlers.add(new VariableProducesHandler(serverMediaType, serialisers));
+                    properMap = nameResponseInterceptorsMap;
                 }
+                responseFilterHandlers.add(new ResourceResponseFilterHandler(properMap.get(interceptor)));
             }
         }
-
-        //the response filter handlers, they need to be added to both the abort and
-        //normal chains. At the moment this only has one handler added to it but
-        //in future there will be one per filter
-        List<RestHandler> responseFilterHandlers = new ArrayList<>();
-        if (method.isSse()) {
-            handlers.add(new SseResponseWriterHandler());
-        } else {
-            handlers.add(new ResponseHandler());
-
-            // according to the spec, global request filters apply everywhere
-            // and named request filters only apply to methods with exactly matching "qualifiers"
-            if (method.getNameBindingNames().isEmpty() && methodSpecificResponseInterceptorsMap.isEmpty()) {
-                responseFilterHandlers.add(globalResponseInterceptorHandler);
-            } else if (nameResponseInterceptorsMap.isEmpty() && methodSpecificResponseInterceptorsMap.isEmpty()) {
-                // in this case there are no filters that match the qualifiers, so let's just reuse the global handler
-                responseFilterHandlers.add(globalResponseInterceptorHandler);
-            } else {
-                List<ResourceResponseInterceptor> interceptorsToUse = new ArrayList<>(
-                        globalResponseInterceptorsMap.size() + nameResponseInterceptorsMap.size()
-                                + methodSpecificResponseInterceptorsMap.size());
-                interceptorsToUse.addAll(globalResponseInterceptorsMap.keySet());
-                interceptorsToUse.addAll(methodSpecificResponseInterceptorsMap.keySet());
-                for (ResourceResponseInterceptor nameInterceptor : nameResponseInterceptorsMap.keySet()) {
-                    // in order to the interceptor to be used, the method needs to have all the "qualifiers" that the interceptor has
-                    if (method.getNameBindingNames().containsAll(nameInterceptor.getNameBindingNames())) {
-                        interceptorsToUse.add(nameInterceptor);
-                    }
-                }
-                // since we have now mixed global, name and method specific interceptors, we need to sort
-                Collections.sort(interceptorsToUse);
-                List<ContainerResponseFilter> filtersToUse = new ArrayList<>(interceptorsToUse.size());
-                for (ResourceResponseInterceptor interceptor : interceptorsToUse) {
-                    Map<ResourceResponseInterceptor, ContainerResponseFilter> properMap;
-                    if (interceptor.getNameBindingNames().isEmpty()) {
-                        if (methodSpecificResponseInterceptorsMap.containsKey(interceptor)) {
-                            properMap = methodSpecificResponseInterceptorsMap;
-                        } else {
-                            properMap = globalResponseInterceptorsMap;
-                        }
-                    } else {
-                        properMap = nameResponseInterceptorsMap;
-                    }
-                    filtersToUse.add(properMap.get(interceptor));
-                }
-                responseFilterHandlers.add(new ResourceResponseInterceptorHandler(filtersToUse));
-            }
-            handlers.addAll(responseFilterHandlers);
-            handlers.add(new ResponseWriterHandler(dynamicEntityWriter));
-        }
-        abortHandlingChain.addAll(responseFilterHandlers);
-
-        abortHandlingChain.add(new ResponseHandler());
-        abortHandlingChain.add(new ResponseWriterHandler(dynamicEntityWriter));
-        handlers.add(0, new AbortChainHandler(abortHandlingChain.toArray(EMPTY_REST_HANDLER_ARRAY)));
-
-        Class<Object> resourceClass = loadClass(clazz.getClassName());
-        return new RuntimeResource(method.getHttpMethod(), methodPathTemplate,
-                classPathTemplate,
-                method.getProduces() == null ? null : serverMediaType,
-                consumesMediaTypes, invoker,
-                clazz.getFactory(), handlers.toArray(EMPTY_REST_HANDLER_ARRAY), method.getName(), parameterTypes,
-                nonAsyncReturnType, method.isBlocking(), resourceClass,
-                new LazyMethod(method.getName(), resourceClass, parameterTypes),
-                pathParameterIndexes);
     }
 
     public ParameterExtractor parameterExtractor(Map<String, Integer> pathParameterIndexes, ParameterType type, String javaType,
             String name,
-            boolean single, BeanContainer beanContainer) {
+            boolean single, BeanContainer beanContainer, boolean encoded) {
         ParameterExtractor extractor;
         switch (type) {
             case HEADER:
-                extractor = new HeaderParamExtractor(name, single);
-                break;
+                return new HeaderParamExtractor(name, single);
             case COOKIE:
-                extractor = new CookieParamExtractor(name);
-                break;
+                return new CookieParamExtractor(name);
             case FORM:
-                extractor = new FormParamExtractor(name, single);
-                break;
+                return new FormParamExtractor(name, single, encoded);
             case PATH:
-                extractor = new PathParamExtractor(pathParameterIndexes.get(name));
-                break;
+                Integer index = pathParameterIndexes.get(name);
+                if (index == null) {
+                    extractor = new NullParamExtractor();
+                } else {
+                    extractor = new PathParamExtractor(index, encoded);
+                }
+                return extractor;
             case CONTEXT:
-                extractor = new ContextParamExtractor(javaType);
-                break;
+                return new ContextParamExtractor(javaType);
             case ASYNC_RESPONSE:
-                extractor = new AsyncResponseExtractor();
-                break;
+                return new AsyncResponseExtractor();
             case QUERY:
-                extractor = new QueryParamExtractor(name, single);
-                break;
+                extractor = new QueryParamExtractor(name, single, encoded);
+                return extractor;
             case BODY:
-                extractor = new BodyParamExtractor();
-                break;
+                return new BodyParamExtractor();
             case MATRIX:
-                extractor = new MatrixParamExtractor(name, single);
-                break;
+                extractor = new MatrixParamExtractor(name, single, encoded);
+                return extractor;
             case BEAN:
-                extractor = new BeanParamExtractor(factory(javaType, beanContainer));
-                break;
+                return new BeanParamExtractor(factory(javaType, beanContainer));
             default:
-                extractor = new QueryParamExtractor(name, single);
-                break;
+                return new QueryParamExtractor(name, single, encoded);
         }
-        return extractor;
     }
 
     public Map<String, Integer> buildParamIndexMap(URITemplate classPathTemplate, URITemplate methodPathTemplate) {
@@ -933,6 +1144,7 @@ public class QuarkusRestRecorder {
         if (returnType instanceof Class)
             return returnType;
         if (returnType instanceof ParameterizedType) {
+            // NOTE: same code in EndpointIndexer.getNonAsyncReturnType
             ParameterizedType type = (ParameterizedType) returnType;
             if (type.getRawType() == CompletionStage.class) {
                 return type.getActualTypeArguments()[0];
