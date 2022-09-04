@@ -23,7 +23,6 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
-import com.google.devtools.build.lib.analysis.AnalysisUtils;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
@@ -195,15 +194,10 @@ public abstract class NativeDepsHelper {
 
     CppHelper.checkLinkstampsUnique(ruleContext, ccLinkingContext.getLinkstamps());
     ImmutableSet<Linkstamp> linkstamps = ImmutableSet.copyOf(ccLinkingContext.getLinkstamps());
-    List<Artifact> buildInfoArtifacts =
-        linkstamps.isEmpty()
-            ? ImmutableList.<Artifact>of()
-            : ruleContext
-                .getAnalysisEnvironment()
-                .getBuildInfo(
-                    AnalysisUtils.isStampingEnabled(ruleContext, configuration),
-                    CppBuildInfo.KEY,
-                    configuration);
+    List<Artifact> buildInfoArtifacts = linkstamps.isEmpty()
+        ? ImmutableList.<Artifact>of()
+        : ruleContext.getAnalysisEnvironment().getBuildInfo(
+            ruleContext, CppBuildInfo.KEY, configuration);
 
     boolean shareNativeDeps = configuration.getFragment(CppConfiguration.class).shareNativeDeps();
     Artifact sharedLibrary;
@@ -237,20 +231,7 @@ public abstract class NativeDepsHelper {
             toolchain);
 
     new CcLinkingHelper(
-            ruleContext,
-            ruleContext.getLabel(),
-            ruleContext,
-            ruleContext,
-            cppSemantics,
-            featureConfiguration,
-            toolchain,
-            fdoContext,
-            configuration,
-            ruleContext.getFragment(CppConfiguration.class),
-            ruleContext.getSymbolGenerator())
-        .setGrepIncludes(CppHelper.getGrepIncludes(ruleContext))
-        .setIsStampingEnabled(AnalysisUtils.isStampingEnabled(ruleContext))
-        .setTestOrTestOnlyTarget(ruleContext.isTestTarget() || ruleContext.isTestOnlyTarget())
+            ruleContext, cppSemantics, featureConfiguration, toolchain, fdoContext, configuration)
         .setLinkerOutputArtifact(sharedLibrary)
         .setLinkingMode(LinkingMode.STATIC)
         .addLinkopts(extraLinkOpts)
