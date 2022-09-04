@@ -16,7 +16,6 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -49,11 +48,7 @@ public class TestResourceManager {
         oldSystemProps = new HashMap<>();
         for (Map.Entry<String, String> i : ret.entrySet()) {
             oldSystemProps.put(i.getKey(), System.getProperty(i.getKey()));
-            if (i.getValue() == null) {
-                System.clearProperty(i.getKey());
-            } else {
-                System.setProperty(i.getKey(), i.getValue());
-            }
+            System.setProperty(i.getKey(), i.getValue());
         }
         return ret;
     }
@@ -91,13 +86,7 @@ public class TestResourceManager {
 
         Set<Class<? extends QuarkusTestResourceLifecycleManager>> testResourceRunnerClasses = new LinkedHashSet<>();
 
-        Set<AnnotationInstance> testResourceAnnotations = new HashSet<>();
-        testResourceAnnotations.addAll(index.getAnnotations(DotName.createSimple(QuarkusTestResource.class.getName())));
-        for (AnnotationInstance annotation : index
-                .getAnnotations(DotName.createSimple(QuarkusTestResource.List.class.getName()))) {
-            Collections.addAll(testResourceAnnotations, annotation.value().asNestedArray());
-        }
-        for (AnnotationInstance annotation : testResourceAnnotations) {
+        for (AnnotationInstance annotation : index.getAnnotations(DotName.createSimple(QuarkusTestResource.class.getName()))) {
             try {
                 testResourceRunnerClasses.add((Class<? extends QuarkusTestResourceLifecycleManager>) Class
                         .forName(annotation.value().asString()));
