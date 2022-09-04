@@ -33,10 +33,8 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -185,7 +183,7 @@ public class BuildTimeGenerator {
 
         private final List<DeploymentTaskHolder> tasks = new ArrayList<>();
         private final List<DeploymentTaskHolder> staticInitTasks = new ArrayList<>();
-        private final Map<String, ReflectionInfo> reflectiveClasses = new LinkedHashMap<>();
+        private final Set<String> reflectiveClasses = new LinkedHashSet<>();
 
         @Override
         public BytecodeRecorder addStaticInitTask(int priority) {
@@ -202,15 +200,8 @@ public class BuildTimeGenerator {
         }
 
         @Override
-        public void addReflectiveClass(boolean method, boolean fields, String... className) {
-            for(String cl : className) {
-                ReflectionInfo existing = reflectiveClasses.get(cl);
-                if(existing == null) {
-                    reflectiveClasses.put(cl, new ReflectionInfo(method, fields));
-                } else {
-                    reflectiveClasses.put(cl, new ReflectionInfo(method || existing.methods, fields || existing.fields));
-                }
-            }
+        public void addReflectiveClass(String... className) {
+            reflectiveClasses.addAll(Arrays.asList(className));
         }
 
         @Override
@@ -344,7 +335,7 @@ public class BuildTimeGenerator {
             mv = file.visitMethod(ACC_PUBLIC, "beforeAnalysis", "(Lorg/graalvm/nativeimage/Feature$BeforeAnalysisAccess;)V", null, null);
 
 
-            for (Map.Entry<String, ReflectionInfo> entry : reflectiveClasses.entrySet()) {
+            for (String holder : reflectiveClasses) {
                 Label lTryBlockStart = new Label();
                 Label lTryBlockEnd = new Label();
                 Label lCatchBlockStart = new Label();
@@ -360,32 +351,23 @@ public class BuildTimeGenerator {
                 mv.visitTypeInsn(ANEWARRAY, "java/lang/Class");
                 mv.visitInsn(DUP);
                 mv.visitLdcInsn(0);
-                mv.visitLdcInsn(entry.getKey());
+                mv.visitLdcInsn(holder);
                 mv.visitMethodInsn(INVOKESTATIC, "java/lang/Class", "forName", "(Ljava/lang/String;)Ljava/lang/Class;", false);
                 mv.visitInsn(AASTORE);
                 mv.visitMethodInsn(INVOKESTATIC, "org/graalvm/nativeimage/RuntimeReflection", "register", "([Ljava/lang/Class;)V", false);
 
-
                 //now load everything else
-                mv.visitLdcInsn(entry.getKey());
+                mv.visitLdcInsn(holder);
                 mv.visitMethodInsn(INVOKESTATIC, "java/lang/Class", "forName", "(Ljava/lang/String;)Ljava/lang/Class;", false);
-                if(entry.getValue().methods) {
-                    mv.visitInsn(DUP);
-                }
-                if(entry.getValue().fields) {
-                    mv.visitInsn(DUP);
-                }
+                mv.visitInsn(DUP);
+                mv.visitInsn(DUP);
                 mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Class", "getDeclaredConstructors", "()[Ljava/lang/reflect/Constructor;", false);
                 mv.visitMethodInsn(INVOKESTATIC, "org/graalvm/nativeimage/RuntimeReflection", "register", "([Ljava/lang/reflect/Executable;)V", false);
                 //now load everything else
-                if(entry.getValue().methods) {
-                    mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Class", "getDeclaredMethods", "()[Ljava/lang/reflect/Method;", false);
-                    mv.visitMethodInsn(INVOKESTATIC, "org/graalvm/nativeimage/RuntimeReflection", "register", "([Ljava/lang/reflect/Executable;)V", false);
-                }
-                if(entry.getValue().fields) {
-                    mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Class", "getDeclaredFields", "()[Ljava/lang/reflect/Field;", false);
-                    mv.visitMethodInsn(INVOKESTATIC, "org/graalvm/nativeimage/RuntimeReflection", "register", "([Ljava/lang/reflect/Field;)V", false);
-                }
+                mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Class", "getDeclaredMethods", "()[Ljava/lang/reflect/Method;", false);
+                mv.visitMethodInsn(INVOKESTATIC, "org/graalvm/nativeimage/RuntimeReflection", "register", "([Ljava/lang/reflect/Executable;)V", false);
+                mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Class", "getDeclaredFields", "()[Ljava/lang/reflect/Field;", false);
+                mv.visitMethodInsn(INVOKESTATIC, "org/graalvm/nativeimage/RuntimeReflection", "register", "([Ljava/lang/reflect/Field;)V", false);
                 mv.visitLabel(lTryBlockEnd);
                 mv.visitLabel(lCatchBlockStart);
                 mv.visitLabel(lCatchBlockEnd);
@@ -416,16 +398,6 @@ public class BuildTimeGenerator {
                 return val;
             }
             return className.compareTo(o.className);
-        }
-    }
-
-    static final class ReflectionInfo {
-        final boolean methods;
-        final boolean fields;
-
-        private ReflectionInfo(boolean methods, boolean fields) {
-            this.methods = methods;
-            this.fields = fields;
         }
     }
 }
