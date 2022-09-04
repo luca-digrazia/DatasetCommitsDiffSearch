@@ -1,6 +1,5 @@
 package io.quarkus.deployment.dev.testing;
 
-import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
@@ -51,24 +50,25 @@ public class TestConsoleHandler implements TestListener {
                     if (k == 'f') {
                         testController.runFailedTests();
                     } else if (k == 'v') {
-                        testController.printFullResults();
+                        printFullResults();
                     } else if (k == 'i') {
-                        testController.toggleInstrumentation();
+                        RuntimeUpdatesProcessor.INSTANCE.toggleInstrumentation();
                     } else if (k == 'o') {
-                        testController.toggleTestOutput();
+                        TestSupport.instance().get().setDisplayTestOutput(!TestSupport.instance().get().displayTestOutput);
+                        if (TestSupport.instance().get().displayTestOutput) {
+                            log.info("Test output enabled");
+                        } else {
+                            log.info("Test output disabled");
+                        }
                     } else if (k == 'p') {
                         TestSupport.instance().get().stop();
                     } else if (k == 'h') {
                         printUsage();
                     } else if (k == 'b') {
-                        testController.toggleBrokenOnlyMode();
-                    } else if (k == 'l') {
-                        RuntimeUpdatesProcessor.INSTANCE.toggleLiveReloadEnabled();
-                    } else if (k == 's') {
-                        try {
-                            RuntimeUpdatesProcessor.INSTANCE.doScan(true, true);
-                        } catch (IOException e) {
-                            log.error("Live reload scan failed", e);
+                        if (testController.toggleBrokenOnlyMode()) {
+                            log.info("Broken only mode enabled");
+                        } else {
+                            log.info("Broken only mode disabled");
                         }
                     }
                 }
@@ -93,11 +93,25 @@ public class TestConsoleHandler implements TestListener {
         System.out.println("b - Toggle 'broken only' mode, where only failing tests are run");
         System.out.println("v - Print failures from the last test run");
         System.out.println("o - Toggle test output");
-        System.out.println("p - Pause tests");
         System.out.println("i - Toggle instrumentation based reload");
-        System.out.println("l - Toggle live reload");
-        System.out.println("s - Force live reload scan");
+        System.out.println("d - Disable tests");
         System.out.println("h - Display this help");
+
+    }
+
+    private void printFullResults() {
+        if (testController.currentState().getFailingClasses().isEmpty()) {
+            log.info("All tests passed, no output to display");
+        }
+        for (TestClassResult i : testController.currentState().getFailingClasses()) {
+            for (TestResult failed : i.getFailing()) {
+                log.error(
+                        "Test " + failed.getDisplayName() + " failed "
+                                + failed.getTestExecutionResult().getStatus()
+                                + "\n",
+                        failed.getTestExecutionResult().getThrowable().get());
+            }
+        }
 
     }
 
