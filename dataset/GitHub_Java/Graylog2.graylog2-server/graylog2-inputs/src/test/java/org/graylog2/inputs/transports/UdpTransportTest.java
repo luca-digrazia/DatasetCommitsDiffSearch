@@ -16,9 +16,7 @@
  */
 package org.graylog2.inputs.transports;
 
-import com.github.joschi.jadconfig.util.Size;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.primitives.Ints;
 import com.google.common.util.concurrent.Callables;
 import com.google.common.util.concurrent.Uninterruptibles;
 import org.apache.commons.lang3.SystemUtils;
@@ -181,16 +179,15 @@ public class UdpTransportTest {
     }
 
     @Test
-    public void receiveBufferSizeIsNotLimited() throws Exception {
-        final int recvBufferSize = Ints.saturatedCast(Size.megabytes(1L).toBytes());
+    public void receiveBufferSizeIsLimited() throws Exception {
         ImmutableMap<String, Object> source = ImmutableMap.<String, Object>of(
                 NettyTransport.CK_BIND_ADDRESS, BIND_ADDRESS,
                 NettyTransport.CK_PORT, PORT,
-                NettyTransport.CK_RECV_BUFFER_SIZE, recvBufferSize);
+                NettyTransport.CK_RECV_BUFFER_SIZE, Integer.MAX_VALUE);
         Configuration config = new Configuration(source);
         UdpTransport udpTransport = new UdpTransport(config, throughputCounter, new LocalMetricRegistry());
 
-        assertThat(udpTransport.getBootstrap().getOption("receiveBufferSize")).isEqualTo(recvBufferSize);
+        assertThat(udpTransport.getBootstrap().getOption("receiveBufferSize")).isEqualTo(65536);
     }
 
     @Test
