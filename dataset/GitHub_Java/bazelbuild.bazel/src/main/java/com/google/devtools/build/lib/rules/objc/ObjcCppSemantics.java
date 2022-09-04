@@ -14,63 +14,125 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
-import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.Root;
+import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.rules.cpp.CppCompilationContext.Builder;
+import com.google.devtools.build.lib.analysis.RuleErrorConsumer;
+import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
+import com.google.devtools.build.lib.packages.AspectDescriptor;
+import com.google.devtools.build.lib.packages.StructImpl;
+import com.google.devtools.build.lib.rules.cpp.CcCompilationContext;
+import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
+import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
 import com.google.devtools.build.lib.rules.cpp.CppCompileActionBuilder;
-import com.google.devtools.build.lib.rules.cpp.CppCompileActionContext;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.HeadersCheckingMode;
-import com.google.devtools.build.lib.rules.cpp.CppHelper;
 import com.google.devtools.build.lib.rules.cpp.CppSemantics;
-import com.google.devtools.build.lib.vfs.PathFragment;
+import com.google.devtools.build.lib.rules.cpp.HeaderDiscovery.DotdPruningMode;
 
 /**
  * CppSemantics for objc builds.
  */
 public class ObjcCppSemantics implements CppSemantics {
-  
-  // We make CppSemantics a singleton object for efficiency and consistency, since we expect
-  // any instance to be identical.
-  public static final CppSemantics INSTANCE = new ObjcCppSemantics();
 
-  @Override
-  public PathFragment getEffectiveSourcePath(Artifact source) {
-    return source.getRootRelativePath();
+  private final IntermediateArtifacts intermediateArtifacts;
+  private final BuildConfiguration buildConfiguration;
+  private final boolean enableModules;
+
+  /**
+   * Creates an instance of ObjcCppSemantics
+   *
+   * @param intermediateArtifacts used to create headers_list artifacts
+   * @param buildConfiguration the build configuration for this build
+   * @param enableModules whether modules are enabled
+   */
+  public ObjcCppSemantics(
+      IntermediateArtifacts intermediateArtifacts,
+      BuildConfiguration buildConfiguration,
+      boolean enableModules) {
+    this.intermediateArtifacts = intermediateArtifacts;
+    this.buildConfiguration = buildConfiguration;
+    this.enableModules = enableModules;
   }
 
   @Override
   public void finalizeCompileActionBuilder(
-      RuleContext ruleContext, CppCompileActionBuilder actionBuilder) {
-    actionBuilder.setCppConfiguration(ruleContext.getFragment(CppConfiguration.class));
-    actionBuilder.setActionContext(CppCompileActionContext.class);
-    // Because Bazel does not support include scanning, we need the entire crosstool filegroup,
-    // including header files, as opposed to just the "compile" filegroup.
-    actionBuilder.addTransitiveMandatoryInputs(CppHelper.getToolchain(ruleContext).getCrosstool());
-    actionBuilder.setShouldScanIncludes(false);
-  }
-
-  
-  @Override
-  public void setupCompilationContext(RuleContext ruleContext, Builder contextBuilder) {
-    // For objc builds, no extra setup is required.
+      BuildConfiguration configuration,
+      FeatureConfiguration featureConfiguration,
+      CppCompileActionBuilder actionBuilder,
+      RuleErrorConsumer ruleErrorConsumer) {
+    actionBuilder
+        // Without include scanning, we need the entire crosstool filegroup, including header files,
+        // as opposed to just the "compile" filegroup.  Even with include scanning, we need the
+        // system framework headers since they are not being scanned right now.
+        // TODO(waltl): do better with include scanning.
+        .addTransitiveMandatoryInputs(actionBuilder.getToolchain().getAllFilesMiddleman())
+        .setShouldScanIncludes(
+            configuration.getFragment(ObjcConfiguration.class).shouldScanIncludes());
   }
 
   @Override
   public HeadersCheckingMode determineHeadersCheckingMode(RuleContext ruleContext) {
-    // Currently, objc builds do not enforce strict deps.  To begin enforcing strict deps in objc,
-    // switch this flag to STRICT.
-    return HeadersCheckingMode.WARN;
+    return HeadersCheckingMode.STRICT;
   }
 
   @Override
-  public boolean needsIncludeScanning(RuleContext ruleContext) {
-    return false;
+  public HeadersCheckingMode determineStarlarkHeadersCheckingMode(
+      RuleContext context, CppConfiguration cppConfig, CcToolchainProvider toolchain) {
+    if (cppConfig.strictHeaderCheckingFromStarlark()) {
+      return HeadersCheckingMode.STRICT;
+    }
+    return HeadersCheckingMode.LOOSE;
   }
 
   @Override
-  public Root getGreppedIncludesDirectory(RuleContext ruleContext) {
+  public boolean allowIncludeScanning() {
+    return true;
+  }
+
+  @Override
+  public boolean needsDotdInputPruning(BuildConfiguration configuration) {
+    return configuration.getFragment(ObjcConfiguration.class).getDotdPruningPlan()
+        == DotdPruningMode.USE;
+  }
+
+  @Override
+  public void validateAttributes(RuleContext ruleContext) {
+  }
+
+  @Override
+  public boolean needsIncludeValidation() {
+    // We disable include validation when modules are enabled, because Apple uses absolute paths in
+    // its module maps, which include validation does not recognize.  Modules should only be used
+    // rarely and in third party code anyways.
+    return !enableModules;
+  }
+
+  /**
+   * Gets the purpose for the {@code CcCompilationContext}.
+   *
+   * @see CcCompilationContext.Builder#setPurpose
+   */
+  public String getPurpose() {
+    // ProtoSupport creates multiple {@code CcCompilationContext}s for a single rule,
+    // potentially
+    // multiple archives per build configuration. This covers that worst case.
+    return "ObjcCppSemantics_build_arch_"
+        + buildConfiguration.getMnemonic()
+        + "_with_suffix_"
+        + intermediateArtifacts.archiveFileNameSuffix();
+  }
+
+  /** cc_shared_library is not supported with Objective-C */
+  @Override
+  public StructImpl getCcSharedLibraryInfo(TransitiveInfoCollection dep) {
     return null;
   }
+
+  @Override
+  public void validateLayeringCheckFeatures(
+      RuleContext ruleContext,
+      AspectDescriptor aspectDescriptor,
+      CcToolchainProvider ccToolchain,
+      ImmutableSet<String> unsupportedFeatures) {}
 }
