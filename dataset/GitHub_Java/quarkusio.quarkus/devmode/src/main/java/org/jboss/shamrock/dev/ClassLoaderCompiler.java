@@ -68,14 +68,15 @@ public class ClassLoaderCompiler {
             toParse.add(new File(url.getPath()).getAbsolutePath());
         }
         Set<File> classPathElements = new HashSet<>();
+        classPathElements.add(outputDirectory);
         while (!toParse.isEmpty()) {
             String s = toParse.poll();
             if (!parsedFiles.contains(s)) {
                 parsedFiles.add(s);
                 File file = new File(s);
-                if (file.exists()) {
+                if (file.exists() && file.getName().endsWith(".jar")) {
                     classPathElements.add(file);
-                    if(!file.isDirectory()) {
+                    if(!file.isDirectory() && file.getName().endsWith(".jar")) {
                         try (JarFile jar = new JarFile(file)) {
                             Manifest mf = jar.getManifest();
                             if(mf == null || mf.getMainAttributes() == null) {
@@ -90,6 +91,8 @@ public class ClassLoaderCompiler {
                                     }
                                 }
                             }
+                        } catch (Exception e) {
+                            throw new RuntimeException("Failed to open class path file " + file, e);
                         }
                     }
                 }
