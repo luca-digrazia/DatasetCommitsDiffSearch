@@ -33,7 +33,6 @@ import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.NotifyOnActionCacheHit;
 import com.google.devtools.build.lib.analysis.RunfilesSupplierImpl;
-import com.google.devtools.build.lib.analysis.ShellConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.RunUnder;
 import com.google.devtools.build.lib.buildeventstream.TestFileNameConstants;
@@ -755,7 +754,7 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
   }
 
   public PathFragment getShExecutable() {
-    return configuration.getFragment(ShellConfiguration.class).getShellExecutable();
+    return configuration.getShellExecutable();
   }
 
   public ImmutableMap<String, String> getLocalShellEnvironment() {
