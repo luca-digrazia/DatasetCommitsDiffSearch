@@ -365,11 +365,7 @@ public class ActionCacheCheckerTest {
     SpecialArtifact output =
         new Artifact.SpecialArtifact(
             ArtifactRoot.asDerivedRoot(
-                new InMemoryFileSystem(DigestHashFunction.SHA256).getPath("/output"),
-                false,
-                false,
-                false,
-                "bin"),
+                new InMemoryFileSystem(DigestHashFunction.SHA256).getPath("/output"), false, "bin"),
             PathFragment.create("bin/dummy"),
             ActionsTestUtil.NULL_ARTIFACT_OWNER,
             SpecialArtifactType.CONSTANT_METADATA);

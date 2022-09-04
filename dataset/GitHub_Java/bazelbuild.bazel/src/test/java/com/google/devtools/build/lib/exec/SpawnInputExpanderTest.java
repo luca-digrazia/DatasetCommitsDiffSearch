@@ -67,8 +67,7 @@ public class SpawnInputExpanderTest {
 
   private final FileSystem fs = new InMemoryFileSystem(DigestHashFunction.SHA256);
   private final Path execRoot = fs.getPath("/root");
-  private final ArtifactRoot rootDir =
-      ArtifactRoot.asDerivedRoot(execRoot, false, false, false, "out");
+  private final ArtifactRoot rootDir = ArtifactRoot.asDerivedRoot(execRoot, false, "out");
 
   private SpawnInputExpander expander = new SpawnInputExpander(execRoot, /*strict=*/ true);
   private Map<PathFragment, ActionInput> inputMappings = new HashMap<>();
@@ -359,8 +358,7 @@ public class SpawnInputExpanderTest {
     Path outputDir = execRoot.getRelative(outputSegment);
     Path outputPath = outputDir.getRelative(relPath);
     outputPath.createDirectoryAndParents();
-    ArtifactRoot derivedRoot =
-        ArtifactRoot.asDerivedRoot(execRoot, false, false, false, outputSegment);
+    ArtifactRoot derivedRoot = ArtifactRoot.asDerivedRoot(execRoot, false, outputSegment);
     return new SpecialArtifact(
         derivedRoot,
         derivedRoot.getExecPath().getRelative(derivedRoot.getRoot().relativize(outputPath)),

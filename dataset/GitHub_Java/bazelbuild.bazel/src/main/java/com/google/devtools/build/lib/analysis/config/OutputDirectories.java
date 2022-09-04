@@ -132,6 +132,7 @@ public class OutputDirectories {
   private final boolean siblingRepositoryLayout;
 
   private final Path execRoot;
+  private final RepositoryName mainRepository;
 
   OutputDirectories(
       BlazeDirectories directories,
@@ -162,6 +163,7 @@ public class OutputDirectories {
     this.mergeGenfilesDirectory = options.mergeGenfilesDirectory;
     this.siblingRepositoryLayout = siblingRepositoryLayout;
     this.execRoot = directories.getExecRoot(mainRepositoryName.strippedName());
+    this.mainRepository = mainRepositoryName;
   }
 
   private static String buildMnemonic(
@@ -217,7 +219,7 @@ public class OutputDirectories {
         execRoot,
         isMiddleman,
         directories.getRelativeOutputPath(),
-        repository.strippedName(),
+        repository.equals(mainRepository) ? "" : repository.strippedName(),
         outputDirName,
         nameFragment);
   }
