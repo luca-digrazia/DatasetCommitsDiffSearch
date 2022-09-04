@@ -38,6 +38,6 @@ public class ContextProducers {
 
     private QrsRequestContext getContext() {
         return (QrsRequestContext) currentVertxRequest.data()
-                .get(QrsRequestContext.CURRENT_REQUEST_KEY);
+                .get(QrsRequestContext.class.getName());
     }
 }
