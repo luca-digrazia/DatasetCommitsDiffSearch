@@ -37,7 +37,6 @@ import org.graylog2.filters.RewriteFilter;
 import org.graylog2.filters.StreamMatcherFilter;
 import org.graylog2.initializers.*;
 import org.graylog2.inputs.gelf.GELFUDPInput;
-import org.graylog2.outputs.ElasticSearchOutput;
 
 /*
  * 
@@ -133,9 +132,6 @@ public final class Main {
         server.registerFilter(BlacklistFilter.class);
         server.registerFilter(StreamMatcherFilter.class);
         server.registerFilter(CounterUpdateFilter.class);
-
-        // Register outputs.
-        server.registerOutput(ElasticSearchOutput.class);
 
         // Blocks until we shut down.
         server.run();
