@@ -54,12 +54,7 @@ public class FakeAppleCommon implements AppleCommonApi<
 
   @Override
   public StructApi getPlatformTypeStruct() {
-    return new FakeStructApi(
-        ImmutableMap.of(
-            "ios", "ios",
-            "macos", "macos",
-            "tvos", "tvos",
-            "watchos", "watchos"));
+    return new FakeStructApi();
   }
 
   @Override
