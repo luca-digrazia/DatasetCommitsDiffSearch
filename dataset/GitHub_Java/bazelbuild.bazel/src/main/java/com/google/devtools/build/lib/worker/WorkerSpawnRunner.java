@@ -96,7 +96,7 @@ final class WorkerSpawnRunner implements SpawnRunner {
   }
 
   @Override
-  public SpawnResult exec(Spawn spawn, SpawnExecutionContext context)
+  public SpawnResult exec(Spawn spawn, SpawnExecutionPolicy policy)
       throws ExecException, IOException, InterruptedException {
     if (!spawn.getExecutionInfo().containsKey(ExecutionRequirements.SUPPORTS_WORKERS)
         || !spawn.getExecutionInfo().get(ExecutionRequirements.SUPPORTS_WORKERS).equals("1")) {
@@ -105,19 +105,19 @@ final class WorkerSpawnRunner implements SpawnRunner {
       reporter.handle(
           Event.warn(
               String.format(ERROR_MESSAGE_PREFIX + REASON_NO_EXECUTION_INFO, spawn.getMnemonic())));
-      return fallbackRunner.exec(spawn, context);
+      return fallbackRunner.exec(spawn, policy);
     }
 
-    context.report(ProgressStatus.SCHEDULING, getName());
+    policy.report(ProgressStatus.SCHEDULING, getName());
     ActionExecutionMetadata owner = spawn.getResourceOwner();
     try (ResourceHandle handle =
         ResourceManager.instance().acquireResources(owner, spawn.getLocalResources())) {
-      context.report(ProgressStatus.EXECUTING, getName());
-      return actuallyExec(spawn, context);
+      policy.report(ProgressStatus.EXECUTING, getName());
+      return actuallyExec(spawn, policy);
     }
   }
 
-  private SpawnResult actuallyExec(Spawn spawn, SpawnExecutionContext context)
+  private SpawnResult actuallyExec(Spawn spawn, SpawnExecutionPolicy policy)
       throws ExecException, IOException, InterruptedException {
     if (Iterables.isEmpty(spawn.getToolFiles())) {
       throw new UserExecException(
@@ -132,15 +132,15 @@ final class WorkerSpawnRunner implements SpawnRunner {
     ImmutableList<String> workerArgs = splitSpawnArgsIntoWorkerArgsAndFlagFiles(spawn, flagFiles);
     ImmutableMap<String, String> env = spawn.getEnvironment();
 
-    ActionInputFileCache inputFileCache = context.getActionInputFileCache();
+    ActionInputFileCache inputFileCache = policy.getActionInputFileCache();
 
     SortedMap<PathFragment, HashCode> workerFiles =
         WorkerFilesHash.getWorkerFilesWithHashes(
-            spawn, context.getArtifactExpander(), context.getActionInputFileCache());
+            spawn, policy.getArtifactExpander(), policy.getActionInputFileCache());
 
     HashCode workerFilesCombinedHash = WorkerFilesHash.getCombinedHash(workerFiles);
 
-    Map<PathFragment, Path> inputFiles = SandboxHelpers.getInputFiles(spawn, context, execRoot);
+    Map<PathFragment, Path> inputFiles = SandboxHelpers.getInputFiles(spawn, policy, execRoot);
     Set<PathFragment> outputFiles = SandboxHelpers.getOutputFiles(spawn);
 
     WorkerKey key =
@@ -151,15 +151,17 @@ final class WorkerSpawnRunner implements SpawnRunner {
             spawn.getMnemonic(),
             workerFilesCombinedHash,
             workerFiles,
-            context.speculating());
+            inputFiles,
+            outputFiles,
+            policy.speculating());
 
-    WorkRequest workRequest = createWorkRequest(spawn, context, flagFiles, inputFileCache);
+    WorkRequest workRequest = createWorkRequest(spawn, policy, flagFiles, inputFileCache);
 
     long startTime = System.currentTimeMillis();
-    WorkResponse response = execInWorker(key, workRequest, context, inputFiles, outputFiles);
+    WorkResponse response = execInWorker(key, workRequest, policy);
     Duration wallTime = Duration.ofMillis(System.currentTimeMillis() - startTime);
 
-    FileOutErr outErr = context.getFileOutErr();
+    FileOutErr outErr = policy.getFileOutErr();
     response.getOutputBytes().writeTo(outErr.getErrorStream());
 
     int exitCode = response.getExitCode();
@@ -202,7 +204,7 @@ final class WorkerSpawnRunner implements SpawnRunner {
 
   private WorkRequest createWorkRequest(
       Spawn spawn,
-      SpawnExecutionContext context,
+      SpawnExecutionPolicy policy,
       List<String> flagfiles,
       ActionInputFileCache inputFileCache)
       throws IOException {
@@ -212,7 +214,7 @@ final class WorkerSpawnRunner implements SpawnRunner {
     }
 
     List<ActionInput> inputs =
-        ActionInputHelper.expandArtifacts(spawn.getInputFiles(), context.getArtifactExpander());
+        ActionInputHelper.expandArtifacts(spawn.getInputFiles(), policy.getArtifactExpander());
 
     for (ActionInput input : inputs) {
       byte[] digestBytes = inputFileCache.getMetadata(input).getDigest();
@@ -255,12 +257,7 @@ final class WorkerSpawnRunner implements SpawnRunner {
     }
   }
 
-  private WorkResponse execInWorker(
-      WorkerKey key,
-      WorkRequest request,
-      SpawnExecutionContext context,
-      Map<PathFragment, Path> inputFiles,
-      Set<PathFragment> outputFiles)
+  private WorkResponse execInWorker(WorkerKey key, WorkRequest request, SpawnExecutionPolicy policy)
       throws InterruptedException, ExecException {
     Worker worker = null;
     WorkResponse response;
@@ -278,7 +275,7 @@ final class WorkerSpawnRunner implements SpawnRunner {
       }
 
       try {
-        worker.prepareExecution(inputFiles, outputFiles, key.getWorkerFilesWithHashes().keySet());
+        worker.prepareExecution(key);
       } catch (IOException e) {
         throw new UserExecException(
             ErrorMessage.builder()
@@ -317,17 +314,14 @@ final class WorkerSpawnRunner implements SpawnRunner {
         recordingStream.readRemaining();
         throw new UserExecException(
             ErrorMessage.builder()
-                .message(
-                    "Worker process returned an unparseable WorkResponse!\n\n"
-                        + "Did you try to print something to stdout? Workers aren't allowed to do "
-                        + "this, as it breaks the protocol between Bazel and the worker process.")
+                .message("Worker process returned an unparseable WorkResponse:")
                 .logText(recordingStream.getRecordedDataAsString())
                 .exception(e)
                 .build()
                 .toString());
       }
 
-      context.lockOutputFiles();
+      policy.lockOutputFiles();
 
       if (response == null) {
         throw new UserExecException(
@@ -340,7 +334,7 @@ final class WorkerSpawnRunner implements SpawnRunner {
       }
 
       try {
-        worker.finishExecution(execRoot);
+        worker.finishExecution(key);
       } catch (IOException e) {
         throw new UserExecException(
             ErrorMessage.builder()

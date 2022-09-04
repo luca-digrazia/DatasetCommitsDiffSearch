@@ -41,6 +41,7 @@ import com.google.devtools.build.lib.vfs.Path;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Map;
+import java.util.Optional;
 
 /** Abstract common ancestor for sandbox spawn runners implementing the common parts. */
 abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
@@ -50,11 +51,13 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
   private static final String SANDBOX_DEBUG_SUGGESTION =
       "\n\nUse --sandbox_debug to see verbose messages from the sandbox";
 
+  private final Path sandboxBase;
   private final SandboxOptions sandboxOptions;
   private final boolean verboseFailures;
   private final ImmutableSet<Path> inaccessiblePaths;
 
-  public AbstractSandboxSpawnRunner(CommandEnvironment cmdEnv) {
+  public AbstractSandboxSpawnRunner(CommandEnvironment cmdEnv, Path sandboxBase) {
+    this.sandboxBase = sandboxBase;
     this.sandboxOptions = cmdEnv.getOptions().getOptions(SandboxOptions.class);
     this.verboseFailures = cmdEnv.getOptions().getOptions(ExecutionOptions.class).verboseFailures;
     this.inaccessiblePaths =
@@ -62,14 +65,14 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
   }
 
   @Override
-  public SpawnResult exec(Spawn spawn, SpawnExecutionContext context)
+  public SpawnResult exec(Spawn spawn, SpawnExecutionPolicy policy)
       throws ExecException, InterruptedException {
     ActionExecutionMetadata owner = spawn.getResourceOwner();
-    context.report(ProgressStatus.SCHEDULING, getName());
+    policy.report(ProgressStatus.SCHEDULING, getName());
     try (ResourceHandle ignored =
         ResourceManager.instance().acquireResources(owner, spawn.getLocalResources())) {
-      context.report(ProgressStatus.EXECUTING, getName());
-      return actuallyExec(spawn, context);
+      policy.report(ProgressStatus.EXECUTING, getName());
+      return actuallyExec(spawn, policy);
     } catch (IOException e) {
       throw new UserExecException("I/O exception during sandboxed execution", e);
     }
@@ -78,25 +81,27 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
   // TODO(laszlocsomor): refactor this class to make `actuallyExec`'s contract clearer: the caller
   // of `actuallyExec` should not depend on `actuallyExec` calling `runSpawn` because it's easy to
   // forget to do so in `actuallyExec`'s implementations.
-  protected abstract SpawnResult actuallyExec(Spawn spawn, SpawnExecutionContext context)
+  protected abstract SpawnResult actuallyExec(Spawn spawn, SpawnExecutionPolicy policy)
       throws ExecException, InterruptedException, IOException;
 
   protected SpawnResult runSpawn(
       Spawn originalSpawn,
       SandboxedSpawn sandbox,
-      SpawnExecutionContext context,
+      SpawnExecutionPolicy policy,
       Path execRoot,
+      Path tmpDir,
       Duration timeout,
-      Path statisticsPath)
+      Optional<String> statisticsPath)
       throws IOException, InterruptedException {
     try {
       sandbox.createFileSystem();
-      OutErr outErr = context.getFileOutErr();
-      context.prefetchInputs();
+      OutErr outErr = policy.getFileOutErr();
+      policy.prefetchInputs();
 
-      SpawnResult result = run(originalSpawn, sandbox, outErr, timeout, execRoot, statisticsPath);
+      SpawnResult result =
+          run(originalSpawn, sandbox, outErr, timeout, execRoot, tmpDir, statisticsPath);
 
-      context.lockOutputFiles();
+      policy.lockOutputFiles();
       try {
         // We copy the outputs even when the command failed.
         sandbox.copyOutputs(execRoot);
@@ -117,7 +122,8 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
       OutErr outErr,
       Duration timeout,
       Path execRoot,
-      Path statisticsPath)
+      Path tmpDir,
+      Optional<String> statisticsPath)
       throws IOException, InterruptedException {
     Command cmd = new Command(
         sandbox.getArguments().toArray(new String[0]),
@@ -140,6 +146,9 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
     long startTime = System.currentTimeMillis();
     CommandResult commandResult;
     try {
+      if (!tmpDir.exists() && !tmpDir.createDirectory()) {
+        throw new IOException(String.format("Could not create temp directory '%s'", tmpDir));
+      }
       commandResult = cmd.execute(outErr.getOutputStream(), outErr.getErrorStream());
       if (Thread.currentThread().isInterrupted()) {
         throw new InterruptedException();
@@ -183,19 +192,19 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
             .setWallTime(wallTime)
             .setFailureMessage(status != Status.SUCCESS || exitCode != 0 ? failureMessage : "");
 
-    if (statisticsPath != null) {
-      ExecutionStatistics.getResourceUsage(statisticsPath)
-          .ifPresent(
-              resourceUsage -> {
-                spawnResultBuilder.setUserTime(resourceUsage.getUserExecutionTime());
-                spawnResultBuilder.setSystemTime(resourceUsage.getSystemExecutionTime());
-                spawnResultBuilder.setNumBlockOutputOperations(
-                    resourceUsage.getBlockOutputOperations());
-                spawnResultBuilder.setNumBlockInputOperations(
-                    resourceUsage.getBlockInputOperations());
-                spawnResultBuilder.setNumInvoluntaryContextSwitches(
-                    resourceUsage.getInvoluntaryContextSwitches());
-              });
+    if (statisticsPath.isPresent()) {
+      Optional<ExecutionStatistics.ResourceUsage> resourceUsage =
+          ExecutionStatistics.getResourceUsage(statisticsPath.get());
+      if (resourceUsage.isPresent()) {
+        spawnResultBuilder.setUserTime(resourceUsage.get().getUserExecutionTime());
+        spawnResultBuilder.setSystemTime(resourceUsage.get().getSystemExecutionTime());
+        spawnResultBuilder.setNumBlockOutputOperations(
+            resourceUsage.get().getBlockOutputOperations());
+        spawnResultBuilder.setNumBlockInputOperations(
+            resourceUsage.get().getBlockInputOperations());
+        spawnResultBuilder.setNumInvoluntaryContextSwitches(
+            resourceUsage.get().getInvoluntaryContextSwitches());
+      }
     }
 
     return spawnResultBuilder.build();
@@ -203,6 +212,17 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
 
   private boolean wasTimeout(Duration timeout, Duration wallTime) {
     return !timeout.isZero() && wallTime.compareTo(timeout) > 0;
+  }
+
+  /**
+   * Returns a temporary directory that should be used as the sandbox directory for a single action.
+   */
+  protected Path getSandboxRoot() throws IOException {
+    return sandboxBase.getRelative(
+        java.nio.file.Files.createTempDirectory(
+                java.nio.file.Paths.get(sandboxBase.getPathString()), "")
+            .getFileName()
+            .toString());
   }
 
   /**
@@ -228,7 +248,7 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
         writablePaths,
         // As of 2018-01-09:
         // - every caller of `getWritableDirs` passes a LocalEnvProvider-processed environment as
-        //   `env`, and in every case that's either PosixLocalEnvProvider or XcodeLocalEnvProvider,
+        //   `env`, and in every case that's either PosixLocalEnvProvider or XCodeLocalEnvProvider,
         //   therefore `env` surely has an entry for TMPDIR
         // - Bazel-on-Windows does not yet support sandboxing, so we don't need to add env[TMP] and
         //   env[TEMP] as writable paths.

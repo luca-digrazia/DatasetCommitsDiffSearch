@@ -23,7 +23,7 @@ import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.actions.Spawns;
 import com.google.devtools.build.lib.exec.ActionContextProvider;
 import com.google.devtools.build.lib.exec.SpawnRunner;
-import com.google.devtools.build.lib.exec.apple.XcodeLocalEnvProvider;
+import com.google.devtools.build.lib.exec.apple.XCodeLocalEnvProvider;
 import com.google.devtools.build.lib.exec.local.LocalEnvProvider;
 import com.google.devtools.build.lib.exec.local.LocalExecutionOptions;
 import com.google.devtools.build.lib.exec.local.LocalSpawnRunner;
@@ -35,7 +35,6 @@ import com.google.devtools.common.options.OptionsProvider;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Optional;
-import javax.annotation.Nullable;
 
 /**
  * Provides the sandboxed spawn strategy.
@@ -47,8 +46,7 @@ final class SandboxActionContextProvider extends ActionContextProvider {
     this.contexts = contexts;
   }
 
-  public static SandboxActionContextProvider create(CommandEnvironment cmdEnv, Path sandboxBase,
-      @Nullable SandboxfsProcess process)
+  public static SandboxActionContextProvider create(CommandEnvironment cmdEnv, Path sandboxBase)
       throws IOException {
     ImmutableList.Builder<ActionContext> contexts = ImmutableList.builder();
 
@@ -74,7 +72,6 @@ final class SandboxActionContextProvider extends ActionContextProvider {
 
     // This is the preferred sandboxing strategy on Linux.
     if (LinuxSandboxedSpawnRunner.isSupported(cmdEnv)) {
-      // TODO(jmmv): Inject process into spawn runner.
       SpawnRunner spawnRunner =
           withFallback(
               cmdEnv,
@@ -87,8 +84,7 @@ final class SandboxActionContextProvider extends ActionContextProvider {
       SpawnRunner spawnRunner =
           withFallback(
               cmdEnv,
-              new DarwinSandboxedSpawnRunner(cmdEnv, sandboxBase, productName, timeoutKillDelay,
-                  process));
+              new DarwinSandboxedSpawnRunner(cmdEnv, sandboxBase, productName, timeoutKillDelay));
       contexts.add(new DarwinSandboxedStrategy(cmdEnv.getExecRoot(), spawnRunner));
     }
 
@@ -104,7 +100,7 @@ final class SandboxActionContextProvider extends ActionContextProvider {
         env.getOptions().getOptions(LocalExecutionOptions.class);
     LocalEnvProvider localEnvProvider =
         OS.getCurrent() == OS.DARWIN
-            ? new XcodeLocalEnvProvider(env.getRuntime().getProductName(), env.getClientEnv())
+            ? new XCodeLocalEnvProvider(env.getRuntime().getProductName(), env.getClientEnv())
             : new PosixLocalEnvProvider(env.getClientEnv());
     return
         new LocalSpawnRunner(

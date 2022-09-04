@@ -48,6 +48,7 @@ import java.time.Duration;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
@@ -118,15 +119,16 @@ public class LocalSpawnRunner implements SpawnRunner {
   }
 
   @Override
-  public SpawnResult exec(Spawn spawn, SpawnExecutionContext context)
-      throws IOException, InterruptedException {
+  public SpawnResult exec(
+      Spawn spawn,
+      SpawnExecutionPolicy policy) throws IOException, InterruptedException {
     ActionExecutionMetadata owner = spawn.getResourceOwner();
-    context.report(ProgressStatus.SCHEDULING, getName());
+    policy.report(ProgressStatus.SCHEDULING, getName());
     try (ResourceHandle handle =
         resourceManager.acquireResources(owner, spawn.getLocalResources())) {
-      context.report(ProgressStatus.EXECUTING, getName());
-      context.lockOutputFiles();
-      return new SubprocessHandler(spawn, context).run();
+      policy.report(ProgressStatus.EXECUTING, getName());
+      policy.lockOutputFiles();
+      return new SubprocessHandler(spawn, policy).run();
     }
   }
 
@@ -140,7 +142,7 @@ public class LocalSpawnRunner implements SpawnRunner {
 
   private final class SubprocessHandler {
     private final Spawn spawn;
-    private final SpawnExecutionContext context;
+    private final SpawnExecutionPolicy policy;
 
     private final long creationTime = System.currentTimeMillis();
     private long stateStartTime = creationTime;
@@ -149,11 +151,13 @@ public class LocalSpawnRunner implements SpawnRunner {
 
     private final int id;
 
-    public SubprocessHandler(Spawn spawn, SpawnExecutionContext context) {
+    public SubprocessHandler(
+        Spawn spawn,
+        SpawnExecutionPolicy policy) {
       Preconditions.checkArgument(!spawn.getArguments().isEmpty());
       this.spawn = spawn;
-      this.context = context;
-      this.id = context.getId();
+      this.policy = policy;
+      this.id = policy.getId();
       setState(State.PARSING);
     }
 
@@ -219,7 +223,7 @@ public class LocalSpawnRunner implements SpawnRunner {
     private SpawnResult start() throws InterruptedException, IOException {
       logger.info(String.format("starting local subprocess #%d, argv: %s", id, debugCmdString()));
 
-      FileOutErr outErr = context.getFileOutErr();
+      FileOutErr outErr = policy.getFileOutErr();
       String actionType = spawn.getResourceOwner().getMnemonic();
       if (localExecutionOptions.allowedLocalAction != null
           && !localExecutionOptions.allowedLocalAction.matcher(actionType).matches()) {
@@ -238,14 +242,14 @@ public class LocalSpawnRunner implements SpawnRunner {
       if (Spawns.shouldPrefetchInputsForLocalExecution(spawn)) {
         stepLog(INFO, "prefetching inputs for local execution");
         setState(State.PREFETCHING_LOCAL_INPUTS);
-        context.prefetchInputs();
+        policy.prefetchInputs();
       }
 
       stepLog(INFO, "running locally");
       setState(State.LOCAL_ACTION_RUNNING);
 
       Path tmpDir = createActionTemp(execRoot);
-      Path statisticsPath = null;
+      Optional<String> statisticsPath = Optional.empty();
       try {
         Command cmd;
         OutputStream stdOut;
@@ -267,11 +271,11 @@ public class LocalSpawnRunner implements SpawnRunner {
               ProcessWrapperUtil.commandLineBuilder(processWrapper, spawn.getArguments())
                   .setStdoutPath(getPathOrDevNull(outErr.getOutputPath()))
                   .setStderrPath(getPathOrDevNull(outErr.getErrorPath()))
-                  .setTimeout(context.getTimeout())
+                  .setTimeout(policy.getTimeout())
                   .setKillDelay(Duration.ofSeconds(localExecutionOptions.localSigkillGraceSeconds));
           if (localExecutionOptions.collectLocalExecutionStatistics) {
-            statisticsPath = tmpDir.getRelative("stats.out");
-            commandLineBuilder.setStatisticsPath(statisticsPath);
+            statisticsPath = Optional.of(tmpDir.getRelative("stats.out").getPathString());
+            commandLineBuilder.setStatisticsPath(statisticsPath.get());
           }
           List<String> cmdLine = commandLineBuilder.build();
           cmd =
@@ -287,7 +291,7 @@ public class LocalSpawnRunner implements SpawnRunner {
                   spawn.getArguments().toArray(new String[0]),
                   environment,
                   execRoot.getPathFile(),
-                  context.getTimeout());
+                  policy.getTimeout());
         }
 
         long startTime = System.currentTimeMillis();
@@ -323,7 +327,7 @@ public class LocalSpawnRunner implements SpawnRunner {
         Duration wallTime = Duration.ofMillis(System.currentTimeMillis() - startTime);
         boolean wasTimeout =
             commandResult.getTerminationStatus().timedOut()
-                || (useProcessWrapper && wasTimeout(context.getTimeout(), wallTime));
+                || (useProcessWrapper && wasTimeout(policy.getTimeout(), wallTime));
         int exitCode =
             wasTimeout
                 ? POSIX_TIMEOUT_EXIT_CODE
@@ -339,19 +343,19 @@ public class LocalSpawnRunner implements SpawnRunner {
                 .setExitCode(exitCode)
                 .setExecutorHostname(hostName)
                 .setWallTime(wallTime);
-        if (statisticsPath != null) {
-          ExecutionStatistics.getResourceUsage(statisticsPath)
-              .ifPresent(
-                  resourceUsage -> {
-                    spawnResultBuilder.setUserTime(resourceUsage.getUserExecutionTime());
-                    spawnResultBuilder.setSystemTime(resourceUsage.getSystemExecutionTime());
-                    spawnResultBuilder.setNumBlockOutputOperations(
-                        resourceUsage.getBlockOutputOperations());
-                    spawnResultBuilder.setNumBlockInputOperations(
-                        resourceUsage.getBlockInputOperations());
-                    spawnResultBuilder.setNumInvoluntaryContextSwitches(
-                        resourceUsage.getInvoluntaryContextSwitches());
-                  });
+        if (statisticsPath.isPresent()) {
+          Optional<ExecutionStatistics.ResourceUsage> resourceUsage =
+              ExecutionStatistics.getResourceUsage(statisticsPath.get());
+          if (resourceUsage.isPresent()) {
+            spawnResultBuilder.setUserTime(resourceUsage.get().getUserExecutionTime());
+            spawnResultBuilder.setSystemTime(resourceUsage.get().getSystemExecutionTime());
+            spawnResultBuilder.setNumBlockOutputOperations(
+                resourceUsage.get().getBlockOutputOperations());
+            spawnResultBuilder.setNumBlockInputOperations(
+                resourceUsage.get().getBlockInputOperations());
+            spawnResultBuilder.setNumInvoluntaryContextSwitches(
+                resourceUsage.get().getInvoluntaryContextSwitches());
+          }
         }
         return spawnResultBuilder.build();
       } finally {
@@ -374,8 +378,8 @@ public class LocalSpawnRunner implements SpawnRunner {
       }
     }
 
-    private Path getPathOrDevNull(Path path) {
-      return path == null ? execRoot.getRelative("/dev/null") : path;
+    private String getPathOrDevNull(Path path) {
+      return path == null ? "/dev/null" : path.getPathString();
     }
 
     private boolean wasTimeout(Duration timeout, Duration wallTime) {

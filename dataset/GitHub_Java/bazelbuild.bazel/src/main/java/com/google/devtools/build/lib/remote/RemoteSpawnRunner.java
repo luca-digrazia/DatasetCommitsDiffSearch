@@ -33,11 +33,9 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.exec.SpawnExecException;
 import com.google.devtools.build.lib.exec.SpawnRunner;
+import com.google.devtools.build.lib.remote.DigestUtil.ActionKey;
 import com.google.devtools.build.lib.remote.Retrier.RetryException;
 import com.google.devtools.build.lib.remote.TreeNodeRepository.TreeNode;
-import com.google.devtools.build.lib.remote.util.DigestUtil;
-import com.google.devtools.build.lib.remote.util.DigestUtil.ActionKey;
-import com.google.devtools.build.lib.remote.util.TracingMetadataUtils;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.Path;
@@ -233,11 +231,6 @@ class RemoteSpawnRunner implements SpawnRunner {
       boolean uploadLocalResults,
       IOException cause)
       throws ExecException, InterruptedException, IOException {
-    // Regardless of cause, if we are interrupted, we should stop without displaying a user-visible
-    // failure/stack trace.
-    if (Thread.currentThread().isInterrupted()) {
-      throw new InterruptedException();
-    }
     if (options.remoteLocalFallback && !(cause instanceof TimeoutException)) {
       return execLocally(spawn, policy, inputMap, uploadLocalResults, remoteCache, actionKey);
     }
