@@ -111,8 +111,8 @@ public class NativeImageMojo extends AbstractMojo {
     @Parameter(defaultValue = "true")
     private boolean fullStackTraces;
 
-    @Parameter(defaultValue = "${native-image.disable-reports}")
-    private boolean disableReports;
+    @Parameter(defaultValue = "true")
+    private boolean generateCallReports;
 
     @Parameter
     private List<String> additionalBuildArgs;
@@ -151,12 +151,9 @@ public class NativeImageMojo extends AbstractMojo {
             if (cleanupServer) {
                 List<String> cleanup = new ArrayList<>(nativeImage);
                 cleanup.add("--server-shutdown");
-                ProcessBuilder pb = new ProcessBuilder(cleanup.toArray(new String[0]));
-                pb.directory(outputDirectory);
-                pb.redirectInput(ProcessBuilder.Redirect.INHERIT);
-                pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
-                pb.redirectError(ProcessBuilder.Redirect.INHERIT);
-                Process process = pb.start();
+                Process process = Runtime.getRuntime().exec(cleanup.toArray(new String[0]), null, outputDirectory);
+                new Thread(new ProcessReader(process.getInputStream(), false)).start();
+                new Thread(new ProcessReader(process.getErrorStream(), true)).start();
                 process.waitFor();
             }
             // TODO this is a temp hack
@@ -202,7 +199,7 @@ public class NativeImageMojo extends AbstractMojo {
             if (debugBuildProcess) {
                 command.add("-J-Xrunjdwp:transport=dt_socket,address=5005,server=y,suspend=y");
             }
-            if(!disableReports) {
+            if(generateCallReports) {
                 command.add("-H:+PrintAnalysisCallTree");
             }
             if (dumpProxies) {
@@ -266,14 +263,8 @@ public class NativeImageMojo extends AbstractMojo {
 
             System.out.println(command);
             CountDownLatch errorReportLatch = new CountDownLatch(1);
-
-
-            ProcessBuilder pb = new ProcessBuilder(command.toArray(new String[0]));
-            pb.directory(outputDirectory);
-            pb.redirectInput(ProcessBuilder.Redirect.INHERIT);
-            pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
-
-            Process process = pb.start();
+            Process process = Runtime.getRuntime().exec(command.toArray(new String[0]), null, outputDirectory);
+            new Thread(new ProcessReader(process.getInputStream(), false)).start();
             new Thread(new ErrorReplacingProcessReader(process.getErrorStream(), new File(outputDirectory, "reports"), errorReportLatch)).start();
             errorReportLatch.await();
             if (process.waitFor() != 0) {
