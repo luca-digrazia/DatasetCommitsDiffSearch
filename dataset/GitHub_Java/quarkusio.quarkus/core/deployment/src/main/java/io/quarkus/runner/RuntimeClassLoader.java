@@ -12,6 +12,7 @@ import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.net.MalformedURLException;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.net.URLStreamHandler;
@@ -32,6 +33,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -43,6 +45,7 @@ import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
 
 import io.quarkus.deployment.ClassOutput;
+import io.quarkus.deployment.QuarkusClassWriter;
 
 public class RuntimeClassLoader extends ClassLoader implements ClassOutput, TransformerTarget {
 
@@ -54,7 +57,6 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput, Tran
     private final Map<String, byte[]> resources = new ConcurrentHashMap<>();
 
     private volatile Map<String, List<BiFunction<String, ClassVisitor, ClassVisitor>>> bytecodeTransformers = null;
-    private volatile ClassLoader transformerSafeClassLoader;
 
     private final List<Path> applicationClassDirectories;
 
@@ -67,7 +69,7 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput, Tran
 
     private static final String DEBUG_CLASSES_DIR = System.getProperty("quarkus.debug.generated-classes-dir");
 
-    private final ConcurrentHashMap<String, LoadingClass> loadingClasses = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Future<Class<?>>> loadingClasses = new ConcurrentHashMap<>();
 
     static {
         registerAsParallelCapable();
@@ -206,15 +208,11 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput, Tran
         Path classLoc = getClassInApplicationClassPaths(name);
 
         if (classLoc != null) {
-            LoadingClass res = new LoadingClass(new CompletableFuture<>(), Thread.currentThread());
-            LoadingClass loadingClass = loadingClasses.putIfAbsent(name, res);
+            CompletableFuture<Class<?>> res = new CompletableFuture<>();
+            Future<Class<?>> loadingClass = loadingClasses.putIfAbsent(name, res);
             if (loadingClass != null) {
-                if (loadingClass.initiator == Thread.currentThread()) {
-                    throw new LinkageError(
-                            "Load caused recursion in RuntimeClassLoader, this is a Quarkus bug loading class: " + name);
-                }
                 try {
-                    return loadingClass.value.get();
+                    return loadingClass.get();
                 } catch (Exception e) {
                     throw new ClassNotFoundException("Failed to load " + name, e);
                 }
@@ -228,13 +226,13 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput, Tran
                 bytes = handleTransform(name, bytes);
                 definePackage(name);
                 Class<?> clazz = defineClass(name, bytes, 0, bytes.length, defaultProtectionDomain);
-                res.value.complete(clazz);
+                res.complete(clazz);
                 return clazz;
             } catch (RuntimeException e) {
-                res.value.completeExceptionally(e);
+                res.completeExceptionally(e);
                 throw e;
             } catch (Throwable e) {
-                res.value.completeExceptionally(e);
+                res.completeExceptionally(e);
                 throw e;
             }
         }
@@ -304,7 +302,6 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput, Tran
     @Override
     public void setTransformers(Map<String, List<BiFunction<String, ClassVisitor, ClassVisitor>>> functions) {
         this.bytecodeTransformers = functions;
-        this.transformerSafeClassLoader = Thread.currentThread().getContextClassLoader();
     }
 
     public void setApplicationArchives(List<Path> archives) {
@@ -426,12 +423,7 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput, Tran
         }
 
         ClassReader cr = new ClassReader(bytes);
-        ClassWriter writer = new ClassWriter(cr, ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS) {
-            @Override
-            protected ClassLoader getClassLoader() {
-                return transformerSafeClassLoader;
-            }
-        };
+        ClassWriter writer = new QuarkusClassWriter(cr, ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
         ClassVisitor visitor = writer;
         for (BiFunction<String, ClassVisitor, ClassVisitor> i : transformers) {
             visitor = i.apply(name, visitor);
@@ -535,9 +527,14 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput, Tran
         URL url = null;
         if (applicationClasspath != null) {
             try {
-                URI uri = applicationClasspath.toUri();
+                String path = applicationClasspath.toString();
+                if (File.separatorChar != '/') {
+                    // Note that windows separator is always quoted in the URI constructor
+                    path = path.replace('/', File.separatorChar);
+                }
+                URI uri = new URI("file", null, path, null);
                 url = uri.toURL();
-            } catch (MalformedURLException e) {
+            } catch (URISyntaxException | MalformedURLException e) {
                 log.error("URL codeSource location for path " + applicationClasspath + " could not be created.", e);
             }
         }
@@ -545,14 +542,5 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput, Tran
         ProtectionDomain protectionDomain = new ProtectionDomain(codesource, null, this, null);
         return protectionDomain;
     }
-
-    static final class LoadingClass {
-        final CompletableFuture<Class<?>> value;
-        final Thread initiator;
-
-        LoadingClass(CompletableFuture<Class<?>> value, Thread initiator) {
-            this.value = value;
-            this.initiator = initiator;
-        }
-    }
+    
 }
