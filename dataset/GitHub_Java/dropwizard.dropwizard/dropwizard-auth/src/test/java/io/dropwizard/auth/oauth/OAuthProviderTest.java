@@ -6,7 +6,7 @@ import io.dropwizard.auth.AuthFilter;
 import io.dropwizard.auth.AuthResource;
 import io.dropwizard.auth.util.AuthUtil;
 import io.dropwizard.jersey.DropwizardResourceConfig;
-import io.dropwizard.logging.BootstrapLogging;
+import io.dropwizard.logging.LoggingFactory;
 import org.glassfish.jersey.server.filter.RolesAllowedDynamicFeature;
 import org.glassfish.jersey.servlet.ServletProperties;
 import org.glassfish.jersey.test.DeploymentContext;
@@ -26,7 +26,7 @@ import static org.assertj.core.api.Assertions.failBecauseExceptionWasNotThrown;
 
 public class OAuthProviderTest extends JerseyTest {
     static {
-        BootstrapLogging.bootstrap();
+        LoggingFactory.bootstrap();
     }
 
     @Override
@@ -126,7 +126,7 @@ public class OAuthProviderTest extends JerseyTest {
                     .setAuthenticator(AuthUtil.<String, Principal>getTestAuthenticator(validUser))
                     .setPrefix("Bearer")
                     .setSecurityContextFunction(AuthUtil.getSecurityContextProviderFunction(validUser, "ADMIN"))
-                    .buildAuthFilter();
+                    .buildAuthHandler();
         }
     }
 }

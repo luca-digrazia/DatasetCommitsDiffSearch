@@ -2,7 +2,7 @@ package io.dropwizard.views.mustache;
 
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.ImmutableList;
-import io.dropwizard.logging.BootstrapLogging;
+import io.dropwizard.logging.LoggingFactory;
 import io.dropwizard.views.ViewMessageBodyWriter;
 import io.dropwizard.views.ViewRenderer;
 import org.glassfish.jersey.server.ResourceConfig;
@@ -22,7 +22,7 @@ import static org.assertj.core.api.Assertions.failBecauseExceptionWasNotThrown;
 
 public class MustacheViewRendererTest extends JerseyTest {
     static {
-        BootstrapLogging.bootstrap();
+        LoggingFactory.bootstrap();
     }
 
     @Path("/test/")
@@ -45,12 +45,6 @@ public class MustacheViewRendererTest extends JerseyTest {
         public BadView showBad() {
             return new BadView();
         }
-
-        @GET
-        @Path("/error")
-        public ErrorView showError() {
-            return new ErrorView();
-        }
     }
 
     @Override
@@ -66,13 +60,15 @@ public class MustacheViewRendererTest extends JerseyTest {
     @Test
     public void rendersViewsWithAbsoluteTemplatePaths() throws Exception {
         final String response = target("/test/absolute").request().get(String.class);
-        assertThat(response).isEqualTo("Woop woop. yay\n");
+        assertThat(response)
+                .isEqualTo("Woop woop. yay" + System.lineSeparator());
     }
 
     @Test
     public void rendersViewsWithRelativeTemplatePaths() throws Exception {
         final String response = target("/test/relative").request().get(String.class);
-        assertThat(response).isEqualTo("Ok.\n");
+        assertThat(response)
+                .isEqualTo("Ok." + System.lineSeparator());
     }
 
     @Test
@@ -85,21 +81,7 @@ public class MustacheViewRendererTest extends JerseyTest {
                     .isEqualTo(500);
 
             assertThat(e.getResponse().readEntity(String.class))
-                    .isEqualTo(ViewMessageBodyWriter.TEMPLATE_ERROR_MSG);
-        }
-    }
-
-    @Test
-    public void returnsA500ForViewsThatCantCompile() throws Exception {
-        try {
-            target("/test/error").request().get(String.class);
-            failBecauseExceptionWasNotThrown(WebApplicationException.class);
-        } catch (WebApplicationException e) {
-            assertThat(e.getResponse().getStatus())
-                    .isEqualTo(500);
-
-            assertThat(e.getResponse().readEntity(String.class))
-                .isEqualTo(ViewMessageBodyWriter.TEMPLATE_ERROR_MSG);
+                    .isEqualTo("<html><head><title>Missing Template</title></head><body><h1>Missing Template</h1><p>Template \"/woo-oo-ahh.txt.mustache\" not found.</p></body></html>");
         }
     }
 }

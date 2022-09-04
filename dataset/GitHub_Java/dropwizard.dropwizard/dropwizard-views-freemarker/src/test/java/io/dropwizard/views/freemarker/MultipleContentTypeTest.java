@@ -4,7 +4,7 @@ import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.ImmutableList;
 import io.dropwizard.jackson.Jackson;
 import io.dropwizard.jersey.DropwizardResourceConfig;
-import io.dropwizard.logging.BootstrapLogging;
+import io.dropwizard.logging.LoggingFactory;
 import io.dropwizard.views.View;
 import io.dropwizard.views.ViewMessageBodyWriter;
 import io.dropwizard.views.ViewRenderer;
@@ -31,7 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 public class MultipleContentTypeTest extends JerseyTest {
     static {
-        BootstrapLogging.bootstrap();
+        LoggingFactory.bootstrap();
     }
 
     @Override
@@ -129,7 +129,7 @@ public class MultipleContentTypeTest extends JerseyTest {
 
     @Provider
     @Produces(MediaType.APPLICATION_JSON)
-    public static class InfoMessageBodyWriter implements MessageBodyWriter<Info> {
+    public class InfoMessageBodyWriter implements MessageBodyWriter<Info> {
         @Override
         public boolean isWriteable(Class<?> type, Type genericType, Annotation[] annotations, MediaType mediaType) {
             return Info.class.isAssignableFrom(type);
