@@ -147,6 +147,7 @@ public class BazelCppRuleClasses {
         "cc_inc_library",
         "cc_library",
         "objc_library",
+        "experimental_objc_library",
         "cc_proto_library",
       };
 
