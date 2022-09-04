@@ -1,5 +1,6 @@
 package io.quarkus.vertx.http.deployment.devmode.console;
 
+import java.awt.*;
 import java.io.File;
 import java.io.IOException;
 import java.io.Reader;
@@ -464,8 +465,7 @@ public class DevConsoleProcessor {
         // Escape some characters for HTML templates
         builder.addResultMapper(new HtmlEscaper());
 
-        builder.strictRendering(false)
-                .addValueResolver(new ReflectionValueResolver())
+        builder.addValueResolver(new ReflectionValueResolver())
                 .addValueResolver(new JsonObjectValueResolver())
                 .addValueResolver(new MultiMapValueResolver())
                 .addValueResolver(ValueResolvers.rawResolver())
