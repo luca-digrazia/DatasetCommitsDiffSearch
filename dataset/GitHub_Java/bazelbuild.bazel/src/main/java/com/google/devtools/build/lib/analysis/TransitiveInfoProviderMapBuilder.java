@@ -14,8 +14,7 @@
 
 package com.google.devtools.build.lib.analysis;
 
-import com.google.devtools.build.lib.packages.ClassObjectConstructor;
-import com.google.devtools.build.lib.packages.SkylarkClassObject;
+import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.util.Preconditions;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -25,7 +24,8 @@ import javax.annotation.Nullable;
 public class TransitiveInfoProviderMapBuilder {
 
   // TODO(arielb): share the instance with the outerclass and copy on write instead?
-  private final LinkedHashMap<Object, Object> providers = new LinkedHashMap<>();
+  private final LinkedHashMap<Class<? extends TransitiveInfoProvider>, TransitiveInfoProvider>
+      providers = new LinkedHashMap();
 
   /**
    * Returns <tt>true</tt> if a {@link TransitiveInfoProvider} has been added for the class
@@ -35,47 +35,16 @@ public class TransitiveInfoProviderMapBuilder {
     return providers.containsKey(providerClass);
   }
 
-  public boolean contains(String legacyId) {
-    return providers.containsKey(legacyId);
-  }
-
-  public boolean contains(ClassObjectConstructor.Key key) {
-    return providers.containsKey(key);
-  }
-
-
   public <T extends TransitiveInfoProvider> TransitiveInfoProviderMapBuilder put(
       Class<? extends T> providerClass, T provider) {
     Preconditions.checkNotNull(providerClass);
     Preconditions.checkNotNull(provider);
-    Preconditions.checkState(!(provider instanceof SkylarkClassObject),
-        "Expose %s as native declared provider",
-        providerClass);
-
     // TODO(arielb): throw an exception if the providerClass is already present?
     // This is enforced by aspects but RuleConfiguredTarget presents violations
     // particularly around LicensesProvider
     providers.put(providerClass, provider);
     return this;
   }
-
-  public TransitiveInfoProviderMapBuilder put(SkylarkClassObject classObject) {
-    Preconditions.checkNotNull(classObject);
-    Preconditions.checkState(!(classObject instanceof TransitiveInfoProvider),
-        "Declared provider %s should not implement TransitiveInfoProvider",
-        classObject.getClass());
-
-    providers.put(classObject.getConstructor().getKey(), classObject);
-    return this;
-  }
-
-  public TransitiveInfoProviderMapBuilder put(String legacyKey, Object classObject) {
-    Preconditions.checkNotNull(legacyKey);
-    Preconditions.checkNotNull(classObject);
-    providers.put(legacyKey, classObject);
-    return this;
-  }
-
 
   public TransitiveInfoProviderMapBuilder add(TransitiveInfoProvider provider) {
     return put(TransitiveInfoProviderEffectiveClassHelper.get(provider), provider);
@@ -85,9 +54,9 @@ public class TransitiveInfoProviderMapBuilder {
     return addAll(Arrays.asList(providers));
   }
 
-  public TransitiveInfoProviderMapBuilder addAll(TransitiveInfoProviderMap other) {
-    for (int i = 0; i < other.getProviderCount(); ++i) {
-      providers.put(other.getProviderKeyAt(i), other.getProviderInstanceAt(i));
+  public TransitiveInfoProviderMapBuilder addAll(TransitiveInfoProviderMap providers) {
+    for (int i = 0; i < providers.getProviderCount(); ++i) {
+      add(providers.getProviderAt(i));
     }
     return this;
   }
@@ -104,12 +73,7 @@ public class TransitiveInfoProviderMapBuilder {
     return (P) providers.get(providerClass);
   }
 
-  @Nullable
-  public SkylarkClassObject getProvider(ClassObjectConstructor.Key key) {
-    return (SkylarkClassObject) providers.get(key);
-  }
-
   public TransitiveInfoProviderMap build() {
-    return new TransitiveInfoProviderMapImpl(providers);
+    return new TransitiveInfoProviderMapOffsetBased(ImmutableMap.copyOf(providers));
   }
 }
