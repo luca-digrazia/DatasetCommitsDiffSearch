@@ -766,8 +766,7 @@ public final class CcCompilationHelper {
       FeatureConfiguration featureConfiguration,
       RuleContext ruleContext,
       boolean generateHeaderTokensGroup,
-      boolean addSelfHeaderTokens,
-      boolean generateHiddenTopLevelGroup) {
+      boolean addSelfHeaderTokens) {
     ImmutableMap.Builder<String, NestedSet<Artifact>> outputGroupsBuilder = ImmutableMap.builder();
     outputGroupsBuilder.put(OutputGroupInfo.TEMP_FILES, ccCompilationOutputs.getTemps());
     boolean processHeadersInDependencies = cppConfiguration.processHeadersInDependencies();
@@ -787,35 +786,10 @@ public final class CcCompilationHelper {
               ccCompilationOutputs,
               addSelfHeaderTokens));
     }
-    if (generateHiddenTopLevelGroup) {
-      outputGroupsBuilder.put(
-          OutputGroupInfo.HIDDEN_TOP_LEVEL,
-          collectLibraryHiddenTopLevelArtifacts(
-              ruleContext, ccToolchain, ccCompilationOutputs, featureConfiguration));
-    }
     outputGroupsBuilder.putAll(
         CcCommon.createSaveFeatureStateArtifacts(
             cppConfiguration, featureConfiguration, ruleContext));
     return outputGroupsBuilder.build();
-  }
-
-  private static NestedSet<Artifact> collectLibraryHiddenTopLevelArtifacts(
-      RuleContext ruleContext,
-      CcToolchainProvider toolchain,
-      CcCompilationOutputs ccCompilationOutputs,
-      FeatureConfiguration featureConfiguration) {
-    // Ensure that we build all the dependencies, otherwise users may get confused.
-    NestedSetBuilder<Artifact> artifactsToForceBuilder = NestedSetBuilder.stableOrder();
-    CppConfiguration cppConfiguration = ruleContext.getFragment(CppConfiguration.class);
-    boolean processHeadersInDependencies = cppConfiguration.processHeadersInDependencies();
-    boolean usePic = toolchain.usePicForDynamicLibraries(cppConfiguration, featureConfiguration);
-    artifactsToForceBuilder.addTransitive(
-        ccCompilationOutputs.getFilesToCompile(processHeadersInDependencies, usePic));
-    for (OutputGroupInfo dep :
-        ruleContext.getPrerequisites("deps", OutputGroupInfo.STARLARK_CONSTRUCTOR)) {
-      artifactsToForceBuilder.addTransitive(dep.getOutputGroup(OutputGroupInfo.HIDDEN_TOP_LEVEL));
-    }
-    return artifactsToForceBuilder.build();
   }
 
   @Immutable
