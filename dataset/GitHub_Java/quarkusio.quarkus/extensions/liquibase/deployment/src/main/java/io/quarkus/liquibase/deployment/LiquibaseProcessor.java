@@ -9,7 +9,6 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -23,14 +22,12 @@ import io.quarkus.agroal.spi.JdbcDataSourceBuildItem;
 import io.quarkus.agroal.spi.JdbcDataSourceSchemaReadyBuildItem;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.SyntheticBeanBuildItem;
-import io.quarkus.arc.deployment.SyntheticBeansRuntimeInitBuildItem;
 import io.quarkus.arc.processor.DotNames;
 import io.quarkus.datasource.common.runtime.DataSourceUtil;
 import io.quarkus.deployment.Capability;
 import io.quarkus.deployment.Feature;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
-import io.quarkus.deployment.annotations.Consume;
 import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.CapabilityBuildItem;
@@ -46,13 +43,9 @@ import io.quarkus.deployment.util.ServiceUtil;
 import io.quarkus.liquibase.LiquibaseDataSource;
 import io.quarkus.liquibase.LiquibaseFactory;
 import io.quarkus.liquibase.runtime.LiquibaseBuildTimeConfig;
-import io.quarkus.liquibase.runtime.LiquibaseFactoryProducer;
+import io.quarkus.liquibase.runtime.LiquibaseContainerProducer;
 import io.quarkus.liquibase.runtime.LiquibaseRecorder;
-import liquibase.change.Change;
-import liquibase.change.core.CreateProcedureChange;
-import liquibase.change.core.CreateViewChange;
 import liquibase.change.core.LoadDataChange;
-import liquibase.change.core.SQLFileChange;
 import liquibase.changelog.ChangeLogParameters;
 import liquibase.changelog.ChangeSet;
 import liquibase.changelog.DatabaseChangeLog;
@@ -143,10 +136,7 @@ class LiquibaseProcessor {
                 liquibase.sqlgenerator.SqlGenerator.class,
                 liquibase.structure.DatabaseObject.class,
                 liquibase.hub.HubService.class)
-                .forEach(t -> addService(services, reflective, t, false));
-
-        // Register Precondition services, and the implementation class for reflection while also registering fields for reflection
-        addService(services, reflective, liquibase.precondition.Precondition.class, true);
+                .forEach(t -> addService(services, reflective, t));
 
         // liquibase XSD
         resource.produce(new NativeImageResourceBuildItem(
@@ -171,16 +161,14 @@ class LiquibaseProcessor {
     }
 
     private void addService(BuildProducer<ServiceProviderBuildItem> services,
-            BuildProducer<ReflectiveClassBuildItem> reflective, Class<?> serviceClass,
-            boolean shouldRegisterFieldForReflection) {
+            BuildProducer<ReflectiveClassBuildItem> reflective, Class<?> serviceClass) {
         try {
             String service = "META-INF/services/" + serviceClass.getName();
             Set<String> implementations = ServiceUtil.classNamesNamedIn(Thread.currentThread().getContextClassLoader(),
                     service);
             services.produce(new ServiceProviderBuildItem(serviceClass.getName(), implementations.toArray(new String[0])));
 
-            reflective.produce(new ReflectiveClassBuildItem(true, true, shouldRegisterFieldForReflection,
-                    implementations.toArray(new String[0])));
+            reflective.produce(new ReflectiveClassBuildItem(true, true, false, implementations.toArray(new String[0])));
         } catch (IOException ex) {
             throw new IllegalStateException(ex);
         }
@@ -193,14 +181,15 @@ class LiquibaseProcessor {
 
     @BuildStep
     @Record(ExecutionTime.RUNTIME_INIT)
-    void createBeans(LiquibaseRecorder recorder,
+    ServiceStartBuildItem createBeansAndStartActions(LiquibaseRecorder recorder,
             List<JdbcDataSourceBuildItem> jdbcDataSourceBuildItems,
             BuildProducer<AdditionalBeanBuildItem> additionalBeans,
-            BuildProducer<SyntheticBeanBuildItem> syntheticBeanBuildItemBuildProducer) {
+            BuildProducer<SyntheticBeanBuildItem> syntheticBeanBuildItemBuildProducer,
+            BuildProducer<JdbcDataSourceSchemaReadyBuildItem> schemaReadyBuildItem) {
 
         // make a LiquibaseContainerProducer bean
         additionalBeans
-                .produce(AdditionalBeanBuildItem.builder().addBeanClasses(LiquibaseFactoryProducer.class).setUnremovable()
+                .produce(AdditionalBeanBuildItem.builder().addBeanClasses(LiquibaseContainerProducer.class).setUnremovable()
                         .setDefaultScope(DotNames.SINGLETON).build());
         // add the @LiquibaseDataSource class otherwise it won't registered as a qualifier
         additionalBeans.produce(AdditionalBeanBuildItem.builder().addBeanClass(LiquibaseDataSource.class).build());
@@ -227,20 +216,13 @@ class LiquibaseProcessor {
 
             syntheticBeanBuildItemBuildProducer.produce(configurator.done());
         }
-    }
 
-    @BuildStep
-    @Record(ExecutionTime.RUNTIME_INIT)
-    @Consume(SyntheticBeansRuntimeInitBuildItem.class)
-    ServiceStartBuildItem startLiquibase(LiquibaseRecorder recorder,
-            List<JdbcDataSourceBuildItem> jdbcDataSourceBuildItems,
-            BuildProducer<JdbcDataSourceSchemaReadyBuildItem> schemaReadyBuildItem) {
         // will actually run the actions at runtime
         recorder.doStartActions();
 
         // once we are done running the migrations, we produce a build item indicating that the
         // schema is "ready"
-        schemaReadyBuildItem.produce(new JdbcDataSourceSchemaReadyBuildItem(getDataSourceNames(jdbcDataSourceBuildItems)));
+        schemaReadyBuildItem.produce(new JdbcDataSourceSchemaReadyBuildItem(dataSourceNames));
 
         return new ServiceStartBuildItem("liquibase");
     }
@@ -312,8 +294,9 @@ class LiquibaseProcessor {
                     result.add(changeSet.getFilePath());
 
                     changeSet.getChanges().stream()
-                            .map(this::extractChangeFile)
-                            .forEach(changeFile -> changeFile.ifPresent(result::add));
+                            .filter(c -> c instanceof LoadDataChange)
+                            .map(c -> ((LoadDataChange) c).getFile())
+                            .forEach(result::add);
 
                     // get all parents of the changeSet
                     DatabaseChangeLog parent = changeSet.getChangeLog();
@@ -331,19 +314,4 @@ class LiquibaseProcessor {
         return Collections.emptySet();
     }
 
-    private Optional<String> extractChangeFile(Change change) {
-        if (change instanceof LoadDataChange) {
-            return Optional.of(((LoadDataChange) change).getFile());
-        }
-        if (change instanceof SQLFileChange) {
-            return Optional.of(((SQLFileChange) change).getPath());
-        }
-        if (change instanceof CreateProcedureChange) {
-            return Optional.of(((CreateProcedureChange) change).getPath());
-        }
-        if (change instanceof CreateViewChange) {
-            return Optional.of(((CreateViewChange) change).getPath());
-        }
-        return Optional.empty();
-    }
 }
