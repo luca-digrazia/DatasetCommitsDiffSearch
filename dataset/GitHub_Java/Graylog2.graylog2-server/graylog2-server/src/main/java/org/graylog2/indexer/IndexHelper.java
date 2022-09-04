@@ -16,20 +16,20 @@
  */
 package org.graylog2.indexer;
 
-import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
-import org.elasticsearch.index.query.QueryBuilder;
-import org.elasticsearch.index.query.QueryBuilders;
+import org.elasticsearch.index.query.FilterBuilder;
+import org.elasticsearch.index.query.FilterBuilders;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.indexer.ranges.IndexRange;
 import org.graylog2.indexer.ranges.IndexRangeService;
+import org.graylog2.indexer.searches.timeranges.RelativeRange;
 import org.graylog2.indexer.searches.timeranges.TimeRange;
 import org.graylog2.plugin.Tools;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 
@@ -57,12 +57,12 @@ public class IndexHelper {
         return r;
     }
 
-    public static QueryBuilder getTimestampRangeFilter(TimeRange range) throws InvalidRangeFormatException {
+    public static FilterBuilder getTimestampRangeFilter(TimeRange range) throws InvalidRangeFormatException {
         if (range == null) {
             return null;
         }
 
-        return QueryBuilders.rangeQuery("timestamp")
+        return FilterBuilders.rangeFilter("timestamp")
                 .gte(Tools.buildElasticSearchTimeFormat(range.getFrom()))
                 .lte(Tools.buildElasticSearchTimeFormat(range.getTo()));
     }
@@ -89,26 +89,33 @@ public class IndexHelper {
     public static Set<String> determineAffectedIndices(IndexRangeService indexRangeService,
                                                        Deflector deflector,
                                                        TimeRange range) {
-        final Set<IndexRange> indexRanges = determineAffectedIndicesWithRanges(indexRangeService, deflector, range);
-        final ImmutableSet.Builder<String> indices = ImmutableSet.builder();
-        for (IndexRange indexRange : indexRanges) {
-            indices.add(indexRange.indexName());
+        Set<String> indices = Sets.newHashSet();
+
+        for (IndexRange indexRange : indexRangeService.getFrom((int) (range.getFrom().getMillis() / 1000))) {
+            indices.add(indexRange.getIndexName());
         }
 
-        return indices.build();
+        // Always include the most recent index in some cases.
+        final String targetIndex = deflector.getCurrentActualTargetIndex();
+        if (targetIndex != null && (indices.isEmpty() || range instanceof RelativeRange)) {
+            indices.add(targetIndex);
+        }
+
+        return indices;
     }
 
     public static Set<IndexRange> determineAffectedIndicesWithRanges(IndexRangeService indexRangeService,
                                                                      Deflector deflector,
                                                                      TimeRange range) {
-        final ImmutableSortedSet.Builder<IndexRange> indices = ImmutableSortedSet.orderedBy(IndexRange.COMPARATOR);
-        for (IndexRange indexRange : indexRangeService.find(range.getFrom(), range.getTo())) {
+        Set<IndexRange> indices = Sets.newTreeSet(IndexRange.COMPARATOR);
+
+        for (IndexRange indexRange : indexRangeService.getFrom((int) (range.getFrom().getMillis() / 1000))) {
             indices.add(indexRange);
         }
 
-        // Always include the deflector target
+        // Always include the most recent index in some cases.
         final String targetIndex = deflector.getCurrentActualTargetIndex();
-        if (targetIndex != null) {
+        if (targetIndex != null && (indices.isEmpty() || range instanceof RelativeRange)) {
             try {
                 final IndexRange deflectorIndexRange = indexRangeService.get(targetIndex);
                 indices.add(deflectorIndexRange);
@@ -117,6 +124,7 @@ public class IndexHelper {
             }
         }
 
-        return indices.build();
+        return indices;
     }
+
 }

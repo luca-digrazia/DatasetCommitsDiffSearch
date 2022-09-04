@@ -16,38 +16,19 @@
  */
 package org.graylog2.indexer.ranges;
 
-import com.fasterxml.jackson.annotation.JsonAutoDetect;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.google.auto.value.AutoValue;
+import org.graylog2.plugin.database.Persisted;
 import org.joda.time.DateTime;
 
 import java.util.Comparator;
 
-@AutoValue
-@JsonAutoDetect
-public abstract class IndexRange {
-    public static final Comparator<IndexRange> COMPARATOR = new IndexRangeComparator();
+public interface IndexRange extends Persisted {
+    Comparator<IndexRange> COMPARATOR = new IndexRangeComparator();
 
-    @JsonProperty
-    public abstract String indexName();
+    String getIndexName();
 
-    @JsonProperty
-    public abstract DateTime begin();
+    DateTime getCalculatedAt();
 
-    @JsonProperty
-    public abstract DateTime end();
+    DateTime getStart();
 
-    @JsonProperty
-    public abstract DateTime calculatedAt();
-
-    @JsonProperty("took_ms")
-    public abstract int calculationDuration();
-
-    public static IndexRange create(String indexName,
-                                    DateTime begin,
-                                    DateTime end,
-                                    DateTime calculatedAt,
-                                    int calculationDuration) {
-        return new AutoValue_IndexRange(indexName, begin, end, calculatedAt, calculationDuration);
-    }
+    int getCalculationTookMs();
 }

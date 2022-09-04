@@ -16,178 +16,114 @@
  */
 package org.graylog2.indexer.ranges;
 
-import com.github.rholder.retry.RetryException;
-import com.github.rholder.retry.Retryer;
-import com.github.rholder.retry.RetryerBuilder;
-import com.github.rholder.retry.StopStrategies;
-import com.github.rholder.retry.WaitStrategies;
 import com.google.common.base.Stopwatch;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedSet;
-import com.google.common.eventbus.AllowConcurrentEvents;
-import com.google.common.eventbus.EventBus;
-import com.google.common.eventbus.Subscribe;
 import com.google.common.primitives.Ints;
 import com.mongodb.BasicDBObject;
-import com.mongodb.BasicDBObjectBuilder;
+import com.mongodb.DBObject;
 import org.bson.types.ObjectId;
-import org.graylog2.bindings.providers.MongoJackObjectMapperProvider;
 import org.graylog2.database.MongoConnection;
 import org.graylog2.database.NotFoundException;
-import org.graylog2.events.ClusterEventBus;
-import org.graylog2.indexer.esplugin.IndexChangeMonitor;
-import org.graylog2.indexer.esplugin.IndicesClosedEvent;
-import org.graylog2.indexer.esplugin.IndicesDeletedEvent;
-import org.graylog2.indexer.esplugin.IndicesReopenedEvent;
-import org.graylog2.indexer.indices.Indices;
-import org.graylog2.indexer.searches.TimestampStats;
+import org.graylog2.database.PersistedServiceImpl;
+import org.graylog2.indexer.searches.Searches;
+import org.graylog2.plugin.Tools;
+import org.graylog2.plugin.database.ValidationException;
+import org.graylog2.shared.system.activities.Activity;
+import org.graylog2.shared.system.activities.ActivityWriter;
 import org.joda.time.DateTime;
-import org.joda.time.DateTimeZone;
-import org.mongojack.DBCursor;
-import org.mongojack.DBQuery;
-import org.mongojack.JacksonDBCollection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-import java.util.Iterator;
+import java.util.Comparator;
+import java.util.Map;
 import java.util.SortedSet;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
-public class MongoIndexRangeService implements IndexRangeService {
-    private static final Logger LOG = LoggerFactory.getLogger(MongoIndexRangeService.class);
-    private static final String COLLECTION_NAME = "index_ranges";
+import static com.google.common.base.MoreObjects.firstNonNull;
 
-    private final Indices indices;
-    private final JacksonDBCollection<MongoIndexRange, ObjectId> collection;
-    private final EventBus clusterEventBus;
+public class MongoIndexRangeService extends PersistedServiceImpl implements IndexRangeService {
+    private static final Logger LOG = LoggerFactory.getLogger(MongoIndexRangeService.class);
+
+    private final Searches searches;
+    private final ActivityWriter activityWriter;
 
     @Inject
-    public MongoIndexRangeService(MongoConnection mongoConnection,
-                                  MongoJackObjectMapperProvider objectMapperProvider,
-                                  Indices indices,
-                                  EventBus eventBus,
-                                  @ClusterEventBus EventBus clusterEventBus) {
-        this.indices = indices;
-        this.collection = JacksonDBCollection.wrap(
-                mongoConnection.getDatabase().getCollection(COLLECTION_NAME),
-                MongoIndexRange.class,
-                ObjectId.class,
-                objectMapperProvider.get());
-        this.clusterEventBus = clusterEventBus;
-
-        // This sucks. We need to bridge Elasticsearch's and our own Guice injector.
-        IndexChangeMonitor.setEventBus(eventBus);
-        eventBus.register(this);
-        clusterEventBus.register(this);
-
-        collection.createIndex(new BasicDBObject(MongoIndexRange.FIELD_INDEX_NAME, 1));
-        collection.createIndex(BasicDBObjectBuilder.start()
-                .add(MongoIndexRange.FIELD_BEGIN, 1)
-                .add(MongoIndexRange.FIELD_END, 1)
-                .get());
+    public MongoIndexRangeService(MongoConnection mongoConnection, ActivityWriter activityWriter, Searches searches) {
+        super(mongoConnection);
+        this.activityWriter = activityWriter;
+        this.searches = searches;
     }
 
     @Override
     public IndexRange get(String index) throws NotFoundException {
-        final DBQuery.Query query = DBQuery.and(
-                DBQuery.notExists("start"),
-                DBQuery.is(IndexRange.FIELD_INDEX_NAME, index));
-        final MongoIndexRange indexRange = collection.findOne(query);
-        if (indexRange == null) {
-            throw new NotFoundException("Index range for index <" + index + "> not found.");
+        DBObject dbo = findOne(MongoIndexRange.class, new BasicDBObject("index", index));
+
+        if (dbo == null)
+            throw new NotFoundException("Index " + index + " not found.");
+
+        return new MongoIndexRange((ObjectId) dbo.get("_id"), dbo.toMap());
+    }
+
+    @Override
+    public SortedSet<IndexRange> getFrom(int timestamp) {
+        final ImmutableSortedSet.Builder<IndexRange> ranges = ImmutableSortedSet.orderedBy(IndexRange.COMPARATOR);
+        final BasicDBObject query = new BasicDBObject("start", new BasicDBObject("$gte", timestamp));
+        for (DBObject dbo : query(MongoIndexRange.class, query)) {
+            ranges.add(new MongoIndexRange((ObjectId) dbo.get("_id"), dbo.toMap()));
         }
 
-        return indexRange;
+        return ranges.build();
     }
 
     @Override
-    public SortedSet<IndexRange> find(DateTime begin, DateTime end) {
-        final DBCursor<MongoIndexRange> indexRanges = collection.find(
-                DBQuery.and(
-                        DBQuery.notExists("start"),  // "start" has been used by the old index ranges in MongoDB
-                        DBQuery.lessThanEquals(IndexRange.FIELD_BEGIN, end.getMillis()),
-                        DBQuery.greaterThanEquals(IndexRange.FIELD_END, begin.getMillis())
-                )
-        );
-
-        return ImmutableSortedSet.copyOf(IndexRange.COMPARATOR, (Iterator<? extends IndexRange>) indexRanges);
+    public SortedSet<IndexRange> getFrom(DateTime dateTime) {
+        return getFrom(Ints.saturatedCast(dateTime.getMillis() / 1000L));
     }
 
     @Override
-    public SortedSet<IndexRange> findAll() {
-        return ImmutableSortedSet.copyOf(IndexRange.COMPARATOR, (Iterator<? extends IndexRange>) collection.find(DBQuery.notExists("start")));
+    public void destroy(String index) {
+        try {
+            final IndexRange range = get(index);
+            destroy(range);
+        } catch (NotFoundException e) {
+            return;
+        }
+
+        String x = "Removed range meta-information of [" + index + "]";
+        LOG.info(x);
+        activityWriter.write(new Activity(x, MongoIndexRange.class));
+    }
+
+    @Override
+    public IndexRange create(Map<String, Object> range) {
+        return new MongoIndexRange(range);
+    }
+
+    @Override
+    public void destroyAll() {
+        destroyAll(MongoIndexRange.class);
     }
 
     @Override
     public IndexRange calculateRange(String index) {
-        final Stopwatch sw = Stopwatch.createStarted();
-        final DateTime now = DateTime.now(DateTimeZone.UTC);
-        final TimestampStats stats = indices.timestampStatsOfIndex(index);
-        final int duration = Ints.saturatedCast(sw.stop().elapsed(TimeUnit.MILLISECONDS));
+        final Stopwatch x = Stopwatch.createStarted();
+        final DateTime timestamp = firstNonNull(searches.findNewestMessageTimestampOfIndex(index), Tools.iso8601());
+        final int rangeEnd = Ints.saturatedCast(timestamp.getMillis() / 1000L);
+        final int took = Ints.saturatedCast(x.stop().elapsed(TimeUnit.MILLISECONDS));
 
-        LOG.info("Calculated range of [{}] in [{}ms].", index, duration);
-        return MongoIndexRange.create(index, stats.min(), stats.max(), now, duration);
+        LOG.info("Calculated range of [{}] in [{}ms].", index, took);
+
+        return create(ImmutableMap.<String, Object>of(
+                "index", index,
+                "start", rangeEnd, // FIXME The name of the attribute is massively misleading and should be rectified some time
+                "calculated_at", Tools.getUTCTimestamp(),
+                "took_ms", took));
     }
 
     @Override
-    public void save(IndexRange indexRange) {
-        collection.remove(DBQuery.in(IndexRange.FIELD_INDEX_NAME, indexRange.indexName()));
-        collection.save(MongoIndexRange.create(indexRange));
-
-        clusterEventBus.post(IndexRangeUpdatedEvent.create(indexRange.indexName()));
-    }
-
-    @Subscribe
-    @AllowConcurrentEvents
-    public void handleIndexDeletion(IndicesDeletedEvent event) {
-        for (String index : event.indices()) {
-            LOG.debug("Index \"{}\" has been deleted. Removing index range.");
-            collection.remove(DBQuery.in(IndexRange.FIELD_INDEX_NAME, index));
-        }
-    }
-
-    @Subscribe
-    @AllowConcurrentEvents
-    public void handleIndexClosing(IndicesClosedEvent event) {
-        for (String index : event.indices()) {
-            LOG.debug("Index \"{}\" has been closed. Removing index range.");
-            collection.remove(DBQuery.in(IndexRange.FIELD_INDEX_NAME, index));
-        }
-    }
-
-    @Subscribe
-    @AllowConcurrentEvents
-    public void handleIndexReopening(IndicesReopenedEvent event) {
-        for (final String index : event.indices()) {
-            LOG.debug("Index \"{}\" has been reopened. Calculating index range.", index);
-
-            indices.waitForRecovery(index);
-
-            final Retryer<IndexRange> retryer = RetryerBuilder.<IndexRange>newBuilder()
-                    .retryIfException()
-                    .withWaitStrategy(WaitStrategies.exponentialWait())
-                    .withStopStrategy(StopStrategies.stopAfterDelay(5, TimeUnit.MINUTES))
-                    .build();
-
-            final IndexRange indexRange;
-            try {
-                indexRange = retryer.call(new Callable<IndexRange>() {
-                    @Override
-                    public IndexRange call() throws Exception {
-                        return calculateRange(index);
-                    }
-                });
-            } catch (ExecutionException e) {
-                LOG.error("Couldn't calculate index range for index \"" + index + "\"", e.getCause());
-                throw new RuntimeException("Couldn't calculate index range for index \"" + index + "\"", e);
-            } catch (RetryException e) {
-                LOG.error("Couldn't calculate index range for index \"" + index + "\"", e);
-                throw new RuntimeException("Couldn't calculate index range for index \"" + index + "\"", e);
-            }
-
-            save(indexRange);
-        }
+    public void save(IndexRange indexRange) throws ValidationException {
+        super.save(indexRange);
     }
 }
