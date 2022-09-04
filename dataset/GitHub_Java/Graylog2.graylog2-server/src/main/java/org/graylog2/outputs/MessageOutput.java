@@ -20,16 +20,15 @@
 
 package org.graylog2.outputs;
 
+import java.util.List;
 import org.graylog2.GraylogServer;
 import org.graylog2.logmessage.LogMessage;
 
 /**
- * MessageOutput.java: 29.04.2012 21:23:18
- *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public interface MessageOutput {
 
-    public void write(LogMessage msg, GraylogServer server) throws Exception;
+    void write(List<LogMessage> msg, GraylogServer server) throws Exception;
 
 }
