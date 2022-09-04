@@ -54,6 +54,20 @@ public class ArcConfig {
     public boolean autoInjectFields;
 
     /**
+     * If set to true, Arc will transform the bytecode of beans containing methods that need to be proxyable
+     * but have been declared as final. The transformation is simply a matter of removing final.
+     * This ensures that a proxy/subclass can be created properly.
+     * If the value is set to false, then an exception is thrown at build time indicating
+     * that a proxy could not be created because a method was final.
+     * 
+     * @deprecated This config property is ignored and will be removed at some point post Quarkus 1.4
+     * @see #transformUnproxyableClasses
+     */
+    @Deprecated
+    @ConfigItem(defaultValue = "true")
+    public boolean removeFinalForProxyableMethods;
+
+    /**
      * If set to true, the bytecode of unproxyable beans will be transformed. This ensures that a proxy/subclass
      * can be created properly. If the value is set to false, then an exception is thrown at build time indicating that a
      * subclass/proxy could not be created.
@@ -79,20 +93,11 @@ public class ArcConfig {
      * <li>a package name with suffix {@code .**}, i.e. {@code org.acme.**}, matches a package that starts with the value</li>
      * </ul>
      * Each element value is used to match an alternative bean class, an alternative stereotype annotation type or a bean class
-     * that declares an alternative producer. If any value matches then the priority of {@link Integer#MAX_VALUE} is used for
-     * the relevant bean. The priority declared via {@link javax.annotation.Priority} or
-     * {@link io.quarkus.arc.AlternativePriority} is overriden.
+     * that declares an alternative producer. If matched the priority of {@link Integer#MAX_VALUE} is used for the relevant
+     * bean.
      */
     @ConfigItem
     public Optional<List<String>> selectedAlternatives;
-
-    /**
-     * If set to true then {@code javax.enterprise.inject.Produces} is automatically added to all methods that are
-     * annotated with a scope annotation, a stereotype or a qualifier, and are not annotated with {@code Inject} or
-     * {@code Produces}, and no parameter is annotated with {@code Disposes}, {@code Observes} or {@code ObservesAsync}.
-     */
-    @ConfigItem(defaultValue = "true")
-    public boolean autoProducerMethods;
 
     public final boolean isRemoveUnusedBeansFieldValid() {
         return ALLOWED_REMOVE_UNUSED_BEANS_VALUES.contains(removeUnusedBeans.toLowerCase());

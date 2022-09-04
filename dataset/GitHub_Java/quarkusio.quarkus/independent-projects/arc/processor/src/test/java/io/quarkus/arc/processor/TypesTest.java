@@ -32,7 +32,7 @@ public class TypesTest {
         DotName producerName = DotName.createSimple(Producer.class.getName());
         ClassInfo fooClass = index.getClassByName(fooName);
         Map<ClassInfo, Map<TypeVariable, Type>> resolvedTypeVariables = new HashMap<>();
-        BeanDeployment dummyDeployment = BeanProcessor.builder().setBeanArchiveIndex(index).build().getBeanDeployment();
+        BeanDeployment dummyDeployment = dummyDeployment(index);
 
         // Baz, Foo<String>, Object
         Set<Type> bazTypes = Types.getTypeClosure(index.getClassByName(bazName), null,
@@ -74,6 +74,13 @@ public class TypesTest {
         Set<Type> producerFieldTypes = Types.getProducerFieldTypeClosure(producerField,
                 dummyDeployment);
         assertEquals(1, producerFieldTypes.size());
+    }
+
+    BeanDeployment dummyDeployment(IndexView index) {
+        return new BeanDeployment(index, Collections.emptyList(), Collections.emptyList(), Collections.emptyList(),
+                Collections.emptyList(),
+                Collections.emptyList(), null,
+                false, Collections.emptyList(), Collections.emptyMap(), Collections.emptyList(), false, false, null);
     }
 
     static class Foo<T> {

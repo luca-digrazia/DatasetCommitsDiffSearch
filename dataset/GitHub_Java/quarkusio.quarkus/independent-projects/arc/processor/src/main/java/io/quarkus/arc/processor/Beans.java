@@ -262,7 +262,7 @@ final class Beans {
             if (alternativePriority == null) {
                 // after all attempts, priority is still null, bean will be ignored
                 LOGGER.infof(
-                        "Ignoring producer method %s - declared as an @Alternative but not selected by @Priority, @AlternativePriority or quarkus.arc.selected-alternatives",
+                        "Ignoring producer method %s - declared as an @Alternative but not selected by @Priority, @AlernativePriority or quarkus.arc.selected-alternatives",
                         declaringBean.getTarget().get().asClass().name() + "#" + producerMethod.name());
                 return null;
             }
@@ -360,7 +360,7 @@ final class Beans {
             // after all attempts, priority is still null
             if (alternativePriority == null) {
                 LOGGER.debugf(
-                        "Ignoring producer field %s - declared as an @Alternative but not selected by @Priority, @AlternativePriority or quarkus.arc.selected-alternatives",
+                        "Ignoring producer field %s - declared as an @Alternative but not selected by @Priority, @AlernativePriority or quarkus.arc.selected-alternatives",
                         producerField);
                 return null;
 
@@ -558,24 +558,10 @@ final class Beans {
 
     private static int compareAlternativeBeans(BeanInfo bean1, BeanInfo bean2) {
         // The highest priority wins
-        Integer priority1, priority2;
-
-        priority2 = bean2.getAlternativePriority();
-        if (priority2 == null) {
-            priority2 = bean2.getDeclaringBean().getAlternativePriority();
-        }
-
-        priority1 = bean1.getAlternativePriority();
-        if (priority1 == null) {
-            priority1 = bean1.getDeclaringBean().getAlternativePriority();
-        }
-
-        if (priority2 == null) {
-            return priority1 == null ? 0 : -1;
-        } else if (priority1 == null) {
-            return 1;
-        }
-
+        Integer priority2 = bean2.getDeclaringBean() != null ? bean2.getDeclaringBean().getAlternativePriority()
+                : bean2.getAlternativePriority();
+        Integer priority1 = bean1.getDeclaringBean() != null ? bean1.getDeclaringBean().getAlternativePriority()
+                : bean1.getAlternativePriority();
         return priority2.compareTo(priority1);
     }
 

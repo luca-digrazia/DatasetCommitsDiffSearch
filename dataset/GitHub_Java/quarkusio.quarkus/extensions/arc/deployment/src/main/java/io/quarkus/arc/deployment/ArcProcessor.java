@@ -16,8 +16,6 @@ import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-import javax.enterprise.context.ApplicationScoped;
-
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.ClassInfo;
@@ -62,13 +60,11 @@ import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
 import io.quarkus.deployment.builditem.ApplicationClassPredicateBuildItem;
 import io.quarkus.deployment.builditem.BytecodeTransformerBuildItem;
 import io.quarkus.deployment.builditem.CapabilityBuildItem;
-import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.ExecutorBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
 import io.quarkus.deployment.builditem.GeneratedResourceBuildItem;
 import io.quarkus.deployment.builditem.LaunchModeBuildItem;
-import io.quarkus.deployment.builditem.LiveReloadBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
 import io.quarkus.deployment.builditem.TestClassPredicateBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
@@ -76,8 +72,6 @@ import io.quarkus.deployment.builditem.nativeimage.ReflectiveFieldBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveMethodBuildItem;
 import io.quarkus.runner.bootstrap.BootstrapDebug;
 import io.quarkus.runtime.LaunchMode;
-import io.quarkus.runtime.QuarkusApplication;
-import io.quarkus.runtime.annotations.QuarkusMain;
 
 /**
  * This class contains build steps that trigger various phases of the bean processing.
@@ -102,16 +96,6 @@ public class ArcProcessor {
     @BuildStep
     CapabilityBuildItem capability() {
         return new CapabilityBuildItem(Capabilities.CDI_ARC);
-    }
-
-    @BuildStep
-    AdditionalBeanBuildItem quarkusApplication(CombinedIndexBuildItem combinedIndexBuildItem) {
-        return AdditionalBeanBuildItem.builder().setUnremovable()
-                .setDefaultScope(DotName.createSimple(ApplicationScoped.class.getName()))
-                .addBeanClasses(combinedIndexBuildItem.getIndex()
-                        .getAllKnownImplementors(DotName.createSimple(QuarkusApplication.class.getName())).stream()
-                        .map(s -> s.name().toString()).toArray(String[]::new))
-                .build();
     }
 
     // PHASE 1 - build BeanProcessor, register custom contexts
@@ -372,7 +356,6 @@ public class ArcProcessor {
             BuildProducer<ReflectiveMethodBuildItem> reflectiveMethods,
             BuildProducer<ReflectiveFieldBuildItem> reflectiveFields,
             BuildProducer<GeneratedClassBuildItem> generatedClass,
-            LiveReloadBuildItem liveReloadBuildItem,
             BuildProducer<GeneratedResourceBuildItem> generatedResource) throws Exception {
 
         for (ValidationErrorBuildItem validationError : validationErrors) {
@@ -383,11 +366,6 @@ public class ArcProcessor {
 
         BeanProcessor beanProcessor = validationPhase.getBeanProcessor();
         beanProcessor.processValidationErrors(validationPhase.getContext());
-        ExistingClasses existingClasses = liveReloadBuildItem.getContextObject(ExistingClasses.class);
-        if (existingClasses == null) {
-            existingClasses = new ExistingClasses();
-            liveReloadBuildItem.setContextObject(ExistingClasses.class, existingClasses);
-        }
 
         long start = System.currentTimeMillis();
         List<ResourceOutput.Resource> resources = beanProcessor.generateResources(new ReflectionRegistration() {
@@ -400,7 +378,7 @@ public class ArcProcessor {
             public void registerField(FieldInfo fieldInfo) {
                 reflectiveFields.produce(new ReflectiveFieldBuildItem(fieldInfo));
             }
-        }, existingClasses.existingClasses);
+        });
         for (ResourceOutput.Resource resource : resources) {
             switch (resource.getType()) {
                 case JAVA_CLASS:
@@ -408,9 +386,6 @@ public class ArcProcessor {
                             resource.getFullyQualifiedName());
                     generatedClass.produce(new GeneratedClassBuildItem(resource.isApplicationClass(), resource.getName(),
                             resource.getData(), resource.getSource()));
-                    if (!resource.isApplicationClass()) {
-                        existingClasses.existingClasses.add(resource.getName());
-                    }
                     break;
                 case SERVICE_PROVIDER:
                     generatedResource.produce(
@@ -509,11 +484,6 @@ public class ArcProcessor {
         return predicates;
     }
 
-    @BuildStep
-    BeanDefiningAnnotationBuildItem quarkusMain() {
-        return new BeanDefiningAnnotationBuildItem(DotName.createSimple(QuarkusMain.class.getName()), DotNames.SINGLETON);
-    }
-
     private abstract static class AbstractCompositeApplicationClassesPredicate<T> implements Predicate<T> {
 
         private final IndexView applicationClassesIndex;
@@ -557,13 +527,5 @@ public class ArcProcessor {
             }
             return false;
         }
-    }
-
-    /**
-     * This tracks beans etc from the platform that have already been generated. There is no need to spend time
-     * generating them again on a hot reload
-     */
-    static class ExistingClasses {
-        Set<String> existingClasses = new HashSet<>();
     }
 }
