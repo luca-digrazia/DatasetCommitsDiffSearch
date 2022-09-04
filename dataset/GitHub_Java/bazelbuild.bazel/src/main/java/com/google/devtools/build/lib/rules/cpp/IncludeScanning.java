@@ -73,7 +73,6 @@ public class IncludeScanning implements IncludeProcessing {
     // really mess up #include_next directives.
     Set<PathFragment> includeDirs = new LinkedHashSet<>(action.getIncludeDirs());
     List<PathFragment> quoteIncludeDirs = action.getQuoteIncludeDirs();
-    List<PathFragment> frameworkIncludeDirs = action.getFrameworkIncludeDirs();
     List<String> cmdlineIncludes = includeScanningHeaderData.getCmdlineIncludes();
 
     includeDirs.addAll(includeScanningHeaderData.getSystemIncludeDirs());
@@ -87,8 +86,7 @@ public class IncludeScanning implements IncludeProcessing {
     }
 
     List<PathFragment> includeDirList = ImmutableList.copyOf(includeDirs);
-    IncludeScanner scanner =
-        includeScannerSupplier.scannerFor(quoteIncludeDirs, includeDirList, frameworkIncludeDirs);
+    IncludeScanner scanner = includeScannerSupplier.scannerFor(quoteIncludeDirs, includeDirList);
 
     Artifact mainSource = action.getMainIncludeScannerSource();
     Collection<Artifact> sources = action.getIncludeScannerSources();
@@ -142,13 +140,7 @@ public class IncludeScanning implements IncludeProcessing {
             "illegal absolute path to include file: "
                 + actionExecutionContext.getInputPath(included));
       }
-      if (included.hasParent() && included.getParent().isTreeArtifact()) {
-        // Note that this means every file in the TreeArtifact becomes an input to the action, and
-        // we have spurious rebuilds if non-included files change.
-        inputs.add(included.getParent());
-      } else {
-        inputs.add(included);
-      }
+      inputs.add(included);
     }
     return inputs.build();
   }
