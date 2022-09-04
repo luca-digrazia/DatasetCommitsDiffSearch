@@ -21,7 +21,6 @@ import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
 import com.google.devtools.build.lib.skylarkbuildapi.SkylarkActionFactoryApi;
 import com.google.devtools.build.lib.skylarkbuildapi.SkylarkRuleContextApi;
 import com.google.devtools.build.lib.skylarkbuildapi.core.ProviderApi;
-import com.google.devtools.build.lib.skylarkbuildapi.platform.ConstraintValueInfoApi;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.ParamType;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
@@ -29,6 +28,7 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics.FlagIdentifier;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.syntax.StarlarkValue;
@@ -40,8 +40,7 @@ public interface JavaCommonApi<
         JavaInfoT extends JavaInfoApi<FileT>,
         JavaToolchainT extends JavaToolchainSkylarkApiProviderApi,
         JavaRuntimeT extends JavaRuntimeInfoApi,
-        ConstraintValueT extends ConstraintValueInfoApi,
-        SkylarkRuleContextT extends SkylarkRuleContextApi<ConstraintValueT>,
+        SkylarkRuleContextT extends SkylarkRuleContextApi,
         SkylarkActionFactoryT extends SkylarkActionFactoryApi>
     extends StarlarkValue {
 
@@ -266,13 +265,15 @@ public interface JavaCommonApi<
             allowedTypes = {@ParamType(type = JavaToolchainSkylarkApiProviderApi.class)},
             doc = "A JavaToolchainInfo to used to find the ijar tool."),
       },
+      useStarlarkSemantics = true,
       useLocation = true)
   FileApi runIjar(
       SkylarkActionFactoryT actions,
       FileT jar,
       Object targetLabel,
       JavaToolchainT javaToolchain,
-      Location location)
+      Location location,
+      StarlarkSemantics semantics)
       throws EvalException;
 
   @SkylarkCallable(
@@ -314,13 +315,15 @@ public interface JavaCommonApi<
             allowedTypes = {@ParamType(type = JavaToolchainSkylarkApiProviderApi.class)},
             doc = "A JavaToolchainInfo to used to find the stamp_jar tool."),
       },
+      useStarlarkSemantics = true,
       useLocation = true)
   FileApi stampJar(
       SkylarkActionFactoryT actions,
       FileT jar,
       Label targetLabel,
       JavaToolchainT javaToolchain,
-      Location location)
+      Location location,
+      StarlarkSemantics semantics)
       throws EvalException;
 
   @SkylarkCallable(
@@ -374,6 +377,7 @@ public interface JavaCommonApi<
             doc = "A JavaRuntimeInfo to be used for packing sources."),
       },
       allowReturnNones = true,
+      useStarlarkSemantics = true,
       useLocation = true)
   FileApi packSources(
       SkylarkActionFactoryT actions,
@@ -382,7 +386,8 @@ public interface JavaCommonApi<
       Sequence<?> sourceJars, // <FileT> expected.
       JavaToolchainT javaToolchain,
       JavaRuntimeT hostJavabase,
-      Location location)
+      Location location,
+      StarlarkSemantics semantics)
       throws EvalException;
 
   @SkylarkCallable(

@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.skylarkbuildapi.java;
 
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
 import com.google.devtools.build.lib.skylarkbuildapi.core.ProviderApi;
 import com.google.devtools.build.lib.skylarkbuildapi.core.StructApi;
@@ -235,6 +236,7 @@ public interface JavaInfoApi<FileT extends FileApi> extends StructApi {
                       + " tools can use this information for more efficient processing."),
         },
         selfCall = true,
+        useLocation = true,
         useStarlarkThread = true)
     @SkylarkConstructor(objectType = JavaInfoApi.class, receiverNameForDoc = "JavaInfo")
     JavaInfoApi<?> javaInfo(
@@ -246,6 +248,7 @@ public interface JavaInfoApi<FileT extends FileApi> extends StructApi {
         Sequence<?> runtimeDeps,
         Sequence<?> exports,
         Object jdepsApi,
+        Location loc,
         StarlarkThread thread)
         throws EvalException;
   }
