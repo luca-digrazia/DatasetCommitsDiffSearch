@@ -15,7 +15,7 @@
 package com.google.devtools.build.lib.buildeventservice;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.mockito.Matchers.any;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import com.google.devtools.build.lib.buildeventservice.client.BuildEventServiceGrpcClient;
@@ -94,7 +94,7 @@ public class BuildEventServiceGrpcClientTest {
               responseObserver.onCompleted();
               return NULL_OBSERVER;
             });
-    assertThat(grpcClient.openStream(ack -> {}).get()).isEqualTo(Status.OK);
+    assertThat(grpcClient.openStream(ack -> {}).getStatus().get()).isEqualTo(Status.OK);
   }
 
   @Test
@@ -110,6 +110,6 @@ public class BuildEventServiceGrpcClientTest {
               responseObserver.onError(failure);
               return NULL_OBSERVER;
             });
-    assertThat(grpcClient.openStream(ack -> {}).get()).isEqualTo(Status.INTERNAL);
+    assertThat(grpcClient.openStream(ack -> {}).getStatus().get()).isEqualTo(Status.INTERNAL);
   }
 }

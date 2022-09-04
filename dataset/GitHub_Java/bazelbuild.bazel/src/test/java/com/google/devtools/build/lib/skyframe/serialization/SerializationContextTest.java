@@ -15,13 +15,13 @@
 package com.google.devtools.build.lib.skyframe.serialization;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.when;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableClassToInstanceMap;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec.MemoizationStrategy;
 import com.google.devtools.build.lib.skyframe.serialization.testutils.TestUtils;
 import com.google.protobuf.CodedInputStream;
@@ -43,7 +43,7 @@ public class SerializationContextTest {
     ObjectCodecRegistry registry = Mockito.mock(ObjectCodecRegistry.class);
     CodedOutputStream codedOutputStream = Mockito.mock(CodedOutputStream.class);
     SerializationContext serializationContext =
-        new SerializationContext(registry, ImmutableClassToInstanceMap.of());
+        new SerializationContext(registry, ImmutableMap.of());
     serializationContext.serialize(null, codedOutputStream);
     Mockito.verify(codedOutputStream).writeSInt32NoTag(0);
     Mockito.verifyZeroInteractions(registry);
@@ -55,7 +55,7 @@ public class SerializationContextTest {
     when(registry.maybeGetTagForConstant(ArgumentMatchers.any())).thenReturn(1);
     CodedOutputStream codedOutputStream = Mockito.mock(CodedOutputStream.class);
     SerializationContext serializationContext =
-        new SerializationContext(registry, ImmutableClassToInstanceMap.of());
+        new SerializationContext(registry, ImmutableMap.of());
     Object constant = new Object();
     serializationContext.serialize(constant, codedOutputStream);
     Mockito.verify(codedOutputStream).writeSInt32NoTag(1);
@@ -71,8 +71,7 @@ public class SerializationContextTest {
     when(registry.maybeGetTagForConstant(ArgumentMatchers.any())).thenReturn(null);
     when(registry.getCodecDescriptorForObject("string")).thenReturn(codecDescriptor);
     CodedOutputStream codedOutputStream = Mockito.mock(CodedOutputStream.class);
-    SerializationContext underTest =
-        new SerializationContext(registry, ImmutableClassToInstanceMap.of());
+    SerializationContext underTest = new SerializationContext(registry, ImmutableMap.of());
     underTest.serialize("string", codedOutputStream);
     Mockito.verify(codedOutputStream).writeSInt32NoTag(1);
     Mockito.verify(registry).maybeGetTagForConstant("string");
@@ -86,7 +85,7 @@ public class SerializationContextTest {
     ObjectCodecRegistry registry = Mockito.mock(ObjectCodecRegistry.class);
     CodedOutputStream codedOutputStream = Mockito.mock(CodedOutputStream.class);
     SerializationContext serializationContext =
-        new SerializationContext(registry, ImmutableClassToInstanceMap.of());
+        new SerializationContext(registry, ImmutableMap.of());
     serializationContext.getMemoizingContext().serialize(null, codedOutputStream);
     Mockito.verify(codedOutputStream).writeSInt32NoTag(0);
     Mockito.verifyZeroInteractions(registry);
@@ -98,7 +97,7 @@ public class SerializationContextTest {
     when(registry.maybeGetTagForConstant(ArgumentMatchers.any())).thenReturn(1);
     CodedOutputStream codedOutputStream = Mockito.mock(CodedOutputStream.class);
     SerializationContext serializationContext =
-        new SerializationContext(registry, ImmutableClassToInstanceMap.of());
+        new SerializationContext(registry, ImmutableMap.of());
     Object constant = new Object();
     serializationContext.getMemoizingContext().serialize(constant, codedOutputStream);
     Mockito.verify(codedOutputStream).writeSInt32NoTag(1);
@@ -119,7 +118,7 @@ public class SerializationContextTest {
     when(registry.getCodecDescriptorForObject("string")).thenReturn(codecDescriptor);
     CodedOutputStream codedOutputStream = Mockito.mock(CodedOutputStream.class);
     SerializationContext underTest =
-        new SerializationContext(registry, ImmutableClassToInstanceMap.of()).getMemoizingContext();
+        new SerializationContext(registry, ImmutableMap.of()).getMemoizingContext();
     underTest.serialize("string", codedOutputStream);
     Mockito.verify(codedOutputStream).writeSInt32NoTag(1);
     Mockito.verify(registry).maybeGetTagForConstant("string");
@@ -145,8 +144,7 @@ public class SerializationContextTest {
   @Test
   public void explicitlyAllowedClassCheck() throws SerializationException {
     SerializationContext underTest =
-        new SerializationContext(
-                ObjectCodecRegistry.newBuilder().build(), ImmutableClassToInstanceMap.of())
+        new SerializationContext(ObjectCodecRegistry.newBuilder().build(), ImmutableMap.of())
             .getMemoizingContext();
     underTest.addExplicitlyAllowedClass(String.class);
     underTest.checkClassExplicitlyAllowed(String.class, "str");
@@ -162,8 +160,7 @@ public class SerializationContextTest {
   @Test
   public void explicitlyAllowedClassCheckFailsIfNotMemoizing() {
     SerializationContext underTest =
-        new SerializationContext(
-            ObjectCodecRegistry.newBuilder().build(), ImmutableClassToInstanceMap.of());
+        new SerializationContext(ObjectCodecRegistry.newBuilder().build(), ImmutableMap.of());
     assertThrows(
         SerializationException.class, () -> underTest.addExplicitlyAllowedClass(String.class));
   }
