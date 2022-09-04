@@ -14,7 +14,7 @@
 package com.google.devtools.build.lib.collect;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.common.collect.Maps;
 import com.google.common.testing.NullPointerTester;
@@ -22,6 +22,7 @@ import java.io.Serializable;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Map.Entry;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -107,29 +108,41 @@ public class ImmutableSortedKeyMapTest {
   @Test
   public void builderPutNullKey() {
     ImmutableSortedKeyMap.Builder<String, Integer> builder = new ImmutableSortedKeyMap.Builder<>();
-    assertThrows(NullPointerException.class, () -> builder.put(null, 1));
+    try {
+      builder.put(null, 1);
+      fail();
+    } catch (NullPointerException expected) {
+    }
   }
 
   @Test
   public void builderPutNullValue() {
     ImmutableSortedKeyMap.Builder<String, Integer> builder = new ImmutableSortedKeyMap.Builder<>();
-    assertThrows(NullPointerException.class, () -> builder.put("one", null));
+    try {
+      builder.put("one", null);
+      fail();
+    } catch (NullPointerException expected) {
+    }
   }
 
   @Test
   public void builderPutNullKeyViaPutAll() {
     ImmutableSortedKeyMap.Builder<String, Integer> builder = new ImmutableSortedKeyMap.Builder<>();
-    assertThrows(
-        NullPointerException.class,
-        () -> builder.putAll(Collections.<String, Integer>singletonMap(null, 1)));
+    try {
+      builder.putAll(Collections.<String, Integer>singletonMap(null, 1));
+      fail();
+    } catch (NullPointerException expected) {
+    }
   }
 
   @Test
   public void builderPutNullValueViaPutAll() {
     ImmutableSortedKeyMap.Builder<String, Integer> builder = new ImmutableSortedKeyMap.Builder<>();
-    assertThrows(
-        NullPointerException.class,
-        () -> builder.putAll(Collections.<String, Integer>singletonMap("one", null)));
+    try {
+      builder.putAll(Collections.<String, Integer>singletonMap("one", null));
+      fail();
+    } catch (NullPointerException expected) {
+    }
   }
 
   @Test
@@ -144,16 +157,32 @@ public class ImmutableSortedKeyMapTest {
 
   @Test
   public void ofNullKey() {
-    assertThrows(NullPointerException.class, () -> ImmutableSortedKeyMap.of((String) null, 1));
+    try {
+      ImmutableSortedKeyMap.of((String) null, 1);
+      fail();
+    } catch (NullPointerException expected) {
+    }
 
-    assertThrows(NullPointerException.class, () -> ImmutableSortedKeyMap.of("one", 1, null, 2));
+    try {
+      ImmutableSortedKeyMap.of("one", 1, null, 2);
+      fail();
+    } catch (NullPointerException expected) {
+    }
   }
 
   @Test
   public void ofNullValue() {
-    assertThrows(NullPointerException.class, () -> ImmutableSortedKeyMap.of("one", null));
+    try {
+      ImmutableSortedKeyMap.of("one", null);
+      fail();
+    } catch (NullPointerException expected) {
+    }
 
-    assertThrows(NullPointerException.class, () -> ImmutableSortedKeyMap.of("one", 1, "two", null));
+    try {
+      ImmutableSortedKeyMap.of("one", 1, "two", null);
+      fail();
+    } catch (NullPointerException expected) {
+    }
   }
 
   @Test
@@ -206,7 +235,7 @@ public class ImmutableSortedKeyMapTest {
       Object... alternatingKeysAndValues) {
     assertThat(alternatingKeysAndValues.length / 2).isEqualTo(map.size());
     int i = 0;
-    for (Map.Entry<K, V> entry : map.entrySet()) {
+    for (Entry<K, V> entry : map.entrySet()) {
       assertThat(entry.getKey()).isEqualTo(alternatingKeysAndValues[i++]);
       assertThat(entry.getValue()).isEqualTo(alternatingKeysAndValues[i++]);
     }

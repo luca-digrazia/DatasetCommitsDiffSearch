@@ -14,18 +14,15 @@
 
 package com.google.devtools.build.lib.buildeventstream.transports;
 
-import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Strings.isNullOrEmpty;
 
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.buildeventstream.BuildEventArtifactUploader;
-import com.google.devtools.build.lib.buildeventstream.BuildEventArtifactUploaderFactoryMap;
-import com.google.devtools.build.lib.buildeventstream.BuildEventProtocolOptions;
 import com.google.devtools.build.lib.buildeventstream.BuildEventTransport;
-import com.google.devtools.build.lib.util.AbruptExitException;
-import com.google.devtools.common.options.OptionsParsingResult;
+import com.google.devtools.build.lib.buildeventstream.PathConverter;
+import com.google.devtools.build.lib.vfs.Path;
 import java.io.IOException;
-import java.util.function.Consumer;
+import java.net.URI;
+import java.net.URISyntaxException;
 
 /** Factory used to create a Set of BuildEventTransports from BuildEventStreamOptions. */
 public enum BuildEventTransportFactory {
@@ -36,19 +33,11 @@ public enum BuildEventTransportFactory {
     }
 
     @Override
-    protected BuildEventTransport create(
-        BuildEventStreamOptions options,
-        BuildEventProtocolOptions protocolOptions,
-        BuildEventArtifactUploader uploader,
-        Consumer<AbruptExitException> exitFunc)
-        throws IOException {
+    protected BuildEventTransport create(BuildEventStreamOptions options,
+        PathConverter pathConverter) throws IOException {
       return new TextFormatFileTransport(
-          options.getBuildEventTextFile(), protocolOptions, uploader, exitFunc);
-    }
-
-    @Override
-    protected boolean usePathConverter(BuildEventStreamOptions options) {
-      return options.getBuildEventTextFilePathConversion();
+          options.getBuildEventTextFile(),
+          options.getBuildEventTextFilePathConversion() ? pathConverter : new NullPathConverter());
     }
   },
 
@@ -59,19 +48,13 @@ public enum BuildEventTransportFactory {
     }
 
     @Override
-    protected BuildEventTransport create(
-        BuildEventStreamOptions options,
-        BuildEventProtocolOptions protocolOptions,
-        BuildEventArtifactUploader uploader,
-        Consumer<AbruptExitException> exitFunc)
-        throws IOException {
+    protected BuildEventTransport create(BuildEventStreamOptions options,
+        PathConverter pathConverter) throws IOException {
       return new BinaryFormatFileTransport(
-          options.getBuildEventBinaryFile(), protocolOptions, uploader, exitFunc);
-    }
-
-    @Override
-    protected boolean usePathConverter(BuildEventStreamOptions options) {
-      return options.getBuildEventBinaryFilePathConversion();
+          options.getBuildEventBinaryFile(),
+          options.getBuildEventBinaryFilePathConversion()
+              ? pathConverter
+              : new NullPathConverter());
     }
   },
 
@@ -83,18 +66,10 @@ public enum BuildEventTransportFactory {
 
     @Override
     protected BuildEventTransport create(
-        BuildEventStreamOptions options,
-        BuildEventProtocolOptions protocolOptions,
-        BuildEventArtifactUploader uploader,
-        Consumer<AbruptExitException> exitFunc)
-        throws IOException {
+        BuildEventStreamOptions options, PathConverter pathConverter) throws IOException {
       return new JsonFormatFileTransport(
-          options.getBuildEventJsonFile(), protocolOptions, uploader, exitFunc);
-    }
-
-    @Override
-    protected boolean usePathConverter(BuildEventStreamOptions options) {
-      return options.getBuildEventJsonFilePathConversion();
+          options.getBuildEventJsonFile(),
+          options.getBuildEventJsonFilePathConversion() ? pathConverter : new NullPathConverter());
     }
   };
 
@@ -106,28 +81,12 @@ public enum BuildEventTransportFactory {
    * @return A {@link ImmutableSet} of BuildEventTransports. This set may be empty.
    * @throws IOException Exception propagated from a {@link BuildEventTransport} creation failure.
    */
-  public static ImmutableSet<BuildEventTransport> createFromOptions(
-      OptionsParsingResult options,
-      BuildEventArtifactUploaderFactoryMap artifactUploaders,
-      Consumer<AbruptExitException> exitFunc)
-      throws IOException {
-    BuildEventStreamOptions bepOptions =
-        checkNotNull(
-            options.getOptions(BuildEventStreamOptions.class),
-            "Could not get BuildEventStreamOptions.");
-    BuildEventProtocolOptions protocolOptions =
-        checkNotNull(
-            options.getOptions(BuildEventProtocolOptions.class),
-            "Could not get BuildEventProtocolOptions.");
+  public static ImmutableSet<BuildEventTransport> createFromOptions(BuildEventStreamOptions options,
+      PathConverter pathConverter) throws IOException {
     ImmutableSet.Builder<BuildEventTransport> buildEventTransportsBuilder = ImmutableSet.builder();
     for (BuildEventTransportFactory transportFactory : BuildEventTransportFactory.values()) {
-      if (transportFactory.enabled(bepOptions)) {
-        BuildEventArtifactUploader uploader =
-            transportFactory.usePathConverter(bepOptions)
-                ? artifactUploaders.select(protocolOptions.buildEventUploadStrategy).create(options)
-                : BuildEventArtifactUploader.LOCAL_FILES_UPLOADER;
-        buildEventTransportsBuilder.add(
-            transportFactory.create(bepOptions, protocolOptions, uploader, exitFunc));
+      if (transportFactory.enabled(options)) {
+        buildEventTransportsBuilder.add(transportFactory.create(options, pathConverter));
       }
     }
     return buildEventTransportsBuilder.build();
@@ -137,12 +96,47 @@ public enum BuildEventTransportFactory {
   protected abstract boolean enabled(BuildEventStreamOptions options);
 
   /** Creates a BuildEventTransport from the specified options. */
-  protected abstract BuildEventTransport create(
-      BuildEventStreamOptions options,
-      BuildEventProtocolOptions protocolOptions,
-      BuildEventArtifactUploader uploader,
-      Consumer<AbruptExitException> exitFunc)
-      throws IOException;
+  protected abstract BuildEventTransport create(BuildEventStreamOptions options,
+      PathConverter pathConverter) throws IOException;
 
-  protected abstract boolean usePathConverter(BuildEventStreamOptions options);
+  private static class NullPathConverter implements PathConverter {
+    @Override
+    public String apply(Path path) {
+      return pathToUriString(path.getPathString());
+    }
+  }
+
+  /**
+   * Returns the path encoded as an {@link URI}.
+   *
+   * <p>This concrete implementation returns URIs with "file" as the scheme. For Example: - On Unix
+   * the path "/tmp/foo bar.txt" will be encoded as "file:///tmp/foo%20bar.txt". - On Windows the
+   * path "C:\Temp\Foo Bar.txt" will be encoded as "file:///C:/Temp/Foo%20Bar.txt"
+   *
+   * <p>Implementors extending this class for special filesystems will likely need to override this
+   * method.
+   *
+   * @throws URISyntaxException if the URI cannot be constructed.
+   */
+  static String pathToUriString(String path) {
+    if (!path.startsWith("/")) {
+      // On Windows URI's need to start with a '/'. i.e. C:\Foo\Bar would be file:///C:/Foo/Bar
+      path = "/" + path;
+    }
+    try {
+      return new URI(
+              "file",
+              // Needs to be "" instead of null, so that toString() will append "//" after the
+              // scheme.
+              // We need this for backwards compatibility reasons as some consumers of the BEP are
+              // broken.
+              "",
+              path,
+              null,
+              null)
+          .toString();
+    } catch (URISyntaxException e) {
+      throw new IllegalStateException(e);
+    }
+  }
 }
