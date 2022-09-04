@@ -228,6 +228,7 @@ public class CppCompileAction extends AbstractAction
    * @param owner the owner of the action, usually the configured target that emitted it
    * @param allInputs the list of all action inputs.
    * @param featureConfiguration TODO(bazel-team): Add parameter description.
+   * @param crosstoolTopPathFragment the path to the CROSSTOOL given in --crosstool_top
    * @param variables TODO(bazel-team): Add parameter description.
    * @param sourceFile the source file that should be compiled. {@code mandatoryInputs} must contain
    *     this file
@@ -260,6 +261,7 @@ public class CppCompileAction extends AbstractAction
       ActionOwner owner,
       NestedSet<Artifact> allInputs,
       FeatureConfiguration featureConfiguration,
+      PathFragment crosstoolTopPathFragment,
       CcToolchainFeatures.Variables variables,
       Artifact sourceFile,
       boolean shouldScanIncludes,
@@ -319,7 +321,8 @@ public class CppCompileAction extends AbstractAction
         lipoScannables,
         builtinIncludeFiles,
         ImmutableList.copyOf(additionalIncludeScanningRoots),
-        CompileCommandLine.builder(sourceFile, coptsFilter, actionName, dotdFile)
+        CompileCommandLine.builder(
+                sourceFile, coptsFilter, actionName, crosstoolTopPathFragment, dotdFile)
             .setFeatureConfiguration(featureConfiguration)
             .setVariables(variables)
             .build(),
@@ -329,10 +332,10 @@ public class CppCompileAction extends AbstractAction
         actionClassId,
         shouldScanIncludes || cppSemantics.needsDotdInputPruning(),
         ImmutableList.copyOf(cppProvider.getBuiltInIncludeDirectories()),
-        /* additionalInputs= */ null,
-        /* usedModules= */ null,
-        /* topLevelModules= */ null,
-        /* overwrittenVariables= */ null,
+        /*additionalInputs=*/ null,
+        /*usedModules=*/ null,
+        /*topLevelModules=*/ null,
+        /*overwrittenVariables=*/ null,
         cppSemantics.needsDotdInputPruning(),
         cppSemantics.needsIncludeValidation(),
         cppSemantics.getIncludeProcessing(),

@@ -1056,12 +1056,13 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
         .isSameAs(getGeneratingActionForLabel(labelA));
   }
 
-  protected Artifact getSourceArtifact(PathFragment rootRelativePath, Root root) {
+  protected Artifact getSourceArtifact(PathFragment rootRelativePath, ArtifactRoot root) {
     return view.getArtifactFactory().getSourceArtifact(rootRelativePath, root);
   }
 
   protected Artifact getSourceArtifact(String name) {
-    return getSourceArtifact(PathFragment.create(name), Root.fromPath(rootDirectory));
+    return getSourceArtifact(
+        PathFragment.create(name), ArtifactRoot.asSourceRoot(Root.fromPath(rootDirectory)));
   }
 
   /**

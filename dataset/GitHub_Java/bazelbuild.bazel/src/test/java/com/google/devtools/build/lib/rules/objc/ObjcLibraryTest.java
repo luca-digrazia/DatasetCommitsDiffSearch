@@ -44,6 +44,7 @@ import com.google.devtools.build.lib.actions.CommandAction;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
+import com.google.devtools.build.lib.analysis.actions.ParameterFileWriteAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.analysis.util.ScratchAttributeWriter;
@@ -1225,9 +1226,9 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
     scratch.file("lib/b.m");
     scratch.file("lib/BUILD", "objc_library(name = 'lib1', srcs = ['a.m', 'b.m'])");
     ConfiguredTarget target = getConfiguredTarget("//lib:lib1");
-    Artifact lib = getBinArtifact("liblib1.a", target);
-    Action action = getGeneratingAction(lib);
-    assertThat(paramFileArgsForAction(action))
+    Artifact objlist = getBinArtifact("lib1-archive.objlist", target);
+    ParameterFileWriteAction action = (ParameterFileWriteAction) getGeneratingAction(objlist);
+    assertThat(action.getContents())
         .containsExactlyElementsIn(
             Artifact.toExecPaths(inputsEndingWith(archiveAction("//lib:lib1"), ".o")));
   }
@@ -2031,20 +2032,5 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
     CommandAction compileAction = compileAction("//cc:lib", "a.o");
     assertThat(Artifact.toRootRelativePaths(compileAction.getPossibleInputsForTesting()))
         .contains("objc/objc_hdr.h");
-  }
-
-  @Test
-  public void testTextualHeaderPassedToCcLib() throws Exception {
-    ScratchAttributeWriter.fromLabelString(this, "cc_library", "//cc/txt_dep")
-        .setList("textual_hdrs", "hdr.h")
-        .write();
-    createLibraryTargetWriter("//objc:lib").setList("deps", "//cc/txt_dep").write();
-    ScratchAttributeWriter.fromLabelString(this, "cc_library", "//cc/lib")
-        .setList("srcs", "a.cc")
-        .setList("deps", "//objc:lib")
-        .write();
-    CommandAction compileAction = compileAction("//cc/lib", "a.o");
-    assertThat(Artifact.toRootRelativePaths(compileAction.getPossibleInputsForTesting()))
-        .contains("cc/txt_dep/hdr.h");
   }
 }
