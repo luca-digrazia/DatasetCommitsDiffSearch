@@ -15,8 +15,8 @@
 package com.google.devtools.build.lib.analysis.constraints;
 
 import static com.google.common.collect.ImmutableList.toImmutableList;
+import static com.google.common.collect.Streams.stream;
 
-import com.google.auto.value.AutoValue;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Verify;
@@ -570,10 +570,7 @@ public class RuleContextConstraintSemantics implements ConstraintSemantics<RuleC
             ? ImmutableSet.of()
             : Sets.difference(groupsWithEnvironmentsRemoved, refinedGroups);
     if (!newlyEmptyGroups.isEmpty()) {
-      ruleError(
-          ruleContext,
-          getOverRefinementError(
-              ruleContext.getLabel(), newlyEmptyGroups, removedEnvironmentCulprits));
+      ruleError(ruleContext, getOverRefinementError(newlyEmptyGroups, removedEnvironmentCulprits));
     }
   }
 
@@ -581,8 +578,7 @@ public class RuleContextConstraintSemantics implements ConstraintSemantics<RuleC
    * Constructs an error message for when all environments have been pruned out of one or more
    * environment groups due to refining.
    */
-  private String getOverRefinementError(
-      Label currentTarget,
+  private static String getOverRefinementError(
       Set<EnvironmentLabels> newlyEmptyGroups,
       Map<Label, RemovedEnvironmentCulprit> removedEnvironmentCulprits) {
     StringJoiner message = new StringJoiner("\n")
@@ -600,31 +596,21 @@ public class RuleContextConstraintSemantics implements ConstraintSemantics<RuleC
         if (culprit != null) {
           message
               .add(" ")
-              .add(getMissingEnvironmentCulpritMessage(currentTarget, prunedEnvironment, culprit));
+              .add(getMissingEnvironmentCulpritMessage(prunedEnvironment, culprit));
         }
       }
     }
     return message.toString();
   }
 
-  public String getMissingEnvironmentCulpritMessage(
-      Label currentTarget, Label environment, RemovedEnvironmentCulprit reason) {
+  static String getMissingEnvironmentCulpritMessage(Label environment,
+      RemovedEnvironmentCulprit reason) {
     LabelAndLocation culprit = reason.culprit();
-    Label targetToExplore =
-        currentTarget.equals(culprit.getLabel())
-            ? reason.selectedDepForCulprit()
-            : culprit.getLabel();
-
     return new StringJoiner("\n")
         .add("  environment: " + environment)
         .add("    removed by: " + culprit.getLabel() + " (" + culprit.getLocation() + ")")
-        .add("    because of a select() that chooses dep: " + reason.selectedDepForCulprit())
+        .add("    which has a select() that chooses dep: " + reason.selectedDepForCulprit())
         .add("    which lacks: " + environment)
-        .add("")
-        .add(
-            String.format(
-                "To see why, run: blaze build --target_environment=%s %s",
-                environment, targetToExplore))
         .toString();
   }
 
@@ -740,8 +726,8 @@ public class RuleContextConstraintSemantics implements ConstraintSemantics<RuleC
   }
 
   /**
-   * Returns all dependencies that should be constraint-checked against the current rule, including
-   * both "unconditional" deps (outside selects) and deps that only appear in selects.
+   * Returns all dependencies that should be constraint-checked against the current rule,
+   * including both "uncoditional" deps (outside selects) and deps that only appear in selects.
    */
   private static DepsToCheck getConstraintCheckedDependencies(RuleContext ruleContext) {
     Set<TransitiveInfoCollection> depsToCheck = new LinkedHashSet<>();
@@ -845,45 +831,6 @@ public class RuleContextConstraintSemantics implements ConstraintSemantics<RuleC
   }
 
   /**
-   * Provides information about a target's incompatibility.
-   *
-   * <p>After calling {@code checkForIncompatibility()}, the {@code isIncompatible} getter tells you
-   * whether the target is incompatible. If the target is incompatible, then {@code
-   * underlyingTarget} tells you which underlying target provided the incompatibility. For the vast
-   * majority of targets this is the same one passed to {@code checkForIncompatibility()}. In some
-   * instances like {@link OutputFileConfiguredTarget}, however, the {@code underlyingTarget} is the
-   * rule that generated the file.
-   */
-  @AutoValue
-  public abstract static class IncompatibleCheckResult {
-    private static IncompatibleCheckResult create(
-        boolean isIncompatible, ConfiguredTarget underlyingTarget) {
-      return new AutoValue_RuleContextConstraintSemantics_IncompatibleCheckResult(
-          isIncompatible, underlyingTarget);
-    }
-
-    public abstract boolean isIncompatible();
-
-    public abstract ConfiguredTarget underlyingTarget();
-  }
-
-  /**
-   * Checks whether the target is incompatible.
-   *
-   * <p>See the documentation for {@link RuleContextConstraintSemantics.IncompatibleCheckResult} for
-   * more information.
-   */
-  public static IncompatibleCheckResult checkForIncompatibility(ConfiguredTarget target) {
-    if (target instanceof OutputFileConfiguredTarget) {
-      // For generated files, we want to query the generating rule for providers. genrule() for
-      // example doesn't attach providers like IncompatiblePlatformProvider to its outputs.
-      target = ((OutputFileConfiguredTarget) target).getGeneratingRule();
-    }
-    return IncompatibleCheckResult.create(
-        target.getProvider(IncompatiblePlatformProvider.class) != null, target);
-  }
-
-  /**
    * Creates an incompatible {@link ConfiguredTarget} if the corresponding rule is incompatible.
    *
    * <p>Returns null if the target is not incompatible.
@@ -907,13 +854,16 @@ public class RuleContextConstraintSemantics implements ConstraintSemantics<RuleC
       RuleContext ruleContext,
       OrderedSetMultimap<DependencyKind, ConfiguredTargetAndData> prerequisiteMap)
       throws ActionConflictException, InterruptedException {
-    // The target (ruleContext) is incompatible if explicitly specified to be.
-    if (ruleContext.getRule().getRuleClassObject().useToolchainResolution()
-        && ruleContext.attributes().has("target_compatible_with")) {
+    if (!ruleContext.getRule().getRuleClassObject().useToolchainResolution()) {
+      return null;
+    }
+
+    // This is incompatible if explicitly specified to be.
+    if (ruleContext.attributes().has("target_compatible_with")) {
       ImmutableList<ConstraintValueInfo> invalidConstraintValues =
-          PlatformProviderUtils.constraintValues(
-                  ruleContext.getPrerequisites("target_compatible_with"))
-              .stream()
+          stream(
+                  PlatformProviderUtils.constraintValues(
+                      ruleContext.getPrerequisites("target_compatible_with")))
               .filter(cv -> !ruleContext.targetPlatformHasConstraint(cv))
               .collect(toImmutableList());
 
@@ -923,12 +873,22 @@ public class RuleContextConstraintSemantics implements ConstraintSemantics<RuleC
     }
 
     // This is incompatible if one of the dependencies is as well.
+    ImmutableList.Builder<ConfiguredTarget> incompatibleDependenciesBuilder =
+        ImmutableList.builder();
+    for (ConfiguredTargetAndData infoCollection : prerequisiteMap.values()) {
+      ConfiguredTarget dependency = infoCollection.getConfiguredTarget();
+      if (dependency instanceof OutputFileConfiguredTarget) {
+        // For generated files, we want to query the generating rule for providers. genrule() for
+        // example doesn't attach providers like IncompatiblePlatformProvider to its outputs.
+        dependency = ((OutputFileConfiguredTarget) dependency).getGeneratingRule();
+      }
+      if (dependency.getProvider(IncompatiblePlatformProvider.class) != null) {
+        incompatibleDependenciesBuilder.add(dependency);
+      }
+    }
+
     ImmutableList<ConfiguredTarget> incompatibleDependencies =
-        prerequisiteMap.values().stream()
-            .map(value -> checkForIncompatibility(value.getConfiguredTarget()))
-            .filter(result -> result.isIncompatible())
-            .map(result -> result.underlyingTarget())
-            .collect(toImmutableList());
+        incompatibleDependenciesBuilder.build();
     if (!incompatibleDependencies.isEmpty()) {
       return createIncompatibleConfiguredTarget(ruleContext, incompatibleDependencies, null);
     }
@@ -1030,7 +990,7 @@ public class RuleContextConstraintSemantics implements ConstraintSemantics<RuleC
           new FailAction(
               ruleContext.getActionOwner(),
               outputArtifacts,
-              "Can't build this. This target is incompatible. Please file a bug upstream.",
+              "Can't build this. This target is incompatible.",
               Code.CANT_BUILD_INCOMPATIBLE_TARGET));
     }
     return builder.build();

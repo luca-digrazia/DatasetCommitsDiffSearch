@@ -52,7 +52,6 @@ import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -105,7 +104,6 @@ public final class StarlarkRuleConfiguredTargetUtil {
               toolsRepository,
               /*fragmentNameToClass=*/ null,
               ruleContext.getTarget().getPackage().getRepositoryMapping(),
-              /*convertedLabelsInPackage=*/ new HashMap<>(),
               ruleContext.getSymbolGenerator(),
               ruleContext.getLabel())
           .storeInThread(thread);

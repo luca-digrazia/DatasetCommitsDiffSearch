@@ -61,7 +61,7 @@ public final class TestTargetExecutionSettings {
       Artifact persistentTestRunnerFlagFile,
       int shards,
       int runs)
-      throws InterruptedException { // due to CommandLine.arguments
+      throws InterruptedException {
     Preconditions.checkArgument(TargetUtils.isTestRule(ruleContext.getRule()));
     Preconditions.checkArgument(shards >= 0);
     BuildConfiguration config = ruleContext.getConfiguration();

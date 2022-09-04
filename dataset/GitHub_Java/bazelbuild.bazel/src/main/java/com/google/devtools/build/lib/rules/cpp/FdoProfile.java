@@ -13,18 +13,14 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.cpp;
 
-import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 
 /** Implementation for the {@code fdo_profile} rule. */
@@ -32,15 +28,20 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 public final class FdoProfile implements RuleConfiguredTargetFactory {
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
-      throws RuleErrorException, ActionConflictException {
-    NestedSet<Artifact> fdoProfile =
-        ruleContext
-            .getPrerequisite("profile", Mode.TARGET)
-            .getProvider(FileProvider.class)
-            .getFilesToBuild();
+      throws InterruptedException, ActionConflictException {
+    CcCommon.checkRuleLoadedThroughMacro(ruleContext);
+    FdoInputFile inputFile = FdoInputFile.fromProfileRule(ruleContext);
+    if (ruleContext.hasErrors()) {
+      return null;
+    }
+
+    Artifact protoProfileArtifact = ruleContext.getPrerequisiteArtifact("proto_profile");
+    if (protoProfileArtifact != null && !protoProfileArtifact.isSourceArtifact()) {
+      ruleContext.attributeError("proto_profile", "the target is not an input file");
+    }
 
     return new RuleConfiguredTargetBuilder(ruleContext)
-        .addNativeDeclaredProvider(new FdoProfileProvider(Iterables.getOnlyElement(fdoProfile)))
+        .addNativeDeclaredProvider(new FdoProfileProvider(inputFile, protoProfileArtifact))
         .addProvider(RunfilesProvider.simple(Runfiles.EMPTY))
         .build();
   }

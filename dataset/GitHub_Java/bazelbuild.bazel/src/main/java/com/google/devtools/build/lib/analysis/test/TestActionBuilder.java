@@ -29,7 +29,6 @@ import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.PrerequisiteArtifacts;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
-import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.RunfilesSupplierImpl;
 import com.google.devtools.build.lib.analysis.RunfilesSupport;
 import com.google.devtools.build.lib.analysis.ShToolchain;
@@ -53,6 +52,7 @@ import javax.annotation.Nullable;
  * Helper class to create test actions.
  */
 public final class TestActionBuilder {
+
   private static final String CC_CODE_COVERAGE_SCRIPT = "CC_CODE_COVERAGE_SCRIPT";
   private static final String LCOV_MERGER = "LCOV_MERGER";
   // The coverage tool Bazel uses to generate a code coverage report for C++.
@@ -215,11 +215,6 @@ public final class TestActionBuilder {
       inputsBuilder.addTransitive(metadataFiles);
       inputsBuilder.addTransitive(
           PrerequisiteArtifacts.nestedSet(ruleContext, ":coverage_support"));
-      inputsBuilder.addTransitive(
-          ruleContext
-              .getPrerequisite(":coverage_support", RunfilesProvider.class)
-              .getDataRunfiles()
-              .getAllArtifacts());
 
       if (ruleContext.isAttrDefined("$collect_cc_coverage", LABEL)) {
         Artifact collectCcCoverage =
@@ -401,7 +396,7 @@ public final class TestActionBuilder {
                 coverageArtifact,
                 coverageDirectory,
                 testProperties,
-                runfilesSupport.getActionEnvironment().addFixedVariables(extraTestEnv),
+                extraTestEnv,
                 executionSettings,
                 shard,
                 run,
