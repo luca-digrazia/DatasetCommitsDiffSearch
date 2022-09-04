@@ -41,7 +41,7 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.starlarkbuildapi.BuildConfigurationApi;
+import com.google.devtools.build.lib.skylarkbuildapi.BuildConfigurationApi;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.RegexFilter;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -661,6 +661,10 @@ public class BuildConfiguration implements BuildConfigurationApi {
     return options.experimentalForwardInstrumentedFilesInfoByDefault;
   }
 
+  public boolean experimentalIgnoreDeprecatedInstrumentationSpec() {
+    return options.experimentalIgnoreDeprecatedInstrumentationSpec;
+  }
+
   public RunUnder getRunUnder() {
     return options.runUnder;
   }
@@ -706,6 +710,10 @@ public class BuildConfiguration implements BuildConfigurationApi {
 
   public List<Label> getActionListeners() {
     return options.actionListeners;
+  }
+
+  public boolean inmemoryUnusedInputsList() {
+    return options.inmemoryUnusedInputsList;
   }
 
   /**
@@ -864,10 +872,6 @@ public class BuildConfiguration implements BuildConfigurationApi {
    */
   public Label getAutoCpuEnvironmentGroup() {
     return options.autoCpuEnvironmentGroup;
-  }
-
-  public CoreOptions.FatApkSplitSanitizer getFatApkSplitSanitizer() {
-    return options.fatApkSplitSanitizer;
   }
 
   public Class<? extends Fragment> getStarlarkFragmentByName(String name) {
