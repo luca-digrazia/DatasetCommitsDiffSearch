@@ -1,18 +1,3 @@
-/*
- * Copyright 2019 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package io.quarkus.keycloak;
 
 import java.util.HashMap;
@@ -27,7 +12,7 @@ import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
-import io.quarkus.deployment.builditem.HotDeploymentConfigFileBuildItem;
+import io.quarkus.deployment.builditem.HotDeploymentWatchedFileBuildItem;
 import io.quarkus.elytron.security.deployment.AuthConfigBuildItem;
 import io.quarkus.elytron.security.runtime.AuthConfig;
 import io.quarkus.undertow.deployment.ServletExtensionBuildItem;
@@ -38,14 +23,14 @@ public class KeycloakAdapterProcessor {
 
     @BuildStep
     @Record(ExecutionTime.STATIC_INIT)
-    BeanContainerListenerBuildItem configureAdapter(KeycloakTemplate template, BuildProducer<AuthConfigBuildItem> authConfig,
-            BuildProducer<HotDeploymentConfigFileBuildItem> resources,
+    BeanContainerListenerBuildItem configureAdapter(KeycloakRecorder recorder, BuildProducer<AuthConfigBuildItem> authConfig,
+            BuildProducer<HotDeploymentWatchedFileBuildItem> resources,
             BuildProducer<ServletExtensionBuildItem> servletExtension) {
         // configure login info
         authConfig.produce(new AuthConfigBuildItem(new AuthConfig("KEYCLOAK", "KEYCLOAK", Object.class)));
 
         // in case keycloak.json is used, register it as a hot deployment config file
-        resources.produce(new HotDeploymentConfigFileBuildItem("keycloak.json"));
+        resources.produce(new HotDeploymentWatchedFileBuildItem("keycloak.json"));
 
         AdapterConfig adapterConfig = null;
 
@@ -54,29 +39,29 @@ public class KeycloakAdapterProcessor {
             adapterConfig = createAdapterConfig(keycloakConfig);
         }
 
-        QuarkusDeploymentContext deploymentContext = template.createKeycloakDeploymentContext(adapterConfig);
+        QuarkusDeploymentContext deploymentContext = recorder.createKeycloakDeploymentContext(adapterConfig);
 
         // register keycloak servlet extension
-        servletExtension.produce(new ServletExtensionBuildItem(template.createServletExtension(deploymentContext)));
+        servletExtension.produce(new ServletExtensionBuildItem(recorder.createServletExtension(deploymentContext)));
 
-        return new BeanContainerListenerBuildItem(template.createBeanContainerListener(deploymentContext));
+        return new BeanContainerListenerBuildItem(recorder.createBeanContainerListener(deploymentContext));
     }
 
     private AdapterConfig createAdapterConfig(KeycloakConfig keycloakConfig) {
         AdapterConfig config = new AdapterConfig();
 
         config.setRealm(keycloakConfig.realm);
-        config.setRealmKey(keycloakConfig.realmKey.orElse(null));
+        config.setRealmKey(keycloakConfig.realmPublicKey.orElse(null));
         config.setAuthServerUrl(keycloakConfig.authServerUrl);
         config.setSslRequired(keycloakConfig.sslRequired);
         config.setConfidentialPort(keycloakConfig.confidentialPort);
         config.setResource(keycloakConfig.resource.get());
         config.setUseResourceRoleMappings(keycloakConfig.useResourceRoleMappings);
-        config.setCors(keycloakConfig.cors);
+        config.setCors(keycloakConfig.enableCors);
         config.setCorsMaxAge(keycloakConfig.corsMaxAge);
-        config.setCorsAllowedHeaders(keycloakConfig.corsAllowedHeaders);
-        config.setCorsAllowedMethods(keycloakConfig.corsAllowedMethods);
-        config.setCorsExposedHeaders(keycloakConfig.corsExposedHeaders);
+        config.setCorsAllowedHeaders(keycloakConfig.corsAllowedHeaders.orElse(null));
+        config.setCorsAllowedMethods(keycloakConfig.corsAllowedMethods.orElse(null));
+        config.setCorsExposedHeaders(keycloakConfig.corsExposedHeaders.orElse(null));
         config.setBearerOnly(keycloakConfig.bearerOnly);
         config.setAutodetectBearerOnly(keycloakConfig.autodetectBearerOnly);
         config.setPublicClient(keycloakConfig.publicClient);
@@ -112,7 +97,7 @@ public class KeycloakAdapterProcessor {
         config.setRegisterNodeAtStartup(keycloakConfig.registerNodeAtStartup);
         config.setRegisterNodePeriod(keycloakConfig.registerNodePeriod);
         config.setTokenStore(keycloakConfig.tokenStore.orElse(null));
-        config.setTokenCookiePath(keycloakConfig.tokenCookiePath.orElse(null));
+        config.setTokenCookiePath(keycloakConfig.adapterStateCookiePath.orElse(null));
         config.setPrincipalAttribute(keycloakConfig.principalAttribute);
         config.setTurnOffChangeSessionIdOnLogin(keycloakConfig.turnOffChangeSessionIdOnLogin);
         config.setTokenMinimumTimeToLive(keycloakConfig.tokenMinimumTimeToLive);
@@ -133,8 +118,8 @@ public class KeycloakAdapterProcessor {
 
             PolicyEnforcerConfig.PathCacheConfig pathCacheConfig = new PolicyEnforcerConfig.PathCacheConfig();
 
-            pathCacheConfig.setLifespan(keycloakConfig.policyEnforcer.pathCacheConfig.lifespan);
-            pathCacheConfig.setMaxEntries(keycloakConfig.policyEnforcer.pathCacheConfig.maxEntries);
+            pathCacheConfig.setLifespan(keycloakConfig.policyEnforcer.pathCache.lifespan);
+            pathCacheConfig.setMaxEntries(keycloakConfig.policyEnforcer.pathCache.maxEntries);
 
             enforcerConfig.setPathCacheConfig(pathCacheConfig);
 
@@ -143,7 +128,7 @@ public class KeycloakAdapterProcessor {
             }
 
             enforcerConfig.setClaimInformationPointConfig(
-                    getClaimInformationPointConfig(keycloakConfig.policyEnforcer.claimInformationPointConfig));
+                    getClaimInformationPointConfig(keycloakConfig.policyEnforcer.claimInformationPoint));
             enforcerConfig.setPaths(keycloakConfig.policyEnforcer.paths.values().stream().map(
                     pathConfig -> {
                         PolicyEnforcerConfig.PathConfig config1 = new PolicyEnforcerConfig.PathConfig();
@@ -162,7 +147,7 @@ public class KeycloakAdapterProcessor {
                                     return mConfig;
                                 }).collect(Collectors.toList()));
                         config1.setClaimInformationPointConfig(
-                                getClaimInformationPointConfig(pathConfig.claimInformationPointConfig));
+                                getClaimInformationPointConfig(pathConfig.claimInformationPoint));
 
                         return config1;
                     }).collect(Collectors.toList()));
