@@ -260,7 +260,7 @@ public abstract class NativeDepsHelper {
 
     builder
         .setLinkArtifactFactory(SHAREABLE_LINK_ARTIFACT_FACTORY)
-        .setLinkerFiles(toolchain.getLinkerFiles())
+        .setCrosstoolInputs(toolchain.getLink())
         .addLibraries(linkerInputs)
         .setLinkType(LinkTargetType.DYNAMIC_LIBRARY)
         .setLinkingMode(LinkingMode.STATIC)
