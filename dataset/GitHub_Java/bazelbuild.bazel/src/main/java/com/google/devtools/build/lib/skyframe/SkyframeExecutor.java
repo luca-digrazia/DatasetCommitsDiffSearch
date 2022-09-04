@@ -780,7 +780,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
 
   /** Clear any configured target data stored outside Skyframe. */
   public void handleConfiguredTargetChange() {
-    logger.info("Dropping configured target data");
     skyframeBuildView.clearInvalidatedConfiguredTargets();
     skyframeBuildView.clearLegacyData();
   }

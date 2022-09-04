@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.analysis.TargetCompleteEvent;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactContext;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactHelper;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactHelper.ArtifactsToBuild;
-import com.google.devtools.build.lib.buildeventstream.BuildEventId;
 import com.google.devtools.build.lib.causes.Cause;
 import com.google.devtools.build.lib.causes.LabelCause;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -274,35 +273,13 @@ public final class CompletionFunction<TValue extends SkyValue, TResult extends S
 
     @Override
     public ExtendedEventHandler.Postable createFailed(
-        AspectValue value, NestedSet<Cause> rootCauses, Environment env)
-        throws InterruptedException {
-      BuildEventId configurationEventId = getConfigurationEventIdFromAspectValue(value, env);
-      if (configurationEventId == null) {
-        return null;
-      }
-
-      return AspectCompleteEvent.createFailed(value, rootCauses, configurationEventId);
+        AspectValue value, NestedSet<Cause> rootCauses, Environment env) {
+      return AspectCompleteEvent.createFailed(value, rootCauses);
     }
 
     @Override
     public String extractTag(SkyKey skyKey) {
       return Label.print(((AspectCompletionKey) skyKey.argument()).aspectKey().getLabel());
-    }
-
-    @Nullable
-    private BuildEventId getConfigurationEventIdFromAspectValue(AspectValue value, Environment env)
-        throws InterruptedException {
-      if (value.getKey().getBaseConfiguredTargetKey().getConfigurationKey() == null) {
-        return BuildEventId.nullConfigurationId();
-      } else {
-        BuildConfigurationValue buildConfigurationValue =
-            (BuildConfigurationValue)
-                env.getValue(value.getKey().getBaseConfiguredTargetKey().getConfigurationKey());
-        if (buildConfigurationValue == null) {
-          return null;
-        }
-        return buildConfigurationValue.getConfiguration().getEventId();
-      }
     }
 
     @Override
@@ -311,18 +288,10 @@ public final class CompletionFunction<TValue extends SkyValue, TResult extends S
         AspectValue value,
         ArtifactPathResolver pathResolver,
         TopLevelArtifactContext topLevelArtifactContext,
-        Environment env)
-        throws InterruptedException {
+        Environment env) {
       ArtifactsToBuild artifacts =
           TopLevelArtifactHelper.getAllArtifactsToBuild(value, topLevelArtifactContext);
-
-      BuildEventId configurationEventId = getConfigurationEventIdFromAspectValue(value, env);
-      if (configurationEventId == null) {
-        return null;
-      }
-
-      return AspectCompleteEvent.createSuccessful(
-          value, pathResolver, artifacts, configurationEventId);
+      return AspectCompleteEvent.createSuccessful(value, pathResolver, artifacts);
     }
   }
 
