@@ -3,10 +3,8 @@ package io.quarkus.it.spring.data.jpa;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.Date;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
-import java.util.Set;
 
 import javax.json.bind.annotation.JsonbDateFormat;
 import javax.json.bind.annotation.JsonbProperty;
@@ -16,8 +14,6 @@ import javax.persistence.Entity;
 import javax.persistence.GeneratedValue;
 import javax.persistence.Id;
 import javax.persistence.JoinColumn;
-import javax.persistence.JoinTable;
-import javax.persistence.ManyToMany;
 import javax.persistence.ManyToOne;
 import javax.persistence.MappedSuperclass;
 import javax.persistence.OneToMany;
@@ -46,11 +42,7 @@ public class Person {
 
     @ManyToOne
     @JoinColumn(name = "address_id")
-    private Address someAddress;
-
-    @ManyToMany
-    @JoinTable(name = "liked_songs", joinColumns = @JoinColumn(name = "person_id"), inverseJoinColumns = @JoinColumn(name = "song_id"))
-    private Set<Song> likedSongs = new HashSet<>();
+    private Address address;
 
     public Person(String name) {
         this.name = name;
@@ -104,20 +96,12 @@ public class Person {
         this.active = active;
     }
 
-    public Address getSomeAddress() {
-        return someAddress;
+    public Address getAddress() {
+        return address;
     }
 
-    public void setSomeAddress(Address address) {
-        this.someAddress = address;
-    }
-
-    public Set<Song> getLikedSongs() {
-        return likedSongs;
-    }
-
-    public void setLikedSongs(Set<Song> likedSongs) {
-        this.likedSongs = likedSongs;
+    public void setAddress(Address address) {
+        this.address = address;
     }
 
     @MappedSuperclass
@@ -157,7 +141,7 @@ public class Person {
         private String zipCode;
 
         @JsonbTransient
-        @OneToMany(mappedBy = "someAddress")
+        @OneToMany(mappedBy = "address")
         private List<Person> people;
 
         public Long getId() {
@@ -184,5 +168,4 @@ public class Person {
             this.people = people;
         }
     }
-
 }
