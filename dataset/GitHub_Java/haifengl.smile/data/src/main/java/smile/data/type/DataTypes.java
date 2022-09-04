@@ -1,19 +1,31 @@
-/*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package smile.data.type;
+
+import java.math.BigDecimal;
+import java.sql.JDBCType;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.List;
 
 /**
  * To get a specific data type, users should use singleton objects
@@ -31,52 +43,173 @@ public class DataTypes {
     /** Short data type. */
     public static smile.data.type.ShortType ShortType = smile.data.type.ShortType.instance;
     /** Integer data type. */
-    public static smile.data.type.IntegerType IntegerType = smile.data.type.IntegerType.instance;
+    public static IntegerType IntegerType = smile.data.type.IntegerType.instance;
     /** Long data type. */
     public static smile.data.type.LongType LongType = smile.data.type.LongType.instance;
     /** Float data type. */
     public static smile.data.type.FloatType FloatType = smile.data.type.FloatType.instance;
     /** Double data type. */
     public static smile.data.type.DoubleType DoubleType = smile.data.type.DoubleType.instance;
+    /** Decimal data type. */
+    public static smile.data.type.DecimalType DecimalType = smile.data.type.DecimalType.instance;
     /** String data type. */
     public static smile.data.type.StringType StringType = smile.data.type.StringType.instance;
     /** Date data type with ISO format. */
-    public static smile.data.type.DateType DateType = new smile.data.type.DateType();
+    public static smile.data.type.DateType DateType = smile.data.type.DateType.instance;
     /** DateTime data type with ISO format. */
-    public static smile.data.type.DateTimeType DateTimeType = new smile.data.type.DateTimeType();
+    public static smile.data.type.DateTimeType DateTimeType = smile.data.type.DateTimeType.instance;
+    /** Time data type with ISO format. */
+    public static smile.data.type.TimeType TimeType = smile.data.type.TimeType.instance;
+    /** Plain Object data type. */
+    public static smile.data.type.ObjectType ObjectType = smile.data.type.ObjectType.instance;
+    /** Boolean Object data type. */
+    public static smile.data.type.ObjectType BooleanObjectType = smile.data.type.ObjectType.BooleanObjectType;
+    /** Char Object data type. */
+    public static smile.data.type.ObjectType CharObjectType = smile.data.type.ObjectType.CharObjectType;
+    /** Byte Object data type. */
+    public static smile.data.type.ObjectType ByteObjectType = smile.data.type.ObjectType.ByteObjectType;
+    /** Short Object data type. */
+    public static smile.data.type.ObjectType ShortObjectType = smile.data.type.ObjectType.ShortObjectType;
+    /** Integer Object data type. */
+    public static smile.data.type.ObjectType IntegerObjectType = smile.data.type.ObjectType.IntegerObjectType;
+    /** Long Object data type. */
+    public static smile.data.type.ObjectType LongObjectType = smile.data.type.ObjectType.LongObjectType;
+    /** Float Object data type. */
+    public static smile.data.type.ObjectType FloatObjectType = smile.data.type.ObjectType.FloatObjectType;
+    /** Double Object data type. */
+    public static smile.data.type.ObjectType DoubleObjectType = smile.data.type.ObjectType.DoubleObjectType;
+    /** Boolean Array data type. */
+    public static smile.data.type.ArrayType BooleanArrayType = smile.data.type.ArrayType.BooleanArrayType;
+    /** Char Array data type. */
+    public static smile.data.type.ArrayType CharArrayType = smile.data.type.ArrayType.CharArrayType;
+    /** Byte Array data type. */
+    public static smile.data.type.ArrayType ByteArrayType = smile.data.type.ArrayType.ByteArrayType;
+    /** Short Array data type. */
+    public static smile.data.type.ArrayType ShortArrayType = smile.data.type.ArrayType.ShortArrayType;
+    /** Integer Array data type. */
+    public static smile.data.type.ArrayType IntegerArrayType = smile.data.type.ArrayType.IntegerArrayType;
+    /** Long Array data type. */
+    public static smile.data.type.ArrayType LongArrayType = smile.data.type.ArrayType.LongArrayType;
+    /** Float Array data type. */
+    public static smile.data.type.ArrayType FloatArrayType = smile.data.type.ArrayType.FloatArrayType;
+    /** Double Array data type. */
+    public static smile.data.type.ArrayType DoubleArrayType = smile.data.type.ArrayType.DoubleArrayType;
 
-    /** Date data type with customized format. */
+    /**
+     * Date data type with customized format.
+     * @param pattern the date regex pattern.
+     * @return the Date type.
+     */
     public static smile.data.type.DateType date(String pattern) {
         return new smile.data.type.DateType(pattern);
     }
 
-    /** DateTime data type with customized format. */
+    /**
+     * Time data type with customized format.
+     * @param pattern the time regex pattern.
+     * @return the Time type.
+     */
+    public static smile.data.type.TimeType time(String pattern) {
+        return new smile.data.type.TimeType(pattern);
+    }
+
+    /**
+     * DateTime data type with customized format.
+     * @param pattern the date time regex pattern.
+     * @return the DateTime type.
+     */
     public static smile.data.type.DateTimeType datetime(String pattern) {
         return new smile.data.type.DateTimeType(pattern);
     }
 
-    /** Creates a nominal data type. */
-    public static NominalType nominal(String... values) {
-        return new NominalType(values);
-    }
-
-    /** Creates an ordinal data type. */
-    public static OrdinalType ordinal(String... values) {
-        return new OrdinalType(values);
-    }
-
-    /** Creates an object data type. */
-    public static ObjectType object(Class clazz) {
+    /**
+     * Creates an object data type of a given class.
+     * @param clazz the object class.
+     * @return the object data type.
+     */
+    public static DataType object(Class<?> clazz) {
+        if (clazz == Integer.class) return IntegerObjectType;
+        if (clazz == Long.class) return LongObjectType;
+        if (clazz == Float.class) return FloatObjectType;
+        if (clazz == Double.class) return DoubleObjectType;
+        if (clazz == Boolean.class) return BooleanObjectType;
+        if (clazz == Character.class) return CharObjectType;
+        if (clazz == Byte.class) return ByteObjectType;
+        if (clazz == Short.class) return ShortObjectType;
+        if (clazz == BigDecimal.class) return DecimalType;
+        if (clazz == String.class) return StringType;
+        if (clazz == LocalDate.class) return DateType;
+        if (clazz == LocalTime.class) return TimeType;
+        if (clazz == LocalDateTime.class) return DateTimeType;
         return new ObjectType(clazz);
     }
 
-    /** Creates an array data type. */
+    /**
+     * Creates an array data type.
+     * @param type the data type of array elements.
+     * @return the array data type.
+     */
     public static ArrayType array(DataType type) {
+        if (type == IntegerType) return IntegerArrayType;
+        if (type == LongType) return LongArrayType;
+        if (type == FloatType) return FloatArrayType;
+        if (type == DoubleType) return DoubleArrayType;
+        if (type == BooleanType) return BooleanArrayType;
+        if (type == CharType) return CharArrayType;
+        if (type == ByteType) return ByteArrayType;
+        if (type == ShortType) return ShortArrayType;
         return new ArrayType(type);
     }
 
-    /** Creates a struct data type. */
+    /**
+     * Creates a struct data type.
+     * @param fields the struct fields.
+     * @return the struct data type.
+     */
     public static StructType struct(StructField... fields) {
         return new StructType(fields);
+    }
+
+    /**
+     * Creates a struct data type.
+     * @param fields the struct fields.
+     * @return the struct data type.
+     */
+    public static StructType struct(List<StructField> fields) {
+        return new StructType(fields);
+    }
+
+    /**
+     * Creates a struct data type from JDBC result set meta data.
+     * @param rs the JDBC result set.
+     * @throws SQLException when JDBC operation fails.
+     * @return the struct data type.
+     */
+    public static StructType struct(ResultSet rs) throws SQLException {
+        ResultSetMetaData meta = rs.getMetaData();
+        String dbms = rs.getStatement().getConnection().getMetaData().getDatabaseProductName();
+        return struct(meta, dbms);
+    }
+
+    /**
+     * Creates a struct data type from JDBC result set meta data.
+     * @param meta the JDBC result set meta data.
+     * @param dbms the name of database management system.
+     * @throws SQLException when JDBC operation fails.
+     * @return the struct data type.
+     */
+    public static StructType struct(ResultSetMetaData meta, String dbms) throws SQLException {
+        int ncol = meta.getColumnCount();
+        StructField[] fields = new StructField[ncol];
+        for (int i = 1; i <= ncol; i++) {
+            String name = meta.getColumnName(i);
+            DataType type = DataType.of(
+                    JDBCType.valueOf(meta.getColumnType(i)),
+                    meta.isNullable(i) != ResultSetMetaData.columnNoNulls,
+                    dbms);
+            fields[i-1] = new StructField(name, type);
+        }
+
+        return struct(fields);
     }
 }

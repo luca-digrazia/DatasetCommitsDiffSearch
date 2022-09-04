@@ -110,13 +110,13 @@ public class ARMA implements Serializable {
      * This leads to the alternative approach of looking at the
      * adjusted R<sup>2</sup>.
      */
-    private final double R2;
+    private final double RSquared;
     /**
      * Adjusted R<sup>2</sup>. The adjusted R<sup>2</sup> has almost same
      * explanation as R<sup>2</sup> but it penalizes the statistic as
      * extra variables are included in the model.
      */
-    private final double adjustedR2;
+    private final double adjustedRSquared;
 
     /**
      * Constructor.
@@ -157,8 +157,8 @@ public class ARMA implements Serializable {
         df = n;
         variance = RSS / df;
 
-        R2 = 1.0 - RSS / TSS;
-        adjustedR2 = 1.0 - ((1 - R2) * (n-1) / (n-p));
+        RSquared = 1.0 - RSS / TSS;
+        adjustedRSquared = 1.0 - ((1 - RSquared) * (n-1) / (n-p));
     }
 
     /**
@@ -285,8 +285,8 @@ public class ARMA implements Serializable {
      *
      * @return R<sup>2</sup> statistic.
      */
-    public double R2() {
-        return R2;
+    public double RSquared() {
+        return RSquared;
     }
 
     /**
@@ -296,8 +296,8 @@ public class ARMA implements Serializable {
      *
      * @return Adjusted R<sup>2</sup> statistic.
      */
-    public double adjustedR2() {
-        return adjustedR2;
+    public double adjustedRSquared() {
+        return adjustedRSquared;
     }
 
     /**
@@ -459,7 +459,7 @@ public class ARMA implements Serializable {
         }
 
         builder.append(String.format("%nResidual  variance: %.4f on %5d degrees of freedom%n", variance, df));
-        builder.append(String.format("Multiple R-squared: %.4f, Adjusted R-squared: %.4f%n", R2, adjustedR2));
+        builder.append(String.format("Multiple R-squared: %.4f, Adjusted R-squared: %.4f%n", RSquared, adjustedRSquared));
 
         return builder.toString();
     }

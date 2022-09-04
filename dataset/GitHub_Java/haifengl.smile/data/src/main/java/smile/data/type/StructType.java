@@ -80,7 +80,7 @@ public class StructType implements DataType {
      * @return the field.
      */
     public StructField field(String name) {
-        return fields[indexOf(name)];
+        return fields[fieldIndex(name)];
     }
 
     /**
@@ -97,7 +97,7 @@ public class StructType implements DataType {
      * @param field the field name.
      * @return the index of field.
      */
-    public int indexOf(String field) {
+    public int fieldIndex(String field) {
         return index.get(field);
     }
 
@@ -106,7 +106,7 @@ public class StructType implements DataType {
      * @param i the index of field.
      * @return the field name.
      */
-    public String name(int i) {
+    public String fieldName(int i) {
         return fields[i].name;
     }
 
