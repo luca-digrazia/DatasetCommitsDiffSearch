@@ -19,7 +19,6 @@ import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import com.google.common.base.Joiner;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
-import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -59,7 +58,6 @@ import com.google.devtools.build.lib.actions.SpawnMetrics;
 import com.google.devtools.build.lib.actionsketch.ActionSketch;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.bugreport.BugReport;
-import com.google.devtools.build.lib.bugreport.BugReporter;
 import com.google.devtools.build.lib.causes.Cause;
 import com.google.devtools.build.lib.causes.LabelCause;
 import com.google.devtools.build.lib.clock.BlazeClock;
@@ -113,7 +111,6 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.IntFunction;
-import java.util.function.Supplier;
 import javax.annotation.Nullable;
 import net.starlark.java.eval.StarlarkSemantics;
 
@@ -141,18 +138,15 @@ public class ActionExecutionFunction implements SkyFunction {
   private final SkyframeActionExecutor skyframeActionExecutor;
   private final BlazeDirectories directories;
   private final AtomicReference<TimestampGranularityMonitor> tsgm;
-  private final BugReporter bugReporter;
   private ConcurrentMap<Action, ContinuationState> stateMap;
 
   public ActionExecutionFunction(
       SkyframeActionExecutor skyframeActionExecutor,
       BlazeDirectories directories,
-      AtomicReference<TimestampGranularityMonitor> tsgm,
-      BugReporter bugReporter) {
+      AtomicReference<TimestampGranularityMonitor> tsgm) {
     this.skyframeActionExecutor = skyframeActionExecutor;
     this.directories = directories;
     this.tsgm = tsgm;
-    this.bugReporter = bugReporter;
     // TODO(b/136156191): This stays in RAM while the SkyFunction of the action is pending, which
     // can result in a lot of memory pressure if a lot of actions are pending.
     stateMap = Maps.newConcurrentMap();
@@ -956,7 +950,7 @@ public class ActionExecutionFunction implements SkyFunction {
         retrievedMetadata = nonMandatoryDiscovered.get(Artifact.key(input)).get();
       } catch (SourceArtifactException e) {
         if (!input.isSourceArtifact()) {
-          bugReporter.sendBugReport(
+          BugReport.sendBugReport(
               new IllegalStateException(
                   "Non-source artifact had SourceArtifactException" + input, e));
         }
@@ -1234,14 +1228,14 @@ public class ActionExecutionFunction implements SkyFunction {
         value = valueOrException.get();
       } catch (SourceArtifactException e) {
         if (!input.isSourceArtifact()) {
-          bugReporter.sendBugReport(
+          BugReport.sendBugReport(
               new IllegalStateException(
                   "Non-source artifact had SourceArtifactException" + input, e));
         }
         if (mandatory) {
           sourceArtifactErrorCauses.add(
               createLabelCauseNullOwnerOk(
-                  input, e.getDetailedExitCode(), action.getOwner().getLabel(), bugReporter));
+                  input, e.getDetailedExitCode(), action.getOwner().getLabel()));
           continue;
         }
       } catch (ActionExecutionException e) {
@@ -1269,8 +1263,7 @@ public class ActionExecutionFunction implements SkyFunction {
               createLabelCause(
                   input,
                   ((MissingArtifactValue) value).getDetailedExitCode(),
-                  action.getOwner().getLabel(),
-                  bugReporter));
+                  action.getOwner().getLabel()));
           continue;
         } else {
           value = FileArtifactValue.MISSING_FILE_MARKER;
@@ -1346,37 +1339,35 @@ public class ActionExecutionFunction implements SkyFunction {
       AccumulateInputResultsFactory<S, R> accumulateInputResultsFactory,
       boolean allowValuesMissingEarlyReturn)
       throws ActionExecutionException, InterruptedException {
+    ImmutableList<Artifact> allInputsList = allInputs.toList();
+
+    // Some keys have more than 1 corresponding Artifact (e.g. actions with 2 outputs).
+    // For Artifacts whose Artifact::key isn't itself.
+    Multimap<SkyKey, Artifact> skyKeyToArtifactSet =
+        MultimapBuilder.hashKeys().hashSetValues().build();
+    allInputsList.forEach(
+        input -> {
+          SkyKey key = Artifact.key(input);
+          if (key != input) {
+            skyKeyToArtifactSet.put(key, input);
+          }
+        });
 
     ActionExecutionFunctionExceptionHandler actionExecutionFunctionExceptionHandler =
         new ActionExecutionFunctionExceptionHandler(
-            Suppliers.memoize(
-                () -> {
-                  ImmutableList<Artifact> allInputsList = allInputs.toList();
-                  Multimap<SkyKey, Artifact> skyKeyToArtifactSet =
-                      MultimapBuilder.hashKeys().hashSetValues().build();
-                  allInputsList.forEach(
-                      input -> {
-                        SkyKey key = Artifact.key(input);
-                        if (key != input) {
-                          skyKeyToArtifactSet.put(key, input);
-                        }
-                      });
-                  return skyKeyToArtifactSet;
-                }),
+            skyKeyToArtifactSet,
             inputDeps,
             action,
             mandatoryInputs,
             requestedSkyKeys,
             env.valuesMissing());
 
-    boolean errorFree = actionExecutionFunctionExceptionHandler.accumulateAndMaybeThrowExceptions();
+    boolean errorFree = actionExecutionFunctionExceptionHandler.accumulateAndThrowExceptions();
 
     // No exceptions from dependencies, it's now safe to check for missing values.
     if (allowValuesMissingEarlyReturn && errorFree && env.valuesMissing()) {
       return null;
     }
-
-    ImmutableList<Artifact> allInputsList = allInputs.toList();
 
     // When there are no missing values or there was an error, we can start checking individual
     // files. We don't bother to optimize the error-ful case since it's rare.
@@ -1393,13 +1384,11 @@ public class ActionExecutionFunction implements SkyFunction {
     for (Artifact input : allInputsList) {
       SkyValue value = ArtifactNestedSetFunction.getInstance().getValueForKey(Artifact.key(input));
       if (value == null) {
-        if (errorFree && (mandatoryInputs == null || mandatoryInputs.contains(input))) {
-          BugReport.sendBugReport(
-              new IllegalStateException(
-                  String.format(
-                      "Null value for mandatory %s with no errors or values missing: %s",
-                      input, action)));
-        }
+        Preconditions.checkState(
+            !errorFree || !mandatoryInputs.contains(input),
+            "Null value for mandatory %s with no errors or values missing: %s",
+            input,
+            action);
         continue;
       }
       if (value instanceof MissingArtifactValue) {
@@ -1435,27 +1424,21 @@ public class ActionExecutionFunction implements SkyFunction {
   }
 
   static LabelCause createLabelCause(
-      Artifact input,
-      DetailedExitCode detailedExitCode,
-      Label labelInCaseOfBug,
-      BugReporter bugReporter) {
+      Artifact input, DetailedExitCode detailedExitCode, Label labelInCaseOfBug) {
     if (input.getOwner() == null) {
-      bugReporter.sendBugReport(
+      BugReport.sendBugReport(
           new IllegalStateException(
               String.format(
                   "Mandatory artifact %s with exit code %s should have owner (%s)",
                   input, detailedExitCode, labelInCaseOfBug)));
     }
-    return createLabelCauseNullOwnerOk(input, detailedExitCode, labelInCaseOfBug, bugReporter);
+    return createLabelCauseNullOwnerOk(input, detailedExitCode, labelInCaseOfBug);
   }
 
   private static LabelCause createLabelCauseNullOwnerOk(
-      Artifact input,
-      DetailedExitCode detailedExitCode,
-      Label actionLabel,
-      BugReporter bugReporter) {
+      Artifact input, DetailedExitCode detailedExitCode, Label actionLabel) {
     if (!input.isSourceArtifact()) {
-      bugReporter.sendBugReport(
+      BugReport.sendBugReport(
           new IllegalStateException(
               String.format(
                   "Unexpected exit code %s for generated artifact %s (%s)",
@@ -1608,7 +1591,7 @@ public class ActionExecutionFunction implements SkyFunction {
 
   /** Helper subclass for the error-handling logic for ActionExecutionFunction#accumulateInputs. */
   private final class ActionExecutionFunctionExceptionHandler {
-    private final Supplier<Multimap<SkyKey, Artifact>> skyKeyToDerivedArtifactSetForExceptions;
+    private final Multimap<SkyKey, Artifact> skyKeyToDerivedArtifactSet;
     private final List<
             ValueOrException3<
                 SourceArtifactException, ActionExecutionException, ArtifactNestedSetEvalException>>
@@ -1622,7 +1605,7 @@ public class ActionExecutionFunction implements SkyFunction {
     private ActionExecutionException firstActionExecutionException;
 
     ActionExecutionFunctionExceptionHandler(
-        Supplier<Multimap<SkyKey, Artifact>> skyKeyToDerivedArtifactSetForExceptions,
+        Multimap<SkyKey, Artifact> skyKeyToDerivedArtifactSet,
         List<
                 ValueOrException3<
                     SourceArtifactException,
@@ -1633,7 +1616,7 @@ public class ActionExecutionFunction implements SkyFunction {
         Set<Artifact> mandatoryInputs,
         Iterable<SkyKey> requestedSkyKeys,
         boolean valuesMissing) {
-      this.skyKeyToDerivedArtifactSetForExceptions = skyKeyToDerivedArtifactSetForExceptions;
+      this.skyKeyToDerivedArtifactSet = skyKeyToDerivedArtifactSet;
       this.inputDeps = inputDeps;
       this.action = action;
       this.mandatoryInputs = mandatoryInputs;
@@ -1648,12 +1631,9 @@ public class ActionExecutionFunction implements SkyFunction {
      * <p>This also updates ArtifactNestedSetFunction#skyKeyToSkyValue if an Artifact's value is
      * non-null.
      *
-     * @throws ActionExecutionException if the eval of any mandatory artifact threw an exception and
-     *     there {@link #valuesMissing}. If there were no values missing, returns false, indicating
-     *     that there were errors, allowing the caller to discover any further errors before calling
-     *     {@link #maybeThrowException} to throw the fully accumulated exception.
+     * @throws ActionExecutionException if the eval of any mandatory artifact threw an exception.
      */
-    boolean accumulateAndMaybeThrowExceptions() throws ActionExecutionException {
+    boolean accumulateAndThrowExceptions() throws ActionExecutionException {
       int i = 0;
       for (SkyKey key : requestedSkyKeys) {
         try {
@@ -1668,7 +1648,6 @@ public class ActionExecutionFunction implements SkyFunction {
           }
           ArtifactNestedSetFunction.getInstance().updateValueForKey(key, value);
         } catch (SourceArtifactException e) {
-          ArtifactNestedSetFunction.getInstance().removeStaleKeyBecauseOfException(key);
           handleSourceArtifactExceptionFromSkykey(key, e);
         } catch (ActionExecutionException e) {
           handleActionExecutionExceptionFromSkykey(key, e);
@@ -1709,14 +1688,14 @@ public class ActionExecutionFunction implements SkyFunction {
         handleActionExecutionExceptionPerArtifact((Artifact) key, e);
         return;
       }
-      for (Artifact input : skyKeyToDerivedArtifactSetForExceptions.get().get(key)) {
+      for (Artifact input : skyKeyToDerivedArtifactSet.get(key)) {
         handleActionExecutionExceptionPerArtifact(input, e);
       }
     }
 
     private void handleSourceArtifactExceptionFromSkykey(SkyKey key, SourceArtifactException e) {
       if (!(key instanceof Artifact) || !((Artifact) key).isSourceArtifact()) {
-        bugReporter.sendBugReport(
+        BugReport.sendBugReport(
             new IllegalStateException(
                 "Unexpected SourceArtifactException for key: " + key + ", " + action, e));
         missingArtifactCauses.add(
@@ -1727,17 +1706,13 @@ public class ActionExecutionFunction implements SkyFunction {
       if (isMandatory((Artifact) key)) {
         missingArtifactCauses.add(
             createLabelCauseNullOwnerOk(
-                (Artifact) key,
-                e.getDetailedExitCode(),
-                action.getOwner().getLabel(),
-                bugReporter));
+                (Artifact) key, e.getDetailedExitCode(), action.getOwner().getLabel()));
       }
     }
 
     void accumulateMissingFileArtifactValue(Artifact input, MissingArtifactValue value) {
       missingArtifactCauses.add(
-          createLabelCause(
-              input, value.getDetailedExitCode(), action.getOwner().getLabel(), bugReporter));
+          createLabelCause(input, value.getDetailedExitCode(), action.getOwner().getLabel()));
     }
 
     /** @throws ActionExecutionException if there is any accumulated exception from the inputs. */
