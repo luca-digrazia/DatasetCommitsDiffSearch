@@ -569,23 +569,19 @@ class BytecodeCreatorImpl implements BytecodeCreator {
         final ResultHandle resolvedResultHandle = resolve(checkScope(resultHandle));
         assert result != null;
         operations.add(new Operation() {
-            @Override
             void writeBytecode(final MethodVisitor methodVisitor) {
                 loadResultHandle(methodVisitor, resolvedResultHandle, BytecodeCreatorImpl.this, result.getType());
                 storeResultHandle(methodVisitor, result);
             }
 
-            @Override
             Set<ResultHandle> getInputResultHandles() {
                 return Collections.singleton(resolvedResultHandle);
             }
 
-            @Override
             ResultHandle getTopResultHandle() {
                 return resolvedResultHandle;
             }
 
-            @Override
             ResultHandle getOutgoingResultHandle() {
                 return result;
             }
@@ -593,12 +589,10 @@ class BytecodeCreatorImpl implements BytecodeCreator {
         return result;
     }
 
-    @Override
     public boolean isScopedWithin(final BytecodeCreator other) {
         return other == this || owner != null && owner.isScopedWithin(other);
     }
 
-    @Override
     public void continueScope(final BytecodeCreator scope) {
         if (! isScopedWithin(scope)) {
             throw new IllegalArgumentException("Cannot continue non-enclosing scope");
@@ -606,7 +600,6 @@ class BytecodeCreatorImpl implements BytecodeCreator {
         operations.add(new JumpOperation(((BytecodeCreatorImpl) scope).top));
     }
 
-    @Override
     public void breakScope(final BytecodeCreator scope) {
         if (! isScopedWithin(scope)) {
             throw new IllegalArgumentException("Cannot break non-enclosing scope");
@@ -614,7 +607,6 @@ class BytecodeCreatorImpl implements BytecodeCreator {
         operations.add(new JumpOperation(((BytecodeCreatorImpl) scope).bottom));
     }
 
-    @Override
     public BytecodeCreator createScope() {
         final BytecodeCreatorImpl enclosed = new BytecodeCreatorImpl(this);
         operations.add(new BlockOperation(enclosed));
@@ -696,7 +688,6 @@ class BytecodeCreatorImpl implements BytecodeCreator {
         }
     }
 
-    @Override
     public TryBlock tryBlock() {
         final TryBlockImpl tryBlock = new TryBlockImpl(this);
         operations.add(new BlockOperation(tryBlock));
@@ -1024,22 +1015,18 @@ class BytecodeCreatorImpl implements BytecodeCreator {
             this.target = target;
         }
 
-        @Override
         void writeBytecode(final MethodVisitor methodVisitor) {
             methodVisitor.visitJumpInsn(Opcodes.GOTO, target);
         }
 
-        @Override
         Set<ResultHandle> getInputResultHandles() {
             return Collections.emptySet();
         }
 
-        @Override
         ResultHandle getTopResultHandle() {
             return null;
         }
 
-        @Override
         ResultHandle getOutgoingResultHandle() {
             return null;
         }
@@ -1231,27 +1218,22 @@ class BytecodeCreatorImpl implements BytecodeCreator {
             this.block = block;
         }
 
-        @Override
         void writeBytecode(final MethodVisitor methodVisitor) {
             block.writeOperations(methodVisitor);
         }
 
-        @Override
         Set<ResultHandle> getInputResultHandles() {
             return Collections.emptySet();
         }
 
-        @Override
         ResultHandle getTopResultHandle() {
             return null;
         }
 
-        @Override
         ResultHandle getOutgoingResultHandle() {
             return null;
         }
 
-        @Override
         public void findResultHandles(final Set<ResultHandle> vc) {
             block.findActiveResultHandles(vc);
         }
