@@ -16,28 +16,23 @@ package com.google.devtools.build.lib.analysis;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.buildeventstream.BuildEvent;
-import com.google.devtools.build.lib.buildeventstream.BuildEventContext;
+import com.google.devtools.build.lib.buildeventstream.BuildEventConverters;
 import com.google.devtools.build.lib.buildeventstream.BuildEventId;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
 import com.google.devtools.build.lib.buildeventstream.BuildEventWithConfiguration;
 import com.google.devtools.build.lib.buildeventstream.GenericBuildEvent;
 import com.google.devtools.build.lib.buildeventstream.NullConfiguration;
-import com.google.devtools.build.lib.packages.RawAttributeMapper;
-import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.packages.TargetUtils;
-import com.google.devtools.build.lib.packages.TestSize;
-import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.cmdline.Label;
 import java.util.Collection;
 
 /** Event reporting about the configurations associated with a given target */
 public class TargetConfiguredEvent implements BuildEventWithConfiguration {
-  private final Target target;
+  private final Label label;
   private final Collection<BuildConfiguration> configurations;
 
-  TargetConfiguredEvent(Target target, Collection<BuildConfiguration> configurations) {
+  TargetConfiguredEvent(Label label, Collection<BuildConfiguration> configurations) {
+    this.label = label;
     this.configurations = configurations;
-    this.target = target;
   }
 
   @Override
@@ -45,7 +40,7 @@ public class TargetConfiguredEvent implements BuildEventWithConfiguration {
     ImmutableList.Builder<BuildEvent> builder = new ImmutableList.Builder<>();
     for (BuildConfiguration config : configurations) {
       if (config != null) {
-        builder.add(config.toBuildEvent());
+        builder.add(config);
       } else {
         builder.add(new NullConfiguration());
       }
@@ -55,7 +50,7 @@ public class TargetConfiguredEvent implements BuildEventWithConfiguration {
 
   @Override
   public BuildEventId getEventId() {
-    return BuildEventId.targetConfigured(target.getLabel());
+    return BuildEventId.targetConfigured(label);
   }
 
   @Override
@@ -63,41 +58,19 @@ public class TargetConfiguredEvent implements BuildEventWithConfiguration {
     ImmutableList.Builder childrenBuilder = ImmutableList.builder();
     for (BuildConfiguration config : configurations) {
       if (config != null) {
-        childrenBuilder.add(BuildEventId.targetCompleted(target.getLabel(), config.getEventId()));
+        childrenBuilder.add(BuildEventId.targetCompleted(label, config.getEventId()));
       } else {
         childrenBuilder.add(
-            BuildEventId.targetCompleted(target.getLabel(), BuildEventId.nullConfigurationId()));
+            BuildEventId.targetCompleted(label, BuildEventId.nullConfigurationId()));
       }
     }
     return childrenBuilder.build();
   }
 
-  static BuildEventStreamProtos.TestSize bepTestSize(TestSize size) {
-    switch (size) {
-      case SMALL:
-        return BuildEventStreamProtos.TestSize.SMALL;
-      case MEDIUM:
-        return BuildEventStreamProtos.TestSize.MEDIUM;
-      case LARGE:
-        return BuildEventStreamProtos.TestSize.LARGE;
-      case ENORMOUS:
-        return BuildEventStreamProtos.TestSize.ENORMOUS;
-      default:
-        return BuildEventStreamProtos.TestSize.UNKNOWN;
-    }
-  }
-
   @Override
-  public BuildEventStreamProtos.BuildEvent asStreamProto(BuildEventContext converters) {
-    BuildEventStreamProtos.TargetConfigured.Builder builder =
-        BuildEventStreamProtos.TargetConfigured.newBuilder().setTargetKind(target.getTargetKind());
-    Rule rule = target.getAssociatedRule();
-    if (rule != null) {
-      builder.addAllTag(RawAttributeMapper.of(rule).getMergedValues("tags", Type.STRING_LIST));
-    }
-    if (TargetUtils.isTestRule(target)) {
-      builder.setTestSize(bepTestSize(TestSize.getTestSize(target.getAssociatedRule())));
-    }
-    return GenericBuildEvent.protoChaining(this).setConfigured(builder.build()).build();
+  public BuildEventStreamProtos.BuildEvent asStreamProto(BuildEventConverters converters) {
+    return GenericBuildEvent.protoChaining(this)
+        .setConfigured(BuildEventStreamProtos.TargetConfigured.getDefaultInstance())
+        .build();
   }
 }

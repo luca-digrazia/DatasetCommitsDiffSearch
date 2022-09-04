@@ -102,7 +102,6 @@ import com.google.devtools.build.lib.rules.config.ConfigFeatureFlagFeatureVisibi
 import com.google.devtools.build.lib.rules.config.ConfigRuleClasses;
 import com.google.devtools.build.lib.rules.config.ConfigSkylarkCommon;
 import com.google.devtools.build.lib.rules.cpp.CcIncLibraryRule;
-import com.google.devtools.build.lib.rules.cpp.CcToolchainAlias;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainRule;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainSuiteRule;
 import com.google.devtools.build.lib.rules.cpp.CppBuildInfo;
@@ -118,7 +117,6 @@ import com.google.devtools.build.lib.rules.genrule.GenRuleBaseRule;
 import com.google.devtools.build.lib.rules.java.JavaConfigurationLoader;
 import com.google.devtools.build.lib.rules.java.JavaImportBaseRule;
 import com.google.devtools.build.lib.rules.java.JavaOptions;
-import com.google.devtools.build.lib.rules.java.JavaRuntimeAlias;
 import com.google.devtools.build.lib.rules.java.JavaRuntimeRule;
 import com.google.devtools.build.lib.rules.java.JavaRuntimeSuiteRule;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
@@ -131,6 +129,8 @@ import com.google.devtools.build.lib.rules.objc.AppleBinaryRule;
 import com.google.devtools.build.lib.rules.objc.AppleSkylarkCommon;
 import com.google.devtools.build.lib.rules.objc.AppleStaticLibraryRule;
 import com.google.devtools.build.lib.rules.objc.AppleStubBinaryRule;
+import com.google.devtools.build.lib.rules.objc.AppleWatch1ExtensionRule;
+import com.google.devtools.build.lib.rules.objc.AppleWatchExtensionBinaryRule;
 import com.google.devtools.build.lib.rules.objc.IosApplicationRule;
 import com.google.devtools.build.lib.rules.objc.IosDeviceRule;
 import com.google.devtools.build.lib.rules.objc.IosExtensionBinaryRule;
@@ -392,7 +392,6 @@ public class BazelRuleClassProvider {
 
           builder.addRuleDefinition(new CcToolchainRule());
           builder.addRuleDefinition(new CcToolchainSuiteRule());
-          builder.addRuleDefinition(new CcToolchainAlias.CcToolchainAliasRule());
           builder.addRuleDefinition(new CcIncLibraryRule());
           builder.addRuleDefinition(new BazelCppRuleClasses.CcLinkingRule());
           builder.addRuleDefinition(new BazelCppRuleClasses.CcDeclRule());
@@ -451,7 +450,6 @@ public class BazelRuleClassProvider {
           builder.addRuleDefinition(new JavaToolchainRule());
           builder.addRuleDefinition(new JavaRuntimeRule());
           builder.addRuleDefinition(new JavaRuntimeSuiteRule());
-          builder.addRuleDefinition(new JavaRuntimeAlias.JavaRuntimeAliasRule());
 
           builder.addRuleDefinition(new ExtraActionRule());
           builder.addRuleDefinition(new ActionListenerRule());
@@ -587,6 +585,8 @@ public class BazelRuleClassProvider {
 
           builder.addRuleDefinition(new AppleCcToolchainRule());
           builder.addRuleDefinition(new AppleToolchain.RequiresXcodeConfigRule(toolsRepository));
+          builder.addRuleDefinition(new AppleWatch1ExtensionRule());
+          builder.addRuleDefinition(new AppleWatchExtensionBinaryRule());
           builder.addRuleDefinition(new IosApplicationRule());
           builder.addRuleDefinition(new IosDeviceRule());
           builder.addRuleDefinition(new IosExtensionBinaryRule());

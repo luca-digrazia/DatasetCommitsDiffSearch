@@ -17,7 +17,7 @@ package com.google.devtools.build.lib.bazel.rules;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.buildeventstream.BuildEvent;
-import com.google.devtools.build.lib.buildeventstream.BuildEventContext;
+import com.google.devtools.build.lib.buildeventstream.BuildEventConverters;
 import com.google.devtools.build.lib.buildeventstream.BuildEventId;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
 import com.google.devtools.build.lib.buildeventstream.BuildEventWithConfiguration;
@@ -39,8 +39,7 @@ public class VisibilityErrorEvent implements BuildEventWithConfiguration {
 
   @Override
   public BuildEventId getEventId() {
-    // TODO(aehlig): track the configuration as well
-    return BuildEventId.unconfiguredLabelId(label);
+    return BuildEventId.targetCompleted(label, configuration.getEventId());
   }
 
   @Override
@@ -49,18 +48,15 @@ public class VisibilityErrorEvent implements BuildEventWithConfiguration {
   }
 
   @Override
-  public BuildEventStreamProtos.BuildEvent asStreamProto(BuildEventContext converters) {
+  public BuildEventStreamProtos.BuildEvent asStreamProto(BuildEventConverters converters) {
     return GenericBuildEvent.protoChaining(this)
-        .setAborted(
-            BuildEventStreamProtos.Aborted.newBuilder()
-                .setReason(BuildEventStreamProtos.Aborted.AbortReason.ANALYSIS_FAILURE)
-                .setDescription(errorMessage)
-                .build())
+        .setAnalysisFailed(
+            BuildEventStreamProtos.AnalysisFailure.newBuilder().setDetails(errorMessage).build())
         .build();
   }
 
   @Override
   public Collection<BuildEvent> getConfigurations() {
-    return ImmutableList.<BuildEvent>of(configuration.toBuildEvent());
+    return ImmutableList.<BuildEvent>of(configuration);
   }
 }
