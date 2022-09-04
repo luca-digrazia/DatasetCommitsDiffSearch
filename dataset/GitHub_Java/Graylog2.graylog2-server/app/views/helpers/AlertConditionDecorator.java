@@ -44,11 +44,11 @@ public abstract class AlertConditionDecorator {
     }
 
     public int getGrace() {
-        return (int) ((Double) getParameter("grace", 0.0)).longValue();
+        return (int) ((Number) getParameter("grace", 0.0)).longValue();
     }
 
     public int getBacklog() {
-        return (int) ((Double) getParameter("backlog", 0.0)).longValue();
+        return (int) ((Number) getParameter("backlog", 0.0)).longValue();
     }
 
     public abstract Call getFormAction(String streamId);
@@ -70,7 +70,7 @@ public abstract class AlertConditionDecorator {
         if (isEmptyCondition()) {
             sb.append("Add alert condition");
         } else {
-            sb.append("Edit alert condition");
+            sb.append("Update alert condition");
         }
         sb.append("</button>");
 
