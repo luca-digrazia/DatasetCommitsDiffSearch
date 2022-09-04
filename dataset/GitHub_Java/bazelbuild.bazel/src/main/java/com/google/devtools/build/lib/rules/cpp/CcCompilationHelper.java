@@ -104,8 +104,7 @@ public final class CcCompilationHelper {
 
     // FDO is disabled -> do nothing.
     if (fdoProvider.getFdoInstrument() == null
-        && fdoProvider.getFdoMode() == FdoMode.OFF
-        && fdoProvider.getPrefetchHintsArtifact() == null) {
+        && fdoProvider.getFdoMode() == FdoMode.OFF) {
       return;
     }
 
@@ -116,7 +115,7 @@ public final class CcCompilationHelper {
     }
 
     // Optimization phase
-    if (fdoProvider.getFdoMode() != FdoMode.OFF || fdoProvider.getPrefetchHintsArtifact() != null) {
+    if (fdoProvider.getFdoMode() != FdoMode.OFF) {
       Iterable<Artifact> auxiliaryInputs = getAuxiliaryFdoInputs(fdoProvider);
       builder.addMandatoryInputs(auxiliaryInputs);
       if (!Iterables.isEmpty(auxiliaryInputs)) {
@@ -353,11 +352,11 @@ public final class CcCompilationHelper {
     this.cppConfiguration =
         Preconditions.checkNotNull(ruleContext.getFragment(CppConfiguration.class));
     setGenerateNoPicAction(
-        !ccToolchain.usePicForDynamicLibraries(featureConfiguration)
-            || !CppHelper.usePicForBinaries(ruleContext, ccToolchain, featureConfiguration));
+        !ccToolchain.usePicForDynamicLibraries()
+            || !CppHelper.usePicForBinaries(ruleContext, ccToolchain));
     setGeneratePicAction(
-        ccToolchain.usePicForDynamicLibraries(featureConfiguration)
-            || CppHelper.usePicForBinaries(ruleContext, ccToolchain, featureConfiguration));
+        ccToolchain.usePicForDynamicLibraries()
+            || CppHelper.usePicForBinaries(ruleContext, ccToolchain));
   }
 
   /**
@@ -831,7 +830,7 @@ public final class CcCompilationHelper {
     outputGroups.put(OutputGroupInfo.TEMP_FILES, ccOutputs.getTemps());
     if (emitCompileProviders) {
       boolean processHeadersInDependencies = cppConfiguration.processHeadersInDependencies();
-      boolean usePic = ccToolchain.usePicForDynamicLibraries(featureConfiguration);
+      boolean usePic = ccToolchain.usePicForDynamicLibraries();
       outputGroups.put(
           OutputGroupInfo.FILES_TO_COMPILE,
           ccOutputs.getFilesToCompile(processHeadersInDependencies, usePic));
