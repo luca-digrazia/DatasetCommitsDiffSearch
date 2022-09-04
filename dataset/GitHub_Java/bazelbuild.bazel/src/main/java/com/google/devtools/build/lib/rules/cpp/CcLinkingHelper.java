@@ -18,14 +18,16 @@ package com.google.devtools.build.lib.rules.cpp;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.FailAction;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.AnalysisUtils;
 import com.google.devtools.build.lib.analysis.FileProvider;
+import com.google.devtools.build.lib.analysis.LanguageDependentFragment;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
+import com.google.devtools.build.lib.analysis.TransitiveInfoProviderMap;
+import com.google.devtools.build.lib.analysis.TransitiveInfoProviderMapBuilder;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -62,17 +64,21 @@ public final class CcLinkingHelper {
   // TODO(plf): Only used by Skylark API. Remove after migrating.
   @Deprecated
   public static final class LinkingInfo implements LinkingInfoApi {
-    private final CcLinkingInfo ccLinkingInfo;
+    private final TransitiveInfoProviderMap providers;
     private final CcLinkingOutputs linkingOutputs;
 
-    public LinkingInfo(CcLinkingInfo ccLinkingInfo, CcLinkingOutputs linkingOutputs) {
-      this.ccLinkingInfo = ccLinkingInfo;
+    public LinkingInfo(TransitiveInfoProviderMap providers, CcLinkingOutputs linkingOutputs) {
+      this.providers = providers;
       this.linkingOutputs = linkingOutputs;
+    }
+
+    public TransitiveInfoProviderMap getProviders() {
+      return providers;
     }
 
     @Override
     public CcLinkingInfo getCcLinkingInfo() {
-      return ccLinkingInfo;
+      return (CcLinkingInfo) providers.get(CcLinkingInfo.PROVIDER.getKey());
     }
 
     @Override
@@ -190,10 +196,7 @@ public final class CcLinkingHelper {
    * (like from a "deps" attribute) and also implicit dependencies on runtime libraries.
    */
   public CcLinkingHelper addDeps(Iterable<? extends TransitiveInfoCollection> deps) {
-    this.ccLinkingInfos.addAll(
-        Streams.stream(AnalysisUtils.getProviders(deps, CcInfo.PROVIDER))
-            .map(CcInfo::getCcLinkingInfo)
-            .collect(ImmutableList.toImmutableList()));
+    Iterables.addAll(this.ccLinkingInfos, AnalysisUtils.getProviders(deps, CcLinkingInfo.PROVIDER));
     Iterables.addAll(this.deps, deps);
     return this;
   }
@@ -280,7 +283,9 @@ public final class CcLinkingHelper {
   }
 
   /**
-   * Disables checking that the deps actually are C++ rules.
+   * Disables checking that the deps actually are C++ rules. By default, the {@link #link} method
+   * uses {@link LanguageDependentFragment.Checker#depSupportsLanguage} to check that all deps
+   * provide C++ providers.
    */
   public CcLinkingHelper setCheckDepsGenerateCpp(boolean checkDepsGenerateCpp) {
     this.checkDepsGenerateCpp = checkDepsGenerateCpp;
@@ -342,7 +347,11 @@ public final class CcLinkingHelper {
     Preconditions.checkNotNull(ccOutputs);
 
     if (checkDepsGenerateCpp) {
-      CppHelper.checkProtoLibrariesInDeps(ruleContext, deps);
+      for (LanguageDependentFragment dep :
+          AnalysisUtils.getProviders(deps, LanguageDependentFragment.class)) {
+        LanguageDependentFragment.Checker.depSupportsLanguage(
+            ruleContext, dep, CppRuleClasses.LANGUAGE, "deps");
+      }
     }
 
     // Create link actions (only if there are object files or if explicitly requested).
@@ -363,6 +372,10 @@ public final class CcLinkingHelper {
   public CcLinkingInfo buildCcLinkingInfo(
       CcLinkingOutputs ccLinkingOutputs, CcCompilationContext ccCompilationContext) {
     Preconditions.checkNotNull(ccCompilationContext);
+
+    // Be very careful when adding new providers here - it can potentially affect a lot of rules.
+    // We should consider merging most of these providers into a single provider.
+    TransitiveInfoProviderMapBuilder providers = new TransitiveInfoProviderMapBuilder();
 
     final CcLinkingOutputs ccLinkingOutputsFinalized = ccLinkingOutputs;
     BiFunction<Boolean, Boolean, CcLinkParams> createParams =
@@ -403,6 +416,7 @@ public final class CcLinkingHelper {
                 createParams.apply(/* staticMode= */ false, /* forDynamicLibrary= */ true))
             .setDynamicModeParamsForExecutable(
                 createParams.apply(/* staticMode= */ false, /* forDynamicLibrary= */ false));
+    providers.put(ccLinkingInfoBuilder.build());
     return ccLinkingInfoBuilder.build();
   }
 
@@ -749,8 +763,7 @@ public final class CcLinkingHelper {
       } else {
         Artifact implLibraryLinkArtifact =
             SolibSymlinkAction.getDynamicLibrarySymlink(
-                /* actionRegistry= */ ruleContext,
-                /* actionConstructionContext= */ ruleContext,
+                ruleContext,
                 ccToolchain.getSolibDirectory(),
                 dynamicLibrary.getArtifact(),
                 /* preserveName= */ false,
@@ -767,8 +780,7 @@ public final class CcLinkingHelper {
         } else {
           Artifact libraryLinkArtifact =
               SolibSymlinkAction.getDynamicLibrarySymlink(
-                  /* actionRegistry= */ ruleContext,
-                  /* actionConstructionContext= */ ruleContext,
+                  ruleContext,
                   ccToolchain.getSolibDirectory(),
                   interfaceLibrary.getArtifact(),
                   /* preserveName= */ false,

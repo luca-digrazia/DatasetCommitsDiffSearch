@@ -198,7 +198,7 @@ public final class CcLinkParams implements CcLinkParamsApi {
     private final NestedSetBuilder<LibraryToLink> librariesBuilder =
         NestedSetBuilder.linkOrder();
     private final NestedSetBuilder<Artifact> dynamicLibrariesForRuntimeBuilder =
-        NestedSetBuilder.linkOrder();
+        NestedSetBuilder.stableOrder();
 
     /**
      * A builder for the list of link time libraries.  Most builds
@@ -291,9 +291,9 @@ public final class CcLinkParams implements CcLinkParamsApi {
      * anything.
      */
     public Builder addTransitiveTarget(TransitiveInfoCollection target) {
-      CcInfo ccInfo = target.get(CcInfo.PROVIDER);
-      if (ccInfo != null) {
-        add(ccInfo.getCcLinkingInfo());
+      CcLinkingInfo ccLinkingInfo = target.get(CcLinkingInfo.PROVIDER);
+      if (ccLinkingInfo != null) {
+        add(ccLinkingInfo);
       }
       return this;
     }
@@ -409,13 +409,7 @@ public final class CcLinkParams implements CcLinkParamsApi {
     /** Processes typical dependencies of a C/C++ library. */
     public Builder addCcLibrary(RuleContext context) {
       addTransitiveTargets(
-          context.getPrerequisites("deps", Mode.TARGET),
-          x -> {
-            if (x.get(CcInfo.PROVIDER) == null) {
-              return null;
-            }
-            return x.get(CcInfo.PROVIDER).getCcLinkingInfo();
-          });
+          context.getPrerequisites("deps", Mode.TARGET), x -> x.get(CcLinkingInfo.PROVIDER));
       return this;
     }
   }
