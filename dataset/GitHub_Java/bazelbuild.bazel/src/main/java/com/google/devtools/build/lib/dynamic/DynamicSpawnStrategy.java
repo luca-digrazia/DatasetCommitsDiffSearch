@@ -374,9 +374,7 @@ public class DynamicSpawnStrategy implements SpawnStrategy {
     for (SandboxedSpawnStrategy strategy :
         dynamicStrategyRegistry.getDynamicSpawnActionContexts(
             spawn, DynamicStrategyRegistry.DynamicMode.LOCAL)) {
-      if (strategy.canExec(spawn, actionExecutionContext)) {
-        return strategy.exec(spawn, actionExecutionContext, stopConcurrentSpawns);
-      }
+      return strategy.exec(spawn, actionExecutionContext, stopConcurrentSpawns);
     }
     throw new RuntimeException(
         "executorCreated not yet called or no default dynamic_local_strategy set");
@@ -393,9 +391,7 @@ public class DynamicSpawnStrategy implements SpawnStrategy {
     for (SandboxedSpawnStrategy strategy :
         dynamicStrategyRegistry.getDynamicSpawnActionContexts(
             spawn, DynamicStrategyRegistry.DynamicMode.REMOTE)) {
-      if (strategy.canExec(spawn, actionExecutionContext)) {
-        return strategy.exec(spawn, actionExecutionContext, stopConcurrentSpawns);
-      }
+      return strategy.exec(spawn, actionExecutionContext, stopConcurrentSpawns);
     }
     throw new RuntimeException(
         "executorCreated not yet called or no default dynamic_remote_strategy set");
