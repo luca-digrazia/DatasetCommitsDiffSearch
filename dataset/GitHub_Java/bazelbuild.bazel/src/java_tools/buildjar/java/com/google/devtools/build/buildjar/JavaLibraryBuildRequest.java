@@ -71,8 +71,6 @@ public final class JavaLibraryBuildRequest {
 
   private final boolean compressJar;
 
-  private final boolean noClasspathFallback;
-
   /** Repository for all dependency-related information. */
   private final DependencyModule dependencyModule;
 
@@ -149,7 +147,6 @@ public final class JavaLibraryBuildRequest {
     this.plugins = pluginsBuilder.build();
 
     this.compressJar = optionsParser.compressJar();
-    this.noClasspathFallback = optionsParser.noClasspathFallback();
     this.sourceFiles = new ArrayList<>(asPaths(optionsParser.getSourceFiles()));
     this.sourceJars = asPaths(optionsParser.getSourceJars());
     this.classPath = asPaths(optionsParser.getClassPath());
@@ -186,8 +183,7 @@ public final class JavaLibraryBuildRequest {
     return paths.stream().map(Paths::get).collect(toImmutableList());
   }
 
-  @Nullable
-  private static Path asPath(@Nullable String path) {
+  private static @Nullable Path asPath(@Nullable String path) {
     return path != null ? Paths.get(path) : null;
   }
 
@@ -272,10 +268,6 @@ public final class JavaLibraryBuildRequest {
 
   public boolean compressJar() {
     return compressJar;
-  }
-
-  public boolean noClasspathFallback() {
-    return noClasspathFallback;
   }
 
   public DependencyModule getDependencyModule() {
