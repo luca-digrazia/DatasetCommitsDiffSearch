@@ -1,7 +1,6 @@
 package io.quarkus.annotation.processor.generate_doc;
 
 import static io.quarkus.annotation.processor.generate_doc.DocGeneratorUtil.computeConfigGroupDocFileName;
-import static io.quarkus.annotation.processor.generate_doc.DocGeneratorUtil.computeConfigRootDocFileName;
 import static io.quarkus.annotation.processor.generate_doc.DocGeneratorUtil.computeExtensionDocFileName;
 import static io.quarkus.annotation.processor.generate_doc.DocGeneratorUtil.deriveConfigRootName;
 
@@ -90,9 +89,6 @@ final public class ConfigDocItemScanner {
 
                 if (name.isEmpty()) {
                     name = deriveConfigRootName(clazz.getSimpleName().toString(), configPhase);
-                } else if (name.endsWith(Constants.DOT + Constants.PARENT)) {
-                    // take into account the root case which would contain characters that can't be used to create the final file
-                    name = name.replace(Constants.DOT + Constants.PARENT, "");
                 }
 
                 ConfigRootInfo configRootInfo = new ConfigRootInfo(name, clazz, extensionName, configPhase);
@@ -102,10 +98,14 @@ final public class ConfigDocItemScanner {
         }
     }
 
-    public Set<ConfigDocGeneratedOutput> scanExtensionsConfigurationItems(Properties javaDocProperties)
+    /**
+     * Return a data structure which contains two maps of config items.
+     * 1. A map of all extensions config items accessible via
+     * {@link ScannedConfigDocsItemHolder#getAllConfigItemsPerExtension()}
+     * 2. a map of all config groups config items accessible via {@link ScannedConfigDocsItemHolder#getConfigGroupConfigItems()}
+     */
+    public ScannedConfigDocsItemHolder scanExtensionsConfigurationItems(Properties javaDocProperties)
             throws IOException {
-
-        Set<ConfigDocGeneratedOutput> configDocGeneratedOutputs = new HashSet<>();
 
         final ConfigDoItemFinder configDoItemFinder = new ConfigDoItemFinder(configRoots, configGroups, javaDocProperties);
         final ScannedConfigDocsItemHolder inMemoryScannedItemsHolder = configDoItemFinder.findInMemoryConfigurationItems();
@@ -122,16 +122,11 @@ final public class ConfigDocItemScanner {
                     configurationRootsParExtensionFileName);
         }
 
-        Set<ConfigDocGeneratedOutput> allConfigItemsPerExtension = generateAllConfigItemsOutputs(inMemoryScannedItemsHolder,
+        Map<String, List<ConfigDocItem>> allConfigItemsPerExtension = computeAllExtensionConfigItems(inMemoryScannedItemsHolder,
                 allExtensionGeneratedDocs, configurationRootsParExtensionFileName);
-        Set<ConfigDocGeneratedOutput> configGroupConfigItems = generateAllConfigGroupOutputs(inMemoryScannedItemsHolder);
-        Set<ConfigDocGeneratedOutput> configRootConfigItems = generateAllConfigRootOutputs(inMemoryScannedItemsHolder);
+        Map<String, List<ConfigDocItem>> configGroupConfigItems = computeConfigGroupFilesNames(inMemoryScannedItemsHolder);
 
-        configDocGeneratedOutputs.addAll(configGroupConfigItems);
-        configDocGeneratedOutputs.addAll(allConfigItemsPerExtension);
-        configDocGeneratedOutputs.addAll(configRootConfigItems);
-
-        return configDocGeneratedOutputs;
+        return new ScannedConfigDocsItemHolder(allConfigItemsPerExtension, configGroupConfigItems);
     }
 
     private void createOutputFolder() throws IOException {
@@ -201,7 +196,7 @@ final public class ConfigDocItemScanner {
 
     private void updateScannedExtensionArtifactFiles(ScannedConfigDocsItemHolder inMemoryScannedItemsHolder,
             Properties allExtensionGeneratedDocs, Properties configurationRootsParExtensionFileName) throws IOException {
-        for (Map.Entry<String, List<ConfigDocItem>> entry : inMemoryScannedItemsHolder.getConfigRootConfigItems()
+        for (Map.Entry<String, List<ConfigDocItem>> entry : inMemoryScannedItemsHolder.getAllConfigItemsPerExtension()
                 .entrySet()) {
             String serializableConfigRootDoc = OBJECT_MAPPER.writeValueAsString(entry.getValue());
             allExtensionGeneratedDocs.put(entry.getKey(), serializableConfigRootDoc);
@@ -225,10 +220,13 @@ final public class ConfigDocItemScanner {
         }
     }
 
-    private Set<ConfigDocGeneratedOutput> generateAllConfigItemsOutputs(
+    /**
+     * returns a Map of with extension generated file name and the list of its associated config items.
+     */
+    private Map<String, List<ConfigDocItem>> computeAllExtensionConfigItems(
             ScannedConfigDocsItemHolder inMemoryScannedItemsHolder, Properties allExtensionGeneratedDocs,
             Properties configurationRootsParExtensionFileName) throws IOException {
-        Set<ConfigDocGeneratedOutput> outputs = new HashSet<>();
+        Map<String, List<ConfigDocItem>> configItemsParExtensionFileNames = new HashMap<>();
 
         Set<String> extensionFileNamesToGenerate = processorClassMembers
                 .stream()
@@ -243,59 +241,35 @@ final public class ConfigDocItemScanner {
             }
 
             String[] extensionConfigRoots = extensionConfigRootsProperty.split(EXTENSION_LIST_SEPARATOR);
-            List<ConfigDocItem> extensionConfigItems = new ArrayList<>();
-
             for (String configRoot : extensionConfigRoots) {
-                List<ConfigDocItem> configDocItems = inMemoryScannedItemsHolder.getConfigRootConfigItems().get(configRoot);
+                List<ConfigDocItem> configDocItems = inMemoryScannedItemsHolder.getAllConfigItemsPerExtension().get(configRoot);
                 if (configDocItems == null) {
                     String serializedContent = allExtensionGeneratedDocs.getProperty(configRoot);
                     configDocItems = OBJECT_MAPPER.readValue(serializedContent, new TypeReference<List<ConfigDocItem>>() {
                     });
                 }
 
-                DocGeneratorUtil.appendConfigItemsIntoExistingOnes(extensionConfigItems, configDocItems);
+                final List<ConfigDocItem> existingConfigDocItems = configItemsParExtensionFileNames
+                        .computeIfAbsent(extensionFileName, (key) -> new ArrayList<>());
+                DocGeneratorUtil.appendConfigItemsIntoExistingOnes(existingConfigDocItems, configDocItems);
             }
-
-            outputs.add(new ConfigDocGeneratedOutput(extensionFileName, true, extensionConfigItems, true));
-
-            List<ConfigDocItem> generalConfigItems = extensionConfigItems
-                    .stream()
-                    .filter(ConfigDocItem::isWithinAConfigGroup)
-                    .collect(Collectors.toList());
-
-            if (!generalConfigItems.isEmpty()) {
-                String fileName = extensionFileName.replaceAll("\\.adoc$", "-general-config-items.adoc");
-                outputs.add(new ConfigDocGeneratedOutput(fileName, false, generalConfigItems, true));
-            }
-
         }
 
-        return outputs;
+        return configItemsParExtensionFileNames;
     }
 
-    private Set<ConfigDocGeneratedOutput> generateAllConfigGroupOutputs(
+    /**
+     * returns a Map of with config group generated file name and the list of its associated config items.
+     */
+    private Map<String, List<ConfigDocItem>> computeConfigGroupFilesNames(
             ScannedConfigDocsItemHolder inMemoryScannedItemsHolder) {
-
-        return inMemoryScannedItemsHolder
-                .getConfigGroupConfigItems()
-                .entrySet()
-                .stream()
-                .map(entry -> new ConfigDocGeneratedOutput(computeConfigGroupDocFileName(entry.getKey()), false,
-                        entry.getValue(), true))
-                .collect(Collectors.toSet());
-    }
-
-    private Set<ConfigDocGeneratedOutput> generateAllConfigRootOutputs(ScannedConfigDocsItemHolder inMemoryScannedItemsHolder) {
-        Map<String, List<ConfigDocItem>> configRootConfigItems = inMemoryScannedItemsHolder.getConfigRootConfigItems();
-        Set<ConfigDocGeneratedOutput> outputs = new HashSet<>();
-        for (ConfigRootInfo configRootInfo : configRoots) {
-            String clazz = configRootInfo.getClazz().getQualifiedName().toString();
-            List<ConfigDocItem> configDocItems = configRootConfigItems.get(clazz);
-            String fileName = computeConfigRootDocFileName(clazz, configRootInfo.getName());
-            outputs.add(new ConfigDocGeneratedOutput(fileName, false, configDocItems, true));
+        Map<String, List<ConfigDocItem>> configItemsParConfigGroupFileNames = new HashMap<>();
+        for (Map.Entry<String, List<ConfigDocItem>> entry : inMemoryScannedItemsHolder.getConfigGroupConfigItems().entrySet()) {
+            String extensionDocFileName = computeConfigGroupDocFileName(entry.getKey());
+            configItemsParConfigGroupFileNames.put(extensionDocFileName, entry.getValue());
         }
 
-        return outputs;
+        return configItemsParConfigGroupFileNames;
     }
 
     /**
