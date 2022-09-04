@@ -1,78 +1,97 @@
-/**
- * This file is part of Graylog.
+/*
+ * Copyright (C) 2020 Graylog, Inc.
  *
- * Graylog is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the Server Side Public License, version 1,
+ * as published by MongoDB, Inc.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * Server Side Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the Server Side Public License
+ * along with this program. If not, see
+ * <http://www.mongodb.com/licensing/server-side-public-license>.
  */
 package org.graylog2.indexer.ranges;
 
-import com.google.common.collect.ImmutableMap;
-import com.google.common.primitives.Ints;
-import com.lordofthejars.nosqlunit.annotation.UsingDataSet;
-import com.lordofthejars.nosqlunit.core.LoadStrategyEnum;
-import com.lordofthejars.nosqlunit.mongodb.InMemoryMongoDb;
-import com.mongodb.BasicDBObject;
-import com.mongodb.DBCollection;
-import com.mongodb.DBObject;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.eventbus.EventBus;
 import org.assertj.jodatime.api.Assertions;
-import org.elasticsearch.indices.IndexMissingException;
-import org.graylog2.database.MongoConnectionRule;
+import org.bson.types.ObjectId;
+import org.graylog.testing.mongodb.MongoDBFixtures;
+import org.graylog.testing.mongodb.MongoDBInstance;
+import org.graylog2.audit.NullAuditEventSender;
+import org.graylog2.bindings.providers.MongoJackObjectMapperProvider;
 import org.graylog2.database.NotFoundException;
-import org.graylog2.indexer.searches.Searches;
-import org.graylog2.shared.system.activities.NullActivityWriter;
+import org.graylog2.indexer.ElasticsearchException;
+import org.graylog2.indexer.IndexSetRegistry;
+import org.graylog2.indexer.indices.HealthStatus;
+import org.graylog2.indexer.indices.Indices;
+import org.graylog2.indexer.indices.events.IndicesClosedEvent;
+import org.graylog2.indexer.indices.events.IndicesDeletedEvent;
+import org.graylog2.indexer.indices.events.IndicesReopenedEvent;
+import org.graylog2.indexer.searches.IndexRangeStats;
+import org.graylog2.plugin.system.NodeId;
+import org.graylog2.shared.bindings.providers.ObjectMapperProvider;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.junit.Before;
-import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.runner.RunWith;
 import org.mockito.Mock;
-import org.mockito.runners.MockitoJUnitRunner;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 
+import java.util.Collections;
 import java.util.Set;
 import java.util.SortedSet;
 
-import static com.lordofthejars.nosqlunit.mongodb.InMemoryMongoDb.InMemoryMongoRuleBuilder.newInMemoryMongoDbRule;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.class)
 public class MongoIndexRangeServiceTest {
-    @ClassRule
-    public static final InMemoryMongoDb IN_MEMORY_MONGO_DB = newInMemoryMongoDbRule().build();
+    @Rule
+    public final MongoDBInstance mongodb = MongoDBInstance.createForClass();
 
     @Rule
-    public MongoConnectionRule mongoRule = MongoConnectionRule.build("test");
+    public final MockitoRule mockitoRule = MockitoJUnit.rule();
+
+    private final ObjectMapper objectMapper = new ObjectMapperProvider().get();
+    private final MongoJackObjectMapperProvider objectMapperProvider = new MongoJackObjectMapperProvider(objectMapper);
 
     @Mock
-    private Searches searches;
+    private Indices indices;
+    @Mock
+    private IndexSetRegistry indexSetRegistry;
+    private EventBus localEventBus;
     private MongoIndexRangeService indexRangeService;
 
     @Before
     public void setUp() throws Exception {
-        indexRangeService = new MongoIndexRangeService(mongoRule.getMongoConnection(), new NullActivityWriter(), searches);
+        localEventBus = new EventBus("local-event-bus");
+        indexRangeService = new MongoIndexRangeService(mongodb.mongoConnection(), objectMapperProvider, indices, indexSetRegistry, new NullAuditEventSender(), mock(NodeId.class), localEventBus);
     }
 
     @Test
-    @UsingDataSet(locations = "IndexRangeServiceImplTest.json", loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
+    @MongoDBFixtures("MongoIndexRangeServiceTest.json")
     public void getReturnsExistingIndexRange() throws Exception {
         IndexRange indexRange = indexRangeService.get("graylog_1");
 
         assertThat(indexRange.indexName()).isEqualTo("graylog_1");
-        assertThat(indexRange.end()).isEqualTo(new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC));
-        assertThat(indexRange.calculatedAt()).isEqualTo(new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC));
+        assertThat(indexRange.begin()).isEqualTo(new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC));
+        assertThat(indexRange.end()).isEqualTo(new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC));
+        assertThat(indexRange.calculatedAt()).isEqualTo(new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC));
         assertThat(indexRange.calculationDuration()).isEqualTo(23);
+    }
+
+    @Test(expected = NotFoundException.class)
+    @MongoDBFixtures("MongoIndexRangeServiceTest-LegacyIndexRanges.json")
+    public void getIgnoresLegacyIndexRange() throws Exception {
+        indexRangeService.get("graylog_0");
     }
 
     @Test(expected = NotFoundException.class)
@@ -80,141 +99,214 @@ public class MongoIndexRangeServiceTest {
         indexRangeService.get("does-not-exist");
     }
 
+    /**
+     * Test the following constellation:
+     * <pre>
+     *                        [-        index range       -]
+     * [- graylog_1 -][- graylog_2 -][- graylog_3 -][- graylog_4 -][- graylog_5 -]
+     * </pre>
+     */
     @Test
-    @UsingDataSet(locations = "IndexRangeServiceImplTest.json", loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
-    public void getFromReturnsIndexRangesAfterTimestamp() throws Exception {
-        final long millis = new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC).getMillis();
-        SortedSet<IndexRange> indexRanges = indexRangeService.getFrom(Ints.saturatedCast(millis / 1000L));
+    @MongoDBFixtures("MongoIndexRangeServiceTest-distinct.json")
+    public void findReturnsIndexRangesWithinGivenRange() throws Exception {
+        final DateTime begin = new DateTime(2015, 1, 2, 12, 0, DateTimeZone.UTC);
+        final DateTime end = new DateTime(2015, 1, 4, 12, 0, DateTimeZone.UTC);
+        final SortedSet<IndexRange> indexRanges = indexRangeService.find(begin, end);
 
-        assertThat(indexRanges).hasSize(2);
-    }
-
-    @Test
-    @UsingDataSet(locations = "IndexRangeServiceImplTest.json", loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
-    public void getFromReturnsNothingBeforeTimestamp() throws Exception {
-        final long millis = new DateTime(2016, 1, 1, 0, 0, DateTimeZone.UTC).getMillis();
-        Set<IndexRange> indexRanges = indexRangeService.getFrom(Ints.saturatedCast(millis / 1000L));
-
-        assertThat(indexRanges).isEmpty();
-    }
-
-    @Test
-    @UsingDataSet(locations = "IndexRangeServiceImplTest.json", loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
-    public void getFromWithDateTimeReturnsIndexRangesAfterTimestamp() throws Exception {
-        final DateTime dateTime = new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC);
-        SortedSet<IndexRange> indexRanges = indexRangeService.getFrom(dateTime);
-
-        assertThat(indexRanges).hasSize(2);
-    }
-
-    @Test
-    @UsingDataSet(locations = "IndexRangeServiceImplTest.json", loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
-    public void getFromWithDateTimeReturnsNothingBeforeTimestamp() throws Exception {
-        final DateTime dateTime = new DateTime(2016, 1, 1, 0, 0, DateTimeZone.UTC);
-        Set<IndexRange> indexRanges = indexRangeService.getFrom(dateTime);
-
-        assertThat(indexRanges).isEmpty();
-    }
-
-    @Test
-    @UsingDataSet(locations = "IndexRangeServiceImplTest.json", loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
-    public void destroyRemovesIndexRange() throws Exception {
-        indexRangeService.destroy("graylog_1");
-
-        Set<IndexRange> indexRanges = indexRangeService.getFrom(0);
-
-        assertThat(indexRanges).hasSize(1);
-        assertThat(indexRanges.iterator().next().indexName()).isEqualTo("graylog_2");
-    }
-
-    @Test
-    @UsingDataSet(locations = "IndexRangeServiceImplTest.json", loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
-    public void destroyRemovesIgnoresNonExistingIndexRange() throws Exception {
-        indexRangeService.destroy("does-not-exist");
-
-        final long millis = new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC).getMillis();
-        Set<IndexRange> indexRanges = indexRangeService.getFrom(Ints.saturatedCast(millis / 1000L));
-
-        assertThat(indexRanges).hasSize(2);
-    }
-
-    @Test
-    public void createReturnsIndexRange() throws Exception {
-        final DateTime dateTime = new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC);
-        final int timestamp = Ints.saturatedCast(dateTime.getMillis() / 1000L);
-        IndexRange indexRange = indexRangeService.create(ImmutableMap.<String, Object>of(
-                        "index", "graylog_3",
-                        "start", timestamp,
-                        "calculated_at", timestamp,
-                        "took_ms", 42
-                )
+        assertThat(indexRanges).containsExactly(
+                MongoIndexRange.create(new ObjectId("55e0261a0cc6980000000002"), "graylog_2", new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC), new DateTime(2015, 1, 3, 0, 0, DateTimeZone.UTC), new DateTime(2015, 1, 3, 0, 0, DateTimeZone.UTC), 42),
+                MongoIndexRange.create(new ObjectId("55e0261a0cc6980000000003"), "graylog_3", new DateTime(2015, 1, 3, 0, 0, DateTimeZone.UTC), new DateTime(2015, 1, 4, 0, 0, DateTimeZone.UTC), new DateTime(2015, 1, 4, 0, 0, DateTimeZone.UTC), 42),
+                MongoIndexRange.create(new ObjectId("55e0261a0cc6980000000004"), "graylog_4", new DateTime(2015, 1, 4, 0, 0, DateTimeZone.UTC), new DateTime(2015, 1, 5, 0, 0, DateTimeZone.UTC), new DateTime(2015, 1, 5, 0, 0, DateTimeZone.UTC), 42)
         );
-
-        assertThat(indexRange.indexName()).isEqualTo("graylog_3");
-        assertThat(indexRange.end()).isEqualTo(dateTime);
-        assertThat(indexRange.calculatedAt()).isEqualTo(dateTime);
-        assertThat(indexRange.calculationDuration()).isEqualTo(42);
     }
 
     @Test
+    @MongoDBFixtures("MongoIndexRangeServiceTest-LegacyIndexRanges.json")
+    public void findIgnoresLegacyIndexRanges() throws Exception {
+        when(indices.waitForRecovery("graylog_1")).thenReturn(HealthStatus.Green);
+
+        final DateTime begin = new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC);
+        final DateTime end = new DateTime(2015, 2, 1, 0, 0, DateTimeZone.UTC);
+        final SortedSet<IndexRange> indexRanges = indexRangeService.find(begin, end);
+
+        assertThat(indexRanges).containsOnly(
+                MongoIndexRange.create(new ObjectId("55e0261a0cc6980000000003"), "graylog_1", new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC), new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC), new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC), 42)
+        );
+    }
+
+    @Test
+    @MongoDBFixtures("MongoIndexRangeServiceTest.json")
+    public void findReturnsNothingBeforeBegin() throws Exception {
+        final DateTime begin = new DateTime(2016, 1, 1, 0, 0, DateTimeZone.UTC);
+        final DateTime end = new DateTime(2016, 1, 2, 0, 0, DateTimeZone.UTC);
+        Set<IndexRange> indexRanges = indexRangeService.find(begin, end);
+
+        assertThat(indexRanges).isEmpty();
+    }
+
+    @Test
+    @MongoDBFixtures("MongoIndexRangeServiceTest.json")
+    public void findAllReturnsAllIndexRanges() throws Exception {
+        assertThat(indexRangeService.findAll()).hasSize(2);
+    }
+
+    @Test
+    @MongoDBFixtures("MongoIndexRangeServiceTest-LegacyIndexRanges.json")
+    public void findAllReturnsAllIgnoresLegacyIndexRanges() throws Exception {
+        assertThat(indexRangeService.findAll()).hasSize(1);
+    }
+
+    @Test
+    @MongoDBFixtures("MongoIndexRangeServiceTest.json")
     public void calculateRangeReturnsIndexRange() throws Exception {
-        final String index = "graylog_test";
-        final DateTime dateTime = new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC);
-        when(searches.findNewestMessageTimestampOfIndex(index)).thenReturn(dateTime);
+        final String index = "graylog";
+        final DateTime min = new DateTime(2015, 1, 1, 1, 0, DateTimeZone.UTC);
+        final DateTime max = new DateTime(2015, 1, 1, 5, 0, DateTimeZone.UTC);
+        when(indices.waitForRecovery(index)).thenReturn(HealthStatus.Green);
+        when(indices.indexRangeStatsOfIndex(index)).thenReturn(IndexRangeStats.create(min, max));
 
         final IndexRange indexRange = indexRangeService.calculateRange(index);
 
         assertThat(indexRange.indexName()).isEqualTo(index);
-        assertThat(indexRange.end()).isEqualTo(dateTime);
+        assertThat(indexRange.begin()).isEqualTo(min);
+        assertThat(indexRange.end()).isEqualTo(max);
         Assertions.assertThat(indexRange.calculatedAt()).isEqualToIgnoringHours(DateTime.now(DateTimeZone.UTC));
     }
 
+    @Test(expected = ElasticsearchException.class)
+    public void calculateRangeFailsIfIndexIsNotHealthy() throws Exception {
+        final String index = "graylog";
+        when(indices.waitForRecovery(index)).thenThrow(new ElasticsearchException("TEST"));
+
+        indexRangeService.calculateRange(index);
+    }
+
     @Test
+    @MongoDBFixtures("MongoIndexRangeServiceTest-EmptyCollection.json")
     public void testCalculateRangeWithEmptyIndex() throws Exception {
-        final String index = "graylog_test";
-        when(searches.findNewestMessageTimestampOfIndex(index)).thenReturn(null);
+        final String index = "graylog";
+        when(indices.indexRangeStatsOfIndex(index)).thenReturn(IndexRangeStats.EMPTY);
+        when(indices.waitForRecovery(index)).thenReturn(HealthStatus.Green);
+
         final IndexRange range = indexRangeService.calculateRange(index);
 
         assertThat(range).isNotNull();
         assertThat(range.indexName()).isEqualTo(index);
-        Assertions.assertThat(range.end()).isEqualToIgnoringHours(DateTime.now(DateTimeZone.UTC));
-    }
-
-    @Test(expected = IndexMissingException.class)
-    public void testCalculateRangeWithNonExistingIndex() throws Exception {
-        when(searches.findNewestMessageTimestampOfIndex("does-not-exist")).thenThrow(IndexMissingException.class);
-        indexRangeService.calculateRange("does-not-exist");
+        assertThat(range.begin()).isEqualTo(new DateTime(0L, DateTimeZone.UTC));
+        assertThat(range.end()).isEqualTo(new DateTime(0L, DateTimeZone.UTC));
     }
 
     @Test
-    @UsingDataSet(locations = "IndexRangeServiceImplTest.json", loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
-    public void destroyAllKillsAllIndexRanges() throws Exception {
-        indexRangeService.destroyAll();
+    public void testCalculateRangeWithNonExistingIndex() throws Exception {
+        when(indices.waitForRecovery("does-not-exist")).thenReturn(HealthStatus.Red);
 
-        assertThat(indexRangeService.getFrom(0)).isEmpty();
+        assertThatThrownBy(() -> indexRangeService.calculateRange("does-not-exist"))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("Unable to calculate range for index <does-not-exist>, index is unhealthy: Red");
     }
 
     @Test
     public void savePersistsIndexRange() throws Exception {
-        final DateTime dateTime = new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC);
-        final int timestamp = Ints.saturatedCast(dateTime.getMillis() / 1000L);
-        final IndexRange indexRange = indexRangeService.create(ImmutableMap.<String, Object>of(
-                        "index", "graylog_test",
-                        "start", timestamp,
-                        "calculated_at", timestamp,
-                        "took_ms", 42
-                )
-        );
+        final String indexName = "graylog";
+        final DateTime begin = new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC);
+        final DateTime end = new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC);
+        final DateTime now = DateTime.now(DateTimeZone.UTC);
+        final IndexRange indexRange = MongoIndexRange.create(indexName, begin, end, now, 42);
 
         indexRangeService.save(indexRange);
 
-        final DBCollection collection = mongoRule.getMongoConnection().getDatabase().getCollection("index_ranges");
-        final DBObject query = new BasicDBObject("index", "graylog_test");
-        final DBObject result = collection.findOne(query);
+        final IndexRange result = indexRangeService.get(indexName);
+        assertThat(result.indexName()).isEqualTo(indexName);
+        assertThat(result.begin()).isEqualTo(begin);
+        assertThat(result.end()).isEqualTo(end);
+        assertThat(result.calculatedAt()).isEqualTo(now);
+        assertThat(result.calculationDuration()).isEqualTo(42);
+    }
 
-        assertThat(result.get("index")).isEqualTo("graylog_test");
-        assertThat(result.get("start")).isEqualTo(timestamp);
-        assertThat(result.get("calculated_at")).isEqualTo(timestamp);
-        assertThat(result.get("took_ms")).isEqualTo(42);
+    @Test
+    public void saveOverwritesExistingIndexRange() throws Exception {
+        final String indexName = "graylog";
+        final DateTime begin = new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC);
+        final DateTime end = new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC);
+        final DateTime now = DateTime.now(DateTimeZone.UTC);
+        final IndexRange indexRangeBefore = MongoIndexRange.create(indexName, begin, end, now, 1);
+        final IndexRange indexRangeAfter = MongoIndexRange.create(indexName, begin, end, now, 2);
+
+        indexRangeService.save(indexRangeBefore);
+
+        final IndexRange before = indexRangeService.get(indexName);
+        assertThat(before.calculationDuration()).isEqualTo(1);
+
+        indexRangeService.save(indexRangeAfter);
+
+        final IndexRange after = indexRangeService.get(indexName);
+        assertThat(after.calculationDuration()).isEqualTo(2);
+    }
+
+    @Test
+    @MongoDBFixtures("MongoIndexRangeServiceTest.json")
+    public void remove() throws Exception {
+        assertThat(indexRangeService.findAll()).hasSize(2);
+
+        assertThat(indexRangeService.remove("graylog_1")).isTrue();
+        assertThat(indexRangeService.remove("graylog_1")).isFalse();
+
+        assertThat(indexRangeService.findAll()).hasSize(1);
+    }
+
+    @Test
+    @MongoDBFixtures("MongoIndexRangeServiceTest.json")
+    public void testHandleIndexDeletion() throws Exception {
+        when(indexSetRegistry.isManagedIndex("graylog_1")).thenReturn(true);
+
+        assertThat(indexRangeService.findAll()).hasSize(2);
+
+        localEventBus.post(IndicesDeletedEvent.create(Collections.singleton("graylog_1")));
+
+        assertThat(indexRangeService.findAll()).hasSize(1);
+    }
+
+    @Test
+    @MongoDBFixtures("MongoIndexRangeServiceTest.json")
+    public void testHandleIndexClosing() throws Exception {
+        when(indexSetRegistry.isManagedIndex("graylog_1")).thenReturn(true);
+
+        assertThat(indexRangeService.findAll()).hasSize(2);
+
+        localEventBus.post(IndicesClosedEvent.create(Collections.singleton("graylog_1")));
+
+        assertThat(indexRangeService.findAll()).hasSize(1);
+    }
+
+    @Test
+    @MongoDBFixtures("MongoIndexRangeServiceTest.json")
+    public void testHandleIndexReopening() throws Exception {
+        final DateTime begin = new DateTime(2016, 1, 1, 0, 0, DateTimeZone.UTC);
+        final DateTime end = new DateTime(2016, 1, 15, 0, 0, DateTimeZone.UTC);
+        when(indices.indexRangeStatsOfIndex("graylog_3")).thenReturn(IndexRangeStats.create(begin, end));
+        when(indexSetRegistry.isManagedIndex("graylog_3")).thenReturn(true);
+        when(indices.waitForRecovery("graylog_3")).thenReturn(HealthStatus.Green);
+
+        localEventBus.post(IndicesReopenedEvent.create(Collections.singleton("graylog_3")));
+
+        final SortedSet<IndexRange> indexRanges = indexRangeService.find(begin, end);
+        assertThat(indexRanges).hasSize(1);
+        assertThat(indexRanges.first().indexName()).isEqualTo("graylog_3");
+        assertThat(indexRanges.first().begin()).isEqualTo(begin);
+        assertThat(indexRanges.first().end()).isEqualTo(end);
+    }
+
+    @Test
+    @MongoDBFixtures("MongoIndexRangeServiceTest.json")
+    public void testHandleIndexReopeningWhenNotManaged() throws Exception {
+        final DateTime begin = new DateTime(2016, 1, 1, 0, 0, DateTimeZone.UTC);
+        final DateTime end = new DateTime(2016, 1, 15, 0, 0, DateTimeZone.UTC);
+        when(indexSetRegistry.isManagedIndex("graylog_3")).thenReturn(false);
+        when(indices.indexRangeStatsOfIndex("graylog_3")).thenReturn(IndexRangeStats.EMPTY);
+
+        localEventBus.post(IndicesReopenedEvent.create(Collections.singleton("graylog_3")));
+
+        final SortedSet<IndexRange> indexRanges = indexRangeService.find(begin, end);
+        assertThat(indexRanges).isEmpty();
     }
 }
