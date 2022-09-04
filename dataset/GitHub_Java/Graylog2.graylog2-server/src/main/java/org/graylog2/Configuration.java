@@ -21,6 +21,7 @@
 package org.graylog2;
 
 import java.net.UnknownHostException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -66,9 +67,6 @@ public class Configuration {
 
     @Parameter(value = "no_retention")
     private boolean noRetention;
-
-    @Parameter(value = "output_batch_size", required = true, validator = PositiveIntegerValidator.class)
-    private int outputBatchSize = 5000;
 
     @Parameter(value = "elasticsearch_config_file", required = true, validator = FilePresentValidator.class)
     private String elasticSearchConfigFile = "/etc/graylog2-elasticsearch.yml";
@@ -139,18 +137,6 @@ public class Configuration {
     @Parameter("rules_file")
     private String droolsRulesFile;
 
-    @Parameter(value = "enable_tokenizer_filter", required = true)
-    private boolean enableTokenizerFilter = true;
-
-    @Parameter(value = "enable_graphite_output", required = false)
-    private boolean enableGraphiteOutput = false;
-
-    @Parameter(value = "graphite_carbon_host", required = false)
-    private String graphiteCarbonHost = "127.0.0.1";
-
-    @Parameter(value = "graphite_carbon_udp_port", validator = InetPortValidator.class, required = false)
-    private int graphiteCarbonUdpPort = 2003;
-
     public int getSyslogListenPort() {
         return syslogListenPort;
     }
@@ -177,10 +163,6 @@ public class Configuration {
 
     public boolean performRetention() {
         return !noRetention;
-    }
-
-    public int getOutputBatchSize() {
-        return outputBatchSize;
     }
 
     public String getElasticSearchConfigFile() {
@@ -302,21 +284,34 @@ public class Configuration {
         return replicaServers;
     }
 
-    public boolean isEnableTokenizerFilter() {
-        return enableTokenizerFilter;
-    }
+/*    public List<AMQPSubscribedQueue> getAmqpSubscribedQueues() {
+        List<AMQPSubscribedQueue> queueList = new ArrayList<AMQPSubscribedQueue>();
 
-    public boolean isEnableGraphiteOutput() {
-        return enableGraphiteOutput;
-    }
+        List<String> rawQueues = amqpSubscribedQueues;
 
-    public String getGraphiteCarbonHost() {
-        return graphiteCarbonHost;
-    }
+        if (rawQueues == null || rawQueues.isEmpty()) {
+            return null;
+        }
 
-    public int getGraphiteCarbonUdpPort() {
-        return graphiteCarbonUdpPort;
-    }
+        // Get every queue.
+        for (String queue : rawQueues) {
+            String[] queueDefinition = queue.split(":");
+
+            // Check if valid.
+            if (queueDefinition == null || queueDefinition.length != 2) {
+                LOG.error("Malformed amqp_subscribed_queues configuration.");
+                return null;
+            }
+            try {
+                queueList.add(new AMQPSubscribedQueue(queueDefinition[0], queueDefinition[1]));
+            } catch (InvalidQueueTypeException e) {
+                LOG.error("Invalid queue type in amqp_subscribed_queues");
+                return null;
+            }
+        }
+
+        return queueList;
+    }*/
 
     @ValidatorMethod
     public void validate() throws ValidationException {
