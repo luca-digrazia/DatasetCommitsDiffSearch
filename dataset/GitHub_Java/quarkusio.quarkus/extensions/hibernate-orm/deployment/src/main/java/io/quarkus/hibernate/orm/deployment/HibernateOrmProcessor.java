@@ -791,11 +791,12 @@ public final class HibernateOrmProcessor {
             setMaxFetchDepth(descriptor, persistenceUnitConfig.maxFetchDepth);
         }
 
-        descriptor.getProperties().setProperty(AvailableSettings.QUERY_PLAN_CACHE_MAX_SIZE, Integer.toString(
-                persistenceUnitConfig.query.queryPlanCacheMaxSize));
+        persistenceUnitConfig.query.queryPlanCacheMaxSize.ifPresent(
+                maxSize -> descriptor.getProperties().setProperty(AvailableSettings.QUERY_PLAN_CACHE_MAX_SIZE, maxSize));
 
-        descriptor.getProperties().setProperty(AvailableSettings.DEFAULT_NULL_ORDERING,
-                persistenceUnitConfig.query.defaultNullOrdering.name().toLowerCase());
+        persistenceUnitConfig.query.defaultNullOrdering.ifPresent(
+                defaultNullOrdering -> descriptor.getProperties().setProperty(AvailableSettings.DEFAULT_NULL_ORDERING,
+                        defaultNullOrdering));
 
         // JDBC
         persistenceUnitConfig.jdbc.timezone.ifPresent(
