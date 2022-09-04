@@ -17,7 +17,6 @@
 package org.graylog2.cluster;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import org.bson.types.ObjectId;
 import org.graylog2.database.CollectionName;
 import org.graylog2.database.PersistedImpl;
@@ -45,7 +44,6 @@ public class NodeImpl extends PersistedImpl implements Node {
     }
 
     @Override
-    @JsonProperty("is_master")
     public boolean isMaster() {
         return (Boolean) fields.get("is_master");
     }
