@@ -29,10 +29,11 @@ import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.ExpansionException;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
-import com.google.devtools.build.lib.starlarkbuildapi.cpp.CcToolchainVariablesApi;
+import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcToolchainVariablesApi;
 import com.google.devtools.build.lib.syntax.EvalException;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -268,6 +269,7 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
      */
     private void abort(String error) throws EvalException {
       throw new EvalException(
+          Location.BUILTIN,
           "Invalid toolchain configuration: "
               + error
               + " at position "
@@ -1325,11 +1327,6 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
     static MapVariables create(
         CcToolchainVariables parent, ImmutableMap<String, Object> variablesMap) {
       return INTERNER.intern(new MapVariables(parent, variablesMap));
-    }
-
-    @Override
-    public boolean isImmutable() {
-      return true; // immutable and Starlark-hashable
     }
 
     @Override
