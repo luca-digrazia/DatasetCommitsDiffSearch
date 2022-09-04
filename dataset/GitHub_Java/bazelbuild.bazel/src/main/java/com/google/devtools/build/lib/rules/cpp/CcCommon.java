@@ -818,7 +818,7 @@ public final class CcCommon {
       allFeatures.add("nonhost");
     }
 
-    if (toolchain.useFission()) {
+    if (CppHelper.useFission(cppConfiguration, toolchain)) {
       allFeatures.add(CppRuleClasses.PER_OBJECT_DEBUG_INFO);
     }
 
