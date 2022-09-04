@@ -1,7 +1,5 @@
 package io.quarkus.kubernetes.client.deployment;
 
-import static io.quarkus.deployment.annotations.ExecutionTime.STATIC_INIT;
-
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -11,20 +9,14 @@ import javax.inject.Inject;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.Type;
 
-import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
-import io.quarkus.arc.deployment.BeanContainerListenerBuildItem;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
-import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.ApplicationIndexBuildItem;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.ExtensionSslNativeSupportBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import io.quarkus.deployment.util.JandexUtil;
-import io.quarkus.kubernetes.client.runtime.KubernetesClientBuildConfig;
-import io.quarkus.kubernetes.client.runtime.KubernetesClientProducer;
-import io.quarkus.kubernetes.client.runtime.KubernetesClientRecorder;
 
 public class KubernetesClientProcessor {
 
@@ -36,15 +28,9 @@ public class KubernetesClientProcessor {
     @Inject
     BuildProducer<ReflectiveClassBuildItem> reflectiveClasses;
 
-    KubernetesClientBuildConfig buildConfig;
-
-    @Record(STATIC_INIT)
     @BuildStep
     public void process(ApplicationIndexBuildItem applicationIndex, CombinedIndexBuildItem combinedIndexBuildItem,
-            BuildProducer<ExtensionSslNativeSupportBuildItem> sslNativeSupport,
-            BuildProducer<BeanContainerListenerBuildItem> beanContainerListenerBuildItem,
-            BuildProducer<AdditionalBeanBuildItem> additionalBeanBuildItemBuildItem,
-            KubernetesClientRecorder recorder) {
+            BuildProducer<ExtensionSslNativeSupportBuildItem> sslNativeSupport) {
         featureProducer.produce(new FeatureBuildItem(FeatureBuildItem.KUBERNETES_CLIENT));
 
         Set<String> watchedClasses = new HashSet<>();
@@ -88,16 +74,9 @@ public class KubernetesClientProcessor {
         reflectiveClasses.produce(new ReflectiveClassBuildItem(true, false, deserializerClasses));
 
         reflectiveClasses
-                .produce(new ReflectiveClassBuildItem(true, false, "io.fabric8.kubernetes.api.model.IntOrString"));
-        reflectiveClasses
                 .produce(new ReflectiveClassBuildItem(true, false, "io.fabric8.kubernetes.internal.KubernetesDeserializer"));
 
         // Enable SSL support by default
         sslNativeSupport.produce(new ExtensionSslNativeSupportBuildItem(FeatureBuildItem.KUBERNETES_CLIENT));
-
-        // wire up the KubernetesClient bean support
-        additionalBeanBuildItemBuildItem.produce(AdditionalBeanBuildItem.unremovableOf(KubernetesClientProducer.class));
-        beanContainerListenerBuildItem.produce(new BeanContainerListenerBuildItem(
-                recorder.setBuildConfig(buildConfig)));
     }
 }
