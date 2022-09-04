@@ -41,18 +41,15 @@ import javax.annotation.Nullable;
  */
 public class ClassPathsSubject extends Subject<ClassPathsSubject, Path> {
 
-  private final Path actual;
-
   ClassPathsSubject(FailureMetadata failureMetadata, @Nullable Path subject) {
     super(failureMetadata, subject);
-    this.actual = subject;
   }
 
   void exists() {
-    if (actual == null) {
+    if (getSubject() == null) {
       failWithoutActual(simpleFact("expected not to be null"));
     }
-    if (!Files.exists(actual)) {
+    if (!Files.exists(getSubject())) {
       failWithActual(simpleFact("expected to exist"));
     }
   }
@@ -64,14 +61,15 @@ public class ClassPathsSubject extends Subject<ClassPathsSubject, Path> {
    * @param contents expected contents
    */
   public void javaContentsIsEqualTo(String... contents) {
-    if (actual == null) {
+    if (getSubject() == null) {
       failWithoutActual(simpleFact("expected not to be null"));
     }
     exists();
     try {
       assertThat(
-              trimWhitespace(
-                  stripJavaHeaderComments(Files.readAllLines(actual, StandardCharsets.UTF_8))))
+          trimWhitespace(
+              stripJavaHeaderComments(
+                  Files.readAllLines(getSubject(), StandardCharsets.UTF_8))))
           .containsExactly((Object[]) contents)
           .inOrder();
     } catch (IOException e) {
@@ -117,21 +115,21 @@ public class ClassPathsSubject extends Subject<ClassPathsSubject, Path> {
    * @param className the fully qualified class name
    */
   public ClassNameSubject withClass(String className) {
-    if (actual == null) {
+    if (getSubject() == null) {
       failWithoutActual(simpleFact("expected not to be null"));
     }
     exists();
-    return check("class(%s)", className).about(ClassNameSubject.classNames(actual)).that(className);
+    return check("class(%s)", className)
+        .about(ClassNameSubject.classNames(getSubject()))
+        .that(className);
   }
 
   static final class ClassNameSubject extends Subject<ClassNameSubject, String> {
 
-    private final String actual;
     private final Path basePath;
 
     public ClassNameSubject(FailureMetadata failureMetadata, Path basePath, String subject) {
       super(failureMetadata, subject);
-      this.actual = subject;
       this.basePath = basePath;
     }
 
@@ -148,7 +146,7 @@ public class ClassPathsSubject extends Subject<ClassPathsSubject, Path> {
         ImmutableMap<String, Integer> intFields,
         ImmutableMap<String, List<Integer>> intArrayFields,
         boolean areFieldsFinal) throws Exception {
-      String expectedClassName = actual;
+      String expectedClassName = getSubject();
       URLClassLoader urlClassLoader = new URLClassLoader(new URL[]{basePath.toUri().toURL()});
       Class<?> innerClass = urlClassLoader.loadClass(expectedClassName);
       assertThat(innerClass.getSuperclass()).isEqualTo(Object.class);
