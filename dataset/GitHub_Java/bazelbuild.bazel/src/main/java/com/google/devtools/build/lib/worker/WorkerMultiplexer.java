@@ -17,16 +17,17 @@ package com.google.devtools.build.lib.worker;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.flogger.GoogleLogger;
-import com.google.devtools.build.lib.events.Event;
-import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.shell.Subprocess;
 import com.google.devtools.build.lib.shell.SubprocessBuilder;
 import com.google.devtools.build.lib.shell.SubprocessFactory;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.worker.WorkerProtocol.WorkRequest;
 import com.google.devtools.build.lib.worker.WorkerProtocol.WorkResponse;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -47,7 +48,7 @@ public class WorkerMultiplexer extends Thread {
    * A map of {@code WorkResponse}s received from the worker process. They are stored in this map
    * until the corresponding {@code WorkerProxy} picks them up.
    */
-  private final Map<Integer, WorkResponse> workerProcessResponse;
+  private final Map<Integer, InputStream> workerProcessResponse;
   /** A semaphore to protect {@code workerProcessResponse} object. */
   private final Semaphore semWorkerProcessResponse;
   /**
@@ -62,8 +63,8 @@ public class WorkerMultiplexer extends Thread {
   /** The worker process that this WorkerMultiplexer should be talking to. */
   private Subprocess process;
   /**
-   * Set to true if one of the worker processes returns an unparseable response. We then abort the
-   * worker process.
+   * Set to true if one of the worker processes returns an unparseable response. We then discard all
+   * the responses from other worker processes and abort.
    */
   private boolean isUnparseable;
   /** InputStream from the worker process. */
@@ -84,14 +85,7 @@ public class WorkerMultiplexer extends Thread {
   /** For testing only, allow a way to fake subprocesses. */
   private SubprocessFactory subprocessFactory;
 
-  /**
-   * The active Reporter object, non-null if {@code --worker_verbose} is set. This must be cleared
-   * at the end of a command execution.
-   */
-  private Reporter reporter;
-
   WorkerMultiplexer(Path logFile) {
-    this.logFile = logFile;
     semWorkerProcessResponse = new Semaphore(1);
     semResponseChecker = new Semaphore(1);
     responseChecker = new HashMap<>();
@@ -99,19 +93,7 @@ public class WorkerMultiplexer extends Thread {
     isUnparseable = false;
     isWorkerStreamClosed = false;
     isInterrupted = false;
-  }
-
-  /** Sets or clears the reporter for outputting verbose info. */
-  void setReporter(Reporter reporter) {
-    this.reporter = reporter;
-  }
-
-  /** Reports a string to the user if reporting is enabled. */
-  private void report(String s) {
-    Reporter r = this.reporter; // Protect against race condition with setReporter().
-    if (r != null && s != null) {
-      r.handle(Event.info(s));
-    }
+    this.logFile = logFile;
   }
 
   /**
@@ -137,7 +119,6 @@ public class WorkerMultiplexer extends Thread {
       processBuilder.setStderr(logFile.getPathFile());
       processBuilder.setEnv(workerKey.getEnv());
       this.process = processBuilder.start();
-      report(String.format("Created new multiplexer process for %s", workerKey.getMnemonic()));
     }
     if (!this.isAlive()) {
       this.start();
@@ -198,7 +179,7 @@ public class WorkerMultiplexer extends Thread {
    * Waits on a semaphore for the {@code WorkResponse} returned from worker process. This method is
    * called on the thread of a {@code WorkerProxy}.
    */
-  public WorkResponse getResponse(Integer requestId) throws IOException, InterruptedException {
+  public InputStream getResponse(Integer requestId) throws IOException, InterruptedException {
     try {
       semResponseChecker.acquire();
       Semaphore waitForResponse = responseChecker.get(requestId);
@@ -224,7 +205,7 @@ public class WorkerMultiplexer extends Thread {
       }
 
       semWorkerProcessResponse.acquire();
-      WorkResponse response = workerProcessResponse.get(requestId);
+      InputStream response = workerProcessResponse.get(requestId);
       semWorkerProcessResponse.release();
       return response;
     } finally {
@@ -266,32 +247,23 @@ public class WorkerMultiplexer extends Thread {
     // A null parsedResponse can only happen if the input stream is closed.
     if (parsedResponse == null) {
       isWorkerStreamClosed = true;
-      report("Multiplexer process has closed its output, aborting multiplexer");
       releaseAllSemaphores();
       return;
     }
 
     int requestId = parsedResponse.getRequestId();
+    ByteArrayOutputStream tempOs = new ByteArrayOutputStream();
+    parsedResponse.writeDelimitedTo(tempOs);
 
     semWorkerProcessResponse.acquire();
-    workerProcessResponse.put(requestId, parsedResponse);
+    workerProcessResponse.put(requestId, new ByteArrayInputStream(tempOs.toByteArray()));
     semWorkerProcessResponse.release();
 
     // TODO(b/151767359): When allowing cancellation, remove responses that have no matching
     // entry in responseChecker.
     semResponseChecker.acquire();
-    Semaphore semaphore = responseChecker.get(requestId);
-    if (semaphore != null) {
-      semaphore.release();
-      semResponseChecker.release();
-    } else {
-      semResponseChecker.release();
-      logger.atWarning().log("Received response for unknown request %d.", requestId);
-      semWorkerProcessResponse.acquire();
-      // Prevent memory leak of useless responses.
-      workerProcessResponse.remove(requestId);
-      semWorkerProcessResponse.release();
-    }
+    responseChecker.get(requestId).release();
+    semResponseChecker.release();
   }
 
   /** The multiplexer thread that listens to the WorkResponse from worker process. */
@@ -302,7 +274,6 @@ public class WorkerMultiplexer extends Thread {
         waitResponse();
       } catch (IOException e) {
         isUnparseable = true;
-        report("Multiplexer process was interrupted during I/O, aborting multiplexer");
         releaseAllSemaphores();
         logger.atWarning().withCause(e).log(
             "IOException was caught while waiting for worker response. "
@@ -322,20 +293,13 @@ public class WorkerMultiplexer extends Thread {
   private void releaseAllSemaphores() {
     try {
       semResponseChecker.acquire();
-      for (Semaphore semaphore : responseChecker.values()) {
-        semaphore.release();
+      for (Integer requestId : responseChecker.keySet()) {
+        responseChecker.get(requestId).release();
       }
-      responseChecker.clear();
+    } catch (InterruptedException e) {
+      // Do nothing
+    } finally {
       semResponseChecker.release();
-    } catch (InterruptedException e) {
-      // Do nothing - we only get interrupted during shutdown
-    }
-    try {
-      semWorkerProcessResponse.acquire();
-      workerProcessResponse.clear();
-      semWorkerProcessResponse.release();
-    } catch (InterruptedException e) {
-      // Do nothing - we only get interrupted during shutdown
     }
   }
 
