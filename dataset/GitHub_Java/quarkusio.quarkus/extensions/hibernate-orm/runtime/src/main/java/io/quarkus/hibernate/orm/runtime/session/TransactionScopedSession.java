@@ -59,7 +59,6 @@ public class TransactionScopedSession implements Session {
     private final TransactionManager transactionManager;
     private final TransactionSynchronizationRegistry transactionSynchronizationRegistry;
     private final SessionFactory sessionFactory;
-    private final JTASessionOpener jtaSessionOpener;
     private final String unitName;
     private final String sessionKey;
     private final Instance<RequestScopedSessionHolder> requestScopedSessions;
@@ -72,7 +71,6 @@ public class TransactionScopedSession implements Session {
         this.transactionManager = transactionManager;
         this.transactionSynchronizationRegistry = transactionSynchronizationRegistry;
         this.sessionFactory = sessionFactory;
-        this.jtaSessionOpener = JTASessionOpener.create(sessionFactory);
         this.unitName = unitName;
         this.sessionKey = this.getClass().getSimpleName() + "-" + unitName;
         this.requestScopedSessions = requestScopedSessions;
@@ -84,7 +82,7 @@ public class TransactionScopedSession implements Session {
             if (session != null) {
                 return new SessionResult(session, false, true);
             }
-            Session newSession = jtaSessionOpener.openSession();
+            Session newSession = sessionFactory.openSession();
             // The session has automatically joined the JTA transaction when it was constructed.
             transactionSynchronizationRegistry.putResource(sessionKey, newSession);
             // No need to flush or close the session upon transaction completion:
