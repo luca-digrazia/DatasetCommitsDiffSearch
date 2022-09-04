@@ -189,19 +189,19 @@ public class InMemoryNodeEntry implements NodeEntry {
   }
 
   @Override
-  public SkyValue getValue() {
+  public synchronized SkyValue getValue() {
     Preconditions.checkState(isDone(), "no value until done. ValueEntry: %s", this);
     return ValueWithMetadata.justValue(value);
   }
 
   @Override
-  public SkyValue getValueMaybeWithMetadata() {
+  public synchronized SkyValue getValueMaybeWithMetadata() {
     Preconditions.checkState(isDone(), "no value until done: %s", this);
     return value;
   }
 
   @Override
-  public SkyValue toValue() {
+  public synchronized SkyValue toValue() {
     if (isDone()) {
       return getErrorInfo() == null ? getValue() : null;
     } else if (isChanged() || isDirty()) {

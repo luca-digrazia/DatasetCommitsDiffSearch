@@ -343,9 +343,6 @@ public class GroupedList<T> implements Iterable<Collection<T>> {
    * GroupedListHelper.
    */
   private static <E> List<Object> remove(List<Object> elements, Set<E> toRemove) {
-    if (toRemove.isEmpty()) {
-      return elements;
-    }
     int removedCount = 0;
     // elements.size is an upper bound of the needed size. Since normally removal happens just
     // before the list is finished and compressed, optimizing this size isn't a concern.
@@ -372,15 +369,8 @@ public class GroupedList<T> implements Iterable<Collection<T>> {
         }
       }
     }
-    // removedCount can be larger if elements had duplicates and the duplicate was also in toRemove.
     Preconditions.checkState(
-        removedCount >= toRemove.size(),
-        "removedCount=%s, toRemove.size()=%s, elements=%s toRemove=%s newElements=%s",
-        removedCount,
-        toRemove.size(),
-        elements,
-        toRemove,
-        newElements);
+        removedCount == toRemove.size(), "%s %s %s", elements, toRemove, newElements);
     return newElements;
   }
 

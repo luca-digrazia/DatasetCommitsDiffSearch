@@ -193,11 +193,6 @@ public abstract class DirtyBuildingState {
     return result.build();
   }
 
-  final void resetForRestartFromScratch() {
-    Preconditions.checkState(dirtyState == DirtyState.REBUILDING, this);
-    dirtyDirectDepIndex = 0;
-  }
-
   protected void markRebuilding() {
     Preconditions.checkState(dirtyState == DirtyState.NEEDS_REBUILDING, this);
     dirtyState = DirtyState.REBUILDING;
