@@ -69,6 +69,8 @@ public final class Label
       ImmutableSet.of(
           // Used for select
           PathFragment.create("conditions"),
+          // dependencies that are a function of the configuration
+          PathFragment.create("tools/defaults"),
           // Visibility is labels aren't actually targets
           PathFragment.create("visibility"),
           // There is only one //external package
@@ -243,7 +245,7 @@ public final class Label
    *
    * <p>It would be cleaner to use the TargetPatternEvaluator for this resolution, but that is not
    * possible, because it is sometimes necessary to resolve a relative label before the package path
-   * is setup (maybe not anymore...)
+   * is setup; in particular, before the tools/defaults package is created.
    *
    * @throws LabelSyntaxException if the resulting label is not valid
    */
@@ -452,7 +454,7 @@ public final class Label
       name = "workspace_name",
       structField = true,
       doc =
-          "The repository part of this label. For instance, "
+          "The repository part of this label. For isntance, "
               + "<pre class=language-python>Label(\"@foo//bar:baz\").workspace_name"
               + " == \"foo\"</pre>")
   public String getWorkspaceName() {
