@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -22,7 +22,10 @@ import java.lang.annotation.Target;
 
 /**
  * Methods annotated with @{@link AfterInject} will be called after the
- * constructor is called in an enhanced class.
+ * constructor is called in an {@link Enhanced} annotated class.
+ * 
+ * When the constructor of your {@link Enhanced} annotated class is called, it's
+ * fields have not been injected yet.
  * 
  * Any code depending on injected fields should be done in an
  * {@link AfterInject} annotated method.
@@ -33,7 +36,7 @@ import java.lang.annotation.Target;
  * class.
  * 
  */
-@Retention(RetentionPolicy.CLASS)
+@Retention(RetentionPolicy.SOURCE)
 @Target(ElementType.METHOD)
 public @interface AfterInject {
 }
