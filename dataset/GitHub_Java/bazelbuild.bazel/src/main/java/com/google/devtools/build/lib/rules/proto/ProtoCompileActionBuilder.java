@@ -402,32 +402,32 @@ public class ProtoCompileActionBuilder {
         outReplacement);
   }
 
-  public static void registerActionsWithoutExports(
+  public static void registerActions(
       RuleContext ruleContext,
       List<ToolchainInvocation> toolchainInvocations,
-      ProtoSourcesProvider protoProvider,
+      Iterable<Artifact> protosToCompile,
+      NestedSet<Artifact> transitiveSources,
+      NestedSet<Artifact> protosInDirectDeps,
+      NestedSet<String> protoSourceRoots,
+      NestedSet<String> directProtoSourceRoots,
       Label ruleLabel,
       Iterable<Artifact> outputs,
       String flavorName,
       boolean allowServices) {
-    SpawnAction.Builder actions =
-        createActions(
-            ruleContext,
-            toolchainInvocations,
-            protoProvider.getDirectProtoSources(),
-            protoProvider.getTransitiveProtoSources(),
-            protoProvider.getProtosInDirectDeps(),
-            null,
-            protoProvider.getTransitiveProtoSourceRoots(),
-            protoProvider.getDirectProtoSourceRoots(),
-            null,
-            ruleLabel,
-            outputs,
-            flavorName,
-            allowServices);
-    if (actions != null) {
-      ruleContext.registerAction(actions.build(ruleContext));
-    }
+    registerActions(
+        ruleContext,
+        toolchainInvocations,
+        protosToCompile,
+        transitiveSources,
+        protosInDirectDeps,
+        protoSourceRoots,
+        directProtoSourceRoots,
+        ruleLabel,
+        outputs,
+        flavorName,
+        allowServices,
+        /* protosInExports= */ null,
+        /* exportedProtoSourceRoots= */ null);
   }
 
   /**
@@ -445,22 +445,28 @@ public class ProtoCompileActionBuilder {
   public static void registerActions(
       RuleContext ruleContext,
       List<ToolchainInvocation> toolchainInvocations,
-      ProtoSourcesProvider protoProvider,
+      Iterable<Artifact> protosToCompile,
+      NestedSet<Artifact> transitiveSources,
+      NestedSet<Artifact> protosInDirectDeps,
+      NestedSet<String> protoSourceRoots,
+      NestedSet<String> directProtoSourceRoots,
       Label ruleLabel,
       Iterable<Artifact> outputs,
       String flavorName,
-      boolean allowServices) {
+      boolean allowServices,
+      NestedSet<Artifact> protosInExports,
+      NestedSet<String> exportedProtoSourceRoots) {
     SpawnAction.Builder actions =
         createActions(
             ruleContext,
             toolchainInvocations,
-            protoProvider.getDirectProtoSources(),
-            protoProvider.getTransitiveProtoSources(),
-            protoProvider.getProtosInDirectDeps(),
-            protoProvider.getProtosInExports(),
-            protoProvider.getTransitiveProtoSourceRoots(),
-            protoProvider.getDirectProtoSourceRoots(),
-            protoProvider.getExportedProtoSourceRoots(),
+            protosToCompile,
+            transitiveSources,
+            protosInDirectDeps,
+            protosInExports,
+            protoSourceRoots,
+            directProtoSourceRoots,
+            exportedProtoSourceRoots,
             ruleLabel,
             outputs,
             flavorName,
