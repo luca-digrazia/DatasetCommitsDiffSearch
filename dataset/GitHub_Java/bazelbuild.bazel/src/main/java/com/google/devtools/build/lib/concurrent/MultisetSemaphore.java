@@ -13,10 +13,10 @@
 // limitations under the License.
 package com.google.devtools.build.lib.concurrent;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.HashMultiset;
 import com.google.common.collect.Multiset;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.util.Set;
 import java.util.concurrent.Semaphore;
 
@@ -133,15 +133,14 @@ public abstract class MultisetSemaphore<T> {
   }
 
   private static class NaiveMultisetSemaphore<T> extends MultisetSemaphore<T> {
-    private final int maxNumUniqueValues;
     private final Semaphore semaphore;
     private final Object lock = new Object();
     // Protected by 'lock'.
-    private final HashMultiset<T> actualValues = HashMultiset.create();
+    private final HashMultiset<T> actualValues;
 
     private NaiveMultisetSemaphore(int maxNumUniqueValues) {
-      this.maxNumUniqueValues = maxNumUniqueValues;
       this.semaphore = new Semaphore(maxNumUniqueValues);
+      actualValues = HashMultiset.create();
     }
 
     @Override
@@ -174,7 +173,11 @@ public abstract class MultisetSemaphore<T> {
 
     @Override
     public int estimateCurrentNumUniqueValues() {
-      return maxNumUniqueValues - semaphore.availablePermits();
+      // Notes:
+      //   (1) The race here is completely benign; we're just supposed to return an estimate.
+      //   (2) See the javadoc for Multiset#size, which explains to use entrySet().size() to get the
+      //       number of unique values.
+      return actualValues.entrySet().size();
     }
   }
 }
