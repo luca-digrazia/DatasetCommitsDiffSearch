@@ -72,26 +72,6 @@ public class BasicConsole extends QuarkusConsole {
             }
 
             @Override
-            protected void setResultsMessage(String results) {
-                DISABLE_FILTER.set(true);
-                try {
-                    statusLogger.info(results);
-                } finally {
-                    DISABLE_FILTER.set(false);
-                }
-            }
-
-            @Override
-            protected void setCompileErrorMessage(String results) {
-                DISABLE_FILTER.set(true);
-                try {
-                    statusLogger.info(results);
-                } finally {
-                    DISABLE_FILTER.set(false);
-                }
-            }
-
-            @Override
             protected void setStatusMessage(String status) {
                 if (status == null) {
                     return;
