@@ -1,4 +1,6 @@
-/**
+/*
+ * Copyright 2012-2014 TORCH GmbH
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -14,11 +16,11 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
+
 package org.graylog2.initializers;
 
 import com.google.common.util.concurrent.AbstractIdleService;
 import com.google.inject.Singleton;
-import org.graylog2.indexer.Deflector;
 import org.graylog2.indexer.Indexer;
 import org.graylog2.plugin.Tools;
 import org.slf4j.Logger;
@@ -32,25 +34,21 @@ import java.util.concurrent.Executors;
  */
 @Singleton
 public class IndexerSetupService extends AbstractIdleService {
-    private static final Logger LOG = LoggerFactory.getLogger(IndexerSetupService.class);
+    private static final Logger log = LoggerFactory.getLogger(IndexerSetupService.class);
 
     private final Indexer indexer;
-    private final Deflector deflector;
     private final BufferSynchronizerService bufferSynchronizerService;
 
     @Inject
-    public IndexerSetupService(final Indexer indexer,
-                               final Deflector deflector,
-                               final BufferSynchronizerService bufferSynchronizerService) {
+    public IndexerSetupService(Indexer indexer, BufferSynchronizerService bufferSynchronizerService) {
         this.indexer = indexer;
-        this.deflector = deflector;
         this.bufferSynchronizerService = bufferSynchronizerService;
 
         // Shutdown after the BufferSynchronizerServer has stopped to avoid shutting down ES too early.
         bufferSynchronizerService.addListener(new Listener() {
             @Override
             public void terminated(State from) {
-                LOG.debug("Shutting down ES client after buffer synchronizer has terminated.");
+                log.debug("Shutting down ES client after buffer synchronizer has terminated.");
                 // Properly close ElasticSearch node.
                 IndexerSetupService.this.indexer.getNode().close();
             }
@@ -60,17 +58,12 @@ public class IndexerSetupService extends AbstractIdleService {
     @Override
     protected void startUp() throws Exception {
         Tools.silenceUncaughtExceptionsInThisThread();
-
-        LOG.debug("Starting indexer");
         try {
             indexer.start();
         } catch (Exception e) {
             bufferSynchronizerService.setIndexerUnavailable();
             throw e;
         }
-
-        LOG.debug("Setting up deflector");
-        deflector.setUp(indexer);
     }
 
     @Override

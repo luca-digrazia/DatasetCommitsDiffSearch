@@ -1,4 +1,6 @@
-/**
+/*
+ * Copyright 2012-2014 TORCH GmbH
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -14,6 +16,7 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
+
 package org.graylog2.initializers;
 
 import com.google.common.util.concurrent.AbstractIdleService;
@@ -30,7 +33,7 @@ import javax.inject.Singleton;
  */
 @Singleton
 public class BufferSynchronizerService extends AbstractIdleService {
-    private static final Logger LOG = LoggerFactory.getLogger(BufferSynchronizerService.class);
+    private static final Logger log = LoggerFactory.getLogger(BufferSynchronizerService.class);
 
     private final Buffers bufferSynchronizer;
     private final Caches cacheSynchronizer;
@@ -49,14 +52,14 @@ public class BufferSynchronizerService extends AbstractIdleService {
 
     @Override
     protected void shutDown() throws Exception {
-        LOG.debug("Stopping BufferSynchronizerService");
+        log.debug("Stopping BufferSynchronizerService");
         if (indexerAvailable) {
             bufferSynchronizer.waitForEmptyBuffers();
             cacheSynchronizer.waitForEmptyCaches();
         } else {
-            LOG.warn("Indexer is unavailable, not waiting to clear buffers and caches, as we have no connection to Elasticsearch");
+            log.warn("Indexer is unavailable, not waiting to clear buffers and caches, as we have no connection to Elasticsearch");
         }
-        LOG.debug("Stopped BufferSynchronizerService");
+        log.debug("Stopped BufferSynchronizerService");
     }
 
     public void setIndexerUnavailable() {

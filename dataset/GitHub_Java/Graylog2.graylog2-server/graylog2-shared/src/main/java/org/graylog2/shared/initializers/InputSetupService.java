@@ -32,14 +32,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-import javax.inject.Singleton;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 /**
  * @author Dennis Oelkers <dennis@torch.sh>
  */
-@Singleton
 public class InputSetupService extends AbstractExecutionThreadService {
     private static final Logger LOG = LoggerFactory.getLogger(InputSetupService.class);
     private final InputRegistry inputRegistry;

@@ -28,7 +28,6 @@ import org.graylog2.shared.ProcessingPauseLockedException;
 import org.graylog2.shared.ServerStatus;
 import org.graylog2.shared.initializers.InputSetupService;
 import org.graylog2.shared.initializers.PeriodicalsService;
-import org.graylog2.shared.initializers.RestApiService;
 import org.graylog2.system.activities.Activity;
 import org.graylog2.system.activities.ActivityWriter;
 import org.slf4j.Logger;
@@ -53,7 +52,6 @@ public class GracefulShutdown implements Runnable {
     private final InputSetupService inputSetupService;
     private final ServerStatus serverStatus;
     private final ActivityWriter activityWriter;
-    private final RestApiService restApiService;
 
     @Inject
     public GracefulShutdown(ServerStatus serverStatus,
@@ -62,8 +60,7 @@ public class GracefulShutdown implements Runnable {
                             BufferSynchronizerService bufferSynchronizerService,
                             IndexerSetupService indexerSetupService,
                             PeriodicalsService periodicalsService,
-                            InputSetupService inputSetupService,
-                            RestApiService restApiService) {
+                            InputSetupService inputSetupService) {
         this.serverStatus = serverStatus;
         this.activityWriter = activityWriter;
         this.configuration = configuration;
@@ -71,7 +68,6 @@ public class GracefulShutdown implements Runnable {
         this.indexerSetupService = indexerSetupService;
         this.periodicalsService = periodicalsService;
         this.inputSetupService = inputSetupService;
-        this.restApiService = restApiService;
     }
 
     @Override
@@ -106,9 +102,6 @@ public class GracefulShutdown implements Runnable {
         try {
             Thread.sleep(SLEEP_SECS*1000);
         } catch (InterruptedException ignored) { /* nope */ }
-
-        // Stop REST API service to avoid changes from outside.
-        restApiService.stopAsync().awaitTerminated();
 
         // stop all inputs so no new messages can come in
         inputSetupService.stopAsync().awaitTerminated();
