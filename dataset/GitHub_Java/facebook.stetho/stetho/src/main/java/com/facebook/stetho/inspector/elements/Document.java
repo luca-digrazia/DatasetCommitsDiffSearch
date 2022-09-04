@@ -141,22 +141,10 @@ public final class Document extends ThreadBoundProxy {
     mDocumentProvider.setAttributesAsText(element, text);
   }
 
-  public void getElementStyleRuleNames(Object element, StyleRuleNameAccumulator accumulator) {
+  public void getElementStyles(Object element, StyleAccumulator styleAccumulator) {
     NodeDescriptor nodeDescriptor = getNodeDescriptor(element);
 
-    nodeDescriptor.getStyleRuleNames(element, accumulator);
-  }
-
-  public void getElementStyles(Object element, String ruleName, StyleAccumulator accumulator) {
-    NodeDescriptor nodeDescriptor = getNodeDescriptor(element);
-
-    nodeDescriptor.getStyles(element, ruleName, accumulator);
-  }
-
-  public void setElementStyle(Object element, String ruleName, String name, String value) {
-    NodeDescriptor nodeDescriptor = getNodeDescriptor(element);
-
-    nodeDescriptor.setStyle(element, ruleName, name, value);
+    nodeDescriptor.getStyles(element, styleAccumulator);
   }
 
   public void getElementComputedStyles(Object element, ComputedStyleAccumulator styleAccumulator) {

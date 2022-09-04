@@ -10,7 +10,6 @@
 package com.facebook.stetho.inspector.elements.android;
 
 import android.app.Dialog;
-import android.graphics.Rect;
 import android.view.View;
 
 import com.facebook.stetho.common.Accumulator;
@@ -26,7 +25,6 @@ import com.facebook.stetho.inspector.elements.Descriptor;
 import com.facebook.stetho.inspector.elements.DescriptorMap;
 import com.facebook.stetho.inspector.elements.NodeType;
 import com.facebook.stetho.inspector.elements.StyleAccumulator;
-import com.facebook.stetho.inspector.elements.StyleRuleNameAccumulator;
 
 import javax.annotation.Nullable;
 
@@ -46,7 +44,7 @@ final class DialogFragmentDescriptor
     if (compat != null) {
       Class<?> dialogFragmentClass = compat.getDialogFragmentClass();
       LogUtil.d("Adding support for %s", dialogFragmentClass);
-      map.registerDescriptor(dialogFragmentClass, new DialogFragmentDescriptor(compat));
+      map.register(dialogFragmentClass, new DialogFragmentDescriptor(compat));
     }
   }
 
@@ -121,26 +119,18 @@ final class DialogFragmentDescriptor
 
   @Nullable
   @Override
-  public View getViewAndBoundsForHighlighting(Object element, Rect bounds) {
+  public View getViewForHighlighting(Object element) {
     final Descriptor.Host host = getHost();
     if (host instanceof AndroidDescriptorHost) {
       Dialog dialog = mAccessor.getDialog(element);
-      return ((AndroidDescriptorHost) host).getHighlightingView(dialog, bounds);
+      return ((AndroidDescriptorHost) host).getHighlightingView(dialog);
     }
 
     return null;
   }
 
   @Override
-  public void getStyleRuleNames(Object element, StyleRuleNameAccumulator accumulator) {
-  }
-
-  @Override
-  public void getStyles(Object element, String ruleName, StyleAccumulator accumulator) {
-  }
-
-  @Override
-  public void setStyle(Object element, String ruleName, String name, String value) {
+  public void getStyles(Object element, StyleAccumulator styles) {
   }
 
   @Override

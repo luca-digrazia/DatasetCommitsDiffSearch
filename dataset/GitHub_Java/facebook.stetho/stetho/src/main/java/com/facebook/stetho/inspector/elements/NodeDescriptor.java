@@ -34,11 +34,7 @@ public interface NodeDescriptor<E> extends ThreadBound {
 
   void setAttributesAsText(E element, String text);
 
-  void getStyleRuleNames(E element, StyleRuleNameAccumulator accumulator);
-
-  void getStyles(E element, String ruleName, StyleAccumulator accumulator);
-
-  void setStyle(E element, String ruleName, String name, String value);
+  void getStyles(E element, StyleAccumulator accumulator);
 
   void getComputedStyles(E element, ComputedStyleAccumulator accumulator);
 }
