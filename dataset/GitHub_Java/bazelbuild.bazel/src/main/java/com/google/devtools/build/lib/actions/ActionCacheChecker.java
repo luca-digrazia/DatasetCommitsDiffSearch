@@ -23,9 +23,6 @@ import com.google.devtools.build.lib.actions.cache.ActionCache;
 import com.google.devtools.build.lib.actions.cache.DigestUtils;
 import com.google.devtools.build.lib.actions.cache.MetadataHandler;
 import com.google.devtools.build.lib.actions.cache.Protos.ActionCacheStatistics.MissReason;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.EventKind;
@@ -268,14 +265,14 @@ public class ActionCacheChecker {
     if (!cacheConfig.enabled()) {
       return new Token(getKeyString(action));
     }
-    NestedSet<Artifact> actionInputs = action.getInputs();
+    Iterable<Artifact> actionInputs = action.getInputs();
     // Resolve action inputs from cache, if necessary.
     boolean inputsDiscovered = action.inputsDiscovered();
     if (!inputsDiscovered && resolvedCacheArtifacts != null) {
       // The action doesn't know its inputs, but the caller has a good idea of what they are.
       Preconditions.checkState(action.discoversInputs(),
           "Actions that don't know their inputs must discover them: %s", action);
-      actionInputs = NestedSetBuilder.wrap(Order.STABLE_ORDER, resolvedCacheArtifacts);
+      actionInputs = resolvedCacheArtifacts;
     }
     ActionCache.Entry entry = getCacheEntry(action);
     if (mustExecute(
@@ -403,7 +400,7 @@ public class ActionCacheChecker {
         entry.addFile(output.getExecPath(), metadata);
       }
     }
-    for (Artifact input : action.getInputs().toList()) {
+    for (Artifact input : action.getInputs()) {
       entry.addFile(input.getExecPath(), getMetadataMaybe(metadataHandler, input));
     }
     entry.getFileDigest();
@@ -436,7 +433,7 @@ public class ActionCacheChecker {
     // is a superset of getMandatoryInputs(). See bug about an "action not in canonical form"
     // error message and the integration test test_crosstool_change_and_failure().
     Map<PathFragment, Artifact> allowedDerivedInputsMap = new HashMap<>();
-    for (Artifact derivedInput : action.getAllowedDerivedInputs().toList()) {
+    for (Artifact derivedInput : action.getAllowedDerivedInputs()) {
       if (!derivedInput.isSourceArtifact()) {
         allowedDerivedInputsMap.put(derivedInput.getExecPath(), derivedInput);
       }
@@ -514,7 +511,7 @@ public class ActionCacheChecker {
       // Since we never validate action key for middlemen, we should not store
       // it in the cache entry and just use empty string instead.
       entry = new ActionCache.Entry("", ImmutableMap.<String, String>of(), false);
-      for (Artifact input : action.getInputs().toList()) {
+      for (Artifact input : action.getInputs()) {
         entry.addFile(input.getExecPath(), getMetadataMaybe(metadataHandler, input));
       }
     }

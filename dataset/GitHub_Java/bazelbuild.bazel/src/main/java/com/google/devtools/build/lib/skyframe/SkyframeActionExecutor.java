@@ -35,7 +35,6 @@ import com.google.devtools.build.lib.actions.ActionContinuationOrResult;
 import com.google.devtools.build.lib.actions.ActionExecutedEvent;
 import com.google.devtools.build.lib.actions.ActionExecutedEvent.ErrorTiming;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
-import com.google.devtools.build.lib.actions.ActionExecutionContext.LostInputsCheck;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionExecutionStatusReporter;
 import com.google.devtools.build.lib.actions.ActionGraph;
@@ -627,7 +626,6 @@ public final class SkyframeActionExecutor {
    * tasks related to that action.
    */
   public ActionExecutionContext getContext(
-      Action action,
       MetadataProvider metadataProvider,
       MetadataHandler metadataHandler,
       ProgressEventBehavior progressEventBehavior,
@@ -644,7 +642,6 @@ public final class SkyframeActionExecutor {
         actionInputPrefetcher,
         actionKeyContext,
         metadataHandler,
-        lostInputsCheck(actionFileSystem, action, outputService),
         fileOutErr,
         selectEventHandler(progressEventBehavior),
         clientEnv,
@@ -788,7 +785,6 @@ public final class SkyframeActionExecutor {
             actionInputPrefetcher,
             actionKeyContext,
             metadataHandler,
-            lostInputsCheck(actionFileSystem, action, outputService),
             actionLogBufferPathGenerator.generate(
                 ArtifactPathResolver.createPathResolver(
                     actionFileSystem, executorEngine.getExecRoot())),
@@ -808,8 +804,7 @@ public final class SkyframeActionExecutor {
       // Input discovery may have been affected by lost inputs. If an action filesystem is used, it
       // may know whether inputs were lost. We should fail fast if any were; rewinding may be able
       // to fix it.
-      checkActionFileSystemForLostInputs(
-          actionExecutionContext.getActionFileSystem(), action, outputService);
+      checkActionFileSystemForLostInputs(actionExecutionContext, action, outputService);
 
       return artifacts;
     } catch (ActionExecutionException e) {
@@ -819,8 +814,7 @@ public final class SkyframeActionExecutor {
       // complete without error.
       if (!(e instanceof LostInputsActionExecutionException)) {
         try {
-          checkActionFileSystemForLostInputs(
-              actionExecutionContext.getActionFileSystem(), action, outputService);
+          checkActionFileSystemForLostInputs(actionExecutionContext, action, outputService);
         } catch (LostInputsActionExecutionException lostInputsException) {
           e = lostInputsException;
         }
@@ -1069,8 +1063,7 @@ public final class SkyframeActionExecutor {
         // An action's result (or intermediate state) may have been affected by lost inputs. If an
         // action filesystem is used, it may know whether inputs were lost. We should fail fast if
         // any were; rewinding may be able to fix it.
-        checkActionFileSystemForLostInputs(
-            actionExecutionContext.getActionFileSystem(), action, outputService);
+        checkActionFileSystemForLostInputs(actionExecutionContext, action, outputService);
       } catch (ActionExecutionException e) {
 
         // Action failures may be caused by lost inputs. Lost input failures have higher priority
@@ -1078,8 +1071,7 @@ public final class SkyframeActionExecutor {
         // without error.
         if (!(e instanceof LostInputsActionExecutionException)) {
           try {
-            checkActionFileSystemForLostInputs(
-                actionExecutionContext.getActionFileSystem(), action, outputService);
+            checkActionFileSystemForLostInputs(actionExecutionContext, action, outputService);
           } catch (LostInputsActionExecutionException lostInputsException) {
             e = lostInputsException;
           }
@@ -1517,18 +1509,12 @@ public final class SkyframeActionExecutor {
    * if any were.
    */
   private static void checkActionFileSystemForLostInputs(
-      @Nullable FileSystem actionFileSystem, Action action, OutputService outputService)
+      ActionExecutionContext context, Action action, OutputService outputService)
       throws LostInputsActionExecutionException {
+    FileSystem actionFileSystem = context.getActionFileSystem();
     if (actionFileSystem != null) {
       outputService.checkActionFileSystemForLostInputs(actionFileSystem, action);
     }
-  }
-
-  private static LostInputsCheck lostInputsCheck(
-      @Nullable FileSystem actionFileSystem, Action action, OutputService outputService) {
-    return actionFileSystem == null
-        ? LostInputsCheck.NONE
-        : () -> outputService.checkActionFileSystemForLostInputs(actionFileSystem, action);
   }
 
   /**

@@ -1262,7 +1262,7 @@ public class ActionExecutionFunction implements SkyFunction {
     }
 
     if (missingCount > 0) {
-      for (Cause missingInput : rootCauses.build().toList()) {
+      for (Cause missingInput : rootCauses.build()) {
         env.getListener()
             .handle(
                 Event.error(
