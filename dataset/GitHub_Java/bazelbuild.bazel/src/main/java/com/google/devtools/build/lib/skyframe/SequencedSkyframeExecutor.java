@@ -353,10 +353,6 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
     for (PackageIdentifier deletedPackage : deletedPackages) {
       packagesToInvalidate.add(PackageLookupValue.key(deletedPackage));
     }
-    // Exit early if there are no packages to be deleted to avoid iterating over a large map.
-    if (packagesToInvalidate.isEmpty()) {
-      return;
-    }
     memoizingEvaluator.delete(Predicates.in(packagesToInvalidate));
   }
 
