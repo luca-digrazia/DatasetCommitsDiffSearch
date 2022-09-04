@@ -1,51 +1,55 @@
 /*
- * Copyright 2013 TORCH UG
+ * Copyright 2012-2015 TORCH GmbH, 2015 Graylog, Inc.
  *
- * This file is part of Graylog2.
+ * This file is part of Graylog.
  *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package controllers;
 
-import com.google.gson.Gson;
-import com.google.inject.Inject;
-import lib.APIException;
+import com.google.common.net.MediaType;
 import lib.BreadcrumbList;
-import models.accounts.LdapSettings;
-import models.accounts.LdapSettingsService;
-import models.api.requests.accounts.LdapSettingsRequest;
-import models.api.requests.accounts.LdapTestConnectionRequest;
-import models.api.responses.accounts.LdapConnectionTestResponse;
+import lib.json.Json;
+import org.graylog2.restclient.lib.APIException;
+import org.graylog2.restclient.models.accounts.LdapSettings;
+import org.graylog2.restclient.models.accounts.LdapSettingsService;
+import org.graylog2.restclient.models.api.requests.accounts.LdapSettingsRequest;
+import org.graylog2.restclient.models.api.requests.accounts.LdapTestConnectionRequest;
+import org.graylog2.restclient.models.api.responses.accounts.LdapConnectionTestResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import play.data.DynamicForm;
 import play.data.Form;
 import play.mvc.Result;
 
-import javax.ws.rs.core.MediaType;
+import javax.inject.Inject;
 import java.io.IOException;
 import java.util.Map;
 
-import static com.google.common.base.Objects.firstNonNull;
+import static com.google.common.base.MoreObjects.firstNonNull;
 import static play.data.Form.form;
 
 public class LdapController extends AuthenticatedController {
     private static final Logger log = LoggerFactory.getLogger(LdapController.class);
     private final Form<LdapSettingsRequest> settingsForm = form(LdapSettingsRequest.class);
 
+    private final LdapSettingsService ldapSettingsService;
+
     @Inject
-    private LdapSettingsService ldapSettingsService;
+    public LdapController(final LdapSettingsService ldapSettingsService) {
+        this.ldapSettingsService = ldapSettingsService;
+    }
 
     public Result index() {
         final LdapSettings ldapSettings = ldapSettingsService.load();
@@ -54,10 +58,12 @@ public class LdapController extends AuthenticatedController {
             final LdapSettingsRequest newRequest = new LdapSettingsRequest();
             newRequest.ldapUri = "ldap:///";
             newRequest.enabled = true;
+            newRequest.defaultGroup = "";
             ldapSettingsForm = settingsForm.fill(newRequest);
         } else {
             ldapSettingsForm = settingsForm.fill(ldapSettings.toRequest());
         }
+
         return ok(views.html.system.ldap.index.render(currentUser(), breadcrumbs(), ldapSettingsForm));
     }
 
@@ -68,7 +74,7 @@ public class LdapController extends AuthenticatedController {
         try {
             final LdapTestConnectionRequest request = getLdapTestConnectionRequest(formData);
             request.testConnectOnly = true;
-            result = api().post(LdapConnectionTestResponse.class).path("/system/ldap/test").body(request).execute();
+            result = ldapSettingsService.testLdapConfiguration(request);
         } catch (APIException e) {
             // couldn't connect
             log.error("Unable to test connection: {}", e.getMessage());
@@ -77,7 +83,7 @@ public class LdapController extends AuthenticatedController {
             log.error("Unable to connect", e);
             return internalServerError();
         }
-        return ok(new Gson().toJson(result)).as(MediaType.APPLICATION_JSON);
+        return ok(Json.toJsonString(result)).as(MediaType.JSON_UTF_8.toString());
     }
 
     public Result apiTestLdapLogin() {
@@ -96,7 +102,7 @@ public class LdapController extends AuthenticatedController {
             request.searchPattern = formData.get("searchPattern");
             request.principal = formData.get("principal");
             request.password = formData.get("password");
-            result = api().post(LdapConnectionTestResponse.class).path("/system/ldap/test").body(request).execute();
+            result = ldapSettingsService.testLdapConfiguration(request);
         } catch (APIException e) {
             log.error("Unable to test login: {}", e.getMessage());
             return internalServerError();
@@ -104,7 +110,7 @@ public class LdapController extends AuthenticatedController {
             log.error("Unable to connect", e);
             return internalServerError();
         }
-        return ok(new Gson().toJson(result)).as(MediaType.APPLICATION_JSON);
+        return ok(Json.toJsonString(result)).as(MediaType.JSON_UTF_8.toString());
     }
 
     private LdapTestConnectionRequest getLdapTestConnectionRequest(Map<String, String> formData) {

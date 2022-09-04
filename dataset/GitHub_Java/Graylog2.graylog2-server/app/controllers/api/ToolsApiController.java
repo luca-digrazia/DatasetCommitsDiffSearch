@@ -18,6 +18,7 @@
 package controllers.api;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.google.common.net.MediaType;
 import com.google.inject.Inject;
 import controllers.AuthenticatedController;
 import lib.NaturalDateTest;
@@ -25,12 +26,12 @@ import lib.extractors.testers.GrokTest;
 import lib.extractors.testers.RegexTest;
 import lib.extractors.testers.SplitAndIndexTest;
 import lib.extractors.testers.SubstringTest;
+import lib.json.Json;
+import org.graylog2.rest.models.tools.requests.GrokTestRequest;
+import org.graylog2.rest.models.tools.requests.RegexTestRequest;
+import org.graylog2.rest.models.tools.requests.SplitAndIndexTestRequest;
+import org.graylog2.rest.models.tools.requests.SubstringTestRequest;
 import org.graylog2.restclient.lib.APIException;
-import org.graylog2.restclient.models.api.requests.tools.RegexTestRequest;
-import org.graylog2.restclient.models.api.requests.tools.GrokTestRequest;
-import org.graylog2.restclient.models.api.requests.tools.SplitAndIndexTestRequest;
-import org.graylog2.restclient.models.api.requests.tools.SubstringTestRequest;
-import play.libs.Json;
 import play.mvc.Result;
 
 import java.io.IOException;
@@ -61,11 +62,11 @@ public class ToolsApiController extends AuthenticatedController {
         final RegexTestRequest request = Json.fromJson(json, RegexTestRequest.class);
 
         try {
-            if (request.regex.isEmpty() || request.string.isEmpty()) {
+            if (request.regex().isEmpty() || request.string().isEmpty()) {
                 return badRequest();
             }
 
-            return ok(Json.toJson(regexTest.test(request)));
+            return ok(Json.toJsonString(regexTest.test(request))).as(MediaType.JSON_UTF_8.toString());
         } catch (IOException e) {
             return internalServerError("io exception");
         } catch (APIException e) {
@@ -77,11 +78,11 @@ public class ToolsApiController extends AuthenticatedController {
         final JsonNode json = request().body().asJson();
         final SubstringTestRequest request = Json.fromJson(json, SubstringTestRequest.class);
         try {
-            if (request.start < 0 || request.end <= 0 || request.string.isEmpty()) {
+            if (request.start() < 0 || request.end() <= 0 || request.string().isEmpty()) {
                 return badRequest();
             }
 
-            return ok(Json.toJson(substringTest.test(request)));
+            return ok(Json.toJsonString(substringTest.test(request))).as(MediaType.JSON_UTF_8.toString());
         } catch (IOException e) {
             return internalServerError("io exception");
         } catch (APIException e) {
@@ -94,11 +95,11 @@ public class ToolsApiController extends AuthenticatedController {
         final SplitAndIndexTestRequest request = Json.fromJson(json, SplitAndIndexTestRequest.class);
 
         try {
-            if (request.splitBy.isEmpty() || request.index < 0 || request.string.isEmpty()) {
+            if (request.splitBy().isEmpty() || request.index() < 0 || request.string().isEmpty()) {
                 return badRequest();
             }
 
-            return ok(Json.toJson(splitAndIndexTest.test(request)));
+            return ok(Json.toJsonString(splitAndIndexTest.test(request))).as(MediaType.JSON_UTF_8.toString());
         } catch (IOException e) {
             return internalServerError("io exception");
         } catch (APIException e) {
@@ -112,7 +113,7 @@ public class ToolsApiController extends AuthenticatedController {
         }
 
         try {
-            return ok(Json.toJson(naturalDateTest.test(string)));
+            return ok(Json.toJsonString(naturalDateTest.test(string))).as(MediaType.JSON_UTF_8.toString());
         } catch (IOException e) {
             return internalServerError("io exception");
         } catch (APIException e) {
@@ -127,12 +128,12 @@ public class ToolsApiController extends AuthenticatedController {
         final JsonNode json = request().body().asJson();
         final GrokTestRequest request = Json.fromJson(json, GrokTestRequest.class);
 
-        if (request.pattern.isEmpty() || request.string.isEmpty()) {
+        if (request.pattern().isEmpty() || request.string().isEmpty()) {
             return badRequest();
         }
 
         try {
-            return ok(Json.toJson(grokTest.test(request)));
+            return ok(Json.toJsonString(grokTest.test(request))).as(MediaType.JSON_UTF_8.toString());
         } catch (IOException e) {
             return internalServerError("io exception");
         } catch (APIException e) {

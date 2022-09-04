@@ -1,59 +1,77 @@
+/**
+ * This file is part of Graylog.
+ *
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Graylog is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package controllers.api;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Multimap;
-import com.google.common.io.Files;
-import com.google.gson.Gson;
-import com.google.inject.Inject;
+import com.google.common.net.MediaType;
 import controllers.AuthenticatedController;
-import org.glassfish.grizzly.utils.Charsets;
+import lib.json.Json;
+import org.graylog2.restclient.models.api.requests.CreateBundleRequest;
 import org.graylog2.restclient.models.bundles.BundleService;
 import org.graylog2.restclient.models.bundles.ConfigurationBundle;
-import org.graylog2.restclient.models.api.requests.CreateBundleRequest;
 import play.Logger;
+import play.mvc.BodyParser;
 import play.mvc.Http.MultipartFormData;
 import play.mvc.Http.MultipartFormData.FilePart;
 import play.mvc.Result;
 
-import java.io.File;
+import javax.inject.Inject;
 import java.io.IOException;
 
 public class BundlesApiController extends AuthenticatedController {
+    private final BundleService bundleService;
+    private final ObjectMapper objectMapper;
+
     @Inject
-    private BundleService bundleService;
+    public BundlesApiController(BundleService bundleService, ObjectMapper objectMapper) {
+        this.bundleService = bundleService;
+        this.objectMapper = objectMapper;
+    }
 
     public Result index() {
         Multimap<String, ConfigurationBundle> bundles = bundleService.all();
 
-        return ok(new Gson().toJson(bundles.asMap())).as("application/json");
+        return ok(Json.toJsonString(bundles.asMap())).as(MediaType.JSON_UTF_8.toString());
     }
 
+    @BodyParser.Of(BodyParser.MultipartFormData.class)
     public Result create() {
+        String path = getRefererPath();
         MultipartFormData body = request().body().asMultipartFormData();
         FilePart bundle = body.getFile("bundle");
         if (bundle != null) {
             CreateBundleRequest cbr;
             try {
-                File file = bundle.getFile();
-                String bundleContents = Files.toString(file, Charsets.UTF8_CHARSET);
-                ObjectMapper om = new ObjectMapper();
-                cbr = om.readValue(bundleContents, CreateBundleRequest.class);
+                cbr = objectMapper.readValue(bundle.getFile(), CreateBundleRequest.class);
             } catch (IOException e) {
                 Logger.error("Could not parse uploaded bundle: " + e);
                 flash("error", "The uploaded bundle could not be applied: does it have the right format?");
-                return redirect("/");
+                return redirect(path);
             }
             if (bundleService.create(cbr)) {
                 flash("success", "Bundle added successfully");
-                return redirect("/");
             } else {
                 flash("error", "There was an error adding the bundle, please try again later");
-                return redirect("/");
             }
         } else {
             flash("error", "You didn't upload any bundle file");
-            return redirect("/");
         }
+        return redirect(path);
     }
 
     public Result apply(String bundleId) {
@@ -63,6 +81,17 @@ public class BundlesApiController extends AuthenticatedController {
         } catch (Exception e) {
             flash("error", "Could not apply bundle: " + e);
         }
-        return redirect("/");
+        return redirect(getRefererPath());
     }
+
+    public Result delete(String bundleId) {
+        try {
+            bundleService.delete(bundleId);
+            flash("success", "Bundle successfully deleted");
+        } catch (Exception e) {
+            flash("error", "Could not delete bundle: " + e);
+        }
+        return redirect(getRefererPath());
+    }
+
 }

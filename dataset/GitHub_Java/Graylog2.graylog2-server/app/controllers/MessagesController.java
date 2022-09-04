@@ -1,33 +1,59 @@
+/*
+ * Copyright 2012-2015 TORCH GmbH, 2015 Graylog, Inc.
+ *
+ * This file is part of Graylog.
+ *
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Graylog is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package controllers;
 
+import com.google.common.collect.Maps;
+import com.google.common.net.MediaType;
+import lib.json.Json;
+import org.graylog2.restclient.lib.APIException;
+import org.graylog2.restclient.lib.ApiClient;
+import org.graylog2.restclient.models.MessagesService;
+import org.graylog2.restclient.models.api.results.MessageAnalyzeResult;
+import org.graylog2.restclient.models.api.results.MessageResult;
+import play.mvc.Result;
+
+import javax.inject.Inject;
 import java.io.IOException;
 import java.util.Map;
 
-import com.google.common.collect.Maps;
-import com.google.gson.Gson;
-
-import lib.APIException;
-import lib.Api;
-import models.FieldMapper;
-import models.Input;
-import models.Message;
-import models.Node;
-import models.api.results.MessageAnalyzeResult;
-import models.api.results.MessageResult;
-import play.Logger;
-import play.mvc.*;
-
 public class MessagesController extends AuthenticatedController {
 
-    public static Result single(String index, String id) {
+    private final MessagesService messagesService;
+
+    @Inject
+    public MessagesController(MessagesService messagesService) {
+        this.messagesService = messagesService;
+    }
+
+    public Result single(String index, String id) {
         try {
-            MessageResult message = Message.get(index, id);
+
+            final MessageResult message = messagesService.getMessage(index, id);
 
             Map<String, Object> result = Maps.newHashMap();
             result.put("id", message.getId());
+            result.put("index", message.getIndex());
+            result.put("filtered_fields", message.getFilteredFields());
             result.put("fields", message.getFields());
+            result.put("formatted_fields", message.getFormattedFields());
 
-            return ok(new Gson().toJson(result)).as("application/json");
+            return ok(Json.toJsonString(result)).as(MediaType.JSON_UTF_8.toString());
         } catch (IOException e) {
             return status(500);
         } catch (APIException e) {
@@ -35,59 +61,22 @@ public class MessagesController extends AuthenticatedController {
         }
     }
 
-	public static Result singleAsPartial(String index, String id) {
-		try {
-            MessageResult message = FieldMapper.run(Message.get(index, id));
-            Node sourceNode = getSourceNode(message);
-
-            return ok(views.html.messages.show_as_partial.render(message, getSourceInput(sourceNode, message), sourceNode));
-		} catch (IOException e) {
-			return status(500, views.html.errors.error.render(Api.ERROR_MSG_IO, e, request()));
-		} catch (APIException e) {
-			String message = "Could not get message. We expected HTTP 200, but got a HTTP " + e.getHttpCode() + ".";
-			return status(500, views.html.errors.error.render(message, e, request()));
-		}
-	}
-	
-	public static Result analyze(String index, String id, String field) {
-		try {
-			MessageResult message = Message.get(index, id);
-			
-			String analyzeField = (String) message.getFields().get(field);
-			if (analyzeField == null || analyzeField.isEmpty()) {
-				throw new APIException(404, "Message does not have requested field.");
-			}
-			
-			MessageAnalyzeResult result = Message.analyze(index, analyzeField);
-			return ok(new Gson().toJson(result.getTokens())).as("application/json");
-		} catch (IOException e) {
-			return status(500, views.html.errors.error.render(Api.ERROR_MSG_IO, e, request()));
-		} catch (APIException e) {
-			String message = "There was a problem with your search. We expected HTTP 200, but got a HTTP " + e.getHttpCode() + ".";
-			return status(500, views.html.errors.error.render(message, e, request()));
-		}
-	}
-
-    private static Node getSourceNode(MessageResult m) {
+    public Result analyze(String index, String id, String field) {
         try {
-            return Node.fromId(m.getSourceNodeId());
-        } catch(Exception e) {
-            Logger.warn("Could not derive source node from message <" + m.getId() + ">.", e);
-        }
+            MessageResult message = messagesService.getMessage(index, id);
 
-        return null;
-    }
-
-    private static Input getSourceInput(Node node, MessageResult m) {
-        if (node != null) {
-            try {
-                return node.getInput(m.getSourceInputId());
-            } catch(Exception e) {
-                Logger.warn("Could not derive source input from message <" + m.getId() + ">.", e);
+            Object analyzeField = message.getFilteredFields().get(field);
+            if (analyzeField == null || (analyzeField instanceof String) && ((String)analyzeField).isEmpty()) {
+                return status(404, "Message does not have requested field " + field);
             }
+            final String stringifiedValue = String.valueOf(analyzeField);
+            MessageAnalyzeResult result = messagesService.analyze(index, stringifiedValue);
+            return ok(Json.toJsonString(result.getTokens())).as(MediaType.JSON_UTF_8.toString());
+        } catch (IOException e) {
+            return status(500, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, e, request()));
+        } catch (APIException e) {
+            String message = "There was a problem with your search. We expected HTTP 200, but got a HTTP " + e.getHttpCode() + ".";
+            return status(500, views.html.errors.error.render(message, e, request()));
         }
-
-        return null;
     }
-	
 }

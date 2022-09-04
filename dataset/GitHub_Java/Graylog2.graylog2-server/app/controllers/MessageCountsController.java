@@ -1,63 +1,46 @@
+/*
+ * Copyright 2012-2015 TORCH GmbH, 2015 Graylog, Inc.
+ *
+ * This file is part of Graylog.
+ *
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Graylog is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package controllers;
 
-import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.google.gson.Gson;
-import lib.APIException;
-import models.MessageCount;
-import models.MessageCountHistogram;
-import models.api.results.DateHistogramResult;
-import models.api.results.MessageCountResult;
+import com.google.common.net.MediaType;
+import lib.json.Json;
+import org.graylog2.restclient.models.MessagesService;
 import play.mvc.Result;
 
-import java.io.IOException;
-import java.util.List;
+import javax.inject.Inject;
 import java.util.Map;
 
 public class MessageCountsController extends AuthenticatedController {
+    private final MessagesService messagesService;
 
-    public Result total() {
-        try {
-            MessageCount count = new MessageCount();
-            MessageCountResult countResult = count.total();
-
-            Map<String, Integer> result = Maps.newHashMap();
-            result.put("events", countResult.getEventsCount());
-
-            return ok(new Gson().toJson(result)).as("application/json");
-        } catch (IOException e) {
-            return internalServerError("io exception");
-        } catch (APIException e) {
-            return internalServerError("api exception " + e);
-        }
+    @Inject
+    public MessageCountsController(MessagesService messagesService) {
+        this.messagesService = messagesService;
     }
 
-	public Result histogram(String timerange) {
-    	int range;
-    	try {
-    		range = Integer.parseInt(timerange);
-    	} catch (NumberFormatException e) {
-    		return badRequest("Invalid timerange.");
-    	}
-		
-		try {
-			MessageCountHistogram count = new MessageCountHistogram("minute", range);
-			DateHistogramResult histogramResult = count.histogram();
-			
-			List<Map<String, Object>> lines = Lists.newArrayList();
-			Map<String, Object> r = Maps.newTreeMap();
-			r.put("color", "#26ADE4");
-			r.put("name", "Messages");
-			r.put("data", histogramResult.getFormattedResults());
-			
-			lines.add(r);
-			
-			return ok(new Gson().toJson(lines)).as("application/json");
-		} catch (IOException e) {
-			return internalServerError("io exception");
-		} catch (APIException e) {
-			return internalServerError("api exception " + e);
-		}
-	}
-	
+    public Result total() {
+        long countResult = messagesService.total();
+
+        Map<String, Long> result = Maps.newHashMap();
+        result.put("events", countResult);
+
+        return ok(Json.toJsonString(result)).as(MediaType.JSON_UTF_8.toString());
+    }
 }

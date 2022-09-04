@@ -1,14 +1,15 @@
 package controllers.api;
 
 import com.google.common.collect.Lists;
+import com.google.common.net.MediaType;
 import controllers.AuthenticatedController;
+import lib.json.Json;
 import models.descriptions.NodeDescription;
 import org.graylog2.restclient.lib.APIException;
 import org.graylog2.restclient.lib.ServerNodes;
+import org.graylog2.restclient.models.Node;
 import org.graylog2.restclient.models.NodeService;
 import org.graylog2.restclient.models.Radio;
-import play.Logger;
-import play.libs.Json;
 import play.mvc.Result;
 
 import javax.inject.Inject;
@@ -28,12 +29,8 @@ public class NodesApiController extends AuthenticatedController {
     public Result nodes() {
         final List<NodeDescription> nodes = Lists.newArrayList();
 
-        for (final String nodeId : serverNodes.asMap().keySet()) {
-            try {
-                nodes.add(new NodeDescription(nodeService.loadNode(nodeId)));
-            } catch (NodeService.NodeNotFoundException e) {
-                Logger.error("Could not load node information", e);
-            }
+        for (final Node node : serverNodes.all()) {
+            nodes.add(new NodeDescription(node));
         }
 
         try {
@@ -47,6 +44,6 @@ public class NodesApiController extends AuthenticatedController {
             return status(504, message);
         }
 
-        return ok(Json.toJson(nodes));
+        return ok(Json.toJsonString(nodes)).as(MediaType.JSON_UTF_8.toString());
     }
 }
