@@ -803,15 +803,13 @@ public class PackageFunction implements SkyFunction {
     }
 
     @Override
-    public Token runAsync(
-        List<String> includes, List<String> excludes, boolean excludeDirs, boolean allowEmpty)
+    public Token runAsync(List<String> includes, List<String> excludes, boolean excludeDirs)
         throws BadGlobException, InterruptedException {
-      return delegate.runAsync(includes, excludes, excludeDirs, allowEmpty);
+      return delegate.runAsync(includes, excludes, excludeDirs);
     }
 
     @Override
-    public List<String> fetch(Token token)
-        throws BadGlobException, IOException, InterruptedException {
+    public List<String> fetch(Token token) throws IOException, InterruptedException {
       return delegate.fetch(token);
     }
 
@@ -879,8 +877,7 @@ public class PackageFunction implements SkyFunction {
     }
 
     @Override
-    public Token runAsync(
-        List<String> includes, List<String> excludes, boolean excludeDirs, boolean allowEmpty)
+    public Token runAsync(List<String> includes, List<String> excludes, boolean excludeDirs)
         throws BadGlobException, InterruptedException {
       LinkedHashSet<SkyKey> globKeys = Sets.newLinkedHashSetWithExpectedSize(includes.size());
       Map<SkyKey, String> globKeyToPatternMap = Maps.newHashMapWithExpectedSize(includes.size());
@@ -907,7 +904,7 @@ public class PackageFunction implements SkyFunction {
         }
       }
       Token legacyIncludesToken =
-          legacyGlobber.runAsync(globsToDelegate, ImmutableList.of(), excludeDirs, allowEmpty);
+          legacyGlobber.runAsync(globsToDelegate, ImmutableList.of(), excludeDirs);
 
       return new HybridToken(globValueMap, globKeys, legacyIncludesToken, excludes);
     }
@@ -933,8 +930,7 @@ public class PackageFunction implements SkyFunction {
     }
 
     @Override
-    public List<String> fetch(Token token)
-        throws BadGlobException, IOException, InterruptedException {
+    public List<String> fetch(Token token) throws IOException, InterruptedException {
       HybridToken hybridToken = (HybridToken) token;
       return hybridToken.resolve(legacyGlobber);
     }
@@ -978,8 +974,7 @@ public class PackageFunction implements SkyFunction {
         this.excludes = excludes;
       }
 
-      private List<String> resolve(Globber delegate)
-          throws BadGlobException, IOException, InterruptedException {
+      private List<String> resolve(Globber delegate) throws IOException, InterruptedException {
         HashSet<String> matches = new HashSet<>();
         for (SkyKey includeGlobKey : includesGlobKeys) {
           // TODO(bazel-team): NestedSet expansion here is suboptimal.
