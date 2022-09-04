@@ -25,8 +25,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.Runnables;
 import com.google.devtools.build.lib.actions.Action;
-import com.google.devtools.build.lib.actions.ActionLookupValue;
-import com.google.devtools.build.lib.actions.ActionLookupValue.ActionLookupKey;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifactType;
@@ -155,7 +153,7 @@ public class FilesystemValueCheckerTest {
     assertEmptyDiff(getDirtyFilesystemKeys(evaluator, checker));
 
     SkyKey skyKey = FileStateValue.key(
-        RootedPath.toRootedPath(fs.getRootDirectory(), PathFragment.create("foo")));
+        RootedPath.toRootedPath(fs.getRootDirectory(), new PathFragment("foo")));
     EvaluationResult<SkyValue> result =
         driver.evaluate(
             ImmutableList.of(skyKey),
@@ -206,13 +204,13 @@ public class FilesystemValueCheckerTest {
     FileSystemUtils.ensureSymbolicLink(sym1, path);
     FileSystemUtils.ensureSymbolicLink(sym2, path);
     SkyKey fooKey =
-        FileValue.key(RootedPath.toRootedPath(fs.getRootDirectory(), PathFragment.create("foo")));
+        FileValue.key(RootedPath.toRootedPath(fs.getRootDirectory(), new PathFragment("foo")));
     RootedPath symlinkRootedPath =
-        RootedPath.toRootedPath(fs.getRootDirectory(), PathFragment.create("bar"));
+        RootedPath.toRootedPath(fs.getRootDirectory(), new PathFragment("bar"));
     SkyKey symlinkKey = FileValue.key(symlinkRootedPath);
     SkyKey symlinkFileStateKey = FileStateValue.key(symlinkRootedPath);
     RootedPath sym1RootedPath =
-        RootedPath.toRootedPath(fs.getRootDirectory(), PathFragment.create("sym1"));
+        RootedPath.toRootedPath(fs.getRootDirectory(), new PathFragment("sym1"));
     SkyKey sym1FileStateKey = FileStateValue.key(sym1RootedPath);
     Iterable<SkyKey> allKeys = ImmutableList.of(symlinkKey, fooKey);
 
@@ -274,10 +272,10 @@ public class FilesystemValueCheckerTest {
 
     SkyKey key1 =
         FileStateValue.key(
-            RootedPath.toRootedPath(fs.getRootDirectory(), PathFragment.create("foo1")));
+            RootedPath.toRootedPath(fs.getRootDirectory(), new PathFragment("foo1")));
     SkyKey key2 =
         FileStateValue.key(
-            RootedPath.toRootedPath(fs.getRootDirectory(), PathFragment.create("foo2")));
+            RootedPath.toRootedPath(fs.getRootDirectory(), new PathFragment("foo2")));
     Iterable<SkyKey> skyKeys = ImmutableList.of(key1, key2);
     EvaluationResult<SkyValue> result =
         driver.evaluate(
@@ -304,11 +302,10 @@ public class FilesystemValueCheckerTest {
   public void testFileWithIOExceptionNotConsideredDirty() throws Exception {
     Path path = fs.getPath("/testroot/foo");
     path.getParentDirectory().createDirectory();
-    path.createSymbolicLink(PathFragment.create("bar"));
+    path.createSymbolicLink(new PathFragment("bar"));
 
     fs.readlinkThrowsIoException = true;
-    SkyKey fileKey = FileStateValue.key(
-        RootedPath.toRootedPath(pkgRoot, PathFragment.create("foo")));
+    SkyKey fileKey = FileStateValue.key(RootedPath.toRootedPath(pkgRoot, new PathFragment("foo")));
     EvaluationResult<SkyValue> result =
         driver.evaluate(
             ImmutableList.of(fileKey),
@@ -355,16 +352,14 @@ public class FilesystemValueCheckerTest {
     FileSystemUtils.writeContentAsLatin1(out1.getPath(), "hello");
     FileSystemUtils.writeContentAsLatin1(out2.getPath(), "fizzlepop");
 
-    SkyKey actionLookupKey =
-        ActionLookupValue.key(
-            new ActionLookupKey() {
-              @Override
-              protected SkyFunctionName getType() {
-                return SkyFunctionName.FOR_TESTING;
-              }
-            });
-    SkyKey actionKey1 = ActionExecutionValue.key(actionLookupKey, 0);
-    SkyKey actionKey2 = ActionExecutionValue.key(actionLookupKey, 1);
+    Action action1 =
+        new TestAction(
+            Runnables.doNothing(), ImmutableSet.<Artifact>of(), ImmutableSet.of(out1));
+    Action action2 =
+        new TestAction(
+            Runnables.doNothing(), ImmutableSet.<Artifact>of(), ImmutableSet.of(out2));
+    SkyKey actionKey1 = ActionExecutionValue.key(action1);
+    SkyKey actionKey2 = ActionExecutionValue.key(action2);
     differencer.inject(
         ImmutableMap.<SkyKey, SkyValue>of(
             actionKey1,
@@ -434,19 +429,27 @@ public class FilesystemValueCheckerTest {
     Artifact last = createTreeArtifact("zzzzzzzzzz");
     FileSystemUtils.createDirectoryAndParents(last.getPath());
 
-    SkyKey actionLookupKey =
-        ActionLookupValue.key(
-            new ActionLookupKey() {
-              @Override
-              protected SkyFunctionName getType() {
-                return SkyFunctionName.FOR_TESTING;
-              }
-            });
-    SkyKey actionKey1 = ActionExecutionValue.key(actionLookupKey, 0);
-    SkyKey actionKey2 = ActionExecutionValue.key(actionLookupKey, 1);
-    SkyKey actionKeyEmpty = ActionExecutionValue.key(actionLookupKey, 2);
-    SkyKey actionKeyUnchanging = ActionExecutionValue.key(actionLookupKey, 3);
-    SkyKey actionKeyLast = ActionExecutionValue.key(actionLookupKey, 4);
+    Action action1 =
+        new TestAction(
+            Runnables.doNothing(), ImmutableSet.<Artifact>of(), ImmutableSet.of(out1));
+    Action action2 =
+        new TestAction(
+            Runnables.doNothing(), ImmutableSet.<Artifact>of(), ImmutableSet.of(out2));
+    Action actionEmpty =
+        new TestAction(
+            Runnables.doNothing(), ImmutableSet.<Artifact>of(), ImmutableSet.of(outEmpty));
+    Action actionUnchanging =
+        new TestAction(
+            Runnables.doNothing(), ImmutableSet.<Artifact>of(), ImmutableSet.of(outUnchanging));
+    Action lastAction =
+        new TestAction(
+            Runnables.doNothing(), ImmutableSet.<Artifact>of(), ImmutableSet.of(last));
+
+    SkyKey actionKey1 = ActionExecutionValue.key(action1);
+    SkyKey actionKey2 = ActionExecutionValue.key(action2);
+    SkyKey actionKeyEmpty = ActionExecutionValue.key(actionEmpty);
+    SkyKey actionKeyUnchanging = ActionExecutionValue.key(actionUnchanging);
+    SkyKey actionKeyLast = ActionExecutionValue.key(lastAction);
     differencer.inject(
         ImmutableMap.<SkyKey, SkyValue>of(
             actionKey1,
@@ -764,8 +767,8 @@ public class FilesystemValueCheckerTest {
 
   @Test
   public void testPropagatesRuntimeExceptions() throws Exception {
-    Collection<SkyKey> values = ImmutableList.of(
-        FileValue.key(RootedPath.toRootedPath(pkgRoot, PathFragment.create("foo"))));
+    Collection<SkyKey> values =
+        ImmutableList.of(FileValue.key(RootedPath.toRootedPath(pkgRoot, new PathFragment("foo"))));
     driver.evaluate(
         values, false, SkyframeExecutor.DEFAULT_THREAD_COUNT, NullEventHandler.INSTANCE);
     FilesystemValueChecker checker = new FilesystemValueChecker(null, null);
