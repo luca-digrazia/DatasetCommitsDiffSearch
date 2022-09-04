@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,12 +14,14 @@
 
 package com.google.devtools.build.lib.analysis;
 
-import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.packages.OutputFile;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesProviderImpl;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
+import com.google.devtools.build.lib.util.Pair;
+import com.google.devtools.build.lib.util.Preconditions;
 
 /**
  * A ConfiguredTarget for an OutputFile.
@@ -34,7 +36,7 @@ public class OutputFileConfiguredTarget extends FileConfiguredTarget
       TransitiveInfoCollection generatingRule, Artifact outputArtifact) {
     super(targetContext, outputArtifact);
     Preconditions.checkArgument(targetContext.getTarget() == outputFile);
-    this.generatingRule = generatingRule;
+    this.generatingRule = Preconditions.checkNotNull(generatingRule);
   }
 
   @Override
@@ -53,6 +55,19 @@ public class OutputFileConfiguredTarget extends FileConfiguredTarget
   }
 
   @Override
+  public TargetLicense getOutputLicenses() {
+    return getProvider(LicensesProvider.class, LicensesProviderImpl.EMPTY)
+        .getOutputLicenses();
+  }
+
+  @Override
+  public boolean hasOutputLicenses() {
+    return getProvider(LicensesProvider.class, LicensesProviderImpl.EMPTY)
+        .hasOutputLicenses();
+  }
+
+
+  @Override
   public NestedSet<Artifact> getInstrumentedFiles() {
     return getProvider(InstrumentedFilesProvider.class, InstrumentedFilesProviderImpl.EMPTY)
         .getInstrumentedFiles();
@@ -62,6 +77,30 @@ public class OutputFileConfiguredTarget extends FileConfiguredTarget
   public NestedSet<Artifact> getInstrumentationMetadataFiles() {
     return getProvider(InstrumentedFilesProvider.class, InstrumentedFilesProviderImpl.EMPTY)
         .getInstrumentationMetadataFiles();
+  }
+
+  @Override
+  public NestedSet<Artifact> getBaselineCoverageInstrumentedFiles() {
+    return getProvider(InstrumentedFilesProvider.class, InstrumentedFilesProviderImpl.EMPTY)
+        .getBaselineCoverageInstrumentedFiles();
+  }
+
+  @Override
+  public NestedSet<Artifact> getBaselineCoverageArtifacts() {
+    return getProvider(InstrumentedFilesProvider.class, InstrumentedFilesProviderImpl.EMPTY)
+        .getBaselineCoverageArtifacts();
+  }
+
+  @Override
+  public NestedSet<Artifact> getCoverageSupportFiles() {
+    return getProvider(InstrumentedFilesProvider.class, InstrumentedFilesProviderImpl.EMPTY)
+        .getCoverageSupportFiles();
+  }
+
+  @Override
+  public NestedSet<Pair<String, String>> getCoverageEnvironment() {
+    return getProvider(InstrumentedFilesProvider.class, InstrumentedFilesProviderImpl.EMPTY)
+        .getCoverageEnvironment();
   }
 
   /**
@@ -76,5 +115,10 @@ public class OutputFileConfiguredTarget extends FileConfiguredTarget
       }
     }
     return defaultValue;
+  }
+
+  @Override
+  public void repr(SkylarkPrinter printer) {
+    printer.append("<output file target " + getTarget().getLabel() + ">");
   }
 }

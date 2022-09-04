@@ -18,16 +18,14 @@ import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.analysis.AliasProvider;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.analysis.VisibilityProvider;
 import com.google.devtools.build.lib.analysis.VisibilityProviderImpl;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.util.FileTypeSet;
@@ -63,16 +61,11 @@ public class Alias implements RuleConfiguredTargetFactory {
           <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
           .removeAttribute("licenses")
           .removeAttribute("distribs")
-          .add(
-              attr("actual", LABEL)
-                  .allowedFileTypes(FileTypeSet.ANY_FILE)
-                  .allowedRuleClasses(ANY_RULE)
-                  .mandatory())
+          .add(attr("actual", LABEL)
+              .allowedFileTypes(FileTypeSet.ANY_FILE)
+              .allowedRuleClasses(ANY_RULE)
+              .mandatory())
           .canHaveAnyProvider()
-          // Aliases themselves do not need toolchains or an execution platform, so this is fine.
-          // The actual target
-          // will resolve platforms and toolchains with no issues regardless of this setting.
-          .supportsPlatforms(false)
           .build();
     }
 
