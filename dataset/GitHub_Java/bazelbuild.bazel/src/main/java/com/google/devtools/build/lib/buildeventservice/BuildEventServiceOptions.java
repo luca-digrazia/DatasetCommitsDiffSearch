@@ -27,15 +27,14 @@ import java.util.List;
 public class BuildEventServiceOptions extends OptionsBase {
 
   @Option(
-      name = "bes_backend",
-      defaultValue = "",
-      documentationCategory = OptionDocumentationCategory.LOGGING,
-      effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
-      help =
-          "Specifies the build event service (BES) backend endpoint as HOST or HOST:PORT. Disabled"
-              + " by default.The supported schemas are grpc and grpcs (grpc with TLS enabled). If"
-              + " no schema is provided bazel'll default to grpcs. Specify grpc:// schema to"
-              + " disable TLS.")
+    name = "bes_backend",
+    defaultValue = "",
+    documentationCategory = OptionDocumentationCategory.LOGGING,
+    effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
+    help =
+        "Specifies the build event service (BES) backend endpoint as HOST or HOST:PORT. "
+            + "Disabled by default."
+  )
   public String besBackend;
 
   @Option(

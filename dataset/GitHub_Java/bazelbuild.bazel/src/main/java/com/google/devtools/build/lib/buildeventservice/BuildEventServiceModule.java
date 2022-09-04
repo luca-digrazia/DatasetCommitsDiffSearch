@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.buildeventservice;
 
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
@@ -26,7 +25,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.flogger.GoogleLogger;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.common.util.concurrent.Uninterruptibles;
 import com.google.devtools.build.lib.authandtls.AuthAndTLSOptions;
@@ -73,6 +71,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
@@ -86,6 +85,9 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
 
   private static final Logger logger = Logger.getLogger(BuildEventServiceModule.class.getName());
   private static final GoogleLogger googleLogger = GoogleLogger.forEnclosingClass();
+
+  private final AtomicReference<AbruptExitException> pendingAbruptExitException =
+      new AtomicReference<>();
 
   private BuildEventProtocolOptions bepOptions;
   private AuthAndTLSOptions authTlsOptions;
@@ -158,10 +160,6 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
     halfCloseFuturesMap = ImmutableMap.of();
   }
 
-  private static boolean isTimeoutException(ExecutionException e) {
-    return e.getCause() instanceof TimeoutException;
-  }
-
   private void waitForPreviousInvocation() {
     if (closeFuturesMap.isEmpty()) {
       return;
@@ -186,19 +184,15 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
               getMaxWaitForPreviousInvocation().getSeconds());
       cmdLineReporter.handle(Event.warn(msg));
       googleLogger.atWarning().withCause(exception).log(msg);
-    } catch (ExecutionException e) {
-      // Futures.withTimeout wraps the TimeoutException in an ExecutionException when the future
-      // times out.
-      String previousExceptionMsg =
-          isTimeoutException(e) ? "The Build Event Protocol upload timed out" : e.getMessage();
+    } catch (ExecutionException exception) {
       String msg =
           String.format(
               "Previous invocation failed to finish Build Event Protocol upload "
                   + "with the following exception: '%s'. "
                   + "Ignoring the failure and starting a new invocation...",
-              previousExceptionMsg);
+              exception.getMessage());
       cmdLineReporter.handle(Event.warn(msg));
-      googleLogger.atWarning().withCause(e).log(msg);
+      googleLogger.atWarning().withCause(exception).log(msg);
     } finally {
       cancelPendingUploads();
     }
@@ -295,12 +289,13 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
 
   private void forceShutdownBuildEventStreamer() {
     streamer.close(AbortReason.INTERNAL);
-    closeFuturesMap = constructCloseFuturesMapWithTimeouts(streamer.getCloseFuturesMap());
+
     try {
       // TODO(b/130148250): Uninterruptibles.getUninterruptibly waits forever if no timeout is
       //  passed. We should fix this by waiting at most the value set by bes_timeout.
       googleLogger.atInfo().log("Closing pending build event transports");
-      Uninterruptibles.getUninterruptibly(Futures.allAsList(closeFuturesMap.values()));
+      Uninterruptibles.getUninterruptibly(
+          Futures.allAsList(streamer.getCloseFuturesMap().values()));
     } catch (ExecutionException e) {
       googleLogger.atSevere().withCause(e).log("Failed to close a build event transport");
       LoggingUtil.logToRemote(Level.SEVERE, "Failed to close a build event transport", e);
@@ -319,6 +314,12 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
 
   @Override
   public void blazeShutdown() {
+    AbruptExitException pendingException = pendingAbruptExitException.getAndSet(null);
+    if (pendingException != null) {
+      cancelPendingUploads();
+      return;
+    }
+
     if (closeFuturesMap.isEmpty()) {
       return;
     }
@@ -379,15 +380,6 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
         Uninterruptibles.getUninterruptibly(Futures.allAsList(closeFuturesMap.values()));
       }
     } catch (ExecutionException e) {
-      // Futures.withTimeout wraps the TimeoutException in an ExecutionException when the future
-      // times out.
-      if (isTimeoutException(e)) {
-        throw new AbruptExitException(
-            "The Build Event Protocol upload timed out",
-            ExitCode.TRANSIENT_BUILD_EVENT_SERVICE_UPLOAD_ERROR,
-            e);
-      }
-
       Throwables.throwIfInstanceOf(e.getCause(), AbruptExitException.class);
       throw new RuntimeException(
           String.format(
@@ -402,42 +394,9 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
     }
   }
 
-  private static ImmutableMap<BuildEventTransport, ListenableFuture<Void>>
-      constructCloseFuturesMapWithTimeouts(
-          ImmutableMap<BuildEventTransport, ListenableFuture<Void>> bepTransportToCloseFuturesMap) {
-    ImmutableMap.Builder<BuildEventTransport, ListenableFuture<Void>> builder =
-        ImmutableMap.builder();
-
-    bepTransportToCloseFuturesMap.forEach(
-        (bepTransport, closeFuture) -> {
-          final ListenableFuture<Void> closeFutureWithTimeout;
-          if (bepTransport.getTimeout().isZero() || bepTransport.getTimeout().isNegative()) {
-            closeFutureWithTimeout = closeFuture;
-          } else {
-            final ScheduledExecutorService timeoutExecutor =
-                Executors.newSingleThreadScheduledExecutor(
-                    new ThreadFactoryBuilder()
-                        .setNameFormat("bes-close-" + bepTransport.name() + "-%d")
-                        .build());
-
-            closeFutureWithTimeout =
-                Futures.withTimeout(
-                    closeFuture,
-                    bepTransport.getTimeout().toMillis(),
-                    TimeUnit.MILLISECONDS,
-                    timeoutExecutor);
-            closeFutureWithTimeout.addListener(
-                () -> timeoutExecutor.shutdown(), MoreExecutors.directExecutor());
-          }
-          builder.put(bepTransport, closeFutureWithTimeout);
-        });
-
-    return builder.build();
-  }
-
   private void closeBepTransports() throws AbruptExitException {
-    closeFuturesMap = constructCloseFuturesMapWithTimeouts(streamer.getCloseFuturesMap());
-    halfCloseFuturesMap = constructCloseFuturesMapWithTimeouts(streamer.getHalfClosedMap());
+    closeFuturesMap = streamer.getCloseFuturesMap();
+    halfCloseFuturesMap = streamer.getHalfClosedMap();
     switch (besOptions.besUploadMode) {
       case WAIT_FOR_UPLOAD_COMPLETE:
         waitForBuildEventTransportsToClose();

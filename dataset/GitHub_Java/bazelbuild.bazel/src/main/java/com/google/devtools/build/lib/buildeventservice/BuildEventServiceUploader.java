@@ -70,7 +70,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.logging.Level;
@@ -105,7 +104,6 @@ public final class BuildEventServiceUploader implements Runnable {
   private final Clock clock;
   private final ArtifactGroupNamer namer;
   private final EventBus eventBus;
-  private final AtomicBoolean startedClose = new AtomicBoolean(false);
 
   /**
    * The event queue contains two types of events: - Build events, sorted by sequence number, that
@@ -125,7 +123,14 @@ public final class BuildEventServiceUploader implements Runnable {
   @GuardedBy("lock")
   private Result buildStatus = UNKNOWN_STATUS;
 
-  private final SettableFuture<Void> closeFuture = SettableFuture.create();
+  /**
+   * Initialized only after the first call to {@link #close()} or if the upload fails before that.
+   * The {@code null} state is used throughout the code to make multiple calls to {@link #close()}
+   * idempotent.
+   */
+  @GuardedBy("lock")
+  private SettableFuture<Void> closeFuture;
+
   private final SettableFuture<Void> halfCloseFuture = SettableFuture.create();
 
   /**
@@ -178,25 +183,31 @@ public final class BuildEventServiceUploader implements Runnable {
     ListenableFuture<PathConverter> localFileUploadFuture =
         localFileUploader.uploadReferencedLocalFiles(event.referencedLocalFiles());
 
-    if (startedClose.get()) {
-      if (!localFileUploadFuture.isDone()) {
-        localFileUploadFuture.cancel(true);
+    synchronized (lock) {
+      if (closeFuture != null) {
+        // Close has been called and thus we silently ignore any further events and cancel
+        // any pending file uploads
+        closeFuture.addListener(
+            () -> {
+              if (!localFileUploadFuture.isDone()) {
+                localFileUploadFuture.cancel(true);
+              }
+            },
+            MoreExecutors.directExecutor());
+        return;
       }
-      return;
-    }
-    // BuildCompletingEvent marks the end of the build in the BEP event stream.
-    if (event instanceof BuildCompletingEvent) {
-      synchronized (lock) {
+      // BuildCompletingEvent marks the end of the build in the BEP event stream.
+      if (event instanceof BuildCompletingEvent) {
         this.buildStatus = extractBuildStatus((BuildCompletingEvent) event);
       }
+      ensureUploadThreadStarted();
+      eventQueue.addLast(
+          new SendRegularBuildEventCommand(
+              event,
+              localFileUploadFuture,
+              nextSeqNum.getAndIncrement(),
+              Timestamps.fromMillis(clock.currentTimeMillis())));
     }
-    ensureUploadThreadStarted();
-    eventQueue.addLast(
-        new SendRegularBuildEventCommand(
-            event,
-            localFileUploadFuture,
-            nextSeqNum.getAndIncrement(),
-            Timestamps.fromMillis(clock.currentTimeMillis())));
   }
 
   /**
@@ -206,30 +217,34 @@ public final class BuildEventServiceUploader implements Runnable {
    * <p>The returned future completes when the upload completes. It's guaranteed to never fail.
    */
   public ListenableFuture<Void> close() {
-    if (startedClose.getAndSet(true)) {
+    synchronized (lock) {
+      if (closeFuture != null) {
+        return closeFuture;
+      }
+      ensureUploadThreadStarted();
+
+      closeFuture = SettableFuture.create();
+
+      // Enqueue the last event which will terminate the upload.
+      eventQueue.addLast(
+          new SendLastBuildEventCommand(nextSeqNum.getAndIncrement(), currentTime()));
+
+      if (!closeTimeout.isZero()) {
+        startCloseTimer(closeFuture, closeTimeout);
+      }
+
+      final SettableFuture<Void> finalCloseFuture = closeFuture;
+      closeFuture.addListener(
+          () -> {
+            // Make sure to cancel any pending uploads if the closing is cancelled.
+            if (finalCloseFuture.isCancelled()) {
+              closeOnCancel();
+            }
+          },
+          MoreExecutors.directExecutor());
+
       return closeFuture;
     }
-
-    ensureUploadThreadStarted();
-
-    // Enqueue the last event which will terminate the upload.
-    eventQueue.addLast(new SendLastBuildEventCommand(nextSeqNum.getAndIncrement(), currentTime()));
-
-    if (!closeTimeout.isZero()) {
-      startCloseTimer(closeFuture, closeTimeout);
-    }
-
-    final SettableFuture<Void> finalCloseFuture = closeFuture;
-    closeFuture.addListener(
-        () -> {
-          // Make sure to cancel any pending uploads if the closing is cancelled.
-          if (finalCloseFuture.isCancelled()) {
-            closeOnCancel();
-          }
-        },
-        MoreExecutors.directExecutor());
-
-    return closeFuture;
   }
 
   private void closeOnTimeout() {
@@ -239,7 +254,7 @@ public final class BuildEventServiceUploader implements Runnable {
     }
   }
 
-  private void closeOnCancel() {
+  void closeOnCancel() {
     synchronized (lock) {
       interruptCausedByCancel = true;
       closeNow();
@@ -258,10 +273,19 @@ public final class BuildEventServiceUploader implements Runnable {
     }
   }
 
+  private void initCloseFutureOnFailure(Throwable cause) {
+    synchronized (lock) {
+      if (closeFuture == null) {
+        closeFuture = SettableFuture.create();
+      }
+      closeFuture.setException(cause);
+    }
+  }
+
   private void logAndExitAbruptly(String message, ExitCode exitCode, Throwable cause) {
     checkState(!exitCode.equals(ExitCode.SUCCESS));
     logger.severe(message);
-    closeFuture.setException(new AbruptExitException(message, exitCode, cause));
+    initCloseFutureOnFailure(new AbruptExitException(message, exitCode, cause));
   }
 
   @Override
@@ -283,6 +307,13 @@ public final class BuildEventServiceUploader implements Runnable {
           publishLifecycleEvent(besProtoUtil.invocationFinished(currentTime(), buildStatus));
           publishLifecycleEvent(besProtoUtil.buildFinished(currentTime(), buildStatus));
         }
+      }
+      synchronized (lock) {
+        // Invariant: closeFuture is not null.
+        // publishBuildEvents() only terminates successfully after SendLastBuildEventCommand
+        // has been sent successfully and that event is only added to the eventQueue during a
+        // call to close() which initializes the closeFuture.
+        closeFuture.set(null);
       }
     } catch (InterruptedException e) {
       logger.info("Aborting the BES upload due to having received an interrupt");
@@ -311,12 +342,11 @@ public final class BuildEventServiceUploader implements Runnable {
           ExitCode.TRANSIENT_BUILD_EVENT_SERVICE_UPLOAD_ERROR,
           e.getCause());
     } catch (Throwable e) {
-      closeFuture.setException(e);
+      initCloseFutureOnFailure(e);
       logger.severe("BES upload failed due to a RuntimeException / Error. This is a bug.");
       throw e;
     } finally {
       localFileUploader.shutdown();
-      closeFuture.set(null);
     }
   }
 
