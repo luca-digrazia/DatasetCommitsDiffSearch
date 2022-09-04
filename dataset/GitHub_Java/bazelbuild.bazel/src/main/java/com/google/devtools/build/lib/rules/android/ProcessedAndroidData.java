@@ -113,15 +113,13 @@ public class ProcessedAndroidData {
       AndroidDataContext dataContext,
       StampedAndroidManifest manifest,
       Artifact apkOut,
-      Artifact mergedResourcesOut,
       String proguardPrefix,
       Map<String, String> manifestValues)
       throws RuleErrorException {
 
     AndroidResourcesProcessorBuilder builder =
         builderForTopLevelTarget(dataContext, manifest, proguardPrefix, manifestValues)
-            .setApkOut(apkOut)
-            .setMergedResourcesOut(mergedResourcesOut);
+            .setApkOut(apkOut);
 
     return buildActionForBinary(
         dataContext,
@@ -210,8 +208,6 @@ public class ProcessedAndroidData {
     AndroidResourcesProcessorBuilder builder =
         builderForNonIncrementalTopLevelTarget(
                 dataContext, manifest, ImmutableMap.of(), aaptVersion)
-            .setMergedResourcesOut(
-                dataContext.createOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_ZIP))
             .setMainDexProguardOut(
                 AndroidBinary.createMainDexProguardSpec(
                     dataContext.getLabel(), dataContext.getActionConstructionContext()))

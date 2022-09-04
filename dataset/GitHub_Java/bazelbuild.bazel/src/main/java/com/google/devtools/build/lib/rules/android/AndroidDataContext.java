@@ -15,18 +15,15 @@ package com.google.devtools.build.lib.rules.android;
 
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.Whitelist;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SafeImplicitOutputsFunction;
-import com.google.devtools.build.lib.skylarkbuildapi.android.AndroidDataContextApi;
-import com.google.devtools.build.lib.vfs.PathFragment;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 
 /**
  * Wraps common tools and settings used for working with Android assets, resources, and manifests.
@@ -39,56 +36,39 @@ import com.google.devtools.build.lib.vfs.PathFragment;
  * bundle them together. Additionally, this class includes some common tools (such as an SDK) that
  * are used in BusyBox actions.
  */
-public class AndroidDataContext implements AndroidDataContextApi {
+@SkylarkModule(
+    name = "AndroidDataContext",
+    doc =
+        "Wraps common tools and settings used for working with Android assets, resources, and"
+            + " manifests")
+public class AndroidDataContext {
 
   private final Label label;
   private final ActionConstructionContext actionConstructionContext;
   private final FilesToRunProvider busybox;
   private final AndroidSdkProvider sdk;
-  private final boolean persistentBusyboxToolsEnabled;
-  private final boolean throwOnResourceConflict;
-  private final boolean useDataBindingV2;
 
   public static AndroidDataContext forNative(RuleContext ruleContext) {
     return makeContext(ruleContext);
   }
 
   public static AndroidDataContext makeContext(RuleContext ruleContext) {
-    AndroidConfiguration androidConfig = ruleContext
-        .getConfiguration()
-        .getFragment(AndroidConfiguration.class);
-
     return new AndroidDataContext(
         ruleContext.getLabel(),
         ruleContext,
         ruleContext.getExecutablePrerequisite("$android_resources_busybox", Mode.HOST),
-        androidConfig.persistentBusyboxTools(),
-        AndroidSdkProvider.fromRuleContext(ruleContext),
-        shouldThrowOnResourceConflictFromWhitelist(ruleContext)
-            || androidConfig.throwOnResourceConflict(),
-        androidConfig.useDataBindingV2());
-  }
-
-  private static boolean shouldThrowOnResourceConflictFromWhitelist(RuleContext ruleContext) {
-    return Whitelist.hasWhitelist(ruleContext, "allow_resource_conflicts")
-        && !Whitelist.isAvailable(ruleContext, "allow_resource_conflicts");
+        AndroidSdkProvider.fromRuleContext(ruleContext));
   }
 
   protected AndroidDataContext(
       Label label,
       ActionConstructionContext actionConstructionContext,
       FilesToRunProvider busybox,
-      boolean persistentBusyboxToolsEnabled,
-      AndroidSdkProvider sdk,
-      boolean throwOnResourceConflict,
-      boolean useDataBindingV2) {
+      AndroidSdkProvider sdk) {
     this.label = label;
-    this.persistentBusyboxToolsEnabled = persistentBusyboxToolsEnabled;
     this.actionConstructionContext = actionConstructionContext;
     this.busybox = busybox;
     this.sdk = sdk;
-    this.throwOnResourceConflict = throwOnResourceConflict;
-    this.useDataBindingV2 = useDataBindingV2;
   }
 
   public Label getLabel() {
@@ -130,22 +110,6 @@ public class AndroidDataContext implements AndroidDataContextApi {
     return actionConstructionContext.getUniqueDirectoryArtifact(uniqueDirectorySuffix, relative);
   }
 
-  public Artifact getUniqueDirectoryArtifact(String uniqueDirectorySuffix, PathFragment relative) {
-    return actionConstructionContext.getUniqueDirectoryArtifact(uniqueDirectorySuffix, relative);
-  }
-
-  public PathFragment getUniqueDirectory(PathFragment fragment) {
-    return actionConstructionContext.getUniqueDirectory(fragment);
-  }
-
-  public ArtifactRoot getBinOrGenfilesDirectory() {
-    return actionConstructionContext.getBinOrGenfilesDirectory();
-  }
-
-  public PathFragment getPackageDirectory() {
-    return actionConstructionContext.getPackageDirectory();
-  }
-
   public AndroidConfiguration getAndroidConfig() {
     return actionConstructionContext.getConfiguration().getFragment(AndroidConfiguration.class);
   }
@@ -154,17 +118,5 @@ public class AndroidDataContext implements AndroidDataContextApi {
   public boolean useDebug() {
     return getActionConstructionContext().getConfiguration().getCompilationMode()
         != CompilationMode.OPT;
-  }
-
-  public boolean isPersistentBusyboxToolsEnabled() {
-    return persistentBusyboxToolsEnabled;
-  }
-
-  public boolean throwOnResourceConflict() {
-    return throwOnResourceConflict;
-  }
-
-  public boolean useDataBindingV2() {
-    return useDataBindingV2;
   }
 }
