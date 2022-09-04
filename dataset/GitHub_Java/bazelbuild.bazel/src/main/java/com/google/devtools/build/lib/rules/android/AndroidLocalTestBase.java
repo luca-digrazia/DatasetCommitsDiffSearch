@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.rules.android;
 
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
 import static com.google.devtools.build.lib.rules.java.DeployArchiveBuilder.Compression.COMPRESSED;
-import static com.google.devtools.build.lib.vfs.FileSystemUtils.replaceExtension;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
@@ -42,8 +41,6 @@ import com.google.devtools.build.lib.rules.java.JavaCommon;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArtifacts;
 import com.google.devtools.build.lib.rules.java.JavaCompilationHelper;
-import com.google.devtools.build.lib.rules.java.JavaConfiguration;
-import com.google.devtools.build.lib.rules.java.JavaConfiguration.OneVersionEnforcementLevel;
 import com.google.devtools.build.lib.rules.java.JavaHelper;
 import com.google.devtools.build.lib.rules.java.JavaPrimaryClassProvider;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
@@ -54,7 +51,6 @@ import com.google.devtools.build.lib.rules.java.JavaSkylarkApiProvider;
 import com.google.devtools.build.lib.rules.java.JavaSourceInfoProvider;
 import com.google.devtools.build.lib.rules.java.JavaSourceJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaTargetAttributes;
-import com.google.devtools.build.lib.rules.java.OneVersionCheckActionBuilder;
 import com.google.devtools.build.lib.rules.java.SingleJarActionBuilder;
 import com.google.devtools.build.lib.rules.java.proto.GeneratedExtensionRegistryProvider;
 import com.google.devtools.build.lib.syntax.Type;
@@ -176,28 +172,6 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
 
     Artifact deployJar =
         ruleContext.getImplicitOutputArtifact(JavaSemantics.JAVA_BINARY_DEPLOY_JAR);
-
-    OneVersionEnforcementLevel oneVersionEnforcementLevel =
-        ruleContext.getFragment(JavaConfiguration.class).oneVersionEnforcementLevel();
-    if (oneVersionEnforcementLevel != OneVersionEnforcementLevel.OFF) {
-      Artifact oneVersionOutput =
-          ruleContext
-              .getAnalysisEnvironment()
-              .getDerivedArtifact(
-                  replaceExtension(classJar.getRootRelativePath(), "-one-version.txt"),
-                  classJar.getRoot());
-      filesToBuildBuilder.add(oneVersionOutput);
-
-      NestedSet<Artifact> transitiveDependencies =
-          NestedSetBuilder.fromNestedSet(helper.getAttributes().getRuntimeClassPath())
-              .add(classJar)
-              .build();
-      OneVersionCheckActionBuilder.build(
-          ruleContext,
-          transitiveDependencies,
-          oneVersionOutput,
-          oneVersionEnforcementLevel);
-    }
 
     NestedSet<Artifact> filesToBuild = filesToBuildBuilder.build();
 
