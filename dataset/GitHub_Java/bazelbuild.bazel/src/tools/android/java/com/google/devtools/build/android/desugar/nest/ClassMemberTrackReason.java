@@ -73,7 +73,6 @@ final class ClassMemberTrackReason {
     if (!hasDeclReason() && otherClassMemberTrackReason.hasDeclReason()) {
       ownerAccess = otherClassMemberTrackReason.getOwnerAccess();
       memberAccess = otherClassMemberTrackReason.getMemberAccess();
-      hasDeclReason = true;
     }
     useAccesses.addAll(otherClassMemberTrackReason.getUseAccesses());
     return this;

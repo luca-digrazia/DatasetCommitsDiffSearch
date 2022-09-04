@@ -19,7 +19,6 @@ import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.android.desugar.io.FileContentProvider;
-import com.google.devtools.build.android.desugar.langmodel.ClassMemberRecord;
 import com.google.devtools.build.runtime.RunfilesPaths;
 import com.google.testing.testsize.MediumTest;
 import com.google.testing.testsize.MediumTestAttribute;
@@ -68,8 +67,7 @@ public class NestAnalyzerTest {
     nestAnalyzer.analyze();
 
     assertThat(nestCompanions.getAllCompanionClasses())
-        .containsExactly(
-            "com/google/devtools/build/android/desugar/nest/testsrc/nestanalyzer/AnalyzedTarget$NestCC");
+        .containsExactly("nestanalyzer/AnalyzedTarget$NestCC");
   }
 
   private static InputStream getZipEntryInputStream(ZipFile jarFile, ZipEntry entry) {
