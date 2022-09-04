@@ -476,7 +476,7 @@ public final class Attribute implements Comparable<Attribute> {
 
     private Builder<TYPE> setPropertyFlag(PropertyFlag flag, String propertyName) {
       Preconditions.checkState(
-          !propertyFlags.contains(flag), "'%s' flag is already set", propertyName);
+          !propertyFlags.contains(flag), "%s flag is already set", propertyName);
       propertyFlags.add(flag);
       return this;
     }
@@ -484,22 +484,15 @@ public final class Attribute implements Comparable<Attribute> {
     /**
      * Sets the property flag of the corresponding name if exists, otherwise throws an Exception.
      * Only meant to use from Starlark, do not use from Java.
-     *
-     * @throws EvalException if a property flag with the provided name does not exist or cannot be
-     *     set.
      */
-    public Builder<TYPE> setPropertyFlag(String propertyName) throws EvalException {
+    public Builder<TYPE> setPropertyFlag(String propertyName) {
       PropertyFlag flag = null;
       try {
         flag = PropertyFlag.valueOf(propertyName);
       } catch (IllegalArgumentException e) {
-        throw Starlark.errorf("unknown attribute flag '%s'", propertyName);
+        throw new IllegalArgumentException("unknown attribute flag " + propertyName);
       }
-      try {
-        setPropertyFlag(flag, propertyName);
-      } catch (IllegalStateException e) {
-        throw new EvalException(e);
-      }
+      setPropertyFlag(flag, propertyName);
       return this;
     }
 
