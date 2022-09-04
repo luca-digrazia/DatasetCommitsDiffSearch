@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,11 +13,18 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.classification;
 
+import java.util.Arrays;
 import java.util.function.BiFunction;
+import java.util.stream.IntStream;
+
+import smile.data.DataFrame;
+import smile.data.Tuple;
+import smile.data.formula.Formula;
+import smile.data.type.StructType;
 import smile.math.MathEx;
 import smile.util.IntSet;
 
@@ -41,40 +48,40 @@ import smile.util.IntSet;
  * distribution is balanced in the training set, the binary classification
  * learners see unbalanced distributions because typically the set of
  * negatives they see is much larger than the set of positives.
+ *
+ * @author Haifeng Li
  */
-public class OneVersusRest<T> implements SoftClassifier<T> {
+public class OneVersusRest<T> extends AbstractClassifier<T> {
     private static final long serialVersionUID = 2L;
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(OneVersusRest.class);
 
     /** The number of classes. */
-    private int k;
+    private final int k;
     /** The binary classifier. */
-    private Classifier<T>[] classifiers;
+    private final Classifier<T>[] classifiers;
     /** The probability estimation by Platt scaling. */
-    private PlattScaling[] platts;
-    /** The class label encoder. */
-    private IntSet labels;
+    private final PlattScaling[] platt;
 
     /**
      * Constructor.
      * @param classifiers the binary classifier for each one-vs-rest case.
+     * @param platt Platt scaling models.
      */
-    public OneVersusRest(Classifier<T>[] classifiers, PlattScaling[] platts) {
-        this.classifiers = classifiers;
-        this.platts = platts;
-        k = classifiers.length;
-        labels = IntSet.of(k);
+    public OneVersusRest(Classifier<T>[] classifiers, PlattScaling[] platt) {
+        this(classifiers, platt, IntSet.of(classifiers.length));
     }
 
     /**
      * Constructor.
      * @param classifiers the binary classifier for each one-vs-rest case.
-     * @param labels the class labels.
+     * @param platt Platt scaling models.
+     * @param labels the class label encoder.
      */
-    public OneVersusRest(Classifier<T>[] classifiers, PlattScaling[] platts, IntSet labels) {
+    public OneVersusRest(Classifier<T>[] classifiers, PlattScaling[] platt, IntSet labels) {
+        super(labels);
         this.classifiers = classifiers;
-        this.platts = platts;
+        this.platt = platt;
         this. k = classifiers.length;
-        this.labels = labels;
     }
 
     /**
@@ -83,6 +90,8 @@ public class OneVersusRest<T> implements SoftClassifier<T> {
      * @param x the training samples.
      * @param y the training labels.
      * @param trainer the lambda to train binary classifiers.
+     * @param <T> the data type.
+     * @return the model.
      */
     public static <T> OneVersusRest<T> fit(T[] x, int[] y, BiFunction<T[], int[], Classifier<T>> trainer) {
         return fit(x, y, +1, -1, trainer);
@@ -95,6 +104,8 @@ public class OneVersusRest<T> implements SoftClassifier<T> {
      * @param pos the class label for one case.
      * @param neg the class label for rest cases.
      * @param trainer the lambda to train binary classifiers.
+     * @param <T> the data type.
+     * @return the model.
      */
     @SuppressWarnings("unchecked")
     public static <T> OneVersusRest<T> fit(T[] x, int[] y, int pos, int neg, BiFunction<T[], int[], Classifier<T>> trainer) {
@@ -105,25 +116,74 @@ public class OneVersusRest<T> implements SoftClassifier<T> {
         ClassLabels codec = ClassLabels.fit(y);
         int k = codec.k;
         if (k <= 2) {
-            throw new IllegalArgumentException(String.format("Only %d classes" + k));
+            throw new IllegalArgumentException(String.format("Only %d classes", k));
         }
 
         int n = x.length;
-        y = codec.y;
+        int[] labels = codec.y;
 
         Classifier<T>[] classifiers = new Classifier[k];
         PlattScaling[] platts = new PlattScaling[k];
-        for (int i = 0; i < k; i++) {
+        IntStream.range(0, k).parallel().forEach(i -> {
             int[] yi = new int[n];
             for (int j = 0; j < n; j++) {
-                yi[j] = y[j] == i ? pos : neg;
+                yi[j] = labels[j] == i ? pos : neg;
             }
 
             classifiers[i] = trainer.apply(x, yi);
-            platts[i] = PlattScaling.fit(classifiers[i], x, yi);
-        }
 
-        return new OneVersusRest<>(classifiers, platts);
+            try {
+                platts[i] = PlattScaling.fit(classifiers[i], x, yi);
+            } catch (UnsupportedOperationException ex) {
+                logger.info("The classifier doesn't support score function. Don't fit Platt scaling.");
+            }
+        });
+
+        return new OneVersusRest<>(classifiers, platts[0] == null ? null : platts);
+    }
+
+    /**
+     * Fits a multi-class model with binary data frame classifiers.
+     * @param formula a symbolic description of the model to be fitted.
+     * @param data the data frame of the explanatory and response variables.
+     * @param trainer the lambda to train binary classifiers.
+     * @return the model.
+     */
+    public static DataFrameClassifier fit(Formula formula, DataFrame data, BiFunction<Formula, DataFrame, DataFrameClassifier> trainer) {
+        Tuple[] x = data.stream().toArray(Tuple[]::new);
+        int[] y = formula.y(data).toIntArray();
+        OneVersusRest<Tuple> model = fit(x, y, 1, 0, (Tuple[] rows, int[] labels) -> {
+            DataFrame df = DataFrame.of(Arrays.asList(rows));
+            return trainer.apply(formula, df);
+        });
+
+        StructType schema = formula.x(data.get(0)).schema();
+        return new DataFrameClassifier() {
+            @Override
+            public int numClasses() {
+                return model.numClasses();
+            }
+
+            @Override
+            public int[] classes() {
+                return model.classes();
+            }
+
+            @Override
+            public int predict(Tuple x) {
+                return model.predict(x);
+            }
+
+            @Override
+            public Formula formula() {
+                return formula;
+            }
+
+            @Override
+            public StructType schema() {
+                return schema;
+            }
+        };
     }
 
     @Override
@@ -131,23 +191,32 @@ public class OneVersusRest<T> implements SoftClassifier<T> {
         int y = 0;
         double maxf = Double.NEGATIVE_INFINITY;
         for (int i = 0; i < k; i++) {
-            double f = platts[i].scale(classifiers[i].f(x));
+            double f = platt[i].scale(classifiers[i].score(x));
             if (f > maxf) {
                 y = i;
                 maxf = f;
             }
         }
 
-        return labels.valueOf(y);
+        return classes.valueOf(y);
+    }
+
+    @Override
+    public boolean soft() {
+        return true;
     }
 
     @Override
     public int predict(T x, double[] posteriori) {
+        if (platt == null) {
+            throw new UnsupportedOperationException("Platt scaling is not available");
+        }
+
         for (int i = 0; i < k; i++) {
-            posteriori[i] = platts[i].scale(classifiers[i].f(x));
+            posteriori[i] = platt[i].scale(classifiers[i].score(x));
         }
 
         MathEx.unitize1(posteriori);
-        return labels.valueOf(MathEx.whichMax(posteriori));
+        return classes.valueOf(MathEx.whichMax(posteriori));
     }
 }
