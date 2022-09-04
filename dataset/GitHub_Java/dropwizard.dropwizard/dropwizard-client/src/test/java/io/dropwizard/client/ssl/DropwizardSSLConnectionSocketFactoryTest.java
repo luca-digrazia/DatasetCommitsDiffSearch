@@ -9,7 +9,6 @@ import io.dropwizard.setup.Environment;
 import io.dropwizard.testing.ConfigOverride;
 import io.dropwizard.testing.ResourceHelpers;
 import io.dropwizard.testing.junit.DropwizardAppRule;
-import io.dropwizard.util.Duration;
 import org.glassfish.jersey.client.ClientResponse;
 import org.junit.Before;
 import org.junit.ClassRule;
@@ -52,21 +51,45 @@ public class DropwizardSSLConnectionSocketFactoryTest {
         }
     }
 
+
+
     @ClassRule
     public static DropwizardAppRule<Configuration> TLS_APP_RULE = new DropwizardAppRule<Configuration>(TlsTestApplication.class,
             ResourceHelpers.resourceFilePath("yaml/ssl_connection_socket_factory_test.yml"),
             Optional.of("tls"),
-            ConfigOverride.config("tls", "server.applicationConnectors[0].keyStorePath", ResourceHelpers.resourceFilePath("stores/server/keycert.p12")),
-            ConfigOverride.config("tls", "server.applicationConnectors[1].keyStorePath", ResourceHelpers.resourceFilePath("stores/server/self_sign_keycert.p12")),
-            ConfigOverride.config("tls", "server.applicationConnectors[2].keyStorePath", ResourceHelpers.resourceFilePath("stores/server/keycert.p12")),
-            ConfigOverride.config("tls", "server.applicationConnectors[2].trustStorePath", ResourceHelpers.resourceFilePath("stores/server/ca_truststore.ts")),
-            ConfigOverride.config("tls", "server.applicationConnectors[2].wantClientAuth", "true"),
-            ConfigOverride.config("tls", "server.applicationConnectors[2].needClientAuth", "true"),
-            ConfigOverride.config("tls", "server.applicationConnectors[2].validatePeers", "false"),
-            ConfigOverride.config("tls", "server.applicationConnectors[2].trustStorePassword", "password"),
-            ConfigOverride.config("tls", "server.applicationConnectors[3].keyStorePath", ResourceHelpers.resourceFilePath("stores/server/bad_host_keycert.p12")),
-            ConfigOverride.config("tls", "server.applicationConnectors[4].keyStorePath", ResourceHelpers.resourceFilePath("stores/server/keycert.p12")),
-            ConfigOverride.config("tls", "server.applicationConnectors[4].supportedProtocols", "SSLv1,SSLv2,SSLv3"));
+            ConfigOverride.config("tls", "server.applicationConnectors[0].keyStorePath", ResourceHelpers.resourceFilePath("stores/server/keycert.p12")));
+
+    @ClassRule
+    public static DropwizardAppRule<Configuration> SELF_SIGNED_APP_RULE = new DropwizardAppRule<Configuration>(TlsTestApplication.class,
+            ResourceHelpers.resourceFilePath("yaml/ssl_connection_socket_factory_test.yml"),
+            Optional.of("selfSigned"),
+            ConfigOverride.config("selfSigned", "server.applicationConnectors[0].keyStorePath", ResourceHelpers.resourceFilePath("stores/server/self_sign_keycert.p12")));
+
+    @ClassRule
+    public static DropwizardAppRule<Configuration> CLIENT_AUTH_APP_RULE = new DropwizardAppRule<Configuration>(TlsTestApplication.class,
+            ResourceHelpers.resourceFilePath("yaml/ssl_connection_socket_factory_test.yml"),
+            Optional.of("clientAuth"),
+            ConfigOverride.config("clientAuth", "server.applicationConnectors[0].keyStorePath", ResourceHelpers.resourceFilePath("stores/server/keycert.p12")),
+            ConfigOverride.config("clientAuth", "server.applicationConnectors[0].trustStorePath", ResourceHelpers.resourceFilePath("stores/server/ca_truststore.ts")),
+            ConfigOverride.config("clientAuth", "server.applicationConnectors[0].wantClientAuth", "true"),
+            ConfigOverride.config("clientAuth", "server.applicationConnectors[0].needClientAuth", "true"),
+            ConfigOverride.config("clientAuth", "server.applicationConnectors[0].trustStorePassword", "password")
+            );
+
+    @ClassRule
+    public static DropwizardAppRule<Configuration> BAD_HOST_APP_RULE = new DropwizardAppRule<Configuration>(TlsTestApplication.class,
+            ResourceHelpers.resourceFilePath("yaml/ssl_connection_socket_factory_test.yml"),
+            Optional.of("badHost"),
+            ConfigOverride.config("badHost", "server.applicationConnectors[0].keyStorePath", ResourceHelpers.resourceFilePath("stores/server/bad_host_keycert.p12"))
+    );
+
+    @ClassRule
+    public static DropwizardAppRule<Configuration> SSL3_APP_RULE = new DropwizardAppRule<Configuration>(TlsTestApplication.class,
+            ResourceHelpers.resourceFilePath("yaml/ssl_connection_socket_factory_test.yml"),
+            Optional.of("ssl3_app"),
+            ConfigOverride.config("ssl3_app", "server.applicationConnectors[0].keyStorePath", ResourceHelpers.resourceFilePath("stores/server/keycert.p12")),
+            ConfigOverride.config("ssl3_app", "server.applicationConnectors[0].supportedProtocols", "SSLv1,SSLv2,SSLv3")
+    );
 
     @Before
     public void setUp() throws Exception {
@@ -75,8 +98,6 @@ public class DropwizardSSLConnectionSocketFactoryTest {
         tlsConfiguration.setTrustStorePassword("password");
         jerseyClientConfiguration = new JerseyClientConfiguration();
         jerseyClientConfiguration.setTlsConfiguration(tlsConfiguration);
-        jerseyClientConfiguration.setConnectionTimeout(Duration.milliseconds(2000));
-        jerseyClientConfiguration.setTimeout(Duration.milliseconds(5000));
     }
 
     @Test
@@ -101,16 +122,16 @@ public class DropwizardSSLConnectionSocketFactoryTest {
     @Test
     public void shouldNotErrorIfServerCertSelfSignedAndSelfSignedCertsAllowed() throws Exception {
         tlsConfiguration.setTrustSelfSignedCertificates(true);
-        final Client client = new JerseyClientBuilder(TLS_APP_RULE.getEnvironment()).using(jerseyClientConfiguration).build("self_sign_permitted");
-        final Response response = client.target(String.format("https://localhost:%d", TLS_APP_RULE.getTestSupport().getPort(1))).request().get();
+        final Client client = new JerseyClientBuilder(SELF_SIGNED_APP_RULE.getEnvironment()).using(jerseyClientConfiguration).build("self_sign_permitted");
+        final Response response = client.target(String.format("https://localhost:%d", SELF_SIGNED_APP_RULE.getLocalPort())).request().get();
         assertThat(response.getStatus()).isEqualTo(200);
     }
 
     @Test
     public void shouldErrorIfServerCertSelfSignedAndSelfSignedCertsNotAllowed() throws Exception {
-        final Client client = new JerseyClientBuilder(TLS_APP_RULE.getEnvironment()).using(jerseyClientConfiguration).build("self_sign_failure");
+        final Client client = new JerseyClientBuilder(SELF_SIGNED_APP_RULE.getEnvironment()).using(jerseyClientConfiguration).build("self_sign_failure");
         try {
-            final ClientResponse response = client.target(String.format("https://localhost:%d", TLS_APP_RULE.getPort(1))).request().get(ClientResponse.class);
+            final ClientResponse response = client.target(String.format("https://localhost:%d", SELF_SIGNED_APP_RULE.getLocalPort())).request().get(ClientResponse.class);
             fail("expected ProcessingException");
         } catch(ProcessingException e) {
             assertThat(e.getCause()).isInstanceOf(SSLHandshakeException.class);
@@ -122,8 +143,8 @@ public class DropwizardSSLConnectionSocketFactoryTest {
         tlsConfiguration.setKeyStorePath(new File(ResourceHelpers.resourceFilePath("stores/client/keycert.p12")));
         tlsConfiguration.setKeyStorePassword("password");
         tlsConfiguration.setKeyStoreType("PKCS12");
-        final Client client = new JerseyClientBuilder(TLS_APP_RULE.getEnvironment()).using(jerseyClientConfiguration).build("client_auth_working");
-        final Response response = client.target(String.format("https://localhost:%d", TLS_APP_RULE.getPort(2))).request().get();
+        final Client client = new JerseyClientBuilder(CLIENT_AUTH_APP_RULE.getEnvironment()).using(jerseyClientConfiguration).build("client_auth_working");
+        final Response response = client.target(String.format("https://localhost:%d", CLIENT_AUTH_APP_RULE.getLocalPort())).request().get();
         assertThat(response.getStatus()).isEqualTo(200);
     }
 
@@ -132,9 +153,9 @@ public class DropwizardSSLConnectionSocketFactoryTest {
         tlsConfiguration.setKeyStorePath(new File(ResourceHelpers.resourceFilePath("stores/server/self_sign_keycert.p12")));
         tlsConfiguration.setKeyStorePassword("password");
         tlsConfiguration.setKeyStoreType("PKCS12");
-        final Client client = new JerseyClientBuilder(TLS_APP_RULE.getEnvironment()).using(jerseyClientConfiguration).build("client_auth_broken");
+        final Client client = new JerseyClientBuilder(CLIENT_AUTH_APP_RULE.getEnvironment()).using(jerseyClientConfiguration).build("client_auth_broken");
         try {
-            final Response response = client.target(String.format("https://localhost:%d", TLS_APP_RULE.getPort(2))).request().get();
+            final Response response = client.target(String.format("https://localhost:%d", CLIENT_AUTH_APP_RULE.getLocalPort())).request().get();
             fail("expected ProcessingException");
         } catch(ProcessingException e) {
             assertThat(e.getCause()).isInstanceOfAny(SocketException.class, SSLHandshakeException.class);
@@ -143,9 +164,9 @@ public class DropwizardSSLConnectionSocketFactoryTest {
 
     @Test
     public void shouldErrorIfHostnameVerificationOnAndServerHostnameDoesntMatch() throws Exception {
-        final Client client = new JerseyClientBuilder(TLS_APP_RULE.getEnvironment()).using(jerseyClientConfiguration).build("bad_host_broken");
+        final Client client = new JerseyClientBuilder(BAD_HOST_APP_RULE.getEnvironment()).using(jerseyClientConfiguration).build("bad_host_broken");
         try {
-            final Response response = client.target(String.format("https://localhost:%d", TLS_APP_RULE.getPort(3))).request().get();
+            final Response response = client.target(String.format("https://localhost:%d", BAD_HOST_APP_RULE.getLocalPort())).request().get();
             fail("Expected ProcessingException");
         } catch (ProcessingException e) {
             assertThat(e.getCause()).isExactlyInstanceOf(SSLPeerUnverifiedException.class);
@@ -156,17 +177,17 @@ public class DropwizardSSLConnectionSocketFactoryTest {
     @Test
     public void shouldBeOkIfHostnameVerificationOffAndServerHostnameDoesntMatch() throws Exception {
         tlsConfiguration.setVerifyHostname(false);
-        final Client client = new JerseyClientBuilder(TLS_APP_RULE.getEnvironment()).using(jerseyClientConfiguration).build("bad_host_working");
-        final Response response = client.target(String.format("https://localhost:%d", TLS_APP_RULE.getPort(3))).request().get();
+        final Client client = new JerseyClientBuilder(BAD_HOST_APP_RULE.getEnvironment()).using(jerseyClientConfiguration).build("bad_host_working");
+        final Response response = client.target(String.format("https://localhost:%d", BAD_HOST_APP_RULE.getLocalPort())).request().get();
         assertThat(response.getStatus()).isEqualTo(200);
     }
 
     @Test
     public void shouldRejectNonSupportedProtocols() throws Exception {
         tlsConfiguration.setSupportedProtocols(asList("TLSv1.2"));
-        final Client client = new JerseyClientBuilder(TLS_APP_RULE.getEnvironment()).using(jerseyClientConfiguration).build("reject_non_supported");
+        final Client client = new JerseyClientBuilder(SSL3_APP_RULE.getEnvironment()).using(jerseyClientConfiguration).build("reject_non_supported");
         try {
-            final Response response = client.target(String.format("https://localhost:%d", TLS_APP_RULE.getPort(4))).request().get();
+            final Response response = client.target(String.format("https://localhost:%d", SSL3_APP_RULE.getLocalPort())).request().get();
             fail("expected ProcessingException");
         } catch (ProcessingException e) {
             assertThat(e.getCause()).isInstanceOfAny(SocketException.class, SSLHandshakeException.class);
