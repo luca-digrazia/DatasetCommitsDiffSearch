@@ -1,16 +1,11 @@
 package io.quarkus.maven;
 
-import java.io.IOException;
-
 import org.apache.maven.plugin.AbstractMojo;
-import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.project.MavenProject;
 
 import io.quarkus.cli.commands.ListExtensions;
-import io.quarkus.cli.commands.writer.FileProjectWriter;
-import io.quarkus.generators.BuildTool;
 
 /**
  * List the available extensions.
@@ -36,7 +31,7 @@ public class ListExtensionsMojo extends AbstractMojo {
     /**
      * Display in simplified format.
      */
-    @Parameter(property = "quarkus.extension.format", alias = "quarkus.extension.format", defaultValue = "simple")
+    @Parameter(property = "quarkus.extension.format", alias = "quarkus.extension.format", defaultValue = "full")
     protected String format;
 
     /**
@@ -46,18 +41,7 @@ public class ListExtensionsMojo extends AbstractMojo {
     protected String searchPattern;
 
     @Override
-    public void execute() throws MojoExecutionException {
-        try {
-            FileProjectWriter writer = null;
-            // Even when we have no pom, the project is not null, but it's set to `org.apache.maven:standalone-pom:1`
-            // So we need to also check for the project's file (the pom.xml file).
-            if (project != null && project.getFile() != null) {
-                writer = new FileProjectWriter(project.getBasedir());
-            }
-            new ListExtensions(writer, BuildTool.MAVEN).listExtensions(all, format,
-                    searchPattern);
-        } catch (IOException e) {
-            throw new MojoExecutionException("Unable to list extensions", e);
-        }
+    public void execute() {
+        new ListExtensions(project.getModel()).listExtensions(all, format, searchPattern);
     }
 }
