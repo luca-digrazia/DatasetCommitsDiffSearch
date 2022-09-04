@@ -264,8 +264,10 @@ public class BaseRuleClasses {
    */
   public static final String TAGGED_TRIMMING_ATTR = "transitive_configs";
 
-  /** Share common attributes across both base and Starlark base rules. */
-  public static RuleClass.Builder commonCoreAndStarlarkAttributes(RuleClass.Builder builder) {
+  /**
+   * Share common attributes across both base and Skylark base rules.
+   */
+  public static RuleClass.Builder commonCoreAndSkylarkAttributes(RuleClass.Builder builder) {
     return builder
         // The visibility attribute is special: it is a nodep label, and loading the
         // necessary package groups is handled by {@link LabelVisitor#visitTargetVisibility}.
@@ -376,7 +378,7 @@ public class BaseRuleClasses {
   public static final class BaseRule implements RuleDefinition {
     @Override
     public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment env) {
-      return commonCoreAndStarlarkAttributes(builder)
+      return commonCoreAndSkylarkAttributes(builder)
           .add(
               attr("licenses", LICENSE)
                   .nonconfigurable("Used in core loading phase logic with no access to configs"))
@@ -476,6 +478,23 @@ public class BaseRuleClasses {
           .name("$binary_base_rule")
           .type(RuleClassType.ABSTRACT)
           .ancestors(RootRule.class, MakeVariableExpandingRule.class)
+          .build();
+    }
+  }
+
+  /** Rule class for rules in error. */
+  public static final class ErrorRule implements RuleDefinition {
+    @Override
+    public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment env) {
+      return builder.publicByDefault().build();
+    }
+
+    @Override
+    public Metadata getMetadata() {
+      return RuleDefinition.Metadata.builder()
+          .name("$error_rule")
+          .type(RuleClassType.ABSTRACT)
+          .ancestors(BaseRuleClasses.BaseRule.class)
           .build();
     }
   }
