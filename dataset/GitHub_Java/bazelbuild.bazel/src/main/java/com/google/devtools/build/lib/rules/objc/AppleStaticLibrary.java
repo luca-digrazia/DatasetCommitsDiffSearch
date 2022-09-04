@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.analysis.OutputGroupInfo;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -38,6 +37,7 @@ import com.google.devtools.build.lib.rules.cpp.CcInfo;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
 import com.google.devtools.build.lib.rules.cpp.CppSemantics;
 import com.google.devtools.build.lib.rules.objc.ObjcProvider.Key;
+import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -72,8 +72,9 @@ public class AppleStaticLibrary implements RuleConfiguredTargetFactory {
     MultiArchSplitTransitionProvider.validateMinimumOs(ruleContext);
     PlatformType platformType = MultiArchSplitTransitionProvider.getPlatformType(ruleContext);
 
-    ImmutableListMultimap<String, TransitiveInfoCollection> cpuToDepsCollectionMap =
-        MultiArchBinarySupport.transformMap(ruleContext.getPrerequisitesByConfiguration("deps"));
+    ImmutableListMultimap<String, ConfiguredTargetAndData> cpuToCTATDepsCollectionMap =
+        MultiArchBinarySupport.transformMap(
+            ruleContext.getPrerequisiteCofiguredTargetAndTargetsByConfiguration("deps"));
 
     ImmutableListMultimap<String, ObjcProvider> cpuToObjcAvoidDepsMap =
         MultiArchBinarySupport.transformMap(
@@ -113,7 +114,7 @@ public class AppleStaticLibrary implements RuleConfiguredTargetFactory {
               ruleContext,
               childToolchainConfig,
               intermediateArtifacts,
-              nullToEmptyList(cpuToDepsCollectionMap.get(childCpu)));
+              nullToEmptyList(cpuToCTATDepsCollectionMap.get(childCpu)));
       ObjcProvider objcProvider =
           common
               .getObjcProvider()
@@ -199,7 +200,7 @@ public class AppleStaticLibrary implements RuleConfiguredTargetFactory {
       RuleContext ruleContext,
       BuildConfiguration buildConfiguration,
       IntermediateArtifacts intermediateArtifacts,
-      List<TransitiveInfoCollection> propagatedDeps)
+      List<ConfiguredTargetAndData> propagatedConfigredTargetAndTargetDeps)
       throws InterruptedException {
 
     CompilationArtifacts compilationArtifacts = new CompilationArtifacts.Builder().build();
@@ -208,7 +209,7 @@ public class AppleStaticLibrary implements RuleConfiguredTargetFactory {
         .setCompilationAttributes(
             CompilationAttributes.Builder.fromRuleContext(ruleContext).build())
         .setCompilationArtifacts(compilationArtifacts)
-        .addDeps(propagatedDeps)
+        .addDeps(propagatedConfigredTargetAndTargetDeps)
         .setIntermediateArtifacts(intermediateArtifacts)
         .setAlwayslink(false)
         .build();

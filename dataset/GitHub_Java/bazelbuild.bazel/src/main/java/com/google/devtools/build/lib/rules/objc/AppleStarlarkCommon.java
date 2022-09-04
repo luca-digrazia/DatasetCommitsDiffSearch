@@ -218,13 +218,6 @@ public class AppleStarlarkCommon
   }
 
   @Override
-  public AppleExecutableBinaryInfo newExecutableBinaryProvider(
-      Object executableBinary, ObjcProvider depsObjcProvider) throws EvalException {
-    Artifact binary = (executableBinary != Starlark.NONE) ? (Artifact) executableBinary : null;
-    return new AppleExecutableBinaryInfo(binary, depsObjcProvider);
-  }
-
-  @Override
   public StructImpl linkMultiArchBinary(
       StarlarkRuleContext starlarkRuleContext,
       Sequence<?> extraLinkopts,
