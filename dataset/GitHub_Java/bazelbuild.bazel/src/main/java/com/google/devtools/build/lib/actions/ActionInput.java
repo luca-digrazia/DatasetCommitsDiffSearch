@@ -17,7 +17,8 @@ package com.google.devtools.build.lib.actions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
 /**
- * Represents an input file to a build action, with an appropriate relative path.
+ * Represents an input file to a build action, with an appropriate relative path and digest
+ * value.
  *
  * <p>Artifact is the only notable implementer of the interface, but the interface remains
  * because 1) some Google specific rules ship files that could be Artifacts to remote execution

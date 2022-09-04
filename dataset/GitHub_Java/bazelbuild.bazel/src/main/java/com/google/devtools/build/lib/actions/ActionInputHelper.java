@@ -81,7 +81,7 @@ public final class ActionInputHelper {
 
     @Override
     public PathFragment getExecPath() {
-      return PathFragment.create(path);
+      return new PathFragment(path);
     }
 
     @Override
@@ -170,7 +170,7 @@ public final class ActionInputHelper {
    * relative to that Artifact.
    */
   public static TreeFileArtifact treeFileArtifact(Artifact parent, String relativePath) {
-    return treeFileArtifact(parent, PathFragment.create(relativePath));
+    return treeFileArtifact(parent, new PathFragment(relativePath));
   }
 
   /** Returns an Iterable of TreeFileArtifacts with the given parent and parent relative paths. */
