@@ -17,7 +17,6 @@ import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.remote.util.DigestUtil.toBinaryDigest;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.Assert.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -916,7 +915,6 @@ public class RemoteCacheTests {
     // act
     InMemoryOutput inMemoryOutput =
         remoteCache.downloadMinimal(
-            "action-id",
             r,
             ImmutableList.of(a1, a2),
             /* inMemoryOutputPath= */ null,
@@ -928,9 +926,9 @@ public class RemoteCacheTests {
     // assert
     assertThat(inMemoryOutput).isNull();
     verify(injector)
-        .injectRemoteFile(eq(a1), eq(toBinaryDigest(d1)), eq(d1.getSizeBytes()), anyInt(), any());
+        .injectRemoteFile(eq(a1), eq(toBinaryDigest(d1)), eq(d1.getSizeBytes()), anyInt());
     verify(injector)
-        .injectRemoteFile(eq(a2), eq(toBinaryDigest(d2)), eq(d2.getSizeBytes()), anyInt(), any());
+        .injectRemoteFile(eq(a2), eq(toBinaryDigest(d2)), eq(d2.getSizeBytes()), anyInt());
 
     Path outputBase = artifactRoot.getRoot().asPath();
     assertThat(outputBase.readdir(Symlinks.NOFOLLOW)).isEmpty();
@@ -979,7 +977,6 @@ public class RemoteCacheTests {
     // act
     InMemoryOutput inMemoryOutput =
         remoteCache.downloadMinimal(
-            "action-id",
             r,
             ImmutableList.of(dir),
             /* inMemoryOutputPath= */ null,
@@ -995,10 +992,10 @@ public class RemoteCacheTests {
         ImmutableMap.<PathFragment, RemoteFileArtifactValue>builder()
             .put(
                 PathFragment.create("file1"),
-                new RemoteFileArtifactValue(toBinaryDigest(d1), d1.getSizeBytes(), 1, "action-id"))
+                new RemoteFileArtifactValue(toBinaryDigest(d1), d1.getSizeBytes(), 1))
             .put(
                 PathFragment.create("a/file2"),
-                new RemoteFileArtifactValue(toBinaryDigest(d2), d2.getSizeBytes(), 1, "action-id"))
+                new RemoteFileArtifactValue(toBinaryDigest(d2), d2.getSizeBytes(), 1))
             .build();
     verify(injector).injectRemoteDirectory(eq(dir), eq(m));
 
@@ -1053,7 +1050,6 @@ public class RemoteCacheTests {
             BulkTransferException.class,
             () ->
                 remoteCache.downloadMinimal(
-                    "action-id",
                     r,
                     ImmutableList.of(dir),
                     /* inMemoryOutputPath= */ null,
@@ -1087,7 +1083,6 @@ public class RemoteCacheTests {
     // act
     InMemoryOutput inMemoryOutput =
         remoteCache.downloadMinimal(
-            "action-id",
             r,
             ImmutableList.of(),
             /* inMemoryOutputPath= */ null,
@@ -1130,7 +1125,6 @@ public class RemoteCacheTests {
     // act
     InMemoryOutput inMemoryOutput =
         remoteCache.downloadMinimal(
-            "action-id",
             r,
             ImmutableList.of(a1, a2),
             inMemoryOutputPathFragment,
@@ -1146,46 +1140,14 @@ public class RemoteCacheTests {
     assertThat(inMemoryOutput.getOutput()).isEqualTo(a1);
     // The in memory file also needs to be injected as an output
     verify(injector)
-        .injectRemoteFile(eq(a1), eq(toBinaryDigest(d1)), eq(d1.getSizeBytes()), anyInt(), any());
+        .injectRemoteFile(eq(a1), eq(toBinaryDigest(d1)), eq(d1.getSizeBytes()), anyInt());
     verify(injector)
-        .injectRemoteFile(eq(a2), eq(toBinaryDigest(d2)), eq(d2.getSizeBytes()), anyInt(), any());
+        .injectRemoteFile(eq(a2), eq(toBinaryDigest(d2)), eq(d2.getSizeBytes()), anyInt());
 
     Path outputBase = artifactRoot.getRoot().asPath();
     assertThat(outputBase.readdir(Symlinks.NOFOLLOW)).isEmpty();
 
     verify(outputFilesLocker).lock();
-  }
-
-  @Test
-  public void testDownloadMinimalWithMissingInMemoryOutput() throws Exception {
-    // Test that downloadMinimal returns null if a declared in-memory output is missing.
-
-    // arrange
-    InMemoryRemoteCache remoteCache = newRemoteCache();
-    Digest d1 = remoteCache.addContents("in-memory output");
-    ActionResult r = ActionResult.newBuilder().setExitCode(0).build();
-    Artifact a1 = ActionsTestUtil.createArtifact(artifactRoot, "file1");
-    MetadataInjector injector = mock(MetadataInjector.class);
-    // a1 should be provided as an InMemoryOutput
-    PathFragment inMemoryOutputPathFragment = a1.getPath().relativeTo(execRoot);
-
-    // act
-    InMemoryOutput inMemoryOutput =
-        remoteCache.downloadMinimal(
-            "action-id",
-            r,
-            ImmutableList.of(a1),
-            inMemoryOutputPathFragment,
-            new FileOutErr(),
-            execRoot,
-            injector,
-            outputFilesLocker);
-
-    // assert
-    assertThat(inMemoryOutput).isNull();
-    // The in memory file metadata also should not have been injected.
-    verify(injector, never())
-        .injectRemoteFile(eq(a1), eq(toBinaryDigest(d1)), eq(d1.getSizeBytes()), anyInt(), any());
   }
 
   @Test

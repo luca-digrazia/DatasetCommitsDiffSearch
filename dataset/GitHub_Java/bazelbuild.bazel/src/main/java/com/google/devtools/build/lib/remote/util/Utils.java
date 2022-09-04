@@ -29,9 +29,6 @@ import com.google.devtools.build.lib.actions.SpawnResult.Status;
 import com.google.devtools.build.lib.remote.common.CacheNotFoundException;
 import com.google.devtools.build.lib.remote.common.RemoteCacheClient.ActionKey;
 import com.google.devtools.build.lib.remote.options.RemoteOutputsMode;
-import com.google.devtools.build.lib.server.FailureDetails;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
-import com.google.devtools.build.lib.server.FailureDetails.Spawn.Code;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
@@ -92,8 +89,7 @@ public class Utils {
       boolean cacheHit,
       String runnerName,
       @Nullable InMemoryOutput inMemoryOutput,
-      SpawnMetrics spawnMetrics,
-      String mnemonic) {
+      SpawnMetrics spawnMetrics) {
     SpawnResult.Builder builder =
         new SpawnResult.Builder()
             .setStatus(exitCode == 0 ? Status.SUCCESS : Status.NON_ZERO_EXIT)
@@ -102,13 +98,6 @@ public class Utils {
             .setCacheHit(cacheHit)
             .setSpawnMetrics(spawnMetrics)
             .setRemote(true);
-    if (exitCode != 0) {
-      builder.setFailureDetail(
-          FailureDetail.newBuilder()
-              .setMessage(mnemonic + " returned a non-zero exit code when running remotely")
-              .setSpawn(FailureDetails.Spawn.newBuilder().setCode(Code.NON_ZERO_EXIT))
-              .build());
-    }
     if (inMemoryOutput != null) {
       builder.setInMemoryOutput(inMemoryOutput.getOutput(), inMemoryOutput.getContents());
     }

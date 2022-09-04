@@ -184,7 +184,7 @@ public class GrpcRemoteExecutionClientTest {
     fakeFileCache = new FakeActionInputFileCache(execRoot);
     simpleSpawn =
         new SimpleSpawn(
-            new FakeOwner("Mnemonic", "Progress Message", "//dummy:label"),
+            new FakeOwner("Mnemonic", "Progress Message"),
             ImmutableList.of("/bin/echo", "Hi!"),
             ImmutableMap.of("VARIABLE", "value"),
             /*executionInfo=*/ ImmutableMap.<String, String>of(),
@@ -262,12 +262,8 @@ public class GrpcRemoteExecutionClientTest {
     CallCredentials creds =
         GoogleAuthUtils.newCallCredentials(Options.getDefaults(AuthAndTLSOptions.class));
     ByteStreamUploader uploader =
-        new ByteStreamUploader(
-            remoteOptions.remoteInstanceName,
-            channel.retain(),
-            creds,
-            remoteOptions.remoteTimeout.getSeconds(),
-            retrier);
+        new ByteStreamUploader(remoteOptions.remoteInstanceName, channel.retain(), creds,
+            remoteOptions.remoteTimeout, retrier);
     GrpcCacheClient cacheProtocol =
         new GrpcCacheClient(channel.retain(), creds, remoteOptions, retrier, DIGEST_UTIL, uploader);
     RemoteExecutionCache remoteCache =
