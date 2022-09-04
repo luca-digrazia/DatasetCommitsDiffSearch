@@ -118,7 +118,7 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable
     public Path getClassesDir() {
         //TODO: fix all these
         for (DevModeContext.ModuleInfo i : context.getAllModules()) {
-            return Paths.get(i.getClassesPath());
+            return Paths.get(i.getResourcePath());
         }
         return null;
     }
@@ -274,7 +274,7 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable
         try {
             Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
             return ConfigProvider.getConfig()
-                    .getOptionalValue("quarkus.live-reload.instrumentation", boolean.class).orElse(true);
+                    .getOptionalValue("quarkus.dev.instrumentation", boolean.class).orElse(true);
         } finally {
             Thread.currentThread().setContextClassLoader(old);
         }
