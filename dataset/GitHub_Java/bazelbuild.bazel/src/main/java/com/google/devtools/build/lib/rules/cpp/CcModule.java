@@ -147,8 +147,7 @@ public class CcModule
   public SkylarkList<String> getCommandLine(
       FeatureConfigurationForStarlark featureConfiguration,
       String actionName,
-      CcToolchainVariables variables)
-      throws EvalException {
+      CcToolchainVariables variables) {
     return SkylarkList.createImmutable(
         featureConfiguration.getFeatureConfiguration().getCommandLine(actionName, variables));
   }
@@ -157,8 +156,7 @@ public class CcModule
   public SkylarkDict<String, String> getEnvironmentVariable(
       FeatureConfigurationForStarlark featureConfiguration,
       String actionName,
-      CcToolchainVariables variables)
-      throws EvalException {
+      CcToolchainVariables variables) {
     return SkylarkDict.copyOf(
         null,
         featureConfiguration

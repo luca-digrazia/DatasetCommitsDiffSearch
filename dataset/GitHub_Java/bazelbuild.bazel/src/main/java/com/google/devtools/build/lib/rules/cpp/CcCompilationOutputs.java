@@ -18,13 +18,9 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcCompilationOutputsApi;
-import com.google.devtools.build.lib.syntax.Environment;
-import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -103,23 +99,8 @@ public class CcCompilationOutputs implements CcCompilationOutputsApi<Artifact> {
   }
 
   @Override
-  public SkylarkList<Artifact> getSkylarkObjectFiles(
-      boolean usePic, Location location, Environment environment) throws EvalException {
-    CcCommon.checkLocationWhitelisted(
-        environment.getSemantics(),
-        location,
-        ((Label) environment.getGlobals().getLabel()).getPackageIdentifier().toString());
+  public SkylarkList<Artifact> getSkylarkObjectFiles(boolean usePic) {
     return SkylarkList.createImmutable(getObjectFiles(usePic));
-  }
-
-  @Override
-  public SkylarkList<Artifact> getSkylarkObjects(Location location) throws EvalException {
-    return SkylarkList.createImmutable(getObjectFiles(/* usePic= */ false));
-  }
-
-  @Override
-  public SkylarkList<Artifact> getSkylarkPicObjects(Location location) throws EvalException {
-    return SkylarkList.createImmutable(getObjectFiles(/* usePic= */ true));
   }
 
   /** Returns information about bitcode object files resulting from compilation. */

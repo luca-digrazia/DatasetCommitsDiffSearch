@@ -141,7 +141,6 @@ public class FakeCcModule
   public CcLinkingContextApi createCcLinkingInfo(
       Object librariesToLinkObject,
       Object userLinkFlagsObject,
-      SkylarkList<FileApi> nonCodeInputs,
       Location location,
       StarlarkContext context) {
     return null;
