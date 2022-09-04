@@ -389,21 +389,21 @@ public final class RuleContext extends TargetContext
    * Returns a configuration fragment for this this target.
    */
   @Nullable
-  public <T extends Fragment> T getFragment(Class<T> fragment, Attribute.Transition transition) {
-    return getFragment(fragment, fragment.getSimpleName(), "", transition);
+  public <T extends Fragment> T getFragment(Class<T> fragment, ConfigurationTransition config) {
+    return getFragment(fragment, fragment.getSimpleName(), "", config);
   }
 
   @Nullable
   protected <T extends Fragment> T getFragment(Class<T> fragment, String name,
-      String additionalErrorMessage, Attribute.Transition transition) {
+      String additionalErrorMessage, ConfigurationTransition config) {
     // TODO(bazel-team): The fragments can also be accessed directly through BuildConfiguration.
     // Can we lock that down somehow?
-    Preconditions.checkArgument(isLegalFragment(fragment, transition),
+    Preconditions.checkArgument(isLegalFragment(fragment, config),
         "%s has to declare '%s' as a required fragment "
         + "in %s configuration in order to access it.%s",
-        getRuleClassNameForLogging(), name, FragmentCollection.getConfigurationName(transition),
+        getRuleClassNameForLogging(), name, FragmentCollection.getConfigurationName(config),
         additionalErrorMessage);
-    return getConfiguration(transition).getFragment(fragment);
+    return getConfiguration(config).getFragment(fragment);
   }
 
   @Nullable
@@ -413,9 +413,9 @@ public final class RuleContext extends TargetContext
   }
 
   @Nullable
-  public Fragment getSkylarkFragment(String name, Attribute.Transition transition) {
+  public Fragment getSkylarkFragment(String name, ConfigurationTransition config) {
     Class<? extends Fragment> fragmentClass =
-        getConfiguration(transition).getSkylarkFragmentByName(name);
+        getConfiguration(config).getSkylarkFragmentByName(name);
     if (fragmentClass == null) {
       return null;
     }
@@ -423,19 +423,19 @@ public final class RuleContext extends TargetContext
         String.format(
             " Please update the '%1$sfragments' argument of the rule definition "
             + "(for example: %1$sfragments = [\"%2$s\"])",
-            (transition.isHostTransition()) ? "host_" : "", name),
-        transition);
+            (config == ConfigurationTransition.HOST) ? "host_" : "", name),
+        config);
   }
 
-  public ImmutableCollection<String> getSkylarkFragmentNames(Attribute.Transition transition) {
-    return getConfiguration(transition).getSkylarkFragmentNames();
+  public ImmutableCollection<String> getSkylarkFragmentNames(ConfigurationTransition config) {
+    return getConfiguration(config).getSkylarkFragmentNames();
   }
 
   public <T extends Fragment> boolean isLegalFragment(
-      Class<T> fragment, Attribute.Transition transition) {
+      Class<T> fragment, ConfigurationTransition config) {
     return fragment == universalFragment
         || fragment == PlatformConfiguration.class
-        || configurationFragmentPolicy.isLegalConfigurationFragment(fragment, transition);
+        || configurationFragmentPolicy.isLegalConfigurationFragment(fragment, config);
   }
 
   public <T extends Fragment> boolean isLegalFragment(Class<T> fragment) {
@@ -443,8 +443,8 @@ public final class RuleContext extends TargetContext
     return isLegalFragment(fragment, ConfigurationTransition.NONE);
   }
 
-  protected BuildConfiguration getConfiguration(Attribute.Transition transition) {
-    return transition.isHostTransition() ? hostConfiguration : getConfiguration();
+  protected BuildConfiguration getConfiguration(ConfigurationTransition config) {
+    return config.equals(ConfigurationTransition.HOST) ? hostConfiguration : getConfiguration();
   }
 
   @Override
@@ -1058,7 +1058,7 @@ public final class RuleContext extends TargetContext
     }
     Attribute.Transition transition = attributeDefinition.getConfigurationTransition();
     if (mode == Mode.HOST) {
-      if (!(transition instanceof PatchTransition)) {
+      if (!(transition instanceof PatchTransition) && transition != ConfigurationTransition.HOST) {
         throw new IllegalStateException(getRule().getLocation() + ": "
             + getRuleClassNameForLogging() + " attribute " + attributeName
             + " is not configured for the host configuration");
@@ -1098,7 +1098,7 @@ public final class RuleContext extends TargetContext
       throw new IllegalStateException(getRuleClassNameForLogging() + " attribute " + attributeName
         + " is not a label type attribute");
     }
-    if (attributeDefinition.getConfigurationTransition().isHostTransition()) {
+    if (attributeDefinition.getConfigurationTransition() == ConfigurationTransition.HOST) {
       return Mode.HOST;
     } else if (attributeDefinition.getConfigurationTransition() == ConfigurationTransition.NONE) {
       return Mode.TARGET;
