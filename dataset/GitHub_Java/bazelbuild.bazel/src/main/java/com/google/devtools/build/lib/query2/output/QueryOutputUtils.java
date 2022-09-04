@@ -13,15 +13,15 @@
 // limitations under the License.
 package com.google.devtools.build.lib.query2.output;
 
+import com.google.devtools.build.lib.graph.Digraph;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.query2.engine.DigraphQueryEvalResult;
 import com.google.devtools.build.lib.query2.engine.OutputFormatterCallback;
 import com.google.devtools.build.lib.query2.engine.QueryEvalResult;
 import com.google.devtools.build.lib.query2.output.OutputFormatter.StreamedFormatter;
 import com.google.devtools.build.lib.query2.output.QueryOptions.OrderOutput;
-
 import java.io.IOException;
-import java.io.PrintStream;
+import java.io.OutputStream;
 import java.util.Set;
 
 /** Static utility methods for outputting a query. */
@@ -35,7 +35,7 @@ public class QueryOutputUtils {
   }
 
   public static void output(QueryOptions queryOptions, QueryEvalResult result,
-      Set<Target> targetsResult, OutputFormatter formatter, PrintStream outputStream,
+      Set<Target> targetsResult, OutputFormatter formatter, OutputStream outputStream,
       AspectResolver aspectResolver)
       throws IOException, InterruptedException {
     /*
@@ -43,14 +43,31 @@ public class QueryOutputUtils {
      * output everything in one batch. This happens when the QueryEnvironment does not
      * support streaming but we don't care about ordered results.
      */
-    boolean orderedResults = !shouldStreamResults(queryOptions, formatter);
-    if (orderedResults) {
-      formatter.output(queryOptions,
-          ((DigraphQueryEvalResult<Target>) result).getGraph().extractSubgraph(targetsResult),
-          outputStream, aspectResolver);
+    if (shouldStreamResults(queryOptions, formatter)) {
+      StreamedFormatter streamedFormatter = (StreamedFormatter) formatter;
+      streamedFormatter.setOptions(queryOptions, aspectResolver);
+      OutputFormatterCallback.processAllTargets(
+          streamedFormatter.createPostFactoStreamCallback(outputStream, queryOptions),
+          targetsResult);
     } else {
-      OutputFormatterCallback.processAllTargets(((StreamedFormatter) formatter)
-          .createStreamCallback(queryOptions, outputStream, aspectResolver), targetsResult);
+      @SuppressWarnings("unchecked")
+      DigraphQueryEvalResult<Target> digraphQueryEvalResult =
+          (DigraphQueryEvalResult<Target>) result;
+      Digraph<Target> subgraph = digraphQueryEvalResult.getGraph().extractSubgraph(targetsResult);
+
+      // Building ConditionalEdges involves traversing the subgraph and so we only do this when
+      // needed.
+      //
+      // TODO(bazel-team): Remove this while adding support for conditional edges in other
+      // formatters.
+      ConditionalEdges conditionalEdges;
+      if (formatter instanceof GraphOutputFormatter) {
+        conditionalEdges = new ConditionalEdges(subgraph);
+      } else {
+        conditionalEdges = new ConditionalEdges();
+      }
+
+      formatter.output(queryOptions, subgraph, outputStream, aspectResolver, conditionalEdges);
     }
   }
 }
