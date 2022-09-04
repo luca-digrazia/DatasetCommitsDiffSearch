@@ -26,7 +26,7 @@ public class ParamTypeConflict {
 
   @SkylarkCallable(
     name = "param_type_conflict",
-    documented = false,
+    doc = "",
     parameters = {
       @Param(name = "a_parameter",
           type = String.class,
