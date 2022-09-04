@@ -1,19 +1,3 @@
-/**
- * This file is part of Graylog.
- *
- * Graylog is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Graylog is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
- */
 package org.graylog.plugins.map.search;
 
 import com.google.common.base.Splitter;
@@ -51,7 +35,7 @@ public class MapDataSearch {
             final org.graylog2.indexer.results.TermsResult terms = searches.terms(field, request.limit(), request.query(), filter, request.timerange());
             // TODO: Validate data!
             final Map<String, Long> validatedTerms = validateTerms(field, terms.getTerms());
-            final TermsResult result = TermsResult.create(terms.tookMs(), validatedTerms, terms.getMissing(), terms.getOther(), terms.getTotal(), terms.getBuiltQuery());
+            final TermsResult result = TermsResult.create(terms.took().millis(), validatedTerms, terms.getMissing(), terms.getOther(), terms.getTotal(), terms.getBuiltQuery());
             termResults.put(field, result);
         }
 
