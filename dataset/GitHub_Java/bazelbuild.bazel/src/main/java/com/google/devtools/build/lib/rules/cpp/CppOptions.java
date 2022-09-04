@@ -620,25 +620,6 @@ public class CppOptions extends FragmentOptions {
   }
 
   @Option(
-    name = "fdo_profile",
-    defaultValue = "null",
-    category = "flags",
-    converter = LabelConverter.class,
-    documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-    effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
-    help = "The fdo_profile representing the profile to be used for optimization."
-  )
-  public Label fdoProfileLabel;
-
-  /**
-   * Returns the --fdo_optimize value if FDO is specified and active for this configuration, the
-   * default value otherwise.
-   */
-  public Label getFdoProfileLabel() {
-    return enableLipoSettings() ? fdoProfileLabel : null;
-  }
-
-  @Option(
     name = "experimental_stl",
     converter = LabelConverter.class,
     defaultValue = "null",
@@ -939,7 +920,6 @@ public class CppOptions extends FragmentOptions {
     host.useStartEndLib = useStartEndLib;
     host.stripBinaries = StripMode.ALWAYS;
     host.fdoOptimizeForBuild = null;
-    host.fdoProfileLabel = null;
     host.lipoModeForBuild = LipoMode.OFF;
     host.inmemoryDotdFiles = inmemoryDotdFiles;
 
@@ -968,7 +948,7 @@ public class CppOptions extends FragmentOptions {
    * Returns true if targets under this configuration should apply FDO.
    */
   public boolean isFdo() {
-    return getFdoOptimize() != null || getFdoInstrument() != null || getFdoProfileLabel() != null;
+    return getFdoOptimize() != null || getFdoInstrument() != null;
   }
 
   /**
