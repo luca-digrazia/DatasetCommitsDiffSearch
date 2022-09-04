@@ -10,7 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
-import java.util.LinkedHashSet;
+import java.util.HashSet;
 import java.util.Set;
 
 /**
@@ -29,7 +29,7 @@ public final class ServiceUtil {
     public static Set<String> classNamesNamedIn(ClassLoader classLoader, String fileName) throws IOException {
         final Enumeration<URL> resources = classLoader.getResources(fileName);
 
-        final Set<String> classNames = new LinkedHashSet<>();
+        final Set<String> classNames = new HashSet<>();
 
         while (resources.hasMoreElements()) {
             final URL url = resources.nextElement();
@@ -39,9 +39,8 @@ public final class ServiceUtil {
                         try (BufferedReader br = new BufferedReader(isr)) {
                             String line;
                             while ((line = br.readLine()) != null) {
-                                int commentMarkerIndex = line.indexOf('#');
-                                if (commentMarkerIndex > 0) {
-                                    line = line.substring(commentMarkerIndex);
+                                if (line.contains("#")) {
+                                    line = line.substring(line.indexOf("#"));
                                 }
                                 line = line.trim();
 
