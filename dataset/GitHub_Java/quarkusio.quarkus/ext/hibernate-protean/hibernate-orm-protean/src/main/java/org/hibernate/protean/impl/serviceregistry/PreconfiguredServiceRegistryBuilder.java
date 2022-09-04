@@ -34,7 +34,6 @@ import org.hibernate.property.access.internal.PropertyAccessStrategyResolverInit
 import org.hibernate.protean.impl.FlatClassLoaderService;
 import org.hibernate.protean.recording.RecordedState;
 import org.hibernate.protean.recording.customservices.CfgXmlAccessServiceInitiatorProtean;
-import org.hibernate.protean.recording.customservices.DisabledJMXInitiator;
 import org.hibernate.protean.recording.customservices.ProteanJtaPlatformResolver;
 import org.hibernate.resource.beans.spi.ManagedBeanRegistryInitiator;
 import org.hibernate.resource.transaction.internal.TransactionCoordinatorBuilderInitiator;
@@ -162,9 +161,7 @@ public class PreconfiguredServiceRegistryBuilder {
 		serviceInitiators.add( new ProteanJdbcEnvironmentInitiator( rs.getDialect() ) );
 
 		serviceInitiators.add( JndiServiceInitiator.INSTANCE );
-
-		//Custom one!
-		serviceInitiators.add( DisabledJMXInitiator.INSTANCE );
+		serviceInitiators.add( JmxServiceInitiator.INSTANCE );
 
 		serviceInitiators.add( PersisterClassResolverInitiator.INSTANCE );
 		serviceInitiators.add( PersisterFactoryInitiator.INSTANCE );
