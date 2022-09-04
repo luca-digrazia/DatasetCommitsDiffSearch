@@ -20,34 +20,30 @@ import com.google.common.collect.ImmutableSet;
 import org.graylog2.streams.StreamService;
 
 import javax.inject.Inject;
-import javax.ws.rs.ForbiddenException;
 import java.util.Set;
 import java.util.function.Predicate;
 
 import static java.util.stream.Collectors.toSet;
 import static org.graylog2.plugin.streams.Stream.DEFAULT_EVENT_STREAM_IDS;
 
-class PermittedStreams {
+public class PermittedStreams {
     private final StreamService streamService;
 
     @Inject
-    PermittedStreams(StreamService streamService) {
+    public PermittedStreams(StreamService streamService) {
         this.streamService = streamService;
     }
 
-    ImmutableSet<String> load(Predicate<String> isStreamIdPermitted) {
+    public ImmutableSet<String> load(Predicate<String> isStreamIdPermitted) {
         final Set<String> result = streamService.loadAll().stream()
                 .map(org.graylog2.plugin.streams.Stream::getId)
-                // Unless explicitly queried, exclude event indices by defaulth
+                // Unless explicitly queried, exclude event indices by default
                 // Having the event indices in every search, makes sorting almost impossible
                 // because it triggers https://github.com/Graylog2/graylog2-server/issues/6378
                 // TODO: this filter can be removed, once we implement https://github.com/Graylog2/graylog2-server/issues/6490
                 .filter(id -> !DEFAULT_EVENT_STREAM_IDS.contains(id))
                 .filter(isStreamIdPermitted)
                 .collect(toSet());
-
-        if (result.isEmpty())
-            throw new ForbiddenException("There are no streams you are permitted to use.");
 
         return ImmutableSet.copyOf(result);
     }
