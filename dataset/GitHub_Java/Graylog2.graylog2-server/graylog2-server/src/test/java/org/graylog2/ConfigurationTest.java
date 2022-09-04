@@ -5,8 +5,11 @@ import com.github.joschi.jadconfig.RepositoryException;
 import com.github.joschi.jadconfig.ValidationException;
 import com.github.joschi.jadconfig.repositories.InMemoryRepository;
 import com.google.common.collect.Maps;
-import org.testng.Assert;
-import org.testng.annotations.*;
+import org.junit.Assert;
+import org.bson.types.ObjectId;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
 
 import java.io.File;
 import java.io.IOException;
@@ -22,7 +25,7 @@ public class ConfigurationTest {
     Map<String, String> validProperties;
     private File tempFile;
 
-    @BeforeClass
+    @Before
     public void setUp() {
 
         validProperties = Maps.newHashMap();
@@ -54,16 +57,14 @@ public class ConfigurationTest {
         validProperties.put("mongodb_threads_allowed_to_block_multiplier", "50");
         validProperties.put("amqp_port", "5672");
         validProperties.put("forwarder_loggly_timeout", "3");
-
-        validProperties.put("retention_strategy", "delete");
     }
 
-    @AfterClass
+    @After
     public void tearDown() {
         tempFile.delete();
     }
 
-    @Test(expectedExceptions = ValidationException.class)
+    @Test(expected = ValidationException.class)
     public void testValidateMongoDbAuth() throws RepositoryException, ValidationException {
 
         validProperties.put("mongodb_useauth", "true");
@@ -195,4 +196,39 @@ public class ConfigurationTest {
 
         Assert.assertEquals(2, configuration.getMongoReplicaSet().size());
     }
+
+    @Test
+    public void testGetLibratoMetricsStreamFilter() throws RepositoryException, ValidationException {
+        ObjectId id1 = new ObjectId();
+        ObjectId id2 = new ObjectId();
+        ObjectId id3 = new ObjectId();
+        validProperties.put("libratometrics_stream_filter", id1.toString() + "," + id2.toString() + "," + id3.toString());
+
+        Configuration configuration = new Configuration();
+        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
+
+        Assert.assertEquals(3, configuration.getLibratoMetricsStreamFilter().size());
+        Assert.assertTrue(configuration.getLibratoMetricsStreamFilter().contains(id1.toString()));
+        Assert.assertTrue(configuration.getLibratoMetricsStreamFilter().contains(id2.toString()));
+        Assert.assertTrue(configuration.getLibratoMetricsStreamFilter().contains(id3.toString()));
+    }
+
+    @Test
+    public void testGetLibratoMetricsPrefix() throws RepositoryException, ValidationException {
+        validProperties.put("libratometrics_prefix", "lolwut");
+        Configuration configuration = new Configuration();
+        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
+
+        Assert.assertEquals("lolwut", configuration.getLibratoMetricsPrefix());
+    }
+
+    @Test
+    public void testGetLibratoMetricsPrefixHasStandardValue() throws RepositoryException, ValidationException {
+        // Nothing set.
+        Configuration configuration = new Configuration();
+        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
+
+        Assert.assertEquals("gl2-", configuration.getLibratoMetricsPrefix());
+    }
+    
 }
