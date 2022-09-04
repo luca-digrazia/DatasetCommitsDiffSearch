@@ -2029,8 +2029,7 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
     assertThat(linkAction.getOutputs())
         .containsAtLeast(
             getImplicitOutputArtifact(
-                a.getConfiguredTarget(),
-                AndroidRuleClasses.ANDROID_RESOURCES_AAPT2_VALIDATION_ARTIFACT),
+                a.getConfiguredTarget(), AndroidRuleClasses.ANDROID_RESOURCES_AAPT2_R_TXT),
             getImplicitOutputArtifact(
                 a.getConfiguredTarget(), AndroidRuleClasses.ANDROID_RESOURCES_AAPT2_SOURCE_JAR));
   }
