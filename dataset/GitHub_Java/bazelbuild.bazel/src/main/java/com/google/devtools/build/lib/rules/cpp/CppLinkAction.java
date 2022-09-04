@@ -117,7 +117,6 @@ public final class CppLinkAction extends AbstractAction
   private final boolean isLtoIndexing;
 
   private final PathFragment ldExecutable;
-  private final String hostSystemName;
 
   private final Iterable<Artifact> mandatoryInputs;
 
@@ -181,7 +180,6 @@ public final class CppLinkAction extends AbstractAction
     this.toolchainEnv = toolchainEnv;
     this.executionRequirements = executionRequirements;
     this.ldExecutable = toolchain.getToolPathFragment(Tool.LD);
-    this.hostSystemName = toolchain.getHostSystemName();
   }
 
   private CppConfiguration getCppConfiguration() {
@@ -194,7 +192,7 @@ public final class CppLinkAction extends AbstractAction
   }
 
   public String getHostSystemName() {
-    return hostSystemName;
+    return getCppConfiguration().getHostSystemName();
   }
 
   @Override

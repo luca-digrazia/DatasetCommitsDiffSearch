@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -56,6 +55,7 @@ import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.OsUtils;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
@@ -293,7 +293,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
           CppLinkAction.symbolCountsFileName(binaryPath)));
     }
 
-    Artifact generatedDefFile = null;
+    Artifact defFile = null;
     Artifact interfaceLibrary = null;
     if (isLinkShared(ruleContext)) {
       linkActionBuilder.setLibraryIdentifier(CcLinkingOutputs.libraryIdentifierOf(binary));
@@ -308,20 +308,15 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
             objectFiles.addAll(library.getObjectFiles());
           }
         }
-        generatedDefFile =
+        defFile =
             CppHelper.createDefFileActions(
                 ruleContext,
                 ccToolchain.getDefParserTool(),
                 objectFiles.build(),
                 binary.getFilename());
 
-        if (CppHelper.shouldUseGeneratedDefFile(ruleContext, featureConfiguration)) {
-          linkActionBuilder.setDefFile(generatedDefFile);
-        }
-
-        Artifact customDefFile = common.getWinDefFile();
-        if (customDefFile != null) {
-          linkActionBuilder.setDefFile(customDefFile);
+        if (CppHelper.shouldUseDefFile(featureConfiguration)) {
+          linkActionBuilder.setDefFile(defFile);
         }
 
         // If we are using a toolchain supporting interface library and targeting Windows, we build
@@ -490,8 +485,8 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       ruleBuilder.addOutputGroup("pdb_file", pdbFile);
     }
 
-    if (generatedDefFile != null) {
-      ruleBuilder.addOutputGroup("def_file", generatedDefFile);
+    if (defFile != null) {
+      ruleBuilder.addOutputGroup("def_file", defFile);
     }
 
     if (interfaceLibrary != null) {
@@ -631,7 +626,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       Iterable<LtoBackendArtifacts> ltoBackendArtifacts) {
     if (linkStaticness == LinkStaticness.DYNAMIC) {
       return DwoArtifactsCollector.directCollector(
-          compilationOutputs, generateDwo, ltoBackendArtifactsUsePic, ltoBackendArtifacts);
+          context, compilationOutputs, generateDwo, ltoBackendArtifactsUsePic, ltoBackendArtifacts);
     } else {
       return CcCommon.collectTransitiveDwoArtifacts(
           context, compilationOutputs, generateDwo, ltoBackendArtifactsUsePic, ltoBackendArtifacts);
