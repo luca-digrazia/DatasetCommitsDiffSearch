@@ -27,7 +27,7 @@ import org.androidannotations.helper.AndroidManifest;
 import org.androidannotations.helper.IntentBuilder;
 import org.androidannotations.helper.OrmLiteHelper;
 import org.androidannotations.helper.ServiceIntentBuilder;
-import org.androidannotations.holder.ReceiverRegistrationDelegate.IntentFilterData;
+import org.androidannotations.holder.ReceiverRegistrationHolder.IntentFilterData;
 import org.androidannotations.process.ProcessHolder;
 
 import com.sun.codemodel.JBlock;
@@ -40,12 +40,12 @@ public class EServiceHolder extends EComponentHolder implements HasIntentBuilder
 
 	private ServiceIntentBuilder intentBuilder;
 	private JDefinedClass intentBuilderClass;
-	private ReceiverRegistrationDelegate<EServiceHolder> receiverRegistrationDelegate;
+	private ReceiverRegistrationHolder<EServiceHolder> receiverRegistrationHolder;
 	private JBlock onDestroyBeforeSuperBlock;
 
 	public EServiceHolder(ProcessHolder processHolder, TypeElement annotatedElement, AndroidManifest androidManifest) throws Exception {
 		super(processHolder, annotatedElement);
-		receiverRegistrationDelegate = new ReceiverRegistrationDelegate<>(this);
+		receiverRegistrationHolder = new ReceiverRegistrationHolder<EServiceHolder>(this);
 		intentBuilder = new ServiceIntentBuilder(this, androidManifest);
 		intentBuilder.build();
 	}
@@ -94,7 +94,7 @@ public class EServiceHolder extends EComponentHolder implements HasIntentBuilder
 
 	@Override
 	public JFieldVar getIntentFilterField(IntentFilterData intentFilterData) {
-		return receiverRegistrationDelegate.getIntentFilterField(intentFilterData);
+		return receiverRegistrationHolder.getIntentFilterField(intentFilterData);
 	}
 
 	@Override
@@ -117,32 +117,32 @@ public class EServiceHolder extends EComponentHolder implements HasIntentBuilder
 
 	@Override
 	public JBlock getOnStartAfterSuperBlock() {
-		return receiverRegistrationDelegate.getOnStartAfterSuperBlock();
+		return receiverRegistrationHolder.getOnStartAfterSuperBlock();
 	}
 
 	@Override
 	public JBlock getOnStopBeforeSuperBlock() {
-		return receiverRegistrationDelegate.getOnStopBeforeSuperBlock();
+		return receiverRegistrationHolder.getOnStopBeforeSuperBlock();
 	}
 
 	@Override
 	public JBlock getOnResumeAfterSuperBlock() {
-		return receiverRegistrationDelegate.getOnAttachAfterSuperBlock();
+		return receiverRegistrationHolder.getOnAttachAfterSuperBlock();
 	}
 
 	@Override
 	public JBlock getOnPauseBeforeSuperBlock() {
-		return receiverRegistrationDelegate.getOnPauseBeforeSuperBlock();
+		return receiverRegistrationHolder.getOnPauseBeforeSuperBlock();
 	}
 
 	@Override
 	public JBlock getOnAttachAfterSuperBlock() {
-		return receiverRegistrationDelegate.getOnAttachAfterSuperBlock();
+		return receiverRegistrationHolder.getOnAttachAfterSuperBlock();
 	}
 
 	@Override
 	public JBlock getOnDetachBeforeSuperBlock() {
-		return receiverRegistrationDelegate.getOnDetachBeforeSuperBlock();
+		return receiverRegistrationHolder.getOnDetachBeforeSuperBlock();
 	}
 
 	@Override

@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,25 +15,29 @@
  */
 package org.androidannotations.holder;
 
-import com.sun.codemodel.JBlock;
-import com.sun.codemodel.JFieldVar;
-import com.sun.codemodel.JMethod;
-import com.sun.codemodel.JVar;
-import org.androidannotations.process.ProcessHolder;
+import static com.sun.codemodel.JExpr._new;
+import static com.sun.codemodel.JExpr._null;
+import static com.sun.codemodel.JMod.PRIVATE;
+import static com.sun.codemodel.JMod.PUBLIC;
+import static com.sun.codemodel.JMod.STATIC;
+import static org.androidannotations.helper.ModelConstants.generationSuffix;
+
+import java.util.List;
 
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.util.ElementFilter;
-import java.util.List;
 
-import static com.sun.codemodel.JExpr._new;
-import static com.sun.codemodel.JExpr._null;
-import static com.sun.codemodel.JMod.*;
-import static org.androidannotations.helper.ModelConstants.GENERATION_SUFFIX;
+import org.androidannotations.process.ProcessHolder;
+
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JFieldVar;
+import com.sun.codemodel.JMethod;
+import com.sun.codemodel.JVar;
 
 public class EBeanHolder extends EComponentWithViewSupportHolder {
 
-	public static final String GET_INSTANCE_METHOD_NAME = "getInstance" + GENERATION_SUFFIX;
+	public static final String GET_INSTANCE_METHOD_NAME = "getInstance" + generationSuffix();
 
 	private JFieldVar contextField;
 	private JMethod constructor;
@@ -57,7 +61,7 @@ public class EBeanHolder extends EComponentWithViewSupportHolder {
 
 	public JFieldVar getContextField() {
 		if (contextField == null) {
-			contextField = generatedClass.field(PRIVATE, classes().CONTEXT, "context_");
+			contextField = generatedClass.field(PRIVATE, classes().CONTEXT, "context" + generationSuffix());
 		}
 		return contextField;
 	}
@@ -66,10 +70,15 @@ public class EBeanHolder extends EComponentWithViewSupportHolder {
 	protected void setContextRef() {
 		contextRef = getContextField();
 	}
+
+	@Override
 	protected void setInit() {
-		init = generatedClass.method(PRIVATE, processHolder.codeModel().VOID, "init_");
+		init = generatedClass.method(PRIVATE, processHolder.codeModel().VOID, "init" + generationSuffix());
+	}
+
+	public void invokeInitInConstructor() {
 		JBlock constructorBody = constructor.body();
-		constructorBody.invoke(init);
+		constructorBody.invoke(getInit());
 	}
 
 	public void createFactoryMethod(boolean hasSingletonScope) {
@@ -80,18 +89,19 @@ public class EBeanHolder extends EComponentWithViewSupportHolder {
 
 		JBlock factoryMethodBody = factoryMethod.body();
 
-			/*
-			 * Singletons are bound to the application context
-			 */
+		/*
+		 * Singletons are bound to the application context
+		 */
 		if (hasSingletonScope) {
 
-			JFieldVar instanceField = generatedClass.field(PRIVATE | STATIC, generatedClass, "instance_");
+			JFieldVar instanceField = generatedClass.field(PRIVATE | STATIC, generatedClass, "instance" + generationSuffix());
 
 			JBlock creationBlock = factoryMethodBody //
 					._if(instanceField.eq(_null())) //
 					._then();
 			JVar previousNotifier = viewNotifierHelper.replacePreviousNotifierWithNull(creationBlock);
 			creationBlock.assign(instanceField, _new(generatedClass).arg(factoryMethodContextParam.invoke("getApplicationContext")));
+			creationBlock.invoke(instanceField, getInit());
 			viewNotifierHelper.resetPreviousNotifier(creationBlock, previousNotifier);
 
 			factoryMethodBody._return(instanceField);

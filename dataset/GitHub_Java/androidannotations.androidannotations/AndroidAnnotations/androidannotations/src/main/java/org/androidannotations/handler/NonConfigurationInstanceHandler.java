@@ -41,6 +41,7 @@ import com.sun.codemodel.JVar;
 
 public class NonConfigurationInstanceHandler extends BaseAnnotationHandler<EActivityHolder> {
 
+	private final APTCodeModelHelper codeModelHelper;
 	private final AnnotationHelper annotationHelper;
 
 	public NonConfigurationInstanceHandler(ProcessingEnvironment processingEnvironment) {

@@ -33,8 +33,10 @@ import javax.lang.model.type.TypeMirror;
 
 import org.androidannotations.annotations.EFragment;
 import org.androidannotations.annotations.Receiver.RegisterAt;
+import org.androidannotations.helper.ActionBarSherlockHelper;
+import org.androidannotations.helper.AnnotationHelper;
 import org.androidannotations.helper.OrmLiteHelper;
-import org.androidannotations.holder.ReceiverRegistrationDelegate.IntentFilterData;
+import org.androidannotations.holder.ReceiverRegistrationHolder.IntentFilterData;
 import org.androidannotations.process.ProcessHolder;
 
 import com.sun.codemodel.JBlock;
@@ -62,10 +64,10 @@ public class EFragmentHolder extends EComponentWithViewSupportHolder implements 
 	private JMethod injectArgsMethod;
 	private JBlock injectArgsBlock;
 	private JVar injectBundleArgs;
-	private InstanceStateDelegate instanceStateDelegate;
-	private OnActivityResultDelegate onActivityResultDelegate;
-	private ReceiverRegistrationDelegate<EFragmentHolder> receiverRegistrationDelegate;
-	private PreferencesDelegate preferencesDelegate;
+	private InstanceStateHolder instanceStateHolder;
+	private OnActivityResultHolder onActivityResultHolder;
+	private ReceiverRegistrationHolder<EFragmentHolder> receiverRegistrationHolder;
+	private PreferencesHolder preferencesHolder;
 	private JBlock onCreateOptionsMenuMethodBody;
 	private JVar onCreateOptionsMenuMenuInflaterVar;
 	private JVar onCreateOptionsMenuMenuParam;
@@ -83,10 +85,10 @@ public class EFragmentHolder extends EComponentWithViewSupportHolder implements 
 
 	public EFragmentHolder(ProcessHolder processHolder, TypeElement annotatedElement) throws Exception {
 		super(processHolder, annotatedElement);
-		instanceStateDelegate = new InstanceStateDelegate(this);
-		onActivityResultDelegate = new OnActivityResultDelegate(this);
-		receiverRegistrationDelegate = new ReceiverRegistrationDelegate<>(this);
-		preferencesDelegate = new PreferencesDelegate(this);
+		instanceStateHolder = new InstanceStateHolder(this);
+		onActivityResultHolder = new OnActivityResultHolder(this);
+		receiverRegistrationHolder = new ReceiverRegistrationHolder<EFragmentHolder>(this);
+		preferencesHolder = new PreferencesHolder(this);
 		setOnCreate();
 		setOnViewCreated();
 		setFragmentBuilder();
@@ -127,7 +129,7 @@ public class EFragmentHolder extends EComponentWithViewSupportHolder implements 
 		JFieldVar contentView = getContentView();
 
 		body._if(contentView.eq(_null())) //
-			._then()._return(_null());
+				._then()._return(_null());
 
 		body._return(contentView.invoke(findViewById).arg(idParam));
 	}
@@ -147,7 +149,7 @@ public class EFragmentHolder extends EComponentWithViewSupportHolder implements 
 	}
 
 	private JClass narrow(JClass toNarrow) {
-		List<JClass> classes = new ArrayList<>();
+		List<JClass> classes = new ArrayList<JClass>();
 		for (JTypeVar type : generatedClass.typeParams()) {
 			classes.add(codeModel().directClass(type.name()));
 		}
@@ -181,11 +183,18 @@ public class EFragmentHolder extends EComponentWithViewSupportHolder implements 
 	}
 
 	private void setOnCreateOptionsMenu() {
+		JClass menuClass = classes().MENU;
+		JClass menuInflaterClass = classes().MENU_INFLATER;
+		if (usesActionBarSherlock()) {
+			menuClass = classes().SHERLOCK_MENU;
+			menuInflaterClass = classes().SHERLOCK_MENU_INFLATER;
+		}
+
 		JMethod method = generatedClass.method(PUBLIC, codeModel().VOID, "onCreateOptionsMenu");
 		method.annotate(Override.class);
 		JBlock methodBody = method.body();
-		onCreateOptionsMenuMenuParam = method.param(classes().MENU, "menu");
-		onCreateOptionsMenuMenuInflaterVar = method.param(classes().MENU_INFLATER, "inflater");
+		onCreateOptionsMenuMenuParam = method.param(menuClass, "menu");
+		onCreateOptionsMenuMenuInflaterVar = method.param(menuInflaterClass, "inflater");
 		onCreateOptionsMenuMethodBody = methodBody.block();
 		methodBody.invoke(_super(), method).arg(onCreateOptionsMenuMenuParam).arg(onCreateOptionsMenuMenuInflaterVar);
 
@@ -193,14 +202,23 @@ public class EFragmentHolder extends EComponentWithViewSupportHolder implements 
 	}
 
 	private void setOnOptionsItemSelected() {
+		JClass menuItemClass = classes().MENU_ITEM;
+		if (usesActionBarSherlock()) {
+			menuItemClass = classes().SHERLOCK_MENU_ITEM;
+		}
+
 		JMethod method = generatedClass.method(JMod.PUBLIC, codeModel().BOOLEAN, "onOptionsItemSelected");
 		method.annotate(Override.class);
 		JBlock methodBody = method.body();
-		onOptionsItemSelectedItem = method.param(classes().MENU_ITEM, "item");
+		onOptionsItemSelectedItem = method.param(menuItemClass, "item");
 		onOptionsItemSelectedItemId = methodBody.decl(codeModel().INT, "itemId_", onOptionsItemSelectedItem.invoke("getItemId"));
 		onOptionsItemSelectedMiddleBlock = methodBody.block();
 
 		methodBody._return(invoke(_super(), method).arg(onOptionsItemSelectedItem));
+	}
+
+	private boolean usesActionBarSherlock() {
+		return new ActionBarSherlockHelper(new AnnotationHelper(processingEnvironment())).usesActionBarSherlock(this);
 	}
 
 	@Override
@@ -375,22 +393,22 @@ public class EFragmentHolder extends EComponentWithViewSupportHolder implements 
 
 	@Override
 	public JBlock getSaveStateMethodBody() {
-		return instanceStateDelegate.getSaveStateMethodBody();
+		return instanceStateHolder.getSaveStateMethodBody();
 	}
 
 	@Override
 	public JVar getSaveStateBundleParam() {
-		return instanceStateDelegate.getSaveStateBundleParam();
+		return instanceStateHolder.getSaveStateBundleParam();
 	}
 
 	@Override
 	public JMethod getRestoreStateMethod() {
-		return instanceStateDelegate.getRestoreStateMethod();
+		return instanceStateHolder.getRestoreStateMethod();
 	}
 
 	@Override
 	public JVar getRestoreStateBundleParam() {
-		return instanceStateDelegate.getRestoreStateBundleParam();
+		return instanceStateHolder.getRestoreStateBundleParam();
 	}
 
 	@Override
@@ -443,27 +461,27 @@ public class EFragmentHolder extends EComponentWithViewSupportHolder implements 
 
 	@Override
 	public JBlock getOnActivityResultCaseBlock(int requestCode) {
-		return onActivityResultDelegate.getCaseBlock(requestCode);
+		return onActivityResultHolder.getCaseBlock(requestCode);
 	}
 
 	@Override
 	public JVar getOnActivityResultDataParam() {
-		return onActivityResultDelegate.getDataParam();
+		return onActivityResultHolder.getDataParam();
 	}
 
 	@Override
 	public JVar getOnActivityResultResultCodeParam() {
-		return onActivityResultDelegate.getResultCodeParam();
+		return onActivityResultHolder.getResultCodeParam();
 	}
 
 	@Override
 	public JMethod getOnActivityResultMethod() {
-		return onActivityResultDelegate.getMethod();
+		return onActivityResultHolder.getMethod();
 	}
 
 	@Override
 	public JFieldVar getIntentFilterField(IntentFilterData intentFilterData) {
-		return receiverRegistrationDelegate.getIntentFilterField(intentFilterData);
+		return receiverRegistrationHolder.getIntentFilterField(intentFilterData);
 	}
 
 	@Override
@@ -553,16 +571,16 @@ public class EFragmentHolder extends EComponentWithViewSupportHolder implements 
 
 	@Override
 	public JBlock getAddPreferencesFromResourceBlock() {
-		return preferencesDelegate.getAddPreferencesFromResourceBlock();
+		return preferencesHolder.getAddPreferencesFromResourceBlock();
 	}
 
 	@Override
 	public void assignFindPreferenceByKey(JFieldRef idRef, JClass preferenceClass, JFieldRef fieldRef) {
-		preferencesDelegate.assignFindPreferenceByKey(idRef, preferenceClass, fieldRef);
+		preferencesHolder.assignFindPreferenceByKey(idRef, preferenceClass, fieldRef);
 	}
 
 	@Override
 	public FoundPreferenceHolder getFoundPreferenceHolder(JFieldRef idRef, JClass preferenceClass) {
-		return preferencesDelegate.getFoundPreferenceHolder(idRef, preferenceClass);
+		return preferencesHolder.getFoundPreferenceHolder(idRef, preferenceClass);
 	}
 }

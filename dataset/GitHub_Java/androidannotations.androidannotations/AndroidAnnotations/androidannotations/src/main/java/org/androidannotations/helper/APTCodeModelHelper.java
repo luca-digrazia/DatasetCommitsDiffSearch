@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -16,121 +16,201 @@
 package org.androidannotations.helper;
 
 import static com.sun.codemodel.JExpr._new;
-import static com.sun.codemodel.JExpr._this;
-import static com.sun.codemodel.JExpr.cast;
-import static com.sun.codemodel.JMod.FINAL;
-import static com.sun.codemodel.JMod.PRIVATE;
-import static com.sun.codemodel.JMod.PUBLIC;
-import static com.sun.codemodel.JMod.STATIC;
-import static javax.lang.model.element.ElementKind.CONSTRUCTOR;
+import static com.sun.codemodel.JExpr.lit;
+import static org.androidannotations.helper.ModelConstants.classSuffix;
 
+import java.io.StringWriter;
+import java.lang.annotation.Annotation;
+import java.lang.annotation.Inherited;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
+import javax.lang.model.element.AnnotationMirror;
+import javax.lang.model.element.AnnotationValue;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
+import javax.lang.model.element.TypeElement;
+import javax.lang.model.element.TypeParameterElement;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.ArrayType;
 import javax.lang.model.type.DeclaredType;
+import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
+import javax.lang.model.type.WildcardType;
+import javax.lang.model.util.ElementFilter;
+import javax.lang.model.util.Types;
 
-import org.androidannotations.processing.EBeanHolder;
-import org.androidannotations.processing.EBeansHolder.Classes;
+import org.androidannotations.annotations.EBean;
+import org.androidannotations.holder.EBeanHolder;
+import org.androidannotations.holder.EComponentHolder;
+import org.androidannotations.holder.GeneratedClassHolder;
+
+import com.sun.codemodel.JAnnotatable;
+import com.sun.codemodel.JAnnotationArrayMember;
+import com.sun.codemodel.JAnnotationUse;
+import com.sun.codemodel.JAnnotationValue;
 import com.sun.codemodel.JBlock;
-import com.sun.codemodel.JCatchBlock;
 import com.sun.codemodel.JClass;
-import com.sun.codemodel.JClassAlreadyExistsException;
 import com.sun.codemodel.JCodeModel;
-import com.sun.codemodel.JConditional;
 import com.sun.codemodel.JDefinedClass;
 import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JFieldRef;
-import com.sun.codemodel.JFieldVar;
+import com.sun.codemodel.JFormatter;
 import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
 import com.sun.codemodel.JStatement;
-import com.sun.codemodel.JTryBlock;
+import com.sun.codemodel.JSuperWildcard;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
 
 public class APTCodeModelHelper {
 
-	public JClass typeMirrorToJClass(TypeMirror type, EBeanHolder holder) {
+	public JClass typeMirrorToJClass(TypeMirror type, GeneratedClassHolder holder) {
+		return typeMirrorToJClass(type, holder, Collections.<String, TypeMirror> emptyMap());
+	}
 
+	private JClass typeMirrorToJClass(TypeMirror type, GeneratedClassHolder holder, Map<String, TypeMirror> substitute) {
 		if (type instanceof DeclaredType) {
-			DeclaredType declaredType = (DeclaredType) type;
-
-			String declaredTypeName = declaredType.asElement().toString();
-
-			JClass declaredClass = holder.refClass(declaredTypeName);
-
-			List<? extends TypeMirror> typeArguments = declaredType.getTypeArguments();
-
-			List<JClass> typeArgumentJClasses = new ArrayList<JClass>();
-			for (TypeMirror typeArgument : typeArguments) {
-				typeArgumentJClasses.add(typeMirrorToJClass(typeArgument, holder));
-			}
-			if (typeArgumentJClasses.size() > 0) {
-				declaredClass = declaredClass.narrow(typeArgumentJClasses);
-			}
-
-			return declaredClass;
+			return typeMirrorToJClass((DeclaredType) type, holder, substitute);
+		} else if (type instanceof WildcardType) {
+			return typeMirrorToJClass((WildcardType) type, holder, substitute);
 		} else if (type instanceof ArrayType) {
-			ArrayType arrayType = (ArrayType) type;
-
-			JClass refClass = typeMirrorToJClass(arrayType.getComponentType(), holder);
-
-			return refClass.array();
+			return typeMirrorToJClass((ArrayType) type, holder, substitute);
 		} else {
+			TypeMirror substituted = substitute.get(type.toString());
+			if (substituted != null && type != substituted) {
+				return typeMirrorToJClass(substituted, holder, substitute);
+			}
 			return holder.refClass(type.toString());
 		}
 	}
 
-	public static class Parameter {
-		public final String name;
-		public final JClass jClass;
+	private JClass typeMirrorToJClass(DeclaredType declaredType, GeneratedClassHolder holder, Map<String, TypeMirror> substitute) {
+		String declaredTypeName = declaredType.asElement().toString();
 
-		public Parameter(String name, JClass jClass) {
-			this.name = name;
-			this.jClass = jClass;
+		JClass declaredClass = holder.refClass(declaredTypeName);
+
+		List<? extends TypeMirror> typeArguments = declaredType.getTypeArguments();
+
+		List<JClass> typeArgumentJClasses = new ArrayList<JClass>();
+		for (TypeMirror typeArgument : typeArguments) {
+			typeArgumentJClasses.add(typeMirrorToJClass(typeArgument, holder, substitute));
+		}
+		if (typeArgumentJClasses.size() > 0) {
+			declaredClass = declaredClass.narrow(typeArgumentJClasses);
+		}
+
+		return declaredClass;
+	}
+
+	private JClass typeMirrorToJClass(WildcardType wildcardType, GeneratedClassHolder holder, Map<String, TypeMirror> substitute) {
+		TypeMirror bound = wildcardType.getExtendsBound();
+		if (bound == null) {
+			bound = wildcardType.getSuperBound();
+			if (bound == null) {
+				return holder.classes().OBJECT.wildcard();
+			}
+			return new JSuperWildcard(typeMirrorToJClass(bound, holder, substitute));
+		}
+
+		TypeMirror extendsBound = wildcardType.getExtendsBound();
+
+		if (extendsBound == null) {
+			return holder.classes().OBJECT.wildcard();
+		} else {
+			return typeMirrorToJClass(extendsBound, holder, substitute).wildcard();
 		}
 	}
 
-	public JMethod overrideAnnotatedMethod(ExecutableElement executableElement, EBeanHolder holder) {
+	private JClass typeMirrorToJClass(ArrayType arrayType, GeneratedClassHolder holder, Map<String, TypeMirror> substitute) {
+		JClass refClass = typeMirrorToJClass(arrayType.getComponentType(), holder, substitute);
+		return refClass.array();
+	}
 
-		String methodName = executableElement.getSimpleName().toString();
+	private Map<String, TypeMirror> getActualTypes(Types typeUtils, DeclaredType baseClass, TypeMirror annotatedClass) {
+		List<TypeMirror> superTypes = new ArrayList<TypeMirror>();
+		superTypes.add(annotatedClass);
+		while (!superTypes.isEmpty()) {
+			TypeMirror x = superTypes.remove(0);
+			if (typeUtils.isSameType(typeUtils.erasure(x), typeUtils.erasure(baseClass))) {
+				DeclaredType type = (DeclaredType) x;
+				Map<String, TypeMirror> actualTypes = new HashMap<String, TypeMirror>();
+				for (int i = 0; i < type.getTypeArguments().size(); i++) {
+					TypeMirror actualArg = type.getTypeArguments().get(i);
+					TypeMirror formalArg = baseClass.getTypeArguments().get(i);
+					if (!typeUtils.isSameType(actualArg, formalArg)) {
+						actualTypes.put(formalArg.toString(), actualArg);
+					}
+				}
+				return actualTypes;
+			}
+			superTypes.addAll(typeUtils.directSupertypes(x));
+		}
+		return Collections.emptyMap();
+	}
 
-		JClass returnType = typeMirrorToJClass(executableElement.getReturnType(), holder);
+	public JClass typeBoundsToJClass(GeneratedClassHolder holder, List<? extends TypeMirror> bounds) {
+		return typeBoundsToJClass(holder, bounds, Collections.<String, TypeMirror> emptyMap());
+	}
 
-		List<Parameter> parameters = new ArrayList<Parameter>();
-		for (VariableElement parameter : executableElement.getParameters()) {
-			String parameterName = parameter.getSimpleName().toString();
-			JClass parameterClass = typeMirrorToJClass(parameter.asType(), holder);
-			parameters.add(new Parameter(parameterName, parameterClass));
+	private JClass typeBoundsToJClass(GeneratedClassHolder holder, List<? extends TypeMirror> bounds, Map<String, TypeMirror> actualTypes) {
+		if (bounds.isEmpty()) {
+			return holder.classes().OBJECT;
+		} else {
+			// TODO resolve <T extends A&B> bounds
+			return typeMirrorToJClass(bounds.get(0), holder, actualTypes);
+		}
+	}
+
+	public JMethod overrideAnnotatedMethod(ExecutableElement executableElement, GeneratedClassHolder holder) {
+		TypeMirror annotatedClass = holder.getAnnotatedElement().asType();
+		DeclaredType baseClass = (DeclaredType) executableElement.getEnclosingElement().asType();
+
+		Types typeUtils = holder.processingEnvironment().getTypeUtils();
+
+		Map<String, TypeMirror> actualTypes = getActualTypes(typeUtils, baseClass, annotatedClass);
+		Map<String, JClass> methodTypes = new LinkedHashMap<String, JClass>();
+
+		for (TypeParameterElement typeParameter : executableElement.getTypeParameters()) {
+			List<? extends TypeMirror> bounds = typeParameter.getBounds();
+			JClass jClassBounds = typeBoundsToJClass(holder, bounds, actualTypes);
+			methodTypes.put(typeParameter.toString(), jClassBounds);
 		}
 
-		JMethod existingMethod = findAlreadyGeneratedMethod(holder.generatedClass, methodName, parameters);
+		actualTypes.keySet().removeAll(methodTypes.keySet());
 
+		JMethod existingMethod = findAlreadyGeneratedMethod(executableElement, holder);
 		if (existingMethod != null) {
 			return existingMethod;
 		}
 
-		JMethod method = holder.generatedClass.method(JMod.PUBLIC, returnType, methodName);
-		method.annotate(Override.class);
+		String methodName = executableElement.getSimpleName().toString();
+		JClass returnType = typeMirrorToJClass(executableElement.getReturnType(), holder, actualTypes);
+		JMethod method = holder.getGeneratedClass().method(JMod.PUBLIC, returnType, methodName);
+		addNonAAAnotations(method, executableElement.getAnnotationMirrors(), holder);
 
-		List<JVar> methodParameters = new ArrayList<JVar>();
+		if (!hasAnnotation(method, Override.class)) {
+			method.annotate(Override.class);
+		}
+
+		for (Map.Entry<String, JClass> typeDeclaration : methodTypes.entrySet()) {
+			method.generify(typeDeclaration.getKey(), typeDeclaration.getValue());
+		}
+
 		for (VariableElement parameter : executableElement.getParameters()) {
-			String parameterName = parameter.getSimpleName().toString();
-			JClass parameterClass = typeMirrorToJClass(parameter.asType(), holder);
-			JVar param = method.param(JMod.FINAL, parameterClass, parameterName);
-			methodParameters.add(param);
+			addParamToMethod(method, parameter, JMod.FINAL, holder, actualTypes);
 		}
 
 		for (TypeMirror superThrownType : executableElement.getThrownTypes()) {
-			JClass thrownType = typeMirrorToJClass(superThrownType, holder);
+			JClass thrownType = typeMirrorToJClass(superThrownType, holder, actualTypes);
 			method._throws(thrownType);
 		}
 
@@ -139,12 +219,24 @@ public class APTCodeModelHelper {
 		return method;
 	}
 
-	private JMethod findAlreadyGeneratedMethod(JDefinedClass definedClass, String methodName, List<Parameter> parameters) {
+	public void generifyStaticHelper(GeneratedClassHolder holder, JMethod staticHelper, TypeElement annotatedClass) {
+		for (TypeParameterElement param : annotatedClass.getTypeParameters()) {
+			JClass bounds = typeBoundsToJClass(holder, param.getBounds());
+			staticHelper.generify(param.getSimpleName().toString(), bounds);
+		}
+	}
+
+	private JMethod findAlreadyGeneratedMethod(ExecutableElement executableElement, GeneratedClassHolder holder) {
+		JDefinedClass definedClass = holder.getGeneratedClass();
+		String methodName = executableElement.getSimpleName().toString();
+		List<? extends VariableElement> parameters = executableElement.getParameters();
+		// CHECKSTYLE:OFF
+		// TODO: refactor the nasty label jump
 		method: for (JMethod method : definedClass.methods()) {
 			if (method.name().equals(methodName) && method.params().size() == parameters.size()) {
 				int i = 0;
 				for (JVar param : method.params()) {
-					String searchedParamType = parameters.get(i).jClass.name();
+					String searchedParamType = typeMirrorToJClass(parameters.get(i).asType(), holder).name();
 					if (!param.type().name().equals(searchedParamType)) {
 						continue method;
 					}
@@ -153,16 +245,71 @@ public class APTCodeModelHelper {
 				return method;
 			}
 		}
+		// CHECKSTYLE:ON
 		return null;
 	}
 
-	public void callSuperMethod(JMethod superMethod, EBeanHolder holder, JBlock callBlock) {
-		JExpression activitySuper = holder.generatedClass.staticRef("super");
+	private void addParamToMethod(JMethod method, VariableElement parameter, int mod, GeneratedClassHolder holder, Map<String, TypeMirror> actualTypes) {
+		String parameterName = parameter.getSimpleName().toString();
+		JClass parameterClass = typeMirrorToJClass(parameter.asType(), holder, actualTypes);
+		JVar param = method.param(mod, parameterClass, parameterName);
+		addNonAAAnotations(param, parameter.getAnnotationMirrors(), holder);
+	}
+
+	public void addNonAAAnotations(JAnnotatable annotatable, List<? extends AnnotationMirror> annotationMirrors, GeneratedClassHolder holder) {
+		for (AnnotationMirror annotationMirror : annotationMirrors) {
+			if (annotationMirror.getAnnotationType().asElement().getAnnotation(Inherited.class) == null) {
+				JClass annotationClass = typeMirrorToJClass(annotationMirror.getAnnotationType(), holder);
+				if (!annotationClass.fullName().startsWith("org.androidannotations")) {
+					addAnnotation(annotatable, annotationMirror, holder);
+				}
+			}
+		}
+	}
+
+	public void addAnnotation(JAnnotatable annotatable, AnnotationMirror annotationMirror, GeneratedClassHolder holder) {
+		Map<? extends ExecutableElement, ? extends AnnotationValue> parameters = annotationMirror.getElementValues();
+
+		if (!hasAnnotation(annotatable, annotationMirror)) {
+			JClass annotation = typeMirrorToJClass(annotationMirror.getAnnotationType(), holder);
+			JAnnotationUse annotate = annotatable.annotate(annotation);
+
+			for (Map.Entry<? extends ExecutableElement, ? extends AnnotationValue> param : parameters.entrySet()) {
+				param.getValue().accept(new AnnotationParamExtractor(annotate, holder, this), param.getKey().getSimpleName().toString());
+			}
+		}
+	}
+
+	private boolean hasAnnotation(JAnnotatable annotatable, AnnotationMirror annotationMirror) {
+		return hasAnnotation(annotatable, annotationMirror.getAnnotationType().toString());
+	}
+
+	public boolean hasAnnotation(JAnnotatable annotatable, Class<? extends Annotation> annotationClass) {
+		return hasAnnotation(annotatable, annotationClass.getCanonicalName());
+	}
+
+	private boolean hasAnnotation(JAnnotatable annotatable, String annotationFQN) {
+		for (JAnnotationUse annotation : annotatable.annotations()) {
+			if (annotation.getAnnotationClass().fullName().equals(annotationFQN)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	public JInvocation getSuperCall(GeneratedClassHolder holder, JMethod superMethod) {
+		JExpression activitySuper = holder.getGeneratedClass().staticRef("super");
 		JInvocation superCall = JExpr.invoke(activitySuper, superMethod);
 
 		for (JVar param : superMethod.params()) {
 			superCall.arg(param);
 		}
+
+		return superCall;
+	}
+
+	public void callSuperMethod(JMethod superMethod, GeneratedClassHolder holder, JBlock callBlock) {
+		JInvocation superCall = getSuperCall(holder, superMethod);
 
 		JType returnType = superMethod.type();
 		if (returnType.fullName().equals("void")) {
@@ -183,12 +330,47 @@ public class APTCodeModelHelper {
 		}
 
 		JBlock clonedBody = new JBlock(false, false);
-
-		for (Object statement : body.getContents()) {
-			clonedBody.add((JStatement) statement);
-		}
-
+		copy(body, clonedBody);
 		return clonedBody;
+	}
+
+	public void copy(JBlock body, JBlock newBody) {
+		for (Object statement : body.getContents()) {
+			if (statement instanceof JVar) {
+				JVar var = (JVar) statement;
+				try {
+					Field varInitField = JVar.class.getDeclaredField("init");
+					varInitField.setAccessible(true);
+					JExpression varInit = (JExpression) varInitField.get(var);
+
+					newBody.decl(var.type(), var.name(), varInit);
+				} catch (Exception e) {
+					throw new RuntimeException(e);
+				}
+			} else {
+				newBody.add((JStatement) statement);
+			}
+		}
+	}
+
+	public void replaceSuperCall(JMethod method, JBlock replacement) {
+		String superCallStart = "super." + method.name() + "(";
+
+		JBlock oldBody = removeBody(method);
+		JBlock newBody = method.body();
+
+		for (Object content : oldBody.getContents()) {
+			StringWriter writer = new StringWriter();
+			JFormatter formatter = new JFormatter(writer);
+			JStatement statement = (JStatement) content;
+			statement.state(formatter);
+			String statementString = writer.getBuffer().toString();
+			if (statementString.startsWith(superCallStart)) {
+				newBody.add(replacement);
+			} else {
+				newBody.add(statement);
+			}
+		}
 	}
 
 	public String getIdStringFromIdFieldRef(JFieldRef idRef) {
@@ -216,155 +398,160 @@ public class APTCodeModelHelper {
 		throw new IllegalStateException("Unable to extract target name from JFieldRef");
 	}
 
-	public JDefinedClass createDelegatingAnonymousRunnableClass(EBeanHolder holder, JMethod delegatedMethod) {
-
+	public JDefinedClass createDelegatingAnonymousRunnableClass(EComponentHolder holder, JBlock previousBody) {
 		JCodeModel codeModel = holder.codeModel();
-		Classes classes = holder.classes();
 
-		JDefinedClass anonymousRunnableClass;
-		JBlock previousMethodBody = removeBody(delegatedMethod);
-
-		anonymousRunnableClass = codeModel.anonymousClass(Runnable.class);
+		JDefinedClass anonymousRunnableClass = codeModel.anonymousClass(Runnable.class);
 
 		JMethod runMethod = anonymousRunnableClass.method(JMod.PUBLIC, codeModel.VOID, "run");
 		runMethod.annotate(Override.class);
+		runMethod.body().add(previousBody);
 
-		JBlock runMethodBody = runMethod.body();
-		JTryBlock runTry = runMethodBody._try();
-
-		runTry.body().add(previousMethodBody);
-
-		JCatchBlock runCatch = runTry._catch(classes.RUNTIME_EXCEPTION);
-		JVar exceptionParam = runCatch.param("e");
-
-		JInvocation errorInvoke = classes.LOG.staticInvoke("e");
-
-		errorInvoke.arg(holder.generatedClass.name());
-		errorInvoke.arg("A runtime exception was thrown while executing code in a runnable");
-		errorInvoke.arg(exceptionParam);
-
-		runCatch.body().add(errorInvoke);
 		return anonymousRunnableClass;
 	}
 
-	public JVar castContextToActivity(EBeanHolder holder, JBlock ifActivityBody) {
-		JClass activityClass = holder.classes().ACTIVITY;
-		return ifActivityBody.decl(activityClass, "activity", cast(activityClass, holder.contextRef));
+	/**
+	 * Gets all of the methods of the class and includes the methods of any
+	 * implemented interfaces.
+	 *
+	 * @param typeElement
+	 * @return full list of methods.
+	 */
+	public List<ExecutableElement> getMethods(TypeElement typeElement) {
+		List<? extends Element> enclosedElements = typeElement.getEnclosedElements();
+		List<ExecutableElement> methods = new ArrayList<ExecutableElement>(ElementFilter.methodsIn(enclosedElements));
+
+		// Add methods of the interfaces. These will be valid as they have gone
+		// through the validator.
+		for (TypeMirror iface : typeElement.getInterfaces()) {
+			DeclaredType dt = (DeclaredType) iface;
+			methods.addAll(ElementFilter.methodsIn(dt.asElement().getEnclosedElements()));
+		}
+
+		return methods;
 	}
 
-	public JBlock ifContextInstanceOfActivity(EBeanHolder holder, JBlock methodBody) {
-		return methodBody._if(holder.contextRef._instanceof(holder.classes().ACTIVITY))._then();
+	public JMethod implementMethod(GeneratedClassHolder holder, List<ExecutableElement> methods, String methodName, String returnType, String... parameterTypes) {
+		return implementMethod(holder, methods, methodName, returnType, false, parameterTypes);
 	}
 
-	public void copyConstructorsAndAddStaticEViewBuilders(Element element, JCodeModel codeModel, JClass eBeanClass, EBeanHolder holder, JMethod setContentViewMethod) {
-		List<ExecutableElement> constructors = new ArrayList<ExecutableElement>();
-		for (Element e : element.getEnclosedElements()) {
-			if (e.getKind() == CONSTRUCTOR) {
-				constructors.add((ExecutableElement) e);
+	public JMethod implementMethod(GeneratedClassHolder holder, List<ExecutableElement> methods, String methodName, String returnType, boolean finalParams, String... parameterTypes) {
+		// First get the ExecutableElement method object from the util function.
+		ExecutableElement method = getMethod(methods, methodName, returnType, parameterTypes);
+		JMethod jmethod = null;
+
+		if (method != null) {
+			// Get the return type or VOID if none.
+			JType jcReturnType = returnType.equals(TypeKind.VOID.toString()) ? holder.codeModel().VOID : holder.refClass(returnType);
+
+			// Create the implementation and annotate it with the Override
+			// annotation.
+			jmethod = holder.getGeneratedClass().method(JMod.PUBLIC, jcReturnType, method.getSimpleName().toString());
+			jmethod.annotate(Override.class);
+
+			// Create the parameters.
+			int paramMods = finalParams ? JMod.FINAL : JMod.NONE;
+			for (int i = 0; i < method.getParameters().size(); i++) {
+				VariableElement param = method.getParameters().get(i);
+				jmethod.param(paramMods, holder.refClass(parameterTypes[i]), param.getSimpleName().toString());
 			}
 		}
 
-		for (ExecutableElement userConstructor : constructors) {
-			JMethod copyConstructor = holder.generatedClass.constructor(PUBLIC);
-			JMethod staticHelper = holder.generatedClass.method(PUBLIC | STATIC, eBeanClass, "build");
-			JBlock body = copyConstructor.body();
-			JInvocation superCall = body.invoke("super");
-			JInvocation newInvocation = JExpr._new(holder.generatedClass);
-			for (VariableElement param : userConstructor.getParameters()) {
-				String paramName = param.getSimpleName().toString();
-				String paramType = param.asType().toString();
-				copyConstructor.param(holder.refClass(paramType), paramName);
-				staticHelper.param(holder.refClass(paramType), paramName);
-				superCall.arg(JExpr.ref(paramName));
-				newInvocation.arg(JExpr.ref(paramName));
-			}
-
-			JVar newCall = staticHelper.body().decl(holder.generatedClass, "instance", newInvocation);
-			staticHelper.body().invoke(newCall, "onFinishInflate");
-			staticHelper.body()._return(newCall);
-			body.invoke(holder.init);
-		}
+		return jmethod;
 	}
 
-	public JVar findParameterByName(JMethod method, String name) {
-		for (JVar parameter : method.params()) {
-			if (parameter.name().equals(name)) {
-				return parameter;
+	private ExecutableElement getMethod(List<ExecutableElement> methods, String methodName, String returnType, String... parameterTypes) {
+		for (ExecutableElement method : methods) {
+			List<? extends VariableElement> parameters = method.getParameters();
+
+			// Get the method return type or "VOID" if none.
+			String methodReturnType = method.getReturnType().getKind() == TypeKind.VOID ? TypeKind.VOID.toString() : method.getReturnType().toString();
+
+			if (parameters.size() == parameterTypes.length && methodReturnType.equals(returnType)) {
+				if (methodName == null || method.getSimpleName().toString().equals(methodName)) {
+					// At this point, method name, return type and number of
+					// parameters are correct. Now we need to validate the
+					// parameter types.
+					boolean validMethod = true;
+
+					for (int i = 0; i < parameters.size(); i++) {
+						VariableElement param = parameters.get(i);
+
+						if (!param.asType().toString().equals(parameterTypes[i])) {
+							// Parameter type does not match, this is not the
+							// correct method.
+							validMethod = false;
+							break;
+						}
+					}
+
+					if (validMethod) {
+						return method;
+					}
+				}
 			}
 		}
+
 		return null;
 	}
 
-	public void addActivityIntentBuilder(JCodeModel codeModel, EBeanHolder holder) throws Exception {
-		addIntentBuilder(codeModel, holder, true);
-	}
-
-	public void addServiceIntentBuilder(JCodeModel codeModel, EBeanHolder holder) throws Exception {
-		addIntentBuilder(codeModel, holder, false);
-	}
-
-	private void addIntentBuilder(JCodeModel codeModel, EBeanHolder holder, boolean isActivity) throws JClassAlreadyExistsException {
-		JClass contextClass = holder.classes().CONTEXT;
-		JClass intentClass = holder.classes().INTENT;
-
-		{
-			holder.intentBuilderClass = holder.generatedClass._class(PUBLIC | STATIC, "IntentBuilder_");
-
-			JFieldVar contextField = holder.intentBuilderClass.field(PRIVATE, contextClass, "context_");
-
-			holder.intentField = holder.intentBuilderClass.field(PRIVATE | FINAL, intentClass, "intent_");
-			{
-				// Constructor
-				JMethod constructor = holder.intentBuilderClass.constructor(JMod.PUBLIC);
-				JVar constructorContextParam = constructor.param(contextClass, "context");
-				JBlock constructorBody = constructor.body();
-				constructorBody.assign(contextField, constructorContextParam);
-				constructorBody.assign(holder.intentField, _new(intentClass).arg(constructorContextParam).arg(holder.generatedClass.dotclass()));
-			}
-
-			{
-				// get()
-				JMethod method = holder.intentBuilderClass.method(PUBLIC, intentClass, "get");
-				method.body()._return(holder.intentField);
-			}
-
-			{
-				// flags()
-				JMethod method = holder.intentBuilderClass.method(PUBLIC, holder.intentBuilderClass, "flags");
-				JVar flagsParam = method.param(codeModel.INT, "flags");
-				JBlock body = method.body();
-				body.invoke(holder.intentField, "setFlags").arg(flagsParam);
-				body._return(_this());
-			}
-
-			{
-				// start()
-				JMethod method = holder.intentBuilderClass.method(PUBLIC, codeModel.VOID, "start");
-				String startComponentName = isActivity ? "startActivity" : "startService";
-				method.body().invoke(contextField, startComponentName).arg(holder.intentField);
-			}
-
-			if (isActivity) {
-				// startForResult()
-				JMethod method = holder.intentBuilderClass.method(PUBLIC, codeModel.VOID, "startForResult");
-				JVar requestCode = method.param(codeModel.INT, "requestCode");
-
-				JBlock body = method.body();
-				JClass activityClass = holder.classes().ACTIVITY;
-				JConditional condition = body._if(contextField._instanceof(activityClass));
-				condition._then() //
-						.invoke(JExpr.cast(activityClass, contextField), "startActivityForResult").arg(holder.intentField).arg(requestCode);
-				condition._else() //
-						.invoke(contextField, "startActivity").arg(holder.intentField);
-			}
-
-			{
-				// intent()
-				JMethod method = holder.generatedClass.method(STATIC | PUBLIC, holder.intentBuilderClass, "intent");
-				JVar contextParam = method.param(contextClass, "context");
-				method.body()._return(_new(holder.intentBuilderClass).arg(contextParam));
-			}
+	public JInvocation newBeanOrEBean(GeneratedClassHolder holder, DeclaredType beanType, JVar contextVar) {
+		if (beanType.asElement().getAnnotation(EBean.class) != null) {
+			String typeQualifiedName = beanType.toString();
+			JClass injectedClass = holder.refClass(typeQualifiedName + classSuffix());
+			return injectedClass.staticInvoke(EBeanHolder.GET_INSTANCE_METHOD_NAME).arg(contextVar);
+		} else {
+			return _new(holder.refClass(beanType.toString()));
 		}
 	}
 
+	public JExpression litObject(Object o) {
+		if (o instanceof Integer) {
+			return lit((Integer) o);
+		} else if (o instanceof Float) {
+			return lit((Float) o);
+		} else if (o instanceof Long) {
+			return lit((Long) o);
+		} else if (o instanceof Boolean) {
+			return lit((Boolean) o);
+		} else {
+			return lit((String) o);
+		}
+	}
+
+	// TODO it would be nice to cache the result map for better performance
+	public TypeMirror getActualType(Element element, GeneratedClassHolder holder) {
+		Types types = holder.processingEnvironment().getTypeUtils();
+		DeclaredType typeMirror = (DeclaredType) element.getEnclosingElement().asType();
+		TypeMirror annotatedClass = holder.getAnnotatedElement().asType();
+
+		Map<String, TypeMirror> actualTypes = getActualTypes(types, typeMirror, annotatedClass);
+
+		TypeMirror type = actualTypes.get(element.asType().toString());
+		return type == null ? element.asType() : type;
+	}
+
+	public void addSuppressWarnings(JAnnotatable generatedElement, String annotationValue) {
+		Collection<JAnnotationUse> annotations = generatedElement.annotations();
+		for (JAnnotationUse annotationUse : annotations) {
+			if (annotationUse.getAnnotationClass().fullName().equals(SuppressWarnings.class.getCanonicalName())) {
+				JAnnotationValue value = annotationUse.getAnnotationMembers().values().iterator().next();
+				StringWriter code = new StringWriter();
+				JFormatter formatter = new JFormatter(code);
+				formatter.g(value);
+				if (!code.toString().contains(annotationValue)) {
+					if (value instanceof JAnnotationArrayMember) {
+						((JAnnotationArrayMember) value).param(annotationValue);
+					} else {
+						String foundValue = code.toString().substring(1, code.toString().length() - 1);
+						JAnnotationArrayMember newParamArray = annotationUse.paramArray("value");
+						newParamArray.param(foundValue).param(annotationValue);
+					}
+				}
+				return;
+			}
+		}
+
+		generatedElement.annotate(SuppressWarnings.class).param("value", annotationValue);
+	}
 }

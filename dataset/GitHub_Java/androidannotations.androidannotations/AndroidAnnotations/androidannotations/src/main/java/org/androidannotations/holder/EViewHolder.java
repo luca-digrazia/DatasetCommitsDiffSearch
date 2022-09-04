@@ -1,33 +1,61 @@
+/**
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ * use this file except in compliance with the License. You may obtain a copy of
+ * the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed To in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
 package org.androidannotations.holder;
 
-import com.sun.codemodel.*;
-import org.androidannotations.helper.ModelConstants;
-import org.androidannotations.process.ProcessHolder;
+import static com.sun.codemodel.JExpr.invoke;
+import static com.sun.codemodel.JMod.PRIVATE;
+import static com.sun.codemodel.JMod.PUBLIC;
+import static com.sun.codemodel.JMod.STATIC;
+import static javax.lang.model.element.ElementKind.CONSTRUCTOR;
+import static org.androidannotations.helper.ModelConstants.generationSuffix;
 
-import javax.lang.model.element.*;
 import java.util.ArrayList;
 import java.util.List;
 
-import static com.sun.codemodel.JExpr.invoke;
-import static com.sun.codemodel.JMod.*;
-import static javax.lang.model.element.ElementKind.CONSTRUCTOR;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.ExecutableElement;
+import javax.lang.model.element.TypeElement;
+import javax.lang.model.element.VariableElement;
+
+import org.androidannotations.process.ProcessHolder;
+
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JFieldVar;
+import com.sun.codemodel.JInvocation;
+import com.sun.codemodel.JMethod;
+import com.sun.codemodel.JType;
+import com.sun.codemodel.JVar;
 
 public class EViewHolder extends EComponentWithViewSupportHolder {
 
 	protected static final String ALREADY_INFLATED_COMMENT = "" // +
-			+ "The mAlreadyInflated_ hack is needed because of an Android bug\n" // +
+			+ "The alreadyInflated_ hack is needed because of an Android bug\n" // +
 			+ "which leads to infinite calls of onFinishInflate()\n" //
 			+ "when inflating a layout with a parent and using\n" //
-			+ "the <merge /> tag." //
-			;
+			+ "the <merge /> tag.";
 
 	private static final String SUPPRESS_WARNING_COMMENT = "" //
 			+ "We use @SuppressWarning here because our java code\n" //
 			+ "generator doesn't know that there is no need\n" //
 			+ "to import OnXXXListeners from View as we already\n" //
-			+ "are in a View." //
-			;
+			+ "are in a View.";
 
+	protected JBlock initBody;
 	protected JMethod onFinishInflate;
 	protected JFieldVar alreadyInflated;
 
@@ -37,26 +65,10 @@ public class EViewHolder extends EComponentWithViewSupportHolder {
 		createConstructorAndBuilder();
 	}
 
-	@Override
-	protected void setGeneratedClass() throws Exception {
-		String annotatedComponentQualifiedName = annotatedElement.getQualifiedName().toString();
-		String generatedBeanQualifiedName = annotatedComponentQualifiedName + ModelConstants.GENERATION_SUFFIX;
-		JClass annotatedComponent = codeModel().directClass(annotatedComponentQualifiedName);
-
-		int modifiers;
-		if (annotatedElement.getModifiers().contains(Modifier.ABSTRACT)) {
-			modifiers = JMod.PUBLIC | JMod.ABSTRACT;
-		} else {
-			modifiers = JMod.PUBLIC | JMod.FINAL;
-		}
-
-		generatedClass = codeModel()._class(modifiers, generatedBeanQualifiedName, ClassType.CLASS);
-		generatedClass._extends(annotatedComponent);
-	}
-
 	private void addSuppressWarning() {
-		generatedClass.annotate(SuppressWarnings.class).param("value", "unused");
 		generatedClass.javadoc().append(SUPPRESS_WARNING_COMMENT);
+
+		codeModelHelper.addSuppressWarnings(getGeneratedClass(), "unused");
 	}
 
 	private void createConstructorAndBuilder() {
@@ -70,14 +82,17 @@ public class EViewHolder extends EComponentWithViewSupportHolder {
 		for (ExecutableElement userConstructor : constructors) {
 			JMethod copyConstructor = generatedClass.constructor(PUBLIC);
 			JMethod staticHelper = generatedClass.method(PUBLIC | STATIC, generatedClass._extends(), "build");
+
+			codeModelHelper.generifyStaticHelper(this, staticHelper, getAnnotatedElement());
+
 			JBlock body = copyConstructor.body();
 			JInvocation superCall = body.invoke("super");
 			JInvocation newInvocation = JExpr._new(generatedClass);
 			for (VariableElement param : userConstructor.getParameters()) {
 				String paramName = param.getSimpleName().toString();
-				String paramType = param.asType().toString();
-				copyConstructor.param(refClass(paramType), paramName);
-				staticHelper.param(refClass(paramType), paramName);
+				JClass paramType = codeModelHelper.typeMirrorToJClass(param.asType(), this);
+				copyConstructor.param(paramType, paramName);
+				staticHelper.param(paramType, paramName);
 				superCall.arg(JExpr.ref(paramName));
 				newInvocation.arg(JExpr.ref(paramName));
 			}
@@ -96,8 +111,20 @@ public class EViewHolder extends EComponentWithViewSupportHolder {
 
 	@Override
 	protected void setInit() {
-		init = generatedClass.method(PRIVATE, codeModel().VOID, "init_");
+		init = generatedClass.method(PRIVATE, codeModel().VOID, "init" + generationSuffix());
 		viewNotifierHelper.wrapInitWithNotifier();
+	}
+
+	@Override
+	public JBlock getInitBody() {
+		if (initBody == null) {
+			setInit();
+		}
+		return initBody;
+	}
+
+	public void setInitBody(JBlock initBody) {
+		this.initBody = initBody;
 	}
 
 	public JMethod getOnFinishInflate() {
@@ -110,7 +137,7 @@ public class EViewHolder extends EComponentWithViewSupportHolder {
 	protected void setOnFinishInflate() {
 		onFinishInflate = generatedClass.method(PUBLIC, codeModel().VOID, "onFinishInflate");
 		onFinishInflate.annotate(Override.class);
-		onFinishInflate.javadoc().append(ALREADY_INFLATED_COMMENT);
+		onFinishInflate.javadoc().append(ALREADY_INFLATED_COMMENT.replaceAll("alreadyInflated_", "alreadyInflated" + generationSuffix()));
 
 		JBlock ifNotInflated = onFinishInflate.body()._if(getAlreadyInflated().not())._then();
 		ifNotInflated.assign(getAlreadyInflated(), JExpr.TRUE);
@@ -129,6 +156,6 @@ public class EViewHolder extends EComponentWithViewSupportHolder {
 	}
 
 	private void setAlreadyInflated() {
-		alreadyInflated = generatedClass.field(PRIVATE, JType.parse(codeModel(), "boolean"), "alreadyInflated_", JExpr.FALSE);
+		alreadyInflated = generatedClass.field(PRIVATE, JType.parse(codeModel(), "boolean"), "alreadyInflated" + generationSuffix(), JExpr.FALSE);
 	}
 }

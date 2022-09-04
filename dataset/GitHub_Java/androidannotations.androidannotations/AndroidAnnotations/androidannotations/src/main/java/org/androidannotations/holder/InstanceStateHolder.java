@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,90 +15,96 @@
  */
 package org.androidannotations.holder;
 
-import com.sun.codemodel.*;
-import org.androidannotations.process.ProcessHolder;
-
-import javax.annotation.processing.ProcessingEnvironment;
-import javax.lang.model.element.Element;
-import javax.lang.model.element.TypeElement;
-
 import static com.sun.codemodel.JExpr._null;
 import static com.sun.codemodel.JExpr.ref;
 import static com.sun.codemodel.JMod.PRIVATE;
 import static com.sun.codemodel.JMod.PUBLIC;
+import static org.androidannotations.helper.ModelConstants.generationSuffix;
 
-public class InstanceStateHolder implements HasInstanceState {
+import javax.annotation.processing.ProcessingEnvironment;
+import javax.lang.model.element.TypeElement;
 
-    private EComponentHolder holder;
-    private JBlock saveStateMethodBody;
-    private JVar saveStateBundleParam;
-    private JMethod restoreStateMethod;
-    private JVar restoreStateBundleParam;
+import org.androidannotations.process.ProcessHolder;
 
-    public InstanceStateHolder(EComponentHolder holder) {
-        this.holder = holder;
-    }
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JCodeModel;
+import com.sun.codemodel.JDefinedClass;
+import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JMethod;
+import com.sun.codemodel.JVar;
 
-    @Override
-    public JBlock getSaveStateMethodBody() {
-        if (saveStateMethodBody == null) {
-            setSaveStateMethod();
-        }
-        return saveStateMethodBody;
-    }
+public class InstanceStateHolder extends GeneratedClassHolderDecorator<EComponentHolder> implements HasInstanceState {
 
-    @Override
-    public JVar getSaveStateBundleParam() {
-        if (saveStateBundleParam == null) {
-            setSaveStateMethod();
-        }
-        return saveStateBundleParam;
-    }
+	private JBlock saveStateMethodBody;
+	private JVar saveStateBundleParam;
+	private JMethod restoreStateMethod;
+	private JVar restoreStateBundleParam;
 
-    private void setSaveStateMethod() {
-        JMethod method = getGeneratedClass().method(PUBLIC, codeModel().VOID, "onSaveInstanceState");
-        method.annotate(Override.class);
-        saveStateBundleParam = method.param(classes().BUNDLE, "bundle");
+	public InstanceStateHolder(EComponentHolder holder) {
+		super(holder);
+	}
 
-        saveStateMethodBody = method.body();
+	@Override
+	public JBlock getSaveStateMethodBody() {
+		if (saveStateMethodBody == null) {
+			setSaveStateMethod();
+		}
+		return saveStateMethodBody;
+	}
 
-        saveStateMethodBody.invoke(JExpr._super(), "onSaveInstanceState").arg(saveStateBundleParam);
-    }
+	@Override
+	public JVar getSaveStateBundleParam() {
+		if (saveStateBundleParam == null) {
+			setSaveStateMethod();
+		}
+		return saveStateBundleParam;
+	}
 
-    @Override
-    public JMethod getRestoreStateMethod() {
-        if (restoreStateMethod == null) {
-            setRestoreStateMethod();
-        }
-        return restoreStateMethod;
-    }
+	private void setSaveStateMethod() {
+		JMethod method = getGeneratedClass().method(PUBLIC, codeModel().VOID, "onSaveInstanceState");
+		method.annotate(Override.class);
+		saveStateBundleParam = method.param(classes().BUNDLE, "bundle" + generationSuffix());
 
-    @Override
-    public JVar getRestoreStateBundleParam() {
-        if (restoreStateBundleParam == null) {
-            setRestoreStateMethod();
-        }
-        return restoreStateBundleParam;
-    }
+		saveStateMethodBody = method.body();
 
-    private void setRestoreStateMethod() {
-        restoreStateMethod = getGeneratedClass().method(PRIVATE, codeModel().VOID, "restoreSavedInstanceState_");
-        restoreStateBundleParam = restoreStateMethod.param(classes().BUNDLE, "savedInstanceState");
-        getInit().body().invoke(restoreStateMethod).arg(restoreStateBundleParam);
+		saveStateMethodBody.invoke(JExpr._super(), "onSaveInstanceState").arg(saveStateBundleParam);
+	}
 
-        restoreStateMethod.body() //
-                ._if(ref("savedInstanceState").eq(_null())) //
-                ._then()._return();
-    }
+	@Override
+	public JMethod getRestoreStateMethod() {
+		if (restoreStateMethod == null) {
+			setRestoreStateMethod();
+		}
+		return restoreStateMethod;
+	}
+
+	@Override
+	public JVar getRestoreStateBundleParam() {
+		if (restoreStateBundleParam == null) {
+			setRestoreStateMethod();
+		}
+		return restoreStateBundleParam;
+	}
+
+	private void setRestoreStateMethod() {
+		restoreStateMethod = getGeneratedClass().method(PRIVATE, codeModel().VOID, "restoreSavedInstanceState" + generationSuffix());
+		restoreStateBundleParam = restoreStateMethod.param(classes().BUNDLE, "savedInstanceState");
+		getInit().body().invoke(restoreStateMethod).arg(restoreStateBundleParam);
+
+		restoreStateMethod.body() //
+				._if(ref("savedInstanceState").eq(_null())) //
+				._then()._return();
+	}
 
 	public JMethod getInit() {
 		return holder.getInit();
 	}
 
 	@Override
-    public JDefinedClass getGeneratedClass() {
-        return holder.getGeneratedClass();
-    }
+	public JDefinedClass getGeneratedClass() {
+		return holder.getGeneratedClass();
+	}
 
 	@Override
 	public JCodeModel codeModel() {
@@ -133,10 +139,5 @@ public class InstanceStateHolder implements HasInstanceState {
 	@Override
 	public JDefinedClass definedClass(String fullyQualifiedClassName) {
 		return holder.definedClass(fullyQualifiedClassName);
-	}
-
-	@Override
-	public void generateApiClass(Element originatingElement, Class<?> apiClass) {
-		holder.generateApiClass(originatingElement, apiClass);
 	}
 }
