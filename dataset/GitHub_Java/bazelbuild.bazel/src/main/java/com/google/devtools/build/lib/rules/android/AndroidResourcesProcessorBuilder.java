@@ -13,9 +13,11 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
 import com.google.devtools.build.lib.rules.android.AndroidDataConverter.JoinerType;
 import com.google.devtools.build.lib.rules.android.databinding.DataBindingContext;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
@@ -157,6 +159,11 @@ public class AndroidResourcesProcessorBuilder {
     return this;
   }
 
+  public AndroidResourcesProcessorBuilder targetAaptVersion(AndroidAaptVersion aaptVersion) {
+    Preconditions.checkArgument(aaptVersion == AndroidAaptVersion.AAPT2);
+    return this;
+  }
+
   public AndroidResourcesProcessorBuilder setThrowOnResourceConflict(
       boolean throwOnResourceConflict) {
     this.throwOnResourceConflict = throwOnResourceConflict;
@@ -276,7 +283,7 @@ public class AndroidResourcesProcessorBuilder {
       AndroidAssets primaryAssets,
       StampedAndroidManifest primaryManifest) {
     BusyBoxActionBuilder builder =
-        BusyBoxActionBuilder.create(dataContext, "AAPT2_PACKAGE").addAapt();
+        BusyBoxActionBuilder.create(dataContext, "AAPT2_PACKAGE").addAapt(AndroidAaptVersion.AAPT2);
 
     if (resourceDependencies != null) {
       builder
@@ -312,6 +319,51 @@ public class AndroidResourcesProcessorBuilder {
 
     configureCommonFlags(dataContext, primaryResources, primaryAssets, primaryManifest, builder)
         .buildAndRegister("Processing Android resources", "AndroidAapt2");
+  }
+
+  private void createAaptAction(
+      AndroidDataContext dataContext,
+      AndroidResources primaryResources,
+      AndroidAssets primaryAssets,
+      StampedAndroidManifest primaryManifest) {
+    BusyBoxActionBuilder builder = BusyBoxActionBuilder.create(dataContext, "PACKAGE");
+
+    if (resourceDependencies != null) {
+      builder
+          .addTransitiveFlag(
+              "--data",
+              resourceDependencies.getTransitiveResourceContainers(),
+              AndroidDataConverter.AAPT_RESOURCES_AND_MANIFEST_CONVERTER)
+          .addTransitiveFlag(
+              "--directData",
+              resourceDependencies.getDirectResourceContainers(),
+              AndroidDataConverter.AAPT_RESOURCES_AND_MANIFEST_CONVERTER)
+          .addTransitiveInputValues(resourceDependencies.getTransitiveResources())
+          .addTransitiveInputValues(resourceDependencies.getTransitiveManifests())
+          .addTransitiveInputValues(resourceDependencies.getTransitiveRTxt())
+          .addTransitiveInputValues(resourceDependencies.getTransitiveSymbolsBin());
+    }
+
+    if (assetDependencies != null && !assetDependencies.getTransitiveAssets().isEmpty()) {
+      builder
+          .addTransitiveFlag(
+              "--directAssets",
+              assetDependencies.getDirectParsedAssets(),
+              AndroidDataConverter.PARSED_ASSET_CONVERTER)
+          .addTransitiveFlag(
+              "--assets",
+              assetDependencies.getTransitiveParsedAssets(),
+              AndroidDataConverter.PARSED_ASSET_CONVERTER)
+          .addTransitiveInputValues(assetDependencies.getTransitiveAssets())
+          .addTransitiveInputValues(assetDependencies.getTransitiveSymbols());
+    }
+
+    builder.addAapt(AndroidAaptVersion.AAPT);
+
+    configureCommonFlags(dataContext, primaryResources, primaryAssets, primaryManifest, builder)
+        .maybeAddVectoredFlag(
+            "--prefilteredResources", resourceFilterFactory.getResourcesToIgnoreInExecution())
+        .buildAndRegister("Processing Android resources", "AaptPackage");
   }
 
   private BusyBoxActionBuilder configureCommonFlags(
