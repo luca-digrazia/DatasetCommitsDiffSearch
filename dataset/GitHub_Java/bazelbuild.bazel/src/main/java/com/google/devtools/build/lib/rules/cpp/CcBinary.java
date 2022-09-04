@@ -880,7 +880,8 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
         CcCompilationHelper.collectHeaderTokens(ruleContext, ccCompilationOutputs);
     NestedSet<Artifact> filesToCompile =
         ccCompilationOutputs.getFilesToCompile(
-            cppConfiguration.processHeadersInDependencies(), toolchain.usePicForDynamicLibraries());
+            cppConfiguration.processHeadersInDependencies(),
+            CppHelper.usePicForDynamicLibraries(ruleContext, toolchain));
 
     CcCompilationInfo.Builder ccCompilationInfoBuilder = CcCompilationInfo.Builder.create();
     ccCompilationInfoBuilder.setCcCompilationContext(ccCompilationContext);
@@ -953,7 +954,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
 
   private static boolean usePic(RuleContext ruleContext, CcToolchainProvider ccToolchainProvider) {
     if (isLinkShared(ruleContext)) {
-      return ccToolchainProvider.usePicForDynamicLibraries();
+      return CppHelper.usePicForDynamicLibraries(ruleContext, ccToolchainProvider);
     } else {
       return CppHelper.usePicForBinaries(ruleContext, ccToolchainProvider);
     }
