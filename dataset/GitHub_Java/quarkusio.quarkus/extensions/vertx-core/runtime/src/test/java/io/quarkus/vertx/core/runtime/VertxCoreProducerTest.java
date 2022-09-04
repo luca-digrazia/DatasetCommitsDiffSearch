@@ -13,7 +13,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import io.quarkus.vertx.core.runtime.VertxCoreRecorder.VertxOptionsCustomizer;
-import io.quarkus.vertx.core.runtime.config.AddressResolverConfiguration;
 import io.quarkus.vertx.core.runtime.config.ClusterConfiguration;
 import io.quarkus.vertx.core.runtime.config.EventBusConfiguration;
 import io.quarkus.vertx.core.runtime.config.JksConfiguration;
@@ -23,7 +22,6 @@ import io.quarkus.vertx.core.runtime.config.PfxConfiguration;
 import io.quarkus.vertx.core.runtime.config.VertxConfiguration;
 import io.vertx.core.Vertx;
 import io.vertx.core.VertxOptions;
-import io.vertx.core.dns.AddressResolverOptions;
 
 public class VertxCoreProducerTest {
 
@@ -61,28 +59,6 @@ public class VertxCoreProducerTest {
             Assertions.assertTrue(e.getMessage().contains("No ClusterManagerFactory"),
                     "The message should contain ''. Message: " + e.getMessage());
         }
-    }
-
-    @Test
-    public void shouldConfigureAddressResolver() {
-        VertxConfiguration configuration = createDefaultConfiguration();
-        AddressResolverConfiguration ar = configuration.resolver;
-        ar.cacheMaxTimeToLive = 3;
-        ar.cacheNegativeTimeToLive = 1;
-
-        VertxOptionsCustomizer customizers = new VertxOptionsCustomizer(Arrays.asList(
-                new Consumer<VertxOptions>() {
-                    @Override
-                    public void accept(VertxOptions vertxOptions) {
-                        Assertions.assertEquals(3, vertxOptions.getAddressResolverOptions().getCacheMaxTimeToLive());
-                        Assertions.assertEquals(
-                                AddressResolverOptions.DEFAULT_CACHE_MIN_TIME_TO_LIVE,
-                                vertxOptions.getAddressResolverOptions().getCacheMinTimeToLive());
-                        Assertions.assertEquals(1, vertxOptions.getAddressResolverOptions().getCacheNegativeTimeToLive());
-                    }
-                }));
-
-        VertxCoreRecorder.initialize(configuration, customizers);
     }
 
     @Test
@@ -153,10 +129,6 @@ public class VertxCoreProducerTest {
         vc.cluster.clustered = false;
         vc.cluster.pingInterval = Duration.ofSeconds(20);
         vc.cluster.pingReplyInterval = Duration.ofSeconds(20);
-        vc.resolver = new AddressResolverConfiguration();
-        vc.resolver.cacheMaxTimeToLive = Integer.MAX_VALUE;
-        vc.resolver.cacheMinTimeToLive = 0;
-        vc.resolver.cacheNegativeTimeToLive = 0;
         return vc;
     }
 }
