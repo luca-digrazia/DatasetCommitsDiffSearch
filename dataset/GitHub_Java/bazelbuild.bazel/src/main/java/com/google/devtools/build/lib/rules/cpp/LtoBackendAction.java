@@ -195,7 +195,7 @@ public final class LtoBackendAction extends SpawnAction {
     for (Artifact runfilesManifest : runfilesManifests) {
       fp.addPath(runfilesManifest.getExecPath());
     }
-    for (Artifact input : getMandatoryInputs().toList()) {
+    for (Artifact input : getMandatoryInputs()) {
       fp.addPath(input.getExecPath());
     }
     if (imports != null) {
