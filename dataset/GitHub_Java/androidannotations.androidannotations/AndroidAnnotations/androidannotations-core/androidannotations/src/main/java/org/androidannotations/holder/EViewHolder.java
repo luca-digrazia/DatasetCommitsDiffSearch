@@ -42,7 +42,7 @@ import com.helger.jcodemodel.JMethod;
 import com.helger.jcodemodel.JMod;
 import com.helger.jcodemodel.JVar;
 
-public class EViewHolder extends EComponentWithViewSupportHolder implements HasInstanceState, HasReceiverRegistration {
+public class EViewHolder extends EComponentWithViewSupportHolder implements HasReceiverRegistration {
 
 	protected static final String ALREADY_INFLATED_COMMENT = "" // +
 			+ "The alreadyInflated_ hack is needed because of an Android bug\n" // +
@@ -61,7 +61,6 @@ public class EViewHolder extends EComponentWithViewSupportHolder implements HasI
 	private JMethod onDetachedFromWindowMethod;
 	private JBlock onDetachedFromWindowBeforeSuperBlock;
 	private ReceiverRegistrationDelegate<EViewHolder> receiverRegistrationDelegate;
-	private ViewInstanceStateDelegate instanceStateDelegate;
 	protected JBlock initBody;
 	protected JMethod onFinishInflate;
 	protected JFieldVar alreadyInflated;
@@ -71,7 +70,6 @@ public class EViewHolder extends EComponentWithViewSupportHolder implements HasI
 		addSuppressWarning();
 		createConstructorAndBuilder();
 		receiverRegistrationDelegate = new ReceiverRegistrationDelegate<>(this);
-		instanceStateDelegate = new ViewInstanceStateDelegate(this);
 	}
 
 	private void addSuppressWarning() {
@@ -250,23 +248,4 @@ public class EViewHolder extends EComponentWithViewSupportHolder implements HasI
 		body.invoke(_super(), onAttachedToWindowMethod);
 	}
 
-	@Override
-	public JBlock getSaveStateMethodBody() {
-		return instanceStateDelegate.getSaveStateMethodBody();
-	}
-
-	@Override
-	public JVar getSaveStateBundleParam() {
-		return instanceStateDelegate.getSaveStateBundleParam();
-	}
-
-	@Override
-	public JMethod getRestoreStateMethod() {
-		return instanceStateDelegate.getRestoreStateMethod();
-	}
-
-	@Override
-	public JVar getRestoreStateBundleParam() {
-		return instanceStateDelegate.getRestoreStateBundleParam();
-	}
 }
