@@ -1,22 +1,4 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package org.jboss.protean.gizmo;
-
-import java.util.Objects;
 
 import org.jboss.jandex.FieldInfo;
 import org.jboss.jandex.MethodInfo;
@@ -342,38 +324,11 @@ public interface BytecodeCreator {
     }
 
     /**
-     * Create a local variable which can be assigned within this scope.
+     * Adds a try catch block
      *
-     * @param typeDescr the type descriptor of the variable's type (must not be {@code null})
-     * @return the assignable local variable (not {@code null})
+     * @return An {@link ExceptionTable} that is used to construct the try catch block
      */
-    AssignableResultHandle createVariable(final String typeDescr);
-
-    /**
-     * Create a local variable which can be assigned within this scope.
-     *
-     * @param type the type of the variable's type (must not be {@code null})
-     * @return the assignable local variable (not {@code null})
-     */
-    default AssignableResultHandle createVariable(final Class<?> type) {
-        Objects.requireNonNull(type);
-        return createVariable(DescriptorUtils.classToStringRepresentation(type));
-    }
-
-    /**
-     * Assign the given value to the given assignable target.
-     *
-     * @param target the assignment target (must not be {@code null})
-     * @param value the value to assign (must not be {@code null})
-     */
-    void assign(AssignableResultHandle target, ResultHandle value);
-
-    /**
-     * Add a {@code try} block.
-     *
-     * @return the {@code try} block
-     */
-    TryBlock tryBlock();
+    ExceptionTable addTryCatch();
 
     /**
      * An if statement.
@@ -488,48 +443,4 @@ public interface BytecodeCreator {
         }
         return array;
     }
-
-    /**
-     * Determine if this bytecode creator is scoped within the given bytecode creator.
-     *
-     * @param other the other bytecode creator
-     * @return {@code true} if this bytecode creator is scoped within the given creator, {@code false} otherwise
-     */
-    boolean isScopedWithin(BytecodeCreator other);
-
-    /**
-     * Go to the top of the given scope.
-     *
-     * @param scope the scope to continue
-     */
-    void continueScope(BytecodeCreator scope);
-
-    /**
-     * Go to the top of this scope.
-     */
-    default void continueScope() {
-        continueScope(this);
-    }
-
-    /**
-     * Go to the end of the given scope.
-     *
-     * @param scope the scope to break out of
-     */
-    void breakScope(BytecodeCreator scope);
-
-    /**
-     * Go to the end of this scope.
-     */
-    default void breakScope() {
-        breakScope(this);
-    }
-
-    /**
-     * Create a nested scope.  Bytecode added to the nested scope will be inserted at this point of the
-     * enclosing scope.
-     *
-     * @return the nested scope
-     */
-    BytecodeCreator createScope();
 }
