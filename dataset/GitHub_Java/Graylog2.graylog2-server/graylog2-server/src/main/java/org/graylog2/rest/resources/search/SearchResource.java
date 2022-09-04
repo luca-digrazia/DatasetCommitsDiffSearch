@@ -242,7 +242,7 @@ public class SearchResource extends RestResource {
     }
 
     public void checkSearchPermission(String filter, String searchPermission) {
-        if (filter == null || filter.equals("*") || filter.isEmpty()) {
+        if (filter == null) {
             checkPermission(searchPermission);
         } else {
             if(!filter.startsWith("streams:")) {
