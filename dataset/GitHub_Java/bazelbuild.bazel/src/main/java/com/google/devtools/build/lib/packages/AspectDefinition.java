@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.packages;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -92,8 +91,6 @@ public final class AspectDefinition {
    */
   private final BiPredicate<Object, String> propagateViaAttribute;
 
-  private final ImmutableSet<AspectClass> requiredAspectClasses;
-
   public AdvertisedProviderSet getAdvertisedProviders() {
     return advertisedProviders;
   }
@@ -111,8 +108,7 @@ public final class AspectDefinition {
       @Nullable ConfigurationFragmentPolicy configurationFragmentPolicy,
       boolean applyToFiles,
       boolean applyToGeneratingRules,
-      BiPredicate<Object, String> propagateViaAttribute,
-      ImmutableSet<AspectClass> requiredAspectClasses) {
+      BiPredicate<Object, String> propagateViaAttribute) {
     this.aspectClass = aspectClass;
     this.advertisedProviders = advertisedProviders;
     this.requiredProviders = requiredProviders;
@@ -126,11 +122,14 @@ public final class AspectDefinition {
     this.applyToFiles = applyToFiles;
     this.applyToGeneratingRules = applyToGeneratingRules;
     this.propagateViaAttribute = propagateViaAttribute;
-    this.requiredAspectClasses = requiredAspectClasses;
   }
 
   public String getName() {
     return aspectClass.getName();
+  }
+
+  public AspectClass getAspectClass() {
+    return aspectClass;
   }
 
   /**
@@ -170,18 +169,12 @@ public final class AspectDefinition {
     return requiredProvidersForAspects;
   }
 
-  /** Returns whether the aspect propagates along the give {@code attributeName} or not. */
+  /** Returns the set of required aspects for a given attribute. */
   public boolean propagateAlong(String attributeName) {
     if (restrictToAttributes != null) {
       return restrictToAttributes.contains(attributeName);
     }
     return true;
-  }
-
-  /** Returns the set of attributes along which the aspect propagates. */
-  @VisibleForTesting
-  public ImmutableSet<String> getRestrictToAttributes() {
-    return restrictToAttributes;
   }
 
   /** Returns the set of configuration fragments required by this Aspect. */
@@ -216,12 +209,7 @@ public final class AspectDefinition {
   }
 
   public static boolean satisfies(Aspect aspect, AdvertisedProviderSet advertisedProviderSet) {
-    return aspect.getDefinition().requiredProviders.isSatisfiedBy(advertisedProviderSet);
-  }
-
-  /** Checks if the given {@code maybeRequiredAspect} is required by this aspect definition */
-  public boolean requires(Aspect maybeRequiredAspect) {
-    return requiredAspectClasses.contains(maybeRequiredAspect.getAspectClass());
+    return aspect.getDefinition().getRequiredProviders().isSatisfiedBy(advertisedProviderSet);
   }
 
   @Nullable
@@ -251,7 +239,7 @@ public final class AspectDefinition {
           }
           consumer.accept(aspectAttribute, repositoryRelativeLabel);
         };
-    for (Attribute aspectAttribute : aspect.getDefinition().attributes.values()) {
+    for (Attribute aspectAttribute : aspect.getDefinition().getAttributes().values()) {
       if (!dependencyFilter.apply(aspect, aspectAttribute)) {
         continue;
       }
@@ -273,11 +261,10 @@ public final class AspectDefinition {
     private final Map<String, Attribute> attributes = new LinkedHashMap<>();
     private final AdvertisedProviderSet.Builder advertisedProviders =
         AdvertisedProviderSet.builder();
-    private final RequiredProviders.Builder requiredProviders =
-        RequiredProviders.acceptAnyBuilder();
+    private RequiredProviders.Builder requiredProviders = RequiredProviders.acceptAnyBuilder();
     private BiPredicate<Object, String> propagateViaAttribute =
         (BiPredicate<Object, String> & Serializable) (a, c) -> true;
-    private final RequiredProviders.Builder requiredAspectProviders =
+    private RequiredProviders.Builder requiredAspectProviders =
         RequiredProviders.acceptNoneBuilder();
     @Nullable private LinkedHashSet<String> propagateAlongAttributes = new LinkedHashSet<>();
     private final ConfigurationFragmentPolicy.Builder configurationFragmentPolicy =
@@ -286,7 +273,6 @@ public final class AspectDefinition {
     private boolean applyToGeneratingRules = false;
     private final List<Label> requiredToolchains = new ArrayList<>();
     private boolean useToolchainTransition = false;
-    private ImmutableSet<AspectClass> requiredAspectClasses = ImmutableSet.of();
 
     public Builder(AspectClass aspectClass) {
       this.aspectClass = aspectClass;
@@ -337,28 +323,18 @@ public final class AspectDefinition {
     }
 
     /**
-     * Asserts that this aspect requires a list of aspects to be applied before it on the configured
-     * target.
-     */
-    public Builder requiredAspectClasses(ImmutableSet<AspectClass> requiredAspectClasses) {
-      this.requiredAspectClasses = requiredAspectClasses;
-      return this;
-    }
-
-    /**
      * Optional predicate to conditionally propagate down an attribute based on the {@link
-     * com.google.devtools.build.lib.analysis.config.BuildConfiguration}.
+     * BuildConfiguration}.
      *
      * <p>This is implemented specifically to support the platform-based Android toolchain
-     * migration. See {@link com.google.devtools.build.lib.rules.android.DexArchiveAspect} for
-     * details. Don't use this for other purposes. It introduces unfortunate API complexity and
-     * should be removed when Android no longer needs it.
+     * migration. See {@link DexArchiveAspect} for details. Don't use this for other purposes. It
+     * introduces unfortunate API complexity and should be removed when Android no longer needs it.
      *
-     * @param propagateFunction {@link BiPredicate} that takes the aspect's build configuration and
-     *     name of the attribute to propagate. If it returns true, propagates down this attribute in
-     *     this configuration. We don't explicitly type with {@link
-     *     com.google.devtools.build.lib.analysis.config.BuildConfiguration} because {@link
-     *     AspectDefinition} is a loading phase class, with no access to config symbols.
+     * @param propagateFunction {@link BiPredicate} that takes the aspect's {@link
+     *     BuildConfiguration} and name of the attribute to propagate. If it returns true,
+     *     propagates down this attribute in this configuration. We don't explicitly type with
+     *     {@link BuildConfiguration} because {@link AspectDefinition} is a loading phase class,
+     *     with no access to config symbols.
      */
     public Builder propagateViaAttribute(BiPredicate<Object, String> propagateFunction) {
       propagateViaAttribute = propagateFunction;
@@ -401,12 +377,13 @@ public final class AspectDefinition {
      * Declares that this aspect propagates along an {@code attribute} on the target associated with
      * this aspect.
      *
-     * <p>Specify multiple attributes by calling this method repeatedly.
+     * <p>Specify multiple attributes by calling {@link #propagateAlongAttribute(String)}
+     * repeatedly.
      *
      * <p>Aspect can also declare to propagate along all attributes with {@link
      * #propagateAlongAttributes}.
      */
-    public Builder propagateAlongAttribute(String attribute) {
+    public final Builder propagateAlongAttribute(String attribute) {
       Preconditions.checkNotNull(attribute);
       Preconditions.checkState(
           this.propagateAlongAttributes != null,
@@ -423,7 +400,7 @@ public final class AspectDefinition {
      *
      * <p>Specify either this or {@link #propagateAlongAttribute(String)}, not both.
      */
-    public Builder propagateAlongAllAttributes() {
+    public final Builder propagateAlongAllAttributes() {
       Preconditions.checkState(
           this.propagateAlongAttributes != null,
           "Aspects for all attributes must only be specified once");
@@ -628,8 +605,7 @@ public final class AspectDefinition {
           configurationFragmentPolicy.build(),
           applyToFiles,
           applyToGeneratingRules,
-          propagateViaAttribute,
-          requiredAspectClasses);
+          propagateViaAttribute);
     }
   }
 }
