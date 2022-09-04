@@ -51,7 +51,7 @@ public class FakeCcModule
         CcCompilationOutputsApi<FileApi>,
         CcLinkingOutputsApi<FileApi>,
         LibraryToLinkApi<FileApi>,
-        CcLinkingContextApi<FileApi>,
+        CcLinkingContextApi<FileApi, LibraryToLinkApi<FileApi>>,
         CcToolchainVariablesApi,
         CcToolchainConfigInfoApi> {
 
@@ -199,7 +199,7 @@ public class FakeCcModule
       CcToolchainProviderApi<FeatureConfigurationApi> skylarkCcToolchainProvider,
       CcCompilationOutputsApi<FileApi> compilationOutputs,
       SkylarkList<String> userLinkFlags,
-      SkylarkList<CcLinkingContextApi<FileApi>> ccLinkingContextApis,
+      SkylarkList<CcLinkingContextApi<FileApi, LibraryToLinkApi<FileApi>>> ccLinkingContextApis,
       String name,
       String language,
       boolean alwayslink,
@@ -221,7 +221,7 @@ public class FakeCcModule
       CcToolchainProviderApi<FeatureConfigurationApi> skylarkCcToolchainProvider,
       CcCompilationOutputsApi<FileApi> compilationOutputs,
       SkylarkList<String> userLinkFlags,
-      SkylarkList<CcLinkingContextApi<FileApi>> linkingContexts,
+      SkylarkList<CcLinkingContextApi<FileApi, LibraryToLinkApi<FileApi>>> linkingContexts,
       String name,
       String language,
       String outputType,
