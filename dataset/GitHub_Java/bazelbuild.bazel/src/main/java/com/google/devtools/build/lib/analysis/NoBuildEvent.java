@@ -16,7 +16,7 @@ package com.google.devtools.build.lib.analysis;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.buildeventstream.BuildEvent;
-import com.google.devtools.build.lib.buildeventstream.BuildEventContext;
+import com.google.devtools.build.lib.buildeventstream.BuildEventConverters;
 import com.google.devtools.build.lib.buildeventstream.BuildEventId;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
 import com.google.devtools.build.lib.buildeventstream.GenericBuildEvent;
@@ -25,27 +25,24 @@ import java.util.Collection;
 
 /** This event raised to indicate that no build will be happening for the given command. */
 public final class NoBuildEvent implements BuildEvent {
-  private final String id;
   private final String command;
   private final Long startTimeMillis;
   private final boolean separateFinishedEvent;
-  private final boolean showProgress;
+  private final boolean keepShowingProgress;
 
   public NoBuildEvent(
       String command,
       Long startTimeMillis,
       boolean separateFinishedEvent,
-      boolean showProgress,
-      String id) {
+      boolean keepShowingProgress) {
     this.command = command;
     this.startTimeMillis = startTimeMillis;
     this.separateFinishedEvent = separateFinishedEvent;
-    this.showProgress = showProgress;
-    this.id = id;
+    this.keepShowingProgress = keepShowingProgress;
   }
 
   public NoBuildEvent(String command, Long startTimeMillis, boolean separateFinishedEvent) {
-    this(command, startTimeMillis, separateFinishedEvent, false, null);
+    this(command, startTimeMillis, separateFinishedEvent, false);
   }
 
   public NoBuildEvent() {
@@ -67,7 +64,7 @@ public final class NoBuildEvent implements BuildEvent {
   }
 
   @Override
-  public BuildEventStreamProtos.BuildEvent asStreamProto(BuildEventContext converters) {
+  public BuildEventStreamProtos.BuildEvent asStreamProto(BuildEventConverters converters) {
     BuildEventStreamProtos.BuildStarted.Builder started =
         BuildEventStreamProtos.BuildStarted.newBuilder()
             .setBuildToolVersion(BlazeVersionInfo.instance().getVersion());
@@ -77,9 +74,6 @@ public final class NoBuildEvent implements BuildEvent {
     if (startTimeMillis != null) {
       started.setStartTimeMillis(startTimeMillis);
     }
-    if (id != null) {
-      started.setUuid(id);
-    }
     return GenericBuildEvent.protoChaining(this).setStarted(started.build()).build();
   }
 
@@ -87,7 +81,7 @@ public final class NoBuildEvent implements BuildEvent {
     return separateFinishedEvent;
   }
 
-  public boolean showProgress() {
-    return showProgress;
+  public boolean keepShowingProgress() {
+    return keepShowingProgress;
   }
 }

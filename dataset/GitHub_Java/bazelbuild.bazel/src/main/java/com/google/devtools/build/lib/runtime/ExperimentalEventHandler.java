@@ -49,16 +49,15 @@ import com.google.devtools.build.lib.view.test.TestStatus.BlazeTestStatus;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Logger;
+import org.joda.time.format.DateTimeFormat;
+import org.joda.time.format.DateTimeFormatter;
 
 /** An experimental new output stream. */
 public class ExperimentalEventHandler implements EventHandler {
-  private static final Logger logger = Logger.getLogger(ExperimentalEventHandler.class.getName());
+  private static Logger LOG = Logger.getLogger(ExperimentalEventHandler.class.getName());
   /** Latest refresh of the progress bar, if contents other than time changed */
   static final long MAXIMAL_UPDATE_DELAY_MILLIS = 200L;
   /** Minimal rate limiting (in ms), if the progress bar cannot be updated in place */
@@ -74,8 +73,7 @@ public class ExperimentalEventHandler implements EventHandler {
   static final long LONG_REFRESH_MILLIS = 20000L;
 
   private static final DateTimeFormatter TIMESTAMP_FORMAT =
-      DateTimeFormatter.ofPattern("(HH:mm:ss) ");
-  private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("YYYY-MM-dd");
+      DateTimeFormat.forPattern("(HH:mm:ss) ");
 
   private final boolean cursorControl;
   private final Clock clock;
@@ -93,7 +91,7 @@ public class ExperimentalEventHandler implements EventHandler {
   private long mustRefreshAfterMillis;
   private boolean dateShown;
   private int numLinesProgressBar;
-  private boolean buildRunning;
+  private boolean buildComplete;
   // Number of open build even protocol transports.
   private boolean progressBarNeedsRefresh;
   private Thread updateThread;
@@ -254,13 +252,13 @@ public class ExperimentalEventHandler implements EventHandler {
         didFlush = true;
       }
     } catch (IOException e) {
-      logger.warning("IO Error writing to output stream: " + e);
+      LOG.warning("IO Error writing to output stream: " + e);
     }
     return didFlush;
   }
 
   private synchronized void maybeAddDate() {
-    if (!showTimestamp || dateShown || !buildRunning) {
+    if (!showTimestamp || dateShown || buildComplete) {
       return;
     }
     dateShown = true;
@@ -268,9 +266,7 @@ public class ExperimentalEventHandler implements EventHandler {
         Event.info(
             null,
             "Current date is "
-                + DATE_FORMAT.format(
-                    Instant.ofEpochMilli(clock.currentTimeMillis())
-                        .atZone(ZoneId.systemDefault()))));
+                + DateTimeFormat.forPattern("YYYY-MM-dd").print(clock.currentTimeMillis())));
   }
 
   @Override
@@ -293,7 +289,7 @@ public class ExperimentalEventHandler implements EventHandler {
                 event.getKind() == EventKind.STDOUT
                     ? outErr.getOutputStream()
                     : outErr.getErrorStream();
-            if (!buildRunning) {
+            if (buildComplete) {
               stream.write(event.getMessageBytes());
               stream.flush();
             } else {
@@ -343,10 +339,9 @@ public class ExperimentalEventHandler implements EventHandler {
           case FAIL:
           case WARNING:
           case INFO:
-          case DEBUG:
           case SUBCOMMAND:
             boolean incompleteLine;
-            if (showProgress && buildRunning) {
+            if (showProgress && !buildComplete) {
               clearProgressBar();
             }
             incompleteLine = flushStdOutStdErrBuffers();
@@ -354,10 +349,7 @@ public class ExperimentalEventHandler implements EventHandler {
               crlf();
             }
             if (showTimestamp) {
-              terminal.writeString(
-                  TIMESTAMP_FORMAT.format(
-                      Instant.ofEpochMilli(clock.currentTimeMillis())
-                          .atZone(ZoneId.systemDefault())));
+              terminal.writeString(TIMESTAMP_FORMAT.print(clock.currentTimeMillis()));
             }
             setEventKindColor(event.getKind());
             terminal.writeString(event.getKind() + ": ");
@@ -373,7 +365,7 @@ public class ExperimentalEventHandler implements EventHandler {
             if (incompleteLine) {
               crlf();
             }
-            if (showProgress && buildRunning && cursorControl) {
+            if (showProgress && !buildComplete && cursorControl) {
               addProgressBar();
             }
             terminal.flush();
@@ -392,7 +384,7 @@ public class ExperimentalEventHandler implements EventHandler {
         }
       }
     } catch (IOException e) {
-      logger.warning("IO Error writing to output stream: " + e);
+      LOG.warning("IO Error writing to output stream: " + e);
     }
   }
 
@@ -409,9 +401,6 @@ public class ExperimentalEventHandler implements EventHandler {
       case INFO:
         terminal.setTextColor(Color.GREEN);
         break;
-      case DEBUG:
-        terminal.setTextColor(Color.YELLOW);
-        break;
       case SUBCOMMAND:
         terminal.setTextColor(Color.BLUE);
         break;
@@ -422,9 +411,6 @@ public class ExperimentalEventHandler implements EventHandler {
 
   @Subscribe
   public void buildStarted(BuildStartingEvent event) {
-    synchronized (this) {
-      buildRunning = true;
-    }
     maybeAddDate();
     stateTracker.buildStarted(event);
     // As a new phase started, inform immediately.
@@ -475,7 +461,7 @@ public class ExperimentalEventHandler implements EventHandler {
       // After a build has completed, only stop updating the UI if there is no more BEP
       // upload happening.
       if (stateTracker.pendingTransports() == 0) {
-        buildRunning = false;
+        buildComplete = true;
         done = true;
       }
     }
@@ -487,10 +473,10 @@ public class ExperimentalEventHandler implements EventHandler {
 
   private void completeBuild() {
     synchronized (this) {
-      if (!buildRunning) {
+      if (buildComplete) {
         return;
       }
-      buildRunning = false;
+      buildComplete = true;
     }
     stopUpdateThread();
     flushStdOutStdErrBuffers();
@@ -498,10 +484,7 @@ public class ExperimentalEventHandler implements EventHandler {
 
   @Subscribe
   public void noBuild(NoBuildEvent event) {
-    if (event.showProgress()) {
-      synchronized (this) {
-        buildRunning = true;
-      }
+    if (event.keepShowingProgress()) {
       return;
     }
     completeBuild();
@@ -515,7 +498,7 @@ public class ExperimentalEventHandler implements EventHandler {
   @Subscribe
   public void afterCommand(AfterCommandEvent event) {
     synchronized (this) {
-      buildRunning = true;
+      buildComplete = true;
     }
     stopUpdateThread();
   }
@@ -596,7 +579,7 @@ public class ExperimentalEventHandler implements EventHandler {
         }
         terminal.flush();
       } catch (IOException e) {
-        logger.warning("IO Error writing to output stream: " + e);
+        LOG.warning("IO Error writing to output stream: " + e);
       }
     } else {
       refresh();
@@ -640,7 +623,7 @@ public class ExperimentalEventHandler implements EventHandler {
   }
 
   private void doRefresh(boolean fromUpdateThread) {
-    if (!buildRunning) {
+    if (buildComplete) {
       return;
     }
     long nowMillis = clock.currentTimeMillis();
@@ -673,7 +656,7 @@ public class ExperimentalEventHandler implements EventHandler {
             }
           }
         } catch (IOException e) {
-          logger.warning("IO Error writing to output stream: " + e);
+          LOG.warning("IO Error writing to output stream: " + e);
         }
       }
     } else {
@@ -734,7 +717,7 @@ public class ExperimentalEventHandler implements EventHandler {
       // Refuse to start an update thread once the build is complete; such a situation might
       // arise if the completion of the build is reported (shortly) before the completion of
       // the last action is reported.
-      if (buildRunning && updateThread == null) {
+      if (!buildComplete && updateThread == null) {
         final ExperimentalEventHandler eventHandler = this;
         updateThread =
             new Thread(
@@ -783,7 +766,7 @@ public class ExperimentalEventHandler implements EventHandler {
     try {
       terminal.resetTerminal();
     } catch (IOException e) {
-      logger.warning("IO Error writing to user terminal: " + e);
+      LOG.warning("IO Error writing to user terminal: " + e);
     }
   }
 
@@ -814,9 +797,7 @@ public class ExperimentalEventHandler implements EventHandler {
     }
     String timestamp = null;
     if (showTimestamp) {
-      timestamp =
-          TIMESTAMP_FORMAT.format(
-              Instant.ofEpochMilli(clock.currentTimeMillis()).atZone(ZoneId.systemDefault()));
+      timestamp = TIMESTAMP_FORMAT.print(clock.currentTimeMillis());
     }
     stateTracker.writeProgressBar(
         terminalWriter,
