@@ -3,8 +3,8 @@ package com.codahale.dropwizard.setup;
 import com.codahale.dropwizard.jersey.DropwizardResourceConfig;
 import com.codahale.dropwizard.jersey.setup.JerseyContainerHolder;
 import com.codahale.dropwizard.jersey.setup.JerseyEnvironment;
-import com.codahale.dropwizard.jetty.setup.ServletEnvironment;
 import com.codahale.dropwizard.lifecycle.setup.LifecycleEnvironment;
+import com.codahale.dropwizard.jetty.setup.ServletEnvironment;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.health.HealthCheckRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -113,17 +113,15 @@ public class Environment {
     * Internal Accessors
     */
 
-    // TODO: 5/4/13 <coda> -- figure out how to make these accessors not a public API
-
-    public ServletContextHandler getServletContext() {
+    ServletContextHandler getServletContext() {
         return servletContext;
     }
 
-    public ServletContainer getJerseyServletContainer() {
+    ServletContainer getJerseyServletContainer() {
         return jerseyServletContainer.getContainer();
     }
 
-    public ServletContextHandler getAdminContext() {
+    ServletContextHandler getAdminContext() {
         return adminContext;
     }
 }
