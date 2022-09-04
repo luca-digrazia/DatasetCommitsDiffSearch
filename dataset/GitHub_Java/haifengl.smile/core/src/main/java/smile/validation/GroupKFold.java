@@ -1,34 +1,26 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
 
 package smile.validation;
 
-import smile.classification.Classifier;
-import smile.classification.DataFrameClassifier;
-import smile.data.DataFrame;
 import smile.math.Histogram;
 import smile.math.MathEx;
-import smile.regression.DataFrameRegression;
-import smile.regression.Regression;
 import smile.sort.QuickSort;
 
 import java.util.Arrays;
-import java.util.function.BiFunction;
-import java.util.function.Function;
 
 /**
  * GroupKfold is a cross validation technique that splits the data by respecting additional information about groups.
@@ -55,12 +47,6 @@ public class GroupKFold {
      */
     public final int[][] test;
 
-    /**
-     * Constructor.
-     * @param n the number of samples.
-     * @param k the number of folds.
-     * @param groups the group information of samples.
-     */
     public GroupKFold(int n, int k, int[] groups) {
         if (n < 0) {
             throw new IllegalArgumentException("Invalid sample size: " + n);
@@ -84,7 +70,8 @@ public class GroupKFold {
         Arrays.sort(uniqueGroups);
         for (int i = 0; i < numGroups; i++) {
             if (uniqueGroups[i] != i) {
-                throw new IllegalArgumentException("Invalid encoding of groups, all group indices between [0, numGroups) have to exist");
+                throw new IllegalArgumentException(
+                        "Invalid encoding of groups, all group indices between [0, numGroups) have to exist");
             }
         }
 
@@ -110,8 +97,9 @@ public class GroupKFold {
 
     private TestFolds calculateTestFolds(int[] groups, int numGroups) {
         // sort the groups by number of samples so that we can distribute test samples from largest groups first
-        int[] numSamplesPerGroup = new int[numGroups];
-        for (int g : groups) numSamplesPerGroup[g]++;
+        int[] numSamplesPerGroup = Arrays.stream(Histogram.of(groups, numGroups)[2])
+                .mapToInt(x -> (int) x)
+                .toArray();
 
         int[] toOriginalGroupIndex = QuickSort.sort(numSamplesPerGroup);
 
@@ -136,82 +124,5 @@ public class GroupKFold {
             this.numTestSamplesPerFold = numTestSamplesPerFold;
             this.groupToTestFoldIndex = groupToTestFoldIndex;
         }
-    }
-
-    /**
-     * Runs cross validation tests.
-     * @return the predictions.
-     */
-    public <T> int[] classification(T[] x, int[] y, BiFunction<T[], int[], Classifier<T>> trainer) {
-        int[] prediction = new int[x.length];
-
-        for (int i = 0; i < k; i++) {
-            T[] trainx = MathEx.slice(x, train[i]);
-            int[] trainy = MathEx.slice(y, train[i]);
-
-            Classifier<T> model = trainer.apply(trainx, trainy);
-
-            for (int j : test[i]) {
-                prediction[j] = model.predict(x[j]);
-            }
-        }
-
-        return prediction;
-    }
-
-    /**
-     * Runs cross validation tests.
-     * @return the predictions.
-     */
-    public int[] classification(DataFrame data, Function<DataFrame, DataFrameClassifier> trainer) {
-        int[] prediction = new int[data.size()];
-
-        for (int i = 0; i < k; i++) {
-            DataFrameClassifier model = trainer.apply(data.of(train[i]));
-            for (int j : test[i]) {
-                prediction[j] = model.predict(data.get(j));
-            }
-        }
-
-        return prediction;
-    }
-
-    /**
-     * Runs cross validation tests.
-     * @return the predictions.
-     */
-    public <T> double[] regression(T[] x, double[] y, BiFunction<T[], double[], Regression<T>> trainer) {
-        double[] prediction = new double[x.length];
-
-        for (int i = 0; i < k; i++) {
-            T[] trainx = MathEx.slice(x, train[i]);
-            double[] trainy = MathEx.slice(y, train[i]);
-
-            Regression<T> model = trainer.apply(trainx, trainy);
-
-            for (int j : test[i]) {
-                prediction[j] = model.predict(x[j]);
-            }
-        }
-
-        return prediction;
-    }
-
-    /**
-     * Runs cross validation tests.
-     * @return the predictions.
-     */
-    public double[] regression(DataFrame data, Function<DataFrame, DataFrameRegression> trainer) {
-        double[] prediction = new double[data.size()];
-
-        for (int i = 0; i < k; i++) {
-            DataFrameRegression model = trainer.apply(data.of(train[i]));
-
-            for (int j : test[i]) {
-                prediction[j] = model.predict(data.get(j));
-            }
-        }
-
-        return prediction;
     }
 }
