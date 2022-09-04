@@ -43,13 +43,13 @@ public class FakeHttpMessageGenerator {
 
         boolean isSuccessful = (y < 98);
 
-        if (x <= 95) {
+        if (x <= 90) {
             // GET
             return buildGETMessage(isSuccessful);
-        } else if(x > 95 && x <= 98) {
+        } else if(x > 90 && x <= 95) {
             // POST
             return buildPOSTMessage(isSuccessful);
-        } else if(x == 99) {
+        } else if(x > 95 && x <= 97) {
             // DELETE
             return buildDELETEMessage(isSuccessful);
         } else {
@@ -58,82 +58,59 @@ public class FakeHttpMessageGenerator {
         }
     }
 
-    private String shortMessage(String method, String resource, int code, int tookMs) {
-        StringBuilder sb = new StringBuilder();
-
-        sb.append(method).append(" ").append(resource)
-                .append(" [").append(code).append("]")
-                .append(" ").append(tookMs);
-
-        return sb.toString();
-    }
-
     // GET
 
-    private Message buildGETMessage(boolean isSuccessful) {
+    public Message buildGETMessage(boolean isSuccessful) {
         return isSuccessful ? successfulGET() : failedGET();
     }
 
-    private Message successfulGET() {
-        int code = 200;
-        String resource = "/login";
-        int tookMs = 86; // TODO make more random, some that are really long
-
-        Message msg = new Message(shortMessage("GET", resource, code, tookMs), source, Tools.getUTCTimestampWithMilliseconds());
-        msg.addField("http_method", "GET");
-        msg.addField("http_response_code", code);
-        msg.addField("resource", resource);
-        msg.addField("controller", "LoginController");
-        msg.addField("action", "login");
-        msg.addField("user_id", 9001);
-        msg.addField("took_ms", tookMs);
-
-        return msg;
+    public Message successfulGET() {
+        return new Message("successful GET", source, Tools.getUTCTimestampWithMilliseconds());
     }
 
-    private Message failedGET() {
+    public Message failedGET() {
         return new Message("failed GET", source, Tools.getUTCTimestampWithMilliseconds());
     }
 
     // POST
 
-    private Message buildPOSTMessage(boolean isSuccessful) {
+    public Message buildPOSTMessage(boolean isSuccessful) {
         return isSuccessful ? successfulPOST() : failedPOST();
     }
 
-    private Message successfulPOST() {
+    public Message successfulPOST() {
         return new Message("successful POST", source, Tools.getUTCTimestampWithMilliseconds());
     }
 
-    private Message failedPOST() {
+    public Message failedPOST() {
         return new Message("failed POST", source, Tools.getUTCTimestampWithMilliseconds());
     }
 
     // PUT
 
-    private Message buildPUTMessage(boolean isSuccessful) {
+    public Message buildPUTMessage(boolean isSuccessful) {
         return isSuccessful ? successfulPUT() : failedPUT();
     }
 
-    private Message successfulPUT() {
+    public Message successfulPUT() {
         return new Message("successful PUT", source, Tools.getUTCTimestampWithMilliseconds());
     }
 
-    private Message failedPUT() {
+    public Message failedPUT() {
         return new Message("failed PUT", source, Tools.getUTCTimestampWithMilliseconds());
     }
 
     // DELETE
 
-    private Message buildDELETEMessage(boolean isSuccessful) {
+    public Message buildDELETEMessage(boolean isSuccessful) {
         return isSuccessful ? successfulDELETE() : failedDELETE();
     }
 
-    private Message successfulDELETE() {
+    public Message successfulDELETE() {
         return new Message("successful DELETE", source, Tools.getUTCTimestampWithMilliseconds());
     }
 
-    private Message failedDELETE() {
+    public Message failedDELETE() {
         return new Message("failed DELETE", source, Tools.getUTCTimestampWithMilliseconds());
     }
 
