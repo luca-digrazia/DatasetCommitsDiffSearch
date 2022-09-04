@@ -13,15 +13,21 @@
 // limitations under the License.
 package com.google.devtools.build.lib.remote.util;
 
-import com.google.common.base.Preconditions;
+import static com.google.common.base.Preconditions.checkState;
+
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import io.reactivex.rxjava3.annotations.NonNull;
 import io.reactivex.rxjava3.core.Completable;
-import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.core.Single;
+import io.reactivex.rxjava3.core.SingleObserver;
+import io.reactivex.rxjava3.disposables.Disposable;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicBoolean;
 import javax.annotation.concurrent.GuardedBy;
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -42,11 +48,13 @@ import javax.annotation.concurrent.ThreadSafe;
  */
 @ThreadSafe
 public final class AsyncTaskCache<KeyT, ValueT> {
-  @GuardedBy("this")
+  private final Object lock = new Object();
+
+  @GuardedBy("lock")
   private final Map<KeyT, ValueT> finished;
 
-  @GuardedBy("this")
-  private final Map<KeyT, Observable<ValueT>> inProgress;
+  @GuardedBy("lock")
+  private final Map<KeyT, Execution> inProgress;
 
   public static <KeyT, ValueT> AsyncTaskCache<KeyT, ValueT> create() {
     return new AsyncTaskCache<>();
@@ -59,14 +67,14 @@ public final class AsyncTaskCache<KeyT, ValueT> {
 
   /** Returns a set of keys for tasks which is finished. */
   public ImmutableSet<KeyT> getFinishedTasks() {
-    synchronized (this) {
+    synchronized (lock) {
       return ImmutableSet.copyOf(finished.keySet());
     }
   }
 
   /** Returns a set of keys for tasks which is still executing. */
   public ImmutableSet<KeyT> getInProgressTasks() {
-    synchronized (this) {
+    synchronized (lock) {
       return ImmutableSet.copyOf(inProgress.keySet());
     }
   }
@@ -82,6 +90,138 @@ public final class AsyncTaskCache<KeyT, ValueT> {
     return execute(key, task, false);
   }
 
+  /** Returns count of subscribers for a task. */
+  public int getSubscriberCount(KeyT key) {
+    synchronized (lock) {
+      Execution task = inProgress.get(key);
+      if (task != null) {
+        return task.getSubscriberCount();
+      }
+    }
+
+    return 0;
+  }
+
+  class Execution extends Single<ValueT> implements SingleObserver<ValueT> {
+    private final KeyT key;
+    private final Single<ValueT> upstream;
+
+    @GuardedBy("lock")
+    private boolean terminated = false;
+
+    @GuardedBy("lock")
+    private Disposable upstreamDisposable;
+
+    @GuardedBy("lock")
+    private final List<SingleObserver<? super ValueT>> observers = new ArrayList<>();
+
+    Execution(KeyT key, Single<ValueT> upstream) {
+      this.key = key;
+      this.upstream = upstream;
+    }
+
+    int getSubscriberCount() {
+      synchronized (lock) {
+        return observers.size();
+      }
+    }
+
+    @Override
+    protected void subscribeActual(@NonNull SingleObserver<? super ValueT> observer) {
+      synchronized (lock) {
+        checkState(!terminated, "terminated");
+
+        boolean shouldSubscribe = observers.isEmpty();
+
+        observers.add(observer);
+
+        observer.onSubscribe(new ExecutionDisposable(this, observer));
+
+        if (shouldSubscribe) {
+          upstream.subscribe(this);
+        }
+      }
+    }
+
+    @Override
+    public void onSubscribe(@NonNull Disposable d) {
+      synchronized (lock) {
+        upstreamDisposable = d;
+
+        if (terminated) {
+          d.dispose();
+        }
+      }
+    }
+
+    @Override
+    public void onSuccess(@NonNull ValueT value) {
+      synchronized (lock) {
+        if (!terminated) {
+          inProgress.remove(key);
+          finished.put(key, value);
+          terminated = true;
+
+          for (SingleObserver<? super ValueT> observer : ImmutableList.copyOf(observers)) {
+            observer.onSuccess(value);
+          }
+        }
+      }
+    }
+
+    @Override
+    public void onError(@NonNull Throwable error) {
+      synchronized (lock) {
+        if (!terminated) {
+          inProgress.remove(key);
+          terminated = true;
+
+          for (SingleObserver<? super ValueT> observer : ImmutableList.copyOf(observers)) {
+            observer.onError(error);
+          }
+        }
+      }
+    }
+
+    void remove(SingleObserver<? super ValueT> observer) {
+      synchronized (lock) {
+        observers.remove(observer);
+
+        if (observers.isEmpty() && !terminated) {
+          inProgress.remove(key);
+          terminated = true;
+
+          if (upstreamDisposable != null) {
+            upstreamDisposable.dispose();
+          }
+        }
+      }
+    }
+  }
+
+  class ExecutionDisposable implements Disposable {
+    final Execution execution;
+    final SingleObserver<? super ValueT> observer;
+    AtomicBoolean isDisposed = new AtomicBoolean(false);
+
+    ExecutionDisposable(Execution execution, SingleObserver<? super ValueT> observer) {
+      this.execution = execution;
+      this.observer = observer;
+    }
+
+    @Override
+    public void dispose() {
+      if (isDisposed.compareAndSet(false, true)) {
+        execution.remove(observer);
+      }
+    }
+
+    @Override
+    public boolean isDisposed() {
+      return isDisposed.get();
+    }
+  }
+
   /**
    * Executes a task.
    *
@@ -91,52 +231,44 @@ public final class AsyncTaskCache<KeyT, ValueT> {
    *     error if any.
    */
   public Single<ValueT> execute(KeyT key, Single<ValueT> task, boolean force) {
-    return Single.defer(
-        () -> {
-          synchronized (this) {
+    return Single.create(
+        emitter -> {
+          synchronized (lock) {
             if (!force && finished.containsKey(key)) {
-              return Single.just(finished.get(key));
+              emitter.onSuccess(finished.get(key));
+              return;
             }
 
             finished.remove(key);
 
-            Observable<ValueT> execution =
-                inProgress.computeIfAbsent(
-                    key,
-                    missingKey -> {
-                      AtomicInteger subscribeTimes = new AtomicInteger(0);
-                      return Single.defer(
-                              () -> {
-                                int times = subscribeTimes.incrementAndGet();
-                                Preconditions.checkState(
-                                    times == 1, "Subscribed more than once to the task");
-                                return task;
-                              })
-                          .doOnSuccess(
-                              value -> {
-                                synchronized (this) {
-                                  finished.put(key, value);
-                                  inProgress.remove(key);
-                                }
-                              })
-                          .doOnError(
-                              error -> {
-                                synchronized (this) {
-                                  inProgress.remove(key);
-                                }
-                              })
-                          .doOnDispose(
-                              () -> {
-                                synchronized (this) {
-                                  inProgress.remove(key);
-                                }
-                              })
-                          .toObservable()
-                          .publish()
-                          .refCount();
-                    });
+            Execution execution =
+                inProgress.computeIfAbsent(key, ignoredKey -> new Execution(key, task));
 
-            return Single.fromObservable(execution);
+            // We must subscribe the execution within the scope of lock to avoid race condition
+            // that:
+            //    1. Two callers get the same execution instance
+            //    2. One decides to dispose the execution, since no more observers, the execution
+            // will change to the terminate state
+            //    3. Another one try to subscribe, will get "terminated" error.
+            execution.subscribe(
+                new SingleObserver<ValueT>() {
+                  @Override
+                  public void onSubscribe(@NonNull Disposable d) {
+                    emitter.setDisposable(d);
+                  }
+
+                  @Override
+                  public void onSuccess(@NonNull ValueT valueT) {
+                    emitter.onSuccess(valueT);
+                  }
+
+                  @Override
+                  public void onError(@NonNull Throwable e) {
+                    if (!emitter.isDisposed()) {
+                      emitter.onError(e);
+                    }
+                  }
+                });
           }
         });
   }
@@ -173,6 +305,11 @@ public final class AsyncTaskCache<KeyT, ValueT> {
     /** Returns a set of keys for tasks which is still executing. */
     public ImmutableSet<KeyT> getInProgressTasks() {
       return cache.getInProgressTasks();
+    }
+
+    /** Returns count of subscribers for a task. */
+    public int getSubscriberCount(KeyT key) {
+      return cache.getSubscriberCount(key);
     }
   }
 }
