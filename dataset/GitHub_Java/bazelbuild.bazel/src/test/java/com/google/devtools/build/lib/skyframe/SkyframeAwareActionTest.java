@@ -20,7 +20,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
-import com.google.common.graph.ImmutableGraph;
 import com.google.common.util.concurrent.Callables;
 import com.google.devtools.build.lib.actions.AbstractAction;
 import com.google.devtools.build.lib.actions.Action;
@@ -41,14 +40,13 @@ import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.EvaluationProgressReceiver;
 import com.google.devtools.build.skyframe.EvaluationProgressReceiver.EvaluationState;
+import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
-import com.google.devtools.build.skyframe.ValueOrException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -241,7 +239,7 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
 
   /** A mock skyframe-aware action that counts how many times it was executed. */
   private static class SkyframeAwareExecutionCountingAction
-      extends ExecutionCountingCacheBypassingAction implements SkyframeAwareAction<IOException> {
+      extends ExecutionCountingCacheBypassingAction implements SkyframeAwareAction {
     private final SkyKey actionDepKey;
 
     SkyframeAwareExecutionCountingAction(
@@ -251,27 +249,16 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
     }
 
     @Override
-    public Object processSkyframeValues(
-        ImmutableList<? extends SkyKey> keys,
-        Map<SkyKey, ValueOrException<IOException>> values,
-        boolean valuesMissing) {
-      assertThat(keys).containsExactly(actionDepKey);
-      assertThat(values.keySet()).containsExactly(actionDepKey);
+    public Object establishSkyframeDependencies(Environment env)
+        throws ExceptionBase, InterruptedException {
+      // Establish some Skyframe dependency. A real action would then use this to compute and
+      // cache data for the execute(...) method.
+      env.getValue(actionDepKey);
       return null;
     }
 
     @Override
-    public ImmutableList<SkyKey> getDirectSkyframeDependencies() {
-      return ImmutableList.of(actionDepKey);
-    }
-
-    @Override
-    public Class<IOException> getExceptionType() {
-      return IOException.class;
-    }
-
-    @Override
-    public ImmutableGraph<SkyKey> getSkyframeDependenciesForRewinding(SkyKey self) {
+    public ImmutableSet<SkyKey> getSkyframeDependenciesForRewinding() {
       throw new UnsupportedOperationException();
     }
   }
@@ -715,7 +702,7 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
   }
 
   private abstract static class SingleOutputSkyframeAwareAction extends SingleOutputAction
-      implements SkyframeAwareAction<IOException> {
+      implements SkyframeAwareAction {
     SingleOutputSkyframeAwareAction(@Nullable Artifact input, Artifact output) {
       super(input, output);
     }
@@ -728,11 +715,6 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
     @Override
     public boolean isVolatile() {
       return true;
-    }
-
-    @Override
-    public Class<IOException> getExceptionType() {
-      return IOException.class;
     }
   }
 
@@ -830,31 +812,20 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
 
     registerAction(
         new SingleOutputSkyframeAwareAction(genFile1, genFile2) {
-
           @Override
-          public ImmutableList<SkyKey> getDirectSkyframeDependencies() {
-            return ImmutableList.of();
-          }
-
-          @Override
-          public Object processSkyframeValues(
-              ImmutableList<? extends SkyKey> keys,
-              Map<SkyKey, ValueOrException<IOException>> values,
-              boolean valuesMissing) {
-            assertThat(keys).isEmpty();
-            assertThat(values).isEmpty();
-            assertThat(valuesMissing).isFalse();
+          public Object establishSkyframeDependencies(Environment env) throws ExceptionBase {
+            assertThat(env.valuesMissing()).isFalse();
             return null;
           }
 
           @Override
-          public ImmutableGraph<SkyKey> getSkyframeDependenciesForRewinding(SkyKey self) {
+          public ImmutableSet<SkyKey> getSkyframeDependenciesForRewinding() {
             throw new UnsupportedOperationException();
           }
 
           @Override
           public ActionResult execute(ActionExecutionContext actionExecutionContext)
-              throws ActionExecutionException {
+              throws ActionExecutionException, InterruptedException {
             writeOutput(readInput(), "gen2");
             return ActionResult.EMPTY;
           }

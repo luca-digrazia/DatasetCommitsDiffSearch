@@ -36,6 +36,7 @@ import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictEx
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.OutputGroupInfo;
+import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactContext;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction.Key;
@@ -47,7 +48,7 @@ import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.shell.Command;
-import com.google.devtools.build.lib.syntax.StarlarkSemantics;
+import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -159,7 +160,7 @@ public final class AnalysisTestUtil {
     }
 
     @Override
-    public StarlarkSemantics getSkylarkSemantics() throws InterruptedException {
+    public SkylarkSemantics getSkylarkSemantics() throws InterruptedException {
       return original.getSkylarkSemantics();
     }
 
@@ -175,8 +176,9 @@ public final class AnalysisTestUtil {
 
     @Override
     public ImmutableList<Artifact> getBuildInfo(
-        boolean stamp, BuildInfoKey key, BuildConfiguration config) throws InterruptedException {
-      return original.getBuildInfo(stamp, key, config);
+        RuleContext ruleContext, BuildInfoKey key, BuildConfiguration config)
+        throws InterruptedException {
+      return original.getBuildInfo(ruleContext, key, config);
     }
 
     @Override
@@ -345,7 +347,7 @@ public final class AnalysisTestUtil {
     }
 
     @Override
-    public StarlarkSemantics getSkylarkSemantics() throws InterruptedException {
+    public SkylarkSemantics getSkylarkSemantics() throws InterruptedException {
       return null;
     }
 
@@ -370,8 +372,8 @@ public final class AnalysisTestUtil {
     }
 
     @Override
-    public ImmutableList<Artifact> getBuildInfo(
-        boolean stamp, BuildInfoKey key, BuildConfiguration config) {
+    public ImmutableList<Artifact> getBuildInfo(RuleContext ruleContext, BuildInfoKey key,
+        BuildConfiguration config) {
       return ImmutableList.of();
     }
 
