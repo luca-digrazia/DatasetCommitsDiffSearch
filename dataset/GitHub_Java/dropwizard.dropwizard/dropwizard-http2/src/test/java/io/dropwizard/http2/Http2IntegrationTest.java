@@ -1,5 +1,6 @@
 package io.dropwizard.http2;
 
+import com.google.common.base.Optional;
 import com.google.common.net.HttpHeaders;
 import io.dropwizard.Configuration;
 import io.dropwizard.testing.ConfigOverride;
@@ -18,7 +19,6 @@ import org.junit.Test;
 
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -29,9 +29,7 @@ public class Http2IntegrationTest extends AbstractHttp2Test {
             FakeApplication.class, ResourceHelpers.resourceFilePath("test-http2.yml"),
             Optional.of("tls_http2"),
             ConfigOverride.config("tls_http2", "server.connector.keyStorePath",
-                    ResourceHelpers.resourceFilePath("stores/http2_server.jks")),
-            ConfigOverride.config("tls_http2", "server.connector.trustStorePath",
-                    ResourceHelpers.resourceFilePath("stores/http2_client.jts"))
+                    ResourceHelpers.resourceFilePath("stores/http2_server.jks"))
     );
 
     private final SslContextFactory sslContextFactory = new SslContextFactory();
@@ -41,6 +39,7 @@ public class Http2IntegrationTest extends AbstractHttp2Test {
     public void setUp() throws Exception {
         sslContextFactory.setTrustStorePath(ResourceHelpers.resourceFilePath("stores/http2_client.jts"));
         sslContextFactory.setTrustStorePassword("http2_client");
+        sslContextFactory.setIncludeCipherSuites("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256");
         sslContextFactory.start();
 
         client = new HttpClient(new HttpClientTransportOverHTTP2(new HTTP2Client()), sslContextFactory);
@@ -74,6 +73,9 @@ public class Http2IntegrationTest extends AbstractHttp2Test {
 
     @Test
     public void testHttp2ManyRequests() throws Exception {
+        // For some reason the library requires to perform the first request synchronously with HTTP/2
+        testHttp2();
+
         performManyAsyncRequests(client, "https://localhost:" + appRule.getLocalPort() + "/api/test");
     }
 }
