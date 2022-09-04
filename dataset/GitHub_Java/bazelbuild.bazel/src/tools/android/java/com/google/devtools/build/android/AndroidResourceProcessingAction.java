@@ -442,28 +442,27 @@ public class AndroidResourceProcessingAction {
         System.exit(1);
       }
 
-      MergedAndroidData processedAndroidData =
-          resourceProcessor.processResources(
-              tmp,
-              aaptConfigOptions.aapt,
-              aaptConfigOptions.androidJar,
-              aaptConfigOptions.buildToolsVersion,
-              options.packageType,
-              aaptConfigOptions.debug,
-              options.packageForR,
-              new FlagAaptOptions(aaptConfigOptions),
-              aaptConfigOptions.resourceConfigs,
-              aaptConfigOptions.splits,
-              processedData,
-              data,
-              generatedSources,
-              options.packagePath,
-              options.proguardOutput,
-              options.mainDexProguardOutput,
-              options.resourcesOutput != null
-                  ? processedData.getResourceDir().resolve("values").resolve("public.xml")
-                  : null,
-              options.dataBindingInfoOut);
+      resourceProcessor.processResources(
+          tmp,
+          aaptConfigOptions.aapt,
+          aaptConfigOptions.androidJar,
+          aaptConfigOptions.buildToolsVersion,
+          options.packageType,
+          aaptConfigOptions.debug,
+          options.packageForR,
+          new FlagAaptOptions(aaptConfigOptions),
+          aaptConfigOptions.resourceConfigs,
+          aaptConfigOptions.splits,
+          processedData,
+          data,
+          generatedSources,
+          options.packagePath,
+          options.proguardOutput,
+          options.mainDexProguardOutput,
+          options.resourcesOutput != null
+              ? processedData.getResourceDir().resolve("values").resolve("public.xml")
+              : null,
+          options.dataBindingInfoOut);
       logger.fine(String.format("aapt finished at %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
 
       if (options.srcJarOutput != null) {
@@ -475,7 +474,7 @@ public class AndroidResourceProcessingAction {
             generatedSources, options.rOutput, VariantType.LIBRARY == options.packageType);
       }
       if (options.resourcesOutput != null) {
-        ResourcesZip.from(processedAndroidData.getResourceDir(), processedAndroidData.getAssetDir())
+        ResourcesZip.from(processedData.getResourceDir(), processedData.getAssetDir())
             .writeTo(options.resourcesOutput, false /* compress */);
       }
       logger.fine(
