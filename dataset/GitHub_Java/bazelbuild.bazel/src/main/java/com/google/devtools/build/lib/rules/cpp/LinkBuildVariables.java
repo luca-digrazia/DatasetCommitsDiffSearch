@@ -20,6 +20,7 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables.SequenceBuilder;
+import com.google.devtools.build.lib.rules.cpp.Link.Staticness;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
 /** Enum covering all build variables we create for all various {@link CppLinkAction}. */
@@ -93,7 +94,7 @@ public enum LinkBuildVariables {
   }
 
   public static Variables setupVariables(
-      boolean isUsingLinkerNotArchiver,
+      CppLinkActionBuilder cppLinkActionBuilder,
       BuildConfiguration configuration,
       Artifact outputArtifact,
       Artifact paramFile,
@@ -131,9 +132,9 @@ public enum LinkBuildVariables {
       buildVariables.addStringVariable(STRIP_DEBUG_SYMBOLS.getVariableName(), "");
     }
 
-    if (isUsingLinkerNotArchiver
+    if (cppLinkActionBuilder.getLinkType().staticness().equals(Staticness.DYNAMIC)
         && CppHelper.shouldCreatePerObjectDebugInfo(
-            cppConfiguration, ccToolchainProvider, featureConfiguration)) {
+        cppConfiguration, ccToolchainProvider, featureConfiguration)) {
       buildVariables.addStringVariable(IS_USING_FISSION.getVariableName(), "");
     }
 
