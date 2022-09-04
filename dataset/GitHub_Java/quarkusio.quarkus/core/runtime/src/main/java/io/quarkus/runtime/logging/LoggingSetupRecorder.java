@@ -40,24 +40,24 @@ import io.quarkus.runtime.annotations.Recorder;
 @Recorder
 public class LoggingSetupRecorder {
 
-    private static final boolean IS_WINDOWS = System.getProperty("os.name").toLowerCase(Locale.ENGLISH).contains("win");
+    static final boolean IS_WINDOWS = System.getProperty("os.name").toLowerCase(Locale.ENGLISH).contains("win");
 
     /**
      * <a href="https://conemu.github.io">ConEmu</a> ANSI X3.64 support enabled,
      * used by <a href="https://cmder.net/">cmder</a>
      */
-    private static final boolean IS_CON_EMU_ANSI = IS_WINDOWS && "ON".equals(System.getenv("ConEmuANSI"));
+    static final boolean IS_CON_EMU_ANSI = IS_WINDOWS && "ON".equals(System.getenv("ConEmuANSI"));
 
     /**
      * These tests are same as used in jansi
      * Source: https://github.com/fusesource/jansi/commit/bb3d538315c44f799d34fd3426f6c91c8e8dfc55
      */
-    private static final boolean IS_CYGWIN = IS_WINDOWS
+    static final boolean IS_CYGWIN = IS_WINDOWS
             && System.getenv("PWD") != null
             && System.getenv("PWD").startsWith("/")
             && !"cygwin".equals(System.getenv("TERM"));
 
-    private static final boolean IS_MINGW_XTERM = IS_WINDOWS
+    static final boolean IS_MINGW_XTERM = IS_WINDOWS
             && System.getenv("MSYSTEM") != null
             && System.getenv("MSYSTEM").startsWith("MINGW")
             && "xterm".equals(System.getenv("TERM"));
@@ -71,7 +71,7 @@ public class LoggingSetupRecorder {
         final Map<String, CategoryConfig> categories = config.categories;
         final LogContext logContext = LogContext.getLogContext();
         final Logger rootLogger = logContext.getLogger("");
-
+        ErrorManager errorManager = new OnlyOnceErrorManager();
         rootLogger.setLevel(config.level.orElse(Level.INFO));
         for (Map.Entry<String, CategoryConfig> entry : categories.entrySet()) {
             final String name = entry.getKey();
@@ -86,25 +86,17 @@ public class LoggingSetupRecorder {
         for (Entry<String, CleanupFilterConfig> entry : filters.entrySet()) {
             filterElements.add(new LogCleanupFilterElement(entry.getKey(), entry.getValue().ifStartsWith));
         }
-        final ArrayList<Handler> handlers = new ArrayList<>(3 + additionalHandlers.size());
-        ErrorManager errorManager = new OnlyOnceErrorManager();
-
+        ArrayList<Handler> handlers = new ArrayList<>(3 + additionalHandlers.size());
         if (config.console.enable) {
-            final Handler consoleHandler = configureConsoleHandler(config.console, errorManager, filterElements,
-                    possibleFormatters);
-            errorManager = consoleHandler.getErrorManager();
-            handlers.add(consoleHandler);
+            errorManager = configureConsoleHandler(config.console, errorManager, filterElements, handlers, possibleFormatters);
         }
 
         if (config.file.enable) {
-            handlers.add(configureFileHandler(config.file, errorManager, filterElements));
+            configureFileHandler(config.file, errorManager, filterElements, handlers);
         }
 
         if (config.syslog.enable) {
-            final Handler syslogHandler = configureSyslogHandler(config.syslog, errorManager, filterElements);
-            if (syslogHandler != null) {
-                handlers.add(syslogHandler);
-            }
+            configureSyslogHandler(config.syslog, errorManager, filterElements, handlers);
         }
 
         for (RuntimeValue<Optional<Handler>> additionalHandler : additionalHandlers) {
@@ -120,26 +112,21 @@ public class LoggingSetupRecorder {
         InitialConfigurator.DELAYED_HANDLER.setHandlers(handlers.toArray(EmbeddedConfigurator.NO_HANDLERS));
     }
 
-    public void initializeLoggingForImageBuild() {
-        if (ImageInfo.inImageBuildtimeCode()) {
-            final ConsoleHandler handler = new ConsoleHandler(new PatternFormatter(
-                    "%d{HH:mm:ss,SSS} %-5p [%c{1.}] %s%e%n"));
-            handler.setLevel(Level.INFO);
-            InitialConfigurator.DELAYED_HANDLER.setHandlers(new Handler[] { handler });
-        }
-    }
-
-    private static boolean hasColorSupport() {
+    private boolean hasColorSupport() {
 
         if (IS_WINDOWS) {
-            // On Windows without a known good emulator
-            // TODO: optimally we would check if Win32 getConsoleMode has
-            // ENABLE_VIRTUAL_TERMINAL_PROCESSING enabled or enable it via
-            // setConsoleMode.
-            // For now we turn it off to not generate noisy output for most
-            // users.
-            // Must be on some Unix variant or ANSI-enabled windows terminal...
-            return IS_CON_EMU_ANSI || IS_CYGWIN || IS_MINGW_XTERM;
+            if (!(IS_CON_EMU_ANSI || IS_CYGWIN || IS_MINGW_XTERM)) {
+                // On Windows without a known good emulator
+                // TODO: optimally we would check if Win32 getConsoleMode has
+                // ENABLE_VIRTUAL_TERMINAL_PROCESSING enabled or enable it via 
+                // setConsoleMode.
+                // For now we turn it off to not generate noisy output for most
+                // users.
+                return false;
+            } else {
+                // Must be on some Unix variant or ANSI-enabled windows terminal...
+                return true;
+            }
         } else {
             // on sane operating systems having a console is a good indicator
             // you are attached to a TTY with colors.
@@ -147,9 +134,9 @@ public class LoggingSetupRecorder {
         }
     }
 
-    private static Handler configureConsoleHandler(final ConsoleConfig config, final ErrorManager defaultErrorManager,
-            final List<LogCleanupFilterElement> filterElements,
-            final List<RuntimeValue<Optional<Formatter>>> possibleFormatters) {
+    private ErrorManager configureConsoleHandler(ConsoleConfig config, ErrorManager errorManager,
+            List<LogCleanupFilterElement> filterElements, ArrayList<Handler> handlers,
+            List<RuntimeValue<Optional<Formatter>>> possibleFormatters) {
         Formatter formatter = null;
         boolean formatterWarning = false;
         for (RuntimeValue<Optional<Formatter>> value : possibleFormatters) {
@@ -162,29 +149,34 @@ public class LoggingSetupRecorder {
             }
         }
         if (formatter == null) {
-            if (config.color.orElse(hasColorSupport())) {
+            if (config.color.orElse(Boolean.valueOf(hasColorSupport())).booleanValue()) {
                 formatter = new ColorPatternFormatter(config.darken, config.format);
             } else {
                 formatter = new PatternFormatter(config.format);
             }
         }
-        final ConsoleHandler consoleHandler = new ConsoleHandler(formatter);
-        consoleHandler.setLevel(config.level);
-        consoleHandler.setErrorManager(defaultErrorManager);
-        consoleHandler.setFilter(new LogCleanupFilter(filterElements));
-
-        final Handler handler = config.async.enable ? createAsyncHandler(config.async, config.level, consoleHandler)
-                : consoleHandler;
-
-        if (formatterWarning) {
-            handler.getErrorManager().error("Multiple formatters were activated", null, ErrorManager.GENERIC_FAILURE);
+        final ConsoleHandler handler = new ConsoleHandler(formatter);
+        handler.setLevel(config.level);
+        handler.setErrorManager(errorManager);
+        handler.setFilter(new LogCleanupFilter(filterElements));
+        if (config.async.enable) {
+            final AsyncHandler asyncHandler = new AsyncHandler(config.async.queueLength);
+            asyncHandler.setOverflowAction(config.async.overflow);
+            asyncHandler.addHandler(handler);
+            asyncHandler.setLevel(config.level);
+            handlers.add(asyncHandler);
+        } else {
+            handlers.add(handler);
         }
-
-        return handler;
+        errorManager = handler.getLocalErrorManager();
+        if (formatterWarning) {
+            errorManager.error("Multiple formatters were activated", null, ErrorManager.GENERIC_FAILURE);
+        }
+        return errorManager;
     }
 
-    private static Handler configureFileHandler(final FileConfig config, final ErrorManager errorManager,
-            final List<LogCleanupFilterElement> filterElements) {
+    private void configureFileHandler(FileConfig config, ErrorManager errorManager,
+            List<LogCleanupFilterElement> filterElements, ArrayList<Handler> handlers) {
         FileHandler handler = new FileHandler();
         FileConfig.RotationConfig rotationConfig = config.rotation;
         if (rotationConfig.maxFileSize.isPresent() && rotationConfig.fileSuffix.isPresent()) {
@@ -217,14 +209,18 @@ public class LoggingSetupRecorder {
         handler.setLevel(config.level);
         handler.setFilter(new LogCleanupFilter(filterElements));
         if (config.async.enable) {
-            return createAsyncHandler(config.async, config.level, handler);
+            final AsyncHandler asyncHandler = new AsyncHandler(config.async.queueLength);
+            asyncHandler.setOverflowAction(config.async.overflow);
+            asyncHandler.addHandler(handler);
+            asyncHandler.setLevel(config.level);
+            handlers.add(asyncHandler);
+        } else {
+            handlers.add(handler);
         }
-        return handler;
     }
 
-    private static Handler configureSyslogHandler(final SyslogConfig config,
-            final ErrorManager errorManager,
-            final List<LogCleanupFilterElement> filterElements) {
+    private void configureSyslogHandler(SyslogConfig config, ErrorManager errorManager,
+            List<LogCleanupFilterElement> filterElements, ArrayList<Handler> handlers) {
         try {
             final SyslogHandler handler = new SyslogHandler(config.endpoint.getHostString(), config.endpoint.getPort());
             handler.setAppName(config.appName.orElse(getProcessName()));
@@ -241,20 +237,25 @@ public class LoggingSetupRecorder {
             handler.setErrorManager(errorManager);
             handler.setFilter(new LogCleanupFilter(filterElements));
             if (config.async.enable) {
-                return createAsyncHandler(config.async, config.level, handler);
+                final AsyncHandler asyncHandler = new AsyncHandler(config.async.queueLength);
+                asyncHandler.setOverflowAction(config.async.overflow);
+                asyncHandler.addHandler(handler);
+                asyncHandler.setLevel(config.level);
+                handlers.add(asyncHandler);
+            } else {
+                handlers.add(handler);
             }
-            return handler;
         } catch (IOException e) {
             errorManager.error("Failed to create syslog handler", e, ErrorManager.OPEN_FAILURE);
-            return null;
         }
     }
 
-    private static AsyncHandler createAsyncHandler(AsyncConfig asyncConfig, Level level, Handler handler) {
-        final AsyncHandler asyncHandler = new AsyncHandler(asyncConfig.queueLength);
-        asyncHandler.setOverflowAction(asyncConfig.overflow);
-        asyncHandler.addHandler(handler);
-        asyncHandler.setLevel(level);
-        return asyncHandler;
+    public void initializeLoggingForImageBuild() {
+        if (ImageInfo.inImageBuildtimeCode()) {
+            final ConsoleHandler handler = new ConsoleHandler(new PatternFormatter(
+                    "%d{HH:mm:ss,SSS} %-5p [%c{1.}] %s%e%n"));
+            handler.setLevel(Level.INFO);
+            InitialConfigurator.DELAYED_HANDLER.setHandlers(new Handler[] { handler });
+        }
     }
 }

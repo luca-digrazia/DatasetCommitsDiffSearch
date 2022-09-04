@@ -5,6 +5,7 @@ import java.util.logging.Level;
 
 import io.quarkus.runtime.annotations.ConfigGroup;
 import io.quarkus.runtime.annotations.ConfigItem;
+import io.quarkus.runtime.annotations.DefaultConverter;
 
 @ConfigGroup
 public class ConsoleConfig {
@@ -16,12 +17,6 @@ public class ConsoleConfig {
     boolean enable;
 
     /**
-     * If console logging should go to {@link System#err} instead of {@link System#out}.
-     */
-    @ConfigItem(defaultValue = "false")
-    boolean stderr;
-
-    /**
      * The log format. Note that this value will be ignored if an extension is present that takes
      * control of console formatting (e.g. an XML or JSON-format extension).
      */
@@ -31,6 +26,7 @@ public class ConsoleConfig {
     /**
      * The console log level.
      */
+    @DefaultConverter
     @ConfigItem(defaultValue = "ALL")
     Level level;
 
@@ -40,7 +36,7 @@ public class ConsoleConfig {
      * Note that this value will be ignored if an extension is present that takes
      * control of console formatting (e.g. an XML or JSON-format extension).
      */
-    @ConfigItem
+    @ConfigItem()
     Optional<Boolean> color;
 
     /**
