@@ -41,9 +41,11 @@ public class Skylint {
     issues.sort(Issue::compare);
     if (!issues.isEmpty()) {
       System.out.println(path);
-      for (Issue issue : issues) {
-        System.out.println(issue);
-      }
+    }
+    for (Issue issue : issues) {
+      System.out.println(issue);
+    }
+    if (!issues.isEmpty()) {
       System.exit(1);
     }
   }

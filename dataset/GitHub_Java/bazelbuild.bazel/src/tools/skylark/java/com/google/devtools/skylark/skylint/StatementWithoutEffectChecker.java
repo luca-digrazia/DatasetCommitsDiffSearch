@@ -28,8 +28,6 @@ import java.util.List;
 
 /** Checks for statements that have no effect. */
 public class StatementWithoutEffectChecker extends SyntaxTreeVisitor {
-  private static final String NO_EFFECT_CATEGORY = "no-effect";
-
   private final List<Issue> issues = new ArrayList<>();
   private boolean hasEffect = false;
   private boolean topLevel = true;
@@ -79,7 +77,7 @@ public class StatementWithoutEffectChecker extends SyntaxTreeVisitor {
       // list]
       return;
     }
-    issues.add(Issue.create(NO_EFFECT_CATEGORY, "expression result not used", node.getLocation()));
+    issues.add(new Issue("expression result not used", node.getLocation()));
   }
 
   @Override
