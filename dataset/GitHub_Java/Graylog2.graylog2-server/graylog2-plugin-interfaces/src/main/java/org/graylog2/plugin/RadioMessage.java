@@ -31,7 +31,6 @@ public class RadioMessage {
 
     public Map<String, String> strings;
     public Map<String, Long> longs;
-    public Map<String, Double> doubles;
     public long timestamp;
 
 }
