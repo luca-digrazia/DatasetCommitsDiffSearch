@@ -74,7 +74,7 @@ public class EvalException extends Exception {
     return msg != null ? msg : cause.toString();
   }
 
-  // TODO(adonovan): delete constructors below. Stop using Location.
+  // TODO(adonovan): delete all constructors below. Stop using Location.
 
   /**
    * Constructs an EvalException with a message and optional location (deprecated).
@@ -96,7 +96,8 @@ public class EvalException extends Exception {
    * message, so callers should incorporate {@code cause.getMessage()} into {@code message} if
    * desired.
    */
-  private EvalException(@Nullable Location location, String message, @Nullable Throwable cause) {
+  // TODO(adonovan): eliminate.
+  public EvalException(@Nullable Location location, String message, @Nullable Throwable cause) {
     super(Preconditions.checkNotNull(message), cause);
     this.location = location;
   }
