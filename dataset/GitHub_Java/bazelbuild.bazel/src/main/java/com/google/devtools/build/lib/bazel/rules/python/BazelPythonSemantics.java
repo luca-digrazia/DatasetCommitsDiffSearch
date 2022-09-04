@@ -331,19 +331,18 @@ public class BazelPythonSemantics implements PythonSemantics {
     builder.addOutputGroup("python_zip_file", zipFile);
   }
 
-  private static String getZipRunfilesPath(
-      PathFragment path, PathFragment workspaceName, boolean legacyExternalRunfiles) {
+  private static boolean isUnderWorkspace(PathFragment path) {
+    return !path.startsWith(LabelConstants.EXTERNAL_PATH_PREFIX);
+  }
+
+  private static String getZipRunfilesPath(PathFragment path, PathFragment workspaceName) {
     String zipRunfilesPath;
-    if (legacyExternalRunfiles && path.startsWith(LabelConstants.EXTERNAL_PATH_PREFIX)) {
-      // If the path starts with 'external' and --legacy_external_runfiles is set, this file is in
-      // an external repository. Convert it to the new runfiles path by removing the 'external'
-      // prefix.
-      zipRunfilesPath = path.relativeTo(LabelConstants.EXTERNAL_PATH_PREFIX).toString();
-    } else {
-      // If not, it means the runfiles path is either under the workspace or an external file path
-      // in the new runfiles path format. In either case, simply appending it to the workspace name
-      // works just fine.
+    if (isUnderWorkspace(path)) {
+      // If the file is under workspace, add workspace name as prefix
       zipRunfilesPath = workspaceName.getRelative(path).toString();
+    } else {
+      // If the file is in external package, strip "external"
+      zipRunfilesPath = path.relativeTo(LabelConstants.EXTERNAL_PATH_PREFIX).toString();
     }
     // We put the whole runfiles tree under the ZIP_RUNFILES_DIRECTORY_NAME directory, by doing this
     // , we avoid the conflict between default workspace name "__main__" and __main__.py file.
@@ -351,9 +350,8 @@ public class BazelPythonSemantics implements PythonSemantics {
     return ZIP_RUNFILES_DIRECTORY_NAME.getRelative(zipRunfilesPath).toString();
   }
 
-  private static String getZipRunfilesPath(
-      String path, PathFragment workspaceName, boolean legacyExternalRunfiles) {
-    return getZipRunfilesPath(PathFragment.create(path), workspaceName, legacyExternalRunfiles);
+  private static String getZipRunfilesPath(String path, PathFragment workspaceName) {
+    return getZipRunfilesPath(PathFragment.create(path), workspaceName);
   }
 
   private static void createPythonZipAction(
@@ -369,14 +367,12 @@ public class BazelPythonSemantics implements PythonSemantics {
     CustomCommandLine.Builder argv = new CustomCommandLine.Builder();
     inputsBuilder.add(stubFile);
     argv.addPrefixedExecPath("__main__.py=", stubFile);
-    boolean legacyExternalRunfiles = ruleContext.getConfiguration().legacyExternalRunfiles();
 
     // Creating __init__.py files under each directory
     argv.add("__init__.py=");
-    argv.addDynamicString(
-        getZipRunfilesPath("__init__.py", workspaceName, legacyExternalRunfiles) + "=");
+    argv.addDynamicString(getZipRunfilesPath("__init__.py", workspaceName) + "=");
     for (String path : runfilesSupport.getRunfiles().getEmptyFilenames().toList()) {
-      argv.addDynamicString(getZipRunfilesPath(path, workspaceName, legacyExternalRunfiles) + "=");
+      argv.addDynamicString(getZipRunfilesPath(path, workspaceName) + "=");
     }
 
     // Read each runfile from execute path, add them into zip file at the right runfiles path.
@@ -384,7 +380,7 @@ public class BazelPythonSemantics implements PythonSemantics {
     for (Artifact artifact : runfilesSupport.getRunfilesArtifacts().toList()) {
       if (!artifact.equals(executable) && !artifact.equals(zipFile)) {
         argv.addDynamicString(
-            getZipRunfilesPath(artifact.getRunfilesPath(), workspaceName, legacyExternalRunfiles)
+            getZipRunfilesPath(artifact.getRunfilesPath(), workspaceName)
                 + "="
                 + artifact.getExecPathString());
         inputsBuilder.add(artifact);

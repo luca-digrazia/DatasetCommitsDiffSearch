@@ -62,7 +62,7 @@ public interface PythonSemantics {
    */
   void collectDefaultRunfilesForBinary(
       RuleContext ruleContext, PyCommon common, Runfiles.Builder builder)
-      throws InterruptedException, RuleErrorException;
+      throws InterruptedException;
 
   /** Collects a rule's default runfiles. */
   void collectDefaultRunfiles(RuleContext ruleContext, Runfiles.Builder builder);
