@@ -15,17 +15,19 @@ package com.google.devtools.build.lib.profiler.statistics;
 
 import com.google.common.base.Predicate;
 import com.google.devtools.build.lib.actions.MiddlemanAction;
+import com.google.devtools.build.lib.profiler.ProfileInfo;
+import com.google.devtools.build.lib.profiler.ProfileInfo.CriticalPathEntry;
+import com.google.devtools.build.lib.profiler.ProfileInfo.Task;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
-import com.google.devtools.build.lib.profiler.analysis.ProfileInfo;
-import com.google.devtools.build.lib.profiler.analysis.ProfileInfo.CriticalPathEntry;
-import com.google.devtools.build.lib.profiler.analysis.ProfileInfo.Task;
 import com.google.devtools.build.lib.util.Pair;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.List;
+
 import javax.annotation.Nullable;
 
 /**
@@ -56,7 +58,7 @@ public final class CriticalPathStatistics implements Iterable<Pair<String, Doubl
                   })),
           typeFilter("the dependency checking", ProfilerTask.ACTION_CHECK),
           typeFilter("the execution setup", ProfilerTask.ACTION_EXECUTE),
-          typeFilter("local execution", ProfilerTask.LOCAL_EXECUTION),
+          typeFilter("local execution", ProfilerTask.SPAWN, ProfilerTask.LOCAL_EXECUTION),
           typeFilter("the include scanner", ProfilerTask.SCANNER),
           typeFilter(
               "Remote execution (cumulative)",
@@ -89,6 +91,7 @@ public final class CriticalPathStatistics implements Iterable<Pair<String, Doubl
    */
   private final CriticalPathEntry optimalPath;
 
+  private final long workerWaitTime;
   private final long mainThreadWaitTime;
 
   public CriticalPathStatistics(ProfileInfo info) {
@@ -99,15 +102,19 @@ public final class CriticalPathStatistics implements Iterable<Pair<String, Doubl
     info.analyzeCriticalPath(DEFAULT_FILTER, optimalPath);
 
     if (totalPath == null || totalPath.isComponent()) {
+      this.workerWaitTime = 0;
       this.mainThreadWaitTime = 0;
       criticalPathDurations = Collections.emptyList();
       return;
     }
     // Worker thread pool scheduling delays for the actual critical path.
+    long workerWaitTime = 0;
     long mainThreadWaitTime = 0;
     for (CriticalPathEntry entry = totalPath; entry != null; entry = entry.next) {
+      workerWaitTime += info.getActionWaitTime(entry.task);
       mainThreadWaitTime += info.getActionQueueTime(entry.task);
     }
+    this.workerWaitTime = workerWaitTime;
     this.mainThreadWaitTime = mainThreadWaitTime;
 
     criticalPathDurations = getCriticalPathDurations(info);
@@ -126,6 +133,14 @@ public final class CriticalPathStatistics implements Iterable<Pair<String, Doubl
    */
   public CriticalPathEntry getOptimalPath() {
     return optimalPath;
+  }
+
+  /**
+   * @see ProfileInfo#getActionWaitTime(Task)
+   * @return the sum of all action wait times on the total critical path
+   */
+  public long getWorkerWaitTime() {
+    return workerWaitTime;
   }
 
   /**
