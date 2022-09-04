@@ -21,9 +21,7 @@ import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.UserExecException;
-import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.exec.SpawnResult;
-import com.google.devtools.build.lib.exec.SpawnResult.Status;
 import com.google.devtools.build.lib.exec.SpawnRunner;
 import com.google.devtools.build.lib.remote.ContentDigests.ActionKey;
 import com.google.devtools.build.lib.remote.RemoteProtocol.Action;
@@ -49,7 +47,6 @@ import java.util.TreeSet;
  * A {@link SpawnRunner} implementation that adds a remote cache on top of an underlying local
  * {@link SpawnRunner} implementation.
  */
-@ThreadSafe // If RemoteActionCache and SpawnRunner implementations are thread-safe.
 final class CachedLocalSpawnRunner implements SpawnRunner {
   private final Path execRoot;
   private final RemoteOptions options;
@@ -116,7 +113,7 @@ final class CachedLocalSpawnRunner implements SpawnRunner {
           actionCache.downloadAllResults(result, execRoot);
           passRemoteOutErr(result, policy.getFileOutErr());
           return new SpawnResult.Builder()
-              .setStatus(Status.SUCCESS)
+              .setSetupSuccess(true)
               .setExitCode(result.getReturnCode())
               .build();
         } catch (CacheNotFoundException e) {

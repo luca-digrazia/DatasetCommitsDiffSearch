@@ -20,6 +20,7 @@ import static org.mockito.Mockito.when;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionInputFileCache;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
@@ -30,7 +31,6 @@ import com.google.devtools.build.lib.actions.SimpleSpawn;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.exec.SpawnInputExpander;
 import com.google.devtools.build.lib.exec.SpawnResult;
-import com.google.devtools.build.lib.exec.SpawnRunner.ProgressStatus;
 import com.google.devtools.build.lib.exec.SpawnRunner.SpawnExecutionPolicy;
 import com.google.devtools.build.lib.remote.RemoteProtocol.ActionResult;
 import com.google.devtools.build.lib.remote.RemoteProtocol.ContentDigest;
@@ -70,6 +70,7 @@ public class GrpcRemoteExecutionClientTest {
 
   private FileSystem fs;
   private Path execRoot;
+  private EventBus eventBus;
   private SimpleSpawn simpleSpawn;
   private FakeActionInputFileCache fakeFileCache;
 
@@ -107,11 +108,6 @@ public class GrpcRemoteExecutionClientTest {
       return new SpawnInputExpander(/*strict*/false)
           .getInputMapping(simpleSpawn, SIMPLE_ARTIFACT_EXPANDER, fakeFileCache, "workspace");
     }
-
-    @Override
-    public void report(ProgressStatus state) {
-      // TODO(ulfjack): Test that the right calls are made.
-    }
   };
 
   @Before
@@ -119,6 +115,7 @@ public class GrpcRemoteExecutionClientTest {
     fs = new InMemoryFileSystem();
     execRoot = fs.getPath("/exec/root");
     FileSystemUtils.createDirectoryAndParents(execRoot);
+    eventBus = new EventBus();
     fakeFileCache = new FakeActionInputFileCache(execRoot);
     simpleSpawn = new SimpleSpawn(
         new FakeOwner("Mnemonic", "Progress Message"),
@@ -152,7 +149,8 @@ public class GrpcRemoteExecutionClientTest {
     RemoteOptions options = Options.getDefaults(RemoteOptions.class);
     GrpcRemoteExecutor executor =
         new GrpcRemoteExecutor(options, casIface, cacheIface, executionIface);
-    RemoteSpawnRunner client = new RemoteSpawnRunner(execRoot, options, executor);
+    RemoteSpawnRunner client =
+        new RemoteSpawnRunner(execRoot, eventBus, options, executor);
 
     scratch(simpleSpawn.getInputFiles().get(0), "xyz");
 
@@ -178,7 +176,8 @@ public class GrpcRemoteExecutionClientTest {
     RemoteOptions options = Options.getDefaults(RemoteOptions.class);
     GrpcRemoteExecutor executor =
         new GrpcRemoteExecutor(options, casIface, cacheIface, executionIface);
-    RemoteSpawnRunner client = new RemoteSpawnRunner(execRoot, options, executor);
+    RemoteSpawnRunner client =
+        new RemoteSpawnRunner(execRoot, eventBus, options, executor);
 
     scratch(simpleSpawn.getInputFiles().get(0), "xyz");
     byte[] cacheStdOut = "stdout".getBytes(StandardCharsets.UTF_8);
@@ -211,7 +210,8 @@ public class GrpcRemoteExecutionClientTest {
     RemoteOptions options = Options.getDefaults(RemoteOptions.class);
     GrpcRemoteExecutor executor =
         new GrpcRemoteExecutor(options, casIface, cacheIface, executionIface);
-    RemoteSpawnRunner client = new RemoteSpawnRunner(execRoot, options, executor);
+    RemoteSpawnRunner client =
+        new RemoteSpawnRunner(execRoot, eventBus, options, executor);
 
     scratch(simpleSpawn.getInputFiles().get(0), "xyz");
     byte[] cacheStdOut = "stdout".getBytes(StandardCharsets.UTF_8);
