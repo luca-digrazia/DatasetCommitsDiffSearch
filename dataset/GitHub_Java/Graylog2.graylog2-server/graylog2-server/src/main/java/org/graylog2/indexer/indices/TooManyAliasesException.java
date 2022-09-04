@@ -16,12 +16,9 @@
  */
 package org.graylog2.indexer.indices;
 
-import org.graylog2.indexer.ElasticsearchException;
-
 import java.util.Set;
 
-// TODO: This should actually be a `TooManyIndicesForAliasException`?
-public class TooManyAliasesException extends ElasticsearchException {
+public class TooManyAliasesException extends Exception {
     private final Set<String> indices;
 
     public TooManyAliasesException(final Set<String> indices) {

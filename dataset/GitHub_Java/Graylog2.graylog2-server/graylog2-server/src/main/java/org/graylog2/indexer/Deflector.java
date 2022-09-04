@@ -265,9 +265,8 @@ public class Deflector { // extends Ablenkblech
         try {
             return Integer.parseInt(parts[parts.length - 1]);
         } catch (Exception e) {
-            final String msg = "Could not extract index number from index <" + indexName + ">.";
-            LOG.debug(msg, e);
-            throw new NumberFormatException(msg);
+            LOG.debug("Could not extract index number from index <" + indexName + ">.", e);
+            throw new NumberFormatException();
         }
     }
 

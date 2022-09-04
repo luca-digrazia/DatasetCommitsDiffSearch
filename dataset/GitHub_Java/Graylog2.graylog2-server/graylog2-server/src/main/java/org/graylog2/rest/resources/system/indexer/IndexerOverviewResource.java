@@ -74,7 +74,7 @@ public class IndexerOverviewResource extends RestResource {
     @Timed
     @ApiOperation(value = "Get overview of current indexing state, including deflector config, cluster state, index ranges & message counts.")
     @Produces(MediaType.APPLICATION_JSON)
-    public IndexerOverview index() throws TooManyAliasesException {
+    public IndexerOverview index() throws ClassNotFoundException, TooManyAliasesException {
         final DeflectorSummary deflectorSummary = deflectorResource.deflector();
         final List<IndexRangeSummary> indexRanges = indexRangesResource.list().ranges();
         final Map<String, IndexStats> allDocCounts = indices.getAllDocCounts().entrySet().stream()
@@ -95,13 +95,15 @@ public class IndexerOverviewResource extends RestResource {
                     areReopened.get(indexStats.getIndex()))
             ));
 
-        indices.getClosedIndices().forEach(indexName -> indicesSummaries.put(indexName, IndexSummary.create(
+        indices.getClosedIndices().stream().forEach((indexName) -> {
+            indicesSummaries.put(indexName, IndexSummary.create(
                 null,
                 indexRanges.stream().filter((indexRangeSummary) -> indexRangeSummary.indexName().equals(indexName)).findFirst().orElse(null),
                 deflectorSummary.currentTarget().equals(indexName),
                 true,
                 false
-        )));
+            ));
+        });
 
         return IndexerOverview.create(deflectorSummary,
             IndexerClusterOverview.create(indexerClusterResource.clusterHealth(), indexerClusterResource.clusterName().name()),

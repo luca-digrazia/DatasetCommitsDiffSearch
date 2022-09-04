@@ -204,9 +204,8 @@ public class IndicesResource extends RestResource {
         checkPermission(RestPermissions.INDICES_CHANGESTATE, index);
 
         if (!deflector.isGraylogIndex(index)) {
-            final String msg = "Index [" + index + "] doesn't look like an index managed by Graylog.";
-            LOG.info(msg);
-            throw new NotFoundException(msg);
+            LOG.info("Index [{}] doesn't look like an index managed by Graylog.", index);
+            throw new NotFoundException();
         }
 
         indices.reopenIndex(index);
@@ -225,9 +224,8 @@ public class IndicesResource extends RestResource {
         checkPermission(RestPermissions.INDICES_CHANGESTATE, index);
 
         if (!deflector.isGraylogIndex(index)) {
-            final String msg = "Index [" + index + "] doesn't look like an index managed by Graylog.";
-            LOG.info(msg);
-            throw new NotFoundException(msg);
+            LOG.info("Index [{}] doesn't look like an index managed by Graylog.", index);
+            throw new NotFoundException();
         }
 
         if (index.equals(deflector.getCurrentActualTargetIndex())) {
