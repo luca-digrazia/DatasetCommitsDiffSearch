@@ -57,10 +57,9 @@ public class ConstraintValueRule implements RuleDefinition {
 }
 /*<!-- #BLAZE_RULE (NAME = constraint_value, FAMILY = Platform)[GENERIC_RULE] -->
 
-This rule introduces a new value for a given constraint type.
-
-For more details, see the
-<a href="https://docs.bazel.build/versions/master/platforms.html">Platforms</a> page.
+This rule introduces a new value for a given constraint type. See the
+<a href="https://docs.bazel.build/versions/master/platforms.html">Platforms</a> page for more
+details.
 
 <h4 id="constraint_value_examples">Example</h4>
 <p>The following creates a new possible value for the predefined <code>constraint_value</code>

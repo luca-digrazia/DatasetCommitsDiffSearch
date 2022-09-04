@@ -60,10 +60,9 @@ public class ConstraintSettingRule implements RuleDefinition {
 
 <p>This rule is used to introduce a new constraint type for which a platform may specify a value.
 For instance, you might define a <code>constraint_setting</code> named "glibc_version" to represent
-the capability for platforms to have different versions of the glibc library installed.
-
-For more details, see the
-<a href="https://docs.bazel.build/versions/master/platforms.html">Platforms</a> page.
+the capability for platforms to have different versions of the glibc library installed. See the
+<a href="https://docs.bazel.build/versions/master/platforms.html">Platforms</a> page for more
+details.
 
 <p>Each <code>constraint_setting</code> has an extensible set of associated
 <code>constraint_value</code>s. Usually these are defined in the same package, but sometimes a

@@ -1,4 +1,4 @@
-// Copyright 2016 The Bazel Authors. All rights reserved.
+// Copyright 2017 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,55 +14,93 @@
 
 package com.google.devtools.build.lib.rules;
 
-import com.google.common.collect.ImmutableMap;
+import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
+import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
+import com.google.devtools.build.lib.analysis.RuleDefinition;
+import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.cmdline.Label;
-import java.util.TreeMap;
+import com.google.devtools.build.lib.analysis.platform.ToolchainTypeInfo;
+import com.google.devtools.build.lib.packages.RuleClass;
+import com.google.devtools.build.lib.packages.RuleClass.ToolchainResolutionMode;
 
 /**
- * Abstract base class for {@code toolchain_type}.
+ * Implementation of {@code toolchain_type}.
  */
 public class ToolchainType implements RuleConfiguredTargetFactory {
-  private final ImmutableMap<Label, Class<? extends BuildConfiguration.Fragment>> fragmentMap;
-  private final ImmutableMap<Label, ImmutableMap<String, String>> hardcodedVariableMap;
-
-  protected ToolchainType(
-      ImmutableMap<Label, Class<? extends BuildConfiguration.Fragment>> fragmentMap,
-      ImmutableMap<Label, ImmutableMap<String, String>> hardcodedVariableMap) {
-    this.fragmentMap = fragmentMap;
-    this.hardcodedVariableMap = hardcodedVariableMap;
-  }
 
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
-      throws InterruptedException, RuleErrorException {
-    // This cannot be an ImmutableMap.Builder because that asserts when a key is duplicated
-    TreeMap<String, String> makeVariables = new TreeMap<>();
-    Class<? extends BuildConfiguration.Fragment> fragmentClass =
-        fragmentMap.get(ruleContext.getLabel());
-    if (fragmentClass != null) {
-      BuildConfiguration.Fragment fragment = ruleContext.getFragment(fragmentClass);
-      ImmutableMap.Builder<String, String> fragmentBuilder = ImmutableMap.builder();
-      fragment.addGlobalMakeVariables(fragmentBuilder);
-      makeVariables.putAll(fragmentBuilder.build());
-    }
+      throws ActionConflictException, InterruptedException {
 
-    ImmutableMap<String, String> hardcodedVariables =
-        hardcodedVariableMap.get(ruleContext.getLabel());
-    if (hardcodedVariables != null) {
-      makeVariables.putAll(hardcodedVariables);
-    }
-    // This will eventually go to Skyframe using getAnalysisEnvironment.getSkyframeEnv() to figure
-    // out the lookup rule -> toolchain rule mapping. For now, it only provides Make variables that
-    // come from BuildConfiguration so no need to ask Skyframe.
+    ToolchainTypeInfo toolchainTypeInfo = ToolchainTypeInfo.create(ruleContext.getLabel());
+
     return new RuleConfiguredTargetBuilder(ruleContext)
-        .addProvider(new MakeVariableProvider(ImmutableMap.copyOf(makeVariables)))
         .addProvider(RunfilesProvider.simple(Runfiles.EMPTY))
+        .addNativeDeclaredProvider(toolchainTypeInfo)
         .build();
   }
+
+  /** Definition for {@code toolchain_type}. */
+  public static class ToolchainTypeRule implements RuleDefinition {
+
+    @Override
+    public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment environment) {
+      return builder
+          .useToolchainResolution(ToolchainResolutionMode.DISABLED)
+          .advertiseStarlarkProvider(ToolchainTypeInfo.PROVIDER.id())
+          .removeAttribute("licenses")
+          .removeAttribute("distribs")
+          .build();
+    }
+
+    @Override
+    public Metadata getMetadata() {
+      return Metadata.builder()
+          .name("toolchain_type")
+          .factoryClass(ToolchainType.class)
+          .ancestors(BaseRuleClasses.NativeBuildRule.class)
+          .build();
+    }
+  }
 }
+/*<!-- #BLAZE_RULE (NAME = toolchain_type, FAMILY = Platform)[GENERIC_RULE] -->
+
+<p>
+  This rule defines a new type of toolchain -- a simple target that represents a class of tools that
+  serve the same role for different platforms.
+</p>
+
+<p>
+  See the <a href="../toolchains.html">Toolchains</a> page for more details.
+</p>
+
+<h4 id="toolchain_type_examples">Example</h4>
+<p>
+  This defines a toolchain type for a custom rule.
+</p>
+<pre class="code">
+toolchain_type(
+    name = "bar_toolchain_type",
+)
+</pre>
+
+<p>
+  This can be used in a bzl file.
+</p>
+<pre class="code">
+bar_binary = rule(
+    implementation = _bar_binary_impl,
+    attrs = {
+        "srcs": attr.label_list(allow_files = True),
+        ...
+        # No `_compiler` attribute anymore.
+    },
+    toolchains = ["//bar_tools:toolchain_type"]
+)
+</pre>
+<!-- #END_BLAZE_RULE -->*/
