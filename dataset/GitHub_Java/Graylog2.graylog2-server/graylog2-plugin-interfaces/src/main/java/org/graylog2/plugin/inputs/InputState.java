@@ -62,7 +62,6 @@ public class InputState {
 
     public void setState(InputStateType state) {
         this.state = state;
-        this.setDetailedMessage(null);
     }
 
     public String getStartedAt() {

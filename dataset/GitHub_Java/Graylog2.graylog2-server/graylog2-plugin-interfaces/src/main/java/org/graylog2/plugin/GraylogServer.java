@@ -54,4 +54,6 @@ public interface GraylogServer extends Runnable, GenericHost {
     void closeIndexShortcut(String indexName);
 
     public AtomicInteger processBufferWatermark();
+
+    public List<MessageFilter> getFilters();
 }
