@@ -21,6 +21,7 @@ import static org.junit.Assert.assertThrows;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.hash.Hashing;
 import com.google.devtools.build.lib.actions.Action;
@@ -29,7 +30,7 @@ import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionLookupData;
-import com.google.devtools.build.lib.actions.ActionLookupKey;
+import com.google.devtools.build.lib.actions.ActionLookupValue.ActionLookupKey;
 import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Actions;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -61,7 +62,6 @@ import com.google.devtools.build.lib.skyframe.serialization.testutils.Serializat
 import com.google.devtools.build.lib.testutil.TestUtils;
 import com.google.devtools.build.lib.util.CrashFailureDetails;
 import com.google.devtools.build.lib.util.DetailedExitCode;
-import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileStatus;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -581,16 +581,12 @@ public final class TreeArtifactBuildTest extends TimestampBuilderTestCase {
             FileStatus stat = child1.getPath().stat(Symlinks.NOFOLLOW);
             FileArtifactValue metadata1 =
                 md.constructMetadataForDigest(
-                    child1,
-                    stat,
-                    DigestHashFunction.SHA256.getHashFunction().hashString("one", UTF_8).asBytes());
+                    child1, stat, Hashing.sha256().hashString("one", UTF_8).asBytes());
 
             stat = child2.getPath().stat(Symlinks.NOFOLLOW);
             FileArtifactValue metadata2 =
                 md.constructMetadataForDigest(
-                    child2,
-                    stat,
-                    DigestHashFunction.SHA256.getHashFunction().hashString("two", UTF_8).asBytes());
+                    child2, stat, Hashing.sha256().hashString("two", UTF_8).asBytes());
 
             // The metadata will not be equal to reading from the filesystem since the filesystem
             // won't have the digest. However, we should be able to detect that nothing could have
@@ -631,12 +627,7 @@ public final class TreeArtifactBuildTest extends TimestampBuilderTestCase {
 
             actionExecutionContext
                 .getMetadataHandler()
-                .injectTree(
-                    out,
-                    TreeArtifactValue.newBuilder(out)
-                        .putChild(child1, remoteFile1)
-                        .putChild(child2, remoteFile2)
-                        .build());
+                .injectDirectory(out, ImmutableMap.of(child1, remoteFile1, child2, remoteFile2));
           }
         };
 
@@ -1040,7 +1031,7 @@ public final class TreeArtifactBuildTest extends TimestampBuilderTestCase {
     }
 
     @Override
-    public SkyValue compute(SkyKey skyKey, Environment env) throws InterruptedException {
+    public SkyValue compute(SkyKey skyKey, Environment env) {
       try {
         return new ActionTemplateExpansionValue(
             Actions.assignOwnersAndFilterSharedActionsAndThrowActionConflict(
