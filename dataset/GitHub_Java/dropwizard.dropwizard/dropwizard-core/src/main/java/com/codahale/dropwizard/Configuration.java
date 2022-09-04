@@ -1,7 +1,8 @@
 package com.codahale.dropwizard;
 
 import com.codahale.dropwizard.logging.LoggingFactory;
-import com.codahale.dropwizard.config.ServerConfiguration;
+import com.codahale.dropwizard.server.DefaultServerFactory;
+import com.codahale.dropwizard.server.ServerFactory;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.base.Objects;
 
@@ -28,15 +29,28 @@ import javax.validation.constraints.NotNull;
  *     \@Max(120)
  *     private int age;
  *
+ *     \@JsonProperty
  *     public String getName() {
  *         return name;
  *     }
  *
+ *     \@JsonProperty
+ *     public void setName(String name) {
+ *         this.name = name;
+ *     }
+ *
+ *     \@JsonProperty
  *     public int getAge() {
  *         return age;
  *     }
+ *
+ *     \@JsonProperty
+ *     public void setAge(int age) {
+ *         this.age = age;
+ *     }
  * }
  * </pre>
+ * <p/>
  * Dropwizard will parse the given YAML file and provide an {@code ExampleConfiguration} instance
  * to your service whose {@code getName()} method will return {@code "Random Person"} and whose
  * {@code getAge()} method will return {@code 43}.
@@ -46,7 +60,7 @@ import javax.validation.constraints.NotNull;
 public class Configuration {
     @Valid
     @NotNull
-    private ServerConfiguration server = new ServerConfiguration();
+    private ServerFactory server = new DefaultServerFactory();
 
     @Valid
     @NotNull
@@ -58,7 +72,7 @@ public class Configuration {
      * @return server-specific configuration parameters
      */
     @JsonProperty("server")
-    public ServerConfiguration getServerConfiguration() {
+    public ServerFactory getServerFactory() {
         return server;
     }
 
@@ -66,8 +80,8 @@ public class Configuration {
      * Sets the HTTP-specific section of the configuration file.
      */
     @JsonProperty("server")
-    public void setHttpConfiguration(ServerConfiguration config) {
-        this.server = config;
+    public void setServerFactory(ServerFactory factory) {
+        this.server = factory;
     }
 
     /**
@@ -84,8 +98,8 @@ public class Configuration {
      * Sets the logging-specific section of the configuration file.
      */
     @JsonProperty("logging")
-    public void setLoggingFactory(LoggingFactory logging) {
-        this.logging = logging;
+    public void setLoggingFactory(LoggingFactory factory) {
+        this.logging = factory;
     }
 
     @Override
