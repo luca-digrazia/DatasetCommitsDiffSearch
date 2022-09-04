@@ -17,7 +17,7 @@ package com.google.devtools.build.lib.rules.cpp;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
-import static com.google.devtools.build.lib.packages.Type.BOOLEAN;
+import static com.google.devtools.build.lib.syntax.Type.BOOLEAN;
 
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
@@ -51,10 +51,7 @@ public final class CcImportRule implements RuleDefinition {
             or <code>.dylib</code>
           </p>
         <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
-        .add(
-            attr("shared_library", LABEL)
-                .allowedFileTypes(
-                    CppFileTypes.SHARED_LIBRARY, CppFileTypes.VERSIONED_SHARED_LIBRARY))
+        .add(attr("shared_library", LABEL).allowedFileTypes(CppFileTypes.SHARED_LIBRARY))
         /*<!-- #BLAZE_RULE($cc_import).ATTRIBUTE(interface_library) -->
           A single interface library for linking the shared library.
           <p> Permitted file types:
