@@ -17,12 +17,15 @@ package com.google.devtools.build.lib.skylarkinterface.processor.testsources;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 
 /**
- * Test case for a class with a SkylarkCallable method which has selfCall=true but no name.
+ * Test case for a class with a SkylarkCallable method which has selfCall=true and
+ * structField=true.
  */
-public class SelfCallWithNoName {
+public class SelfCallWithStructField {
 
   @SkylarkCallable(
+      name = "selfCallMethod",
       selfCall = true,
+      structField = true,
       documented = false
   )
   public Integer selfCallMethod() {

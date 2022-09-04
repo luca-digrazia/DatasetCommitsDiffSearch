@@ -14,18 +14,33 @@
 
 package com.google.devtools.build.lib.skylarkinterface.processor.testsources;
 
+import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 
 /**
- * Test case for a class with a SkylarkCallable method which has selfCall=true but no name.
+ * Test case for a class with multiple SkylarkCallable methods which have selfCall=true.
  */
-public class SelfCallWithNoName {
+public class MultipleSelfCallMethods {
 
   @SkylarkCallable(
+      name = "selfCallMethod",
+      selfCall = true,
+      parameters = {
+          @Param(name = "one", type = String.class, named = true),
+          @Param(name = "two", type = Integer.class, named = true),
+      },
+      documented = false
+  )
+  public Integer selfCallMethod(String one, Integer two) {
+    return 0;
+  }
+
+  @SkylarkCallable(
+      name = "selfCallMethodTwo",
       selfCall = true,
       documented = false
   )
-  public Integer selfCallMethod() {
+  public Integer selfCallMethodTwo() {
     return 0;
   }
 }

@@ -158,12 +158,14 @@ public final class SkylarkCallableProcessor extends AbstractProcessor {
       throws SkylarkCallableProcessorException {
     if (annotation.structField()) {
       if (annotation.useAst()
+          || annotation.useEnvironment()
+          || annotation.useAst()
           || !annotation.extraPositionals().name().isEmpty()
           || !annotation.extraKeywords().name().isEmpty()) {
         throw new SkylarkCallableProcessorException(
             methodElement,
             "@SkylarkCallable-annotated methods with structField=true may not also specify "
-                + "useAst, extraPositionals, or extraKeywords");
+                + "useAst, useEnvironment, useLocation, extraPositionals, or extraKeywords");
       }
     }
   }
