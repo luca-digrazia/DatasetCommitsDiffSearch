@@ -47,8 +47,7 @@ import org.elasticsearch.indices.IndexMissingException;
 import org.elasticsearch.search.aggregations.AggregationBuilders;
 import org.elasticsearch.search.aggregations.bucket.filter.Filter;
 import org.elasticsearch.search.aggregations.bucket.filter.FilterAggregationBuilder;
-import org.elasticsearch.search.aggregations.metrics.max.Max;
-import org.elasticsearch.search.aggregations.metrics.min.Min;
+import org.elasticsearch.search.aggregations.metrics.stats.Stats;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.events.ClusterEventBus;
 import org.graylog2.indexer.Deflector;
@@ -232,8 +231,7 @@ public class EsIndexRangeService implements IndexRangeService {
     protected TimestampStats timestampStatsOfIndex(String index) {
         final FilterAggregationBuilder builder = AggregationBuilders.filter("agg")
                 .filter(FilterBuilders.existsFilter("timestamp"))
-                .subAggregation(AggregationBuilders.min("ts_min").field("timestamp"))
-                .subAggregation(AggregationBuilders.max("ts_max").field("timestamp"));
+                .subAggregation(AggregationBuilders.stats("ts_stats").field("timestamp"));
         final SearchRequestBuilder srb = client.prepareSearch()
                 .setIndices(index)
                 .setSearchType(SearchType.COUNT)
@@ -255,12 +253,13 @@ public class EsIndexRangeService implements IndexRangeService {
             return TimestampStats.EMPTY;
         }
 
-        final Min minAgg = f.getAggregations().get("ts_min");
-        final DateTime min = new DateTime((long) minAgg.getValue(), DateTimeZone.UTC);
-        final Max maxAgg = f.getAggregations().get("ts_max");
-        final DateTime max = new DateTime((long) maxAgg.getValue(), DateTimeZone.UTC);
+        final Stats stats = f.getAggregations().get("ts_stats");
+        final DateTimeFormatter formatter = DateTimeFormat.forPattern(Tools.ES_DATE_FORMAT).withZoneUTC();
+        final DateTime min = formatter.parseDateTime(stats.getMinAsString());
+        final DateTime max = formatter.parseDateTime(stats.getMaxAsString());
+        final DateTime avg = formatter.parseDateTime(stats.getAvgAsString());
 
-        return TimestampStats.create(min, max);
+        return TimestampStats.create(min, max, avg);
     }
 
     @Override
