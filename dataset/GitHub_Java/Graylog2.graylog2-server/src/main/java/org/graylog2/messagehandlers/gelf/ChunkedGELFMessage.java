@@ -72,7 +72,6 @@ public class ChunkedGELFMessage extends GELFMessage {
 
     /**
      * Get all chunks of this message
-     * @return 
      */
     public Map<Integer, GELFClientChunk> getChunkMap() {
         return chunkMap;

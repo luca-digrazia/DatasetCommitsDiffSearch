@@ -138,7 +138,8 @@ public final class Tools {
      *
      * @param compressedData
      * @return A string containing the decompressed data
-     * @throws IOException
+     * @throws DataFormatException
+     * @throws UnsupportedEncodingException
      */
     public static String decompressZlib(byte[] compressedData) throws IOException {
         byte[] buffer = new byte[compressedData.length];

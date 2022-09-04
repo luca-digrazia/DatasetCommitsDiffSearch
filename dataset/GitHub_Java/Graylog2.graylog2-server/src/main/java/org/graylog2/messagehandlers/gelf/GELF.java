@@ -73,12 +73,6 @@ public final class GELF {
      */
     public static final int GELF_DATA_PART_MAX_LENGTH = 8192-GELF_HEADER_LENGTH;
 
-    /**
-     * The prefix for GELF standard fields.
-     * https://github.com/Graylog2/graylog2-docs/wiki/GELF
-     */
-    public static final String STANDARD_FIELD_PREFIX = "gelf";
-
     private GELF() { }
 
     /**
@@ -188,10 +182,10 @@ public final class GELF {
             throw new InvalidGELFHeaderException();
         }
 
-        byte[] data = new byte[message.getLength()-GELF.GELF_HEADER_LENGTH];
+        byte[] data = new byte[GELF.GELF_DATA_PART_MAX_LENGTH];
 
         int j = 0;
-        for (int i = GELF.GELF_HEADER_LENGTH; i < message.getLength(); i++) {
+        for (int i = GELF.GELF_HEADER_LENGTH; i < GELF.GELF_DATA_PART_MAX_LENGTH+GELF.GELF_HEADER_LENGTH; i++) {
             data[j] = message.getData()[i];
             j++;
         }

@@ -64,7 +64,7 @@ public class GELFClientChunk {
      * @param data
      */
     public void setData(byte[] data) {
-        this.data = data.clone();
+        this.data = data;
     }
 
     /**
@@ -138,25 +138,6 @@ public class GELFClientChunk {
         }
         
         return true;
-    }
-
-    @Override
-    public String toString() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("GELFClientChunk:\n");
-        sb.append("\tHash: ");
-        sb.append(this.hash);
-        sb.append("\tSequence: ");
-        sb.append(this.sequenceNumber);
-        sb.append("/");
-        sb.append(this.sequenceCount);
-        sb.append("\tArrival: ");
-        sb.append(this.arrival);
-        sb.append("\tData size: ");
-        sb.append(this.data.length);
-        sb.append("\n");
-
-        return sb.toString();
     }
 
 }
