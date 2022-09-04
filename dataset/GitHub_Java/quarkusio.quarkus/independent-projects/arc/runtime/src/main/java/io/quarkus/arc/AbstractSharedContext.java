@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.Set;
+
 import javax.enterprise.context.spi.Contextual;
 import javax.enterprise.context.spi.CreationalContext;
 
@@ -29,8 +30,7 @@ abstract class AbstractSharedContext implements InjectableContext {
 
     @SuppressWarnings("rawtypes")
     public AbstractSharedContext() {
-        this.instances = new ComputingCache<>(
-                key -> createInstanceHandle((InjectableBean) key.contextual, key.creationalContext));
+        this.instances = new ComputingCache<>(key -> createInstanceHandle((InjectableBean) key.contextual, key.creationalContext));
     }
 
     @SuppressWarnings("unchecked")
@@ -132,7 +132,7 @@ abstract class AbstractSharedContext implements InjectableContext {
         public String toString() {
             return "Key [contextual=" + contextual + "]";
         }
-
+        
     }
 
 }

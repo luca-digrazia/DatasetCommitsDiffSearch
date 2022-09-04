@@ -14,22 +14,24 @@
  * limitations under the License.
  */
 
-package io.quarkus.arc.deployment;
+package io.quarkus.arc;
 
-import org.jboss.builder.item.MultiBuildItem;
+import javax.enterprise.context.spi.CreationalContext;
 
-import io.quarkus.arc.processor.BeanRegistrar;
-import io.quarkus.arc.processor.ContextRegistrar;
+/**
+ * 
+ * 
+ * @param <T>
+ */
+public class ContextInstanceHandleImpl<T> extends InstanceHandleImpl<T> implements ContextInstanceHandle<T> {
 
-public final class ContextRegistrarBuildItem extends MultiBuildItem {
-
-    private final ContextRegistrar contextRegistrar;
-
-    public ContextRegistrarBuildItem(ContextRegistrar contextRegistrar) {
-        this.contextRegistrar = contextRegistrar;
+    public ContextInstanceHandleImpl(InjectableBean<T> bean, T instance, CreationalContext<T> creationalContext) {
+        super(bean, instance, creationalContext);
     }
 
-    public ContextRegistrar getContextRegistrar() {
-        return contextRegistrar;
+    @Override
+    public void destroy() {
+        destroyInternal();
     }
+
 }

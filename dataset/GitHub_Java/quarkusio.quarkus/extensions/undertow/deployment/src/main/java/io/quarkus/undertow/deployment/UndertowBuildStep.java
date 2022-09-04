@@ -139,6 +139,12 @@ public class UndertowBuildStep {
     @Inject
     CombinedIndexBuildItem combinedIndexBuildItem;
 
+    /**
+     * Configuration which applies to the HTTP server.
+     */
+    @ConfigItem(name = "http")
+    HttpConfig config;
+
     @BuildStep
     @Record(RUNTIME_INIT)
     public ServiceStartBuildItem boot(UndertowDeploymentTemplate template,
@@ -146,8 +152,7 @@ public class UndertowBuildStep {
             List<HttpHandlerWrapperBuildItem> wrappers,
             ShutdownContextBuildItem shutdown,
             Consumer<UndertowBuildItem> undertowProducer,
-            LaunchModeBuildItem launchMode,
-            HttpConfig config) throws Exception {
+            LaunchModeBuildItem launchMode) throws Exception {
         RuntimeValue<Undertow> ut = template.startUndertow(shutdown, servletDeploymentManagerBuildItem.getDeploymentManager(),
                 config, wrappers.stream().map(HttpHandlerWrapperBuildItem::getValue).collect(Collectors.toList()),
                 launchMode.getLaunchMode());

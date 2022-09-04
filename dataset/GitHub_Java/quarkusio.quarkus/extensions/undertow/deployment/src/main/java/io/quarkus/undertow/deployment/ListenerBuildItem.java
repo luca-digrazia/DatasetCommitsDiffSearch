@@ -14,22 +14,20 @@
  * limitations under the License.
  */
 
-package io.quarkus.arc.deployment;
+package io.quarkus.undertow.deployment;
 
 import org.jboss.builder.item.MultiBuildItem;
 
-import io.quarkus.arc.processor.BeanRegistrar;
-import io.quarkus.arc.processor.ContextRegistrar;
+public final class ListenerBuildItem extends MultiBuildItem {
 
-public final class ContextRegistrarBuildItem extends MultiBuildItem {
+    private final String listenerClass;
 
-    private final ContextRegistrar contextRegistrar;
-
-    public ContextRegistrarBuildItem(ContextRegistrar contextRegistrar) {
-        this.contextRegistrar = contextRegistrar;
+    public ListenerBuildItem(String listenerClass) {
+        this.listenerClass = listenerClass;
     }
 
-    public ContextRegistrar getContextRegistrar() {
-        return contextRegistrar;
+    public String getListenerClass() {
+        return listenerClass;
     }
+
 }
