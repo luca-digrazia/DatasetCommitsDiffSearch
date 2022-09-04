@@ -20,6 +20,8 @@
 
 package org.graylog2.inputs.gelf.tcp;
 
+import com.codahale.metrics.Gauge;
+import com.codahale.metrics.MetricRegistry;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.graylog2.inputs.gelf.GELFInputBase;
 import org.graylog2.plugin.inputs.*;
@@ -28,6 +30,7 @@ import org.jboss.netty.channel.socket.nio.NioServerSocketChannelFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -42,6 +45,15 @@ public class GELFTCPInput extends GELFInputBase {
 
     @Override
     public void launch() throws MisfireException {
+        // Register throughput counter gauges.
+        for(Map.Entry<String,Gauge<Long>> gauge : throughputCounter.gauges().entrySet()) {
+            core.metrics().register(MetricRegistry.name(getUniqueReadableId(), gauge.getKey()), gauge.getValue());
+        }
+
+        // Register connection counter gauges.
+        core.metrics().register(MetricRegistry.name(getUniqueReadableId(), "open_connections"), connectionCounter.gaugeCurrent());
+        core.metrics().register(MetricRegistry.name(getUniqueReadableId(), "total_connections"), connectionCounter.gaugeTotal());
+
         final ExecutorService bossThreadPool = Executors.newCachedThreadPool(
                 new ThreadFactoryBuilder()
                         .setNameFormat("input-" + inputId + "-gelftcp-boss-%d")
@@ -56,10 +68,10 @@ public class GELFTCPInput extends GELFInputBase {
                 new NioServerSocketChannelFactory(bossThreadPool, workerThreadPool)
         );
 
-        bootstrap.setPipelineFactory(new GELFTCPPipelineFactory(core, this));
+        bootstrap.setPipelineFactory(new GELFTCPPipelineFactory(core, this, throughputCounter, connectionCounter));
 
         try {
-            ((ServerBootstrap) bootstrap).bind(socketAddress);
+            channel = ((ServerBootstrap) bootstrap).bind(socketAddress);
             LOG.info("Started TCP GELF input on {}", socketAddress);
         } catch (Exception e) {
             String msg = "Could not bind TCP GELF input to address " + socketAddress;
