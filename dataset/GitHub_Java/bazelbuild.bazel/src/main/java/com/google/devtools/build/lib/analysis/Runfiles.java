@@ -303,11 +303,7 @@ public final class Runfiles implements RunfilesApi {
         Streams.concat(
                 symlinks.toList().stream().map(SymlinkEntry::getPath),
                 getArtifacts().toList().stream()
-                    .map(
-                        artifact ->
-                            legacyExternalRunfiles
-                                ? artifact.getOutputDirRelativePath(false)
-                                : artifact.getRunfilesPath()))
+                    .map(artifact -> artifact.getOutputDirRelativePath(false)))
             .collect(ImmutableSet.toImmutableSet());
     Iterable<PathFragment> emptyKeys = emptyFilesSupplier.getExtraPaths(manifestKeys);
     return NestedSetBuilder.<String>stableOrder()
