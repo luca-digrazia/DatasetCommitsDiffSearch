@@ -1,5 +1,9 @@
 package io.quarkus.it.hibernate.validator;
 
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -7,7 +11,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import javax.enterprise.event.Observes;
 import javax.inject.Inject;
+import javax.interceptor.InterceptorBinding;
+import javax.persistence.EntityManager;
+import javax.transaction.Transactional;
 import javax.validation.ConstraintViolation;
 import javax.validation.ConstraintViolationException;
 import javax.validation.Valid;
@@ -15,24 +23,52 @@ import javax.validation.Validator;
 import javax.validation.constraints.DecimalMin;
 import javax.validation.constraints.Digits;
 import javax.validation.constraints.Email;
+import javax.validation.constraints.Pattern;
+import javax.validation.groups.ConvertGroup;
+import javax.ws.rs.Consumes;
+import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
+import javax.ws.rs.POST;
+import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
 
 import org.hibernate.validator.constraints.Length;
 
 import io.quarkus.it.hibernate.validator.custom.MyOtherBean;
+import io.quarkus.it.hibernate.validator.groups.MyBeanWithGroups;
+import io.quarkus.it.hibernate.validator.groups.ValidationGroups;
+import io.quarkus.it.hibernate.validator.injection.InjectedConstraintValidatorConstraint;
+import io.quarkus.it.hibernate.validator.injection.MyService;
+import io.quarkus.it.hibernate.validator.orm.TestEntity;
+import io.quarkus.runtime.StartupEvent;
 
 @Path("/hibernate-validator/test")
-public class HibernateValidatorTestResource {
+public class HibernateValidatorTestResource
+        implements HibernateValidatorTestResourceGenericInterface<Integer>, HibernateValidatorTestResourceInterface {
 
     @Inject
     Validator validator;
 
     @Inject
     GreetingService greetingService;
+
+    @Inject
+    EnhancedGreetingService enhancedGreetingService;
+
+    @Inject
+    ZipCodeService zipCodeResource;
+
+    @Inject
+    EntityManager em;
+
+    public void testValidationOutsideOfResteasyContext(@Observes StartupEvent startupEvent) {
+        validator.validate(new MyOtherBean(null));
+    }
 
     @GET
     @Path("/basic-features")
@@ -101,6 +137,167 @@ public class HibernateValidatorTestResource {
         return id;
     }
 
+    // all JAX-RS annotations are defined in the interface
+    @Override
+    public String testRestEndPointInterfaceValidation(String id) {
+        return id;
+    }
+
+    // all JAX-RS annotations are defined in the interface
+    @Override
+    @SomeInterceptorBindingAnnotation
+    public String testRestEndPointInterfaceValidationWithAnnotationOnImplMethod(String id) {
+        return id;
+    }
+
+    @GET
+    @Path("/rest-end-point-generic-method-validation/{id}")
+    @Produces(MediaType.TEXT_PLAIN)
+    @Override
+    public Integer testRestEndpointGenericMethodValidation(@Digits(integer = 5, fraction = 0) @PathParam("id") Integer id) {
+        return id;
+    }
+
+    @GET
+    @Path("/no-produces/{id}/")
+    public Response noProduces(@Digits(integer = 5, fraction = 0) @PathParam("id") String id) {
+        return Response.accepted().build();
+    }
+
+    @GET
+    @Path("/injection")
+    @Produces(MediaType.TEXT_PLAIN)
+    public String testInjection() {
+        ResultBuilder result = new ResultBuilder();
+
+        result.append(formatViolations(validator.validate(new BeanWithInjectedConstraintValidatorConstraint(MyService.VALID))));
+
+        result.append(formatViolations(validator.validate(new BeanWithInjectedConstraintValidatorConstraint("Invalid value"))));
+
+        return result.build();
+    }
+
+    @GET
+    @Path("/test-inherited-implements-constraints")
+    @Produces(MediaType.TEXT_PLAIN)
+    public String testInheritedImplementsConstraints() {
+        ResultBuilder result = new ResultBuilder();
+
+        zipCodeResource.echoZipCode("12345");
+
+        result.append(formatViolations(Collections.emptySet()));
+
+        try {
+            zipCodeResource.echoZipCode("1234");
+        } catch (ConstraintViolationException e) {
+            result.append(formatViolations(e.getConstraintViolations()));
+        }
+
+        return result.build();
+    }
+
+    @GET
+    @Path("/test-inherited-extends-constraints")
+    @Produces(MediaType.TEXT_PLAIN)
+    public String testInheritedExtendsConstraints() {
+        ResultBuilder result = new ResultBuilder();
+
+        enhancedGreetingService.greeting("test");
+
+        result.append(formatViolations(Collections.emptySet()));
+
+        try {
+            enhancedGreetingService.greeting(null);
+        } catch (ConstraintViolationException e) {
+            result.append(formatViolations(e.getConstraintViolations()));
+        }
+
+        return result.build();
+    }
+
+    @GET
+    @Path("/test-validation-message-locale/{id}/")
+    @Produces(MediaType.TEXT_PLAIN)
+    public Response testValidationMessageLocale(
+            @Pattern(regexp = "A.*", message = "{pattern.message}") @PathParam("id") String id) {
+        return Response.accepted().build();
+    }
+
+    @POST
+    @Path("/test-manual-validation-message-locale")
+    @Produces(MediaType.TEXT_PLAIN)
+    public String testManualValidationMessageLocale(MyLocaleTestBean test) {
+        Set<ConstraintViolation<MyLocaleTestBean>> violations = validator.validate(test);
+
+        ResultBuilder result = new ResultBuilder();
+        if (!violations.isEmpty()) {
+            result.append(formatViolations(violations));
+        } else {
+            result.append(formatViolations(Collections.emptySet()));
+        }
+
+        return result.build();
+    }
+
+    @GET
+    @Path("/test-hibernate-orm-integration")
+    @Produces(MediaType.TEXT_PLAIN)
+    @Transactional
+    public String testHibernateOrmIntegration() {
+        em.persist(new TestEntity());
+        return "FAILED";
+    }
+
+    @PUT
+    @Path("/rest-end-point-validation-groups/")
+    @Produces(MediaType.TEXT_PLAIN)
+    @Consumes(MediaType.APPLICATION_JSON)
+    public String testRestEndPointValidationGroups_Put(
+            @Valid @ConvertGroup(to = ValidationGroups.Put.class) MyBeanWithGroups bean) {
+        return "passed";
+    }
+
+    @POST
+    @Path("/rest-end-point-validation-groups/")
+    @Produces(MediaType.TEXT_PLAIN)
+    @Consumes(MediaType.APPLICATION_JSON)
+    public String testRestEndPointValidationGroups_Post(
+            @Valid @ConvertGroup(to = ValidationGroups.Post.class) MyBeanWithGroups bean) {
+        return "passed";
+    }
+
+    @GET
+    @Path("/rest-end-point-validation-groups/{id}/")
+    @Produces(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Valid
+    @ConvertGroup(to = ValidationGroups.Get.class)
+    public MyBeanWithGroups testRestEndPointValidationGroups_Get(@PathParam("id") long id,
+            @QueryParam("simulateDeleted") boolean simulateDeleted,
+            @QueryParam("simulateNullName") boolean simulateNullName) {
+        MyBeanWithGroups result = new MyBeanWithGroups();
+        result.setId(id);
+        result.setName(simulateNullName ? null : "someName");
+        result.setDeleted(simulateDeleted);
+        return result;
+    }
+
+    @DELETE
+    @Path("/rest-end-point-validation-groups/{id}/")
+    @Produces(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Valid
+    @ConvertGroup(to = ValidationGroups.Delete.class)
+    public MyBeanWithGroups testRestEndPointValidationGroups_Delete(@PathParam("id") long id,
+            @QueryParam("simulateDeleted") boolean simulateDeleted,
+            @QueryParam("simulateNullName") boolean simulateNullName) {
+        MyBeanWithGroups result = new MyBeanWithGroups();
+        result.setId(id);
+        result.setName(simulateNullName ? null : "someName");
+        result.setDeleted(simulateDeleted);
+        return result;
+    }
+
     private String formatViolations(Set<? extends ConstraintViolation<?>> violations) {
         if (violations.isEmpty()) {
             return "passed";
@@ -110,6 +307,11 @@ public class HibernateValidatorTestResource {
                 .map(v -> v.getPropertyPath().toString() + " (" + v.getMessage() + ")")
                 .sorted()
                 .collect(Collectors.joining(", "));
+    }
+
+    public static class MyLocaleTestBean {
+        @Pattern(regexp = "A.*", message = "{pattern.message}")
+        public String name;
     }
 
     public static class MyBean {
@@ -178,6 +380,26 @@ public class HibernateValidatorTestResource {
         public void setCategorizedEmails(Map<String, List<String>> categorizedEmails) {
             this.categorizedEmails = categorizedEmails;
         }
+    }
+
+    public static class BeanWithInjectedConstraintValidatorConstraint {
+
+        @InjectedConstraintValidatorConstraint
+        private String value;
+
+        public BeanWithInjectedConstraintValidatorConstraint(String value) {
+            this.value = value;
+        }
+
+        public String getValue() {
+            return value;
+        }
+    }
+
+    @Target(ElementType.METHOD)
+    @Retention(RetentionPolicy.RUNTIME)
+    @InterceptorBinding
+    public static @interface SomeInterceptorBindingAnnotation {
     }
 
     private static class ResultBuilder {
