@@ -32,6 +32,10 @@ public class RestPermissions implements PluginPermissions {
      */
     public static final String AUTHENTICATION_READ = "authentication:read";
     public static final String AUTHENTICATION_EDIT = "authentication:edit";
+    public static final String BLACKLISTENTRY_CREATE = "blacklistentry:create";
+    public static final String BLACKLISTENTRY_DELETE = "blacklistentry:delete";
+    public static final String BLACKLISTENTRY_EDIT = "blacklistentry:edit";
+    public static final String BLACKLISTENTRY_READ = "blacklistentry:read";
     public static final String BUFFERS_READ = "buffers:read";
     public static final String BUNDLE_CREATE = "bundle:create";
     public static final String BUNDLE_DELETE = "bundle:delete";
@@ -136,6 +140,10 @@ public class RestPermissions implements PluginPermissions {
     protected static final ImmutableSet<Permission> PERMISSIONS = ImmutableSet.<Permission>builder()
         .add(create(AUTHENTICATION_EDIT, ""))
         .add(create(AUTHENTICATION_READ, ""))
+        .add(create(BLACKLISTENTRY_CREATE, ""))
+        .add(create(BLACKLISTENTRY_DELETE, ""))
+        .add(create(BLACKLISTENTRY_EDIT, ""))
+        .add(create(BLACKLISTENTRY_READ, ""))
         .add(create(BUFFERS_READ, ""))
         .add(create(BUNDLE_CREATE, ""))
         .add(create(BUNDLE_DELETE, ""))
@@ -239,7 +247,7 @@ public class RestPermissions implements PluginPermissions {
         .build();
 
     // Standard set of PERMISSIONS of readers.
-    protected static final ImmutableSet<String> READER_BASE_PERMISSION_SELECTION = ImmutableSet.<String>builder().add(
+    protected static final Set<String> READER_BASE_PERMISSION_SELECTION = ImmutableSet.<String>builder().add(
         BUFFERS_READ,
         CLUSTER_CONFIG_ENTRY_READ,
         DECORATORS_READ,
