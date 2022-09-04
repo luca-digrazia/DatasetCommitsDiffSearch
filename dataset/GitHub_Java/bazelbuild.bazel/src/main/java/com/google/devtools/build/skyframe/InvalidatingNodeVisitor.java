@@ -13,15 +13,12 @@
 // limitations under the License.
 package com.google.devtools.build.skyframe;
 
-import static java.util.concurrent.TimeUnit.MINUTES;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
-import com.google.common.flogger.GoogleLogger;
 import com.google.devtools.build.lib.concurrent.AbstractQueueVisitor;
 import com.google.devtools.build.lib.concurrent.ErrorClassifier;
 import com.google.devtools.build.lib.concurrent.ForkJoinQuiescingExecutor;
@@ -61,7 +58,6 @@ import javax.annotation.Nullable;
  * <p>This is intended only for use in alternative {@code MemoizingEvaluator} implementations.
  */
 public abstract class InvalidatingNodeVisitor<GraphT extends QueryableGraph> {
-  private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
 
   // Default thread count is equal to the number of cores to exploit
   // that level of hardware parallelism, since invalidation should be CPU-bound.
@@ -320,7 +316,6 @@ public abstract class InvalidatingNodeVisitor<GraphT extends QueryableGraph> {
 
   /** A node-dirtying implementation. */
   static class DirtyingNodeVisitor extends InvalidatingNodeVisitor<QueryableGraph> {
-    private static final int SAFE_STACK_DEPTH = 1 << 9;
 
     private final Set<SkyKey> changed =
         Collections.newSetFromMap(
@@ -360,40 +355,39 @@ public abstract class InvalidatingNodeVisitor<GraphT extends QueryableGraph> {
     @Override
     void visit(Iterable<SkyKey> keys, InvalidationType invalidationType) {
       Preconditions.checkState(invalidationType != InvalidationType.DELETED, keys);
-      visit(keys, invalidationType, /*depthForOverflowCheck=*/ 0, null);
+      visit(keys, invalidationType, null);
     }
 
     /**
      * Queues a task to dirty the nodes named by {@param keys}. May be called from multiple threads.
-     * It is possible that the same node is enqueued many times. However, we require that a node is
-     * only actually marked dirty/changed once, with two exceptions:
+     * It is possible that the same node is enqueued many times. However, we require that a node
+     * is only actually marked dirty/changed once, with two exceptions:
      *
-     * <p>(1) If a node is marked dirty, it can subsequently be marked changed. This can occur if,
-     * for instance, FileValue workspace/foo/foo.cc is marked dirty because FileValue workspace/foo
-     * is marked changed (and every FileValue depends on its parent). Then FileValue
+     * (1) If a node is marked dirty, it can subsequently be marked changed. This can occur if, for
+     * instance, FileValue workspace/foo/foo.cc is marked dirty because FileValue workspace/foo is
+     * marked changed (and every FileValue depends on its parent). Then FileValue
      * workspace/foo/foo.cc is itself changed (this can even happen on the same build).
      *
-     * <p>(2) If a node is going to be marked both dirty and changed, as, for example, in the
-     * previous case if both workspace/foo/foo.cc and workspace/foo have been changed in the same
-     * build, the thread marking workspace/foo/foo.cc dirty may race with the one marking it
-     * changed, and so try to mark it dirty after it has already been marked changed. In that case,
-     * the {@link NodeEntry} ignores the second marking.
+     * (2) If a node is going to be marked both dirty and changed, as, for example, in the previous
+     * case if both workspace/foo/foo.cc and workspace/foo have been changed in the same build, the
+     * thread marking workspace/foo/foo.cc dirty may race with the one marking it changed, and so
+     * try to mark it dirty after it has already been marked changed. In that case, the
+     * {@link NodeEntry} ignores the second marking.
      *
-     * <p>The invariant that we do not process a (SkyKey, InvalidationType) pair twice is enforced
-     * by the {@link #changed} and {@link #dirtied} sets.
+     * The invariant that we do not process a (SkyKey, InvalidationType) pair twice is enforced by
+     * the {@link #changed} and {@link #dirtied} sets.
      *
-     * <p>The "invariant" is also enforced across builds by checking to see if the entry is already
+     * The "invariant" is also enforced across builds by checking to see if the entry is already
      * marked changed, or if it is already marked dirty and we are just going to mark it dirty
      * again.
      *
-     * <p>If either of the above tests shows that we have already started a task to mark this entry
+     * If either of the above tests shows that we have already started a task to mark this entry
      * dirty/changed, or that it is already marked dirty/changed, we do not continue this task.
      */
     @ThreadSafe
     private void visit(
         Iterable<SkyKey> keys,
         final InvalidationType invalidationType,
-        int depthForOverflowCheck,
         @Nullable SkyKey enqueueingKeyForExistenceCheck) {
       // Code from here until pendingVisitations#add is called below must be uninterruptible.
       boolean isChanged = (invalidationType == InvalidationType.CHANGED);
@@ -437,27 +431,18 @@ public abstract class InvalidatingNodeVisitor<GraphT extends QueryableGraph> {
       }
       for (int i = 0; i < lastIndex; i++) {
         SkyKey key = keysToGet.get(i);
-        executor.execute(() -> dirtyKeyAndVisitParents(key, entries, invalidationType, 0));
-      }
-      SkyKey lastParent = keysToGet.get(lastIndex);
-      if (depthForOverflowCheck > SAFE_STACK_DEPTH) {
-        logger.atInfo().atMostEvery(1, MINUTES).log(
-            "Stack depth too deep to safely recurse for %s (%s)",
-            lastParent, enqueueingKeyForExistenceCheck);
-        executor.execute(() -> dirtyKeyAndVisitParents(lastParent, entries, invalidationType, 0));
-        return;
+        executor.execute(() -> dirtyKeyAndVisitParents(key, entries, invalidationType));
       }
       if (!Thread.interrupted()) {
         // Emulate what would happen if we'd submitted this to the executor: skip on interrupt.
-        dirtyKeyAndVisitParents(lastParent, entries, invalidationType, depthForOverflowCheck + 1);
+        dirtyKeyAndVisitParents(keysToGet.get(lastIndex), entries, invalidationType);
       }
     }
 
     private void dirtyKeyAndVisitParents(
         SkyKey key,
         Map<SkyKey, ? extends ThinNodeEntry> entries,
-        InvalidationType invalidationType,
-        int depthForOverflowCheck) {
+        InvalidationType invalidationType) {
       ThinNodeEntry entry = entries.get(key);
 
       if (entry == null) {
@@ -506,11 +491,7 @@ public abstract class InvalidatingNodeVisitor<GraphT extends QueryableGraph> {
 
       // Propagate dirtiness upwards and mark this node dirty/changed. Reverse deps should
       // only be marked dirty (because only a dependency of theirs has changed).
-      visit(
-          markedDirtyResult.getReverseDepsUnsafe(),
-          InvalidationType.DIRTIED,
-          depthForOverflowCheck,
-          key);
+      visit(markedDirtyResult.getReverseDepsUnsafe(), InvalidationType.DIRTIED, key);
     }
   }
 }
