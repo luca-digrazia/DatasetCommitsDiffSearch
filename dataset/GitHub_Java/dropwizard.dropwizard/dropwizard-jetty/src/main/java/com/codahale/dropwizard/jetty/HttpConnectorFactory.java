@@ -15,8 +15,7 @@ import org.eclipse.jetty.io.ByteBufferPool;
 import org.eclipse.jetty.server.*;
 import org.eclipse.jetty.util.thread.ScheduledExecutorScheduler;
 import org.eclipse.jetty.util.thread.Scheduler;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.eclipse.jetty.util.thread.ThreadPool;
 
 import javax.validation.constraints.Min;
 import javax.validation.constraints.NotNull;
@@ -24,18 +23,153 @@ import java.util.concurrent.TimeUnit;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
+/**
+ * Builds HTTP connectors.
+ *
+ * <p/>
+ * <b>Configuration Parameters:</b>
+ * <table>
+ *     <tr>
+ *         <td>Name</td>
+ *         <td>Default</td>
+ *         <td>Description</td>
+ *     </tr>
+ *     <tr>
+ *         <td>{@code port}</td>
+ *         <td>8080</td>
+ *         <td>The TCP/IP port on which to listen for incoming connections.</td>
+ *     </tr>
+ *     <tr>
+ *         <td>{@code bindHost}</td>
+ *         <td>(none)</td>
+ *         <td>The hostname to bind to.</td>
+ *     </tr>
+ *     <tr>
+ *         <td>{@code headerCacheSize}</td>
+ *         <td>512 bytes</td>
+ *         <td>The size of the header field cache.</td>
+ *     </tr>
+ *     <tr>
+ *         <td>{@code outputBufferSize}</td>
+ *         <td>32KiB</td>
+ *         <td>
+ *             The size of the buffer into which response content is aggregated before being sent to
+ *             the client.  A larger buffer can improve performance by allowing a content producer
+ *             to run without blocking, however larger buffers consume more memory and may induce
+ *             some latency before a client starts processing the content.
+ *         </td>
+ *     </tr>
+ *     <tr>
+ *         <td>{@code maxRequestHeaderSize}</td>
+ *         <td>8KiB</td>
+ *         <td>
+ *             The maximum size of a request header. Larger headers will allow for more and/or
+ *             larger cookies plus larger form content encoded  in a URL. However, larger headers
+ *             consume more memory and can make a server more vulnerable to denial of service
+ *             attacks.
+ *         </td>
+ *     </tr>
+ *     <tr>
+ *         <td>{@code maxResponseHeaderSize}</td>
+ *         <td>8KiB</td>
+ *         <td>
+ *             The maximum size of a response header. Larger headers will allow for more and/or
+ *             larger cookies and longer HTTP headers (eg for redirection).  However, larger headers
+ *             will also consume more memory.
+ *         </td>
+ *     </tr>
+ *     <tr>
+ *         <td>{@code inputBufferSize}</td>
+ *         <td>8KiB</td>
+ *         <td>The size of the per-connection input buffer.</td>
+ *     </tr>
+ *     <tr>
+ *         <td>{@code idleTimeout}</td>
+ *         <td>30 seconds</td>
+ *         <td>
+ *             The maximum idle time for a connection, which roughly translates to the
+ *             {@link java.net.Socket#setSoTimeout(int)} call, although with NIO implementations
+ *             other mechanisms may be used to implement the timeout.
+ *             <p/>
+ *             The max idle time is applied:
+ *             <ul>
+ *                 <li>When waiting for a new message to be received on a connection</li>
+ *                 <li>When waiting for a new message to be sent on a connection</li>
+ *             </ul>
+ *             <p/>
+ *             This value is interpreted as the maximum time between some progress being made on the
+ *             connection. So if a single byte is read or written, then the timeout is reset.
+ *         </td>
+ *     </tr>
+ *     <tr>
+ *         <td>{@code minBufferPoolSize}</td>
+ *         <td>64 bytes</td>
+ *         <td>The minimum size of the buffer pool.</td>
+ *     </tr>
+ *     <tr>
+ *         <td>{@code bufferPoolIncrement}</td>
+ *         <td>1KiB</td>
+ *         <td>The increment by which the buffer pool should be increased.</td>
+ *     </tr>
+ *     <tr>
+ *         <td>{@code maxBufferPoolSize}</td>
+ *         <td>64KiB</td>
+ *         <td>The maximum size of the buffer pool.</td>
+ *     </tr>
+ *     <tr>
+ *         <td>{@code acceptorThreads}</td>
+ *         <td>half the # of CPUs</td>
+ *         <td>The number of worker threads dedicated to accepting connections.</td>
+ *     </tr>
+ *     <tr>
+ *         <td>{@code selectorThreads}</td>
+ *         <td>the # of CPUs</td>
+ *         <td>The number of worker threads dedicated to sending and receiving data.</td>
+ *     </tr>
+ *     <tr>
+ *         <td>{@code acceptQueueSize}</td>
+ *         <td>(OS default)</td>
+ *         <td>The size of the TCP/IP accept queue for the listening socket.</td>
+ *     </tr>
+ *     <tr>
+ *         <td>{@code reuseAddress}</td>
+ *         <td>true</td>
+ *         <td>Whether or not {@code SO_REUSEADDR} is enabled on the listening socket.</td>
+ *     </tr>
+ *     <tr>
+ *         <td>{@code soLingerTime}</td>
+ *         <td>(disabled)</td>
+ *         <td>Enable/disable {@code SO_LINGER} with the specified linger time.</td>
+ *     </tr>
+ *     <tr>
+ *         <td>{@code useServerHeader}</td>
+ *         <td>false</td>
+ *         <td>Whether or not to add the {@code Server} header to each response.</td>
+ *     </tr>
+ *     <tr>
+ *         <td>{@code useDateHeader}</td>
+ *         <td>true</td>
+ *         <td>Whether or not to add the {@code Date} header to each response.</td>
+ *     </tr>
+ *     <tr>
+ *         <td>{@code useForwardedHeaders}</td>
+ *         <td>true</td>
+ *         <td>
+ *             Whether or not to look at {@code X-Forwarded-*} headers added by proxies. See
+ *             {@link ForwardedRequestCustomizer} for details.
+ *         </td>
+ *     </tr>
+ * </table>
+ */
 @JsonTypeName("http")
 public class HttpConnectorFactory implements ConnectorFactory {
-    private static final Logger LOGGER = LoggerFactory.getLogger(HttpConnectorFactory.class);
-
-    public static HttpConnectorFactory application() {
+    public static ConnectorFactory application() {
         final HttpConnectorFactory factory = new HttpConnectorFactory();
         factory.port = 8080;
         return factory;
     }
 
-    public static HttpConnectorFactory admin() {
-        // TODO: 5/4/13 <coda> -- make admin connectors have their own thread pools
+    public static ConnectorFactory admin() {
         final HttpConnectorFactory factory = new HttpConnectorFactory();
         factory.port = 8081;
         return factory;
@@ -88,8 +222,8 @@ public class HttpConnectorFactory implements ConnectorFactory {
     @Min(1)
     private int selectorThreads = Runtime.getRuntime().availableProcessors();
 
-    @Min(-1)
-    private int acceptQueueSize = -1;
+    @Min(0)
+    private Integer acceptQueueSize;
 
     private boolean reuseAddress = true;
     private Duration soLingerTime = null;
@@ -228,12 +362,12 @@ public class HttpConnectorFactory implements ConnectorFactory {
     }
 
     @JsonProperty
-    public int getAcceptQueueSize() {
+    public Integer getAcceptQueueSize() {
         return acceptQueueSize;
     }
 
     @JsonProperty
-    public void setAcceptQueueSize(int acceptQueueSize) {
+    public void setAcceptQueueSize(Integer acceptQueueSize) {
         this.acceptQueueSize = acceptQueueSize;
     }
 
@@ -290,7 +424,8 @@ public class HttpConnectorFactory implements ConnectorFactory {
     @Override
     public Connector build(Server server,
                            MetricRegistry metrics,
-                           String name) {
+                           String name,
+                           ThreadPool threadPool) {
         final HttpConfiguration httpConfig = buildHttpConfiguration();
 
         final HttpConnectionFactory httpConnectionFactory = buildHttpConnectionFactory(httpConfig);
@@ -303,7 +438,7 @@ public class HttpConnectorFactory implements ConnectorFactory {
                                       bindHost,
                                       Integer.toString(port),
                                       "connections");
-        return buildConnector(server, scheduler, bufferPool, name,
+        return buildConnector(server, scheduler, bufferPool, name, threadPool,
                               new InstrumentedConnectionFactory(httpConnectionFactory,
                                                                 metrics.timer(timerName)));
     }
@@ -312,9 +447,10 @@ public class HttpConnectorFactory implements ConnectorFactory {
                                              Scheduler scheduler,
                                              ByteBufferPool bufferPool,
                                              String name,
+                                             ThreadPool threadPool,
                                              ConnectionFactory... factories) {
         final ServerConnector connector = new ServerConnector(server,
-                                                              null,
+                                                              threadPool,
                                                               scheduler,
                                                               bufferPool,
                                                               acceptorThreads,
@@ -322,7 +458,9 @@ public class HttpConnectorFactory implements ConnectorFactory {
                                                               factories);
         connector.setPort(port);
         connector.setHost(bindHost);
-        connector.setAcceptQueueSize(acceptQueueSize);
+        if (acceptQueueSize != null) {
+            connector.setAcceptQueueSize(acceptQueueSize);
+        }
         connector.setReuseAddress(reuseAddress);
         if (soLingerTime != null) {
             connector.setSoLingerTime((int) soLingerTime.toSeconds());
