@@ -90,12 +90,7 @@ public class AlertScanner {
                 }
             }
         } catch (Exception e) {
-            if (LOG.isDebugEnabled()) {
-                LOG.error("Skipping alert check <{}/{}>", alertCondition.getTitle(), alertCondition.getId(), e);
-            } else {
-                LOG.error("Skipping alert check <{}/{}>: {} ({})", alertCondition.getTitle(),
-                        alertCondition.getId(), e.getMessage(), e.getClass().getSimpleName());
-            }
+            LOG.error("Skipping alert check that threw an exception.", e);
         }
         return false;
     }
