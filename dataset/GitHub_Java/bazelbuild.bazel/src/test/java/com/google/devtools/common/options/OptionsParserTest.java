@@ -1198,7 +1198,7 @@ public class OptionsParserTest {
     SingleOptionValueDescription singleOptionResult = (SingleOptionValueDescription) result;
     ParsedOptionDescription singleOptionInstance = singleOptionResult.getEffectiveOptionInstance();
     assertThat(singleOptionInstance.getPriority()).isEqualTo(OptionPriority.COMMAND_LINE);
-    assertThat(singleOptionInstance.getOptionDefinition().isExpansionOption()).isFalse();
+    assertThat(singleOptionInstance.isExpansion()).isFalse();
   }
 
   public static class ImplicitDependencyWarningOptions extends OptionsBase {
