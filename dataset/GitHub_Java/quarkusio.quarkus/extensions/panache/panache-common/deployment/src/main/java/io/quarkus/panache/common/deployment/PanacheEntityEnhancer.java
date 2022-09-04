@@ -19,7 +19,6 @@ import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 
-import io.quarkus.gizmo.Gizmo;
 import io.quarkus.panache.common.Parameters;
 import io.quarkus.panache.common.Sort;
 import io.quarkus.panache.common.deployment.EntityField.EntityFieldAnnotation;
@@ -39,9 +38,6 @@ public abstract class PanacheEntityEnhancer<MetamodelType extends MetamodelInfo<
     private static final String JAXB_TRANSIENT_BINARY_NAME = "javax/xml/bind/annotation/XmlTransient";
     private static final String JAXB_TRANSIENT_SIGNATURE = "L" + JAXB_TRANSIENT_BINARY_NAME + ";";
 
-    private static final String JSON_PROPERTY_BINARY_NAME = "com/fasterxml/jackson/annotation/JsonProperty";
-    private static final String JSON_PROPERTY_SIGNATURE = "L" + JSON_PROPERTY_BINARY_NAME + ";";
-
     protected MetamodelType modelInfo;
     protected final ClassInfo panacheEntityBaseClassInfo;
     protected final IndexView indexView;
@@ -58,8 +54,8 @@ public abstract class PanacheEntityEnhancer<MetamodelType extends MetamodelInfo<
 
         protected Type thisClass;
         protected Map<String, ? extends EntityFieldType> fields;
-        // set of name + "/" + descriptor
-        private Set<String> userMethods = new HashSet<>();
+        // set of name + "/" + descriptor (only for suspected accessor names)
+        private Set<String> methods = new HashSet<>();
         private MetamodelInfo<?> modelInfo;
         private ClassInfo panacheEntityBaseClassInfo;
         protected ClassInfo entityInfo;
@@ -68,7 +64,7 @@ public abstract class PanacheEntityEnhancer<MetamodelType extends MetamodelInfo<
                 MetamodelInfo<? extends EntityModel<? extends EntityFieldType>> modelInfo,
                 ClassInfo panacheEntityBaseClassInfo,
                 ClassInfo entityInfo) {
-            super(Gizmo.ASM_API_VERSION, outputClassVisitor);
+            super(Opcodes.ASM7, outputClassVisitor);
             thisClass = Type.getType("L" + className.replace('.', '/') + ";");
             this.modelInfo = modelInfo;
             EntityModel<? extends EntityFieldType> entityModel = modelInfo.getEntityModel(className);
@@ -86,7 +82,7 @@ public abstract class PanacheEntityEnhancer<MetamodelType extends MetamodelInfo<
             }
             ef.signature = signature;
             // if we have a mapped field, let's add some annotations
-            return new FieldVisitor(Gizmo.ASM_API_VERSION, superVisitor) {
+            return new FieldVisitor(Opcodes.ASM7, superVisitor) {
                 private Set<String> descriptors = new HashSet<>();
 
                 @Override
@@ -104,11 +100,8 @@ public abstract class PanacheEntityEnhancer<MetamodelType extends MetamodelInfo<
 
                 @Override
                 public void visitEnd() {
-                    // Add the @JaxbTransient property to the field so that JAXB prefers the generated getter (otherwise JAXB complains about
-                    // having a field and property both with the same name)
-                    // JSONB will already use the getter so we're good
-                    // Note: we don't need to check if we already have @XmlTransient in the descriptors because if we did, we moved it to the getter
-                    // so we can't have any duplicate
+                    // add the @JaxbTransient property to the field so that Jackson prefers the generated getter
+                    // jsonb will already use the getter so we're good
                     super.visitAnnotation(JAXB_TRANSIENT_SIGNATURE, true);
                     super.visitEnd();
                 }
@@ -118,7 +111,11 @@ public abstract class PanacheEntityEnhancer<MetamodelType extends MetamodelInfo<
         @Override
         public MethodVisitor visitMethod(int access, String methodName, String descriptor, String signature,
                 String[] exceptions) {
-            userMethods.add(methodName + "/" + descriptor);
+            if (methodName.startsWith("get")
+                    || methodName.startsWith("set")
+                    || methodName.startsWith("is")) {
+                methods.add(methodName + "/" + descriptor);
+            }
             MethodVisitor superVisitor = super.visitMethod(access, methodName, descriptor, signature, exceptions);
             return new PanacheFieldAccessMethodVisitor(superVisitor, thisClass.getInternalName(), methodName, descriptor,
                     modelInfo);
@@ -130,8 +127,7 @@ public abstract class PanacheEntityEnhancer<MetamodelType extends MetamodelInfo<
 
             for (MethodInfo method : panacheEntityBaseClassInfo.methods()) {
                 // Do not generate a method that already exists
-                String descriptor = JandexUtil.getDescriptor(method, name -> null);
-                if (!userMethods.contains(method.name() + "/" + descriptor)) {
+                if (!JandexUtil.containsMethod(entityInfo, method)) {
                     AnnotationInstance bridge = method.annotation(JandexUtil.DOTNAME_GENERATE_BRIDGE);
                     if (bridge != null) {
                         generateMethod(method, bridge.value("targetReturnTypeErased"));
@@ -199,7 +195,7 @@ public abstract class PanacheEntityEnhancer<MetamodelType extends MetamodelInfo<
                 // Getter
                 String getterName = field.getGetterName();
                 String getterDescriptor = "()" + field.descriptor;
-                if (!userMethods.contains(getterName + "/" + getterDescriptor)) {
+                if (!methods.contains(getterName + "/" + getterDescriptor)) {
                     MethodVisitor mv = super.visitMethod(Opcodes.ACC_PUBLIC,
                             getterName, getterDescriptor, field.signature == null ? null : "()" + field.signature, null);
                     mv.visitCode();
@@ -212,18 +208,13 @@ public abstract class PanacheEntityEnhancer<MetamodelType extends MetamodelInfo<
                     for (EntityFieldAnnotation anno : field.annotations) {
                         anno.writeToVisitor(mv);
                     }
-                    // Add an explicit Jackson annotation so that the entire property is not ignored due to having @XmlTransient
-                    // on the field
-                    if (!field.hasAnnotation(JSON_PROPERTY_SIGNATURE)) {
-                        mv.visitAnnotation(JSON_PROPERTY_SIGNATURE, true);
-                    }
                     mv.visitEnd();
                 }
 
                 // Setter
                 String setterName = field.getSetterName();
                 String setterDescriptor = "(" + field.descriptor + ")V";
-                if (!userMethods.contains(setterName + "/" + setterDescriptor)) {
+                if (!methods.contains(setterName + "/" + setterDescriptor)) {
                     MethodVisitor mv = super.visitMethod(Opcodes.ACC_PUBLIC,
                             setterName, setterDescriptor, field.signature == null ? null : "(" + field.signature + ")V", null);
                     mv.visitCode();
