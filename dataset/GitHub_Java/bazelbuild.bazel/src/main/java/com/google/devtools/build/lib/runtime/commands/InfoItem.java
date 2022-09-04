@@ -650,7 +650,6 @@ public abstract class InfoItem {
         attrPb.setAllowEmpty(!attr.isNonEmpty());
         attrPb.setAllowSingleFile(attr.isSingleArtifact());
         attrPb.setConfigurable(attr.isConfigurable());
-        attrPb.setCfgIsHost(attr.hasHostConfigurationTransition());
 
         // Encode default value, if simple.
         Object v = attr.getDefaultValueUnchecked();
