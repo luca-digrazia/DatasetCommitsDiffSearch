@@ -564,7 +564,7 @@ public class PackageFunctionTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testTransitiveStarlarkDepsStoredInPackage() throws Exception {
+  public void testTransitiveSkylarkDepsStoredInPackage() throws Exception {
     scratch.file("foo/BUILD", "load('//bar:ext.bzl', 'a')");
     scratch.file("bar/BUILD");
     scratch.file("bar/ext.bzl", "load('//baz:ext.bzl', 'b')", "a = b");
@@ -597,44 +597,44 @@ public class PackageFunctionTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testNonExistingStarlarkExtension() throws Exception {
+  public void testNonExistingSkylarkExtension() throws Exception {
     reporter.removeHandler(failFastHandler);
     scratch.file(
-        "test/starlark/BUILD",
-        "load('//test/starlark:bad_extension.bzl', 'some_symbol')",
+        "test/skylark/BUILD",
+        "load('//test/skylark:bad_extension.bzl', 'some_symbol')",
         "genrule(name = gr,",
         "    outs = ['out.txt'],",
         "    cmd = 'echo hello >@')");
     invalidatePackages();
 
-    SkyKey skyKey = PackageValue.key(PackageIdentifier.parse("@//test/starlark"));
+    SkyKey skyKey = PackageValue.key(PackageIdentifier.parse("@//test/skylark"));
     EvaluationResult<PackageValue> result =
         SkyframeExecutorTestUtils.evaluate(
             getSkyframeExecutor(), skyKey, /*keepGoing=*/ false, reporter);
     assertThat(result.hasError()).isTrue();
     ErrorInfo errorInfo = result.getError(skyKey);
     String expectedMsg =
-        "error loading package 'test/starlark': "
-            + "cannot load '//test/starlark:bad_extension.bzl': no such file";
+        "error loading package 'test/skylark': "
+            + "Unable to load file '//test/skylark:bad_extension.bzl': file doesn't exist";
     assertThat(errorInfo.getException()).hasMessageThat().isEqualTo(expectedMsg);
   }
 
   @Test
-  public void testNonExistingStarlarkExtensionFromExtension() throws Exception {
+  public void testNonExistingSkylarkExtensionFromExtension() throws Exception {
     reporter.removeHandler(failFastHandler);
     scratch.file(
-        "test/starlark/extension.bzl",
-        "load('//test/starlark:bad_extension.bzl', 'some_symbol')",
+        "test/skylark/extension.bzl",
+        "load('//test/skylark:bad_extension.bzl', 'some_symbol')",
         "a = 'a'");
     scratch.file(
-        "test/starlark/BUILD",
-        "load('//test/starlark:extension.bzl', 'a')",
+        "test/skylark/BUILD",
+        "load('//test/skylark:extension.bzl', 'a')",
         "genrule(name = gr,",
         "    outs = ['out.txt'],",
         "    cmd = 'echo hello >@')");
     invalidatePackages();
 
-    SkyKey skyKey = PackageValue.key(PackageIdentifier.parse("@//test/starlark"));
+    SkyKey skyKey = PackageValue.key(PackageIdentifier.parse("@//test/skylark"));
     EvaluationResult<PackageValue> result =
         SkyframeExecutorTestUtils.evaluate(
             getSkyframeExecutor(), skyKey, /*keepGoing=*/ false, reporter);
@@ -643,25 +643,25 @@ public class PackageFunctionTest extends BuildViewTestCase {
     assertThat(errorInfo.getException())
         .hasMessageThat()
         .isEqualTo(
-            "error loading package 'test/starlark': "
-                + "in /workspace/test/starlark/extension.bzl: "
-                + "cannot load '//test/starlark:bad_extension.bzl': no such file");
+            "error loading package 'test/skylark': "
+                + "in /workspace/test/skylark/extension.bzl: "
+                + "Unable to load file '//test/skylark:bad_extension.bzl': file doesn't exist");
   }
 
   @Test
-  public void testSymlinkCycleWithStarlarkExtension() throws Exception {
+  public void testSymlinkCycleWithSkylarkExtension() throws Exception {
     reporter.removeHandler(failFastHandler);
-    Path extensionFilePath = scratch.resolve("/workspace/test/starlark/extension.bzl");
+    Path extensionFilePath = scratch.resolve("/workspace/test/skylark/extension.bzl");
     FileSystemUtils.ensureSymbolicLink(extensionFilePath, PathFragment.create("extension.bzl"));
     scratch.file(
-        "test/starlark/BUILD",
-        "load('//test/starlark:extension.bzl', 'a')",
+        "test/skylark/BUILD",
+        "load('//test/skylark:extension.bzl', 'a')",
         "genrule(name = gr,",
         "    outs = ['out.txt'],",
         "    cmd = 'echo hello >@')");
     invalidatePackages();
 
-    SkyKey skyKey = PackageValue.key(PackageIdentifier.parse("@//test/starlark"));
+    SkyKey skyKey = PackageValue.key(PackageIdentifier.parse("@//test/skylark"));
     EvaluationResult<PackageValue> result =
         SkyframeExecutorTestUtils.evaluate(
             getSkyframeExecutor(), skyKey, /*keepGoing=*/ false, reporter);
@@ -671,8 +671,8 @@ public class PackageFunctionTest extends BuildViewTestCase {
     assertThat(errorInfo.getException())
         .hasMessageThat()
         .isEqualTo(
-            "error loading package 'test/starlark': Encountered error while reading extension "
-                + "file 'test/starlark/extension.bzl': Symlink cycle");
+            "error loading package 'test/skylark': Encountered error while reading extension "
+                + "file 'test/skylark/extension.bzl': Symlink cycle");
   }
 
   @Test

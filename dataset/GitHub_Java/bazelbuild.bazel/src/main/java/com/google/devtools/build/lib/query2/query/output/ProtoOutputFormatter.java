@@ -29,7 +29,6 @@ import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
-import com.google.common.io.BaseEncoding;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
@@ -88,16 +87,11 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
   private static final Comparator<Build.Attribute> ATTRIBUTE_NAME =
       Comparator.comparing(Build.Attribute::getName);
 
+  @SuppressWarnings("unchecked")
   private static final ImmutableSet<Type<?>> SCALAR_TYPES =
       ImmutableSet.<Type<?>>of(
-          Type.INTEGER,
-          Type.STRING,
-          BuildType.LABEL,
-          BuildType.NODEP_LABEL,
-          BuildType.OUTPUT,
-          Type.BOOLEAN,
-          BuildType.TRISTATE,
-          BuildType.LICENSE);
+          Type.INTEGER, Type.STRING, BuildType.LABEL, BuildType.NODEP_LABEL, BuildType.OUTPUT,
+          Type.BOOLEAN, BuildType.TRISTATE, BuildType.LICENSE);
 
   private AspectResolver aspectResolver;
   private DependencyFilter dependencyFilter;
@@ -194,16 +188,15 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
         rulePb.setLocation(FormatUtils.getLocation(target, relativeLocations));
       }
       addAttributes(rulePb, rule, extraDataForAttrHash);
-      byte[] transitiveDigest = rule.getRuleClassObject().getRuleDefinitionEnvironmentDigest();
-      if (transitiveDigest != null && includeRuleDefinitionEnvironment()) {
+      String transitiveHashCode = rule.getRuleClassObject().getRuleDefinitionEnvironmentHashCode();
+      if (transitiveHashCode != null && includeRuleDefinitionEnvironment()) {
         // The RuleDefinitionEnvironment is always defined for Starlark rules and
         // always null for non Starlark rules.
         rulePb.addAttribute(
             Build.Attribute.newBuilder()
                 .setName(RULE_IMPLEMENTATION_HASH_ATTR_NAME)
                 .setType(ProtoUtils.getDiscriminatorFromType(Type.STRING))
-                .setStringValue(
-                    BaseEncoding.base16().lowerCase().encode(transitiveDigest))); // hexify
+                .setStringValue(transitiveHashCode));
       }
 
       ImmutableMultimap<Attribute, Label> aspectsDependencies =
@@ -280,13 +273,13 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
       }
 
       if (inputFile.getName().equals("BUILD")) {
-        Iterable<Label> starlarkLoadLabels =
+        Iterable<Label> skylarkLoadLabels =
             aspectResolver == null
                 ? inputFile.getPackage().getStarlarkFileDependencies()
                 : aspectResolver.computeBuildFileDependencies(inputFile.getPackage());
 
-        for (Label starlarkLoadLabel : starlarkLoadLabels) {
-          input.addSubinclude(starlarkLoadLabel.toString());
+        for (Label skylarkLoadLabel : skylarkLoadLabels) {
+          input.addSubinclude(skylarkLoadLabel.toString());
         }
 
         for (String feature : inputFile.getPackage().getFeatures()) {
