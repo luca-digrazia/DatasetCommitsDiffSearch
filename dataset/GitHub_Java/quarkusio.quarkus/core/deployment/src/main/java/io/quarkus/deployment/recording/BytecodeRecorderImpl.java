@@ -14,6 +14,7 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -804,54 +805,41 @@ public class BytecodeRecorderImpl implements RecorderContext {
             // new com.foo.MyAnnotation_Proxy_AnnotationLiteral("foo")
             AnnotationProxy annotationProxy = (AnnotationProxy) param;
             List<MethodInfo> constructorParams = annotationProxy.getAnnotationClass().methods().stream()
-                    .filter(m -> !m.name().equals("<clinit>") && !m.name().equals("<init>")).collect(Collectors.toList());
+                    .filter(m -> !m.name().equals("<clinit>") && !m.name().equals("<init>"))
+                    .collect(Collectors.toList());
             Map<String, AnnotationValue> annotationValues = annotationProxy.getAnnotationInstance().values().stream()
                     .collect(Collectors.toMap(AnnotationValue::name, Function.identity()));
             DeferredParameter[] constructorParamsHandles = new DeferredParameter[constructorParams.size()];
 
             for (ListIterator<MethodInfo> iterator = constructorParams.listIterator(); iterator.hasNext();) {
                 MethodInfo valueMethod = iterator.next();
-                Object explicitValue = annotationProxy.getValues().get(valueMethod.name());
-                if (explicitValue != null) {
-                    constructorParamsHandles[iterator.previousIndex()] = loadObjectInstance(explicitValue, existing,
-                            explicitValue.getClass());
-                } else {
-                    AnnotationValue value = annotationValues.get(valueMethod.name());
-                    if (value == null) {
-                        // method.invokeInterfaceMethod(MAP_PUT, valuesHandle, method.load(entry.getKey()), loadObjectInstance(method, entry.getValue(),
-                        // returnValueResults, entry.getValue().getClass()));
-                        Object defaultValue = annotationProxy.getDefaultValues().get(valueMethod.name());
-                        if (defaultValue != null) {
-                            constructorParamsHandles[iterator.previousIndex()] = loadObjectInstance(defaultValue, existing,
-                                    defaultValue.getClass());
-                            continue;
-                        }
-                        if (value == null) {
-                            value = valueMethod.defaultValue();
-                        }
+                AnnotationValue value = annotationValues.get(valueMethod.name());
+                if (value == null) {
+                    // method.invokeInterfaceMethod(MAP_PUT, valuesHandle, method.load(entry.getKey()), loadObjectInstance(method, entry.getValue(), returnValueResults, entry.getValue().getClass()));
+                    Object defaultValue = annotationProxy.getDefaultValues().get(valueMethod.name());
+                    if (defaultValue != null) {
+                        constructorParamsHandles[iterator.previousIndex()] = loadObjectInstance(defaultValue,
+                                existing, defaultValue.getClass());
+                        continue;
                     }
                     if (value == null) {
-                        throw new NullPointerException("Value not set for " + param);
+                        value = valueMethod.defaultValue();
                     }
-                    DeferredParameter retValue = loadValue(value, annotationProxy.getAnnotationClass(), valueMethod);
-                    constructorParamsHandles[iterator.previousIndex()] = retValue;
                 }
+                if (value == null) {
+                    throw new NullPointerException("Value not set for " + param);
+                }
+                DeferredParameter retValue = loadValue(value, annotationProxy.getAnnotationClass(), valueMethod);
+                constructorParamsHandles[iterator.previousIndex()] = retValue;
             }
             return new DeferredArrayStoreParameter() {
                 @Override
                 ResultHandle createValue(MethodContext context, MethodCreator method, ResultHandle array) {
-                    MethodDescriptor constructor = MethodDescriptor.ofConstructor(annotationProxy.getAnnotationLiteralType(),
-                            constructorParams.stream().map(m -> m.returnType().name().toString()).toArray());
-                    ResultHandle[] args = new ResultHandle[constructorParamsHandles.length];
-                    for (int i = 0; i < constructorParamsHandles.length; i++) {
-                        DeferredParameter deferredParameter = constructorParamsHandles[i];
-                        if (deferredParameter instanceof DeferredArrayStoreParameter) {
-                            DeferredArrayStoreParameter arrayParam = (DeferredArrayStoreParameter) deferredParameter;
-                            arrayParam.doPrepare(context);
-                        }
-                        args[i] = context.loadDeferred(deferredParameter);
-                    }
-                    return method.newInstance(constructor, args);
+                    return method
+                            .newInstance(MethodDescriptor.ofConstructor(annotationProxy.getAnnotationLiteralType(),
+                                    constructorParams.stream().map(m -> m.returnType().name().toString()).toArray()),
+                                    Arrays.stream(constructorParamsHandles).map(m -> context.loadDeferred(m))
+                                            .toArray(ResultHandle[]::new));
                 }
             };
 
