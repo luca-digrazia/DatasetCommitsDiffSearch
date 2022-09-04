@@ -1,40 +1,21 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package org.jboss.shamrock.runner;
 
 import java.io.Closeable;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.function.BiFunction;
-import java.util.function.Consumer;
 
-import org.jboss.builder.BuildChainBuilder;
 import org.jboss.builder.BuildResult;
-import org.jboss.shamrock.deployment.ShamrockAugmentor;
-import org.jboss.shamrock.deployment.builditem.ApplicationClassNameBuildItem;
+import org.jboss.shamrock.deployment.ShamrockAugumentor;
 import org.jboss.shamrock.deployment.builditem.BytecodeTransformerBuildItem;
+import org.jboss.shamrock.deployment.builditem.MainClassBuildItem;
 import org.jboss.shamrock.runtime.Application;
-import org.jboss.shamrock.runtime.LaunchMode;
 import org.objectweb.asm.ClassVisitor;
 
 /**
@@ -47,15 +28,11 @@ public class RuntimeRunner implements Runnable, Closeable {
     private final RuntimeClassLoader loader;
     private Closeable closeTask;
     private final List<Path> additionalArchives;
-    private final List<Consumer<BuildChainBuilder>> chainCustomizers;
-    private final LaunchMode launchMode;
 
-    public RuntimeRunner(Builder builder) {
-        this.target = builder.target;
-        this.additionalArchives = new ArrayList<>(builder.additionalArchives);
-        this.chainCustomizers = new ArrayList<>(builder.chainCustomizers);
-        this.launchMode = builder.launchMode;
-        this.loader = new RuntimeClassLoader(builder.classLoader, target, builder.frameworkClassesPath, builder.transformerCache);
+    public RuntimeRunner(ClassLoader classLoader, Path target, Path frameworkClassesPath, Path transformerCache, List<Path> additionalArchives) {
+        this.target = target;
+        this.additionalArchives = additionalArchives;
+        this.loader = new RuntimeClassLoader(classLoader, target, frameworkClassesPath, transformerCache);
     }
 
     @Override
@@ -69,19 +46,15 @@ public class RuntimeRunner implements Runnable, Closeable {
     public void run() {
         Thread.currentThread().setContextClassLoader(loader);
         try {
-            ShamrockAugmentor.Builder builder = ShamrockAugmentor.builder();
+            ShamrockAugumentor.Builder builder = ShamrockAugumentor.builder();
             builder.setRoot(target);
             builder.setClassLoader(loader);
             builder.setOutput(loader);
-            builder.setLaunchMode(launchMode);
             for (Path i : additionalArchives) {
                 builder.addAdditionalApplicationArchive(i);
             }
-            for (Consumer<BuildChainBuilder> i : chainCustomizers) {
-                builder.addBuildChainCustomizer(i);
-            }
             builder.addFinal(BytecodeTransformerBuildItem.class)
-                    .addFinal(ApplicationClassNameBuildItem.class);
+                    .addFinal(MainClassBuildItem.class);
 
             BuildResult result = builder.build().run();
             List<BytecodeTransformerBuildItem> bytecodeTransformerBuildItems = result.consumeMulti(BytecodeTransformerBuildItem.class);
@@ -92,11 +65,33 @@ public class RuntimeRunner implements Runnable, Closeable {
                 }
 
                 loader.setTransformers(functions);
+                if (!functions.isEmpty()) {
+                    //transformation can be slow, and classes that are transformed are generally always loaded on startup
+                    //to speed this along we eagerly load the classes in parallel
+                    //TODO: do we need this? apparently there have been big perf fixes
+                    ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+                    for (Map.Entry<String, List<BiFunction<String, ClassVisitor, ClassVisitor>>> entry : functions.entrySet()) {
+                        executorService.submit(new Runnable() {
+                            @Override
+                            public void run() {
+                                try {
+                                    loader.loadClass(entry.getKey(), true);
+                                } catch (ClassNotFoundException e) {
+                                    //ignore
+                                    //this will show up at runtime anyway
+                                }
+                            }
+                        });
+                    }
+                    executorService.shutdown();
+
+                }
             }
 
 
             final Application application;
-            Class<? extends Application> appClass = loader.loadClass(result.consume(ApplicationClassNameBuildItem.class).getClassName()).asSubclass(Application.class);
+            // todo - I guess this class name should come from a build item?
+            Class<? extends Application> appClass = loader.findClass("org.jboss.shamrock.runner.ApplicationImpl").asSubclass(Application.class);
             ClassLoader old = Thread.currentThread().getContextClassLoader();
             try {
                 Thread.currentThread().setContextClassLoader(loader);
@@ -113,75 +108,8 @@ public class RuntimeRunner implements Runnable, Closeable {
                 }
             };
 
-        } catch (RuntimeException e) {
-            throw e;
         } catch (Exception e) {
             throw new RuntimeException(e);
-        }
-    }
-
-    public static Builder builder() {
-        return new Builder();
-    }
-
-    public static class Builder {
-        private ClassLoader classLoader;
-        private Path target;
-        private Path frameworkClassesPath;
-        private Path transformerCache;
-        private LaunchMode launchMode = LaunchMode.NORMAL;
-        private final List<Path> additionalArchives = new ArrayList<>();
-        private final List<Consumer<BuildChainBuilder>> chainCustomizers = new ArrayList<>();
-
-        public Builder setClassLoader(ClassLoader classLoader) {
-            this.classLoader = classLoader;
-            return this;
-        }
-
-        public Builder setTarget(Path target) {
-            this.target = target;
-            return this;
-        }
-
-        public Builder setFrameworkClassesPath(Path frameworkClassesPath) {
-            this.frameworkClassesPath = frameworkClassesPath;
-            return this;
-        }
-
-        public Builder setTransformerCache(Path transformerCache) {
-            this.transformerCache = transformerCache;
-            return this;
-        }
-
-        public Builder addAdditionalArchive(Path additionalArchive) {
-            this.additionalArchives.add(additionalArchive);
-            return this;
-        }
-        public Builder addAdditionalArchives(Collection<Path> additionalArchive) {
-            this.additionalArchives.addAll(additionalArchives);
-            return this;
-        }
-
-        public Builder addChainCustomizer(Consumer<BuildChainBuilder> chainCustomizer) {
-            this.chainCustomizers.add(chainCustomizer);
-            return this;
-        }
-        public Builder addChainCustomizers(Collection<Consumer<BuildChainBuilder>> chainCustomizer) {
-            this.chainCustomizers.addAll(chainCustomizer);
-            return this;
-        }
-
-        public LaunchMode getLaunchMode() {
-            return launchMode;
-        }
-
-        public Builder setLaunchMode(LaunchMode launchMode) {
-            this.launchMode = launchMode;
-            return this;
-        }
-
-        public RuntimeRunner build() {
-            return new RuntimeRunner(this);
         }
     }
 }

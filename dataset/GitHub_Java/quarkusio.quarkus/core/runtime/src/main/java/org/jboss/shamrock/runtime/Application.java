@@ -1,5 +1,7 @@
 /*
- * Copyright 2018 Red Hat, Inc.
+ * JBoss, Home of Professional Open Source.
+ * Copyright 2018 Red Hat, Inc., and individual contributors
+ * as indicated by the @author tags.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,16 +18,14 @@
 
 package org.jboss.shamrock.runtime;
 
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.LockSupport;
 
-import org.graalvm.nativeimage.ImageInfo;
-import org.jboss.logging.Logger;
+import org.jboss.shamrock.runtime.graal.ShutdownHookThread;
 import org.jboss.threads.Locks;
 import org.wildfly.common.Assert;
-import sun.misc.Signal;
-import sun.misc.SignalHandler;
 
 /**
  * The application base class, which is extended and implemented by a generated class which implements the application
@@ -42,7 +42,6 @@ public abstract class Application {
     private final Condition stateCond = stateLock.newCondition();
 
     private int state = ST_INITIAL;
-    private volatile boolean shutdownRequested;
 
     /**
      * Construct a new instance.
@@ -143,7 +142,6 @@ public abstract class Application {
         } finally {
             stateLock.unlock();
         }
-        final long mark = System.nanoTime();
         try {
             doStop();
         } finally {
@@ -153,8 +151,6 @@ public abstract class Application {
                 stateCond.signalAll();
             } finally {
                 stateLock.unlock();
-                final long time = System.nanoTime() - mark;
-                Logger.getLogger("org.jboss.shamrock").infof("Shamrock stopped in %d.%03dms", Long.valueOf(time / 1_000_000), Long.valueOf(time % 1_000_000 / 1_000));
             }
         }
     }
@@ -165,20 +161,12 @@ public abstract class Application {
      * Run the application as if it were in a standalone JVM.
      */
     public final void run(String[] args) {
-        if (ImageInfo.inImageRuntimeCode()) {
-            final SignalHandler handler = new SignalHandler() {
-                public void handle(final Signal signal) {
-                    System.exit(0);
-                }
-            };
-            Signal.handle(new Signal("INT"), handler);
-            Signal.handle(new Signal("TERM"), handler);
-        }
-        final ShutdownHookThread shutdownHookThread = new ShutdownHookThread(Thread.currentThread());
+        final AtomicBoolean flag = new AtomicBoolean();
+        final ShutdownHookThread shutdownHookThread = new ShutdownHookThread(flag, Thread.currentThread());
         Runtime.getRuntime().addShutdownHook(shutdownHookThread);
         start(args);
         try {
-            while (! shutdownRequested) {
+            while (! flag.get()) {
                 Thread.interrupted();
                 LockSupport.park(shutdownHookThread);
             }
@@ -193,34 +181,5 @@ public abstract class Application {
 
     private static IllegalStateException interruptedOnAwaitStop() {
         return new IllegalStateException("Interrupted while waiting for another thread to stop the application");
-    }
-
-    class ShutdownHookThread extends Thread {
-        private final Thread mainThread;
-
-        ShutdownHookThread(Thread mainThread) {
-            super("Shutdown thread");
-            this.mainThread = mainThread;
-            setDaemon(false);
-        }
-
-        public void run() {
-            shutdownRequested = true;
-            LockSupport.unpark(mainThread);
-            final Lock stateLock = Application.this.stateLock;
-            final Condition stateCond = Application.this.stateCond;
-            stateLock.lock();
-            try {
-                while (state != ST_STOPPED) {
-                    stateCond.awaitUninterruptibly();
-                }
-            } finally {
-                stateLock.unlock();
-            }
-        }
-
-        public String toString() {
-            return getName();
-        }
     }
 }

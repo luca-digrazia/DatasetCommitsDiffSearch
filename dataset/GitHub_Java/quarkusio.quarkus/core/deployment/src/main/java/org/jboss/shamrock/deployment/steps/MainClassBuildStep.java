@@ -1,19 +1,3 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package org.jboss.shamrock.deployment.steps;
 
 import static org.jboss.protean.gizmo.MethodDescriptor.ofConstructor;
@@ -66,7 +50,7 @@ class MainClassBuildStep {
         MethodCreator mv = file.getMethodCreator("<clinit>", void.class);
         mv.setModifiers(Modifier.PUBLIC | Modifier.STATIC);
 
-        //very first thing is to set system props (for build time)
+        //very first thing is to set system props
         for (SystemPropertyBuildItem i : properties) {
             mv.invokeStaticMethod(ofMethod(System.class, "setProperty", String.class, String.class, String.class), mv.load(i.getKey()), mv.load(i.getValue()));
         }
@@ -94,12 +78,6 @@ class MainClassBuildStep {
 
         mv = file.getMethodCreator("doStart", void.class, String[].class);
         mv.setModifiers(Modifier.PROTECTED | Modifier.FINAL);
-
-        // very first thing is to set system props (for run time, which use substitutions for a different
-        // storage from build-time)
-        for (SystemPropertyBuildItem i : properties) {
-            mv.invokeStaticMethod(ofMethod(System.class, "setProperty", String.class, String.class, String.class), mv.load(i.getKey()), mv.load(i.getValue()));
-        }
 
         mv.invokeStaticMethod(ofMethod(Timing.class, "mainStarted", void.class));
         startupContext = mv.readStaticField(scField.getFieldDescriptor());
