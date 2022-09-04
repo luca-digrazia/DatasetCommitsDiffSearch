@@ -10,7 +10,6 @@ import freemarker.template.Template;
 import freemarker.template.TemplateException;
 import freemarker.template.Version;
 import io.dropwizard.views.View;
-import io.dropwizard.views.ViewRenderException;
 import io.dropwizard.views.ViewRenderer;
 
 import java.io.IOException;
@@ -69,15 +68,14 @@ public class FreemarkerViewRenderer implements ViewRenderer {
                        OutputStream output) throws IOException {
         try {
             final Configuration configuration = configurationCache.getUnchecked(view.getClass());
-            final Charset charset = view.getCharset().orElseGet(() -> Charset.forName(configuration.getEncoding(locale)));
+            final Charset charset = view.getCharset().or(Charset.forName(configuration.getEncoding(locale)));
             final Template template = configuration.getTemplate(view.getTemplateName(), locale, charset.name());
             template.process(view, new OutputStreamWriter(output, template.getEncoding()));
-        } catch (Exception e) {
-            throw new ViewRenderException(e);
+        } catch (TemplateException e) {
+            throw new RuntimeException(e);
         }
     }
 
-    @Override
     public void configure(Map<String, String> baseConfig) {
         this.loader.setBaseConfig(baseConfig);
     }

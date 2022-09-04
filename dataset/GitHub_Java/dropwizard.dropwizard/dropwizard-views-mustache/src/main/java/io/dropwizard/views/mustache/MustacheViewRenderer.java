@@ -16,21 +16,19 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 
 /**
  * A {@link ViewRenderer} which renders Mustache ({@code .mustache}) templates.
  */
 public class MustacheViewRenderer implements ViewRenderer {
     private final LoadingCache<Class<? extends View>, MustacheFactory> factories;
-    private boolean useCache;
 
     public MustacheViewRenderer() {
         this.factories = CacheBuilder.newBuilder()
                                      .build(new CacheLoader<Class<? extends View>, MustacheFactory>() {
                                          @Override
                                          public MustacheFactory load(Class<? extends View> key) throws Exception {
-                                             return createNewMustacheFactory(key);
+                                             return new DefaultMustacheFactory(new PerClassMustacheResolver(key));
                                          }
                                      });
     }
@@ -43,9 +41,9 @@ public class MustacheViewRenderer implements ViewRenderer {
     @Override
     public void render(View view, Locale locale, OutputStream output) throws IOException {
         try {
-            final MustacheFactory mustacheFactory = useCache ? factories.get(view.getClass()) : createNewMustacheFactory(view.getClass());
-            final Mustache template = mustacheFactory.compile(view.getTemplateName());
-            final Charset charset = view.getCharset().orElse(StandardCharsets.UTF_8);
+            final Mustache template = factories.get(view.getClass())
+                                               .compile(view.getTemplateName());
+            final Charset charset = view.getCharset().or(StandardCharsets.UTF_8);
             try (OutputStreamWriter writer = new OutputStreamWriter(output, charset)) {
                 template.execute(writer, view);
             }
@@ -56,16 +54,11 @@ public class MustacheViewRenderer implements ViewRenderer {
 
     @Override
     public void configure(Map<String, String> options) {
-        useCache = !("false".equals(options.get("cache")));
+
     }
 
     @Override
     public String getSuffix() {
         return ".mustache";
     }
-
-    private MustacheFactory createNewMustacheFactory(Class<? extends View> key) {
-        return new DefaultMustacheFactory(new PerClassMustacheResolver(key));
-    }
-
 }

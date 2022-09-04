@@ -1,5 +1,8 @@
 package io.dropwizard.migrations;
 
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Joiner;
+import com.google.common.base.MoreObjects;
 import io.dropwizard.Configuration;
 import io.dropwizard.db.DatabaseConfiguration;
 import liquibase.Liquibase;
@@ -11,18 +14,18 @@ import java.io.OutputStreamWriter;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.stream.Collectors;
 
 public class DbMigrateCommand<T extends Configuration> extends AbstractLiquibaseCommand<T> {
 
     private PrintStream outputStream = System.out;
 
-    public DbMigrateCommand(DatabaseConfiguration<T> strategy, Class<T> configurationClass, String migrationsFileName) {
-        super("migrate", "Apply all pending change sets.", strategy, configurationClass, migrationsFileName);
-    }
-
+    @VisibleForTesting
     void setOutputStream(PrintStream outputStream) {
         this.outputStream = outputStream;
+    }
+
+    public DbMigrateCommand(DatabaseConfiguration<T> strategy, Class<T> configurationClass) {
+        super("migrate", "Apply all pending change sets.", strategy, configurationClass);
     }
 
     @Override
@@ -51,7 +54,7 @@ public class DbMigrateCommand<T extends Configuration> extends AbstractLiquibase
     public void run(Namespace namespace, Liquibase liquibase) throws Exception {
         final String context = getContext(namespace);
         final Integer count = namespace.getInt("count");
-        final boolean dryRun = namespace.getBoolean("dry-run") != null && namespace.getBoolean("dry-run");
+        final boolean dryRun = MoreObjects.firstNonNull(namespace.getBoolean("dry-run"), false);
         if (count != null) {
             if (dryRun) {
                 liquibase.update(count, context, new OutputStreamWriter(outputStream, StandardCharsets.UTF_8));
@@ -72,8 +75,6 @@ public class DbMigrateCommand<T extends Configuration> extends AbstractLiquibase
         if (contexts == null) {
             return "";
         }
-        return contexts.stream()
-                .map(Object::toString)
-                .collect(Collectors.joining(","));
+        return Joiner.on(',').join(contexts);
     }
 }
