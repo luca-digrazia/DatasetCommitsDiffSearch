@@ -17,6 +17,7 @@ package com.googlecode.androidannotations.processing;
 
 import java.lang.annotation.Annotation;
 import java.util.List;
+import java.util.Map;
 
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
@@ -28,7 +29,6 @@ import com.googlecode.androidannotations.model.Instruction;
 import com.googlecode.androidannotations.model.MetaActivity;
 import com.googlecode.androidannotations.model.MetaModel;
 import com.sun.codemodel.JCodeModel;
-import com.sun.codemodel.JInvocation;
 
 public class BeforeCreateProcessor implements ElementProcessor {
 
@@ -41,6 +41,7 @@ public class BeforeCreateProcessor implements ElementProcessor {
 	public void process(Element element, MetaModel metaModel) {
 
 		String methodName = element.getSimpleName().toString();
+
 
 		Element enclosingElement = element.getEnclosingElement();
 		MetaActivity metaActivity = metaModel.getMetaActivities().get(enclosingElement);
@@ -57,21 +58,9 @@ public class BeforeCreateProcessor implements ElementProcessor {
 	}
 
 	@Override
-	public void process(Element element, JCodeModel codeModel, ActivitiesHolder activitiesHolder) {
+	public void process(Element element, JCodeModel codeModel, Map<Element, ActivityHolder> activityHolders) {
+		// TODO Auto-generated method stub
 		
-		ActivityHolder holder = activitiesHolder.getActivityHolder(element);
-		
-		String methodName = element.getSimpleName().toString();
-		
-		ExecutableElement executableElement = (ExecutableElement) element;
-		List<? extends VariableElement> parameters = executableElement.getParameters();
-		boolean hasBundleParameter = parameters.size() == 1;
-
-		JInvocation methodCall = holder.beforeSetContentView.body().invoke(methodName);
-		
-		if (hasBundleParameter) {
-			methodCall.arg(holder.beforeSetContentViewSavedInstanceStateParam);
-		}
 	}
 
 }

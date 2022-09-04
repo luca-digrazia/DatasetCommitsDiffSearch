@@ -40,7 +40,6 @@ public class ModelProcessor {
 
 		JCodeModel codeModel = new JCodeModel();
 
-        Map<Element, ActivityHolder> activityHolders = new HashMap<Element, ActivityHolder>();
 		for (ElementProcessor processor : processors) {
 			Class<? extends Annotation> target = processor.getTarget();
 
@@ -48,7 +47,7 @@ public class ModelProcessor {
 
 			for (Element annotatedElement : annotatedElements) {
 				try {
-					processor.process(annotatedElement, codeModel, activityHolders);
+					processor.process(annotatedElement, codeModel, null);
 				} catch (Exception e) {
 					throw new RuntimeException(e);
 				}
@@ -63,6 +62,7 @@ public class ModelProcessor {
 
             MetaModel metaModel = new MetaModel();
 
+            Map<Element, ActivityHolder> activityHolders = new HashMap<Element, ActivityHolder>();
             for (ElementProcessor processor : processors) {
                     Class<? extends Annotation> target = processor.getTarget();
 

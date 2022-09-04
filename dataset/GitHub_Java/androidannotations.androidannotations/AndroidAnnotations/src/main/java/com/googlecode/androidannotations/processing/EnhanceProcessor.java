@@ -33,6 +33,7 @@ import com.googlecode.androidannotations.rclass.RClass.Res;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
+import com.sun.codemodel.JDefinedClass;
 import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JFieldRef;
 import com.sun.codemodel.JMethod;
@@ -94,27 +95,29 @@ public class EnhanceProcessor extends AnnotationHelper implements ElementProcess
 		TypeElement typeElement = (TypeElement) element;
 
 		// Activity
-		String annotatedActivityQualifiedName = typeElement.getQualifiedName().toString();
+		String activityQualifiedName = typeElement.getQualifiedName().toString();
 
-		String subActivityQualifiedName = annotatedActivityQualifiedName + NEW_CLASS_SUFFIX;
-		holder.activity = codeModel._class(subActivityQualifiedName);
+		String subActivityQualifiedName = activityQualifiedName + NEW_CLASS_SUFFIX;
+		JDefinedClass subActivity = codeModel._class(subActivityQualifiedName);
 		
-		JClass annotatedActivity = codeModel.directClass(annotatedActivityQualifiedName);
+		
+		
+		JClass activity = codeModel.directClass(activityQualifiedName);
 
-		holder.activity._extends(annotatedActivity);
+		subActivity._extends(activity);
 
-		JClass bundleClass = codeModel.ref("android.os.Bundle");
+		JClass bundleClass = codeModel.directClass("android.os.Bundle");
 		
 		// beforeSetContentView
-		JMethod beforeSetContentView = holder.activity.method(JMod.PRIVATE, codeModel.VOID, "beforeSetContentView_");
+		JMethod beforeSetContentView = subActivity.method(JMod.PRIVATE, codeModel.VOID, "beforeSetContentView_");
 		beforeSetContentView.param(bundleClass, "savedInstanceState");
 		
 		// afterSetContentView
-		JMethod afterSetContentView = holder.activity.method(JMod.PRIVATE, codeModel.VOID, "afterSetContentView_");
+		JMethod afterSetContentView = subActivity.method(JMod.PRIVATE, codeModel.VOID, "afterSetContentView_");
 		afterSetContentView.param(bundleClass, "savedInstanceState");
 		
 		// onCreate
-		JMethod onCreate =	holder.activity.method(JMod.PUBLIC, codeModel.VOID, "onCreate");
+		JMethod onCreate =	subActivity.method(JMod.PUBLIC, codeModel.VOID, "onCreate");
 		onCreate.annotate(Override.class);
 
 		JVar onCreateSavedInstanceState = onCreate.param(bundleClass, "savedInstanceState");
@@ -139,7 +142,7 @@ public class EnhanceProcessor extends AnnotationHelper implements ElementProcess
 			String fieldName = layoutFieldQualifiedName.substring(fieldSuffix+1);
 			String rInnerClassName = layoutFieldQualifiedName.substring(0, fieldSuffix);
 			
-			JFieldRef contentViewId = codeModel.ref(rInnerClassName).staticRef(fieldName);
+			JFieldRef contentViewId = codeModel.directClass(rInnerClassName).staticRef(fieldName);
 			
 			onCreateBody.invoke("setContentView").arg(contentViewId);
 		}

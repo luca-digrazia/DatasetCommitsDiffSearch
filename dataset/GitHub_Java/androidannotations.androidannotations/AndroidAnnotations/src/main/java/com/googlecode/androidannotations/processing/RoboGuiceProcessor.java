@@ -93,7 +93,7 @@ public class RoboGuiceProcessor implements ElementProcessor {
 	}
 
 	@Override
-	public void process(Element element, JCodeModel codeModel, ActivitiesHolder activitiesHolder) {
+	public void process(Element element, JCodeModel codeModel, Map<Element, ActivityHolder> activityHolders) {
 		// TODO Auto-generated method stub
 		
 	}
