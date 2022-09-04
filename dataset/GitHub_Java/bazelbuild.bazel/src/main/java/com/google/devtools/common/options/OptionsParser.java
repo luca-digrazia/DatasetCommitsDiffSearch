@@ -278,8 +278,8 @@ public class OptionsParser implements OptionsProvider {
     @Nullable private final Object value;
     @Nullable private final OptionPriority priority;
     @Nullable private final String source;
-    @Nullable private final OptionDefinition implicitDependant;
-    @Nullable private final OptionDefinition expandedFrom;
+    @Nullable private final String implicitDependant;
+    @Nullable private final String expandedFrom;
 
     private OptionValueDescription(
         OptionDefinition optionDefinition,
@@ -288,8 +288,8 @@ public class OptionsParser implements OptionsProvider {
         @Nullable Object value,
         @Nullable OptionPriority priority,
         @Nullable String source,
-        @Nullable OptionDefinition implicitDependant,
-        @Nullable OptionDefinition expandedFrom) {
+        @Nullable String implicitDependant,
+        @Nullable String expandedFrom) {
       this.optionDefinition = optionDefinition;
       this.isDefaultValue = isDefaultValue;
       this.originalValueString = originalValueString;
@@ -306,8 +306,8 @@ public class OptionsParser implements OptionsProvider {
         @Nullable Object value,
         @Nullable OptionPriority priority,
         @Nullable String source,
-        @Nullable OptionDefinition implicitDependant,
-        @Nullable OptionDefinition expandedFrom) {
+        @Nullable String implicitDependant,
+        @Nullable String expandedFrom) {
       return new OptionValueDescription(
           optionDefinition,
           false,
@@ -377,7 +377,7 @@ public class OptionsParser implements OptionsProvider {
       return source;
     }
 
-    public OptionDefinition getImplicitDependant() {
+    public String getImplicitDependant() {
       return implicitDependant;
     }
 
@@ -385,7 +385,7 @@ public class OptionsParser implements OptionsProvider {
       return implicitDependant != null;
     }
 
-    public OptionDefinition getExpansionParent() {
+    public String getExpansionParent() {
       return expandedFrom;
     }
 
@@ -443,7 +443,6 @@ public class OptionsParser implements OptionsProvider {
    * <p>Note that the unparsed value and the source parameters can both be null.
    */
   public static class UnparsedOptionValueDescription {
-
     private final OptionDefinition optionDefinition;
     @Nullable private final String unparsedValue;
     private final OptionPriority priority;
@@ -673,15 +672,15 @@ public class OptionsParser implements OptionsProvider {
   }
 
   /**
-   * Returns a description of the options values that get expanded from this option with the given
-   * value.
+   * Returns a description of the options values that get expanded from this flag with the given
+   * flag value.
    *
    * @return The {@link ImmutableList<OptionValueDescription>} for the option, or null if there is
    *     no option by the given name.
    */
   ImmutableList<OptionValueDescription> getExpansionOptionValueDescriptions(
-      OptionDefinition option, @Nullable String optionValue) throws OptionsParsingException {
-    return impl.getExpansionOptionValueDescriptions(option, optionValue);
+      String flagName, @Nullable String flagValue) throws OptionsParsingException {
+    return impl.getExpansionOptionValueDescriptions(flagName, flagValue);
   }
 
   /**
@@ -730,14 +729,15 @@ public class OptionsParser implements OptionsProvider {
   }
 
   /**
-   * Parses {@code args}, using the classes registered with this parser. {@link #getOptions(Class)}
-   * and {@link #getResidue()} return the results. May be called multiple times; later options
-   * override existing ones if they have equal or higher priority. The source of options is given as
-   * a function that maps option names to the source of the option. Strings that cannot be parsed as
-   * options accumulates as* residue, if this parser allows it.
+   * Parses {@code args}, using the classes registered with this parser.
+   * {@link #getOptions(Class)} and {@link #getResidue()} return the results. May be called
+   * multiple times; later options override existing ones if they have equal or higher priority.
+   * The source of options is given as a function that maps option names to the source of the
+   * option. Strings that cannot be parsed as options accumulates as* residue, if this parser
+   * allows it.
    */
-  public void parseWithSourceFunction(
-      OptionPriority priority, Function<OptionDefinition, String> sourceFunction, List<String> args)
+  public void parseWithSourceFunction(OptionPriority priority,
+      Function<? super String, String> sourceFunction, List<String> args)
       throws OptionsParsingException {
     Preconditions.checkNotNull(priority);
     Preconditions.checkArgument(priority != OptionPriority.DEFAULT);
@@ -754,12 +754,13 @@ public class OptionsParser implements OptionsProvider {
    * <p>This will not affect options objects that have already been retrieved from this parser
    * through {@link #getOptions(Class)}.
    *
-   * @param option The option to clear.
-   * @return The old value of the option that was cleared.
+   * @param optionName The full name of the option to clear.
+   * @return A map of an option name to the old value of the options that were cleared.
    * @throws IllegalArgumentException If the flag does not exist.
    */
-  public OptionValueDescription clearValue(OptionDefinition option) throws OptionsParsingException {
-    return impl.clearValue(option);
+  public OptionValueDescription clearValue(String optionName)
+      throws OptionsParsingException {
+    return impl.clearValue(optionName);
   }
 
   @Override
