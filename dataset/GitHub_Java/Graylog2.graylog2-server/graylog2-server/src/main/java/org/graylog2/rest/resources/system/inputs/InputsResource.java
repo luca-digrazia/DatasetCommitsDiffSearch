@@ -24,7 +24,7 @@ import com.wordnik.swagger.annotations.ApiParam;
 import com.wordnik.swagger.annotations.ApiResponse;
 import com.wordnik.swagger.annotations.ApiResponses;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
-import org.graylog2.plugin.database.ValidationException;
+import org.graylog2.database.ValidationException;
 import org.graylog2.inputs.Input;
 import org.graylog2.inputs.InputService;
 import org.graylog2.plugin.IOState;
@@ -33,7 +33,7 @@ import org.graylog2.plugin.configuration.ConfigurationException;
 import org.graylog2.plugin.inputs.Extractor;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.rest.models.system.inputs.responses.InputSummary;
-import org.graylog2.shared.rest.resources.RestResource;
+import org.graylog2.rest.resources.RestResource;
 import org.graylog2.rest.resources.system.inputs.responses.InputCreated;
 import org.graylog2.rest.models.system.inputs.responses.InputStateSummary;
 import org.graylog2.rest.models.system.inputs.responses.InputsList;
@@ -320,7 +320,6 @@ public class InputsResource extends RestResource {
             try {
                 final Input input = inputService.findForThisNodeOrGlobal(serverStatus.getNodeId().toString(), inputId);
                 messageInput = inputService.getMessageInput(input);
-                messageInput.initialize();
             } catch (NoSuchInputTypeException | org.graylog2.database.NotFoundException e) {
                 final String error = "Cannot launch input <" + inputId + ">. Input not found.";
                 LOG.info(error);

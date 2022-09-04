@@ -22,7 +22,6 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.graylog2.plugin.IOState;
 import org.graylog2.plugin.buffers.InputBuffer;
 import org.graylog2.plugin.inputs.MessageInput;
-import org.graylog2.shared.utilities.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -69,8 +68,6 @@ public class InputLauncher {
             inputRegistry.add(inputState);
         } else {
             inputState = inputRegistry.getInputState(input.getId());
-            if (inputState.getState() == IOState.Type.RUNNING || inputState.getState() == IOState.Type.STARTING)
-                return inputState;
             inputState.setStoppable(input);
         }
 
@@ -98,7 +95,7 @@ public class InputLauncher {
         final MessageInput input = inputState.getStoppable();
         StringBuilder msg = new StringBuilder("The [" + input.getClass().getCanonicalName() + "] input with ID <" + input.getId() + "> misfired. Reason: ");
 
-        String causeMsg = ExceptionUtils.getRootCauseMessage(e);
+        String causeMsg = extractMessageCause(e);
 
         msg.append(causeMsg);
 
@@ -109,6 +106,23 @@ public class InputLauncher {
 
         inputState.setState(IOState.Type.FAILED);
         inputState.setDetailedMessage(causeMsg);
+    }
+
+    private String extractMessageCause(Throwable e) {
+        StringBuilder causeMsg = new StringBuilder(e.getMessage());
+
+        // Go down the whole cause chain to build a message that provides as much information as possible.
+        int maxLevel = 7; // ;)
+        Throwable cause = e.getCause();
+        for (int i = 0; i < maxLevel; i++) {
+            if (cause == null) {
+                break;
+            }
+
+            causeMsg.append(", ").append(cause.getMessage());
+            cause = cause.getCause();
+        }
+        return causeMsg.toString();
     }
 
     public void launchAllPersisted() {
