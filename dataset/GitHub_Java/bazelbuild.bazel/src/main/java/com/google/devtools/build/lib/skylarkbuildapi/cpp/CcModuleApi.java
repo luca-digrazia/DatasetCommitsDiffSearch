@@ -603,6 +603,7 @@ public interface CcModuleApi<
       name = "create_linker_input",
       doc = "Creates a <code>LinkingContext</code>.",
       useStarlarkThread = true,
+      enableOnlyWithFlag = FlagIdentifier.EXPERIMENTAL_CC_SHARED_LIBRARY,
       parameters = {
         @Param(
             name = "owner",
@@ -644,13 +645,6 @@ public interface CcModuleApi<
       throws EvalException, InterruptedException;
 
   @SkylarkCallable(
-      name = "check_experimental_cc_shared_library",
-      doc = "DO NOT USE. This is to guard use of cc_shared_library.",
-      useStarlarkThread = true,
-      documented = false)
-  void checkExperimentalCcSharedLibrary(StarlarkThread thread) throws EvalException;
-
-  @SkylarkCallable(
       name = "create_linking_context",
       doc = "Creates a <code>LinkingContext</code>.",
       useStarlarkThread = true,
@@ -660,38 +654,33 @@ public interface CcModuleApi<
             doc = "Depset of <code>LinkerInput</code>.",
             positional = false,
             named = true,
+            enableOnlyWithFlag = FlagIdentifier.EXPERIMENTAL_CC_SHARED_LIBRARY,
             noneable = true,
-            defaultValue = "None",
+            valueWhenDisabled = "None",
             allowedTypes = {@ParamType(type = NoneType.class), @ParamType(type = Depset.class)}),
         @Param(
             name = "libraries_to_link",
             doc = "List of <code>LibraryToLink</code>.",
             positional = false,
             named = true,
-            disableWithFlag = FlagIdentifier.INCOMPATIBLE_REQUIRE_LINKER_INPUT_CC_API,
             noneable = true,
             defaultValue = "None",
-            valueWhenDisabled = "None",
             allowedTypes = {@ParamType(type = NoneType.class), @ParamType(type = Sequence.class)}),
         @Param(
             name = "user_link_flags",
             doc = "List of user link flags passed as strings.",
             positional = false,
             named = true,
-            disableWithFlag = FlagIdentifier.INCOMPATIBLE_REQUIRE_LINKER_INPUT_CC_API,
             noneable = true,
             defaultValue = "None",
-            valueWhenDisabled = "None",
             allowedTypes = {@ParamType(type = NoneType.class), @ParamType(type = Sequence.class)}),
         @Param(
             name = "additional_inputs",
             doc = "For additional inputs to the linking action, e.g.: linking scripts.",
             positional = false,
             named = true,
-            disableWithFlag = FlagIdentifier.INCOMPATIBLE_REQUIRE_LINKER_INPUT_CC_API,
             noneable = true,
             defaultValue = "None",
-            valueWhenDisabled = "None",
             allowedTypes = {@ParamType(type = NoneType.class), @ParamType(type = Sequence.class)}),
       })
   LinkingContextT createCcLinkingInfo(
