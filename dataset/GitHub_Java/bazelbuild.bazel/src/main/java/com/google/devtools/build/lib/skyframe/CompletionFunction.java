@@ -55,9 +55,7 @@ public final class CompletionFunction<TValue extends SkyValue, TResult extends S
 
   interface PathResolverFactory {
     ArtifactPathResolver createPathResolverForArtifactValues(
-        ActionInputMap actionInputMap,
-        Map<Artifact, Collection<Artifact>> expandedArtifacts,
-        Iterable<Artifact> filesets);
+        ActionInputMap actionInputMap, Map<Artifact, Collection<Artifact>> expandedArtifacts);
 
     boolean shouldCreatePathResolverForArtifactValues();
   }
@@ -355,9 +353,6 @@ public final class CompletionFunction<TValue extends SkyValue, TResult extends S
               input,
               artifactValue,
               env);
-          if (input.isFileset()) {
-            expandedFilesets.put(input, ActionInputMapHelper.getFilesets(env, input));
-          }
         }
       } catch (MissingInputFileException e) {
         missingCount++;
@@ -407,8 +402,7 @@ public final class CompletionFunction<TValue extends SkyValue, TResult extends S
 
     ArtifactPathResolver pathResolver =
         createPathResolver
-            ? pathResolverFactory.createPathResolverForArtifactValues(
-                inputMap, expandedArtifacts, expandedFilesets.keySet())
+            ? pathResolverFactory.createPathResolverForArtifactValues(inputMap, expandedArtifacts)
             : ArtifactPathResolver.IDENTITY;
 
     ExtendedEventHandler.Postable postable =

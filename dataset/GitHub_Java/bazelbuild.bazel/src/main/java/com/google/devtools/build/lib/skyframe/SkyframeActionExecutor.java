@@ -361,8 +361,7 @@ public final class SkyframeActionExecutor {
   }
 
   public void setClientEnv(Map<String, String> clientEnv) {
-    // Copy once here, instead of on every construction of ActionExecutionContext.
-    this.clientEnv = ImmutableMap.copyOf(clientEnv);
+    this.clientEnv = clientEnv;
   }
 
   boolean usesActionFileSystem() {
