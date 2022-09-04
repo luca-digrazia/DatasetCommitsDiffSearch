@@ -39,14 +39,14 @@ public class OrientationUtils {
     }
 
     private void init() {
-        orientationEventListener = new OrientationEventListener(activity.getApplicationContext()) {
+        orientationEventListener = new OrientationEventListener(activity) {
             @Override
             public void onOrientationChanged(int rotation) {
                 boolean autoRotateOn = (Settings.System.getInt(activity.getContentResolver(), Settings.System.ACCELEROMETER_ROTATION, 0) == 1);
                 if (!autoRotateOn && mRotateWithSystem) {
                     return;
                 }
-                if (gsyVideoPlayer != null && gsyVideoPlayer.isVerticalFullByVideoSize()) {
+                if (gsyVideoPlayer != null && gsyVideoPlayer.isVerticalVideoFull()) {
                     return;
                 }
                 // 设置竖屏
@@ -126,7 +126,7 @@ public class OrientationUtils {
      * 点击切换的逻辑，比如竖屏的时候点击了就是切换到横屏不会受屏幕的影响
      */
     public void resolveByClick() {
-        if (mIsLand == 0 && gsyVideoPlayer != null && gsyVideoPlayer.isVerticalFullByVideoSize()) {
+        if (mIsLand == 0 && gsyVideoPlayer != null && gsyVideoPlayer.isVerticalVideoFull()) {
             return;
         }
         mClick = true;

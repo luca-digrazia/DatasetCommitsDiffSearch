@@ -212,6 +212,7 @@ public abstract class GSYBaseVideoPlayer extends GSYVideoControlView {
         to.mPlayTag = from.mPlayTag;
         to.mPlayPosition = from.mPlayPosition;
         to.mEffectFilter = from.mEffectFilter;
+        to.mCacheFile = from.mCacheFile;
         to.mFullPauseBitmap = from.mFullPauseBitmap;
         to.mNeedShowWifiTip = from.mNeedShowWifiTip;
         to.mShrinkImageRes = from.mShrinkImageRes;
@@ -302,14 +303,14 @@ public abstract class GSYBaseVideoPlayer extends GSYVideoControlView {
         mOrientationUtils.setRotateWithSystem(mRotateWithSystem);
         gsyVideoPlayer.mOrientationUtils = mOrientationUtils;
 
-        final boolean isVertical = isVerticalFullByVideoSize();
+        final boolean isVertical = isVerticalVideoFull();
         final boolean isLockLand = isLockLandByAutoFullSize();
 
         if (isShowFullAnimation()) {
             postDelayed(new Runnable() {
                 @Override
                 public void run() {
-                    Debuger.printfLog("GSYVideoBase resolveFullVideoShow isVerticalFullByVideoSize " +  isVertical);
+                    Debuger.printfLog("GSYVideoBase resolveFullVideoShow isVerticalVideoFull " +  isVertical);
                     //autoFull模式下，非横屏视频视频不横屏，并且不自动旋转
                     if (!isVertical && isLockLand && mOrientationUtils.getIsLand() != 1) {
                         mOrientationUtils.resolveByClick();
@@ -502,8 +503,8 @@ public abstract class GSYBaseVideoPlayer extends GSYVideoControlView {
     protected void checkAutoFullSizeWhenFull() {
         if (mIfCurrentIsFullscreen) {
             //确保开启竖屏检测的时候正常全屏
-            boolean isV = isVerticalFullByVideoSize();
-            Debuger.printfLog("GSYVideoBase onPrepared isVerticalFullByVideoSize " + isV);
+            boolean isV = isVerticalVideoFull();
+            Debuger.printfLog("GSYVideoBase onPrepared isVerticalVideoFull " + isV);
             if (isV) {
                 if (mOrientationUtils != null)
                     mOrientationUtils.backToProtVideo();
@@ -518,9 +519,9 @@ public abstract class GSYBaseVideoPlayer extends GSYVideoControlView {
     /************************* 开放接口 *************************/
 
     /**
-     * 是否根据视频尺寸，自动选择竖屏全屏或者横屏全屏，注意，这时候默认旋转无效
+     * 是否需要使用竖屏全屏
      */
-    public boolean isVerticalFullByVideoSize() {
+    public boolean isVerticalVideoFull() {
         return isVerticalVideo() && isAutoFullWithSize();
     }
 
@@ -554,7 +555,7 @@ public abstract class GSYBaseVideoPlayer extends GSYVideoControlView {
             }
         } else {
             //新版本isIfCurrentIsFullscreen的标志位内部提前设置了，所以不会和手动点击冲突
-            if (isIfCurrentIsFullscreen() && isVerticalFullByVideoSize()) {
+            if (isIfCurrentIsFullscreen() && isVerticalVideoFull()) {
                 backFromFull(activity);
             }
             if (orientationUtils != null) {
