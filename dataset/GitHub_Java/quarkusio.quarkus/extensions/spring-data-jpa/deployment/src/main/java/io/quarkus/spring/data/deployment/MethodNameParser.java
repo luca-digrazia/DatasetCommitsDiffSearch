@@ -194,45 +194,38 @@ public class MethodNameParser {
             }
             FieldInfo fieldInfo = getField(fieldName);
             if (fieldInfo == null) {
-                ClassInfo associatedEntityClassInfo;
-                String associatedEntityFieldName;
-                String simpleFieldName;
                 String parsingExceptionMethod = "Entity " + entityClass + " does not contain a field named: " + fieldName +
                         ". " + "Offending method is " + methodName;
 
                 // determine if we are trying to use a field of one of the associated entities
-                int nextStartingIndex = 1;
-                while (true) {
-                    int fieldEndIndex = -1;
-                    for (int i = nextStartingIndex; i < fieldName.length() - 1; i++) {
-                        char c = fieldName.charAt(i);
-                        if ((c >= 'A' && c <= 'Z') || c == '_') {
-                            fieldEndIndex = i;
-                            break;
-                        }
-                    }
 
-                    if (fieldEndIndex == -1) {
-                        throw new UnableToParseMethodException(parsingExceptionMethod);
-                    }
-
-                    int associatedEntityFieldStartIndex = fieldName.charAt(fieldEndIndex) == '_' ? fieldEndIndex + 1
-                            : fieldEndIndex;
-                    if (associatedEntityFieldStartIndex >= fieldName.length() - 1) {
-                        throw new UnableToParseMethodException(parsingExceptionMethod);
-                    }
-
-                    simpleFieldName = fieldName.substring(0, fieldEndIndex);
-                    associatedEntityFieldName = lowerFirstLetter(fieldName.substring(associatedEntityFieldStartIndex));
-                    fieldInfo = getField(simpleFieldName);
-                    if ((fieldInfo == null) || !(fieldInfo.type() instanceof ClassType)) {
-                        nextStartingIndex = fieldEndIndex + 1;
-                    } else {
+                int fieldEndIndex = -1;
+                for (int i = 1; i < fieldName.length() - 1; i++) {
+                    char c = fieldName.charAt(i);
+                    if ((c >= 'A' && c <= 'Z') || c == '_') {
+                        fieldEndIndex = i;
                         break;
                     }
                 }
 
-                associatedEntityClassInfo = indexView.getClassByName(fieldInfo.type().name());
+                if (fieldEndIndex == -1) {
+                    throw new UnableToParseMethodException(parsingExceptionMethod);
+                }
+
+                int associatedEntityFieldStartIndex = fieldName.charAt(fieldEndIndex) == '_' ? fieldEndIndex + 1
+                        : fieldEndIndex;
+                if (associatedEntityFieldStartIndex >= fieldName.length() - 1) {
+                    throw new UnableToParseMethodException(parsingExceptionMethod);
+                }
+
+                String simpleFieldName = fieldName.substring(0, fieldEndIndex);
+                String associatedEntityFieldName = lowerFirstLetter(fieldName.substring(associatedEntityFieldStartIndex));
+                fieldInfo = getField(simpleFieldName);
+                if ((fieldInfo == null) || !(fieldInfo.type() instanceof ClassType)) {
+                    throw new UnableToParseMethodException(parsingExceptionMethod);
+                }
+
+                ClassInfo associatedEntityClassInfo = indexView.getClassByName(fieldInfo.type().name());
                 if (associatedEntityClassInfo == null) {
                     throw new IllegalStateException(
                             "Entity class " + fieldInfo.type().name() + " was not part of the Quarkus index");
@@ -436,7 +429,6 @@ public class MethodNameParser {
             if (StringUtils.containsIgnoreCase(fieldName, fieldInf)) {
                 String newValue = finalName.toString()
                         .replaceAll("(?i)" + fieldInf, lowerFirstLetter(fieldInf) + ".");
-                newValue = newValue.replace("..", "."); // this is just the easiest way to deal with fields of fields
                 finalName.delete(0, finalName.length());
                 finalName.append(newValue);
             }
