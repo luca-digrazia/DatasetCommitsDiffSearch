@@ -146,7 +146,9 @@ public final class Runtime {
     Preconditions.checkArgument(nameSpace.equals(getCanonicalRepresentation(nameSpace)));
     Preconditions.checkArgument(
         getCanonicalRepresentation(function.getObjectType()).equals(nameSpace));
-    functions.computeIfAbsent(nameSpace, k -> new HashMap<String, BaseFunction>());
+    if (!functions.containsKey(nameSpace)) {
+      functions.put(nameSpace, new HashMap<String, BaseFunction>());
+    }
     functions.get(nameSpace).put(function.getName(), function);
   }
 
