@@ -79,40 +79,41 @@ public class ReceiverActionHandler extends BaseAnnotationHandler<EReceiverHolder
 
 		ReceiverAction annotation = element.getAnnotation(ReceiverAction.class);
 		String[] dataSchemes = annotation.dataSchemes();
-		String[] actions = annotation.value();
-		if (actions.length == 0) {
-			actions = new String[] { methodName };
+		String extraKey = annotation.value();
+		if (extraKey.isEmpty()) {
+			extraKey = methodName;
 		}
 
-		JFieldVar actionKeyField = createStaticField(holder, "actions", methodName, actions);
-		JFieldVar dataSchemesField = createStaticField(holder, "dataSchemes", methodName, dataSchemes);
+		JFieldVar actionKeyField = createStaticActionField(holder, extraKey, methodName);
+		JFieldVar dataSchemesField = createStaticDataSchemesField(holder, dataSchemes, methodName);
 		addActionInOnReceive(holder, executableElement, methodName, actionKeyField, dataSchemesField);
 	}
 
-	private JFieldVar createStaticField(EReceiverHolder holder, String prefix, String methodName, String[] values) {
-		String staticFieldName = CaseHelper.camelCaseToUpperSnakeCase(prefix, methodName, null);
+	private JFieldVar createStaticActionField(EReceiverHolder holder, String extraKey, String methodName) {
+		String staticFieldName = CaseHelper.camelCaseToUpperSnakeCase("action", methodName, null);
+		return holder.getGeneratedClass().field(PUBLIC | STATIC | FINAL, classes().STRING, staticFieldName, lit(extraKey));
+	}
 
-		if (values == null || values.length == 0) {
+	private JFieldVar createStaticDataSchemesField(EReceiverHolder holder, String[] dataSchemes, String methodName) {
+		if (dataSchemes == null || dataSchemes.length == 0) {
 			return null;
-		} else if (values.length == 1) {
-			return holder.getGeneratedClass().field(PUBLIC | STATIC | FINAL, classes().STRING, staticFieldName, lit(values[0]));
-
-		}
-
-		JInvocation asListInvoke = classes().ARRAYS.staticInvoke("asList");
-		for (String scheme : values) {
-			asListInvoke.arg(scheme);
 		}
 		JClass listOfStrings = classes().LIST.narrow(classes().STRING);
+		String staticFieldName = CaseHelper.camelCaseToUpperSnakeCase("dataSchemes", methodName, null);
+
+		JInvocation asListInvoke = classes().ARRAYS.staticInvoke("asList");
+		for (String scheme : dataSchemes) {
+			asListInvoke.arg(scheme);
+		}
+
 		return holder.getGeneratedClass().field(PUBLIC | STATIC | FINAL, listOfStrings, staticFieldName, asListInvoke);
 	}
 
-	private void addActionInOnReceive(EReceiverHolder holder, ExecutableElement executableElement, String methodName, JFieldVar actionsField, JFieldVar dataSchemesField) {
-		String actionsInvoke = getInvocationName(actionsField);
-		JExpression filterCondition = actionsField.invoke(actionsInvoke).arg(holder.getOnReceiveIntentAction());
+	private void addActionInOnReceive(EReceiverHolder holder, ExecutableElement executableElement, String methodName, JFieldVar actionKeyField, JFieldVar dataSchemesField) {
+		// If action match, call the method
+		JExpression filterCondition = actionKeyField.invoke("equals").arg(holder.getOnReceiveIntentAction());
 		if (dataSchemesField != null) {
-			String dataSchemesInvoke = getInvocationName(dataSchemesField);
-			filterCondition = filterCondition.cand(dataSchemesField.invoke(dataSchemesInvoke).arg(holder.getOnReceiveIntentDataScheme()));
+			filterCondition = filterCondition.cand(dataSchemesField.invoke("contains").arg(holder.getOnReceiveIntentDataScheme()));
 		}
 
 		JBlock callActionBlock = holder.getOnReceiveBody()._if(filterCondition)._then();
@@ -139,14 +140,6 @@ public class ReceiverActionHandler extends BaseAnnotationHandler<EReceiverHolder
 		}
 		callActionBlock.add(callActionInvocation);
 		callActionBlock._return();
-	}
-
-	private String getInvocationName(JFieldVar field) {
-		JClass listOfStrings = classes().LIST.narrow(classes().STRING);
-		if (field.type().fullName().equals(listOfStrings.fullName())) {
-			return "contains";
-		}
-		return "equals";
 	}
 
 	private static class ExtraHandler extends ExtraParameterHandler {
