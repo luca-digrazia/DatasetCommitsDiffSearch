@@ -35,9 +35,9 @@ import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -84,7 +84,7 @@ public class MoreAsserts {
   static final Predicate<Field> ALL_STRONG_REFS = Predicates.equalTo(NON_STRONG_REF);
 
   private static boolean isRetained(Predicate<Object> predicate, Object start) {
-    IdentityHashMap<Object, Object> visited = Maps.newIdentityHashMap();
+    Map<Object, Object> visited = Maps.newIdentityHashMap();
     visited.put(start, start);
     Queue<Object> toScan = new ArrayDeque<>();
     toScan.add(start);
@@ -301,45 +301,28 @@ public class MoreAsserts {
   }
 
   /**
-   * If {@code eventCollector} does not contain an event which matches {@code expectedEventPattern},
+   * If {@code eventCollector} does not contain an event which matches {@code expectedEventRegex},
    * fails with an informative assertion.
    */
-  public static Event assertContainsEvent(
-      Iterable<Event> eventCollector, Pattern expectedEventPattern, EventKind... kinds) {
-    return assertContainsEvent(eventCollector, expectedEventPattern, ImmutableSet.copyOf(kinds));
-  }
-
-  /**
-   * If {@code eventCollector} does not contain an event which matches {@code expectedEventPattern},
-   * fails with an informative assertion.
-   */
-  public static Event assertContainsEvent(
-      Iterable<Event> eventCollector, Pattern expectedEventPattern, Set<EventKind> kinds) {
+  public static void assertContainsEventRegex(
+      Iterable<Event> eventCollector, String expectedEventRegex) {
     for (Event event : eventCollector) {
-      // Does the event message match the expected regex?
-      if (!expectedEventPattern.matcher(event.toString()).find()) {
-        continue;
+      if (event.toString().matches(expectedEventRegex)) {
+        return;
       }
-      // Was an expected kind given, and does the event match?
-      if (!kinds.isEmpty() && !kinds.contains(event.getKind())) {
-        continue;
-      }
-      // Return the event, assertion successful
-      return event;
     }
     String eventsString = eventsToString(eventCollector);
-    String failureMessage = "Event matching '" + expectedEventPattern + "' not found";
+    String failureMessage = "Event matching '" + expectedEventRegex + "' not found";
     if (!eventsString.isEmpty()) {
       failureMessage += "; found these though: " + eventsString;
     }
     fail(failureMessage);
-    return null; // unreachable
   }
 
-  public static void assertNotContainsEvent(
-      Iterable<Event> eventCollector, Pattern unexpectedEventPattern) {
+  public static void assertNotContainsEventRegex(
+      Iterable<Event> eventCollector, String unexpectedEventRegex) {
     for (Event event : eventCollector) {
-      assertThat(event.toString()).doesNotMatch(unexpectedEventPattern);
+      assertThat(event.toString()).doesNotMatch(unexpectedEventRegex);
     }
   }
 
@@ -401,12 +384,12 @@ public class MoreAsserts {
   }
 
   /**
-   * If "expectedSublist" is not a sublist of "arguments", an informative assertion is failed in the
-   * context of the specified TestCase.
+   * If "expectedSublist" is not a sublist of "arguments", an informative
+   * assertion is failed in the context of the specified TestCase.
    *
    * <p>Argument order mnemonic: assert(X)ContainsSublist(Y).
    */
-  @SuppressWarnings("varargs")
+  @SuppressWarnings({"unchecked", "varargs"})
   public static <T> void assertContainsSublist(List<T> arguments, T... expectedSublist) {
     List<T> sublist = Arrays.asList(expectedSublist);
     try {
@@ -417,12 +400,12 @@ public class MoreAsserts {
   }
 
   /**
-   * If "expectedSublist" is a sublist of "arguments", an informative assertion is failed in the
-   * context of the specified TestCase.
+   * If "expectedSublist" is a sublist of "arguments", an informative
+   * assertion is failed in the context of the specified TestCase.
    *
    * <p>Argument order mnemonic: assert(X)DoesNotContainSublist(Y).
    */
-  @SuppressWarnings("varargs")
+  @SuppressWarnings({"unchecked", "varargs"})
   public static <T> void assertDoesNotContainSublist(List<T> arguments, T... expectedSublist) {
     List<T> sublist = Arrays.asList(expectedSublist);
     try {
@@ -459,6 +442,7 @@ public class MoreAsserts {
    * if the elements of the pair are equal by its lights.
    * @return first element not in arguments in order, or null if success.
    */
+  @SuppressWarnings({"unchecked"})
   protected static <S, T> T containsSublistWithGapsAndEqualityChecker(List<S> arguments,
       Function<Pair<S, T>, Boolean> equalityChecker, T... expectedSublist) {
     Iterator<S> iter = arguments.iterator();
