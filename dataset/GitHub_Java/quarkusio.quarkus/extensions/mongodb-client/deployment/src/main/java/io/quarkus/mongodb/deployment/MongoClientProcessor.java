@@ -29,7 +29,7 @@ import io.quarkus.arc.deployment.BeanContainerBuildItem;
 import io.quarkus.arc.deployment.BeanDefiningAnnotationBuildItem;
 import io.quarkus.arc.deployment.SyntheticBeanBuildItem;
 import io.quarkus.arc.processor.DotNames;
-import io.quarkus.deployment.Feature;
+import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
@@ -41,7 +41,7 @@ import io.quarkus.deployment.builditem.ExtensionSslNativeSupportBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.SslNativeConfigBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
-import io.quarkus.deployment.metrics.MetricsCapabilityBuildItem;
+import io.quarkus.mongodb.metrics.MongoMetricsConnectionPoolListener;
 import io.quarkus.mongodb.reactive.ReactiveMongoClient;
 import io.quarkus.mongodb.runtime.MongoClientBeanUtil;
 import io.quarkus.mongodb.runtime.MongoClientName;
@@ -105,25 +105,12 @@ public class MongoClientProcessor {
 
     @BuildStep
     FeatureBuildItem feature() {
-        return new FeatureBuildItem(Feature.MONGODB_CLIENT);
+        return new FeatureBuildItem(FeatureBuildItem.MONGODB_CLIENT);
     }
 
     @BuildStep
     ExtensionSslNativeSupportBuildItem ssl() {
-        return new ExtensionSslNativeSupportBuildItem(Feature.MONGODB_CLIENT);
-    }
-
-    @BuildStep
-    MongoConnectionPoolListenerBuildItem setupMetrics(
-            MongoClientBuildTimeConfig buildTimeConfig,
-            Optional<MetricsCapabilityBuildItem> metricsCapability) {
-
-        if (buildTimeConfig.metricsEnabled && metricsCapability.isPresent()) {
-            // avoid import for lazy classloading
-            return new MongoConnectionPoolListenerBuildItem(
-                    new io.quarkus.mongodb.metrics.MongoMetricsConnectionPoolListener());
-        }
-        return null;
+        return new ExtensionSslNativeSupportBuildItem(FeatureBuildItem.MONGODB_CLIENT);
     }
 
     @Record(STATIC_INIT)
@@ -264,6 +251,16 @@ public class MongoClientProcessor {
     @BuildStep
     HealthBuildItem addHealthCheck(MongoClientBuildTimeConfig buildTimeConfig) {
         return new HealthBuildItem("io.quarkus.mongodb.health.MongoHealthCheck",
-                buildTimeConfig.healthEnabled);
+                buildTimeConfig.healthEnabled, "mongodb");
+    }
+
+    @BuildStep
+    void setupMetrics(
+            MongoClientBuildTimeConfig buildTimeConfig, Capabilities capabilities,
+            BuildProducer<MongoConnectionPoolListenerBuildItem> producer) {
+
+        if (buildTimeConfig.metricsEnabled && capabilities.isCapabilityPresent(Capabilities.METRICS)) {
+            producer.produce(new MongoConnectionPoolListenerBuildItem(new MongoMetricsConnectionPoolListener()));
+        }
     }
 }
