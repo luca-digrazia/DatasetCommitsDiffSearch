@@ -457,9 +457,8 @@ public final class SkyframeActionExecutor {
     this.actionCacheChecker = null;
   }
 
-  @Nullable
-  Pair<ActionLookupData, FutureTask<ActionExecutionValue>> probeActionExecution(Action action) {
-    return buildActionMap.get(new OwnerlessArtifactWrapper(action.getPrimaryOutput()));
+  boolean probeActionExecution(Action action) {
+    return buildActionMap.containsKey(new OwnerlessArtifactWrapper(action.getPrimaryOutput()));
   }
 
   boolean probeCompletedAndReset(Action action) {
@@ -517,14 +516,14 @@ public final class SkyframeActionExecutor {
       ActionMetadataHandler metadataHandler,
       long actionStartTime,
       ActionExecutionContext actionExecutionContext,
-      ActionLookupData actionLookupData,
-      @Nullable Pair<ActionLookupData, FutureTask<ActionExecutionValue>> previousAction)
+      ActionLookupData actionLookupData)
       throws ActionExecutionException, InterruptedException {
     Exception exception = badActionMap.get(action);
     if (exception != null) {
       // If action had a conflict with some other action in the graph, report it now.
       reportError(exception.getMessage(), exception, action, null);
     }
+    Artifact primaryOutput = action.getPrimaryOutput();
     FutureTask<ActionExecutionValue> actionTask =
         new FutureTask<>(
             new ActionRunner(
@@ -534,15 +533,10 @@ public final class SkyframeActionExecutor {
                 actionStartTime,
                 actionExecutionContext,
                 actionLookupData));
-
-    // Check one last time to see if another action is already executing/has executed this value.
+    // Check to see if another action is already executing/has executed this value.
     Pair<ActionLookupData, FutureTask<ActionExecutionValue>> oldAction =
-        previousAction != null
-            ? previousAction
-            : buildActionMap.putIfAbsent(
-                new OwnerlessArtifactWrapper(action.getPrimaryOutput()),
-                Pair.of(actionLookupData, actionTask));
-
+        buildActionMap.putIfAbsent(
+            new OwnerlessArtifactWrapper(primaryOutput), Pair.of(actionLookupData, actionTask));
     // true if this is a non-shared action or it's shared and to be executed.
     boolean isPrimaryActionForTheValue = oldAction == null;
 

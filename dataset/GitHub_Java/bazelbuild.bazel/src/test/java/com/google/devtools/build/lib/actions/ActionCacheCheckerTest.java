@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.actions.cache.MetadataHandler;
 import com.google.devtools.build.lib.actions.cache.Protos.ActionCacheStatistics;
 import com.google.devtools.build.lib.actions.cache.Protos.ActionCacheStatistics.MissDetail;
 import com.google.devtools.build.lib.actions.cache.Protos.ActionCacheStatistics.MissReason;
-import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil.FakeArtifactResolverBase;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil.FakeMetadataHandlerBase;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil.MissDetailsBuilder;
@@ -282,7 +281,7 @@ public class ActionCacheCheckerTest {
             FileSystem fileSystem = getPrimaryOutput().getPath().getFileSystem();
             Path path = fileSystem.getPath("/input");
             ArtifactRoot root = ArtifactRoot.asSourceRoot(Root.fromPath(fileSystem.getPath("/")));
-            return ImmutableList.of(ActionsTestUtil.createArtifact(root, path));
+            return ImmutableList.of(new Artifact(path, root));
           }
         };
     runAction(action);  // Not cached so recorded as different deps.
@@ -338,7 +337,7 @@ public class ActionCacheCheckerTest {
       if (!(input instanceof Artifact)) {
         return null;
       }
-      return FileArtifactValue.createForTesting((Artifact) input);
+      return FileArtifactValue.create((Artifact) input);
     }
 
     @Override

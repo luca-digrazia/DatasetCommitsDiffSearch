@@ -56,7 +56,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.rules.cpp.IncludeScannable;
 import com.google.devtools.build.lib.skyframe.ActionRewindStrategy.RewindPlan;
-import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -76,7 +75,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.FutureTask;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.IntFunction;
 import javax.annotation.Nullable;
@@ -147,8 +145,7 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
     //
     // Additionally, if an action restarted (in the Skyframe sense) after it executed because it
     // discovered new inputs during execution, we should detect that and short-circuit.
-    Pair<ActionLookupData, FutureTask<ActionExecutionValue>> previousExecution =
-        skyframeActionExecutor.probeActionExecution(action);
+    boolean actionAlreadyRan = skyframeActionExecutor.probeActionExecution(action);
 
     // If this action was previously completed this build, then this evaluation must be happening
     // because of rewinding. Prevent any ProgressLike events from being published a second time for
@@ -193,7 +190,7 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
         env.getValuesOrThrow(
             inputDepKeys, MissingInputFileException.class, ActionExecutionException.class);
     try {
-      if (previousExecution == null && !state.hasArtifactData()) {
+      if (!actionAlreadyRan && !state.hasArtifactData()) {
         // Do we actually need to find our metadata?
         checkedInputs = checkInputs(env, action, inputDeps);
       }
@@ -246,7 +243,7 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
               env,
               clientEnv,
               actionLookupData,
-              previousExecution,
+              actionAlreadyRan,
               skyframeDepsResult,
               actionStartTime);
     } catch (LostInputsActionExecutionException e) {
@@ -545,21 +542,20 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
       Environment env,
       Map<String, String> clientEnv,
       ActionLookupData actionLookupData,
-      @Nullable Pair<ActionLookupData, FutureTask<ActionExecutionValue>> previousAction,
+      boolean actionAlreadyRan,
       Object skyframeDepsResult,
       long actionStartTime)
       throws ActionExecutionException, InterruptedException {
     // If this is a shared action and the other action is the one that executed, we must use that
     // other action's value, provided here, since it is populated with metadata for the outputs.
-    if (previousAction != null) {
+    if (actionAlreadyRan) {
       return skyframeActionExecutor.executeAction(
           env.getListener(),
           action,
           /* metadataHandler= */ null,
           /* actionStartTime= */ -1,
           /* actionExecutionContext= */ null,
-          actionLookupData,
-          previousAction);
+          actionLookupData);
     }
     // The metadataHandler may be recreated if we discover inputs.
     ArtifactPathResolver pathResolver = ArtifactPathResolver.createPathResolver(
@@ -704,8 +700,7 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
                 metadataHandler,
                 actionStartTime,
                 actionExecutionContext,
-                actionLookupData,
-                /*previousAction=*/ null);
+                actionLookupData);
       }
     } catch (IOException e) {
       throw new ActionExecutionException(
