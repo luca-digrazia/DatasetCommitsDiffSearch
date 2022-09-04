@@ -90,7 +90,8 @@ public class NinjaParserStep {
         // Add text together with the spaces between current and previous token.
         int start = previous >= 0 ? previous : lexer.getLastStart();
         String rawText = asString(lexer.getFragment().getBytes(start, lexer.getLastEnd()));
-        varBuilder.addText(unescapeText(rawText));
+        String text = NinjaToken.ESCAPED_TEXT.equals(token) ? unescapeText(rawText) : rawText;
+        varBuilder.addText(text);
       } else {
         lexer.undo();
         break;
@@ -129,7 +130,8 @@ public class NinjaParserStep {
         varBuilder.addVariable(normalizeVariableName(asString(lexer.getTokenBytes())));
       } else if (NinjaToken.TEXT.equals(token) || NinjaToken.ESCAPED_TEXT.equals(token)) {
         String rawText = asString(lexer.getTokenBytes());
-        varBuilder.addText(unescapeText(rawText));
+        String text = NinjaToken.ESCAPED_TEXT.equals(token) ? unescapeText(rawText) : rawText;
+        varBuilder.addText(text);
       } else {
         lexer.undo();
         break;

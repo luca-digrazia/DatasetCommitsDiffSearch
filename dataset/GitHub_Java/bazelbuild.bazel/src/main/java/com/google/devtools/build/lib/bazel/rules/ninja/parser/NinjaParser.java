@@ -14,8 +14,9 @@
 
 package com.google.devtools.build.lib.bazel.rules.ninja.parser;
 
+import com.google.devtools.build.lib.bazel.rules.ninja.file.ByteBufferFragment;
+import com.google.devtools.build.lib.bazel.rules.ninja.file.ByteFragmentAtOffset;
 import com.google.devtools.build.lib.bazel.rules.ninja.file.DeclarationConsumer;
-import com.google.devtools.build.lib.bazel.rules.ninja.file.FileFragment;
 import com.google.devtools.build.lib.bazel.rules.ninja.file.GenericParsingException;
 import com.google.devtools.build.lib.bazel.rules.ninja.lexer.NinjaLexer;
 import com.google.devtools.build.lib.bazel.rules.ninja.lexer.NinjaToken;
@@ -35,12 +36,6 @@ public class NinjaParser implements DeclarationConsumer {
   private final NinjaFileParseResult parseResult;
   private final String ninjaFileName;
 
-  private static final String UNSUPPORTED_TOKEN_MESSAGE =
-      " is an unsupported type of Ninja lexeme for the parser at this state. "
-          + "These are unexpected lexemes at this state for the parser, and running into a "
-          + "token of this lexeme hints that the parser did not progress the lexer to a "
-          + "valid state during a previous parsing step.";
-
   public NinjaParser(
       NinjaPipeline pipeline, NinjaFileParseResult parseResult, String ninjaFileName) {
     this.pipeline = pipeline;
@@ -49,10 +44,12 @@ public class NinjaParser implements DeclarationConsumer {
   }
 
   @Override
-  public void declaration(FileFragment fragment) throws GenericParsingException, IOException {
-    long offset = fragment.getFragmentOffset();
+  public void declaration(ByteFragmentAtOffset byteFragmentAtOffset)
+      throws GenericParsingException, IOException {
+    ByteBufferFragment fragment = byteFragmentAtOffset.getFragment();
+    long offset = byteFragmentAtOffset.getFragmentOffset();
 
-    NinjaLexer lexer = new NinjaLexer(fragment, pipeline.getPathFragmentInterner());
+    NinjaLexer lexer = new NinjaLexer(fragment);
     if (!lexer.hasNextToken()) {
       throw new IllegalStateException("Empty fragment passed as declaration.");
     }
@@ -96,16 +93,16 @@ public class NinjaParser implements DeclarationConsumer {
         parseResult.addSubNinjaScope(declarationStart, subNinjaFuture);
         break;
       case BUILD:
-        FileFragment targetFragment;
+        ByteFragmentAtOffset targetFragment;
         if (declarationStart == offset) {
-          targetFragment = fragment;
+          targetFragment = byteFragmentAtOffset;
         } else {
           // Method subFragment accepts only the offset *inside fragment*.
           // So we should subtract the offset of fragment's buffer in file
-          // (fragment.getFileOffset()),
+          // (byteFragmentAtOffset.getOffset()),
           // and start of fragment inside buffer (fragment.getStartIncl()).
           long fragmentStart =
-              declarationStart - fragment.getFileOffset() - fragment.getStartIncl();
+              declarationStart - byteFragmentAtOffset.getBufferOffset() - fragment.getStartIncl();
 
           // While the absolute offset is typed as long (because of larger ninja files), the
           // fragments are only at most Integer.MAX_VALUE long, so fragmentStart cannot be
@@ -117,7 +114,10 @@ public class NinjaParser implements DeclarationConsumer {
                         + "since each fragment is at most max-int long.",
                     fragmentStart));
           }
-          targetFragment = fragment.subFragment((int) fragmentStart, fragment.length());
+          targetFragment =
+              new ByteFragmentAtOffset(
+                  byteFragmentAtOffset.getBufferOffset(),
+                  fragment.subFragment((int) fragmentStart, fragment.length()));
         }
         parseResult.addTarget(targetFragment);
         break;
@@ -136,7 +136,12 @@ public class NinjaParser implements DeclarationConsumer {
       case PIPE2:
       case TEXT:
       case VARIABLE:
-        throw new UnsupportedOperationException(token.name() + UNSUPPORTED_TOKEN_MESSAGE);
+        throw new UnsupportedOperationException(
+            "Unsupported type of Ninja lexeme for the parser at this state: "
+                + token.name()
+                + ". These are unexpected lexemes at this state for the parser, and running into a "
+                + "token of this lexeme hints that the parser did not progress the lexer to a "
+                + "valid state during a previous parsing step.");
       case ERROR:
         throw new GenericParsingException(lexer.getError());
         // Omit default case on purpose. Explicitly specify *all* NinjaToken enum cases above or the

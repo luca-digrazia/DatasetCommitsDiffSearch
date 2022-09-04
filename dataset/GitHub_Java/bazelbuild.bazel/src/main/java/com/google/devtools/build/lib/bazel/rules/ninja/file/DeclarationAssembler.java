@@ -25,32 +25,41 @@ import java.util.Comparator;
 import java.util.List;
 
 /**
- * A {@link FileFragmentSplitter} callback interface implementation, that assembles fragments of
+ * A {@link BufferSplitter} callback interface implementation, that assembles fragments of
  * declarations (that may occur on the edges of byte buffer fragments) together and passes all
  * declarations to delegate {@link DeclarationConsumer}, which does further processing / parsing.
  */
 public class DeclarationAssembler {
   private final DeclarationConsumer declarationConsumer;
+  private final SeparatorFinder separatorFinder;
 
-  /** @param declarationConsumer delegate declaration consumer for actual processing / parsing */
-  public DeclarationAssembler(DeclarationConsumer declarationConsumer) {
+  /**
+   * @param declarationConsumer delegate declaration consumer for actual processing / parsing
+   * @param separatorFinder callback used to determine if two fragments should be separate
+   *     declarations (in the Ninja case, if the new line starts with a space, it should be treated
+   *     as a part of the previous declaration, i.e. the separator is longer then one symbol).
+   */
+  public DeclarationAssembler(
+      DeclarationConsumer declarationConsumer, SeparatorFinder separatorFinder) {
     this.declarationConsumer = declarationConsumer;
+    this.separatorFinder = separatorFinder;
   }
 
   /**
    * Should be called after all work for processing of individual buffer fragments is complete.
    *
-   * @param fragments list of {@link FileFragment} - pieces on the bounds of sub-fragments.
+   * @param fragments list of {@link ByteFragmentAtOffset} - pieces on the bounds of sub-fragments.
    * @throws GenericParsingException thrown by delegate {@link #declarationConsumer}
    */
-  public void wrapUp(List<FileFragment> fragments) throws GenericParsingException, IOException {
-    fragments.sort(Comparator.comparingLong(FileFragment::getFragmentOffset));
+  public void wrapUp(List<ByteFragmentAtOffset> fragments)
+      throws GenericParsingException, IOException {
+    fragments.sort(Comparator.comparingLong(ByteFragmentAtOffset::getFragmentOffset));
 
-    List<FileFragment> list = Lists.newArrayList();
+    List<ByteFragmentAtOffset> list = Lists.newArrayList();
     long previous = -1;
-    for (FileFragment edge : fragments) {
+    for (ByteFragmentAtOffset edge : fragments) {
       long start = edge.getFragmentOffset();
-      FileFragment fragment = edge;
+      ByteBufferFragment fragment = edge.getFragment();
       if (previous >= 0 && previous != start) {
         sendMerged(list);
         list.clear();
@@ -63,9 +72,10 @@ public class DeclarationAssembler {
     }
   }
 
-  private void sendMerged(List<FileFragment> list) throws GenericParsingException, IOException {
+  private void sendMerged(List<ByteFragmentAtOffset> list)
+      throws GenericParsingException, IOException {
     Preconditions.checkArgument(!list.isEmpty());
-    FileFragment first = list.get(0);
+    ByteFragmentAtOffset first = list.get(0);
     if (list.size() == 1) {
       declarationConsumer.declaration(first);
       return;
@@ -81,10 +91,12 @@ public class DeclarationAssembler {
     // 4. Later we will check only interestingRanges for separators, and create corresponding
     // fragments; the underlying common ByteBuffer will be reused, so we are not performing
     // extensive copying.
-    List<FileFragment> fragments = new ArrayList<>();
+    long firstOffset = first.getBufferOffset();
+    List<ByteBufferFragment> fragments = new ArrayList<>();
     List<Range<Integer>> interestingRanges = Lists.newArrayList();
     int fragmentShift = 0;
-    for (FileFragment fragment : list) {
+    for (ByteFragmentAtOffset byteFragmentAtOffset : list) {
+      ByteBufferFragment fragment = byteFragmentAtOffset.getFragment();
       fragments.add(fragment);
       if (fragmentShift > 0) {
         // We are only looking for the separators between fragments.
@@ -100,22 +112,36 @@ public class DeclarationAssembler {
       fragmentShift += fragment.length();
     }
 
-    FileFragment merged = FileFragment.merge(fragments);
+    ByteBufferFragment merged = ByteBufferFragment.merge(fragments);
+
+    long newOffset;
+    if (Iterables.getLast(list).getBufferOffset() == firstOffset) {
+      // If all fragment offsets were the same (which is the case if all their originating buffers
+      // were the same), then the merged fragment has the start index of the first originating
+      // fragment, and the end index of the last originating fragment.
+      // The old offset can be used without issue.
+      newOffset = firstOffset;
+    } else {
+      // If fragment offsets differed, then the new merged fragment has a different offset.
+      // In this case, the merged fragment has relative indices [0, len), which means that its
+      // offset should reflect the absolute "real" start offset.
+      newOffset = first.getFragmentOffset();
+    }
 
     int previousEnd = 0;
     for (Range<Integer> range : interestingRanges) {
       int idx =
-          NinjaSeparatorFinder.findNextSeparator(
-              merged, range.lowerEndpoint(), range.upperEndpoint());
+          separatorFinder.findNextSeparator(merged, range.lowerEndpoint(), range.upperEndpoint());
       if (idx >= 0) {
         // There should always be a previous fragment, as we are checking non-intersecting ranges,
         // starting from the connection point between first and second fragments.
         Preconditions.checkState(idx > previousEnd);
-        declarationConsumer.declaration(merged.subFragment(previousEnd, idx + 1));
+        declarationConsumer.declaration(
+            new ByteFragmentAtOffset(newOffset, merged.subFragment(previousEnd, idx + 1)));
         previousEnd = idx + 1;
       }
     }
-
-    declarationConsumer.declaration(merged.subFragment(previousEnd, merged.length()));
+    declarationConsumer.declaration(
+        new ByteFragmentAtOffset(newOffset, merged.subFragment(previousEnd, merged.length())));
   }
 }
