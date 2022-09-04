@@ -52,7 +52,7 @@ public class KubernetesDeployer {
     public void deploy(KubernetesClientBuildItem kubernetesClient,
             ContainerImageInfoBuildItem containerImageInfo,
             List<ContainerImageResultBuildItem> containerImageResults,
-            List<KubernetesDeploymentTargetBuildItem> kubernetesDeploymentTargets,
+            List<KubernetesDeploymentTargetBuildItem> kubernetesDeploymentTargetBuildItems,
             OutputTargetBuildItem outputTarget,
             BuildProducer<DeploymentResultBuildItem> deploymentResult) {
 
@@ -76,7 +76,7 @@ public class KubernetesDeployer {
         }
 
         //Get any build item but if the build was s2i, use openshift
-        KubernetesDeploymentTargetBuildItem deploymentTarget = kubernetesDeploymentTargets
+        KubernetesDeploymentTargetBuildItem deploymentTarget = kubernetesDeploymentTargetBuildItems
                 .stream()
                 .filter(d -> !S2I.equals(containerImageResult.getProvider()) || OPENSHIFT.equals(d.getName()))
                 .findFirst()
