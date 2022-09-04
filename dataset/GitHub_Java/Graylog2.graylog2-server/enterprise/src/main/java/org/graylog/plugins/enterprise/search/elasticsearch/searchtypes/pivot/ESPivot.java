@@ -80,7 +80,7 @@ public class ESPivot implements ESSearchTypeHandler<Pivot> {
             if (handler == null) {
                 throw new IllegalArgumentException("Unknown row_group type " + bucketSpec.type());
             }
-            final Optional<AggregationBuilder> generatedAggregation = handler.createAggregation(name, pivot, bucketSpec, this, queryContext, query);
+            final Optional<AggregationBuilder> generatedAggregation = handler.createAggregation(name, pivot, bucketSpec, this, queryContext);
             if (generatedAggregation.isPresent()) {
                 final AggregationBuilder aggregationBuilder = generatedAggregation.get();
                 if (topLevelAggregation == null) {
@@ -112,7 +112,7 @@ public class ESPivot implements ESSearchTypeHandler<Pivot> {
                 if (handler == null) {
                     throw new IllegalArgumentException("Unknown column_group type " + bucketSpec.type());
                 }
-                final Optional<AggregationBuilder> generatedAggregation = handler.createAggregation(name, pivot, bucketSpec, this, queryContext, query);
+                final Optional<AggregationBuilder> generatedAggregation = handler.createAggregation(name, pivot, bucketSpec, this, queryContext);
                 if (generatedAggregation.isPresent()) {
                     final AggregationBuilder aggregationBuilder = generatedAggregation.get();
                     // always insert the series for the final row group, or for each one if explicit rollup was requested
@@ -137,9 +137,10 @@ public class ESPivot implements ESSearchTypeHandler<Pivot> {
     }
 
     private Stream<AggregationBuilder> seriesStream(Pivot pivot, ESGeneratedQueryContext queryContext, String reason) {
+        final String idPrefix = (pivot.columnGroups().isEmpty() && pivot.rowGroups().isEmpty()) ? queryContext.nextName() + "-" : "";
         return EntryStream.of(pivot.series())
                 .mapKeyValue((integer, seriesSpec) -> {
-                    final String seriesName = pivot.id() + "-" + "series-" + integer;
+                    final String seriesName = idPrefix + "series-" + integer;
                     LOG.debug("Adding {} series '{}' with name '{}'", reason, seriesSpec.type(), seriesName);
                     return seriesHandlers.get(seriesSpec.type()).createAggregation(seriesName, pivot, seriesSpec, this, queryContext);
                 })
