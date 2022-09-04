@@ -79,6 +79,7 @@ import com.google.devtools.build.lib.packages.FileTarget;
 import com.google.devtools.build.lib.packages.FilesetEntry;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.Info;
+import com.google.devtools.build.lib.packages.InfoInterface;
 import com.google.devtools.build.lib.packages.InputFile;
 import com.google.devtools.build.lib.packages.NativeProvider;
 import com.google.devtools.build.lib.packages.OutputFile;
@@ -1072,7 +1073,7 @@ public final class RuleContext extends TargetContext
    * Returns all the declared providers (native and Skylark) for the specified constructor under the
    * specified attribute of this target in the BUILD file.
    */
-  public <T extends Info> Iterable<T> getPrerequisites(
+  public <T extends InfoInterface> Iterable<T> getPrerequisites(
       String attributeName, Mode mode, final NativeProvider<T> skylarkKey) {
     return AnalysisUtils.getProviders(getPrerequisites(attributeName, mode), skylarkKey);
   }
@@ -1081,7 +1082,7 @@ public final class RuleContext extends TargetContext
    * Returns all the declared providers (native and Skylark) for the specified constructor under the
    * specified attribute of this target in the BUILD file.
    */
-  public <T extends Info> Iterable<T> getPrerequisites(
+  public <T extends InfoInterface> Iterable<T> getPrerequisites(
       String attributeName, Mode mode, final BuiltinProvider<T> skylarkKey) {
     return AnalysisUtils.getProviders(getPrerequisites(attributeName, mode), skylarkKey);
   }
@@ -1092,7 +1093,7 @@ public final class RuleContext extends TargetContext
    * TransitiveInfoCollection under the specified attribute.
    */
   @Nullable
-  public <T extends Info> T getPrerequisite(
+  public <T extends InfoInterface> T getPrerequisite(
       String attributeName, Mode mode, final NativeProvider<T> skylarkKey) {
     TransitiveInfoCollection prerequisite = getPrerequisite(attributeName, mode);
     return prerequisite == null ? null : prerequisite.get(skylarkKey);
@@ -1104,7 +1105,7 @@ public final class RuleContext extends TargetContext
    * TransitiveInfoCollection under the specified attribute.
    */
   @Nullable
-  public <T extends Info> T getPrerequisite(
+  public <T extends InfoInterface> T getPrerequisite(
       String attributeName, Mode mode, final BuiltinProvider<T> skylarkKey) {
     TransitiveInfoCollection prerequisite = getPrerequisite(attributeName, mode);
     return prerequisite == null ? null : prerequisite.get(skylarkKey);
@@ -1317,9 +1318,9 @@ public final class RuleContext extends TargetContext
   private Artifact transitiveInfoCollectionToArtifact(
       String attributeName, TransitiveInfoCollection target) {
     if (target != null) {
-      NestedSet<Artifact> artifacts = target.getProvider(FileProvider.class).getFilesToBuild();
-      if (artifacts.isSingleton()) {
-        return artifacts.getSingleton();
+      Iterable<Artifact> artifacts = target.getProvider(FileProvider.class).getFilesToBuild();
+      if (Iterables.size(artifacts) == 1) {
+        return Iterables.getOnlyElement(artifacts);
       } else {
         attributeError(attributeName, target.getLabel() + " expected a single artifact");
       }
@@ -1729,7 +1730,7 @@ public final class RuleContext extends TargetContext
     private boolean validateFilesetEntry(FilesetEntry filesetEntry, ConfiguredTargetAndData src) {
       NestedSet<Artifact> filesToBuild =
           src.getConfiguredTarget().getProvider(FileProvider.class).getFilesToBuild();
-      if (filesToBuild.isSingleton() && filesToBuild.getSingleton().isFileset()) {
+      if (filesToBuild.isSingleton() && Iterables.getOnlyElement(filesToBuild).isFileset()) {
         return true;
       }
 
