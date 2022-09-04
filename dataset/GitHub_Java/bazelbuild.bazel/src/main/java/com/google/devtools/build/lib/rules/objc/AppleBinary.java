@@ -23,7 +23,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Functions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableListMultimap;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -42,7 +41,8 @@ import com.google.devtools.build.lib.rules.apple.Platform.PlatformType;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
 import com.google.devtools.build.lib.rules.objc.AppleDebugOutputsProvider.OutputType;
 import com.google.devtools.build.lib.rules.objc.CompilationSupport.ExtraLinkArgs;
-import com.google.devtools.build.lib.rules.objc.MultiArchBinarySupport.DependencySpecificConfiguration;
+import java.util.Map;
+import java.util.Set;
 
 /** Implementation for the "apple_binary" rule. */
 public class AppleBinary implements RuleConfiguredTargetFactory {
@@ -108,9 +108,7 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
   @Override
   public final ConfiguredTarget create(RuleContext ruleContext)
       throws InterruptedException, RuleErrorException {
-    MultiArchSplitTransitionProvider.validateMinimumOs(ruleContext);
     PlatformType platformType = MultiArchSplitTransitionProvider.getPlatformType(ruleContext);
-
     AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
 
     Platform platform = appleConfiguration.getMultiArchPlatform(platformType);
@@ -120,15 +118,14 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
     ImmutableListMultimap<BuildConfiguration, TransitiveInfoCollection> configToDepsCollectionMap =
         ruleContext.getPrerequisitesByConfiguration("deps", Mode.SPLIT);
 
-    ImmutableMap<BuildConfiguration, CcToolchainProvider> childConfigurations =
-        getChildConfigurationsAndToolchains(ruleContext);
+    Set<BuildConfiguration> childConfigurations = getChildConfigurations(ruleContext);
     Artifact outputArtifact =
         ObjcRuleClasses.intermediateArtifacts(ruleContext).combinedArchitectureBinary();
 
     MultiArchBinarySupport multiArchBinarySupport = new MultiArchBinarySupport(ruleContext);
 
-    ImmutableSet<DependencySpecificConfiguration> dependencySpecificConfigurations =
-        multiArchBinarySupport.getDependencySpecificConfigurations(
+    Map<BuildConfiguration, ObjcProvider> objcProviderByDepConfiguration =
+        multiArchBinarySupport.objcProviderByDepConfiguration(
             childConfigurations,
             configToDepsCollectionMap,
             configurationToNonPropagatedObjcMap,
@@ -138,7 +135,7 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
     multiArchBinarySupport.registerActions(
         platform,
         getExtraLinkArgs(ruleContext),
-        dependencySpecificConfigurations,
+        objcProviderByDepConfiguration,
         getExtraLinkInputs(ruleContext),
         configToDepsCollectionMap,
         outputArtifact);
@@ -149,9 +146,8 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
         ObjcRuleClasses.ruleConfiguredTarget(ruleContext, filesToBuild.build());
 
     ObjcProvider.Builder objcProviderBuilder = new ObjcProvider.Builder();
-    for (DependencySpecificConfiguration dependencySpecificConfiguration :
-        dependencySpecificConfigurations) {
-      objcProviderBuilder.addTransitiveAndPropagate(dependencySpecificConfiguration.objcProvider());
+    for (ObjcProvider objcProvider : objcProviderByDepConfiguration.values()) {
+      objcProviderBuilder.addTransitiveAndPropagate(objcProvider);
     }
     objcProviderBuilder.add(MULTI_ARCH_LINKED_BINARIES, outputArtifact);
 
@@ -176,18 +172,12 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
 
     AppleDebugOutputsProvider.Builder builder = AppleDebugOutputsProvider.Builder.create();
 
-    for (DependencySpecificConfiguration dependencySpecificConfiguration :
-        dependencySpecificConfigurations) {
-      AppleConfiguration childAppleConfig =
-          dependencySpecificConfiguration.config().getFragment(AppleConfiguration.class);
-      ObjcConfiguration childObjcConfig =
-          dependencySpecificConfiguration.config().getFragment(ObjcConfiguration.class);
+    for (BuildConfiguration childConfig : childConfigurations) {
+      AppleConfiguration childAppleConfig = childConfig.getFragment(AppleConfiguration.class);
+      ObjcConfiguration childObjcConfig = childConfig.getFragment(ObjcConfiguration.class);
       IntermediateArtifacts intermediateArtifacts =
           new IntermediateArtifacts(
-              ruleContext, /*archiveFileNameSuffix*/
-              "", /*outputPrefix*/
-              "",
-              dependencySpecificConfiguration.config());
+              ruleContext, /*archiveFileNameSuffix*/ "", /*outputPrefix*/ "", childConfig);
       String arch = childAppleConfig.getSingleArchitecture();
 
       if (childAppleConfig.getBitcodeMode() == AppleBitcodeMode.EMBEDDED) {
@@ -282,8 +272,7 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
     return ImmutableSet.<Artifact>of();
   }
 
-  private ImmutableMap<BuildConfiguration, CcToolchainProvider> getChildConfigurationsAndToolchains(
-      RuleContext ruleContext) {
+  private Set<BuildConfiguration> getChildConfigurations(RuleContext ruleContext) {
     // This is currently a hack to obtain all child configurations regardless of the attribute
     // values of this rule -- this rule does not currently use the actual info provided by
     // this attribute. b/28403953 tracks cc toolchain usage.
@@ -291,13 +280,7 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
         ruleContext.getPrerequisitesByConfiguration(
             ObjcRuleClasses.CHILD_CONFIG_ATTR, Mode.SPLIT, CcToolchainProvider.class);
 
-    ImmutableMap.Builder<BuildConfiguration, CcToolchainProvider> result = ImmutableMap.builder();
-    for (BuildConfiguration config : configToProvider.keySet()) {
-      CcToolchainProvider toolchain = Iterables.getOnlyElement(configToProvider.get(config));
-      result.put(config, toolchain);
-    }
-
-    return result.build();
+    return configToProvider.keySet();
   }
 
   private static BinaryType getBinaryType(RuleContext ruleContext) {

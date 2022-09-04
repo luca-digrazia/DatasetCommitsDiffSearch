@@ -29,7 +29,7 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.ConfigRuleClasses;
 import com.google.devtools.build.lib.analysis.constraints.EnvironmentRule;
-import com.google.devtools.build.lib.bazel.rules.BazelToolchainType.BazelToolchainTypeRule;
+import com.google.devtools.build.lib.bazel.rules.BazelToolchainLookup.BazelToolchainLookupRule;
 import com.google.devtools.build.lib.bazel.rules.android.AndroidNdkRepositoryRule;
 import com.google.devtools.build.lib.bazel.rules.android.AndroidSdkRepositoryRule;
 import com.google.devtools.build.lib.bazel.rules.android.BazelAarImportRule;
@@ -77,6 +77,7 @@ import com.google.devtools.build.lib.bazel.rules.workspace.NewGitRepositoryRule;
 import com.google.devtools.build.lib.bazel.rules.workspace.NewHttpArchiveRule;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.ideinfo.AndroidStudioInfoAspect;
+import com.google.devtools.build.lib.ideinfo.BazelAndroidStudioInfoSemantics;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
 import com.google.devtools.build.lib.packages.PackageGroup;
@@ -297,7 +298,7 @@ public class BazelRuleClassProvider {
 
     // These rules are a little special: they need to depend on every configuration fragment that
     // has Make variables, so we can't put them in any of the above buckets.
-    builder.addRuleDefinition(new BazelToolchainTypeRule());
+    builder.addRuleDefinition(new BazelToolchainLookupRule());
     builder.addRuleDefinition(new GenRuleBaseRule());
     builder.addRuleDefinition(new BazelGenRuleRule());
   }
@@ -728,7 +729,9 @@ public class BazelRuleClassProvider {
       new RuleSet() {
         @Override
         public void init(Builder builder) {
-          AndroidStudioInfoAspect androidStudioInfoAspect = new AndroidStudioInfoAspect();
+          String toolsRepository = checkNotNull(builder.getToolsRepository());
+          AndroidStudioInfoAspect androidStudioInfoAspect =
+              new AndroidStudioInfoAspect(toolsRepository, new BazelAndroidStudioInfoSemantics());
           builder.addNativeAspectClass(androidStudioInfoAspect);
         }
 

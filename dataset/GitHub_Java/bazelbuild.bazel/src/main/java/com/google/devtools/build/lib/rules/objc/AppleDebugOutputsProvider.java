@@ -105,7 +105,9 @@ public final class AppleDebugOutputsProvider extends SkylarkClassObject
      * @return this builder.
      */
     public Builder addOutput(String arch, OutputType outputType, Artifact artifact) {
-      outputsByArch.computeIfAbsent(arch, k -> new HashMap<String, Artifact>());
+      if (!outputsByArch.containsKey(arch)) {
+        outputsByArch.put(arch, new HashMap<String, Artifact>());
+      }
 
       outputsByArch.get(arch).put(outputType.toString(), artifact);
       return this;
