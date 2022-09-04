@@ -1613,10 +1613,6 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     return config;
   }
 
-  protected final BuildConfiguration getConfiguration(ConfiguredTarget ct) {
-    return skyframeExecutor.getConfiguration(reporter, ct.getConfigurationKey());
-  }
-
   /**
    * Returns an attribute value retriever for the given rule for the target configuration.
    */

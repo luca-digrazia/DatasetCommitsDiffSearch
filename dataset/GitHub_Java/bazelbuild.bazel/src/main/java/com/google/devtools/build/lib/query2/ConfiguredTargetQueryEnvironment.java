@@ -204,17 +204,17 @@ public class ConfiguredTargetQueryEnvironment
     return target.getLabel();
   }
 
-  public ImmutableList<CqueryThreadsafeCallback> getDefaultOutputFormatters(
+  public static ImmutableList<CqueryThreadsafeCallback> getDefaultOutputFormatters(
       TargetAccessor<ConfiguredTarget> accessor,
       CqueryOptions options,
       OutputStream out,
       SkyframeExecutor skyframeExecutor,
       BuildConfiguration hostConfiguration) {
     return new ImmutableList.Builder<CqueryThreadsafeCallback>()
-        .add(new LabelAndConfigurationOutputFormatterCallback(options, out, skyframeExecutor))
+        .add(new LabelAndConfigurationOutputFormatterCallback(options, out))
         .add(
             new TransitionsOutputFormatterCallback(
-                options, out, skyframeExecutor, accessor, hostConfiguration))
+                accessor, options, out, skyframeExecutor, hostConfiguration))
         .build();
   }
 

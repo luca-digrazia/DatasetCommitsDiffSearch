@@ -91,7 +91,9 @@ public class ConfiguredTargetKey extends ActionLookupKey {
     return configuration == null
         ? KeyAndHost.NULL_INSTANCE
         : new KeyAndHost(
-            BuildConfigurationValue.key(configuration), configuration.isHostConfiguration());
+            BuildConfigurationValue.key(
+                configuration.fragmentClasses(), configuration.getBuildOptionsDiff()),
+            configuration.isHostConfiguration());
   }
 
   @Override
