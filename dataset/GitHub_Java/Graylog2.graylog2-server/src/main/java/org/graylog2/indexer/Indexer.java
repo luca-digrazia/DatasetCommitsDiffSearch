@@ -30,8 +30,6 @@ import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.util.Calendar;
-import java.util.Formatter;
 import java.util.List;
 
 /**
@@ -47,7 +45,7 @@ public class Indexer {
 
     private static final Logger LOG = Logger.getLogger(Indexer.class);
 
-    public static final String INDEX = Main.configuration.getElasticSearchIndexName();
+    public static final String INDEX = "graylog2";
     public static final String TYPE = "message";
 
     /**
@@ -96,7 +94,7 @@ public class Indexer {
 
             // Write Mapping.
             writer.write(JSONValue.toJSONString(Mapping.get()));
-            writer.flush();
+
             if (conn.getResponseCode() == HttpURLConnection.HTTP_OK) {
                 return true;
             } else {
@@ -216,15 +214,6 @@ public class Indexer {
 
     private static String buildIndexWithTypeUrl() {
         return buildIndexURL() + "/" + Indexer.TYPE;
-    }
-
-    // yyyy-MM-dd HH-mm-ss
-    // http://docs.oracle.com/javase/1.5.0/docs/api/java/util/Formatter.html#syntax
-    public static String buildTimeFormat(double timestamp) {
-        final Calendar cal = Calendar.getInstance();
-        cal.setTimeInMillis(System.currentTimeMillis());
-
-        return String.format("%1$tY-%1$tm-%1$td %1$tH-%1$tM-%1$tS", cal); // ramtamtam
     }
 
 }
