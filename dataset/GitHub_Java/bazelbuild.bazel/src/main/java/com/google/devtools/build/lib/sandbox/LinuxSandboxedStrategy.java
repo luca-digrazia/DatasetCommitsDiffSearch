@@ -107,6 +107,7 @@ public class LinuxSandboxedStrategy extends SandboxStrategy {
     SandboxRunner runner =
         new LinuxSandboxRunner(
             execRoot,
+            sandboxPath,
             sandboxExecRoot,
             writableDirs,
             getTmpfsPaths(),
