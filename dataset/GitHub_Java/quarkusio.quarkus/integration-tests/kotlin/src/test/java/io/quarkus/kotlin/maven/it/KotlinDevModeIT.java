@@ -8,18 +8,21 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.maven.shared.invoker.MavenInvocationException;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import com.google.common.collect.ImmutableMap;
 
 import io.quarkus.maven.it.RunAndCheckMojoTestBase;
+import io.quarkus.test.devmode.util.DevModeTestUtils;
 
 public class KotlinDevModeIT extends RunAndCheckMojoTestBase {
 
     @Test
+    @Tag("failsOnJDK16")
     public void testThatTheApplicationIsReloadedOnKotlinChange() throws MavenInvocationException, IOException {
         testDir = initProject("projects/classic-kotlin", "projects/project-classic-run-kotlin-change");
-        runAndCheck();
+        runAndCheck(false);
 
         // Edit the "Hello" message.
         File jaxRsResource = new File(testDir, "src/main/kotlin/org/acme/HelloResource.kt");
@@ -29,7 +32,7 @@ public class KotlinDevModeIT extends RunAndCheckMojoTestBase {
         // Wait until we get "uuid"
         await()
                 .pollDelay(1, TimeUnit.SECONDS)
-                .atMost(1, TimeUnit.MINUTES).until(() -> getHttpResponse("/app/hello").contains(uuid));
+                .atMost(1, TimeUnit.MINUTES).until(() -> DevModeTestUtils.getHttpResponse("/app/hello").contains(uuid));
 
         await()
                 .pollDelay(1, TimeUnit.SECONDS)
@@ -41,7 +44,7 @@ public class KotlinDevModeIT extends RunAndCheckMojoTestBase {
         // Wait until we get "carambar"
         await()
                 .pollDelay(1, TimeUnit.SECONDS)
-                .atMost(1, TimeUnit.MINUTES).until(() -> getHttpResponse("/app/hello").contains("carambar"));
+                .atMost(1, TimeUnit.MINUTES).until(() -> DevModeTestUtils.getHttpResponse("/app/hello").contains("carambar"));
 
         File greetingService = new File(testDir, "src/main/kotlin/org/acme/GreetingService.kt");
         String newUuid = UUID.randomUUID().toString();
@@ -50,6 +53,6 @@ public class KotlinDevModeIT extends RunAndCheckMojoTestBase {
         // Wait until we get "newUuid"
         await()
                 .pollDelay(1, TimeUnit.SECONDS)
-                .atMost(1, TimeUnit.MINUTES).until(() -> getHttpResponse("/app/hello/bean").contains(newUuid));
+                .atMost(1, TimeUnit.MINUTES).until(() -> DevModeTestUtils.getHttpResponse("/app/hello/bean").contains(newUuid));
     }
 }
