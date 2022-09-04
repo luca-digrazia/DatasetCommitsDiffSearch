@@ -14,12 +14,9 @@
 
 package com.google.devtools.build.buildjar.javac;
 
-import static java.util.Locale.ENGLISH;
-
 import com.google.common.collect.ImmutableList;
 import com.sun.tools.javac.api.ClientCodeWrapper.Trusted;
 import com.sun.tools.javac.api.DiagnosticFormatter;
-import com.sun.tools.javac.code.Lint.LintCategory;
 import com.sun.tools.javac.util.Context;
 import com.sun.tools.javac.util.JCDiagnostic;
 import com.sun.tools.javac.util.JavacMessages;
@@ -37,22 +34,15 @@ public class FormattedDiagnostic implements Diagnostic<JavaFileObject> {
 
   public final Diagnostic<? extends JavaFileObject> diagnostic;
   public final String formatted;
-  public final String lintCategory;
 
-  public FormattedDiagnostic(
-      Diagnostic<? extends JavaFileObject> diagnostic, String formatted, String lintCategory) {
+  public FormattedDiagnostic(Diagnostic<? extends JavaFileObject> diagnostic, String formatted) {
     this.diagnostic = diagnostic;
     this.formatted = formatted;
-    this.lintCategory = lintCategory;
   }
 
   /** The formatted diagnostic message produced by javac's diagnostic formatter. */
   public String getFormatted() {
     return formatted;
-  }
-
-  public String getLintCategory() {
-    return lintCategory;
   }
 
   @Override
@@ -124,10 +114,7 @@ public class FormattedDiagnostic implements Diagnostic<JavaFileObject> {
       DiagnosticFormatter<JCDiagnostic> formatter = Log.instance(context).getDiagnosticFormatter();
       Locale locale = JavacMessages.instance(context).getCurrentLocale();
       String formatted = formatter.format((JCDiagnostic) diagnostic, locale);
-      LintCategory lintCategory = ((JCDiagnostic) diagnostic).getLintCategory();
-      FormattedDiagnostic formattedDiagnostic =
-          new FormattedDiagnostic(
-              diagnostic, formatted, lintCategory != null ? lintCategory.option : null);
+      FormattedDiagnostic formattedDiagnostic = new FormattedDiagnostic(diagnostic, formatted);
       diagnostics.add(formattedDiagnostic);
       if (failFast && diagnostic.getKind().equals(Diagnostic.Kind.ERROR)) {
         throw new FailFastException(formatted);
@@ -143,11 +130,5 @@ public class FormattedDiagnostic implements Diagnostic<JavaFileObject> {
     FailFastException(String message) {
       super(message);
     }
-  }
-
-  public boolean isJSpecifyDiagnostic() {
-    return getKind().equals(Diagnostic.Kind.ERROR)
-        && getCode().equals("compiler.err.proc.messager")
-        && getMessage(ENGLISH).startsWith("[nullness] ");
   }
 }
