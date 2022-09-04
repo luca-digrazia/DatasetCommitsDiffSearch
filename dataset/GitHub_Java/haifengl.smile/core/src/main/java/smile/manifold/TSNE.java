@@ -1,31 +1,30 @@
-/*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ */
 
 package smile.manifold;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import smile.math.Math;
-import smile.math.matrix.Matrix;
-import smile.math.matrix.DenseMatrix;
-
+import java.io.Serializable;
 import java.util.Arrays;
+import java.util.stream.IntStream;
+import smile.math.MathEx;
+import smile.stat.distribution.GaussianDistribution;
 
 /**
- * t-distributed stochastic neighbor embedding (t-SNE) is a nonlinear
+ * The t-distributed stochastic neighbor embedding. The t-SNE is a nonlinear
  * dimensionality reduction technique that is particularly well suited
  * for embedding high-dimensional data into a space of two or three
  * dimensions, which can then be visualized in a scatter plot. Specifically,
@@ -46,201 +45,337 @@ import java.util.Arrays;
  *
  * <h2>References</h2>
  * <ol>
- * <li>L.J.P. van der Maaten. Accelerating t-SNE using Tree-Based Algorithms. Journal of Machine Learning Research 15(Oct):3221-3245, 2014. </li>
- * <li>L.J.P. van der Maaten and G.E. Hinton. Visualizing Non-Metric Similarities in Multiple Maps. Machine Learning 87(1):33-55, 2012. </li>
- * <li>L.J.P. van der Maaten. Learning a Parametric Embedding by Preserving Local Structure. In Proceedings of the Twelfth International Conference on Artificial Intelligence & Statistics (AI-STATS), JMLR W&CP 5:384-391, 2009. </li>
- * <li>L.J.P. van der Maaten and G.E. Hinton. Visualizing High-Dimensional Data Using t-SNE. Journal of Machine Learning Research 9(Nov):2579-2605, 2008. </li>
+ * <li>L.J.P. van der Maaten. Accelerating t-SNE using Tree-Based Algorithms.
+ *     Journal of Machine Learning Research 15(Oct):3221-3245, 2014. </li>
+ * <li>L.J.P. van der Maaten and G.E. Hinton. Visualizing Non-Metric
+ *     Similarities in Multiple Maps. Machine Learning 87(1):33-55, 2012. </li>
+ * <li>L.J.P. van der Maaten. Learning a Parametric Embedding by Preserving
+ *     Local Structure. In Proceedings of the Twelfth International Conference
+ *     on Artificial Intelligence &amp; Statistics (AI-STATS),
+ *     JMLR W&amp;CP 5:384-391, 2009. </li>
+ * <li>L.J.P. van der Maaten and G.E. Hinton. Visualizing High-Dimensional
+ *     Data Using t-SNE. Journal of Machine Learning Research
+ *     9(Nov):2579-2605, 2008. </li>
  * </ol>
+ *
+ * @see UMAP
  *
  * @author Haifeng Li
  */
-public class TSNE {
-    private static final Logger logger = LoggerFactory.getLogger(TSNE.class);
+public class TSNE implements Serializable {
+    private static final long serialVersionUID = 2L;
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(TSNE.class);
 
     /**
-     * Coordinate matrix.
+     * The coordinate matrix in embedding space.
      */
-    private double[][] coordinates;
+    public final double[][] coordinates;
 
-    /** Constructor.
-     *
-     * @param X input data.
-     * @param k the dimension of embedding space.
+    /**
+     * The learning rate.
      */
-    public TSNE(double[][] X, int k) {
-        this(X, k, 50, 2000);
+    private final double eta;
+    /**
+     * The number of iterations so far.
+     */
+    private int totalIter = 0;
+    /**
+     * The momentum factor.
+     */
+    private double momentum              = 0.5;
+    /**
+     * The momentum in later stage.
+     */
+    private final double finalMomentum   = 0.8;
+    /**
+     * The number of iterations at which switch the momentum to
+     * finalMomentum.
+     */
+    private final int momentumSwitchIter = 250;
+    /**
+     * The floor of gain.
+     */
+    private final double minGain         = .01;
+
+    /** The gain matrix. */
+    private final double[][] gains; // adjust learning rate for each point
+    /** The probability matrix of the distances in the input space. */
+    private final double[][] P;
+    /** The probability matrix of the distances in the feature space. */
+    private final double[][] Q;
+    /** The sum of Q matrix. */
+    private double Qsum;
+    /** The cost function value. */
+    private double cost;
+
+    /** Constructor. Train t-SNE for 1000 iterations, perplexity = 20 and learning rate = 200.
+     *
+     * @param X the input data. If X is a square matrix, it is assumed to be
+     *          the squared distance/dissimilarity matrix.
+     * @param d the dimension of embedding space.
+     */
+    public TSNE(double[][] X, int d) {
+        this(X, d, 20, 200, 1000);
     }
 
-    /** Constructor.
+    /** Constructor. Train t-SNE for given number of iterations.
      *
-     * @param X input data.
-     * @param k the dimension of embedding space.
+     * @param X the input data. If X is a square matrix, it is assumed to be
+     *         the squared distance/dissimilarity matrix.
+     * @param d the dimension of embedding space.
      * @param perplexity the perplexity of the conditional distribution.
-     * @param maxIter maximum number of iterations.
+     * @param eta the learning rate.
+     * @param iterations the number of iterations.
      */
-    public TSNE(double[][] X, int k, double perplexity, int maxIter) {
-        this(Matrix.newInstance(Math.pdist(X)), k, perplexity, maxIter);
-    }
+    public TSNE(double[][] X, int d, double perplexity, double eta, int iterations) {
+        this.eta = eta;
+        int n = X.length;
 
-    /** Constructor.
-     *
-     * @param D distance/dissimilarity matrix.
-     * @param k the dimension of embedding space.
-     */
-    public TSNE(DenseMatrix D, int k) {
-        this(D, k, 50, 2000);
-    }
+        double[][] D;
+        if (X.length == X[0].length) {
+            D = X;
+        } else {
+            D = new double[n][n];
+            MathEx.pdist(X, D, MathEx::squaredDistance);
+        }
 
-    /** Constructor.
-     *
-     * @param D distance/dissimilarity matrix.
-     * @param k the dimension of embedding space.
-     * @param perplexity the perplexity of the conditional distribution.
-     * @param maxIter maximum number of iterations.
-     */
-    public TSNE(DenseMatrix D, int k, double perplexity, int maxIter) {
-        int n = D.nrows();
-        double momentum        = 0.5;
-        double finalMomentum   = 0.8;
-        int momentumSwitchIter = 250;
-        int eta                = 50; // learning rate
-        double minGain         = 0.01;
+        coordinates = new double[n][d];
+        double[][] Y = coordinates;
+        gains = new double[n][d]; // adjust learning rate for each point
 
-        double[][] Y          = new double[n][k];
-        double[][] dY         = new double[n][k];
-        double[][] gains      = new double[n][k];
-        double[] dC           = new double[k];
-
-        DenseMatrix P         = expd(D, perplexity, 1e-5);
-        DenseMatrix Q         = Matrix.zeros(P.nrows(), P.ncols());
-
-        double Psum = P.sum();
-        for (int j = 0; j < n; j++) {
-            for (int i = 0; i < j; i++) {
-                double p = (P.get(i, j) + P.get(j, i)) / Psum;
-                if (Double.isNaN(p) || p < 1E-12) p = 1E-12;
-                P.set(i, j, p);
-                P.set(j, i, p);
+        // Initialize Y randomly by N(0, 0.0001)
+        GaussianDistribution gaussian = new GaussianDistribution(0.0, 0.0001);
+        for (int i = 0; i < n; i++) {
+            Arrays.fill(gains[i], 1.0);
+            double[] Yi = Y[i];
+            for (int j = 0; j < d; j++) {
+                Yi[j] = gaussian.rand();
             }
         }
 
-        for (int iter = 0; iter < maxIter; iter++) {
-            Math.pdist(Y, Q);
-            double Qsum = 0.0;
-            for (int j = 0; j < n; j++) {
-                for (int i = 0; i < n; i++) {
-                    if (i != j) {
-                        double q = 1.0 / (1.0 + Q.get(i, j));
-                        Q.set(i, j, q);
-                        Qsum += q;
-                    }
-                }
+        // Large tolerance to speed up the search of Gaussian kernel width
+        // A small difference of kernel width is not important.
+        P = expd(D, perplexity, 1E-3);
+        Q = new double[n][n];
+
+        // Make P symmetric
+        // sum(P) = 2 * n as each row of P is normalized
+        double Psum = 2 * n;
+        for (int i = 0; i < n; i++) {
+            double[] Pi = P[i];
+            for (int j = 0; j < i; j++) {
+                double p = 12.0 * (Pi[j] + P[j][i]) / Psum;
+                if (Double.isNaN(p) || p < 1E-16) p = 1E-16;
+                Pi[j] = p;
+                P[j][i] = p;
             }
+        }
 
-            for (int i = 0; i < n; i++) {
-                // Compute gradient
-                Arrays.fill(dC, 0.0);
-                for (int j = 0; j < n; j++) {
-                    if (i != j) {
-                        double q = Q.get(i, j);
-                        double mult = 4.0 * (P.get(i, j) - (q / Qsum)) * q;
-                        for(int d = 0; d < k; d++) {
-                            dC[d] += (Y[i][d] - Y[j][d]) * mult;
-                        }
-                    }
+        update(iterations);
+    }
+
+    /**
+     * Returns the cost function value.
+     * @return the cost function value.
+     */
+    public double cost() {
+        return cost;
+    }
+
+    /**
+     * Performs additional iterations.
+     * @param iterations the number of iterations.
+     */
+    public void update(int iterations) {
+        double[][] Y = coordinates;
+        int n = Y.length;
+        int d = Y[0].length;
+        double[][] dY = new double[n][d];
+        double[][] dC = new double[n][d];
+
+        for (int iter = 1; iter <= iterations; iter++, totalIter++) {
+            Qsum = computeQ(Y, Q);
+
+            IntStream.range(0, n).parallel().forEach(i -> sne(i, dY[i], dC[i]));
+
+            // gradient update with momentum and gains
+            IntStream.range(0, n).parallel().forEach(i -> {
+                double[] Yi = Y[i];
+                double[] dYi = dY[i];
+                double[] dCi = dC[i];
+                double[] g = gains[i];
+                for (int k = 0; k < d; k++) {
+                    dYi[k] = momentum * dYi[k] - eta * g[k] * dCi[k];
+                    Yi[k] += dYi[k];
                 }
+            });
 
-                // Perform the update
-                double[] g = gains[i]; // dereference before the loop for better performance
-                double[] dy = dY[i];
-                double[] y = Y[i];
-                for (int d = 0; d < k; d++) {
-                    // Update gains
-                    g[d] = (Math.signum(dC[d]) != Math.signum(dy[d])) ? (g[d] + .2) : (g[d] * .8);
-                    if (g[d] < minGain) g[d] = minGain;
-
-                    // Perform gradient update (with momentum and gains)
-                    dy[d] = momentum * dy[d] - eta * g[d] * dC[d];
-                    y[d] += dy[d];
-                }
-            }
-
-            if (iter > momentumSwitchIter) {
+            if (totalIter == momentumSwitchIter) {
                 momentum = finalMomentum;
+                for (int i = 0; i < n; i++) {
+                    double[] Pi = P[i];
+                    for (int j = 0; j < n; j++) {
+                        Pi[j] /= 12.0;
+                    }
+                }
             }
 
             // Compute current value of cost function
             if (iter % 100 == 0)   {
-                double C = 0.0;
-                for (int j = 0; j < n; j++) {
-                    for (int i = 0; i < j; i++) {
-                        if (i != j) {
-                            double p = P.get(i, j);
-                            double q = Q.get(i, j) / Qsum;
-                            C += p * Math.log(p / q);
-                        }
-                    }
-                }
-                logger.info("Error after {} iterations: {}", iter, 2 * C);
+                cost = computeCost(P, Q);
+                logger.info("Error after {} iterations: {}", iter, cost);
             }
         }
 
-        coordinates = Y;
+        // Make solution zero-mean
+        double[] colMeans = MathEx.colMeans(Y);
+        IntStream.range(0, n).parallel().forEach(i -> {
+            double[] Yi = Y[i];
+            for (int j = 0; j < d; j++) {
+                Yi[j] -= colMeans[j];
+            }
+        });
+
+        if (iterations % 100 != 0)   {
+            cost = computeCost(P, Q);
+            logger.info("Error after {} iterations: {}", iterations, cost);
+        }
+    }
+
+    /** Computes the gradients and updates the coordinates. */
+    private void sne(int i, double[] dY, double[] dC) {
+        double[][] Y = coordinates;
+        int n = Y.length;
+        int d = Y[0].length;
+
+        // Compute gradient
+        // dereference before the loop for better performance
+        double[] Yi = Y[i];
+        double[] Pi = P[i];
+        double[] Qi = Q[i];
+        double[] g = gains[i];
+
+        Arrays.fill(dC, 0.0);
+        for (int j = 0; j < n; j++) {
+            if (i != j) {
+                double[] Yj = Y[j];
+                double q = Qi[j];
+                double z = (Pi[j] - (q / Qsum)) * q;
+                for (int k = 0; k < d; k++) {
+                    dC[k] += 4.0 * (Yi[k] - Yj[k]) * z;
+                }
+            }
+        }
+
+        // Update gains
+        for (int k = 0; k < d; k++) {
+            g[k] = (Math.signum(dC[k]) != Math.signum(dY[k])) ? (g[k] + .2) : (g[k] * .8);
+            if (g[k] < minGain) g[k] = minGain;
+        }
     }
 
     /** Compute the Gaussian kernel (search the width for given perplexity. */
-    private DenseMatrix expd(DenseMatrix D, double perplexity, double tol){
-        int n              = D.nrows();
-        double logU        = Math.log(perplexity);
-        DenseMatrix P      = Matrix.zeros(n,n);
-        double[] ds        = D.colSums();
+    private double[][] expd(double[][] D, double perplexity, double tol) {
+        int n          = D.length;
+        double[][] P   = new double[n][n];
+        double[] DiSum = MathEx.rowSums(D);
 
-        // Column wise is more efficient for DenseMatrix
-        for (int j = 0; j < n; j++) {
+        IntStream.range(0, n).parallel().forEach(i -> {
+            double logU = MathEx.log2(perplexity);
+
+            double[] Pi = P[i];
+            double[] Di = D[i];
+
             // Use sqrt(1 / avg of distance) to initialize beta
-            double beta = Math.sqrt((n-1) / ds[j]);
+            double beta = Math.sqrt((n-1) / DiSum[i]);
             double betamin = 0.0;
-            double betamax = 16 * beta;
-            logger.debug("initial beta[{}] = {}", j, beta);
+            double betamax = Double.POSITIVE_INFINITY;
+            logger.debug("initial beta[{}] = {}", i, beta);
 
             // Evaluate whether the perplexity is within tolerance
-            int iter = 0;
-            double Hdiff = 0.0;
-            do {
-                double dp = 0.0;
-                double s = 0.0;
-                for (int i = 0; i < n; i++) {
-                    if (i != j) {
-                        double d = -beta * D.get(i, j);
-                        double p = Math.exp(d);
-                        P.set(i, j, p);
-                        s += p;
-                        dp += p * d;
-                    }
+            double Hdiff = Double.MAX_VALUE;
+            for (int iter = 0; Math.abs(Hdiff) > tol && iter < 50; iter++) {
+                double Pisum = 0.0;
+                double H = 0.0;
+                for (int j = 0; j < n; j++) {
+                    double d = beta * Di[j];
+                    double p = Math.exp(-d);
+                    Pi[j] = p;
+                    Pisum += p;
+                    H += p * d;
                 }
 
-                double H = Math.log(s) + dp / s;
+                // P[i][i] should be 0
+                Pi[i] = 0.0;
+                Pisum -= 1.0;
+
+                H = MathEx.log2(Pisum) + H / Pisum;
                 Hdiff = H - logU;
 
                 if (Math.abs(Hdiff) > tol) {
                     if (Hdiff > 0) {
-                        beta = (beta + betamax) / 2;
+                        betamin = beta;
+                        if (Double.isInfinite(betamax))
+                            beta *= 2.0;
+                        else
+                            beta = (beta + betamax) / 2;
                     } else {
+                        betamax = beta;
                         beta = (beta + betamin) / 2;
+                    }
+                } else {
+                    // normalize by row
+                    for (int j = 0; j < n; j++) {
+                        Pi[j] /= Pisum;
                     }
                 }
 
-                logger.debug("Hdiff = {}, beta[{}] = {}", Hdiff, j, beta);
-            } while (Math.abs(Hdiff) > tol && ++iter < 50);
-        }
+                logger.debug("Hdiff = {}, beta[{}] = {}, H = {}, logU = {}", Hdiff, i, beta, H, logU);
+            }
+        });
 
         return P;
     }
 
     /**
-     * Returns the coordinates of projected data.
+     * Computes the Q matrix.
      */
-    public double[][] getCoordinates() {
-        return coordinates;
+    private double computeQ(double[][] Y, double[][] Q) {
+        int n = Y.length;
+
+        // DoubleStream.sum is unreproducible across machines
+        // due to scheduling randomness. Therefore, we accumulate the
+        // row sum and then compute the overall sum.
+        double[] rowSum = IntStream.range(0, n).parallel().mapToDouble(i -> {
+            double[] Yi = Y[i];
+            double[] Qi = Q[i];
+            double sum = 0.0;
+            for (int j = 0; j < n; j++) {
+                double q = 1.0 / (1.0 + MathEx.squaredDistance(Yi, Y[j]));
+                Qi[j] = q;
+                sum += q;
+            }
+            return sum;
+        }).toArray();
+
+        return MathEx.sum(rowSum);
+    }
+
+    /**
+     * Computes the cost function.
+     */
+    private double computeCost(double[][] P, double[][] Q) {
+        return 2 * IntStream.range(0, Q.length).parallel().mapToDouble(i -> {
+            double[] Pi = P[i];
+            double[] Qi = Q[i];
+            double C = 0.0;
+            for (int j = 0; j < i; j++) {
+                double p = Pi[j];
+                double q = Qi[j] / Qsum;
+                if (Double.isNaN(q) || q < 1E-16) q = 1E-16;
+                C += p * MathEx.log2(p / q);
+            }
+            return C;
+        }).sum();
     }
 }
