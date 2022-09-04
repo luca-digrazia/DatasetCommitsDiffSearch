@@ -68,9 +68,6 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
   /** Default attribute name where rules store the reference to cc_toolchain */
   public static final String CC_TOOLCHAIN_DEFAULT_ATTRIBUTE_NAME = ":cc_toolchain";
 
-  /** Default attribute name for the c++ toolchain type */
-  public static final String CC_TOOLCHAIN_TYPE_ATTRIBUTE_NAME = ":cc_toolchain_type";
-
   /**
    * This file (found under the sysroot) may be unconditionally included in every C/C++ compilation.
    */
@@ -157,7 +154,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
               .setProgressMessage(
                   "LLVMUnzipProfileAction: Generating %s", rawProfileArtifact.prettyPrint())
               .setMnemonic("LLVMUnzipProfileAction")
-              .addCommandLine(
+              .setCommandLine(
                   CustomCommandLine.builder()
                       .addExecPath("xf", zipProfileArtifact)
                       .add(
@@ -195,7 +192,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
             .setExecutable(cppConfiguration.getLLVMProfDataExecutable())
             .setProgressMessage("LLVMProfDataAction: Generating %s", profileArtifact.prettyPrint())
             .setMnemonic("LLVMProfDataAction")
-            .addCommandLine(
+            .setCommandLine(
                 CustomCommandLine.builder()
                     .add("merge")
                     .add("-o")
@@ -394,9 +391,6 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
             coverageEnvironment.build(),
             cppConfiguration.supportsInterfaceSharedObjects()
                 ? ruleContext.getPrerequisiteArtifact("$link_dynamic_library_tool", Mode.HOST)
-                : null,
-            ruleContext.attributes().has("$def_parser")
-                ? ruleContext.getPrerequisiteArtifact("$def_parser", Mode.HOST)
                 : null,
             getEnvironment(ruleContext),
             builtInIncludeDirectories,
