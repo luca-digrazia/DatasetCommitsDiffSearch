@@ -4,30 +4,28 @@ import io.dropwizard.Application;
 import io.dropwizard.jetty.HttpConnectorFactory;
 import io.dropwizard.server.DefaultServerFactory;
 import io.dropwizard.setup.Environment;
-
-import java.util.Map;
+import io.dropwizard.testing.app.TestConfiguration;
+import org.junit.ClassRule;
+import org.junit.Test;
 
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
-import javax.ws.rs.client.Client;
-import javax.ws.rs.client.ClientBuilder;
+import javax.ws.rs.core.GenericType;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import java.util.Collections;
+import java.util.Map;
 
-import org.junit.Assert;
-import org.junit.ClassRule;
-import org.junit.Test;
-
-import com.google.common.collect.ImmutableMap;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.entry;
 
 public class DropwizardAppRuleWithExplicitTest {
 
-    @Test
-    public void bogusTest() { }
-
+    @SuppressWarnings("deprecation")
     @ClassRule
     public static final DropwizardAppRule<TestConfiguration> RULE;
+
     static {
         // Bit complicated, as we want to avoid using the default http port (8080)
         // as there is another test that uses it already. So force bogus value of
@@ -36,17 +34,17 @@ public class DropwizardAppRuleWithExplicitTest {
         DefaultServerFactory sf = (DefaultServerFactory) config.getServerFactory();
         ((HttpConnectorFactory) sf.getApplicationConnectors().get(0)).setPort(0);
         ((HttpConnectorFactory) sf.getAdminConnectors().get(0)).setPort(0);
-        RULE = new DropwizardAppRule<TestConfiguration>(TestApplication.class, config);
+        RULE = new DropwizardAppRule<>(TestApplication.class, config);
     }
 
-    Client client = ClientBuilder.newClient();
 
     @Test
     public void runWithExplicitConfig() {
-        Map<?,?> response = client.target("http://localhost:" + RULE.getLocalPort() + "/test")
-                .request()
-                .get(Map.class);
-        Assert.assertEquals(ImmutableMap.of("message", "stuff!"), response);
+        Map<String, String> response = RULE.client().target("http://localhost:" + RULE.getLocalPort() + "/test")
+            .request()
+            .get(new GenericType<Map<String, String>>() {
+            });
+        assertThat(response).containsOnly(entry("message", "stuff!"));
     }
 
     public static class TestApplication extends Application<TestConfiguration> {
@@ -61,11 +59,13 @@ public class DropwizardAppRuleWithExplicitTest {
     public static class TestResource {
         private final String message;
 
-        public TestResource(String m) { message = m; }
+        public TestResource(String m) {
+            message = m;
+        }
 
         @GET
         public Response get() {
-            return Response.ok(ImmutableMap.of("message", message)).build();
+            return Response.ok(Collections.singletonMap("message", message)).build();
         }
     }
 }

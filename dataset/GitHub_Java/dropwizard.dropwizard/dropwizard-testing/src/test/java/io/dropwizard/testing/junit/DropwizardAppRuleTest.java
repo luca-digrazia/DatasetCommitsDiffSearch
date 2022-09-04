@@ -1,100 +1,85 @@
 package io.dropwizard.testing.junit;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.google.common.io.Resources;
-import com.sun.jersey.api.client.Client;
-import io.dropwizard.Application;
-import io.dropwizard.Configuration;
-import io.dropwizard.setup.Bootstrap;
 import io.dropwizard.setup.Environment;
-import org.hibernate.validator.constraints.NotEmpty;
+import io.dropwizard.testing.app.DropwizardTestApplication;
+import io.dropwizard.testing.app.TestConfiguration;
 import org.junit.ClassRule;
 import org.junit.Test;
 
-import javax.ws.rs.GET;
-import javax.ws.rs.Path;
-import java.io.File;
+import javax.ws.rs.client.ClientBuilder;
+import javax.ws.rs.client.Entity;
+import javax.ws.rs.core.MediaType;
 
-import static org.hamcrest.core.Is.is;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertThat;
+import static io.dropwizard.testing.ResourceHelpers.resourceFilePath;
+import static org.assertj.core.api.Assertions.assertThat;
 
 public class DropwizardAppRuleTest {
-
+    @SuppressWarnings("deprecation")
     @ClassRule
     public static final DropwizardAppRule<TestConfiguration> RULE =
-            new DropwizardAppRule<>(TestApplication.class, resourceFilePath("test-config.yaml"));
+        new DropwizardAppRule<>(DropwizardTestApplication.class, resourceFilePath("test-config.yaml"));
 
     @Test
     public void canGetExpectedResourceOverHttp() {
-        final String content = new Client().resource("http://localhost:" +
-                                                     RULE.getLocalPort()
-                                                     +"/test").get(String.class);
+        final String content = ClientBuilder.newClient().target(
+            "http://localhost:" + RULE.getLocalPort() + "/test").request().get(String.class);
 
-        assertThat(content, is("Yes, it's here"));
+        assertThat(content).isEqualTo("Yes, it's here");
     }
 
     @Test
     public void returnsConfiguration() {
         final TestConfiguration config = RULE.getConfiguration();
-        assertThat(config.getMessage(), is("Yes, it's here"));
+        assertThat(config.getMessage()).isEqualTo("Yes, it's here");
     }
 
     @Test
     public void returnsApplication() {
-        final TestApplication application = RULE.getApplication();
-        assertNotNull(application);
+        final DropwizardTestApplication application = RULE.getApplication();
+        assertThat(application).isNotNull();
     }
 
     @Test
     public void returnsEnvironment() {
         final Environment environment = RULE.getEnvironment();
-        assertThat(environment.getName(), is("TestApplication"));
+        assertThat(environment.getName()).isEqualTo("DropwizardTestApplication");
     }
 
+    @Test
+    public void canPerformAdminTask() {
+        final String response
+            = RULE.client().target("http://localhost:"
+            + RULE.getAdminPort() + "/tasks/hello?name=test_user")
+            .request()
+            .post(Entity.entity("", MediaType.TEXT_PLAIN), String.class);
 
-    public static class TestApplication extends Application<TestConfiguration> {
-        @Override
-        public void initialize(Bootstrap<TestConfiguration> bootstrap) {
-        }
-
-        @Override
-        public void run(TestConfiguration configuration, Environment environment) throws Exception {
-            environment.jersey().register(new TestResource(configuration.getMessage()));
-        }
+        assertThat(response).isEqualTo("Hello has been said to test_user");
     }
 
-    @Path("/")
-    public static class TestResource {
+    @Test
+    public void canPerformAdminTaskWithPostBody() {
+        final String response
+            = RULE.client().target("http://localhost:"
+            + RULE.getAdminPort() + "/tasks/echo")
+            .request()
+            .post(Entity.entity("Custom message", MediaType.TEXT_PLAIN), String.class);
 
-        private final String message;
-
-        public TestResource(String message) {
-            this.message = message;
-        }
-
-        @Path("test")
-        @GET
-        public String test() {
-            return message;
-        }
+        assertThat(response).isEqualTo("Custom message");
     }
 
-    public static class TestConfiguration extends Configuration {
-        @NotEmpty
-        @JsonProperty
-        private String message;
-
-        public String getMessage() {
-            return message;
-        }
+    @Test
+    public void clientUsesJacksonMapperFromEnvironment() {
+        assertThat(RULE.client().target("http://localhost:" + RULE.getLocalPort() + "/message")
+            .request()
+            .get(DropwizardTestApplication.MessageView.class).getMessage())
+            .contains("Yes, it's here");
     }
 
-    public static String resourceFilePath(String resourceClassPathLocation) {
-        try {
-            return new File(Resources.getResource(resourceClassPathLocation).toURI()).getAbsolutePath();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+    @Test
+    public void clientSupportsPatchMethod() {
+        assertThat(RULE.client().target("http://localhost:" + RULE.getLocalPort() + "/echoPatch")
+            .request()
+            .method("PATCH", Entity.text("Patch is working"), String.class))
+            .contains("Patch is working");
     }
 }

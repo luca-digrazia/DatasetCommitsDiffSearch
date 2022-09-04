@@ -17,6 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * test container factory.
  */
 public class ResourceTestRuleWithGrizzlyTest {
+    @SuppressWarnings("deprecation")
     @Rule
     public final ResourceTestRule resourceTestRule = ResourceTestRule.builder()
             .addResource(ContextInjectionResource::new)
@@ -37,6 +38,14 @@ public class ResourceTestRuleWithGrizzlyTest {
                 .post(Entity.json(""));
         assertThat(resp.getStatus()).isEqualTo(500);
         assertThat(resp.readEntity(String.class)).isEqualTo("Can't touch this");
+    }
+
+    @Test
+    public void testClientSupportsPatchMethod() {
+        final String resp = resourceTestRule.target("test")
+            .request()
+            .method("PATCH", Entity.text("Patch is working"), String.class);
+        assertThat(resp).isEqualTo("Patch is working");
     }
 
     private static class RuntimeExceptionMapper implements ExceptionMapper<RuntimeException> {

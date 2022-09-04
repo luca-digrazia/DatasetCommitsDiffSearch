@@ -1,21 +1,19 @@
 package io.dropwizard.testing.junit;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.notNullValue;
-import static org.junit.Assert.assertThat;
-import static org.junit.Assert.fail;
-
-import java.io.Serializable;
-
-import javax.validation.ConstraintViolationException;
-
+import io.dropwizard.testing.app.TestEntity;
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
 import org.junit.Rule;
 import org.junit.Test;
 
-public class DAOTestRuleTest {
+import javax.validation.ConstraintViolationException;
+import java.io.Serializable;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+
+public class DAOTestRuleTest {
+    @SuppressWarnings("deprecation")
     @Rule
     public final DAOTestRule daoTestRule = DAOTestRule.newBuilder().addEntityClass(TestEntity.class).build();
 
@@ -23,68 +21,59 @@ public class DAOTestRuleTest {
     public void ruleCreatedSessionFactory() {
         final SessionFactory sessionFactory = daoTestRule.getSessionFactory();
 
-        assertThat(sessionFactory, notNullValue());
+        assertThat(sessionFactory).isNotNull();
     }
 
     @Test
     public void ruleCanOpenTransaction() {
-        final Long id = daoTestRule.transaction(() -> persist(new TestEntity("description")).getId());
+        final Long id = daoTestRule.inTransaction(() -> persist(new TestEntity("description")).getId());
 
-        assertThat(id, notNullValue());
+        assertThat(id).isNotNull();
     }
 
     @Test
     public void ruleCanRoundtrip() {
-        final Long id = daoTestRule.transaction(() -> persist(new TestEntity("description")).getId());
+        final Long id = daoTestRule.inTransaction(() -> persist(new TestEntity("description")).getId());
 
         final TestEntity testEntity = get(id);
 
-        assertThat(testEntity, notNullValue());
-        assertThat(testEntity.getDescription(), equalTo("description"));
+        assertThat(testEntity).isNotNull();
+        assertThat(testEntity.getDescription()).isEqualTo("description");
     }
 
-    @Test(expected = ConstraintViolationException.class)
-    public void transcationThrowsExceptionAsExpected() {
-        daoTestRule.transaction(() -> persist(new TestEntity(null)));
+    @Test
+    public void transactionThrowsExceptionAsExpected() {
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(()->
+            daoTestRule.inTransaction(() -> persist(new TestEntity(null))));
     }
 
     @Test
     public void rollsBackTransaction() {
         // given a successfully persisted entity
         final TestEntity testEntity = new TestEntity("description");
-        daoTestRule.transaction(() -> {
-            persist(testEntity);
-            return true;
-        });
+        daoTestRule.inTransaction(() -> persist(testEntity));
 
         // when we prepare an update of that entity
         testEntity.setDescription("newDescription");
-        try {
-            // ... but cause a constraint violation during the actual update
-            daoTestRule.transaction(() -> {
+        // ... but cause a constraint violation during the actual update
+        assertThatExceptionOfType(ConstraintViolationException.class)
+            .isThrownBy(() -> daoTestRule.inTransaction(() -> {
                 persist(testEntity);
                 persist(new TestEntity(null));
-                return true;
-            });
-            fail("Expected a constraint violation");
-        } catch (ConstraintViolationException ignoredException) {
-            // keep calm and carry on
-        }
-
+            }));
         // ... the entity has the original value
-        final TestEntity sameTestEntity = get(testEntity.getId());
-        assertThat(sameTestEntity.getDescription(), equalTo("description"));
+        assertThat(get(testEntity.getId()).getDescription()).isEqualTo("description");
     }
 
 
-    private TestEntity persist(final TestEntity testEntity) {
+    private TestEntity persist(TestEntity testEntity) {
         final Session currentSession = daoTestRule.getSessionFactory().getCurrentSession();
         currentSession.saveOrUpdate(testEntity);
 
         return testEntity;
     }
 
-    private TestEntity get(final Serializable id) {
+    private TestEntity get(Serializable id) {
         final Session currentSession = daoTestRule.getSessionFactory().getCurrentSession();
         final TestEntity testEntity = currentSession.get(TestEntity.class, id);
         currentSession.refresh(testEntity);
