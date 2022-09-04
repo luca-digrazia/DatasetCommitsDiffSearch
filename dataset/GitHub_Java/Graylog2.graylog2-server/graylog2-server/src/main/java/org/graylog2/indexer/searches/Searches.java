@@ -16,7 +16,6 @@
  */
 package org.graylog2.indexer.searches;
 
-import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Sets;
 
 import com.codahale.metrics.Histogram;
@@ -26,7 +25,6 @@ import com.codahale.metrics.Timer;
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.elasticsearch.action.search.SearchResponse;
-import org.elasticsearch.action.search.ShardSearchFailure;
 import org.elasticsearch.action.support.IndicesOptions;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.common.unit.TimeValue;
@@ -66,15 +64,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.SortedSet;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 import javax.annotation.Nullable;
 import javax.inject.Inject;
@@ -101,6 +96,7 @@ public class Searches {
     public static final String AGG_CARDINALITY = "gl2_field_cardinality";
     public static final String AGG_VALUE_COUNT = "gl2_value_count";
     private static final Pattern filterStreamIdPattern = Pattern.compile("^(.+[^\\p{Alnum}])?streams:([\\p{XDigit}]+)");
+
 
     public enum TermsStatsOrder {
         TERM,
@@ -184,7 +180,8 @@ public class Searches {
     }
 
     public CountResult count(String query, TimeRange range, String filter) {
-        Set<String> indices = determineAffectedIndices(range, filter);
+        IndexSet indexSet = getIndexSetForFilter(filter);
+        Set<String> indices = IndexHelper.determineAffectedIndices(indexRangeService, range, indexSet);
 
         final SearchRequestBuilder srb;
         if (filter == null) {
@@ -200,7 +197,8 @@ public class Searches {
     }
 
     public ScrollResult scroll(String query, TimeRange range, int limit, int offset, List<String> fields, String filter) {
-        final Set<String> indices = determineAffectedIndices(range, filter);
+        IndexSet indexSet = getIndexSetForFilter(filter);
+        final Set<String> indices = IndexHelper.determineAffectedIndices(indexRangeService, range, indexSet);
 
         // only request the fields we asked for otherwise we can't figure out which fields will be in the result set
         // until we've scrolled through the entire set.
@@ -247,7 +245,8 @@ public class Searches {
     }
 
     public SearchResult search(SearchesConfig config) {
-        Set<IndexRange> indices = determineAffectedIndicesWithRanges(config.range(), config.filter());
+        IndexSet indexSet = getIndexSetForFilter(config.filter());
+        Set<IndexRange> indices = IndexHelper.determineAffectedIndicesWithRanges(indexRangeService, config.range(), indexSet);
 
         Set<String> indexNames = Sets.newHashSet();
         for (IndexRange index : indices) {
@@ -262,16 +261,31 @@ public class Searches {
         return new SearchResult(r.getHits(), indices, config.query(), request.source(), r.getTook());
     }
 
+    @Nullable
+    private IndexSet getIndexSetForFilter(String filter) {
+        final Optional<String> streamId = extractStreamId(filter);
+        IndexSet indexSet = null;
+        if (streamId.isPresent()) {
+            try {
+                final Stream stream = streamService.load(streamId.get());
+                indexSet = stream.getIndexSet();
+            } catch (NotFoundException ignored) {
+            }
+        }
+        return indexSet;
+    }
+
     public TermsResult terms(String field, int size, String query, String filter, TimeRange range) {
         if (size == 0) {
             size = 50;
         }
 
+        IndexSet indexSet = getIndexSetForFilter(filter);
         SearchRequestBuilder srb;
         if (filter == null) {
-            srb = standardSearchRequest(query, determineAffectedIndices(range, null), range);
+            srb = standardSearchRequest(query, IndexHelper.determineAffectedIndices(indexRangeService, range, indexSet), range);
         } else {
-            srb = filteredSearchRequest(query, filter, determineAffectedIndices(range, filter), range);
+            srb = filteredSearchRequest(query, filter, IndexHelper.determineAffectedIndices(indexRangeService, range, indexSet), range);
         }
 
         FilterAggregationBuilder builder = AggregationBuilders.filter(AGG_FILTER)
@@ -311,11 +325,12 @@ public class Searches {
             size = 50;
         }
 
+        IndexSet indexSet = getIndexSetForFilter(filter);
         SearchRequestBuilder srb;
         if (filter == null) {
-            srb = standardSearchRequest(query, determineAffectedIndices(range, filter), range);
+            srb = standardSearchRequest(query, IndexHelper.determineAffectedIndices(indexRangeService, range, indexSet), range);
         } else {
-            srb = filteredSearchRequest(query, filter, determineAffectedIndices(range, filter), range);
+            srb = filteredSearchRequest(query, filter, IndexHelper.determineAffectedIndices(indexRangeService, range, indexSet), range);
         }
 
 
@@ -406,11 +421,12 @@ public class Searches {
                                        boolean includeStats,
                                        boolean includeCount)
             throws FieldTypeException {
+        IndexSet indexSet = getIndexSetForFilter(filter);
         SearchRequestBuilder srb;
         if (filter == null) {
-            srb = standardSearchRequest(query, determineAffectedIndices(range, filter), range);
+            srb = standardSearchRequest(query, IndexHelper.determineAffectedIndices(indexRangeService, range, indexSet), range);
         } else {
-            srb = filteredSearchRequest(query, filter, determineAffectedIndices(range, filter), range);
+            srb = filteredSearchRequest(query, filter, IndexHelper.determineAffectedIndices(indexRangeService, range, indexSet), range);
         }
 
         FilterAggregationBuilder builder = AggregationBuilders.filter(AGG_FILTER)
@@ -464,7 +480,8 @@ public class Searches {
         QueryStringQueryBuilder qs = queryStringQuery(query);
         qs.allowLeadingWildcard(configuration.isAllowLeadingWildcardSearches());
 
-        final Set<String> affectedIndices = determineAffectedIndices(range, filter);
+        IndexSet indexSet = getIndexSetForFilter(filter);
+        final Set<String> affectedIndices = IndexHelper.determineAffectedIndices(indexRangeService, range, indexSet);
         final SearchRequestBuilder srb = c.prepareSearch(affectedIndices.toArray(new String[affectedIndices.size()]))
                 .setIndicesOptions(IndicesOptions.lenientExpandOpen())
                 .setQuery(qs)
@@ -505,8 +522,9 @@ public class Searches {
         QueryStringQueryBuilder qs = queryStringQuery(query);
         qs.allowLeadingWildcard(configuration.isAllowLeadingWildcardSearches());
 
+        IndexSet indexSet = getIndexSetForFilter(filter);
         SearchRequestBuilder srb = c.prepareSearch();
-        final Set<String> affectedIndices = determineAffectedIndices(range, filter);
+        final Set<String> affectedIndices = IndexHelper.determineAffectedIndices(indexRangeService, range, indexSet);
         srb.setIndices(affectedIndices.toArray(new String[affectedIndices.size()]));
         srb.setQuery(qs);
         srb.addAggregation(builder);
@@ -517,18 +535,6 @@ public class Searches {
             r = c.search(request).actionGet();
         } catch (org.elasticsearch.action.search.SearchPhaseExecutionException e) {
             throw new FieldTypeException(e);
-        }
-        // unwrap shard failure due to non-numeric mapping. this happens when searching across index sets
-        // if at least one of the index sets comes back with a result, the overall result will have the aggregation
-        // but not considered failed entirely. however, if one shard has the error, we will refuse to respond
-        // otherwise we would be showing empty graphs for non-numeric fields.
-        if (r.getFailedShards() > 0) {
-            final Optional<ShardSearchFailure> failure = Arrays.stream(r.getShardFailures())
-                    .filter(shardSearchFailure -> shardSearchFailure.getCause() instanceof IllegalArgumentException)
-                    .findFirst();
-            if (failure.isPresent()) {
-                throw new FieldTypeException(failure.get().getCause());
-            }
         }
         recordEsMetrics(r, range);
 
@@ -691,7 +697,7 @@ public class Searches {
      * This is currently a workaround. A better solution would be to pass the stream id which is supposed to be the scope
      * for a search query as a separate parameter.
      *
-     * @param filter the filter string like "streams:xxxyyyzzz"
+     * @param filter
      * @return the optional stream id
      */
     public static Optional<String> extractStreamId(String filter) {
@@ -704,54 +710,4 @@ public class Searches {
         }
         return Optional.empty();
     }
-
-    public Set<String> determineAffectedIndices(TimeRange range,
-                                                @Nullable String filter) {
-        final Set<IndexRange> indexRanges = determineAffectedIndicesWithRanges(range, filter);
-        return indexRanges.stream()
-                .map(IndexRange::indexName)
-                .collect(Collectors.toSet());
-    }
-
-    public Set<IndexRange> determineAffectedIndicesWithRanges(TimeRange range,
-                                                              @Nullable String filter) {
-        final Optional<String> streamId = extractStreamId(filter);
-        IndexSet indexSet = null;
-        // if we are searching in a stream, we are further restricting the indices using the currently
-        // configure index set of that stream.
-        // later on we will also test against each index range (we load all of them) to see if there are
-        // additional index ranges that match, this can happen with restored archives or when the index set for
-        // a stream has changed: a stream only knows about its currently configured index set, no the history
-        if (streamId.isPresent()) {
-            try {
-                final Stream stream = streamService.load(streamId.get());
-                indexSet = stream.getIndexSet();
-            } catch (NotFoundException ignored) {
-            }
-        }
-
-        final ImmutableSortedSet.Builder<IndexRange> indices = ImmutableSortedSet.orderedBy(IndexRange.COMPARATOR);
-        final SortedSet<IndexRange> indexRanges = indexRangeService.find(range.getFrom(), range.getTo());
-        for (IndexRange indexRange : indexRanges) {
-            // if we aren't in a stream search, we look at all the ranges matching the time range.
-            if (indexSet == null && filter == null) {
-                indices.add(indexRange);
-                continue;
-            }
-
-            // A range applies to this search if either: the current index set of the stream matches or a previous index set matched.
-            final boolean streamInIndexRange = streamId.isPresent() && indexRange.streamIds() != null && indexRange.streamIds().contains(streamId.get());
-            final boolean streamInCurrentIndexSet = indexSet != null && indexSet.isManagedIndex(indexRange.indexName());
-
-            if (streamInIndexRange) {
-                indices.add(indexRange);
-            }
-            if (streamInCurrentIndexSet) {
-                indices.add(indexRange);
-            }
-        }
-
-        return indices.build();
-    }
-
 }

@@ -23,6 +23,7 @@ import io.swagger.annotations.ApiParam;
 import io.swagger.annotations.ApiResponse;
 import io.swagger.annotations.ApiResponses;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
+import org.elasticsearch.action.search.SearchPhaseExecutionException;
 import org.glassfish.jersey.server.ChunkedOutput;
 import org.graylog2.decorators.DecoratorProcessor;
 import org.graylog2.indexer.results.ScrollResult;
@@ -108,7 +109,11 @@ public class RelativeSearchResource extends SearchResource {
 
         final Optional<String> streamId = Searches.extractStreamId(filter);
 
-        return buildSearchResponse(searches.search(searchesConfig), timeRange, decorate, streamId);
+        try {
+            return buildSearchResponse(searches.search(searchesConfig), timeRange, decorate, streamId);
+        } catch (SearchPhaseExecutionException e) {
+            throw createRequestExceptionForParseFailure(query, e);
+        }
     }
 
     @GET
@@ -133,9 +138,13 @@ public class RelativeSearchResource extends SearchResource {
         final List<String> fieldList = parseFields(fields);
         final TimeRange timeRange = buildRelativeTimeRange(range);
 
-        final ScrollResult scroll = searches
-                .scroll(query, timeRange, limit, offset, fieldList, filter);
-        return buildChunkedOutput(scroll, limit);
+        try {
+            final ScrollResult scroll = searches
+                    .scroll(query, timeRange, limit, offset, fieldList, filter);
+            return buildChunkedOutput(scroll, limit);
+        } catch (SearchPhaseExecutionException e) {
+            throw createRequestExceptionForParseFailure(query, e);
+        }
     }
 
     @GET
@@ -179,12 +188,14 @@ public class RelativeSearchResource extends SearchResource {
             @QueryParam("query") @NotEmpty String query,
             @ApiParam(name = "size", value = "Maximum number of terms to return", required = false) @QueryParam("size") int size,
             @ApiParam(name = "range", value = "Relative timeframe to search in. See search method description.", required = true) @QueryParam("range") int range,
-            @ApiParam(name = "filter", value = "Filter", required = false) @QueryParam("filter") String filter,
-            @ApiParam(name = "order", value = "Sorting (field:asc / field:desc)", required = false) @QueryParam("order") String order) {
+            @ApiParam(name = "filter", value = "Filter", required = false) @QueryParam("filter") String filter) {
         checkSearchPermission(filter, RestPermissions.SEARCHES_RELATIVE);
 
-        final Sorting sortOrder = buildSorting(order);
-        return buildTermsResult(searches.terms(field, size, query, filter, buildRelativeTimeRange(range), sortOrder.getDirection()));
+        try {
+            return buildTermsResult(searches.terms(field, size, query, filter, buildRelativeTimeRange(range)));
+        } catch (SearchPhaseExecutionException e) {
+            throw createRequestExceptionForParseFailure(query, e);
+        }
     }
 
     @GET
@@ -209,9 +220,13 @@ public class RelativeSearchResource extends SearchResource {
             @ApiParam(name = "filter", value = "Filter", required = false) @QueryParam("filter") String filter) {
         checkSearchPermission(filter, RestPermissions.SEARCHES_RELATIVE);
 
-        return buildTermsStatsResult(
-                searches.termsStats(keyField, valueField, Searches.TermsStatsOrder.valueOf(order.toUpperCase(Locale.ENGLISH)), size, query, filter, buildRelativeTimeRange(range))
-        );
+        try {
+            return buildTermsStatsResult(
+                    searches.termsStats(keyField, valueField, Searches.TermsStatsOrder.valueOf(order.toUpperCase(Locale.ENGLISH)), size, query, filter, buildRelativeTimeRange(range))
+            );
+        } catch (SearchPhaseExecutionException e) {
+            throw createRequestExceptionForParseFailure(query, e);
+        }
     }
 
     @GET
@@ -234,7 +249,11 @@ public class RelativeSearchResource extends SearchResource {
             @ApiParam(name = "filter", value = "Filter", required = false) @QueryParam("filter") String filter) {
         checkSearchPermission(filter, RestPermissions.SEARCHES_RELATIVE);
 
-        return buildFieldStatsResult(fieldStats(field, query, filter, buildRelativeTimeRange(range)));
+        try {
+            return buildFieldStatsResult(fieldStats(field, query, filter, buildRelativeTimeRange(range)));
+        } catch (SearchPhaseExecutionException e) {
+            throw createRequestExceptionForParseFailure(query, e);
+        }
     }
 
     @GET
@@ -258,14 +277,18 @@ public class RelativeSearchResource extends SearchResource {
         interval = interval.toUpperCase(Locale.ENGLISH);
         validateInterval(interval);
 
-        return buildHistogramResult(
-                searches.histogram(
-                        query,
-                        Searches.DateHistogramInterval.valueOf(interval),
-                        filter,
-                        buildRelativeTimeRange(range)
-                )
-        );
+        try {
+            return buildHistogramResult(
+                    searches.histogram(
+                            query,
+                            Searches.DateHistogramInterval.valueOf(interval),
+                            filter,
+                            buildRelativeTimeRange(range)
+                    )
+            );
+        } catch (SearchPhaseExecutionException e) {
+            throw createRequestExceptionForParseFailure(query, e);
+        }
     }
 
     @GET
@@ -294,8 +317,12 @@ public class RelativeSearchResource extends SearchResource {
         interval = interval.toUpperCase(Locale.ENGLISH);
         validateInterval(interval);
 
-        return buildHistogramResult(fieldHistogram(field, query, interval, filter, buildRelativeTimeRange(range),
-                                                   includeCardinality));
+        try {
+            return buildHistogramResult(fieldHistogram(field, query, interval, filter, buildRelativeTimeRange(range),
+                                                       includeCardinality));
+        } catch (SearchPhaseExecutionException e) {
+            throw createRequestExceptionForParseFailure(query, e);
+        }
     }
 
     private TimeRange buildRelativeTimeRange(int range) {
