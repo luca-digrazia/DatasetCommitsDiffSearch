@@ -27,7 +27,6 @@ import org.apache.shiro.authc.UsernamePasswordToken;
 import org.apache.shiro.authc.credential.HashedCredentialsMatcher;
 import org.apache.shiro.authc.pam.FirstSuccessfulStrategy;
 import org.apache.shiro.authc.pam.ModularRealmAuthenticator;
-import org.apache.shiro.authz.ModularRealmAuthorizer;
 import org.apache.shiro.cache.MemoryConstrainedCacheManager;
 import org.apache.shiro.mgt.DefaultSecurityManager;
 import org.apache.shiro.mgt.DefaultSessionStorageEvaluator;
@@ -66,27 +65,26 @@ public class ShiroSecurityContextFactory implements SecurityContextFactory {
 
         final LdapConnector ldapConnector = new LdapConnector(core);
         core.setLdapConnector(ldapConnector);
-        final LdapUserAuthenticator ldapUserAuthenticator = new LdapUserAuthenticator(core, ldapConnector);
-        ldapUserAuthenticator.setCachingEnabled(false);
-        core.setLdapAuthenticator(ldapUserAuthenticator);
+//        final LdapRealm ldapRealm = new LdapRealm(core, ldapConnector);
+//        // the incoming password is always SHA-256 hashed, so we will re-hash whatever comes from LDAP, too.
+//        ldapRealm.setCredentialsMatcher(new HashedCredentialsMatcher("SHA-256"));
+//        ldapRealm.setCachingEnabled(false);
 
         final SessionAuthenticator sessionAuthenticator = new SessionAuthenticator(core);
         sessionAuthenticator.setCachingEnabled(false);
         final AccessTokenAuthenticator accessTokenAuthenticator = new AccessTokenAuthenticator(core);
         accessTokenAuthenticator.setCachingEnabled(false);
 
-
         sm = new DefaultSecurityManager(Lists.<Realm>newArrayList(
                 sessionAuthenticator,
                 accessTokenAuthenticator,
-                ldapUserAuthenticator,
                 passwordAuthenticator,
                 inMemoryRealm));
         final Authenticator authenticator = sm.getAuthenticator();
         if (authenticator instanceof ModularRealmAuthenticator) {
             ((ModularRealmAuthenticator) authenticator).setAuthenticationStrategy(new FirstSuccessfulStrategy());
         }
-        sm.setAuthorizer(new ModularRealmAuthorizer(Lists.<Realm>newArrayList(mongoDbAuthorizationRealm, inMemoryRealm)));
+        sm.setAuthorizer(mongoDbAuthorizationRealm);
 
         final DefaultSubjectDAO subjectDAO = new DefaultSubjectDAO();
         final DefaultSessionStorageEvaluator sessionStorageEvaluator = new DefaultSessionStorageEvaluator() {

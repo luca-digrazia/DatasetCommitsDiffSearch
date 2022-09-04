@@ -1,4 +1,6 @@
 /**
+ * Copyright 2013 Kay Roepke <kay@torch.sh>
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -13,6 +15,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 package org.graylog2.security;
 
@@ -20,24 +23,22 @@ import org.apache.shiro.authc.AuthenticationException;
 import org.apache.shiro.authc.AuthenticationToken;
 import org.apache.shiro.subject.Subject;
 import org.apache.shiro.util.ThreadContext;
-import org.graylog2.jersey.container.netty.HeaderAwareSecurityContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.ws.rs.core.MultivaluedMap;
+import javax.ws.rs.core.SecurityContext;
 import java.security.Principal;
 
 /**
  * @author Kay Roepke <kay@torch.sh>
  */
-public class ShiroSecurityContext implements HeaderAwareSecurityContext {
-    private static final Logger LOG = LoggerFactory.getLogger(ShiroSecurityContext.class);
+public class ShiroSecurityContext implements SecurityContext {
+    private static final Logger log = LoggerFactory.getLogger(ShiroSecurityContext.class);
 
     private Subject subject;
     private final AuthenticationToken token;
     private final boolean secure;
     private final String authcScheme;
-    private MultivaluedMap<String, String> headers;
 
     public ShiroSecurityContext(Subject subject, AuthenticationToken token, boolean isSecure, String authcScheme) {
         this.subject = subject;
@@ -77,7 +78,7 @@ public class ShiroSecurityContext implements HeaderAwareSecurityContext {
 
     @Override
     public boolean isUserInRole(String role) {
-        LOG.info("Checking role {} for user {}.", role, subject.getPrincipal());
+        log.info("Checking role {} for user {}.", role, subject.getPrincipal());
         return subject.hasRole(role);
     }
 
@@ -92,24 +93,9 @@ public class ShiroSecurityContext implements HeaderAwareSecurityContext {
     }
 
     public void loginSubject() throws AuthenticationException {
-        // what a hack :(
-        ThreadContext.put("REQUEST_HEADERS", headers);
         subject.login(token);
         // the subject instance will change to include the session
-        final Subject newSubject = ThreadContext.getSubject();
-        if (newSubject != null) {
-            subject = newSubject;
-        }
-        ThreadContext.remove("REQUEST_HEADERS");
-    }
-
-    @Override
-    public void setHeaders(MultivaluedMap<String, String> headers) {
-        this.headers = headers;
-    }
-
-    public MultivaluedMap<String, String> getHeaders() {
-        return headers;
+        subject = ThreadContext.getSubject();
     }
 
     public class ShiroPrincipal implements Principal {

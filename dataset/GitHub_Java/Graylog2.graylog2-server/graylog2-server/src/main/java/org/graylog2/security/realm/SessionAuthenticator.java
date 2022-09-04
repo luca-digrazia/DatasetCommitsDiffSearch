@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2014 TORCH GmbH
+ * Copyright 2013 TORCH GmbH
  *
  * This file is part of Graylog2.
  *
@@ -24,25 +24,19 @@ import org.apache.shiro.realm.AuthenticatingRealm;
 import org.apache.shiro.session.Session;
 import org.apache.shiro.subject.Subject;
 import org.apache.shiro.util.ThreadContext;
+import org.graylog2.Core;
 import org.graylog2.security.SessionIdToken;
 import org.graylog2.users.User;
-import org.graylog2.users.UserService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import javax.inject.Inject;
-import javax.ws.rs.core.MultivaluedMap;
 
 public class SessionAuthenticator extends AuthenticatingRealm {
     private static final Logger log = LoggerFactory.getLogger(SessionAuthenticator.class);
 
-    private final UserService userService;
-    private final LdapUserAuthenticator ldapAuthenticator;
+    private final Core core;
 
-    @Inject
-    public SessionAuthenticator(UserService userService, LdapUserAuthenticator ldapAuthenticator) {
-        this.userService = userService;
-        this.ldapAuthenticator = ldapAuthenticator;
+    public SessionAuthenticator(Core core) {
+        this.core = core;
         // this realm either rejects a session, or allows the associated user implicitly
         setAuthenticationTokenClass(SessionIdToken.class);
         setCredentialsMatcher(new AllowAllCredentialsMatcher());
@@ -59,28 +53,19 @@ public class SessionAuthenticator extends AuthenticatingRealm {
         }
 
         final Object username = subject.getPrincipal();
-        final User user = userService.load(String.valueOf(username));
+        final User user = User.load(String.valueOf(username), core);
         if (user == null) {
             log.debug("No user named {} found for session {}", username, sessionIdToken.getSessionId());
             return null;
         }
-        if (user.isExternalUser() && !ldapAuthenticator.isEnabled()) {
+        if (user.isExternalUser() && !core.getLdapRealm().isEnabled()) {
             throw new LockedAccountException("LDAP authentication is currently disabled.");
         }
 
         if (log.isDebugEnabled()) {
             log.debug("Found session {} for user name {}", session.getId(), username);
         }
-
-        @SuppressWarnings("unchecked")
-        final MultivaluedMap<String, String> requestHeaders = (MultivaluedMap<String, String>) ThreadContext.get(
-                "REQUEST_HEADERS");
-        // extend session unless the relevant header was passed.
-        if (requestHeaders == null || !"true".equalsIgnoreCase(requestHeaders.getFirst("X-Graylog2-No-Session-Extension"))) {
-            session.touch();
-        } else {
-            log.debug("Not extending session because the request indicated not to.");
-        }
+        session.touch();
         ThreadContext.bind(subject);
 
         return new SimpleAccount(user.getName(), null, "session authenticator");
