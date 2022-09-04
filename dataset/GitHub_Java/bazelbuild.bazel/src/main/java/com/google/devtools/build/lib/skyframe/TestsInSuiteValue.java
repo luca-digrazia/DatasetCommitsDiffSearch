@@ -47,12 +47,12 @@ final class TestsInSuiteValue implements SkyValue {
 
   @SuppressWarnings("unused")
   private void writeObject(ObjectOutputStream out) {
-    throw new NotSerializableRuntimeException();
+    throw new UnsupportedOperationException();
   }
 
   @SuppressWarnings("unused")
   private void readObject(ObjectInputStream in) {
-    throw new NotSerializableRuntimeException();
+    throw new UnsupportedOperationException();
   }
 
   @SuppressWarnings("unused")

@@ -41,6 +41,7 @@ import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import javax.annotation.Nullable;
 
@@ -142,8 +143,7 @@ final class TestsInSuiteFunction implements SkyFunction {
     }
     boolean hasError = false;
     Map<PackageIdentifier, Package> packageMap = new HashMap<>();
-    for (Map.Entry<SkyKey, ValueOrException<BuildFileNotFoundException>> entry :
-        packages.entrySet()) {
+    for (Entry<SkyKey, ValueOrException<BuildFileNotFoundException>> entry : packages.entrySet()) {
       try {
         packageMap.put(
             (PackageIdentifier) entry.getKey().argument(),
