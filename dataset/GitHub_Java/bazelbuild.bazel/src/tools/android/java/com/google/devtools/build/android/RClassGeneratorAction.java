@@ -133,8 +133,8 @@ public class RClassGeneratorAction {
         logger.fine(
             String.format("Load symbols finished at %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
         // For now, assuming not used for libraries and setting final access for fields.
-        fullSymbolValues.writeClassesTo(
-            libSymbolMap, appPackageName, classOutPath, true /* finalFields */);
+          resourceProcessor.writePackageRClasses(libSymbolMap, fullSymbolValues, appPackageName,
+              classOutPath, true /* finalFields */);
         logger.fine(
             String.format("Finished R.class at %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
       } else if (!libraries.isEmpty()) {
@@ -144,7 +144,8 @@ public class RClassGeneratorAction {
         logger.fine(
             String.format("Load symbols finished at %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
         // For now, assuming not used for libraries and setting final access for fields.
-        fullSymbolValues.writeClassesTo(libSymbolMap, null, classOutPath, true /* finalFields */);
+        resourceProcessor.writePackageRClasses(
+            libSymbolMap, fullSymbolValues, null, classOutPath, true /* finalFields */);
         logger.fine(
             String.format("Finished R.class at %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
       } else {
