@@ -19,18 +19,18 @@ import java.lang.annotation.Annotation;
 
 import javax.annotation.processing.ProcessingEnvironment;
 
-import com.googlecode.androidannotations.annotations.TrackingTouchStart;
+import com.googlecode.androidannotations.annotations.TrackingTouchStop;
 import com.googlecode.androidannotations.rclass.IRClass;
 
-public class TrackingTouchStartValidator extends AbstractTrackingTouchValidator {
+public class TrackingTouchStopValidator extends AbstractTrackingTouchValidator {
 
-	public TrackingTouchStartValidator(ProcessingEnvironment processingEnv, IRClass rClass) {
+	public TrackingTouchStopValidator(ProcessingEnvironment processingEnv, IRClass rClass) {
 		super(processingEnv, rClass);
 	}
 
 	@Override
 	public Class<? extends Annotation> getTarget() {
-		return TrackingTouchStart.class;
+		return TrackingTouchStop.class;
 	}
 
 }
