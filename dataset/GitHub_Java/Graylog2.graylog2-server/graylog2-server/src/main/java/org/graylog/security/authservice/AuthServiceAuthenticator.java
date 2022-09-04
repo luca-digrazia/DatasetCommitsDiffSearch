@@ -16,7 +16,6 @@
  */
 package org.graylog.security.authservice;
 
-import org.graylog2.shared.security.AuthenticationServiceUnavailableException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -60,14 +59,9 @@ public class AuthServiceAuthenticator {
         final Optional<AuthServiceBackend> activeBackend = authServiceConfig.getActiveBackend();
 
         if (activeBackend.isPresent()) {
-            AuthenticationServiceUnavailableException caughtException = null;
-            try {
-                final AuthServiceResult result = authenticate(authCredentials, activeBackend.get());
-                if (result.isSuccess()) {
-                    return result;
-                }
-            } catch (AuthenticationServiceUnavailableException e) {
-                caughtException = e;
+            final AuthServiceResult result = authenticate(authCredentials, activeBackend.get());
+            if (result.isSuccess()) {
+                return result;
             }
             // TODO: Do we want the fallback to the default backend here? Maybe it should be configurable?
             if (LOG.isDebugEnabled()) {
@@ -77,17 +71,8 @@ public class AuthServiceAuthenticator {
                         activeBackend.get().backendId(), activeBackend.get().backendType(), activeBackend.get().backendTitle(),
                         defaultBackend.backendId(), defaultBackend.backendType(), defaultBackend.backendTitle());
             }
-            final AuthServiceResult result = authenticate(authCredentials, authServiceConfig.getDefaultBackend());
-            if (result.isSuccess()) {
-                return result;
-            }
-            if (caughtException != null) {
-                throw caughtException;
-            }
-            return result;
-        } else {
-            return authenticate(authCredentials, authServiceConfig.getDefaultBackend());
         }
+        return authenticate(authCredentials, authServiceConfig.getDefaultBackend());
     }
 
     private AuthServiceResult authenticate(AuthServiceToken token, AuthServiceBackend backend) {

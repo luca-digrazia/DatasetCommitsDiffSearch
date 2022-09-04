@@ -31,7 +31,6 @@ import org.graylog.security.authservice.ldap.UnboundLDAPConfig;
 import org.graylog.security.authservice.ldap.UnboundLDAPConnector;
 import org.graylog.security.authservice.test.AuthServiceBackendTestResult;
 import org.graylog2.security.encryption.EncryptedValue;
-import org.graylog2.shared.security.AuthenticationServiceUnavailableException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -100,10 +99,10 @@ public class LDAPAuthServiceBackend implements AuthServiceBackend {
             return Optional.of(AuthenticationDetails.builder().userDetails(userDetails).build());
         } catch (GeneralSecurityException e) {
             LOG.error("Error setting up TLS connection", e);
-            throw new AuthenticationServiceUnavailableException("Error setting up TLS connection", e);
+            return Optional.empty();
         } catch (LDAPException e) {
             LOG.error("LDAP error", e);
-            throw new AuthenticationServiceUnavailableException("LDAP error", e);
+            return Optional.empty();
         }
     }
 
