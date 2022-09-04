@@ -157,7 +157,9 @@ public class NotFoundExceptionMapper implements ExceptionMapper<NotFoundExceptio
         Variant variant = request.selectVariant(VARIANTS);
 
         if (variant == JSON_VARIANT) {
-            return Response.status(Status.NOT_FOUND).type(MediaType.APPLICATION_JSON).build();
+            ErrorMessage errorMessage = new ErrorMessage();
+            errorMessage.errorMessage = "404 - Resource Not Found";
+            return Response.status(Status.NOT_FOUND).entity(errorMessage).type(MediaType.APPLICATION_JSON_TYPE).build();
         }
 
         if (variant == HTML_VARIANT) {
@@ -172,7 +174,10 @@ public class NotFoundExceptionMapper implements ExceptionMapper<NotFoundExceptio
         Variant variant = request.selectVariant(VARIANTS);
 
         if (variant == JSON_VARIANT) {
-            return Response.status(Status.NOT_FOUND).type(MediaType.APPLICATION_JSON).build();
+            ErrorMessage errorMessage = new ErrorMessage();
+            errorMessage.errorMessage = "404 - Resource Not Found";
+            errorMessage.existingResourcesDetails = descriptions;
+            return Response.status(Status.NOT_FOUND).entity(errorMessage).type(MediaType.APPLICATION_JSON_TYPE).build();
         }
 
         if (variant == HTML_VARIANT) {
@@ -201,6 +206,11 @@ public class NotFoundExceptionMapper implements ExceptionMapper<NotFoundExceptio
         }
 
         return Response.status(Status.NOT_FOUND).build();
+    }
+
+    public static class ErrorMessage {
+        public String errorMessage;
+        public List<ResourceDescription> existingResourcesDetails;
     }
 
 }
