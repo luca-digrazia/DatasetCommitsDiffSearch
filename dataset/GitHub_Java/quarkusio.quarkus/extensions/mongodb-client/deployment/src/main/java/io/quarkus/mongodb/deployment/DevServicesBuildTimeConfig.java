@@ -1,6 +1,5 @@
 package io.quarkus.mongodb.deployment;
 
-import java.util.Map;
 import java.util.Optional;
 
 import io.quarkus.runtime.annotations.ConfigGroup;
@@ -32,11 +31,4 @@ public class DevServicesBuildTimeConfig {
      */
     @ConfigItem
     public Optional<Integer> port;
-
-    /**
-     * Generic properties that are added to the connection URL.
-     */
-    @ConfigItem
-    public Map<String, String> properties;
-
 }

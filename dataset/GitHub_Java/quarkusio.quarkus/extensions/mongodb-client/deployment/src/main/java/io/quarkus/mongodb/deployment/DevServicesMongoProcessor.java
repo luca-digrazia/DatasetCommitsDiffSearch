@@ -3,32 +3,28 @@ package io.quarkus.mongodb.deployment;
 import static io.quarkus.mongodb.runtime.MongoClientBeanUtil.isDefault;
 
 import java.io.Closeable;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 import org.eclipse.microprofile.config.ConfigProvider;
 import org.jboss.logging.Logger;
 import org.testcontainers.containers.MongoDBContainer;
 import org.testcontainers.utility.DockerImageName;
 
-import com.github.dockerjava.zerodep.shaded.org.apache.hc.core5.http.message.BasicNameValuePair;
-import com.github.dockerjava.zerodep.shaded.org.apache.hc.core5.net.URLEncodedUtils;
-
 import io.quarkus.bootstrap.classloading.QuarkusClassLoader;
 import io.quarkus.deployment.IsDockerWorking;
 import io.quarkus.deployment.IsNormal;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
-import io.quarkus.deployment.builditem.DevServicesNativeConfigResultBuildItem;
 import io.quarkus.deployment.builditem.LaunchModeBuildItem;
 import io.quarkus.deployment.builditem.RunTimeConfigurationDefaultBuildItem;
 import io.quarkus.deployment.builditem.ServiceStartBuildItem;
+import io.quarkus.mongodb.deployment.devservices.DevServicesMongoResultBuildItem;
 import io.quarkus.mongodb.runtime.MongodbConfig;
 import io.quarkus.runtime.LaunchMode;
 import io.quarkus.runtime.configuration.ConfigUtils;
@@ -44,12 +40,11 @@ public class DevServicesMongoProcessor {
     private final IsDockerWorking isDockerWorking = new IsDockerWorking(true);
 
     @BuildStep(onlyIfNot = IsNormal.class)
-    public void startMongo(List<MongoConnectionNameBuildItem> mongoConnections,
+    public DevServicesMongoResultBuildItem startMongo(List<MongoConnectionNameBuildItem> mongoConnections,
             MongoClientBuildTimeConfig mongoClientBuildTimeConfig,
             LaunchModeBuildItem launchMode,
             BuildProducer<RunTimeConfigurationDefaultBuildItem> runTimeConfiguration,
-            BuildProducer<ServiceStartBuildItem> serviceStartBuildItemBuildProducer,
-            BuildProducer<DevServicesNativeConfigResultBuildItem> devServices) {
+            BuildProducer<ServiceStartBuildItem> serviceStartBuildItemBuildProducer) {
 
         List<String> connectionNames = new ArrayList<>(mongoConnections.size());
         for (MongoConnectionNameBuildItem mongoConnection : mongoConnections) {
@@ -58,10 +53,10 @@ public class DevServicesMongoProcessor {
 
         // TODO: handle named connections as well
         if (connectionNames.size() != 1) {
-            return;
+            return null;
         }
         if (!isDefault(connectionNames.get(0))) {
-            return;
+            return null;
         }
 
         Map<String, CapturedProperties> currentCapturedProperties = captureProperties(connectionNames,
@@ -75,7 +70,7 @@ public class DevServicesMongoProcessor {
                 restartRequired = !currentCapturedProperties.equals(capturedProperties);
             }
             if (!restartRequired) {
-                return;
+                return null;
             }
             for (Closeable i : closeables) {
                 try {
@@ -93,14 +88,21 @@ public class DevServicesMongoProcessor {
         // TODO: we need to go through each connection
         String connectionName = connectionNames.get(0);
         StartResult startResult = startMongo(connectionName, currentCapturedProperties.get(connectionName));
+        DevServicesMongoResultBuildItem.Result defaultConnectionResult = null;
+        Map<String, DevServicesMongoResultBuildItem.Result> namedConnectionResults = new HashMap<>();
         if (startResult != null) {
             currentCloseables.add(startResult.getCloseable());
             String connectionStringPropertyName = getConfigPrefix(connectionName) + "connection-string";
             String connectionStringPropertyValue = startResult.getUrl();
             runTimeConfiguration.produce(new RunTimeConfigurationDefaultBuildItem(
                     connectionStringPropertyName, connectionStringPropertyValue));
-            devServices.produce(
-                    new DevServicesNativeConfigResultBuildItem(connectionStringPropertyName, connectionStringPropertyValue));
+            DevServicesMongoResultBuildItem.Result result = new DevServicesMongoResultBuildItem.Result(
+                    Collections.singletonMap(connectionStringPropertyName, connectionStringPropertyValue));
+            if (isDefault(connectionName)) {
+                defaultConnectionResult = result;
+            } else {
+                namedConnectionResults.put(connectionName, result);
+            }
         }
 
         if (first) {
@@ -136,6 +138,7 @@ public class DevServicesMongoProcessor {
         closeables = currentCloseables;
         capturedProperties = currentCapturedProperties;
 
+        return new DevServicesMongoResultBuildItem(defaultConnectionResult, namedConnectionResults);
     }
 
     private StartResult startMongo(String connectionName, CapturedProperties capturedProperties) {
@@ -174,16 +177,8 @@ public class DevServicesMongoProcessor {
         }
         mongoDBContainer.start();
         Optional<String> databaseName = ConfigProvider.getConfig().getOptionalValue(configPrefix + "database", String.class);
-        String effectiveURL = databaseName.map(mongoDBContainer::getReplicaSetUrl).orElse(mongoDBContainer.getReplicaSetUrl());
-        if ((capturedProperties.connectionProperties != null) && !capturedProperties.connectionProperties.isEmpty()) {
-            effectiveURL = effectiveURL + "?"
-                    + URLEncodedUtils.format(
-                            capturedProperties.connectionProperties.entrySet().stream()
-                                    .map(e -> new BasicNameValuePair(e.getKey(), e.getValue())).collect(Collectors.toList()),
-                            StandardCharsets.UTF_8);
-        }
         return new StartResult(
-                effectiveURL,
+                databaseName.map(mongoDBContainer::getReplicaSetUrl).orElse(mongoDBContainer.getReplicaSetUrl()),
                 new Closeable() {
                     @Override
                     public void close() {
@@ -218,7 +213,7 @@ public class DevServicesMongoProcessor {
         DevServicesBuildTimeConfig devServicesConfig = mongoClientBuildTimeConfig.devservices;
         boolean devServicesEnabled = devServicesConfig.enabled.orElse(true);
         return new CapturedProperties(databaseName, connectionString, devServicesEnabled,
-                devServicesConfig.imageName.orElse(null), devServicesConfig.port.orElse(null), devServicesConfig.properties);
+                devServicesConfig.imageName.orElse(null), devServicesConfig.port.orElse(null));
     }
 
     private static class StartResult {
@@ -245,16 +240,14 @@ public class DevServicesMongoProcessor {
         private final boolean devServicesEnabled;
         private final String imageName;
         private final Integer fixedExposedPort;
-        private final Map<String, String> connectionProperties;
 
         public CapturedProperties(String database, String connectionString, boolean devServicesEnabled, String imageName,
-                Integer fixedExposedPort, Map<String, String> connectionProperties) {
+                Integer fixedExposedPort) {
             this.database = database;
             this.connectionString = connectionString;
             this.devServicesEnabled = devServicesEnabled;
             this.imageName = imageName;
             this.fixedExposedPort = fixedExposedPort;
-            this.connectionProperties = connectionProperties;
         }
 
         @Override
@@ -266,14 +259,12 @@ public class DevServicesMongoProcessor {
             CapturedProperties that = (CapturedProperties) o;
             return devServicesEnabled == that.devServicesEnabled && Objects.equals(database, that.database)
                     && Objects.equals(connectionString, that.connectionString) && Objects.equals(imageName, that.imageName)
-                    && Objects.equals(fixedExposedPort, that.fixedExposedPort)
-                    && Objects.equals(connectionProperties, that.connectionProperties);
+                    && Objects.equals(fixedExposedPort, that.fixedExposedPort);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(database, connectionString, devServicesEnabled, imageName, fixedExposedPort,
-                    connectionProperties);
+            return Objects.hash(database, connectionString, devServicesEnabled, imageName, fixedExposedPort);
         }
     }
 
