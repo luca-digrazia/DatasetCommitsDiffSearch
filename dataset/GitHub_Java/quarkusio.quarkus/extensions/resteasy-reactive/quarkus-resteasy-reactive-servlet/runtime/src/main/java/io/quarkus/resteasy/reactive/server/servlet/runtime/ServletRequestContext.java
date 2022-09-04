@@ -89,12 +89,6 @@ public class ServletRequestContext extends ResteasyReactiveRequestContext
     }
 
     @Override
-    public ServerHttpResponse addCloseHandler(Runnable onClose) {
-        context.response().closeHandler(v -> onClose.run());
-        return this;
-    }
-
-    @Override
     public ServerHttpRequest serverRequest() {
         return this;
     }

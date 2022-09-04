@@ -2,7 +2,6 @@ package org.jboss.resteasy.reactive.server.vertx;
 
 import io.netty.buffer.Unpooled;
 import io.netty.channel.EventLoop;
-import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.util.concurrent.ScheduledFuture;
 import io.vertx.core.AsyncResult;
 import io.vertx.core.Handler;
@@ -32,12 +31,10 @@ import org.jboss.resteasy.reactive.spi.ThreadSetupAction;
 public class VertxResteasyReactiveRequestContext extends ResteasyReactiveRequestContext
         implements ServerHttpRequest, ServerHttpResponse, Handler<Void> {
 
-    public static final String CONTINUE = "100-continue";
     protected final RoutingContext context;
     protected final HttpServerRequest request;
     protected final HttpServerResponse response;
     protected Consumer<ResteasyReactiveRequestContext> preCommitTask;
-    ContinueState continueState = ContinueState.NONE;
 
     public VertxResteasyReactiveRequestContext(Deployment deployment, ProvidersImpl providers,
             RoutingContext context,
@@ -47,10 +44,6 @@ public class VertxResteasyReactiveRequestContext extends ResteasyReactiveRequest
         this.request = context.request();
         this.response = context.response();
         context.addHeadersEndHandler(this);
-        String expect = request.getHeader(HttpHeaderNames.EXPECT);
-        if (expect != null && expect.equalsIgnoreCase(CONTINUE)) {
-            continueState = ContinueState.REQUIRED;
-        }
     }
 
     public RoutingContext getContext() {
@@ -180,7 +173,7 @@ public class VertxResteasyReactiveRequestContext extends ResteasyReactiveRequest
 
     @Override
     public InputStream createInputStream(ByteBuffer existingData) {
-        return new VertxInputStream(context, 10000, Unpooled.wrappedBuffer(existingData), this);
+        return new VertxInputStream(context, 10000, Unpooled.wrappedBuffer(existingData));
     }
 
     @Override
@@ -191,20 +184,12 @@ public class VertxResteasyReactiveRequestContext extends ResteasyReactiveRequest
 
     @Override
     public ServerHttpResponse resumeRequestInput() {
-        if (continueState == ContinueState.REQUIRED) {
-            continueState = ContinueState.SENT;
-            response.writeContinue();
-        }
         request.resume();
         return this;
     }
 
     @Override
     public ServerHttpResponse setReadListener(ReadCallback callback) {
-        if (continueState == ContinueState.REQUIRED) {
-            continueState = ContinueState.SENT;
-            response.writeContinue();
-        }
         request.handler(new Handler<Buffer>() {
             @Override
             public void handle(Buffer event) {
@@ -341,11 +326,5 @@ public class VertxResteasyReactiveRequestContext extends ResteasyReactiveRequest
         if (preCommitTask != null) {
             preCommitTask.accept(this);
         }
-    }
-
-    enum ContinueState {
-        NONE,
-        REQUIRED,
-        SENT;
     }
 }

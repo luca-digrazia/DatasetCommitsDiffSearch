@@ -37,6 +37,4 @@ public interface ServerHttpResponse {
     OutputStream createResponseOutputStream();
 
     void setPreCommitListener(Consumer<ResteasyReactiveRequestContext> task);
-
-    ServerHttpResponse addCloseHandler(Runnable onClose);
 }
