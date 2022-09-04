@@ -2,7 +2,6 @@ package org.jboss.shamrock.runtime.logging;
 
 import java.io.FileNotFoundException;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 import java.util.logging.ErrorManager;
 import java.util.logging.Handler;
@@ -30,7 +29,7 @@ public class LoggingSetupTemplate {
     @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Reset)
     private static volatile boolean initialized;
 
-    public void initializeLogging(LogConfig config, List<LogCleanupFilterElement> filters) {
+    public void initializeLogging(LogConfig config) {
         if (initialized || ImageInfo.inImageBuildtimeCode()) {
             // JVM mode, already initialized in static init
             return;
@@ -60,7 +59,7 @@ public class LoggingSetupTemplate {
             final ConsoleHandler handler = new ConsoleHandler(formatter);
             handler.setLevel(config.console.level);
             handler.setErrorManager(errorManager);
-            handler.setFilter(new LogCleanupFilter(filters));
+            handler.setFilter(new LogCleanupFilter());
             handlers.add(handler);
             errorManager = handler.getLocalErrorManager();
         }
@@ -75,7 +74,7 @@ public class LoggingSetupTemplate {
             }
             handler.setErrorManager(errorManager);
             handler.setLevel(config.file.level);
-            handler.setFilter(new LogCleanupFilter(filters));
+            handler.setFilter(new LogCleanupFilter());
             handlers.add(handler);
         }
         InitialConfigurator.DELAYED_HANDLER.setHandlers(handlers.toArray(EmbeddedConfigurator.NO_HANDLERS));

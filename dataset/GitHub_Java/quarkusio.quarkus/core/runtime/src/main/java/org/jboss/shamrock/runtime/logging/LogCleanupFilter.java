@@ -6,8 +6,6 @@ import java.util.logging.Filter;
 import java.util.logging.Level;
 import java.util.logging.LogRecord;
 
-import org.jboss.logging.Logger;
-
 public class LogCleanupFilter implements Filter {
 
     private static class Downgrade {
@@ -49,18 +47,24 @@ public class LogCleanupFilter implements Filter {
     
     @Override
     public boolean isLoggable(LogRecord record) {
-        if(record.getLevel().intValue() != Level.INFO.intValue())
+        if(record.getLevel() != Level.INFO
+                && record.getLevel() != org.jboss.logmanager.Level.INFO)
             return true;
         Downgrade downgrade = downgrades.get(record.getLoggerName());
+        boolean untouched = true;
         if(downgrade != null) {
             if(record.getMessage().startsWith(downgrade.start)) {
                 record.setLevel(org.jboss.logmanager.Level.DEBUG);
-                return Logger.getLogger(record.getLoggerName()).isDebugEnabled();
+                untouched = false;
             }
         }
+        if(untouched) {
 //            System.err.println("isLoggable: "+record.getLoggerName());
 //            System.err.println("isLoggable: "+record.getMessage());
-        return true;
+            return true;
+        }
+        // temporary because ajusting the level is not enough
+        return false;
     }
 
 
