@@ -27,7 +27,6 @@ import static java.util.stream.Collectors.toList;
 import com.android.builder.core.VariantConfiguration;
 import com.android.builder.core.VariantType;
 import com.android.repository.Revision;
-import com.google.auto.value.AutoValue;
 import com.google.common.base.Joiner;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
@@ -109,6 +108,9 @@ public class ResourceLinker {
   private static final boolean OVERRIDE_STYLES_INSTEAD_OF_OVERLAYING =
       Boolean.parseBoolean(System.getProperty(OVERRIDE_STYLES_INSTEAD_OF_OVERLAYING_KEY, "false"));
 
+  public static final String AAPT2_OPTIMIZE_KEY =
+      ResourceProcessorBusyBox.PROPERTY_KEY_PREFIX + "aapt2_optimize";
+
   public static final String ENABLE_RESOURCE_PATH_SHORTENING_KEY =
       ResourceProcessorBusyBox.PROPERTY_KEY_PREFIX + "aapt2_enable_resource_path_shortening";
 
@@ -132,14 +134,11 @@ public class ResourceLinker {
 
   private final ListeningExecutorService executorService;
   private final Path workingDirectory;
-  private final Path resourcePathShorteningMap;
 
   private List<StaticLibrary> linkAgainst = ImmutableList.of();
 
   private String customPackage;
   private boolean outputAsProto;
-  private Optimizations optimizations =
-      Optimizations.builder().setResourcePathShortening(false).build();
 
   private Revision buildToolsVersion;
   private List<String> densities = ImmutableList.of();
@@ -151,13 +150,16 @@ public class ResourceLinker {
   private List<CompiledResources> include = ImmutableList.of();
   private List<Path> assetDirs = ImmutableList.of();
   private boolean conditionalKeepRules = false;
+  private final boolean aapt2Optimize =
+      Boolean.parseBoolean(System.getProperty(AAPT2_OPTIMIZE_KEY, "false"));
+  private final boolean enableResourcePathShortening =
+      Boolean.parseBoolean(System.getProperty(ENABLE_RESOURCE_PATH_SHORTENING_KEY, "false"));
 
   private ResourceLinker(
       Path aapt2, ListeningExecutorService executorService, Path workingDirectory) {
     this.aapt2 = aapt2;
     this.executorService = executorService;
     this.workingDirectory = workingDirectory;
-    this.resourcePathShorteningMap = workingDirectory.resolve("resource_path_shortening.map");
   }
 
   public static ResourceLinker create(
@@ -225,12 +227,6 @@ public class ResourceLinker {
 
   public ResourceLinker outputAsProto(boolean outputAsProto) {
     this.outputAsProto = outputAsProto;
-    return this;
-  }
-
-  public ResourceLinker resourcePathShortening(boolean resourcePathShorteningEnabled) {
-    optimizations =
-        optimizations.toBuilder().setResourcePathShortening(resourcePathShorteningEnabled).build();
     return this;
   }
 
@@ -528,13 +524,7 @@ public class ResourceLinker {
   }
 
   private Path optimize(CompiledResources compiled, Path binary) throws IOException {
-    boolean enableResourcePathShorteningJvmArg =
-        Boolean.parseBoolean(System.getProperty(ENABLE_RESOURCE_PATH_SHORTENING_KEY, "false"));
-    if (enableResourcePathShorteningJvmArg) {
-      optimizations = optimizations.toBuilder().setResourcePathShortening(true).build();
-    }
-
-    if (!optimizations.hasOptimizations() && densities.size() < 2) {
+    if (!aapt2Optimize && densities.size() < 2) {
       return binary;
     }
 
@@ -552,10 +542,8 @@ public class ResourceLinker {
             // the APK analyzer dashboard.
             .when(densities.size() >= 2)
             .thenAdd("--target-densities", densities.stream().collect(Collectors.joining(",")))
-            .when(optimizations.resourcePathShortening())
+            .when(enableResourcePathShortening)
             .thenAdd("--enable-resource-path-shortening")
-            .when(optimizations.resourcePathShortening())
-            .thenAdd("--resource-path-shortening-map", resourcePathShorteningMap)
             .add("-o", optimized)
             .add(binary.toString())
             .execute(String.format("Optimizing %s", compiled.getManifest())));
@@ -574,12 +562,6 @@ public class ResourceLinker {
       try (ProtoApk protoApk =
           linkProtoApk(
               compiled, rTxt, proguardConfig, mainDexProguard, javaSourceDirectory, resourceIds)) {
-        if (Files.notExists(resourcePathShorteningMap)) {
-          // We need to produce a path shortening map file regardless of whether shortening was
-          // activated with the --define flag. If we've reached here, it means the optimization was
-          // not performed, so output an empty file.
-          Files.createFile(resourcePathShorteningMap);
-        }
         return PackagedResources.of(
             outputAsProto
                 ? protoApk.asApkPath()
@@ -588,7 +570,6 @@ public class ResourceLinker {
             rTxt,
             proguardConfig,
             mainDexProguard,
-            resourcePathShorteningMap,
             javaSourceDirectory,
             resourceIds,
             extractAttributes(compiled),
@@ -659,27 +640,5 @@ public class ResourceLinker {
         .add("resourceConfigs", resourceConfigs)
         .add("baseApk", baseApk)
         .toString();
-  }
-
-  @AutoValue
-  abstract static class Optimizations {
-    abstract boolean resourcePathShortening();
-
-    boolean hasOptimizations() {
-      return resourcePathShortening();
-    }
-
-    static Builder builder() {
-      return new AutoValue_ResourceLinker_Optimizations.Builder();
-    }
-
-    abstract Builder toBuilder();
-
-    @AutoValue.Builder
-    abstract static class Builder {
-      abstract Builder setResourcePathShortening(boolean value);
-
-      abstract Optimizations build();
-    }
   }
 }
