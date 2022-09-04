@@ -15,8 +15,8 @@ package com.google.devtools.build.lib.skyframe;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import com.google.common.base.Suppliers;
 import com.google.common.collect.MapMaker;
+import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -30,9 +30,7 @@ import com.google.devtools.build.skyframe.SkyValue;
 import com.google.devtools.build.skyframe.ValueOrException3;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.function.Supplier;
 
 /**
  * A builder of values for {@link ArtifactNestedSetKey}.
@@ -52,7 +50,7 @@ import java.util.function.Supplier;
  * <p>[1] Heuristic: If the size of the NestedSet exceeds a certain threshold, we evaluate it as an
  * ArtifactNestedSetKey.
  */
-final class ArtifactNestedSetFunction implements SkyFunction {
+class ArtifactNestedSetFunction implements SkyFunction {
 
   /**
    * A concurrent map from Artifacts' SkyKeys to their SkyValue, for Artifacts that are part of
@@ -78,7 +76,7 @@ final class ArtifactNestedSetFunction implements SkyFunction {
    * artifactSkyKeyToSkyValue between build 0 and 1, X2's member artifacts' SkyValues would not be
    * available in the map. TODO(leba): Make this weak-keyed.
    */
-  private ConcurrentMap<SkyKey, SkyValue> artifactSkyKeyToSkyValue = new ConcurrentHashMap<>();
+  private ConcurrentMap<SkyKey, SkyValue> artifactSkyKeyToSkyValue;
 
   /**
    * Maps the NestedSets' underlying objects to the corresponding SkyKey. This is to avoid
@@ -87,17 +85,16 @@ final class ArtifactNestedSetFunction implements SkyFunction {
    * <p>The map weakly references its values: when the ArtifactNestedSetKey becomes otherwise
    * unreachable, the map entry is collected.
    */
-  private final ConcurrentMap<NestedSet.Node, ArtifactNestedSetKey> nestedSetToSkyKey =
-      new MapMaker().weakValues().makeMap();
-
-  private final Supplier<ArtifactNestedSetValue> valueSupplier;
+  private final ConcurrentMap<NestedSet.Node, ArtifactNestedSetKey>
+      nestedSetToSkyKey; // note: weak values!
 
   private static ArtifactNestedSetFunction singleton = null;
 
   private static Integer sizeThreshold = null;
 
-  private ArtifactNestedSetFunction(Supplier<ArtifactNestedSetValue> valueSupplier) {
-    this.valueSupplier = valueSupplier;
+  private ArtifactNestedSetFunction() {
+    artifactSkyKeyToSkyValue = Maps.newConcurrentMap();
+    nestedSetToSkyKey = new MapMaker().weakValues().makeMap();
   }
 
   @Override
@@ -163,7 +160,7 @@ final class ArtifactNestedSetFunction implements SkyFunction {
     if (env.valuesMissing()) {
       return null;
     }
-    return valueSupplier.get();
+    return new ArtifactNestedSetValue();
   }
 
   private List<SkyKey> getDepSkyKeys(ArtifactNestedSetKey skyKey) {
@@ -181,29 +178,23 @@ final class ArtifactNestedSetFunction implements SkyFunction {
   }
 
   static ArtifactNestedSetFunction getInstance() {
-    return checkNotNull(singleton);
+    checkNotNull(singleton);
+    return singleton;
   }
 
   /**
    * Creates a new instance. Should only be used in {@code SkyframeExecutor#skyFunctions}. Keeping
    * this method separated from {@code #getInstance} since sometimes we need to overwrite the
    * existing instance.
-   *
-   * <p>If value-based change pruning is disabled, the function makes an optimization of using a
-   * singleton {@link ArtifactNestedSetValue}, since (in)equality of the value doesn't matter.
    */
-  static ArtifactNestedSetFunction createInstance(boolean valueBasedChangePruningEnabled) {
-    singleton =
-        new ArtifactNestedSetFunction(
-            valueBasedChangePruningEnabled
-                ? ArtifactNestedSetValue::new
-                : Suppliers.ofInstance(new ArtifactNestedSetValue()));
+  static ArtifactNestedSetFunction createInstance() {
+    singleton = new ArtifactNestedSetFunction();
     return singleton;
   }
 
   /** Reset the various state-keeping maps of ArtifactNestedSetFunction. */
   void resetArtifactNestedSetFunctionMaps() {
-    artifactSkyKeyToSkyValue = new ConcurrentHashMap<>();
+    artifactSkyKeyToSkyValue = Maps.newConcurrentMap();
   }
 
   SkyValue getValueForKey(SkyKey skyKey) {
