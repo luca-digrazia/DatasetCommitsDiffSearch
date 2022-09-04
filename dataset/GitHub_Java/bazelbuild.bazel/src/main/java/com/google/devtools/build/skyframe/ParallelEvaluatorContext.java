@@ -13,18 +13,17 @@
 // limitations under the License.
 package com.google.devtools.build.skyframe;
 
-import com.google.common.base.Function;
+import com.google.common.base.Preconditions;
 import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetVisitor;
 import com.google.devtools.build.lib.events.Event;
-import com.google.devtools.build.lib.events.EventHandler;
-import com.google.devtools.build.lib.util.Preconditions;
+import com.google.devtools.build.lib.events.ExtendedEventHandler;
+import com.google.devtools.build.lib.events.ExtendedEventHandler.Postable;
 import com.google.devtools.build.skyframe.MemoizingEvaluator.EmittedEventState;
 import com.google.devtools.build.skyframe.QueryableGraph.Reason;
 import java.util.Map;
-import java.util.concurrent.ForkJoinPool;
 import javax.annotation.Nullable;
 
 /**
@@ -35,21 +34,20 @@ import javax.annotation.Nullable;
  * <p>Also used during cycle detection.
  */
 class ParallelEvaluatorContext {
-  enum EnqueueParentBehavior {
-    ENQUEUE,
-    SIGNAL,
-    NO_ACTION
-  }
 
   private final QueryableGraph graph;
   private final Version graphVersion;
-  private final ImmutableMap<SkyFunctionName, ? extends SkyFunction> skyFunctions;
-  private final EventHandler reporter;
+  private final ImmutableMap<SkyFunctionName, SkyFunction> skyFunctions;
+  private final ExtendedEventHandler reporter;
   private final NestedSetVisitor<TaggedEvents> replayingNestedSetEventVisitor;
+  private final NestedSetVisitor<Postable> replayingNestedSetPostableVisitor;
   private final boolean keepGoing;
-  private final boolean storeErrorsAlongsideValues;
   private final DirtyTrackingProgressReceiver progressReceiver;
   private final EventFilter storedEventFilter;
+  private final ErrorInfoManager errorInfoManager;
+  private final GraphInconsistencyReceiver graphInconsistencyReceiver;
+  private final EvaluationVersionBehavior evaluationVersionBehavior;
+
   /**
    * The visitor managing the thread pool. Used to enqueue parents when an entry is finished, and,
    * during testing, to block until an exception is thrown if a node builder requests that.
@@ -58,112 +56,85 @@ class ParallelEvaluatorContext {
    */
   private final Supplier<NodeEntryVisitor> visitorSupplier;
 
-  ParallelEvaluatorContext(
-      QueryableGraph graph,
-      Version graphVersion,
-      ImmutableMap<SkyFunctionName, ? extends SkyFunction> skyFunctions,
-      EventHandler reporter,
-      EmittedEventState emittedEventState,
-      boolean keepGoing,
-      boolean storeErrorsAlongsideValues,
-      final DirtyTrackingProgressReceiver progressReceiver,
-      EventFilter storedEventFilter,
-      final Function<SkyKey, Runnable> runnableMaker,
-      final int threadCount) {
-    this.graph = graph;
-    this.graphVersion = graphVersion;
-    this.skyFunctions = skyFunctions;
-    this.reporter = reporter;
-    this.replayingNestedSetEventVisitor =
-        new NestedSetVisitor<>(new NestedSetEventReceiver(reporter), emittedEventState);
-    this.keepGoing = keepGoing;
-    this.storeErrorsAlongsideValues = storeErrorsAlongsideValues;
-    this.progressReceiver = Preconditions.checkNotNull(progressReceiver);
-    this.storedEventFilter = storedEventFilter;
-    visitorSupplier =
-        Suppliers.memoize(
-            new Supplier<NodeEntryVisitor>() {
-              @Override
-              public NodeEntryVisitor get() {
-                return new NodeEntryVisitor(
-                    threadCount, progressReceiver, runnableMaker);
-              }
-            });
+  /**
+   * Returns a {@link Runnable} given a {@code key} to evaluate and an {@code evaluationPriority}
+   * indicating whether it should be scheduled for evaluation soon (higher is better). The returned
+   * {@link Runnable} is a {@link ComparableRunnable} so that it can be ordered by {@code
+   * evaluationPriority} in a priority queue if needed.
+   */
+  interface RunnableMaker {
+    ComparableRunnable make(SkyKey key, int evaluationPriority);
   }
 
-  ParallelEvaluatorContext(
+  interface ComparableRunnable extends Runnable, Comparable<ComparableRunnable> {}
+
+  public ParallelEvaluatorContext(
       QueryableGraph graph,
       Version graphVersion,
-      ImmutableMap<SkyFunctionName, ? extends SkyFunction> skyFunctions,
-      EventHandler reporter,
+      ImmutableMap<SkyFunctionName, SkyFunction> skyFunctions,
+      ExtendedEventHandler reporter,
       EmittedEventState emittedEventState,
       boolean keepGoing,
-      boolean storeErrorsAlongsideValues,
-      final DirtyTrackingProgressReceiver progressReceiver,
+      DirtyTrackingProgressReceiver progressReceiver,
       EventFilter storedEventFilter,
-      final Function<SkyKey, Runnable> runnableMaker,
-      final ForkJoinPool forkJoinPool) {
+      ErrorInfoManager errorInfoManager,
+      GraphInconsistencyReceiver graphInconsistencyReceiver,
+      Supplier<NodeEntryVisitor> visitorSupplier,
+      EvaluationVersionBehavior evaluationVersionBehavior) {
     this.graph = graph;
     this.graphVersion = graphVersion;
     this.skyFunctions = skyFunctions;
     this.reporter = reporter;
+    this.graphInconsistencyReceiver = graphInconsistencyReceiver;
+    this.evaluationVersionBehavior = evaluationVersionBehavior;
     this.replayingNestedSetEventVisitor =
-        new NestedSetVisitor<>(new NestedSetEventReceiver(reporter), emittedEventState);
+        new NestedSetVisitor<>(new NestedSetEventReceiver(reporter), emittedEventState.eventState);
+    this.replayingNestedSetPostableVisitor =
+        new NestedSetVisitor<>(
+            new NestedSetPostableReceiver(reporter), emittedEventState.postableState);
     this.keepGoing = keepGoing;
-    this.storeErrorsAlongsideValues = storeErrorsAlongsideValues;
     this.progressReceiver = Preconditions.checkNotNull(progressReceiver);
     this.storedEventFilter = storedEventFilter;
-    visitorSupplier =
-        Suppliers.memoize(
-            new Supplier<NodeEntryVisitor>() {
-              @Override
-              public NodeEntryVisitor get() {
-                return new NodeEntryVisitor(
-                    forkJoinPool, progressReceiver, runnableMaker);
-              }
-            });
+    this.errorInfoManager = errorInfoManager;
+    this.visitorSupplier = Suppliers.memoize(visitorSupplier);
   }
 
   Map<SkyKey, ? extends NodeEntry> getBatchValues(
-      @Nullable SkyKey parent, Reason reason, Iterable<SkyKey> keys) throws InterruptedException {
-    return graph.getBatch(parent, reason, keys);
+      @Nullable SkyKey requestor, Reason reason, Iterable<? extends SkyKey> keys)
+      throws InterruptedException {
+    return graph.getBatch(requestor, reason, keys);
   }
 
   /**
-   * Signals all parents that this node is finished. If {@code enqueueParents} is true, also
-   * enqueues any parents that are ready. Otherwise, this indicates that we are building this node
-   * after the main build aborted, so skip any parents that are already done (that can happen with
-   * cycles).
+   * Signals all parents that this node is finished.
+   *
+   * <p>Calling this method indicates that we are building this node after the main build aborted,
+   * so skips signalling any parents that are already done (that can happen with cycles).
    */
-  void signalValuesAndEnqueueIfReady(
-      SkyKey skyKey, Iterable<SkyKey> keys, Version version, EnqueueParentBehavior enqueueParents)
+  void signalParentsOnAbort(SkyKey skyKey, Iterable<SkyKey> parents, Version version)
       throws InterruptedException {
-    // No fields of the entry are needed here, since we're just enqueuing for evaluation, but more
-    // importantly, these hints are not respected for not-done nodes. If they are, we may need to
-    // alter this hint.
-    Map<SkyKey, ? extends NodeEntry> batch = graph.getBatch(skyKey, Reason.SIGNAL_DEP, keys);
-    switch (enqueueParents) {
-      case ENQUEUE:
-        for (SkyKey key : keys) {
-          NodeEntry entry = Preconditions.checkNotNull(batch.get(key), key);
-          if (entry.signalDep(version)) {
-            getVisitor().enqueueEvaluation(key);
-          }
-        }
-        return;
-      case SIGNAL:
-        for (SkyKey key : keys) {
-          NodeEntry entry = Preconditions.checkNotNull(batch.get(key), key);
-          if (!entry.isDone()) {
-            // In cycles, we can have parents that are already done.
-            entry.signalDep(version);
-          }
-        }
-        return;
-      case NO_ACTION:
-        return;
-      default:
-        throw new IllegalStateException(enqueueParents + ", " + skyKey);
+    Map<SkyKey, ? extends NodeEntry> batch = getBatchValues(skyKey, Reason.SIGNAL_DEP, parents);
+    for (SkyKey parent : parents) {
+      NodeEntry entry = Preconditions.checkNotNull(batch.get(parent), parent);
+      if (!entry.isDone()) { // In cycles, we can have parents that are already done.
+        entry.signalDep(version, skyKey);
+      }
+    }
+  }
+
+  /**
+   * Signals all parents that this node is finished and enqueues any parents that are ready at the
+   * given evaluation priority.
+   */
+  void signalParentsAndEnqueueIfReady(
+      SkyKey skyKey, Iterable<SkyKey> parents, Version version, int evaluationPriority)
+      throws InterruptedException {
+    Map<SkyKey, ? extends NodeEntry> batch = getBatchValues(skyKey, Reason.SIGNAL_DEP, parents);
+    for (SkyKey parent : parents) {
+      NodeEntry entry = Preconditions.checkNotNull(batch.get(parent), parent);
+      if (entry.signalDep(version, skyKey)) {
+        getVisitor().enqueueEvaluation(parent, evaluationPriority);
+      }
     }
   }
 
@@ -187,15 +158,23 @@ class ParallelEvaluatorContext {
     return progressReceiver;
   }
 
+  GraphInconsistencyReceiver getGraphInconsistencyReceiver() {
+    return graphInconsistencyReceiver;
+  }
+
   NestedSetVisitor<TaggedEvents> getReplayingNestedSetEventVisitor() {
     return replayingNestedSetEventVisitor;
   }
 
-  EventHandler getReporter() {
+  NestedSetVisitor<Postable> getReplayingNestedSetPostableVisitor() {
+    return replayingNestedSetPostableVisitor;
+  }
+
+  ExtendedEventHandler getReporter() {
     return reporter;
   }
 
-  ImmutableMap<SkyFunctionName, ? extends SkyFunction> getSkyFunctions() {
+  ImmutableMap<SkyFunctionName, SkyFunction> getSkyFunctions() {
     return skyFunctions;
   }
 
@@ -203,25 +182,47 @@ class ParallelEvaluatorContext {
     return storedEventFilter;
   }
 
-  boolean storeErrorsAlongsideValues() {
-    return storeErrorsAlongsideValues;
+  ErrorInfoManager getErrorInfoManager() {
+    return errorInfoManager;
+  }
+
+  EvaluationVersionBehavior getEvaluationVersionBehavior() {
+    return evaluationVersionBehavior;
+  }
+
+  boolean restartPermitted() {
+    return graphInconsistencyReceiver.restartPermitted();
   }
 
   /** Receives the events from the NestedSet and delegates to the reporter. */
-  private static class NestedSetEventReceiver implements NestedSetVisitor.Receiver<TaggedEvents> {
+  private static final class NestedSetEventReceiver
+      implements NestedSetVisitor.Receiver<TaggedEvents> {
+    private final ExtendedEventHandler reporter;
 
-    private final EventHandler reporter;
-
-    public NestedSetEventReceiver(EventHandler reporter) {
+    NestedSetEventReceiver(ExtendedEventHandler reporter) {
       this.reporter = reporter;
     }
 
     @Override
     public void accept(TaggedEvents events) {
-      String tag = events.getTag();
       for (Event e : events.getEvents()) {
-        reporter.handle(e.withTag(tag));
+        reporter.handle(e);
       }
+    }
+  }
+
+  /** Receives the postables from the NestedSet and delegates to the reporter. */
+  private static final class NestedSetPostableReceiver
+      implements NestedSetVisitor.Receiver<Postable> {
+    private final ExtendedEventHandler reporter;
+
+    NestedSetPostableReceiver(ExtendedEventHandler reporter) {
+      this.reporter = reporter;
+    }
+
+    @Override
+    public void accept(Postable post) {
+      reporter.post(post);
     }
   }
 }
