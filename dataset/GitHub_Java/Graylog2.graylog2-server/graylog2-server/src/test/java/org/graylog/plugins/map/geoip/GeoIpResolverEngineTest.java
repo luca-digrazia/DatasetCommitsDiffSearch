@@ -107,7 +107,7 @@ public class GeoIpResolverEngineTest {
         final boolean filtered = resolver.filter(message);
 
         assertFalse("Message should not be filtered out", filtered);
-        assertEquals("Filter should not add new message fields", message.getFields().size(), messageFields.size());
+        assertEquals("Filter should not add new message fields", messageFields.size(), message.getFields().size());
     }
 
     private void assertFieldNotResolved(Message message, String fieldName, String errorMessage) {
@@ -132,14 +132,14 @@ public class GeoIpResolverEngineTest {
         messageFields.put("source", "192.168.0.1");
         messageFields.put("message", "Hello from 1.2.3.4");
         messageFields.put("extracted_ip", "1.2.3.4");
-        messageFields.put("gl2_remote_ip", "1.2.3.4");
+        messageFields.put(Message.FIELD_GL2_REMOTE_IP, "1.2.3.4");
         messageFields.put("ipv6", "2001:4860:4860::8888");
 
         final Message message = new Message(messageFields);
         final boolean filtered = resolver.filter(message);
 
         assertFalse("Message should not be filtered out", filtered);
-        assertEquals("Should have looked up three IPs", metricRegistry.timer(name(GeoIpResolverEngine.class, "resolveTime")).getCount(), 3);
+        assertEquals("Should have looked up three IPs", 3, metricRegistry.timer(name(GeoIpResolverEngine.class, "resolveTime")).getCount());
         assertFieldNotResolved(message, "source", "Should not have resolved private IP");
         assertFieldNotResolved(message, "message", "Should have resolved public IP");
         assertFieldNotResolved(message, "gl2_remote_ip", "Should not have resolved text with an IP");

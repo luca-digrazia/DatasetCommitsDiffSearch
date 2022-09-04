@@ -17,6 +17,7 @@
 
 package org.graylog2.shared.buffers.processors;
 
+import com.codahale.metrics.Counter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 import com.google.common.base.Strings;
@@ -26,6 +27,7 @@ import com.google.common.net.InetAddresses;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import com.lmax.disruptor.EventHandler;
+import org.graylog2.plugin.GlobalMetricNames;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.ResolvableInetSocketAddress;
 import org.graylog2.plugin.ServerStatus;
@@ -33,10 +35,12 @@ import org.graylog2.plugin.buffers.MessageEvent;
 import org.graylog2.plugin.inputs.codecs.Codec;
 import org.graylog2.plugin.inputs.codecs.MultiMessageCodec;
 import org.graylog2.plugin.journal.RawMessage;
+import org.graylog2.shared.journal.Journal;
 import org.graylog2.shared.utilities.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nullable;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -50,29 +54,34 @@ public class DecodingProcessor implements EventHandler<MessageEvent> {
     private static final Logger LOG = LoggerFactory.getLogger(DecodingProcessor.class);
 
     private final Timer decodeTime;
+    private final Counter decodedTrafficCounter;
 
     public interface Factory {
-        public DecodingProcessor create(@Assisted("decodeTime") Timer decodeTime, @Assisted("parseTime") Timer parseTime);
+        DecodingProcessor create(@Assisted("decodeTime") Timer decodeTime, @Assisted("parseTime") Timer parseTime);
     }
 
     private final Map<String, Codec.Factory<? extends Codec>> codecFactory;
     private final ServerStatus serverStatus;
     private final MetricRegistry metricRegistry;
+    private final Journal journal;
     private final Timer parseTime;
 
     @AssistedInject
     public DecodingProcessor(Map<String, Codec.Factory<? extends Codec>> codecFactory,
                              final ServerStatus serverStatus,
                              final MetricRegistry metricRegistry,
+                             final Journal journal,
                              @Assisted("decodeTime") Timer decodeTime,
                              @Assisted("parseTime") Timer parseTime) {
         this.codecFactory = codecFactory;
         this.serverStatus = serverStatus;
         this.metricRegistry = metricRegistry;
+        this.journal = journal;
 
         // these metrics are global to all processors, thus they are passed in directly to avoid relying on the class name
         this.parseTime = parseTime;
         this.decodeTime = decodeTime;
+        decodedTrafficCounter = metricRegistry.counter(GlobalMetricNames.DECODED_TRAFFIC);
     }
 
     @Override
@@ -81,7 +90,11 @@ public class DecodingProcessor implements EventHandler<MessageEvent> {
         try {
             processMessage(event);
         } catch (Exception e) {
-            LOG.error("Error processing message " + event.getRaw(), ExceptionUtils.getRootCause(e));
+            final RawMessage rawMessage = event.getRaw();
+            LOG.error("Error processing message " + rawMessage, ExceptionUtils.getRootCause(e));
+
+            // Mark message as processed to avoid keeping it in the journal.
+            journal.markJournalOffsetCommitted(rawMessage.getJournalOffset());
 
             // always clear the event fields, even if they are null, to avoid later stages to process old messages.
             // basically this will make sure old messages are cleared out early.
@@ -102,14 +115,6 @@ public class DecodingProcessor implements EventHandler<MessageEvent> {
     private void processMessage(final MessageEvent event) throws ExecutionException {
         final RawMessage raw = event.getRaw();
 
-        final Codec.Factory<? extends Codec> factory = codecFactory.get(raw.getCodecName());
-        if (factory == null) {
-            LOG.warn("Couldn't find factory for codec {}, skipping message.", raw.getCodecName());
-            return;
-        }
-
-        final Codec codec = factory.create(raw.getCodecConfig());
-
         // for backwards compatibility: the last source node should contain the input we use.
         // this means that extractors etc defined on the prior inputs are silently ignored.
         // TODO fix the above
@@ -120,6 +125,15 @@ public class DecodingProcessor implements EventHandler<MessageEvent> {
         } catch (NoSuchElementException e) {
             inputIdOnCurrentNode = null;
         }
+
+        final Codec.Factory<? extends Codec> factory = codecFactory.get(raw.getCodecName());
+        if (factory == null) {
+            LOG.warn("Couldn't find factory for codec <{}>, skipping message {} on input <{}>.",
+                    raw.getCodecName(), raw, inputIdOnCurrentNode);
+            return;
+        }
+
+        final Codec codec = factory.create(raw.getCodecConfig());
         final String baseMetricName = name(codec.getClass(), inputIdOnCurrentNode);
 
         Message message = null;
@@ -136,13 +150,7 @@ public class DecodingProcessor implements EventHandler<MessageEvent> {
                 message = codec.decode(raw);
             }
         } catch (RuntimeException e) {
-            String remote = "unknown source";
-            final ResolvableInetSocketAddress remoteAddress = raw.getRemoteAddress();
-            if (remoteAddress != null) {
-                remote = remoteAddress.getInetSocketAddress().toString();
-            }
-            LOG.error("Unable to decode raw message {} (journal offset {}) encoded as {} received from {}.",
-                      raw.getId(), raw.getJournalOffset(), raw.getCodecName(), remote);
+            LOG.error("Unable to decode raw message {} on input <{}>.", raw, inputIdOnCurrentNode);
             metricRegistry.meter(name(baseMetricName, "failures")).mark();
             throw e;
         } finally {
@@ -166,6 +174,7 @@ public class DecodingProcessor implements EventHandler<MessageEvent> {
         }
     }
 
+    @Nullable
     private Message postProcessMessage(RawMessage raw, Codec codec, String inputIdOnCurrentNode, String baseMetricName, Message message, long decodeTime) {
         if (message == null) {
             metricRegistry.meter(name(baseMetricName, "failures")).mark();
@@ -174,7 +183,8 @@ public class DecodingProcessor implements EventHandler<MessageEvent> {
         if (!message.isComplete()) {
             metricRegistry.meter(name(baseMetricName, "incomplete")).mark();
             if (LOG.isDebugEnabled()) {
-                LOG.debug("Dropping incomplete message. Parsed fields: [{}]", message.getFields());
+                LOG.debug("Dropping incomplete message {} on input <{}>. Parsed fields: [{}]",
+                        raw, inputIdOnCurrentNode, message.getFields());
             }
             return null;
         }
@@ -187,21 +197,22 @@ public class DecodingProcessor implements EventHandler<MessageEvent> {
             switch (node.type) {
                 case SERVER:
                     // Always use the last source node.
-                    if (message.getField("gl2_source_input") != null) {
+                    if (message.getField(Message.FIELD_GL2_SOURCE_INPUT) != null) {
                         LOG.debug("Multiple server nodes ({} {}) set for message id {}",
-                                message.getField("gl2_source_input"), node.nodeId, message.getId());
+                                message.getField(Message.FIELD_GL2_SOURCE_INPUT), node.nodeId, message.getId());
                     }
-                    message.addField("gl2_source_input", node.inputId);
-                    message.addField("gl2_source_node", node.nodeId);
+                    message.addField(Message.FIELD_GL2_SOURCE_INPUT, node.inputId);
+                    message.addField(Message.FIELD_GL2_SOURCE_NODE, node.nodeId);
                     break;
+                // TODO Due to be removed in Graylog 3.x
                 case RADIO:
                     // Always use the last source node.
-                    if (message.getField("gl2_source_radio_input") != null) {
+                    if (message.getField(Message.FIELD_GL2_SOURCE_RADIO_INPUT) != null) {
                         LOG.debug("Multiple radio nodes ({} {}) set for message id {}",
-                                message.getField("gl2_source_radio_input"), node.nodeId, message.getId());
+                                message.getField(Message.FIELD_GL2_SOURCE_RADIO_INPUT), node.nodeId, message.getId());
                     }
-                    message.addField("gl2_source_radio_input", node.inputId);
-                    message.addField("gl2_source_radio", node.nodeId);
+                    message.addField(Message.FIELD_GL2_SOURCE_RADIO_INPUT, node.inputId);
+                    message.addField(Message.FIELD_GL2_SOURCE_RADIO, node.nodeId);
                     break;
             }
         }
@@ -217,12 +228,12 @@ public class DecodingProcessor implements EventHandler<MessageEvent> {
         final ResolvableInetSocketAddress remoteAddress = raw.getRemoteAddress();
         if (remoteAddress != null) {
             final String addrString = InetAddresses.toAddrString(remoteAddress.getAddress());
-            message.addField("gl2_remote_ip", addrString);
+            message.addField(Message.FIELD_GL2_REMOTE_IP, addrString);
             if (remoteAddress.getPort() > 0) {
-                message.addField("gl2_remote_port", remoteAddress.getPort());
+                message.addField(Message.FIELD_GL2_REMOTE_PORT, remoteAddress.getPort());
             }
             if (remoteAddress.isReverseLookedUp()) { // avoid reverse lookup if the hostname is available
-                message.addField("gl2_remote_hostname", remoteAddress.getHostName());
+                message.addField(Message.FIELD_GL2_REMOTE_HOSTNAME, remoteAddress.getHostName());
             }
             if (Strings.isNullOrEmpty(message.getSource())) {
                 message.setSource(addrString);
@@ -239,6 +250,7 @@ public class DecodingProcessor implements EventHandler<MessageEvent> {
         }
 
         metricRegistry.meter(name(baseMetricName, "processedMessages")).mark();
+        decodedTrafficCounter.inc(message.getSize());
         return message;
     }
 }

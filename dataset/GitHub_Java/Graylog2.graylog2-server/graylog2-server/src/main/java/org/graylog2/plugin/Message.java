@@ -35,7 +35,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 import javax.annotation.concurrent.NotThreadSafe;
 import java.net.InetAddress;
 import java.time.Instant;
@@ -69,14 +68,7 @@ import static org.joda.time.DateTimeZone.UTC;
 public class Message implements Messages {
     private static final Logger LOG = LoggerFactory.getLogger(Message.class);
 
-    /**
-     * The "_id" is used as document ID to address the document in Elasticsearch.
-     * TODO: We might want to use the "gl2_message_id" for this in the future to reduce storage and avoid having
-     *       basically two different message IDs. To do that we have to check if switching to a different ID format
-     *       breaks anything with regard to expectations in other code and existing data in Elasticsearch.
-     */
     public static final String FIELD_ID = "_id";
-
     public static final String FIELD_MESSAGE = "message";
     public static final String FIELD_FULL_MESSAGE = "full_message";
     public static final String FIELD_SOURCE = "source";
@@ -89,27 +81,6 @@ public class Message implements Messages {
      * custom message fields.
      */
     public static final String INTERNAL_FIELD_PREFIX = "gl2_";
-
-    /**
-     * Will be set to the accounted message size in bytes.
-     */
-    public static final String FIELD_GL2_ACCOUNTED_MESSAGE_SIZE = "gl2_accounted_message_size";
-
-    /**
-     * This is the message ID. It will be set to a {@link de.huxhorn.sulky.ulid.ULID} during processing.
-     * <p></p>
-     * <b>Attention:</b> This is currently NOT the "_id" field which is used as ID for the document in Elasticsearch!
-     * <p></p>
-     * <h3>Implementation notes</h3>
-     * We are not using the UUID in "_id" for this field because of the following reasons:
-     * <ul>
-     *     <li>Using ULIDs results in shorter IDs (26 characters for ULID vs 36 for UUID) and thus reduced storage usage</li>
-     *     <li>They are guaranteed to be lexicographically sortable (UUIDs are only lexicographically sortable when time-based ones are used)</li>
-     * </ul>
-     *
-     * See: https://github.com/Graylog2/graylog2-server/issues/5994
-     */
-    public static final String FIELD_GL2_MESSAGE_ID = "gl2_message_id";
 
     /**
      * Can be set when a message timestamp gets modified to preserve the original timestamp. (e.g. "clone_message" pipeline function)
@@ -187,7 +158,6 @@ public class Message implements Messages {
     private static final char KEY_REPLACEMENT_CHAR = '_';
 
     private static final ImmutableSet<String> GRAYLOG_FIELDS = ImmutableSet.of(
-        FIELD_GL2_ACCOUNTED_MESSAGE_SIZE,
         FIELD_GL2_ORIGINAL_TIMESTAMP,
         FIELD_GL2_PROCESSING_ERROR,
         FIELD_GL2_PROCESSING_TIMESTAMP,
@@ -256,9 +226,6 @@ public class Message implements Messages {
      * was involved.
      */
     private long journalOffset = Long.MIN_VALUE;
-
-    private DateTime receiveTime;
-    private DateTime processingTime;
 
     private ArrayList<Recording> recordings;
 
@@ -390,7 +357,6 @@ public class Message implements Messages {
         obj.put(FIELD_MESSAGE, getMessage());
         obj.put(FIELD_SOURCE, getSource());
         obj.put(FIELD_STREAMS, getStreamIds());
-        obj.put(FIELD_GL2_ACCOUNTED_MESSAGE_SIZE, getSize());
 
         final Object timestampValue = getField(FIELD_TIMESTAMP);
         DateTime dateTime;
@@ -428,21 +394,13 @@ public class Message implements Messages {
 
     @Override
     public String toString() {
-        return toString(true);
-    }
-
-    public String toDumpString() {
-        return toString(false);
-    }
-
-    private String toString(boolean truncate) {
         final StringBuilder sb = new StringBuilder();
         sb.append("source: ").append(getField(FIELD_SOURCE)).append(" | ");
 
         final String message = getField(FIELD_MESSAGE).toString().replaceAll("\\n", "").replaceAll("\\t", "");
         sb.append("message: ");
 
-        if (truncate && message.length() > 225) {
+        if (message.length() > 225) {
             sb.append(message.substring(0, 225)).append(" (...)");
         } else {
             sb.append(message);
@@ -794,30 +752,6 @@ public class Message implements Messages {
 
     public long getJournalOffset() {
         return journalOffset;
-    }
-
-    @Nullable
-    public DateTime getReceiveTime() {
-        return receiveTime;
-    }
-
-    public void setReceiveTime(DateTime receiveTime) {
-        // TODO: In Graylog 3.2 we can set this as field in the message because at that point we have a mapping entry
-        if (receiveTime != null) {
-            this.receiveTime = receiveTime;
-        }
-    }
-
-    @Nullable
-    public DateTime getProcessingTime() {
-        return processingTime;
-    }
-
-    public void setProcessingTime(DateTime processingTime) {
-        // TODO: In Graylog 3.2 we can set this as field in the message because at that point we have a mapping entry
-        if (processingTime != null) {
-            this.processingTime = processingTime;
-        }
     }
 
     // helper methods to optionally record timing information per message, useful for debugging or benchmarking
