@@ -3,7 +3,6 @@ package org.graylog2.plugin.rest;
 import org.glassfish.jersey.spi.ExtendedExceptionMapper;
 
 import javax.ws.rs.WebApplicationException;
-import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
 /**
@@ -17,6 +16,6 @@ public class WebApplicationExceptionMapper implements ExtendedExceptionMapper<We
 
     @Override
     public Response toResponse(WebApplicationException exception) {
-        return Response.fromResponse(exception.getResponse()).type(MediaType.TEXT_PLAIN_TYPE).entity(exception.getMessage()).build();
+        return Response.fromResponse(exception.getResponse()).entity(exception.getMessage()).build();
     }
 }
