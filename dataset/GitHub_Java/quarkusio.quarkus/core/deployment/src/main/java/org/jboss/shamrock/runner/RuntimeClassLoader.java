@@ -11,6 +11,7 @@ import java.net.URLConnection;
 import java.net.URLStreamHandler;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
@@ -18,26 +19,25 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.BiFunction;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 import org.jboss.shamrock.deployment.ClassOutput;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
 
-public class RuntimeClassLoader extends ClassLoader implements ClassOutput, Consumer<Map<String, List<BiFunction<String, ClassVisitor, ClassVisitor>>>> {
+public class RuntimeClassLoader extends ClassLoader implements ClassOutput, Consumer<List<Function<String, Function<ClassVisitor, ClassVisitor>>>> {
 
     private final Map<String, byte[]> appClasses = new HashMap<>();
     private final Set<String> frameworkClasses = new HashSet<>();
 
     private final Map<String, byte[]> resources = new HashMap<>();
 
-    private volatile Map<String, List<BiFunction<String, ClassVisitor, ClassVisitor>>> bytecodeTransformers = null;
+    private volatile List<Function<String, Function<ClassVisitor, ClassVisitor>>> functions = null;
 
     private final Path applicationClasses;
     private final Path frameworkClassesPath;
-
     static {
         registerAsParallelCapable();
     }
@@ -51,7 +51,7 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput, Cons
     @Override
     public Enumeration<URL> getResources(String nm) throws IOException {
         String name;
-        if (nm.startsWith("/")) {
+        if(nm.startsWith("/")) {
             name = nm.substring(1);
         } else {
             name = nm;
@@ -83,7 +83,7 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput, Cons
     @Override
     public URL getResource(String nm) {
         String name;
-        if (nm.startsWith("/")) {
+        if(nm.startsWith("/")) {
             name = nm.substring(1);
         } else {
             name = nm;
@@ -94,7 +94,7 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput, Cons
     @Override
     public InputStream getResourceAsStream(String nm) {
         String name;
-        if (nm.startsWith("/")) {
+        if(nm.startsWith("/")) {
             name = nm.substring(1);
         } else {
             name = nm;
@@ -111,7 +111,7 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput, Cons
         if (appClasses.containsKey(name)) {
             return findClass(name);
         }
-        if (frameworkClasses.contains(name)) {
+        if(frameworkClasses.contains(name)) {
             return super.loadClass(name, resolve);
         }
 
@@ -130,33 +130,31 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput, Cons
             }
             byte[] bytes = out.toByteArray();
             bytes = handleTransform(name, bytes);
-            try {
-                return defineClass(name, bytes, 0, bytes.length);
-            } catch (Error e) {
-                //potential race conditions if another thread is loading the same class
-                ex = findLoadedClass(name);
-                if(ex != null) {
-                    return ex;
-                }
-                throw e;
-            }
+            return defineClass(name, bytes, 0, bytes.length);
         }
         return super.loadClass(name, resolve);
     }
 
     private byte[] handleTransform(String name, byte[] bytes) {
-        if (bytecodeTransformers == null || bytecodeTransformers.isEmpty()) {
+        if (functions == null || functions.isEmpty()) {
             return bytes;
         }
-        List<BiFunction<String, ClassVisitor, ClassVisitor>> transformers = bytecodeTransformers.get(name);
-        if (transformers == null) {
+        List<Function<ClassVisitor, ClassVisitor>> transformers = new ArrayList<>();
+        for (Function<String, Function<ClassVisitor, ClassVisitor>> function : this.functions) {
+            Function<ClassVisitor, ClassVisitor> res = function.apply(name);
+            if (res != null) {
+                transformers.add(res);
+            }
+        }
+        if (transformers.isEmpty()) {
             return bytes;
         }
+
         ClassReader cr = new ClassReader(bytes);
         ClassWriter writer = new ClassWriter(cr, ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
         ClassVisitor visitor = writer;
-        for (BiFunction<String, ClassVisitor, ClassVisitor> i : transformers) {
-            visitor = i.apply(name, visitor);
+        for (Function<ClassVisitor, ClassVisitor> i : transformers) {
+            visitor = i.apply(visitor);
         }
         cr.accept(visitor, 0);
         byte[] data = writer.toByteArray();
@@ -165,24 +163,11 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput, Cons
 
     @Override
     protected Class<?> findClass(String name) throws ClassNotFoundException {
-        Class<?> existing = findLoadedClass(name);
-        if(existing != null) {
-            return existing;
-        }
         byte[] bytes = appClasses.get(name);
         if (bytes == null) {
             throw new ClassNotFoundException(name);
         }
-        try {
-            return defineClass(name, bytes, 0, bytes.length);
-        } catch (Error e) {
-            //potential race conditions if another thread is loading the same class
-            existing = findLoadedClass(name);
-            if(existing != null) {
-                return existing;
-            }
-            throw e;
-        }
+        return defineClass(name, bytes, 0, bytes.length);
     }
 
     @Override
@@ -199,7 +184,7 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput, Cons
             Path fileName = frameworkClassesPath.resolve(className.replace(".", "/") + ".class");
             try {
                 Files.createDirectories(fileName.getParent());
-                try (FileOutputStream out = new FileOutputStream(fileName.toFile())) {
+                try(FileOutputStream out = new FileOutputStream(fileName.toFile())) {
                     out.write(data);
                 }
             } catch (IOException e) {
@@ -208,8 +193,8 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput, Cons
         }
     }
 
-    public void accept(Map<String, List<BiFunction<String, ClassVisitor, ClassVisitor>>> functions) {
-        this.bytecodeTransformers = functions;
+    public void accept(List<Function<String, Function<ClassVisitor, ClassVisitor>>> functions) {
+        this.functions = functions;
     }
 
     public void writeResource(String name, byte[] data) throws IOException {
