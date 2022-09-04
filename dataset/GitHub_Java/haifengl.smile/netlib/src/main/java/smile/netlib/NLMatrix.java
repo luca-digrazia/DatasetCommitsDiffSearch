@@ -17,12 +17,9 @@
 package smile.netlib;
 
 import smile.math.matrix.DenseMatrix;
-import smile.math.matrix.JMatrix;
+import smile.math.matrix.ColumnMajorMatrix;
 import com.github.fommil.netlib.BLAS;
 import com.github.fommil.netlib.LAPACK;
-import org.netlib.util.intW;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Column-major matrix that employs netlib for matrix-vector and matrix-matrix
@@ -30,24 +27,9 @@ import org.slf4j.LoggerFactory;
  *
  * @author Haifeng Li
  */
-public class NLMatrix extends JMatrix {
-    private static final long serialVersionUID = 1L;
-
-    private static final Logger logger = LoggerFactory.getLogger(NLMatrix.class);
-
-    static String NoTranspose = "N";
-    static String Transpose   = "T";
-    static String ConjugateTranspose = "C";
-
-    static String Upper = "U";
-    static String Lower = "L";
-
-    static String Left = "L";
-    static String Right = "R";
-
-    /** The diagonal elements are assumed to be 1. */
-    static String UnitTriangular = "U";
-    static String NonUnitTriangular = "N";
+public class NLMatrix extends ColumnMajorMatrix {
+    private static String NoTranspose = "N";
+    private static String Transpose   = "T";
 
     /**
      * Constructor.
@@ -58,8 +40,8 @@ public class NLMatrix extends JMatrix {
     }
 
     /**
-     * Constructor of a column vector/matrix with given array as the internal storage.
-     * @param A the array of column vector.
+     * Constructor of a square diagonal matrix with the elements of vector diag on the main diagonal.
+     * @param A the array of diagonal elements.
      */
     public NLMatrix(double[] A) {
         super(A);
@@ -83,8 +65,16 @@ public class NLMatrix extends JMatrix {
      * Constructor.
      * @param value the array of matrix values arranged in column major format
      */
-    private NLMatrix(int rows, int cols, double[] value) {
+    public NLMatrix(int rows, int cols, double[] value) {
         super(rows, cols, value);
+    }
+
+    public static NLMatrix eye(int n) {
+        NLMatrix matrix = new NLMatrix(n, n);
+        for (int i = 0; i < n; i++) {
+            matrix.set(i, i, 1.0);
+        }
+        return matrix;
     }
 
     @Override
@@ -140,41 +130,41 @@ public class NLMatrix extends JMatrix {
 
     @Override
     public NLMatrix abmm(DenseMatrix B) {
-        if (B instanceof JMatrix) {
+        if (B instanceof ColumnMajorMatrix) {
             NLMatrix C = new NLMatrix(nrows(), B.ncols());
             BLAS.getInstance().dgemm(NoTranspose, NoTranspose,
-                    nrows(), B.ncols(), ncols(), 1.0, data(), ld(), B.data(),
-                    B.ld(), 0.0, C.data(), C.ld());
+                    nrows(), B.ncols(), ncols(), 1.0, data(), ld(), ((ColumnMajorMatrix) B).data(),
+                    B.ld(), 1, C.data(), C.ld());
             return C;
         }
 
-        throw new IllegalArgumentException("NLMatrix.abmm() parameter must be JMatrix");
+        throw new IllegalArgumentException("NLMatrix.abmm() parameter must be ColumnMajorMatrix");
     }
 
     @Override
     public NLMatrix abtmm(DenseMatrix B) {
-        if (B instanceof JMatrix) {
+        if (B instanceof ColumnMajorMatrix) {
             NLMatrix C = new NLMatrix(nrows(), B.ncols());
             BLAS.getInstance().dgemm(NoTranspose, Transpose,
-                    nrows(), B.ncols(), ncols(), 1.0, data(), ld(), B.data(),
-                    B.ld(), 0.0, C.data(), C.ld());
+                    nrows(), B.ncols(), ncols(), 1.0, data(), ld(), ((ColumnMajorMatrix) B).data(),
+                    B.ld(), 1, C.data(), C.ld());
             return C;
         }
 
-        throw new IllegalArgumentException("NLMatrix.abtmm() parameter must be JMatrix");
+        throw new IllegalArgumentException("NLMatrix.abmm() parameter must be ColumnMajorMatrix");
     }
 
     @Override
     public NLMatrix atbmm(DenseMatrix B) {
-        if (B instanceof JMatrix) {
+        if (B instanceof ColumnMajorMatrix) {
             NLMatrix C = new NLMatrix(nrows(), B.ncols());
             BLAS.getInstance().dgemm(Transpose, NoTranspose,
-                    nrows(), B.ncols(), ncols(), 1.0, data(), ld(), B.data(),
-                    B.ld(), 0.0, C.data(), C.ld());
+                    nrows(), B.ncols(), ncols(), 1.0, data(), ld(), ((ColumnMajorMatrix) B).data(),
+                    B.ld(), 1, C.data(), C.ld());
             return C;
         }
 
-        throw new IllegalArgumentException("NLMatrix.atbmm() parameter must be JMatrix");
+        throw new IllegalArgumentException("NLMatrix.abmm() parameter must be ColumnMajorMatrix");
     }
 
     @Override
@@ -187,86 +177,5 @@ public class NLMatrix extends JMatrix {
         }
 
         return B;
-    }
-
-    @Override
-    public LU lu() {
-        boolean singular = false;
-
-        int[] piv = new int[Math.min(nrows(), ncols())];
-        intW info = new intW(0);
-        LAPACK.getInstance().dgetrf(nrows(), ncols(), data(), ld(), piv, info);
-
-        if (info.val > 0) {
-            singular = true;
-        }
-
-        if (info.val < 0) {
-            logger.error("LAPACK DGETRF error code: {}", info.val);
-            throw new IllegalArgumentException("LAPACK DGETRF error code: " + info.val);
-        }
-
-        return new LU(this, piv, singular);
-    }
-
-    @Override
-    public Cholesky cholesky() {
-        if (nrows() != ncols()) {
-            throw new UnsupportedOperationException("Cholesky decomposition on non-square matrix");
-        }
-
-        intW info = new intW(0);
-        LAPACK.getInstance().dpotrf(NLMatrix.Lower, nrows(), data(), ld(), info);
-
-        if (info.val > 0) {
-            logger.error("LAPACK DPOTRF error code: {}", info.val);
-            throw new IllegalArgumentException("The matrix is not positive definite.");
-        }
-
-        if (info.val < 0) {
-            logger.error("LAPACK DPOTRF error code: {}", info.val);
-            throw new IllegalArgumentException("LAPACK DPOTRF error code: " + info.val);
-        }
-
-        return new Cholesky(this);
-    }
-
-    @Override
-    public QR qr() {
-        boolean singular = false;
-
-        int m = nrows();
-        int n = ncols();
-
-        // Query optimal workspace.
-        double[] work = new double[1];
-        intW info = new intW(0);
-        LAPACK.getInstance().dgeqrf(m, n, new double[0], m, new double[0], work, -1, info);
-
-        int lwork = n;
-        if (info.val == 0) {
-            lwork = (int) work[0];
-            logger.info("LAPACK DEGQRF returns work space size: {}", lwork);
-        } else {
-            logger.info("LAPACK DEGQRF error code: {}", info.val);
-        }
-
-        lwork = Math.max(1, lwork);
-        work = new double[lwork];
-
-        info.val = 0;
-        double[] tau = new double[Math.min(nrows(), ncols())];
-        LAPACK.getInstance().dgeqrf(nrows(), ncols(), data(), ld(), tau, work, lwork, info);
-
-        if (info.val > 0) {
-            singular = true;
-        }
-
-        if (info.val < 0) {
-            logger.error("LAPACK DGETRF error code: {}", info.val);
-            throw new IllegalArgumentException("LAPACK DGETRF error code: " + info.val);
-        }
-
-        return new QR(this, tau, singular);
     }
 }

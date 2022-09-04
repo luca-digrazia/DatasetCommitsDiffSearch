@@ -30,7 +30,7 @@ import smile.stat.distribution.GaussianDistribution;
  * 
  * @author Haifeng Li
  */
-public class NaiveMatrix extends DenseMatrix implements MatrixMultiplication<NaiveMatrix, NaiveMatrix> {
+public class NaiveMatrix implements DenseMatrix {
 
     /**
      * The original matrix.
@@ -42,41 +42,6 @@ public class NaiveMatrix extends DenseMatrix implements MatrixMultiplication<Nai
      * @param A the array of matrix.
      */
     public NaiveMatrix(double[][] A) {
-        this.A = A;
-    }
-
-    /**
-     * Constructor. Note that this is a shallow copy of A.
-     * If the matrix is updated, no check on if the matrix is symmetric.
-     * @param A the array of matrix.
-     * @param symmetric true if the matrix is symmetric.
-     */
-    public NaiveMatrix(double[][] A, boolean symmetric) {
-        super(symmetric);
-
-        if (symmetric && A.length != A[0].length) {
-            throw new IllegalArgumentException("A is not square");
-        }
-
-        this.A = A;
-    }
-
-    /**
-     * Constructor. Note that this is a shallow copy of A.
-     * If the matrix is updated, no check on if the matrix is symmetric
-     * and/or positive definite. The symmetric and positive definite
-     * properties are intended for read-only matrices.
-     * @param A the array of matrix.
-     * @param symmetric true if the matrix is symmetric.
-     * @param positive true if the matrix is positive definite.
-     */
-    public NaiveMatrix(double[][] A, boolean symmetric, boolean positive) {
-        super(symmetric, positive);
-
-        if (symmetric && A.length != A[0].length) {
-            throw new IllegalArgumentException("A is not square");
-        }
-
         this.A = A;
     }
 
@@ -98,6 +63,15 @@ public class NaiveMatrix extends DenseMatrix implements MatrixMultiplication<Nai
     }
 
     /**
+     * Constructor of a square diagonal matrix with the elements of vector diag on the main diagonal.
+     */
+    public NaiveMatrix(double[] diag) {
+        this(diag.length, diag.length);
+        for (int i = 0; i < diag.length; i++)
+            A[i][i] = diag[i];
+    }
+
+    /**
      * Constructor of matrix with normal random values with given mean and standard dev.
      */
     public NaiveMatrix(int rows, int cols, double mu, double sigma) {
@@ -110,6 +84,36 @@ public class NaiveMatrix extends DenseMatrix implements MatrixMultiplication<Nai
         }
     }
 
+    /**
+     * Returns an n-by-n identity matrix with ones on the main diagonal and zeros elsewhere.
+     */
+    public static NaiveMatrix eye(int n) {
+        return eye(n, n);
+    }
+
+    /**
+     * Returns an n-by-n identity matrix with ones on the main diagonal and zeros elsewhere.
+     */
+    public static NaiveMatrix eye(int m, int n) {
+        double[][] x = new double[m][n];
+        int l = Math.min(m, n);
+        for (int i = 0; i < l; i++) {
+            x[i][i] = 1.0;
+        }
+
+        return new NaiveMatrix(x);
+    }
+
+    @Override
+    public String toString() {
+        return toString(false);
+    }
+
+    @Override
+    public ColumnMajorMatrix copy() {
+        return new ColumnMajorMatrix(A);
+    }
+
     @Override
     public double[][] array() {
         double[][] B = new double[nrows()][ncols()];
@@ -117,14 +121,6 @@ public class NaiveMatrix extends DenseMatrix implements MatrixMultiplication<Nai
             System.arraycopy(A[i], 0, B[i], 0, ncols());
         }
         return B;
-    }
-
-    public RowMajorMatrix toRowMajor() {
-        return new RowMajorMatrix(A, isSymmetric(), isPositive());
-    }
-
-    public ColumnMajorMatrix toColumnMajor() {
-        return new ColumnMajorMatrix(A, isSymmetric(), isPositive());
     }
 
     @Override
@@ -138,38 +134,38 @@ public class NaiveMatrix extends DenseMatrix implements MatrixMultiplication<Nai
     }
 
     @Override
+    public int ld() {
+        throw new IllegalStateException("NaiveMatrix doesn't store matrix in one-dimensional array");
+    }
+
+    @Override
     public double get(int i, int j) {
         return A[i][j];
     }
 
     @Override
-    public NaiveMatrix set(int i, int j, double x) {
-        A[i][j] = x;
-        return this;
+    public double set(int i, int j, double x) {
+        return A[i][j] = x;
     }
 
     @Override
-    public NaiveMatrix add(int i, int j, double x) {
-        A[i][j] += x;
-        return this;
+    public double add(int i, int j, double x) {
+        return A[i][j] += x;
     }
 
     @Override
-    public NaiveMatrix sub(int i, int j, double x) {
-        A[i][j] -= x;
-        return this;
+    public double sub(int i, int j, double x) {
+        return A[i][j] -= x;
     }
 
     @Override
-    public NaiveMatrix mul(int i, int j, double x) {
-        A[i][j] *= x;
-        return this;
+    public double mul(int i, int j, double x) {
+        return A[i][j] *= x;
     }
 
     @Override
-    public NaiveMatrix div(int i, int j, double x) {
-        A[i][j] /= x;
-        return this;
+    public double div(int i, int j, double x) {
+        return A[i][j] /= x;
     }
 
     @Override
@@ -183,38 +179,101 @@ public class NaiveMatrix extends DenseMatrix implements MatrixMultiplication<Nai
     }
 
     @Override
-    public void ax(double[] x, double[] y) {
-        Math.ax(A, x, y);
+    public double[] ax(double[] x, double[] y) {
+        return Math.ax(A, x, y);
     }
 
     @Override
-    public void axpy(double[] x, double[] y) {
-        Math.axpy(A, x, y);
+    public double[] axpy(double[] x, double[] y) {
+        return Math.axpy(A, x, y);
     }
 
     @Override
-    public void axpy(double[] x, double[] y, double b) {
-        Math.axpy(A, x, y, b);
+    public double[] axpy(double[] x, double[] y, double b) {
+        return Math.axpy(A, x, y, b);
     }
 
     @Override
-    public void atx(double[] x, double[] y) {
-        Math.atx(A, x, y);
+    public double[] atx(double[] x, double[] y) {
+        return Math.atx(A, x, y);
     }
 
     @Override
-    public void atxpy(double[] x, double[] y) {
-        Math.atxpy(A, x, y);
+    public double[] atxpy(double[] x, double[] y) {
+        return Math.atxpy(A, x, y);
     }
 
     @Override
-    public void atxpy(double[] x, double[] y, double b) {
-        Math.atxpy(A, x, y, b);
+    public double[] atxpy(double[] x, double[] y, double b) {
+        return Math.atxpy(A, x, y, b);
     }
 
     @Override
-    public NaiveMatrix mm(NaiveMatrix b) {
-        return new NaiveMatrix(Math.abmm(A, b.A));
+    public NaiveMatrix abmm(DenseMatrix b) {
+        if (A[0].length != b.nrows()) {
+            throw new IllegalArgumentException(String.format("Matrix multiplication A * B: %d x %d vs %d x %d", A.length, A[0].length, b.nrows(), b.ncols()));
+        }
+
+        int m = A.length;
+        int n = b.ncols();
+        int l = b.nrows();
+
+        double[][] C = new double[m][n];
+        for (int i = 0; i < m; i++) {
+            for (int j = 0; j < n; j++) {
+                C[i][j] = 0.0;
+                for (int k = 0; k < l; k++) {
+                    C[i][j] += A[i][k] * b.get(k, j);
+                }
+            }
+        }
+
+        return new NaiveMatrix(C);
+    }
+
+    @Override
+    public NaiveMatrix abtmm(DenseMatrix b) {
+        if (A[0].length != b.nrows()) {
+            throw new IllegalArgumentException(String.format("Matrix multiplication A * B: %d x %d vs %d x %d", A.length, A[0].length, b.nrows(), b.ncols()));
+        }
+
+        int m = A.length;
+        int n = b.nrows();
+        int l = b.ncols();
+
+        double[][] C = new double[m][n];
+        for (int i = 0; i < m; i++) {
+            for (int j = 0; j < n; j++) {
+                C[i][j] = 0.0;
+                for (int k = 0; k < l; k++) {
+                    C[i][j] += A[i][k] * b.get(j, k);
+                }
+            }
+        }
+        return new NaiveMatrix(C);
+    }
+
+    @Override
+    public NaiveMatrix atbmm(DenseMatrix b) {
+        if (A[0].length != b.nrows()) {
+            throw new IllegalArgumentException(String.format("Matrix multiplication A * B: %d x %d vs %d x %d", A.length, A[0].length, b.nrows(), b.ncols()));
+        }
+
+        int m = A[0].length;
+        int n = b.ncols();
+        int l = b.nrows();
+
+        double[][] C = new double[m][n];
+        for (int i = 0; i < m; i++) {
+            for (int j = 0; j < n; j++) {
+                C[i][j] = 0.0;
+                for (int k = 0; k < l; k++) {
+                    C[i][j] += A[k][i] * b.get(k, j);
+                }
+            }
+        }
+
+        return new NaiveMatrix(C);
     }
 
     /**
