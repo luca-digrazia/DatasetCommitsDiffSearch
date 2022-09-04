@@ -22,32 +22,30 @@ import org.objectweb.asm.commons.InstructionAdapter;
 /** Models an int field initializer. */
 public final class IntFieldInitializer implements FieldInitializer {
 
-  private final String fieldName;
   private final int value;
-
   private static final String DESC = "I";
 
-  private IntFieldInitializer(String fieldName, int value) {
-    this.fieldName = fieldName;
+  private IntFieldInitializer(int value) {
     this.value = value;
   }
 
-  public static FieldInitializer of(String fieldName, String value) {
-    return of(fieldName, Integer.decode(value));
+  public static FieldInitializer of(String value) {
+    return of(Integer.decode(value));
   }
 
-  public static IntFieldInitializer of(String fieldName, int value) {
-    return new IntFieldInitializer(fieldName, value);
+  public static IntFieldInitializer of(int value) {
+    return new IntFieldInitializer(value);
   }
 
   @Override
-  public boolean writeFieldDefinition(ClassWriter cw, int accessLevel, boolean isFinal) {
+  public boolean writeFieldDefinition(
+      String fieldName, ClassWriter cw, int accessLevel, boolean isFinal) {
     cw.visitField(accessLevel, fieldName, DESC, null, isFinal ? value : null).visitEnd();
     return !isFinal;
   }
 
   @Override
-  public int writeCLInit(InstructionAdapter insts, String className) {
+  public int writeCLInit(String fieldName, InstructionAdapter insts, String className) {
     insts.iconst(value);
     insts.putstatic(className, fieldName, DESC);
     // Just needs one stack slot for the iconst.
@@ -55,16 +53,12 @@ public final class IntFieldInitializer implements FieldInitializer {
   }
 
   @Override
-  public void writeInitSource(Writer writer, boolean finalFields) throws IOException {
+  public void writeInitSource(String fieldName, Writer writer, boolean finalFields)
+      throws IOException {
     writer.write(
         String.format(
             "        public static %sint %s = 0x%x;\n",
             finalFields ? "final " : "", fieldName, value));
-  }
-
-  @Override
-  public String getFieldName() {
-    return fieldName;
   }
 
   @Override

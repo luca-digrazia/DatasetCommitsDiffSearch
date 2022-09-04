@@ -29,21 +29,18 @@ import org.objectweb.asm.commons.InstructionAdapter;
 public final class IntArrayFieldInitializer implements FieldInitializer {
 
   public static final String DESC = "[I";
-
-  private final String fieldName;
   private final ImmutableCollection<Integer> values;
 
-  private IntArrayFieldInitializer(String fieldName, ImmutableCollection<Integer> values) {
-    this.fieldName = fieldName;
+  private IntArrayFieldInitializer(ImmutableCollection<Integer> values) {
     this.values = values;
   }
 
-  public static FieldInitializer of(String fieldName, String value) {
+  public static FieldInitializer of(String value) {
     Preconditions.checkArgument(value.startsWith("{ "), "Expected list starting with { ");
     Preconditions.checkArgument(value.endsWith(" }"), "Expected list ending with } ");
     // Check for an empty list, which is "{ }".
     if (value.length() < 4) {
-      return of(fieldName, ImmutableList.<Integer>of());
+      return of(ImmutableList.<Integer>of());
     }
     ImmutableList.Builder<Integer> intValues = ImmutableList.builder();
     String trimmedValue = value.substring(2, value.length() - 2);
@@ -51,21 +48,22 @@ public final class IntArrayFieldInitializer implements FieldInitializer {
     for (String valueString : valueStrings) {
       intValues.add(Integer.decode(valueString));
     }
-    return of(fieldName, intValues.build());
+    return of(intValues.build());
   }
 
-  public static IntArrayFieldInitializer of(String fieldName, ImmutableCollection<Integer> values) {
-    return new IntArrayFieldInitializer(fieldName, values);
+  public static IntArrayFieldInitializer of(ImmutableCollection<Integer> values) {
+    return new IntArrayFieldInitializer(values);
   }
 
   @Override
-  public boolean writeFieldDefinition(ClassWriter cw, int accessLevel, boolean isFinal) {
+  public boolean writeFieldDefinition(
+      String fieldName, ClassWriter cw, int accessLevel, boolean isFinal) {
     cw.visitField(accessLevel, fieldName, DESC, null, null).visitEnd();
     return true;
   }
 
   @Override
-  public int writeCLInit(InstructionAdapter insts, String className) {
+  public int writeCLInit(String fieldName, InstructionAdapter insts, String className) {
     insts.iconst(values.size());
     insts.newarray(Type.INT_TYPE);
     int curIndex = 0;
@@ -83,7 +81,8 @@ public final class IntArrayFieldInitializer implements FieldInitializer {
   }
 
   @Override
-  public void writeInitSource(Writer writer, boolean finalFields) throws IOException {
+  public void writeInitSource(String fieldName, Writer writer, boolean finalFields)
+      throws IOException {
     StringBuilder builder = new StringBuilder();
     boolean first = true;
     for (Integer attrId : values) {
@@ -99,11 +98,6 @@ public final class IntArrayFieldInitializer implements FieldInitializer {
         String.format(
             "        public static %sint[] %s = { %s };\n",
             finalFields ? "final " : "", fieldName, builder.toString()));
-  }
-
-  @Override
-  public String getFieldName() {
-    return fieldName;
   }
 
   @Override
