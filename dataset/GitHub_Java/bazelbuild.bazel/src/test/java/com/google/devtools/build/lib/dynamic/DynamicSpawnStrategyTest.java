@@ -139,18 +139,15 @@ public class DynamicSpawnStrategyTest {
     private CountDownLatch succeeded = new CountDownLatch(1);
 
     /** Hook to implement per-test custom logic. */
-    private final DoExec doExecBeforeStop;
+    private final DoExec doExec;
 
-    private final DoExec doExecAfterStop;
-
-    MockSpawnStrategy(String name, Path testRoot, DoExec doExecBeforeStop, DoExec doExecAfterStop) {
+    MockSpawnStrategy(String name, Path testRoot, DoExec doExec) {
       this.name = name;
       this.testRoot = testRoot;
-      this.doExecBeforeStop = doExecBeforeStop;
-      this.doExecAfterStop = doExecAfterStop;
+      this.doExec = doExec;
     }
 
-    /** Helper to record an execution failure from within {@link #doExecBeforeStop}. */
+    /** Helper to record an execution failure from within {@link #doExec}. */
     void failExecution(ActionExecutionContext actionExecutionContext) throws ExecException {
       try {
         FileSystemUtils.appendIsoLatin1(
@@ -169,10 +166,10 @@ public class DynamicSpawnStrategyTest {
         throws ExecException, InterruptedException {
       executedSpawn = spawn;
 
-      doExecBeforeStop.run(this, spawn, actionExecutionContext);
+      doExec.run(this, spawn, actionExecutionContext);
+
       if (stopConcurrentSpawns != null) {
         stopConcurrentSpawns.stop();
-        doExecAfterStop.run(this, spawn, actionExecutionContext);
       }
 
       for (ActionInput output : spawn.getOutputFiles()) {
@@ -226,12 +223,8 @@ public class DynamicSpawnStrategyTest {
       this(testRoot, DoExec.NOTHING);
     }
 
-    MockRemoteSpawnStrategy(Path testRoot, DoExec doExecBeforeStop) {
-      super("MockRemoteSpawnStrategy", testRoot, doExecBeforeStop, DoExec.NOTHING);
-    }
-
-    MockRemoteSpawnStrategy(Path testRoot, DoExec doExecBeforeStop, DoExec doExecAfterStop) {
-      super("MockRemoteSpawnStrategy", testRoot, doExecBeforeStop, doExecAfterStop);
+    MockRemoteSpawnStrategy(Path testRoot, DoExec doExec) {
+      super("MockRemoteSpawnStrategy", testRoot, doExec);
     }
   }
 
@@ -244,12 +237,8 @@ public class DynamicSpawnStrategyTest {
       this(testRoot, DoExec.NOTHING);
     }
 
-    MockLocalSpawnStrategy(Path testRoot, DoExec doExecBeforeStop) {
-      super("MockLocalSpawnStrategy", testRoot, doExecBeforeStop, DoExec.NOTHING);
-    }
-
-    MockLocalSpawnStrategy(Path testRoot, DoExec doExecBeforeStop, DoExec doExecAfterStop) {
-      super("MockLocalSpawnStrategy", testRoot, doExecBeforeStop, doExecAfterStop);
+    MockLocalSpawnStrategy(Path testRoot, DoExec doExec) {
+      super("MockLocalSpawnStrategy", testRoot, doExec);
     }
   }
 
@@ -262,12 +251,8 @@ public class DynamicSpawnStrategyTest {
       this(testRoot, DoExec.NOTHING);
     }
 
-    MockSandboxedSpawnStrategy(Path testRoot, DoExec doExecBeforeStop) {
-      super("MockSandboxedSpawnStrategy", testRoot, doExecBeforeStop, DoExec.NOTHING);
-    }
-
-    MockSandboxedSpawnStrategy(Path testRoot, DoExec doExecBeforeStop, DoExec doExecAfterStop) {
-      super("MockSandboxedSpawnStrategy", testRoot, doExecBeforeStop, doExecAfterStop);
+    MockSandboxedSpawnStrategy(Path testRoot, DoExec doExec) {
+      super("MockSandboxedSpawnStrategy", testRoot, doExec);
     }
   }
 
@@ -686,60 +671,6 @@ public class DynamicSpawnStrategyTest {
     assertThat(localStrategy.succeeded()).isFalse();
     assertThat(remoteStrategy.getExecutedSpawn()).isEqualTo(spawn);
     assertThat(remoteStrategy.succeeded()).isFalse();
-  }
-
-  @Test
-  public void stopConcurrentSpawnsWaitForCompletion() throws Exception {
-    if (legacyBehavior) {
-      // The legacy spawn scheduler does not implement cross-cancellations of the two parallel
-      // branches so this test makes no sense in that case.
-      Logger.getLogger(DynamicSpawnStrategyTest.class.getName()).info("Skipping test");
-      return;
-    }
-
-    CountDownLatch countDownLatch = new CountDownLatch(2);
-
-    AtomicBoolean slowCleanupFinished = new AtomicBoolean(false);
-    MockLocalSpawnStrategy localStrategy =
-        new MockLocalSpawnStrategy(
-            testRoot,
-            (self, spawn, actionExecutionContext) -> {
-              try {
-                countDownAndWait(countDownLatch);
-                // Block indefinitely waiting for the remote branch to interrupt us.
-                Thread.sleep(TestUtils.WAIT_TIMEOUT_MILLISECONDS);
-                fail("Should have been interrupted");
-              } catch (InterruptedException e) {
-                // Wait for "long enough" hoping that the remoteStrategy will have enough time to
-                // check the value of slowCleanupFinished before we finish this sleep, in case we
-                // have a bug.
-                Uninterruptibles.sleepUninterruptibly(5, TimeUnit.SECONDS);
-                slowCleanupFinished.set(true);
-              }
-            });
-
-    MockRemoteSpawnStrategy remoteStrategy =
-        new MockRemoteSpawnStrategy(
-            testRoot,
-            (self, spawn, actionExecutionContext) -> countDownAndWait(countDownLatch),
-            (self, spawn, actionExecutionContext) -> {
-              // This runs after we have asked the local spawn to complete and, in theory, awaited
-              // for InterruptedException to propagate. Make sure that's the case here by checking
-              // that we did indeed wait for the slow process.
-              if (!slowCleanupFinished.get()) {
-                fail("Did not await for the other branch to do its cleanup");
-              }
-            });
-
-    SpawnActionContext dynamicSpawnStrategy = createSpawnStrategy(localStrategy, remoteStrategy);
-
-    Spawn spawn = newDynamicSpawn();
-    dynamicSpawnStrategy.exec(spawn, actionExecutionContext);
-
-    assertThat(localStrategy.getExecutedSpawn()).isEqualTo(spawn);
-    assertThat(localStrategy.succeeded()).isFalse();
-    assertThat(remoteStrategy.getExecutedSpawn()).isEqualTo(spawn);
-    assertThat(remoteStrategy.succeeded()).isTrue();
   }
 
   @Test
