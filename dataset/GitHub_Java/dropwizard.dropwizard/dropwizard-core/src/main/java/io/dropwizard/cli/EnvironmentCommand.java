@@ -6,8 +6,6 @@ import io.dropwizard.setup.Bootstrap;
 import io.dropwizard.setup.Environment;
 import net.sourceforge.argparse4j.inf.Namespace;
 
-import javax.annotation.Nullable;
-
 /**
  * A command which executes with a configured {@link Environment}.
  *
@@ -16,8 +14,6 @@ import javax.annotation.Nullable;
  */
 public abstract class EnvironmentCommand<T extends Configuration> extends ConfiguredCommand<T> {
     private final Application<T> application;
-    @Nullable
-    private Environment environment;
 
     /**
      * Creates a new environment command.
@@ -31,26 +27,14 @@ public abstract class EnvironmentCommand<T extends Configuration> extends Config
         this.application = application;
     }
 
-    /**
-     * Returns the constructed environment or {@code null} if it hasn't been constructed yet.
-     *
-     * @return Returns the constructed environment or {@code null} if it hasn't been constructed yet
-     * @since 2.0.19
-     */
-    @Nullable
-    public Environment getEnvironment() {
-        return environment;
-    }
-
     @Override
     protected void run(Bootstrap<T> bootstrap, Namespace namespace, T configuration) throws Exception {
-        this.environment = new Environment(bootstrap.getApplication().getName(),
-                                           bootstrap.getObjectMapper(),
-                                           bootstrap.getValidatorFactory(),
-                                           bootstrap.getMetricRegistry(),
-                                           bootstrap.getClassLoader(),
-                                           bootstrap.getHealthCheckRegistry(),
-                                           configuration);
+        final Environment environment = new Environment(bootstrap.getApplication().getName(),
+                                                        bootstrap.getObjectMapper(),
+                                                        bootstrap.getValidatorFactory(),
+                                                        bootstrap.getMetricRegistry(),
+                                                        bootstrap.getClassLoader(),
+                                                        bootstrap.getHealthCheckRegistry());
         configuration.getMetricsFactory().configure(environment.lifecycle(),
                                                     bootstrap.getMetricRegistry());
         configuration.getServerFactory().configure(environment);

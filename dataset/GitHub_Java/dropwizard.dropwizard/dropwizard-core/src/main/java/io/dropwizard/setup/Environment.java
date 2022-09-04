@@ -76,7 +76,7 @@ public class Environment {
 
         this.adminEnvironment = new AdminEnvironment(adminContext, healthCheckRegistry, metricRegistry);
 
-        this.lifecycleEnvironment = new LifecycleEnvironment(metricRegistry);
+        this.lifecycleEnvironment = new LifecycleEnvironment();
 
         final DropwizardResourceConfig jerseyConfig = new DropwizardResourceConfig(metricRegistry);
         jerseyConfig.setContextPath(servletContext.getContextPath());
@@ -113,8 +113,6 @@ public class Environment {
 
     /**
      * Creates an environment and enables injecting validator feature.
-     *
-     * @since 2.0
      */
     public Environment(String name,
                        ObjectMapper objectMapper,
