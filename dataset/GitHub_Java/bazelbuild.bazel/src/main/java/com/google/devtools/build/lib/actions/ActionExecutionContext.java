@@ -19,7 +19,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
 import com.google.devtools.build.lib.actions.cache.MetadataHandler;
-import com.google.devtools.build.lib.bugreport.BugReporter;
 import com.google.devtools.build.lib.clock.Clock;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetExpander;
@@ -30,7 +29,6 @@ import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.Root;
-import com.google.devtools.build.lib.vfs.UnixGlob.FilesystemCalls;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import com.google.devtools.common.options.OptionsProvider;
 import java.io.Closeable;
@@ -75,7 +73,6 @@ public class ActionExecutionContext implements Closeable, ActionContext.ActionCo
 
   private final ArtifactPathResolver pathResolver;
   private final NestedSetExpander nestedSetExpander;
-  private final FilesystemCalls syscalls;
 
   private ActionExecutionContext(
       Executor executor,
@@ -93,8 +90,7 @@ public class ActionExecutionContext implements Closeable, ActionContext.ActionCo
       @Nullable Environment env,
       @Nullable FileSystem actionFileSystem,
       @Nullable Object skyframeDepsResult,
-      NestedSetExpander nestedSetExpander,
-      FilesystemCalls syscalls) {
+      NestedSetExpander nestedSetExpander) {
     this.actionInputFileCache = actionInputFileCache;
     this.actionInputPrefetcher = actionInputPrefetcher;
     this.actionKeyContext = actionKeyContext;
@@ -114,7 +110,6 @@ public class ActionExecutionContext implements Closeable, ActionContext.ActionCo
         // executor is only ever null in testing.
         executor == null ? null : executor.getExecRoot());
     this.nestedSetExpander = nestedSetExpander;
-    this.syscalls = syscalls;
   }
 
   public ActionExecutionContext(
@@ -132,8 +127,7 @@ public class ActionExecutionContext implements Closeable, ActionContext.ActionCo
       ArtifactExpander artifactExpander,
       @Nullable FileSystem actionFileSystem,
       @Nullable Object skyframeDepsResult,
-      NestedSetExpander nestedSetExpander,
-      FilesystemCalls syscalls) {
+      NestedSetExpander nestedSetExpander) {
     this(
         executor,
         actionInputFileCache,
@@ -150,8 +144,7 @@ public class ActionExecutionContext implements Closeable, ActionContext.ActionCo
         /*env=*/ null,
         actionFileSystem,
         skyframeDepsResult,
-        nestedSetExpander,
-        syscalls);
+        nestedSetExpander);
   }
 
   public static ActionExecutionContext forInputDiscovery(
@@ -167,8 +160,7 @@ public class ActionExecutionContext implements Closeable, ActionContext.ActionCo
       Map<String, String> clientEnv,
       Environment env,
       @Nullable FileSystem actionFileSystem,
-      NestedSetExpander nestedSetExpander,
-      FilesystemCalls syscalls) {
+      NestedSetExpander nestedSetExpander) {
     return new ActionExecutionContext(
         executor,
         actionInputFileCache,
@@ -185,8 +177,7 @@ public class ActionExecutionContext implements Closeable, ActionContext.ActionCo
         env,
         actionFileSystem,
         /*skyframeDepsResult=*/ null,
-        nestedSetExpander,
-        syscalls);
+        nestedSetExpander);
   }
 
   public ActionInputPrefetcher getActionInputPrefetcher() {
@@ -248,6 +239,11 @@ public class ActionExecutionContext implements Closeable, ActionContext.ActionCo
     return pathResolver;
   }
 
+  /** Returns whether failures for {@code failedLabel} should have verbose error messages. */
+  public boolean showVerboseFailures(Label failedLabel) {
+    return executor.getVerboseFailuresPredicate().test(failedLabel);
+  }
+
   /**
    * Returns the command line options of the Blaze command being executed.
    */
@@ -257,14 +253,6 @@ public class ActionExecutionContext implements Closeable, ActionContext.ActionCo
 
   public Clock getClock() {
     return executor.getClock();
-  }
-
-  /**
-   * Returns {@link BugReporter} to use when reporting bugs, instead of {@link
-   * com.google.devtools.build.lib.bugreport.BugReport#sendBugReport}.
-   */
-  public BugReporter getBugReporter() {
-    return executor.getBugReporter();
   }
 
   public ExtendedEventHandler getEventHandler() {
@@ -361,24 +349,11 @@ public class ActionExecutionContext implements Closeable, ActionContext.ActionCo
     return nestedSetExpander;
   }
 
-  /**
-   * This only exists for loose header checking (and shouldn't be exist at all).
-   *
-   * <p>Do NOT use from any other place.
-   */
-  public FilesystemCalls getSyscalls() {
-    return syscalls;
-  }
-
   @Override
   public void close() throws IOException {
-    // Ensure that we close both fileOutErr and actionFileSystem even if one throws.
-    try {
-      fileOutErr.close();
-    } finally {
-      if (actionFileSystem instanceof Closeable) {
-        ((Closeable) actionFileSystem).close();
-      }
+    fileOutErr.close();
+    if (actionFileSystem instanceof Closeable) {
+      ((Closeable) actionFileSystem).close();
     }
   }
 
@@ -403,8 +378,7 @@ public class ActionExecutionContext implements Closeable, ActionContext.ActionCo
         env,
         actionFileSystem,
         skyframeDepsResult,
-        nestedSetExpander,
-        syscalls);
+        nestedSetExpander);
   }
 
   /**
