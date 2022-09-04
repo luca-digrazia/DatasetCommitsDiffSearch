@@ -25,6 +25,8 @@ import org.graylog2.GraylogServer;
 import org.graylog2.MessageCounter;
 
 /**
+ * ServerValueWriterThread.java
+ * <p/>
  * Periodically writes server values to MongoDB.
  *
  * @author Lennart Koopmann <lennart@socketfeed.com>

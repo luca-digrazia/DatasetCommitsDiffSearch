@@ -19,13 +19,6 @@ import org.graylog2.outputs.MessageOutput;
 import org.graylog2.streams.StreamCache;
 
 import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-import com.yammer.metrics.Metrics;
-import com.yammer.metrics.core.Histogram;
-import com.yammer.metrics.core.Meter;
-import com.yammer.metrics.core.Timer;
-import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 public class GraylogServer implements Runnable {
 
@@ -53,11 +46,6 @@ public class GraylogServer implements Runnable {
     private List<MessageInput> inputs = Lists.newArrayList();
     private List<Class<? extends MessageFilter>> filters = Lists.newArrayList();
     private List<Class<? extends MessageOutput>> outputs = Lists.newArrayList();
-
-    // Metrics.
-    private Map<String, Meter> meters = Maps.newHashMap();
-    private Map<String, Timer> timers = Maps.newHashMap();
-    private Map<String, Histogram> histograms = Maps.newHashMap();
 
     private ProcessBuffer processBuffer;
     private OutputBuffer outputBuffer;
@@ -212,40 +200,6 @@ public class GraylogServer implements Runnable {
 
     public MessageCounterManager getMessageCounterManager() {
         return this.messageCounterManager;
-    }
-
-    public Meter getMeter(Class meteredClass, String name, String eventType) {
-        String id = name + eventType;
-        if (this.meters.containsKey(id)) {
-            return this.meters.get(id);
-        } else {
-            Meter meter = Metrics.newMeter(meteredClass, name, eventType, TimeUnit.SECONDS);
-            this.meters.put(id, meter);
-            
-            return meter;
-        }
-    }
-
-    public Timer getTimer(Class meteredClass, String name, TimeUnit measureUnit, TimeUnit bucketUnit) {
-        if (this.timers.containsKey(name)) {
-            return this.timers.get(name);
-        } else {
-            Timer timer = Metrics.newTimer(meteredClass, name, measureUnit, bucketUnit);
-            this.timers.put(name, timer);
-
-            return timer;
-        }
-    }
-
-    public Histogram getHistogram(Class meteredClass, String name) {
-        if (this.histograms.containsKey(name)) {
-            return this.histograms.get(name);
-        } else {
-            Histogram histogram = Metrics.newHistogram(meteredClass, name);
-            this.histograms.put(name, histogram);
-
-            return histogram;
-        }
     }
 
 }
