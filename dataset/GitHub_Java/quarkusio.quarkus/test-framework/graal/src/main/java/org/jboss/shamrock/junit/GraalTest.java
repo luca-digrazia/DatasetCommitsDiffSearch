@@ -1,10 +1,14 @@
 package org.jboss.shamrock.junit;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
-import java.net.URLClassLoader;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.BiConsumer;
 
 import org.junit.runner.Description;
 import org.junit.runner.Result;
@@ -40,52 +44,55 @@ public class GraalTest extends BlockJUnit4ClassRunner {
     }
 
     private void runInternal(RunNotifier notifier) {
+        boolean reportAtRuntime = Boolean.getBoolean("graal.reportAtRuntime");
+        boolean debugSymbols = Boolean.getBoolean("graal.debugSymbols");
         if (first) {
             first = false;
-            String path = System.getProperty("native.image.path");
-            if (path == null) {
-                //ok, lets make a guess
-                //this is a horrible hack, but it is intended to make this work in IDE's
-
-                ClassLoader cl = getClass().getClassLoader();
-                String guessedPath = null;
-                if (cl instanceof URLClassLoader) {
-                    URL[] urls = ((URLClassLoader) cl).getURLs();
-                    for (URL url : urls) {
-                        if (url.getProtocol().equals("file") && url.getPath().endsWith("test-classes/")) {
-                            //we have the test classes dir
-                            File testClasses = new File(url.getPath());
-                            for (File file : testClasses.getParentFile().listFiles()) {
-                                if (file.getName().endsWith("-runner")) {
-                                    guessedPath = file.getAbsolutePath();
-                                    break;
-                                }
-                            }
-                        }
-                        if (guessedPath != null) {
-                            break;
-                        }
-                    }
-                }
-
-                if(guessedPath == null) {
-                    notifier.fireTestFailure(new Failure(Description.createSuiteDescription(GraalTest.class), new RuntimeException("Unable to find native image, make sure native.image.path is set")));
-                    return;
-                } else {
-                    String errorString = "=native.image.path was not set, making a guess that  " + guessedPath + " is the correct native image=";
-                    for(int i= 0; i < errorString.length(); ++i) {
-                        System.err.print("=");
-                    }
-                    System.err.println(errorString);
-                    for(int i= 0; i < errorString.length(); ++i) {
-                        System.err.print("=");
-                    }
-                    path = guessedPath;
-                }
+            String graal = System.getenv("GRAALVM_HOME");
+            if (graal == null) {
+                notifier.fireTestFailure(new Failure(Description.createSuiteDescription(GraalTest.class), new RuntimeException("GRAALVM_HOME was not set")));
+                return;
             }
+            String nativeImage = graal + File.separator + "bin" + File.separator + "native-image";
+
+            URL mainClassUri = getClass().getClassLoader().getResource("org/jboss/shamrock/runner/Main.class");
+            if (mainClassUri == null) {
+                notifier.fireTestFailure(new Failure(Description.createSuiteDescription(GraalTest.class), new RuntimeException("Unable to find shamrock main class")));
+                return;
+            }
+            String externalForm = mainClassUri.getPath();
+            int jar = externalForm.lastIndexOf('!');
+            if (jar == -1) {
+                notifier.fireTestFailure(new Failure(Description.createSuiteDescription(GraalTest.class), new RuntimeException("Cannot find jar to image " + mainClassUri + " is not in a jar archive")));
+                return;
+            }
+            String path = externalForm.substring(5, jar);
+
             try {
-                System.out.println("Executing " + path);
-                final Process testProcess = Runtime.getRuntime().exec(path);
+
+                List<String> command = new ArrayList<>();
+                command.add(nativeImage);
+                command.add("-jar");
+                command.add(path);
+                command.add("-H:IncludeResources=META-INF/.*");
+                if(reportAtRuntime) {
+                    command.add("-H:+ReportUnsupportedElementsAtRuntime");
+                }
+                if(debugSymbols) {
+                    command.add("-g");
+                }
+                command.add("--no-server");
+                Process process = Runtime.getRuntime().exec(command.toArray(new String[0]), new String[]{}, new File(path.substring(0, path.lastIndexOf(File.separator))));
+                new Thread(new ProcessReader(process.getInputStream())).start();
+                new Thread(new ProcessReader(process.getErrorStream())).start();
+                if (process.waitFor() != 0) {
+                    notifier.fireTestFailure(new Failure(Description.createSuiteDescription(GraalTest.class), new RuntimeException("Image generation failed")));
+                    return;
+                }
+
+                String outputFile = path.substring(0, path.lastIndexOf('.'));
+                System.out.println("Executing " + outputFile);
+                final Process testProcess = Runtime.getRuntime().exec(outputFile);
                 notifier.addListener(new RunListener() {
                     @Override
                     public void testRunFinished(Result result) throws Exception {
