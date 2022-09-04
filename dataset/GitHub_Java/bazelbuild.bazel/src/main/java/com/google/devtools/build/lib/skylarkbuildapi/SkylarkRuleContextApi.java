@@ -24,6 +24,7 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.ClassObject;
+import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.Runtime.UnboundMarker;
@@ -33,7 +34,7 @@ import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics.FlagIdentifier;
-import com.google.devtools.build.lib.syntax.StarlarkThread;
+import java.util.Map;
 import javax.annotation.Nullable;
 
 /** Interface for a context object given to rule implementation functions. */
@@ -376,9 +377,7 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
             doc = "The label resolver."),
       })
   public String expand(
-      @Nullable String expression,
-      SkylarkList<?> artifacts, // <FileT>
-      Label labelResolver)
+      @Nullable String expression, SkylarkList<Object> artifacts, Label labelResolver)
       throws EvalException;
 
   @SkylarkCallable(
@@ -454,23 +453,26 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
   public FileApi newDirectory(String name, Object siblingArtifactUnchecked) throws EvalException;
 
   @SkylarkCallable(
-      name = "check_placeholders",
-      documented = false,
-      parameters = {
-        @Param(
-            name = "template",
-            positional = true,
-            named = false,
-            type = String.class,
-            doc = "The template."),
-        @Param(
-            name = "allowed_placeholders",
-            positional = true,
-            named = false,
-            type = SkylarkList.class,
-            doc = "The allowed placeholders."),
-      })
-  public boolean checkPlaceholders(String template, SkylarkList<?> allowedPlaceholders) // <String>
+    name = "check_placeholders",
+    documented = false,
+    parameters = {
+      @Param(
+          name = "template",
+          positional = true,
+          named = false,
+          type = String.class,
+          doc = "The template."
+      ),
+      @Param(
+          name = "allowed_placeholders",
+          positional = true,
+          named = false,
+          type = SkylarkList.class,
+          doc = "The allowed placeholders."
+      ),
+    }
+  )
+  public boolean checkPlaceholders(String template, SkylarkList<Object> allowedPlaceholders)
       throws EvalException;
 
   @SkylarkCallable(
@@ -495,25 +497,27 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
             positional = true,
             named = false,
             type = String.class,
-            doc = "The attribute name. Used for error reporting."),
+            doc = "The attribute name. Used for error reporting."
+        ),
         @Param(
             name = "command",
             positional = true,
             named = false,
             type = String.class,
-            doc =
-                "The expression to expand. It can contain references to " + "\"Make variables\"."),
+            doc = "The expression to expand. It can contain references to "
+              + "\"Make variables\"."
+        ),
         @Param(
             name = "additional_substitutions",
             positional = true,
             named = false,
             type = SkylarkDict.class,
-            doc = "Additional substitutions to make beyond the default make variables."),
-      })
+            doc = "Additional substitutions to make beyond the default make variables."
+        ),
+      }
+  )
   public String expandMakeVariables(
-      String attributeName,
-      String command,
-      final SkylarkDict<?, ?> additionalSubstitutions) // <String, String>
+      String attributeName, String command, final Map<String, String> additionalSubstitutions)
       throws EvalException;
 
   @SkylarkCallable(
@@ -686,7 +690,7 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
       },
       allowReturnNones = true,
       useLocation = true,
-      useStarlarkThread = true)
+      useEnvironment = true)
   public Runtime.NoneType action(
       SkylarkList outputs,
       Object inputs,
@@ -701,144 +705,155 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
       Object executionRequirementsUnchecked,
       Object inputManifestsUnchecked,
       Location loc,
-      StarlarkThread thread)
+      Environment env)
       throws EvalException;
 
   @SkylarkCallable(
-      name = "expand_location",
-      doc =
-          "Expands all <code>$(location ...)</code> templates in the given string by replacing "
-              + "<code>$(location //x)</code> with the path of the output file of target //x. "
-              + "Expansion only works for labels that point to direct dependencies of this rule or "
-              + "that are explicitly listed in the optional argument <code>targets</code>. "
-              + "<br/><br/>"
-              //
-              + "<code>$(location ...)</code> will cause an error if the referenced target has "
-              + "multiple outputs. In this case, please use <code>$(locations ...)</code> since it "
-              + "produces a space-separated list of output paths. It can be safely used for a "
-              + "single output file, too."
-              + "<br/><br/>"
-              //
-              + "This function is useful to let the user specify a command in a BUILD file (like"
-              + " for <code>genrule</code>). In other cases, it is often better to manipulate"
-              + " labels directly.",
-      parameters = {
-        @Param(name = "input", type = String.class, doc = "String to be expanded."),
-        @Param(
-            name = "targets",
-            type = SkylarkList.class,
-            generic1 = TransitiveInfoCollectionApi.class,
-            defaultValue = "[]",
-            named = true,
-            doc = "List of targets for additional lookup information."),
-      },
-      allowReturnNones = true,
-      useLocation = true,
-      useStarlarkThread = true)
-  public String expandLocation(
-      String input, SkylarkList targets, Location loc, StarlarkThread thread) throws EvalException;
+    name = "expand_location",
+    doc =
+        "Expands all <code>$(location ...)</code> templates in the given string by replacing "
+            + "<code>$(location //x)</code> with the path of the output file of target //x. "
+            + "Expansion only works for labels that point to direct dependencies of this rule or "
+            + "that are explicitly listed in the optional argument <code>targets</code>. "
+            + "<br/><br/>"
+            + "<code>$(location ...)</code> will cause an error if the referenced target has "
+            + "multiple outputs. In this case, please use <code>$(locations ...)</code> since it "
+            + "produces a space-separated list of output paths. It can be safely used for a "
+            + "single output file, too."
+            + "<br/><br/>"
+            + "This function is useful to let the user specify a command in a BUILD file (like "
+            + "for <code>genrule</code>). In other cases, it is often better to manipulate labels "
+            + "directly.",
+    parameters = {
+      @Param(name = "input", type = String.class, doc = "String to be expanded."),
+      @Param(
+        name = "targets",
+        type = SkylarkList.class,
+        generic1 = TransitiveInfoCollectionApi.class,
+        defaultValue = "[]",
+        named = true,
+        doc = "List of targets for additional lookup information."
+      ),
+    },
+    allowReturnNones = true,
+    useLocation = true,
+    useEnvironment = true
+  )
+  public String expandLocation(String input, SkylarkList targets, Location loc, Environment env)
+      throws EvalException;
 
   @SkylarkCallable(
-      name = "file_action",
-      doc =
-          "DEPRECATED. Use <a href =\"actions.html#write\">ctx.actions.write</a> instead. <br>"
-              + "Creates a file write action.",
-      parameters = {
-        @Param(name = "output", type = FileApi.class, named = true, doc = "The output file."),
-        @Param(
-            name = "content",
-            type = String.class,
-            named = true,
-            doc = "The contents of the file."),
-        @Param(
-            name = "executable",
-            type = Boolean.class,
-            defaultValue = "False",
-            named = true,
-            doc = "Whether the output file should be executable (default is False).")
-      },
-      allowReturnNones = true,
-      useLocation = true,
-      useStarlarkThread = true)
+    name = "file_action",
+    doc =
+        "DEPRECATED. Use <a href =\"actions.html#write\">ctx.actions.write</a> instead. <br>"
+            + "Creates a file write action.",
+    parameters = {
+      @Param(name = "output", type = FileApi.class, named = true, doc = "The output file."),
+      @Param(
+        name = "content",
+        type = String.class,
+        named = true,
+        doc = "The contents of the file."
+      ),
+      @Param(
+        name = "executable",
+        type = Boolean.class,
+        defaultValue = "False",
+        named = true,
+        doc = "Whether the output file should be executable (default is False)."
+      )
+    },
+    allowReturnNones = true,
+    useLocation = true,
+    useEnvironment = true
+  )
   public Runtime.NoneType fileAction(
-      FileApi output, String content, Boolean executable, Location loc, StarlarkThread thread)
+      FileApi output, String content, Boolean executable, Location loc, Environment env)
       throws EvalException;
 
   @SkylarkCallable(
-      name = "empty_action",
-      doc =
-          "DEPRECATED. Use <a href=\"actions.html#do_nothing\">ctx.actions.do_nothing</a> instead."
-              + " <br>"
-              + "Creates an empty action that neither executes a command nor produces any "
-              + "output, but that is useful for inserting 'extra actions'.",
-      parameters = {
-        @Param(
-            name = "mnemonic",
-            type = String.class,
-            named = true,
-            positional = false,
-            doc = "A one-word description of the action, e.g. CppCompile or GoLink."),
-        @Param(
-            name = "inputs",
-            allowedTypes = {
-              @ParamType(type = SkylarkList.class),
-              @ParamType(type = SkylarkNestedSet.class),
-            },
-            generic1 = FileApi.class,
-            named = true,
-            positional = false,
-            defaultValue = "[]",
-            doc = "List of the input files of the action."),
-      },
-      allowReturnNones = true,
-      useLocation = true,
-      useStarlarkThread = true)
-  public Runtime.NoneType emptyAction(
-      String mnemonic, Object inputs, Location loc, StarlarkThread thread) throws EvalException;
+    name = "empty_action",
+    doc =
+        "DEPRECATED. Use <a href=\"actions.html#do_nothing\">ctx.actions.do_nothing</a> instead."
+            + " <br>"
+            + "Creates an empty action that neither executes a command nor produces any "
+            + "output, but that is useful for inserting 'extra actions'.",
+    parameters = {
+      @Param(
+        name = "mnemonic",
+        type = String.class,
+        named = true,
+        positional = false,
+        doc = "A one-word description of the action, e.g. CppCompile or GoLink."
+      ),
+      @Param(
+        name = "inputs",
+        allowedTypes = {
+          @ParamType(type = SkylarkList.class),
+          @ParamType(type = SkylarkNestedSet.class),
+        },
+        generic1 = FileApi.class,
+        named = true,
+        positional = false,
+        defaultValue = "[]",
+        doc = "List of the input files of the action."
+      ),
+    },
+    allowReturnNones = true,
+    useLocation = true,
+    useEnvironment = true
+  )
+  public Runtime.NoneType emptyAction(String mnemonic, Object inputs, Location loc, Environment env)
+      throws EvalException;
 
   @SkylarkCallable(
-      name = "template_action",
-      doc =
-          "DEPRECATED. "
-              + "Use <a href=\"actions.html#expand_template\">ctx.actions.expand_template()</a> "
-              + "instead. <br>Creates a template expansion action.",
-      parameters = {
-        @Param(
-            name = "template",
-            type = FileApi.class,
-            named = true,
-            positional = false,
-            doc = "The template file, which is a UTF-8 encoded text file."),
-        @Param(
-            name = "output",
-            type = FileApi.class,
-            named = true,
-            positional = false,
-            doc = "The output file, which is a UTF-8 encoded text file."),
-        @Param(
-            name = "substitutions",
-            type = SkylarkDict.class,
-            named = true,
-            positional = false,
-            doc = "Substitutions to make when expanding the template."),
-        @Param(
-            name = "executable",
-            type = Boolean.class,
-            defaultValue = "False",
-            named = true,
-            positional = false,
-            doc = "Whether the output file should be executable (default is False).")
-      },
-      allowReturnNones = true,
-      useLocation = true,
-      useStarlarkThread = true)
+    name = "template_action",
+    doc =
+        "DEPRECATED. "
+            + "Use <a href=\"actions.html#expand_template\">ctx.actions.expand_template()</a> "
+            + "instead. <br>Creates a template expansion action.",
+    parameters = {
+      @Param(
+        name = "template",
+        type = FileApi.class,
+        named = true,
+        positional = false,
+        doc = "The template file, which is a UTF-8 encoded text file."
+      ),
+      @Param(
+        name = "output",
+        type = FileApi.class,
+        named = true,
+        positional = false,
+        doc = "The output file, which is a UTF-8 encoded text file."
+      ),
+      @Param(
+        name = "substitutions",
+        type = SkylarkDict.class,
+        named = true,
+        positional = false,
+        doc = "Substitutions to make when expanding the template."
+      ),
+      @Param(
+        name = "executable",
+        type = Boolean.class,
+        defaultValue = "False",
+        named = true,
+        positional = false,
+        doc = "Whether the output file should be executable (default is False)."
+      )
+    },
+    allowReturnNones = true,
+    useLocation = true,
+    useEnvironment = true
+  )
   public Runtime.NoneType templateAction(
       FileApi template,
       FileApi output,
       SkylarkDict<?, ?> substitutionsUnchecked,
       Boolean executable,
       Location loc,
-      StarlarkThread thread)
+      Environment env)
       throws EvalException;
 
   @SkylarkCallable(
@@ -979,7 +994,7 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
                     + "for useful keys."),
       },
       useLocation = true,
-      useStarlarkThread = true)
+      useEnvironment = true)
   public Tuple<Object> resolveCommand(
       String command,
       Object attributeUnchecked,
@@ -989,7 +1004,7 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
       SkylarkDict<?, ?> labelDictUnchecked,
       SkylarkDict<?, ?> executionRequirementsUnchecked,
       Location loc,
-      StarlarkThread thread)
+      Environment env)
       throws EvalException;
 
   @SkylarkCallable(
@@ -1012,6 +1027,6 @@ public interface SkylarkRuleContextApi extends SkylarkValue {
             doc = "List of tools (list of targets)."),
       },
       useLocation = false,
-      useStarlarkThread = false)
+      useEnvironment = false)
   public Tuple<Object> resolveTools(SkylarkList tools) throws EvalException;
 }
