@@ -16,8 +16,6 @@ package com.google.devtools.build.lib.skylarkbuildapi.config;
 
 import com.google.common.collect.ImmutableMap.Builder;
 import com.google.devtools.build.lib.skylarkbuildapi.Bootstrap;
-import com.google.devtools.build.lib.skylarkbuildapi.StarlarkConfigApi;
-import com.google.devtools.build.lib.syntax.Starlark;
 
 /**
  * A {@link Bootstrap} for config-related libraries of the build API.
@@ -25,22 +23,13 @@ import com.google.devtools.build.lib.syntax.Starlark;
 public class ConfigBootstrap implements Bootstrap {
 
   private final ConfigSkylarkCommonApi configSkylarkCommonApi;
-  private final StarlarkConfigApi starlarkConfigApi;
-  private final ConfigGlobalLibraryApi configGlobalLibrary;
 
-  public ConfigBootstrap(
-      ConfigSkylarkCommonApi configSkylarkCommonApi,
-      StarlarkConfigApi starlarkConfigApi,
-      ConfigGlobalLibraryApi configGlobalLibrary) {
+  public ConfigBootstrap(ConfigSkylarkCommonApi configSkylarkCommonApi) {
     this.configSkylarkCommonApi = configSkylarkCommonApi;
-    this.starlarkConfigApi = starlarkConfigApi;
-    this.configGlobalLibrary = configGlobalLibrary;
   }
 
   @Override
   public void addBindingsToBuilder(Builder<String, Object> builder) {
     builder.put("config_common", configSkylarkCommonApi);
-    builder.put("config", starlarkConfigApi);
-    Starlark.addMethods(builder, configGlobalLibrary);
   }
 }
