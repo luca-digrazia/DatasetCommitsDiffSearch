@@ -39,7 +39,6 @@ public class SubstrateAutoFeatureStep {
             "initializeAtRunTime", void.class, Class.class, String.class);
     private static final MethodDescriptor RERUN_INITIALIZATION = ofMethod(RuntimeClassInitializationSupport.class,
             "rerunInitialization", void.class, Class.class, String.class);
-    static final String RUNTIME_REFLECTION = "org/graalvm/nativeimage/RuntimeReflection";
 
     @BuildStep
     SubstrateOutputBuildItem generateFeature(ClassOutputBuildItem output,
@@ -194,13 +193,14 @@ public class SubstrateAutoFeatureStep {
             if (!entry.getValue().weak) {
                 ResultHandle carray = tc.newArray(Class.class, tc.load(1));
                 tc.writeArrayValue(carray, 0, clazz);
-                tc.invokeStaticMethod(ofMethod(RUNTIME_REFLECTION, "register", void.class, Class[].class),
+                tc.invokeStaticMethod(
+                        ofMethod("org/graalvm/nativeimage/RuntimeReflection", "register", void.class, Class[].class),
                         carray);
             }
 
             if (entry.getValue().constructors) {
                 tc.invokeStaticMethod(
-                        ofMethod(RUNTIME_REFLECTION, "register", void.class, Executable[].class),
+                        ofMethod("org/graalvm/nativeimage/RuntimeReflection", "register", void.class, Executable[].class),
                         constructors);
             } else if (!entry.getValue().ctorSet.isEmpty()) {
                 ResultHandle farray = tc.newArray(Constructor.class, tc.load(1));
@@ -215,13 +215,13 @@ public class SubstrateAutoFeatureStep {
                             paramArray);
                     tc.writeArrayValue(farray, 0, fhandle);
                     tc.invokeStaticMethod(
-                            ofMethod(RUNTIME_REFLECTION, "register", void.class, Executable[].class),
+                            ofMethod("org/graalvm/nativeimage/RuntimeReflection", "register", void.class, Executable[].class),
                             farray);
                 }
             }
             if (entry.getValue().methods) {
                 tc.invokeStaticMethod(
-                        ofMethod(RUNTIME_REFLECTION, "register", void.class, Executable[].class),
+                        ofMethod("org/graalvm/nativeimage/RuntimeReflection", "register", void.class, Executable[].class),
                         methods);
             } else if (!entry.getValue().methodSet.isEmpty()) {
                 ResultHandle farray = tc.newArray(Method.class, tc.load(1));
@@ -236,13 +236,13 @@ public class SubstrateAutoFeatureStep {
                             tc.load(method.getName()), paramArray);
                     tc.writeArrayValue(farray, 0, fhandle);
                     tc.invokeStaticMethod(
-                            ofMethod(RUNTIME_REFLECTION, "register", void.class, Executable[].class),
+                            ofMethod("org/graalvm/nativeimage/RuntimeReflection", "register", void.class, Executable[].class),
                             farray);
                 }
             }
             if (entry.getValue().fields) {
                 tc.invokeStaticMethod(
-                        ofMethod(RUNTIME_REFLECTION, "register", void.class,
+                        ofMethod("org/graalvm/nativeimage/RuntimeReflection", "register", void.class,
                                 boolean.class, Field[].class),
                         tc.load(entry.getValue().finalFieldsWritable), fields);
             } else if (!entry.getValue().fieldSet.isEmpty()) {
@@ -252,7 +252,7 @@ public class SubstrateAutoFeatureStep {
                             ofMethod(Class.class, "getDeclaredField", Field.class, String.class), clazz, tc.load(field));
                     tc.writeArrayValue(farray, 0, fhandle);
                     tc.invokeStaticMethod(
-                            ofMethod(RUNTIME_REFLECTION, "register", void.class, Field[].class),
+                            ofMethod("org/graalvm/nativeimage/RuntimeReflection", "register", void.class, Field[].class),
                             farray);
                 }
             }
