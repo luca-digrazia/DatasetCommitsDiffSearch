@@ -1,95 +1,86 @@
 /**
- * Copyright 2013 Lennart Koopmann <lennart@socketfeed.com>
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.graylog2.indexer.results;
 
-import java.util.Iterator;
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.Sets;
+import org.graylog2.indexer.ranges.IndexRange;
+import org.graylog2.plugin.Message;
+
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
-import org.elasticsearch.common.unit.TimeValue;
-import org.elasticsearch.search.SearchHit;
-import org.elasticsearch.search.SearchHits;
-import org.graylog2.plugin.Message;
-
-import com.beust.jcommander.internal.Lists;
-import com.beust.jcommander.internal.Sets;
-
-/**
- * @author Lennart Koopmann <lennart@socketfeed.com>
- */
 public class SearchResult extends IndexQueryResult {
 
-	private final int totalResults;
+	private final long totalResults;
 	private final List<ResultMessage> results;
 	private final Set<String> fields;
+    private final Set<IndexRange> usedIndices;
 
-	public SearchResult(SearchHits searchHits, String originalQuery, TimeValue took) {
-        super(originalQuery, took);
+	public SearchResult(List<ResultMessage> hits, long totalResults, Set<IndexRange> usedIndices, String originalQuery, String builtQuery, long tookMs) {
+	    super(originalQuery, builtQuery, tookMs);
+	    this.results = hits;
+        this.fields = extractFields(hits);
+        this.totalResults = totalResults;
+        this.usedIndices = usedIndices;
+    }
 
-		this.results = buildResults(searchHits);
-		this.fields = extractFields(searchHits);
-		this.totalResults = (int) searchHits.getTotalHits();
-	}
-	
-	public int getTotalResults() {
+    private SearchResult(String query, String originalQuery) {
+        super(query, originalQuery, 0);
+        this.results = Collections.emptyList();
+        this.fields = Collections.emptySet();
+        this.usedIndices = Collections.emptySet();
+        this.totalResults = 0;
+    }
+
+    public long getTotalResults() {
 		return totalResults;
 	}
-	
+
 	public List<ResultMessage> getResults() {
 		return results;
 	}
-	
+
 	public Set<String> getFields() {
 		return fields;
 	}
-	
-	private List<ResultMessage> buildResults(SearchHits hits) {
-		List<ResultMessage> r = Lists.newArrayList();
-		
-		Iterator<SearchHit> i = hits.iterator();
-		while(i.hasNext()) {
-			r.add(ResultMessage.parseFromSource(i.next()));
-		}
-		
-		return r;
-	}
-	
-	private Set<String> extractFields(SearchHits hits) {
-		Set<String> fields = Sets.newHashSet();
-		
-		Iterator<SearchHit> i = hits.iterator();
-		while(i.hasNext()) {
-			for (String field : i.next().sourceAsMap().keySet()) {
-				if (!Message.RESERVED_FIELDS.contains(field)) {
-					fields.add(field);
-				}
-			}
-		}
-		
-		// Because some fields actually make sense in this result and some don't.
-		fields.add("message");
-		fields.add("source");
-		fields.remove("streams");
-		fields.remove("full_message");
-		
-		return fields;
-	}
+
+	@VisibleForTesting
+    Set<String> extractFields(List<ResultMessage> hits) {
+        Set<String> filteredFields = Sets.newHashSet();
+
+        hits.forEach(hit -> {
+            final Message message = hit.getMessage();
+            for (String field : message.getFieldNames()) {
+                if (!Message.FILTERED_FIELDS.contains(field)) {
+                    filteredFields.add(field);
+                }
+            }
+        });
+
+        return filteredFields;
+    }
+
+    public Set<IndexRange> getUsedIndices() {
+        return usedIndices;
+    }
+
+    public static SearchResult empty(String query, String originalQuery) {
+        return new SearchResult(query, originalQuery);
+    }
 }
