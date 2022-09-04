@@ -17,22 +17,19 @@ import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.NULL_AC
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.AbstractAction;
-import com.google.devtools.build.lib.actions.ActionAnalysisMetadata.MiddlemanType;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
 
@@ -50,65 +47,54 @@ public class TestAction extends AbstractAction {
         public void run() {}
       };
 
-  private static boolean isOptional(Artifact artifact) {
-    return artifact.getExecPath().getBaseName().endsWith(".optional");
-  }
-
-  private static ImmutableList<Artifact> mandatoryArtifacts(Iterable<Artifact> inputs) {
-    return ImmutableList.copyOf(Iterables.filter(inputs, a -> !isOptional(a)));
-  }
-
-  private static ImmutableList<Artifact> optionalArtifacts(Iterable<Artifact> inputs) {
-    return ImmutableList.copyOf(Iterables.filter(inputs, a -> isOptional(a)));
-  }
-
   protected final Callable<Void> effect;
-  private final ImmutableList<Artifact> mandatoryInputs;
-  private final ImmutableList<Artifact> optionalInputs;
 
   /** Use this constructor if the effect can't throw exceptions. */
-  public TestAction(Runnable effect, NestedSet<Artifact> inputs, ImmutableSet<Artifact> outputs) {
-    this(Executors.callable(effect, null), inputs, outputs);
+  public TestAction(Runnable effect,
+             Collection<Artifact> inputs,
+             Collection<Artifact> outputs) {
+    super(NULL_ACTION_OWNER, inputs, outputs);
+    this.effect = Executors.callable(effect, null);
   }
 
   /**
-   * Use this constructor if the effect can throw exceptions. Any checked exception thrown will be
-   * repackaged as an ActionExecutionException.
+   * Use this constructor if the effect can throw exceptions.
+   * Any checked exception thrown will be repackaged as an
+   * ActionExecutionException.
    */
-  public TestAction(
-      Callable<Void> effect, NestedSet<Artifact> inputs, ImmutableSet<Artifact> outputs) {
-    super(
-        NULL_ACTION_OWNER,
-        NestedSetBuilder.wrap(Order.STABLE_ORDER, mandatoryArtifacts(inputs)),
-        outputs);
-    this.mandatoryInputs = mandatoryArtifacts(inputs);
-    this.optionalInputs = optionalArtifacts(inputs);
+  public TestAction(Callable<Void> effect,
+             Collection<Artifact> inputs,
+             Collection<Artifact> outputs) {
+    super(NULL_ACTION_OWNER, inputs, outputs);
     this.effect = effect;
   }
 
   @Override
-  public Iterable<Artifact> getMandatoryInputs() {
+  public Collection<Artifact> getMandatoryInputs() {
+    List<Artifact> mandatoryInputs = new ArrayList<>();
+    for (Artifact input : getInputs()) {
+      if (!input.getExecPath().getBaseName().endsWith(".optional")) {
+        mandatoryInputs.add(input);
+      }
+    }
     return mandatoryInputs;
   }
 
   @Override
   public boolean discoversInputs() {
-    return !optionalInputs.isEmpty();
+    for (Artifact input : getInputs()) {
+      if (input.getExecPath().getBaseName().endsWith(".optional")) {
+        return true;
+      }
+    }
+    return false;
   }
 
   @Override
   public Iterable<Artifact> discoverInputs(ActionExecutionContext actionExecutionContext) {
     Preconditions.checkState(discoversInputs(), this);
-    ImmutableList<Artifact> discoveredInputs =
-        optionalInputs.stream()
-            .filter(i -> i.getPath().exists())
-            .collect(ImmutableList.toImmutableList());
-    updateInputs(
-        NestedSetBuilder.<Artifact>stableOrder()
-            .addAll(mandatoryInputs)
-            .addAll(discoveredInputs)
-            .build());
-    return discoveredInputs;
+    updateInputs(getInputs());
+    return ImmutableList.of();
   }
 
   @Override
@@ -119,7 +105,8 @@ public class TestAction extends AbstractAction {
       // used by tests to specify artifacts that may or may not be missing.
       // This is used, e.g., to test Blaze behavior when action has missing
       // input artifacts but still is successfully executed.
-      if (!artifact.getPath().exists()) {
+      if (!artifact.getPath().exists()
+          && !artifact.getExecPath().getBaseName().endsWith(".optional")) {
         throw new IllegalStateException("action's input file does not exist: "
             + artifact.getPath());
       }
@@ -162,12 +149,12 @@ public class TestAction extends AbstractAction {
     private final MiddlemanType type;
 
     @AutoCodec.Instantiator
-    public DummyAction(NestedSet<Artifact> inputs, Artifact primaryOutput, MiddlemanType type) {
-      super(NO_EFFECT, inputs, ImmutableSet.of(primaryOutput));
+    public DummyAction(Collection<Artifact> inputs, Artifact primaryOutput, MiddlemanType type) {
+      super(NO_EFFECT, inputs, ImmutableList.of(primaryOutput));
       this.type = type;
     }
 
-    public DummyAction(NestedSet<Artifact> inputs, Artifact output) {
+    public DummyAction(Collection<Artifact> inputs, Artifact output) {
       this(inputs, output, MiddlemanType.NORMAL);
     }
 

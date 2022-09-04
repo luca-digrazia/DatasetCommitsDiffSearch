@@ -22,7 +22,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.Collections2;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.hash.Hashing;
@@ -51,9 +50,6 @@ import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.actions.util.TestAction;
 import com.google.devtools.build.lib.actions.util.TestAction.DummyAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnActionTemplate;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.events.StoredEventHandler;
@@ -172,9 +168,7 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
     final Artifact normalOutput = createDerivedArtifact("normal/out");
     Action testAction =
         new TestAction(
-            TestAction.NO_EFFECT,
-            NestedSetBuilder.create(Order.STABLE_ORDER, outOne),
-            ImmutableSet.of(normalOutput)) {
+            TestAction.NO_EFFECT, ImmutableList.of(outOne), ImmutableList.of(normalOutput)) {
           @Override
           public ActionResult execute(ActionExecutionContext actionExecutionContext) {
             try {
@@ -390,23 +384,21 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
   public void testActionExpansion() throws Exception {
     WriteInputToFilesAction action = new WriteInputToFilesAction(in, outOneFileOne, outOneFileTwo);
 
-    CopyTreeAction actionTwo =
-        new CopyTreeAction(
-            ImmutableList.of(outOneFileOne, outOneFileTwo),
-            ImmutableList.of(outTwoFileOne, outTwoFileTwo)) {
-          @Override
-          public void executeTestBehavior(ActionExecutionContext actionExecutionContext)
-              throws ActionExecutionException {
-            super.executeTestBehavior(actionExecutionContext);
+    CopyTreeAction actionTwo = new CopyTreeAction(
+        ImmutableList.of(outOneFileOne, outOneFileTwo),
+        ImmutableList.of(outTwoFileOne, outTwoFileTwo)) {
+      @Override
+      public void executeTestBehavior(ActionExecutionContext actionExecutionContext)
+          throws ActionExecutionException {
+        super.executeTestBehavior(actionExecutionContext);
 
-            Collection<ActionInput> expanded =
-                ActionInputHelper.expandArtifacts(
-                    NestedSetBuilder.create(Order.STABLE_ORDER, outOne),
-                    actionExecutionContext.getArtifactExpander());
-            // Only files registered should show up here.
-            assertThat(expanded).containsExactly(outOneFileOne, outOneFileTwo);
-          }
-        };
+        Collection<ActionInput> expanded =
+            ActionInputHelper.expandArtifacts(ImmutableList.of(outOne),
+                actionExecutionContext.getArtifactExpander());
+        // Only files registered should show up here.
+        assertThat(expanded).containsExactly(outOneFileOne, outOneFileTwo);
+      }
+    };
 
     registerAction(action);
     registerAction(actionTwo);
@@ -807,14 +799,10 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
     TreeFileArtifact expectedOutputTreeFileArtifact2 =
         ActionInputHelper.treeFileArtifactWithNoGeneratingActionSet(
             artifact2, PathFragment.createAlreadyNormalized("child2"), secondOwner);
-    Action generateOutputAction =
-        new DummyAction(
-            NestedSetBuilder.create(Order.STABLE_ORDER, treeFileArtifactA),
-            expectedOutputTreeFileArtifact1);
-    Action noGenerateOutputAction =
-        new DummyAction(
-            NestedSetBuilder.create(Order.STABLE_ORDER, treeFileArtifactB),
-            expectedOutputTreeFileArtifact2);
+    Action generateOutputAction = new DummyAction(
+        ImmutableList.<Artifact>of(treeFileArtifactA), expectedOutputTreeFileArtifact1);
+    Action noGenerateOutputAction = new DummyAction(
+        ImmutableList.<Artifact>of(treeFileArtifactB), expectedOutputTreeFileArtifact2);
 
     actionTemplateExpansionFunction =
         new DummyActionTemplateExpansionFunction(
@@ -856,14 +844,11 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
     TreeFileArtifact expectedOutputTreeFileArtifact2 =
         ActionInputHelper.treeFileArtifactWithNoGeneratingActionSet(
             artifact2, PathFragment.createAlreadyNormalized("child2"), secondOwner);
-    Action generateOutputAction =
-        new DummyAction(
-            NestedSetBuilder.create(Order.STABLE_ORDER, treeFileArtifactA),
-            expectedOutputTreeFileArtifact1);
-    Action noGenerateOutputAction =
-        new NoOpDummyAction(
-            NestedSetBuilder.create(Order.STABLE_ORDER, treeFileArtifactB),
-            ImmutableSet.of(expectedOutputTreeFileArtifact2));
+    Action generateOutputAction = new DummyAction(
+        ImmutableList.<Artifact>of(treeFileArtifactA), expectedOutputTreeFileArtifact1);
+    Action noGenerateOutputAction = new NoOpDummyAction(
+        ImmutableList.<Artifact>of(treeFileArtifactB),
+        ImmutableList.<Artifact>of(expectedOutputTreeFileArtifact2));
 
     actionTemplateExpansionFunction =
         new DummyActionTemplateExpansionFunction(
@@ -910,14 +895,11 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
             artifact2,
             PathFragment.createAlreadyNormalized("child2"),
             ActionTemplateExpansionKey.of(artifact1.getArtifactOwner(), 1));
-    Action generateOutputAction =
-        new DummyAction(
-            NestedSetBuilder.create(Order.STABLE_ORDER, treeFileArtifactA),
-            expectedOutputTreeFileArtifact1);
-    Action throwingAction =
-        new ThrowingDummyAction(
-            NestedSetBuilder.create(Order.STABLE_ORDER, treeFileArtifactB),
-            ImmutableSet.of(expectedOutputTreeFileArtifact2));
+    Action generateOutputAction = new DummyAction(
+        ImmutableList.<Artifact>of(treeFileArtifactA), expectedOutputTreeFileArtifact1);
+    Action throwingAction = new ThrowingDummyAction(
+        ImmutableList.<Artifact>of(treeFileArtifactB),
+        ImmutableList.<Artifact>of(expectedOutputTreeFileArtifact2));
 
     actionTemplateExpansionFunction =
         new DummyActionTemplateExpansionFunction(
@@ -959,14 +941,12 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
     TreeFileArtifact expectedOutputTreeFileArtifact2 =
         ActionInputHelper.treeFileArtifactWithNoGeneratingActionSet(
             artifact2, PathFragment.createAlreadyNormalized("child2"), secondOwner);
-    Action throwingAction =
-        new ThrowingDummyAction(
-            NestedSetBuilder.create(Order.STABLE_ORDER, treeFileArtifactA),
-            ImmutableSet.of(expectedOutputTreeFileArtifact1));
-    Action anotherThrowingAction =
-        new ThrowingDummyAction(
-            NestedSetBuilder.create(Order.STABLE_ORDER, treeFileArtifactB),
-            ImmutableSet.of(expectedOutputTreeFileArtifact2));
+    Action throwingAction = new ThrowingDummyAction(
+        ImmutableList.<Artifact>of(treeFileArtifactA),
+        ImmutableList.<Artifact>of(expectedOutputTreeFileArtifact1));
+    Action anotherThrowingAction = new ThrowingDummyAction(
+        ImmutableList.<Artifact>of(treeFileArtifactB),
+        ImmutableList.<Artifact>of(expectedOutputTreeFileArtifact2));
 
     actionTemplateExpansionFunction =
         new DummyActionTemplateExpansionFunction(
@@ -985,8 +965,7 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
     // artifact1 is created by a action that throws.
     SpecialArtifact artifact1 = createTreeArtifact("treeArtifact1");
     registerAction(
-        new ThrowingDummyAction(
-            NestedSetBuilder.emptySet(Order.STABLE_ORDER), ImmutableSet.of(artifact1)));
+        new ThrowingDummyAction(ImmutableList.<Artifact>of(), ImmutableList.of(artifact1)));
 
     // artifact2 is a tree artifact generated by an action template.
     SpecialArtifact artifact2 = createTreeArtifact("treeArtifact2");
@@ -1003,9 +982,7 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
   public void testEmptyInputAndOutputTreeArtifactInActionTemplate() throws Throwable {
     // artifact1 is an empty tree artifact which is generated by a single no-op dummy action.
     SpecialArtifact artifact1 = createTreeArtifact("treeArtifact1");
-    registerAction(
-        new NoOpDummyAction(
-            NestedSetBuilder.emptySet(Order.STABLE_ORDER), ImmutableSet.of(artifact1)));
+    registerAction(new NoOpDummyAction(ImmutableList.<Artifact>of(), ImmutableList.of(artifact1)));
 
     // artifact2 is a tree artifact generated by an action template that takes artifact1 as input.
     SpecialArtifact artifact2 = createTreeArtifact("treeArtifact2");
@@ -1072,12 +1049,9 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
         Collection<TreeFileArtifact> inputFiles,
         Artifact output,
         Collection<TreeFileArtifact> outputFiles) {
-      super(
-          effect,
-          input == null
-              ? NestedSetBuilder.emptySet(Order.STABLE_ORDER)
-              : NestedSetBuilder.create(Order.STABLE_ORDER, input),
-          ImmutableSet.of(output));
+      super(effect,
+          input == null ? ImmutableList.<Artifact>of() : ImmutableList.of(input),
+          ImmutableList.of(output));
       Preconditions.checkArgument(
           inputFiles.isEmpty() || (input != null && input.isTreeArtifact()));
       Preconditions.checkArgument(output == null || output.isTreeArtifact());
@@ -1094,9 +1068,9 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
     @Override
     public ActionResult execute(ActionExecutionContext actionExecutionContext)
         throws ActionExecutionException {
-      if (!getInputs().isEmpty()) {
+      if (getInputs().iterator().hasNext()) {
         // Sanity check--verify all inputs exist.
-        Artifact input = getInputs().getSingleton();
+        Artifact input = getSoleInput();
         if (!input.getPath().exists()) {
           throw new IllegalStateException("action's input Artifact does not exist: "
               + input.getPath());
@@ -1127,6 +1101,17 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
 
     void executeTestBehavior(ActionExecutionContext c) throws ActionExecutionException {
       // Default: do nothing
+    }
+
+    /** Checks there's exactly one input, and returns it. */
+    // This prevents us from making testing mistakes, like
+    // assuming there's only one input when this isn't actually true.
+    Artifact getSoleInput() {
+      Iterator<Artifact> it = getInputs().iterator();
+      Artifact r = it.next();
+      Preconditions.checkNotNull(r);
+      Preconditions.checkState(!it.hasNext());
+      return r;
     }
 
     /** Checks there's exactly one output, and returns it. */
@@ -1202,7 +1187,7 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
       try {
         for (Artifact file : outputFiles) {
           FileSystemUtils.createDirectoryAndParents(file.getPath().getParentDirectory());
-          FileSystemUtils.copyFile(getInputs().getSingleton().getPath(), file.getPath());
+          FileSystemUtils.copyFile(getSoleInput().getPath(), file.getPath());
         }
       } catch (IOException e) {
         throw new RuntimeException(e);
@@ -1338,7 +1323,7 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
 
   /** No-op action that does not generate the action outputs. */
   private static class NoOpDummyAction extends TestAction {
-    public NoOpDummyAction(NestedSet<Artifact> inputs, ImmutableSet<Artifact> outputs) {
+    public NoOpDummyAction(Collection<Artifact> inputs, Collection<Artifact> outputs) {
       super(NO_EFFECT, inputs, outputs);
     }
 
@@ -1352,7 +1337,7 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
 
   /** No-op action that throws when executed */
   private static class ThrowingDummyAction extends TestAction {
-    public ThrowingDummyAction(NestedSet<Artifact> inputs, ImmutableSet<Artifact> outputs) {
+    public ThrowingDummyAction(Collection<Artifact> inputs, Collection<Artifact> outputs) {
       super(NO_EFFECT, inputs, outputs);
     }
 

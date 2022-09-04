@@ -14,28 +14,29 @@
 
 package com.google.devtools.build.lib.actions;
 
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
-
 /**
- * An ExecException that is related to the failure of an Action and therefore very likely the user's
- * fault.
+ * An ExecException that is related to the failure of an Action and therefore
+ * very likely the user's fault.
  */
 public class UserExecException extends ExecException {
 
-  private final FailureDetail failureDetail;
-
-  public UserExecException(FailureDetail failureDetail) {
-    super(failureDetail.getMessage());
-    this.failureDetail = failureDetail;
+  public UserExecException(String message) {
+    super(message);
+  }
+  
+  public UserExecException(Throwable cause) {
+    super(cause);
   }
 
-  public UserExecException(Throwable cause, FailureDetail failureDetail) {
-    super(failureDetail.getMessage(), cause);
-    this.failureDetail = failureDetail;
+  public UserExecException(String message, Throwable cause) {
+    super(message, cause);
   }
 
   @Override
-  protected FailureDetail getFailureDetail(String message) {
-    return failureDetail.toBuilder().setMessage(message).build();
+  public ActionExecutionException toActionExecutionException(String messagePrefix,
+        boolean verboseFailures, Action action) {
+    String message = messagePrefix + " failed";
+    return new ActionExecutionException(
+        message + ": " + getMessage(), this, action, isCatastrophic());
   }
 }
