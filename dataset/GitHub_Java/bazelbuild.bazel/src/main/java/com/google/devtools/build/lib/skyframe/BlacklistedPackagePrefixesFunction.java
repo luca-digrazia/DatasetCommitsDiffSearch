@@ -16,13 +16,9 @@ package com.google.devtools.build.lib.skyframe;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.io.CharStreams;
 import com.google.common.io.LineProcessor;
-import com.google.devtools.build.lib.actions.FileValue;
-import com.google.devtools.build.lib.actions.InconsistentFilesystemException;
-import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
-import com.google.devtools.build.lib.rules.repository.RepositoryDirectoryValue;
+import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
@@ -34,84 +30,63 @@ import java.nio.charset.StandardCharsets;
 import javax.annotation.Nullable;
 
 /**
- * A {@link SkyFunction} for {@link BlacklistedPackagePrefixesValue}.
- *
- * <p>It is used to implement the `.bazelignore` feature.
+ * A function that returns the union of a set of hardcoded blacklisted package prefixes and the
+ * contents of a hardcoded filepath whose contents is a blacklisted package prefix on each line.
  */
 public class BlacklistedPackagePrefixesFunction implements SkyFunction {
-  private final PathFragment blacklistedPackagePrefixesFile;
+  private ImmutableSet<PathFragment> hardcodedBlacklistedPackagePrefixes;
+  private PathFragment additionalBlacklistedPackagePrefixesFile;
 
-  public BlacklistedPackagePrefixesFunction(PathFragment blacklistedPackagePrefixesFile) {
-    this.blacklistedPackagePrefixesFile = blacklistedPackagePrefixesFile;
-  }
-
-  public static void getBlacklistedPackagePrefixes(
-      RootedPath patternFile, ImmutableSet.Builder<PathFragment> blacklistedPackagePrefixesBuilder)
-      throws BlacklistedPatternsFunctionException {
-    try (InputStreamReader reader =
-        new InputStreamReader(patternFile.asPath().getInputStream(), StandardCharsets.UTF_8)) {
-      blacklistedPackagePrefixesBuilder.addAll(
-          CharStreams.readLines(reader, new PathFragmentLineProcessor()));
-    } catch (IOException e) {
-      String errorMessage = e.getMessage() != null ? "error '" + e.getMessage() + "'" : "an error";
-      throw new BlacklistedPatternsFunctionException(
-          new InconsistentFilesystemException(
-              patternFile.asPath()
-                  + " is not readable because: "
-                  + errorMessage
-                  + ". Was it modified mid-build?"));
-    }
+  public BlacklistedPackagePrefixesFunction(
+      ImmutableSet<PathFragment> hardcodedBlacklistedPackagePrefixes,
+      PathFragment additionalBlacklistedPackagePrefixesFile) {
+    this.hardcodedBlacklistedPackagePrefixes = hardcodedBlacklistedPackagePrefixes;
+    this.additionalBlacklistedPackagePrefixesFile = additionalBlacklistedPackagePrefixesFile;
   }
 
   @Nullable
   @Override
   public SkyValue compute(SkyKey key, Environment env)
       throws SkyFunctionException, InterruptedException {
-    RepositoryName repositoryName = (RepositoryName) key.argument();
-
     ImmutableSet.Builder<PathFragment> blacklistedPackagePrefixesBuilder = ImmutableSet.builder();
-    if (!blacklistedPackagePrefixesFile.equals(PathFragment.EMPTY_FRAGMENT)) {
+
+    blacklistedPackagePrefixesBuilder.addAll(hardcodedBlacklistedPackagePrefixes);
+
+    if (!additionalBlacklistedPackagePrefixesFile.equals(PathFragment.EMPTY_FRAGMENT)) {
       PathPackageLocator pkgLocator = PrecomputedValue.PATH_PACKAGE_LOCATOR.get(env);
       if (env.valuesMissing()) {
         return null;
       }
 
-      if (repositoryName.isMain()) {
-        for (Root packagePathEntry : pkgLocator.getPathEntries()) {
-          RootedPath rootedPatternFile =
-              RootedPath.toRootedPath(packagePathEntry, blacklistedPackagePrefixesFile);
-          FileValue patternFileValue = (FileValue) env.getValue(FileValue.key(rootedPatternFile));
-          if (patternFileValue == null) {
-            return null;
-          }
-          if (patternFileValue.isFile()) {
-            getBlacklistedPackagePrefixes(rootedPatternFile, blacklistedPackagePrefixesBuilder);
-            break;
-          }
-        }
-      } else {
-        // Make sure the repository is fetched.
-        RepositoryDirectoryValue repositoryValue =
-            (RepositoryDirectoryValue) env.getValue(RepositoryDirectoryValue.key(repositoryName));
-        if (repositoryValue == null) {
+      for (Path packagePathEntry : pkgLocator.getPathEntries()) {
+        RootedPath rootedPatternFile =
+            RootedPath.toRootedPath(packagePathEntry, additionalBlacklistedPackagePrefixesFile);
+        FileValue patternFileValue = (FileValue) env.getValue(FileValue.key(rootedPatternFile));
+        if (patternFileValue == null) {
           return null;
         }
-        if (repositoryValue.repositoryExists()) {
-          RootedPath rootedPatternFile =
-              RootedPath.toRootedPath(
-                  Root.fromPath(repositoryValue.getPath()), blacklistedPackagePrefixesFile);
-          FileValue patternFileValue = (FileValue) env.getValue(FileValue.key(rootedPatternFile));
-          if (patternFileValue == null) {
-            return null;
-          }
-          if (patternFileValue.isFile()) {
-            getBlacklistedPackagePrefixes(rootedPatternFile, blacklistedPackagePrefixesBuilder);
+        if (patternFileValue.isFile()) {
+          try {
+            try (InputStreamReader reader =
+                new InputStreamReader(rootedPatternFile.asPath().getInputStream(),
+                    StandardCharsets.UTF_8)) {
+              blacklistedPackagePrefixesBuilder.addAll(
+                  CharStreams.readLines(reader, new PathFragmentLineProcessor()));
+              break;
+            }
+          } catch (IOException e) {
+            String errorMessage = e.getMessage() != null
+                ? "error '" + e.getMessage() + "'" : "an error";
+            throw new BlacklistedPatternsFunctionException(
+                new InconsistentFilesystemException(
+                    rootedPatternFile.asPath() + " is not readable because: " +  errorMessage
+                        + ". Was it modified mid-build?"));
           }
         }
       }
     }
 
-    return BlacklistedPackagePrefixesValue.of(blacklistedPackagePrefixesBuilder.build());
+    return new BlacklistedPackagePrefixesValue(blacklistedPackagePrefixesBuilder.build());
   }
 
   private static final class PathFragmentLineProcessor
@@ -119,8 +94,8 @@ public class BlacklistedPackagePrefixesFunction implements SkyFunction {
     private final ImmutableSet.Builder<PathFragment> fragments = ImmutableSet.builder();
 
     @Override
-    public boolean processLine(String line) {
-      if (!line.isEmpty() && !line.startsWith("#")) {
+    public boolean processLine(String line) throws IOException {
+      if (!line.isEmpty()) {
         fragments.add(PathFragment.create(line));
       }
       return true;

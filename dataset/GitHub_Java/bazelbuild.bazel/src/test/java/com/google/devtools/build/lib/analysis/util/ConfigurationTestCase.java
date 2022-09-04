@@ -20,7 +20,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
-import com.google.devtools.build.lib.actions.ArtifactRoot;
+import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ServerDirectories;
@@ -48,7 +48,6 @@ import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.common.options.Converters;
 import com.google.devtools.common.options.InvocationPolicyEnforcer;
 import com.google.devtools.common.options.Option;
@@ -79,6 +78,7 @@ public abstract class ConfigurationTestCase extends FoundationTestCase {
       documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
       effectTags = {OptionEffectTag.NO_OP},
       defaultValue = "",
+      category = "semantics",
       help = "Additional target CPUs."
     )
     public List<String> multiCpus;
@@ -100,12 +100,12 @@ public abstract class ConfigurationTestCase extends FoundationTestCase {
     PathPackageLocator pkgLocator =
         new PathPackageLocator(
             outputBase,
-            ImmutableList.of(Root.fromPath(rootDirectory)),
+            ImmutableList.of(rootDirectory),
             BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY);
     final PackageFactory pkgFactory;
     BlazeDirectories directories =
         new BlazeDirectories(
-            new ServerDirectories(outputBase, outputBase, outputBase),
+            new ServerDirectories(outputBase, outputBase),
             rootDirectory,
             analysisMock.getProductName());
     pkgFactory =
@@ -114,6 +114,7 @@ public abstract class ConfigurationTestCase extends FoundationTestCase {
             .build(ruleClassProvider, scratch.getFileSystem());
     AnalysisTestUtil.DummyWorkspaceStatusActionFactory workspaceStatusActionFactory =
         new AnalysisTestUtil.DummyWorkspaceStatusActionFactory(directories);
+
     skyframeExecutor =
         SequencedSkyframeExecutor.create(
             pkgFactory,
@@ -129,8 +130,7 @@ public abstract class ConfigurationTestCase extends FoundationTestCase {
             BazelSkyframeExecutorConstants.ADDITIONAL_BLACKLISTED_PACKAGE_PREFIXES_FILE,
             BazelSkyframeExecutorConstants.CROSS_REPOSITORY_LABEL_VIOLATION_STRATEGY,
             BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY,
-            BazelSkyframeExecutorConstants.ACTION_ON_IO_EXCEPTION_READING_BUILD_FILE,
-            DefaultBuildOptionsForTesting.getDefaultBuildOptionsForTest(ruleClassProvider));
+            BazelSkyframeExecutorConstants.ACTION_ON_IO_EXCEPTION_READING_BUILD_FILE);
     TestConstants.processSkyframeExecutorForTesting(skyframeExecutor);
     skyframeExecutor.injectExtraPrecomputedValues(ImmutableList.of(PrecomputedValue.injected(
         RepositoryDelegatorFunction.REPOSITORY_OVERRIDES,
@@ -201,7 +201,7 @@ public abstract class ConfigurationTestCase extends FoundationTestCase {
 
   public void assertConfigurationsHaveUniqueOutputDirectories(
       BuildConfigurationCollection configCollection) throws Exception {
-    Map<ArtifactRoot, BuildConfiguration> outputPaths = new HashMap<>();
+    Map<Root, BuildConfiguration> outputPaths = new HashMap<>();
     for (BuildConfiguration config : configCollection.getTargetConfigurations()) {
       if (config.isActionsEnabled()) {
         BuildConfiguration otherConfig = outputPaths.get(

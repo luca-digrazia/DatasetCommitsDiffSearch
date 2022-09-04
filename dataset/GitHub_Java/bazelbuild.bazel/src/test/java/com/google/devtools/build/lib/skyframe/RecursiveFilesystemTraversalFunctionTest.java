@@ -28,8 +28,8 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.FilesetTraversalParams.PackageBoundaryMode;
+import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ServerDirectories;
@@ -46,7 +46,6 @@ import com.google.devtools.build.lib.testutil.FoundationTestCase;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.ErrorInfo;
 import com.google.devtools.build.skyframe.EvaluationProgressReceiver;
@@ -90,7 +89,7 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
         new AtomicReference<>(
             new PathPackageLocator(
                 outputBase,
-                ImmutableList.of(Root.fromPath(rootDirectory)),
+                ImmutableList.of(rootDirectory),
                 BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY));
     AtomicReference<ImmutableSet<PackageIdentifier>> deletedPackages =
         new AtomicReference<>(ImmutableSet.<PackageIdentifier>of());
@@ -151,14 +150,12 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
   }
 
   private Artifact sourceArtifact(String path) {
-    return new Artifact(
-        PathFragment.create(path), ArtifactRoot.asSourceRoot(Root.fromPath(rootDirectory)));
+    return new Artifact(PathFragment.create(path), Root.asSourceRoot(rootDirectory));
   }
 
   private Artifact sourceArtifactUnderPackagePath(String path, String packagePath) {
     return new Artifact(
-        PathFragment.create(path),
-        ArtifactRoot.asSourceRoot(Root.fromPath(rootDirectory.getRelative(packagePath))));
+        PathFragment.create(path), Root.asSourceRoot(rootDirectory.getRelative(packagePath)));
   }
 
   private Artifact derivedArtifact(String path) {
@@ -167,46 +164,43 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
     Artifact output =
         new Artifact(
             fullPath,
-            ArtifactRoot.asDerivedRoot(rootDirectory, rootDirectory.getRelative("out")),
+            Root.asDerivedRoot(rootDirectory, rootDirectory.getRelative("out")),
             execPath);
     return output;
   }
 
   private static RootedPath rootedPath(Artifact artifact) {
-    return RootedPath.toRootedPath(artifact.getRoot().getRoot(), artifact.getRootRelativePath());
+    return RootedPath.toRootedPath(artifact.getRoot().getPath(), artifact.getRootRelativePath());
   }
 
   private RootedPath rootedPath(String path, String packagePath) {
     return RootedPath.toRootedPath(
-        Root.fromPath(rootDirectory.getRelative(packagePath)), PathFragment.create(path));
+        rootDirectory.getRelative(packagePath), PathFragment.create(path));
   }
 
   private static RootedPath childOf(Artifact artifact, String relative) {
     return RootedPath.toRootedPath(
-        artifact.getRoot().getRoot(), artifact.getRootRelativePath().getRelative(relative));
+        artifact.getRoot().getPath(), artifact.getRootRelativePath().getRelative(relative));
   }
 
   private static RootedPath childOf(RootedPath path, String relative) {
-    return RootedPath.toRootedPath(
-        path.getRoot(), path.getRootRelativePath().getRelative(relative));
+    return RootedPath.toRootedPath(path.getRoot(), path.getRelativePath().getRelative(relative));
   }
 
   private static RootedPath parentOf(RootedPath path) {
-    PathFragment parent =
-        Preconditions.checkNotNull(path.getRootRelativePath().getParentDirectory());
+    PathFragment parent = Preconditions.checkNotNull(path.getRelativePath().getParentDirectory());
     return RootedPath.toRootedPath(path.getRoot(), parent);
   }
 
   private static RootedPath siblingOf(RootedPath path, String relative) {
-    PathFragment parent =
-        Preconditions.checkNotNull(path.getRootRelativePath().getParentDirectory());
+    PathFragment parent = Preconditions.checkNotNull(path.getRelativePath().getParentDirectory());
     return RootedPath.toRootedPath(path.getRoot(), parent.getRelative(relative));
   }
 
   private static RootedPath siblingOf(Artifact artifact, String relative) {
     PathFragment parent =
         Preconditions.checkNotNull(artifact.getRootRelativePath().getParentDirectory());
-    return RootedPath.toRootedPath(artifact.getRoot().getRoot(), parent.getRelative(relative));
+    return RootedPath.toRootedPath(artifact.getRoot().getPath(), parent.getRelative(relative));
   }
 
   private void createFile(Path path, String... contents) throws Exception {
@@ -707,9 +701,7 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
     pkgLocator.set(
         new PathPackageLocator(
             outputBase,
-            ImmutableList.of(
-                Root.fromPath(rootDirectory.getRelative("pp1")),
-                Root.fromPath(rootDirectory.getRelative("pp2"))),
+            ImmutableList.of(rootDirectory.getRelative("pp1"), rootDirectory.getRelative("pp2")),
             BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY));
     PrecomputedValue.PATH_PACKAGE_LOCATOR.set(differencer, pkgLocator.get());
 

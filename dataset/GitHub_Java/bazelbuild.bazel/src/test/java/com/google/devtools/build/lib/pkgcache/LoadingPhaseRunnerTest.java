@@ -55,7 +55,6 @@ import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 import com.google.devtools.common.options.Options;
 import com.google.devtools.common.options.OptionsParser;
@@ -145,43 +144,6 @@ public class LoadingPhaseRunnerTest {
     assertThat(loadingResult.getTestsToRun()).isNull();
     tester.assertContainsError("Skipping '//base:missing': no such target '//base:missing'");
     tester.assertContainsWarning("Target pattern parsing failed.");
-  }
-
-  @Test
-  public void testMistypedTarget() throws Exception {
-    try {
-      tester.load("foo//bar:missing");
-      fail();
-    } catch (TargetParsingException e) {
-      assertThat(e).hasMessageThat().contains(
-          "invalid target format 'foo//bar:missing': "
-          + "invalid package name 'foo//bar': "
-          + "package names may not contain '//' path separators");
-    }
-  }
-
-  @Test
-  public void testEmptyTarget() throws Exception {
-    try {
-      tester.load("");
-      fail();
-    } catch (TargetParsingException e) {
-      assertThat(e).hasMessageThat().contains("the empty string is not a valid target");
-    }
-  }
-
-  @Test
-  public void testMistypedTargetKeepGoing() throws Exception {
-    LoadingResult result = tester.loadKeepGoing("foo//bar:missing");
-    // Legacy loading phase does _not_ report a target pattern error, and it's work to fix, so we
-    // skip this check for now.
-    if (useSkyframeTargetPatternEval()) {
-      assertThat(result.hasTargetPatternError()).isTrue();
-    }
-    tester.assertContainsError(
-          "invalid target format 'foo//bar:missing': "
-          + "invalid package name 'foo//bar': "
-          + "package names may not contain '//' path separators");
   }
 
   @Test
@@ -590,20 +552,6 @@ public class LoadingPhaseRunnerTest {
   }
 
   @Test
-  public void testCompileOneDependencyReferencesFile() throws Exception {
-    tester.addFile("base/BUILD",
-        "cc_library(name = 'hello', srcs = ['hello.cc', '//bad:bad.cc'])");
-    tester.useLoadingOptions("--compile_one_dependency");
-    try {
-      tester.load("//base:hello");
-      fail();
-    } catch (TargetParsingException e) {
-      assertThat(e).hasMessageThat()
-          .contains("--compile_one_dependency target '//base:hello' must be a file");
-    }
-  }
-
-  @Test
   public void testParsingFailureReported() throws Exception {
     LoadingResult loadingResult = tester.loadKeepGoing("//does_not_exist");
     assertThat(loadingResult.hasTargetPatternError()).isTrue();
@@ -801,8 +749,7 @@ public class LoadingPhaseRunnerTest {
         builder.modify(workspacePath);
       }
       ModifiedFileSet modified = builder.build();
-      skyframeExecutor.invalidateFilesUnderPathForTesting(
-          storedErrors, modified, Root.fromPath(workspace));
+      skyframeExecutor.invalidateFilesUnderPathForTesting(storedErrors, modified, workspace);
 
       changes.clear();
     }

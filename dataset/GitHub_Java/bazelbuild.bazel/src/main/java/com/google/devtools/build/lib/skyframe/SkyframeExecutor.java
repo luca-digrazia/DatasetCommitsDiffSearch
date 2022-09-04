@@ -415,15 +415,11 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
             new BuildViewProvider(),
             ruleClassProvider,
             cpuBoundSemaphore,
-            removeActionsAfterEvaluation,
-            shouldStoreTransitivePackagesInLoadingAndAnalysis()));
+            removeActionsAfterEvaluation));
     map.put(
         SkyFunctions.ASPECT,
         new AspectFunction(
-            new BuildViewProvider(),
-            ruleClassProvider,
-            removeActionsAfterEvaluation,
-            shouldStoreTransitivePackagesInLoadingAndAnalysis()));
+            new BuildViewProvider(), ruleClassProvider, removeActionsAfterEvaluation));
     map.put(SkyFunctions.LOAD_SKYLARK_ASPECT, new ToplevelSkylarkAspectFunction());
     map.put(SkyFunctions.POST_CONFIGURED_TARGET,
         new PostConfiguredTargetFunction(new BuildViewProvider(), ruleClassProvider));
@@ -608,7 +604,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
             evaluatorDiffer(),
             progressReceiver,
             emittedEventState,
-            tracksStateForIncrementality());
+            hasIncrementalState());
     buildDriver = getBuildDriver();
   }
 
@@ -690,37 +686,28 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   }
 
   /**
-   * Decides if graph edges should be stored during this evaluation and checks if the state from the
-   * last evaluation, if any, can be kept.
+   * Decides if graph edges should be stored for this build. If not, notes that the next evaluation
+   * on the graph should reset it first. Necessary conditions to not store graph edges are:
    *
-   * <p>If not, it will mark this state for deletion. The actual cleaning is put off until {@link
-   * #sync}, in case no evaluation was actually called for and the existing state can be kept for
-   * longer.
+   * <ol>
+   *   <li>batch (since incremental builds are not possible);
+   *   <li>keep-going (since otherwise bubbling errors up may require edges of done nodes);
+   *   <li>discard_analysis_cache (since otherwise user isn't concerned about saving memory this
+   *       way).
+   * </ol>
    */
   public void decideKeepIncrementalState(
       boolean batch, OptionsProvider viewOptions, EventHandler eventHandler) {
     // Assume incrementality.
   }
 
-  /** Whether this executor tracks state for the purpose of improving incremental performance. */
-  public boolean tracksStateForIncrementality() {
+  public boolean hasIncrementalState() {
     return true;
   }
 
-  /**
-   * If not null, this is the only source root in the build, corresponding to the single element in
-   * a single-element package path. Such a single-source-root build need not plant the execroot
-   * symlink forest, and can trivially resolve source artifacts from exec paths. As a consequence,
-   * builds where this is not null do not need to track a package -> source root map, and so do not
-   * need to track all loaded packages.
-   */
   @Nullable
   protected Path getForcedSingleSourceRootIfNoExecrootSymlinkCreation() {
     return null;
-  }
-
-  private boolean shouldStoreTransitivePackagesInLoadingAndAnalysis() {
-    return getForcedSingleSourceRootIfNoExecrootSymlinkCreation() == null;
   }
 
   @VisibleForTesting
@@ -1871,9 +1858,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     return pkgFactory.getPackageBuilderHelperForTesting();
   }
 
-  /**
-   * Initializes and syncs the graph with the given options, readying it for the next evaluation.
-   */
   public void sync(
       ExtendedEventHandler eventHandler,
       PackageCacheOptions packageCacheOptions,
@@ -1995,17 +1979,12 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
         @Nullable LoadingCallback callback)
         throws TargetParsingException, LoadingFailedException, InterruptedException {
       Stopwatch timer = Stopwatch.createStarted();
-      SkyKey key =
-          TargetPatternPhaseValue.key(
-              ImmutableList.copyOf(targetPatterns),
-              relativeWorkingDirectory.getPathString(),
-              options.compileOneDependency,
-              options.buildTestsOnly,
-              determineTests,
-              ImmutableList.copyOf(options.buildTagFilterList),
-              options.buildManualTests,
-              options.expandTestSuites,
-              TestFilter.forOptions(options, eventHandler, ruleClassNames));
+      SkyKey key = TargetPatternPhaseValue.key(ImmutableList.copyOf(targetPatterns),
+          relativeWorkingDirectory.getPathString(), options.compileOneDependency,
+          options.buildTestsOnly, determineTests,
+          ImmutableList.copyOf(options.buildTagFilterList),
+          options.buildManualTests,
+          TestFilter.forOptions(options, eventHandler, ruleClassNames));
       EvaluationResult<TargetPatternPhaseValue> evalResult;
       eventHandler.post(new LoadingPhaseStartedEvent(packageProgress));
       evalResult =
@@ -2038,7 +2017,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
         callback.notifyTargets(patternParsingValue.getTargets());
       }
       eventHandler.post(new LoadingPhaseCompleteEvent(
-          patternParsingValue.getTargets(), patternParsingValue.getRemovedTargets(),
+          patternParsingValue.getTargets(), patternParsingValue.getTestSuiteTargets(),
           PackageManagerStatistics.ZERO, /*timeInMs=*/0));
       return patternParsingValue.toLoadingResult();
     }

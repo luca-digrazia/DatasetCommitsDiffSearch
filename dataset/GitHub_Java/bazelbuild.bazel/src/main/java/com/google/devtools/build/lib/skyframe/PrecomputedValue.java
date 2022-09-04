@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory.BuildIn
 import com.google.devtools.build.lib.packages.RuleVisibility;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.skyframe.SkyframeActionExecutor.ConflictException;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.skyframe.Injectable;
 import com.google.devtools.build.skyframe.LegacySkyKey;
@@ -41,7 +40,6 @@ import javax.annotation.Nullable;
  * "precomputed" from skyframe's perspective and so the graph needs to be prepopulated with them
  * (e.g. via injection).
  */
-@AutoCodec
 public final class PrecomputedValue implements SkyValue {
   /**
    * An externally-injected precomputed value. Exists so that modules can inject precomputed values
@@ -105,7 +103,6 @@ public final class PrecomputedValue implements SkyValue {
 
   private final Object value;
 
-  @AutoCodec.Instantiator
   public PrecomputedValue(Object value) {
     this.value = Preconditions.checkNotNull(value);
   }

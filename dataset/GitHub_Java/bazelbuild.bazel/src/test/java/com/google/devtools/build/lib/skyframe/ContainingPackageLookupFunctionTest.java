@@ -40,7 +40,6 @@ import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.skyframe.InMemoryMemoizingEvaluator;
 import com.google.devtools.build.skyframe.MemoizingEvaluator;
 import com.google.devtools.build.skyframe.RecordingDifferencer;
@@ -78,16 +77,16 @@ public class ContainingPackageLookupFunctionTest extends FoundationTestCase {
         new AtomicReference<>(
             new PathPackageLocator(
                 outputBase,
-                ImmutableList.of(Root.fromPath(rootDirectory)),
+                ImmutableList.of(rootDirectory),
                 BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY));
     deletedPackages = new AtomicReference<>(ImmutableSet.<PackageIdentifier>of());
     BlazeDirectories directories =
         new BlazeDirectories(
-            new ServerDirectories(rootDirectory, outputBase, outputBase),
+            new ServerDirectories(rootDirectory, outputBase),
             rootDirectory,
             analysisMock.getProductName());
     ExternalFilesHelper externalFilesHelper =
-        ExternalFilesHelper.createForTesting(
+        new ExternalFilesHelper(
             pkgLocator,
             ExternalFileAction.DEPEND_ON_EXTERNAL_PKG_FOR_EXTERNAL_REPO_PATHS,
             directories);
@@ -125,7 +124,7 @@ public class ContainingPackageLookupFunctionTest extends FoundationTestCase {
                 .setEnvironmentExtensions(
                     ImmutableList.<EnvironmentExtension>of(
                         new PackageFactory.EmptyEnvironmentExtension()))
-                .build(ruleClassProvider),
+                .build(ruleClassProvider, scratch.getFileSystem()),
             directories));
     skyFunctions.put(SkyFunctions.EXTERNAL_PACKAGE, new ExternalPackageFunction());
     skyFunctions.put(SkyFunctions.LOCAL_REPOSITORY_LOOKUP, new LocalRepositoryLookupFunction());
@@ -179,7 +178,7 @@ public class ContainingPackageLookupFunctionTest extends FoundationTestCase {
     ContainingPackageLookupValue value = lookupContainingPackage("a/b");
     assertThat(value.hasContainingPackage()).isTrue();
     assertThat(value.getContainingPackageName()).isEqualTo(PackageIdentifier.createInMainRepo("a"));
-    assertThat(value.getContainingPackageRoot()).isEqualTo(Root.fromPath(rootDirectory));
+    assertThat(value.getContainingPackageRoot()).isEqualTo(rootDirectory);
   }
 
   @Test
@@ -189,7 +188,7 @@ public class ContainingPackageLookupFunctionTest extends FoundationTestCase {
     assertThat(value.hasContainingPackage()).isTrue();
     assertThat(value.getContainingPackageName())
         .isEqualTo(PackageIdentifier.createInMainRepo("a/b"));
-    assertThat(value.getContainingPackageRoot()).isEqualTo(Root.fromPath(rootDirectory));
+    assertThat(value.getContainingPackageRoot()).isEqualTo(rootDirectory);
   }
 
   @Test
@@ -228,18 +227,18 @@ public class ContainingPackageLookupFunctionTest extends FoundationTestCase {
     ContainingPackageLookupValue valueA2 = ContainingPackageLookupValue.NONE;
     ContainingPackageLookupValue valueB1 =
         ContainingPackageLookupValue.withContainingPackage(
-            PackageIdentifier.createInMainRepo("b"), Root.fromPath(rootDirectory));
+            PackageIdentifier.createInMainRepo("b"), rootDirectory);
     ContainingPackageLookupValue valueB2 =
         ContainingPackageLookupValue.withContainingPackage(
-            PackageIdentifier.createInMainRepo("b"), Root.fromPath(rootDirectory));
+            PackageIdentifier.createInMainRepo("b"), rootDirectory);
     PackageIdentifier cFrag = PackageIdentifier.createInMainRepo("c");
     ContainingPackageLookupValue valueC1 =
-        ContainingPackageLookupValue.withContainingPackage(cFrag, Root.fromPath(rootDirectory));
+        ContainingPackageLookupValue.withContainingPackage(cFrag, rootDirectory);
     ContainingPackageLookupValue valueC2 =
-        ContainingPackageLookupValue.withContainingPackage(cFrag, Root.fromPath(rootDirectory));
+        ContainingPackageLookupValue.withContainingPackage(cFrag, rootDirectory);
     ContainingPackageLookupValue valueCOther =
         ContainingPackageLookupValue.withContainingPackage(
-            cFrag, Root.fromPath(rootDirectory.getRelative("other_root")));
+            cFrag, rootDirectory.getRelative("other_root"));
     new EqualsTester()
         .addEqualityGroup(valueA1, valueA2)
         .addEqualityGroup(valueB1, valueB2)

@@ -25,13 +25,11 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.ArtifactRoot;
-import com.google.devtools.build.lib.actions.FileStateValue;
-import com.google.devtools.build.lib.actions.FileValue;
 import com.google.devtools.build.lib.actions.FilesetOutputSymlink;
 import com.google.devtools.build.lib.actions.FilesetTraversalParams;
 import com.google.devtools.build.lib.actions.FilesetTraversalParams.PackageBoundaryMode;
 import com.google.devtools.build.lib.actions.FilesetTraversalParamsFactory;
+import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ServerDirectories;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -47,7 +45,6 @@ import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.InMemoryMemoizingEvaluator;
@@ -87,27 +84,24 @@ public final class FilesetEntryFunctionTest extends FoundationTestCase {
         new AtomicReference<>(
             new PathPackageLocator(
                 outputBase,
-                ImmutableList.of(Root.fromPath(rootDirectory)),
+                ImmutableList.of(rootDirectory),
                 BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY));
     AtomicReference<ImmutableSet<PackageIdentifier>> deletedPackages =
         new AtomicReference<>(ImmutableSet.<PackageIdentifier>of());
     ExternalFilesHelper externalFilesHelper =
-        ExternalFilesHelper.createForTesting(
+        new ExternalFilesHelper(
             pkgLocator,
             ExternalFileAction.DEPEND_ON_EXTERNAL_PKG_FOR_EXTERNAL_REPO_PATHS,
             new BlazeDirectories(
-                new ServerDirectories(outputBase, outputBase, outputBase),
+                new ServerDirectories(outputBase, outputBase),
                 rootDirectory,
-                /* defaultSystemJavabase= */ null,
                 TestConstants.PRODUCT_NAME));
 
     Map<SkyFunctionName, SkyFunction> skyFunctions = new HashMap<>();
 
-    skyFunctions.put(
-        FileStateValue.FILE_STATE,
-        new FileStateFunction(
-            new AtomicReference<TimestampGranularityMonitor>(), externalFilesHelper));
-    skyFunctions.put(FileValue.FILE, new FileFunction(pkgLocator));
+    skyFunctions.put(SkyFunctions.FILE_STATE, new FileStateFunction(
+        new AtomicReference<TimestampGranularityMonitor>(), externalFilesHelper));
+    skyFunctions.put(SkyFunctions.FILE, new FileFunction(pkgLocator));
     skyFunctions.put(SkyFunctions.DIRECTORY_LISTING, new DirectoryListingFunction());
     skyFunctions.put(
         SkyFunctions.DIRECTORY_LISTING_STATE,
@@ -135,8 +129,7 @@ public final class FilesetEntryFunctionTest extends FoundationTestCase {
   }
 
   private Artifact getSourceArtifact(String path) throws Exception {
-    return new Artifact(
-        PathFragment.create(path), ArtifactRoot.asSourceRoot(Root.fromPath(rootDirectory)));
+    return new Artifact(PathFragment.create(path), Root.asSourceRoot(rootDirectory));
   }
 
   private Artifact createSourceArtifact(String path) throws Exception {
@@ -146,18 +139,18 @@ public final class FilesetEntryFunctionTest extends FoundationTestCase {
   }
 
   private static RootedPath rootedPath(Artifact artifact) {
-    return RootedPath.toRootedPath(artifact.getRoot().getRoot(), artifact.getRootRelativePath());
+    return RootedPath.toRootedPath(artifact.getRoot().getPath(), artifact.getRootRelativePath());
   }
 
   private static RootedPath childOf(Artifact artifact, String relative) {
     return RootedPath.toRootedPath(
-        artifact.getRoot().getRoot(), artifact.getRootRelativePath().getRelative(relative));
+        artifact.getRoot().getPath(), artifact.getRootRelativePath().getRelative(relative));
   }
 
   private static RootedPath siblingOf(Artifact artifact, String relative) {
     PathFragment parent =
         Preconditions.checkNotNull(artifact.getRootRelativePath().getParentDirectory());
-    return RootedPath.toRootedPath(artifact.getRoot().getRoot(), parent.getRelative(relative));
+    return RootedPath.toRootedPath(artifact.getRoot().getPath(), parent.getRelative(relative));
   }
 
   private void createFile(Path path, String... contents) throws Exception {
@@ -215,7 +208,7 @@ public final class FilesetEntryFunctionTest extends FoundationTestCase {
   }
 
   private static Label label(String label) throws Exception {
-    return Label.parseAbsolute(label, ImmutableMap.of());
+    return Label.parseAbsolute(label);
   }
 
   @Test

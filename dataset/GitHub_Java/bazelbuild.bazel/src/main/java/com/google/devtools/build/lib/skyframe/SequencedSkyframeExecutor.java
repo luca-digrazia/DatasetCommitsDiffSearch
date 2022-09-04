@@ -107,13 +107,17 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
 
   private boolean lastAnalysisDiscarded = false;
 
+  private enum IncrementalState {
+    NORMAL,
+    CLEAR_EDGES_AND_ACTIONS
+  }
+
   /**
-   * If false, the graph will not store state useful for incremental builds, saving memory but
-   * leaving the graph un-reusable. Subsequent builds will therefore not be incremental.
-   *
-   * <p>Avoids storing edges entirely and dereferences each action after execution.
+   * If {@link IncrementalState#CLEAR_EDGES_AND_ACTIONS}, the graph will not store edges, saving
+   * memory but making subsequent builds not incremental. Also, each action will be dereferenced
+   * once it is executed, saving memory.
    */
-  private boolean trackIncrementalState = true;
+  private IncrementalState incrementalState = IncrementalState.NORMAL;
 
   private boolean evaluatorNeedsReset = false;
 
@@ -465,8 +469,6 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
     incrementalBuildMonitor.accrue(changedKeysWithNewValues.keySet());
   }
 
-  private static final int MAX_NUMBER_OF_CHANGED_KEYS_TO_LOG = 10;
-
   private static void logDiffInfo(Iterable<Path> pathEntries,
                                   Collection<SkyKey> changedWithoutNewValue,
                                   Map<SkyKey, ? extends SkyValue> changedWithNewValue) {
@@ -482,13 +484,12 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
     if (numModified > 0) {
       Iterable<SkyKey> allModifiedKeys = Iterables.concat(changedWithoutNewValue,
           changedWithNewValue.keySet());
-      Iterable<SkyKey> trimmed =
-          Iterables.limit(allModifiedKeys, MAX_NUMBER_OF_CHANGED_KEYS_TO_LOG);
+      Iterable<SkyKey> trimmed = Iterables.limit(allModifiedKeys, 5);
 
       result.append(": ")
           .append(Joiner.on(", ").join(trimmed));
 
-      if (numModified > MAX_NUMBER_OF_CHANGED_KEYS_TO_LOG) {
+      if (numModified > 5) {
         result.append(", ...");
       }
     }
@@ -503,63 +504,52 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
         SkyFunctionName.functionIs(SkyFunctions.FILE_STATE)));
   }
 
-  /**
-   * {@inheritDoc}
-   *
-   * <p>Necessary conditions to not store graph edges are either
-   *
-   * <ol>
-   *   <li>batch (since incremental builds are not possible) and discard_analysis_cache (since
-   *       otherwise user isn't concerned about saving memory this way).
-   *   <li>track_incremental_state set to false.
-   * </ol>
-   */
   @Override
   public void decideKeepIncrementalState(
       boolean batch, OptionsProvider options, EventHandler eventHandler) {
     Preconditions.checkState(!active);
     BuildView.Options viewOptions = options.getOptions(BuildView.Options.class);
     BuildRequestOptions requestOptions = options.getOptions(BuildRequestOptions.class);
-    boolean oldState = trackIncrementalState;
-
-    // First check if the incrementality state should be kept around during the build.
     boolean explicitlyRequestedNoIncrementalData =
-        requestOptions != null && !requestOptions.trackIncrementalState;
+        requestOptions != null && !requestOptions.keepIncrementalityData;
     boolean implicitlyRequestedNoIncrementalData =
         batch && viewOptions != null && viewOptions.discardAnalysisCache;
-    trackIncrementalState =
-        !explicitlyRequestedNoIncrementalData && !implicitlyRequestedNoIncrementalData;
+    boolean discardingEdges =
+        explicitlyRequestedNoIncrementalData || implicitlyRequestedNoIncrementalData;
     if (explicitlyRequestedNoIncrementalData != implicitlyRequestedNoIncrementalData) {
       if (requestOptions != null && !explicitlyRequestedNoIncrementalData) {
         eventHandler.handle(
             Event.warn(
-                "--batch and --discard_analysis_cache specified, but --notrack_incremental_state "
+                "--batch and --discard_analysis_cache specified, but --nokeep_incrementality_data "
                     + "not specified: incrementality data is implicitly discarded, but you may need"
-                    + " to specify --notrack_incremental_state in the future if you want to "
+                    + " to specify --nokeep_incrementality_data in the future if you want to "
                     + "maximize memory savings."));
       }
       if (!batch) {
         eventHandler.handle(
             Event.warn(
-                "--batch not specified with --notrack_incremental_state: the server will "
+                "--batch not specified with --nokeep_incrementality_data: the server will "
                     + "remain running, but the next build will not be incremental on this one."));
       }
     }
-
-    // Now check if it is necessary to wipe the previous state. We do this if either the previous
-    // or current incrementalStateRetentionStrategy requires the build to have been isolated.
-    if (oldState != trackIncrementalState) {
-      logger.info("Set incremental state to " + trackIncrementalState);
+    IncrementalState oldState = incrementalState;
+    incrementalState =
+        discardingEdges ? IncrementalState.CLEAR_EDGES_AND_ACTIONS : IncrementalState.NORMAL;
+    if (oldState != incrementalState) {
+      logger.info("Set incremental state to " + incrementalState);
       evaluatorNeedsReset = true;
-      removeActionsAfterEvaluation.set(!trackIncrementalState);
-    } else if (!trackIncrementalState) {
+      removeActionsAfterEvaluation.set(
+          incrementalState == IncrementalState.CLEAR_EDGES_AND_ACTIONS);
+    } else if (incrementalState == IncrementalState.CLEAR_EDGES_AND_ACTIONS) {
       evaluatorNeedsReset = true;
     }
   }
 
   @Override
-  public boolean tracksStateForIncrementality() {
-    return trackIncrementalState;
+  public boolean hasIncrementalState() {
+    // TODO(bazel-team): Combine this method with clearSkyframeRelevantCaches() once legacy
+    // execution is removed [skyframe-execution].
+    return incrementalState == IncrementalState.NORMAL;
   }
 
   @Override
@@ -628,7 +618,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
    * phase. Instead, their analysis-time data is cleared while preserving the generating action info
    * needed for execution. The next build will delete the nodes (and recreate them if necessary).
    *
-   * <p>If {@link #tracksStateForIncrementality} is false, then also delete loading-phase nodes (as
+   * <p>If {@link #hasIncrementalState} is false, then also delete loading-phase nodes (as
    * determined by {@link #LOADING_TYPES}) from the graph, since there will be no future builds to
    * use them for.
    */
@@ -648,7 +638,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
         }
         SkyKey key = keyAndEntry.getKey();
         SkyFunctionName functionName = key.functionName();
-        if (!tracksStateForIncrementality() && LOADING_TYPES.contains(functionName)) {
+        if (!hasIncrementalState() && LOADING_TYPES.contains(functionName)) {
           it.remove();
           continue;
         }
