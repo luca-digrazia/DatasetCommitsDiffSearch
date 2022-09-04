@@ -25,7 +25,6 @@ import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
-import javax.lang.model.element.Name;
 import javax.lang.model.element.PackageElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.DeclaredType;
@@ -163,12 +162,12 @@ final public class ConfigDocItemScanner {
             }
 
             final String fileName = computeExtensionDocFileName(member);
-            final List<ConfigDocItem> existingConfigDocItems = foundExtensionConfigurationItems.get(fileName);
+            final List<ConfigDocItem> previousExtensionConfigDocKeys = foundExtensionConfigurationItems.get(fileName);
 
-            if (existingConfigDocItems == null) {
+            if (previousExtensionConfigDocKeys == null) {
                 foundExtensionConfigurationItems.put(fileName, configDocItems);
             } else {
-                DocGeneratorUtil.appendConfigItemsIntoExistingOnes(existingConfigDocItems, configDocItems);
+                previousExtensionConfigDocKeys.addAll(configDocItems);
             }
         }
 
@@ -205,7 +204,14 @@ final public class ConfigDocItemScanner {
                     new TypeReference<List<ConfigDocItem>>() {
                     });
 
-            foundExtensionConfigurationItems.put(member, configDocItems);
+            final String fileName = computeExtensionDocFileName(member);
+            final List<ConfigDocItem> previousExtensionConfigDocKeys = foundExtensionConfigurationItems.get(fileName);
+
+            if (previousExtensionConfigDocKeys == null) {
+                foundExtensionConfigurationItems.put(fileName, configDocItems);
+            } else {
+                previousExtensionConfigDocKeys.addAll(configDocItems);
+            }
         }
 
         return foundExtensionConfigurationItems;
@@ -314,9 +320,9 @@ final public class ConfigDocItemScanner {
                     configSection = new ConfigDocSection();
                     configSection.setWithinAMap(withinAMap);
                     configSection.setConfigPhase(configPhase);
+                    configSection.setName(parentName + Constants.DOT + hyphenatedFieldName);
                     configSection.setSectionDetails(sectionHolder.details);
                     configSection.setSectionDetailsTitle(sectionHolder.title);
-                    configSection.setName(parentName + Constants.DOT + hyphenatedFieldName);
                 }
             }
 
@@ -337,21 +343,8 @@ final public class ConfigDocItemScanner {
             } else {
                 final ConfigDocKey configDocKey = new ConfigDocKey();
                 configDocKey.setWithinAMap(withinAMap);
-                boolean optional = false;
-                boolean list = false;
                 if (!typeMirror.getKind().isPrimitive()) {
                     DeclaredType declaredType = (DeclaredType) typeMirror;
-                    TypeElement typeElement = (TypeElement) declaredType.asElement();
-                    Name qualifiedName = typeElement.getQualifiedName();
-
-                    if (qualifiedName.contentEquals("java.util.Optional")
-                            || qualifiedName.contentEquals("java.util.OptionalInt")
-                            || qualifiedName.contentEquals("java.util.OptionalDouble")
-                            || qualifiedName.contentEquals("java.util.OptionalLong")) {
-                        optional = true;
-                    } else if (qualifiedName.contentEquals("java.util.List")) {
-                        list = true;
-                    }
                     List<? extends TypeMirror> typeArguments = declaredType.getTypeArguments();
                     if (!typeArguments.isEmpty()) {
                         // FIXME: this is super dodgy: we should check the type!!
@@ -369,7 +362,7 @@ final public class ConfigDocItemScanner {
                                 configDocKey.setWithinAMap(true);
                             }
                         } else {
-                            // FIXME: this is for Optional<T> and List<T>
+                            // FIXME: I assume this is for Optional<T>
                             TypeMirror realTypeMirror = typeArguments.get(0);
                             type = simpleTypeToString(realTypeMirror);
 
@@ -391,8 +384,6 @@ final public class ConfigDocItemScanner {
                 configDocKey.setType(type);
                 configDocKey.setConfigPhase(configPhase);
                 configDocKey.setDefaultValue(defaultValue);
-                configDocKey.setOptional(optional);
-                configDocKey.setList(list);
                 configDocKey.setConfigDoc(configDescription);
                 configDocKey.setAcceptedValues(acceptedValues);
                 configDocKey.setJavaDocSiteLink(getJavaDocSiteLink(type));
