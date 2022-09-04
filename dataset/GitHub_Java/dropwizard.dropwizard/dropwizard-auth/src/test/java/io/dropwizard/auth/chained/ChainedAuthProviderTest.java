@@ -2,12 +2,8 @@ package io.dropwizard.auth.chained;
 
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.ImmutableList;
-import io.dropwizard.auth.AuthBaseTest;
-import io.dropwizard.auth.AuthDynamicFeature;
-import io.dropwizard.auth.AuthFilter;
-import io.dropwizard.auth.AuthResource;
-import io.dropwizard.auth.AuthValueFactoryProvider;
-import io.dropwizard.auth.Authorizer;
+import com.google.common.collect.Lists;
+import io.dropwizard.auth.*;
 import io.dropwizard.auth.basic.BasicCredentialAuthFilter;
 import io.dropwizard.auth.basic.BasicCredentials;
 import io.dropwizard.auth.oauth.OAuthCredentialAuthFilter;
@@ -25,7 +21,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class ChainedAuthProviderTest extends AuthBaseTest<ChainedAuthProviderTest.ChainedAuthTestResourceConfig>{
     private static final String BEARER_USER = "A12B3C4D";
     public static class ChainedAuthTestResourceConfig extends DropwizardResourceConfig {
-        @SuppressWarnings("unchecked")
         public ChainedAuthTestResourceConfig() {
             super(true, new MetricRegistry());
 
@@ -50,7 +45,10 @@ public class ChainedAuthProviderTest extends AuthBaseTest<ChainedAuthProviderTes
         @SuppressWarnings("unchecked")
         public List<AuthFilter> buildHandlerList(AuthFilter<BasicCredentials, Principal> basicAuthFilter,
                                                  AuthFilter<String, Principal> oAuthFilter) {
-            return ImmutableList.of(basicAuthFilter, oAuthFilter);
+            final List<AuthFilter> handlers = Lists.newArrayList();
+            handlers.add(basicAuthFilter);
+            handlers.add(oAuthFilter);
+            return handlers;
         }
     }
 
