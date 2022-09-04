@@ -116,19 +116,13 @@ class VertxWebProcessor {
 
     @BuildStep
     @Record(ExecutionTime.RUNTIME_INIT)
-    BodyHandlerBuildItem bodyHandler(VertxWebRecorder recorder, HttpConfiguration httpConfiguration) {
-        return new BodyHandlerBuildItem(recorder.createBodyHandler(httpConfiguration));
-    }
-
-    @BuildStep
-    @Record(ExecutionTime.RUNTIME_INIT)
     void addAdditionalRoutes(
             VertxWebRecorder recorder,
             List<AnnotatedRouteHandlerBuildItem> routeHandlerBusinessMethods,
             BuildProducer<GeneratedClassBuildItem> generatedClass,
             AnnotationProxyBuildItem annotationProxy,
             BuildProducer<ReflectiveClassBuildItem> reflectiveClasses,
-            BodyHandlerBuildItem bodyHandler,
+            HttpConfiguration httpConfiguration,
             BuildProducer<RouteBuildItem> routeProducer) throws IOException {
 
         ClassOutput classOutput = new ClassOutput() {
@@ -137,6 +131,7 @@ class VertxWebProcessor {
                 generatedClass.produce(new GeneratedClassBuildItem(true, name, data));
             }
         };
+        Handler<RoutingContext> bodyHandler = recorder.createBodyHandler(httpConfiguration);
 
         for (AnnotatedRouteHandlerBuildItem businessMethod : routeHandlerBusinessMethods) {
             String handlerClass = generateHandler(businessMethod.getBean(), businessMethod.getMethod(), classOutput);
@@ -144,8 +139,7 @@ class VertxWebProcessor {
             Handler<RoutingContext> routingHandler = recorder.createHandler(handlerClass);
             for (AnnotationInstance routeAnnotation : businessMethod.getRoutes()) {
                 Route route = annotationProxy.builder(routeAnnotation, Route.class).build(classOutput);
-                Function<Router, io.vertx.ext.web.Route> routeFunction = recorder.createRouteFunction(route,
-                        bodyHandler.getHandler());
+                Function<Router, io.vertx.ext.web.Route> routeFunction = recorder.createRouteFunction(route, bodyHandler);
                 AnnotationValue typeValue = routeAnnotation.value("type");
                 HandlerType handlerType = HandlerType.NORMAL;
                 if (typeValue != null) {

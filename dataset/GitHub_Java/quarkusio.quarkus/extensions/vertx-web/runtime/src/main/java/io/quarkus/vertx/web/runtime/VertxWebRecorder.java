@@ -44,7 +44,7 @@ public class VertxWebRecorder {
                 if (!routeAnnotation.regex().isEmpty()) {
                     route = router.routeWithRegex(routeAnnotation.regex());
                 } else if (!routeAnnotation.path().isEmpty()) {
-                    route = router.route(ensureStartWithSlash(routeAnnotation.path()));
+                    route = router.route(routeAnnotation.path());
                 } else {
                     route = router.route();
                 }
@@ -53,7 +53,7 @@ public class VertxWebRecorder {
                         route.method(method);
                     }
                 }
-                if (routeAnnotation.order() > 0) {
+                if (routeAnnotation.order() != Integer.MIN_VALUE) {
                     route.order(routeAnnotation.order());
                 }
                 if (routeAnnotation.produces().length > 0) {
@@ -84,21 +84,6 @@ public class VertxWebRecorder {
         bodyHandler.setDeleteUploadedFilesOnEnd(bodyConfig.deleteUploadedFilesOnEnd);
         bodyHandler.setMergeFormAttributes(bodyConfig.mergeFormAttributes);
         bodyHandler.setPreallocateBodyBuffer(bodyConfig.preallocateBodyBuffer);
-        return new Handler<RoutingContext>() {
-            @Override
-            public void handle(RoutingContext event) {
-                event.request().resume();
-                bodyHandler.handle(event);
-            }
-        };
+        return bodyHandler;
     }
-
-    private String ensureStartWithSlash(String path) {
-        if (path.startsWith("/")) {
-            return path;
-        } else {
-            return "/" + path;
-        }
-    }
-
 }
