@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.Builder;
-import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.VectorArg;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
@@ -486,7 +485,7 @@ final class ProtobufSupport {
         .addDynamicString(getGenfilesPathString())
         .add("--proto-root-dir")
         .add(".")
-        .addExecPaths(VectorArg.addBefore("--config").each(portableProtoFilters))
+        .addBeforeEachExecPath("--config", portableProtoFilters)
         .build();
   }
 
