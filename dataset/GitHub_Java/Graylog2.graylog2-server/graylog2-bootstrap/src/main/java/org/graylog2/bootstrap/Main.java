@@ -16,38 +16,25 @@
  */
 package org.graylog2.bootstrap;
 
-import com.google.common.collect.ImmutableSet;
-import io.airlift.airline.Cli;
-import io.airlift.airline.Cli.CliBuilder;
-import io.airlift.airline.Help;
+import io.airlift.command.Cli;
+import io.airlift.command.Cli.CliBuilder;
+import io.airlift.command.Help;
 import org.graylog2.bootstrap.commands.Radio;
 import org.graylog2.bootstrap.commands.Server;
 import org.graylog2.bootstrap.commands.ShowVersion;
-import org.graylog2.bootstrap.commands.journal.JournalShow;
-import org.graylog2.bootstrap.commands.journal.JournalTruncate;
 
-import java.util.Set;
-
+/**
+ * @author Dennis Oelkers <dennis@torch.sh>
+ */
 public class Main {
-    public static void main(String[] args) {
-        final Set<Class<? extends Runnable>> commands = ImmutableSet.of(
-                Server.class,
-                Radio.class,
-                ShowVersion.class,
-                Help.class);
-
-        final CliBuilder<Runnable> builder = Cli.<Runnable>builder("graylog2")
+    public static void main(String[] argv) {
+        CliBuilder<Runnable> builder = Cli.<Runnable>builder("graylog2")
                 .withDescription("Open source, centralized log management")
                 .withDefaultCommand(Help.class)
-                .withCommands(commands);
+                .withCommands(Server.class, Radio.class, ShowVersion.class, Help.class);
 
-        builder.withGroup("journal")
-                .withDescription("Manage the persisted message journal")
-                .withDefaultCommand(JournalShow.class)
-                .withCommands(JournalShow.class, JournalTruncate.class);
-
-        final Cli<Runnable> cli = builder.build();
-        final Runnable command = cli.parse(args);
+        Cli<Runnable> gitParser = builder.build();
+        Runnable command = gitParser.parse(argv);
         command.run();
     }
 }

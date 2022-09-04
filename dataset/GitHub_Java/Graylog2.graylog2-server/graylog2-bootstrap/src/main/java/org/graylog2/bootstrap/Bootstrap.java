@@ -52,7 +52,6 @@ import org.graylog2.shared.bindings.GenericBindings;
 import org.graylog2.shared.bindings.GuiceInjectorHolder;
 import org.graylog2.shared.bindings.GuiceInstantiationService;
 import org.graylog2.shared.bindings.InstantiationService;
-import org.graylog2.shared.bindings.SharedPeriodicalBindings;
 import org.graylog2.shared.initializers.ServiceManagerListener;
 import org.graylog2.shared.plugins.PluginLoader;
 import org.graylog2.shared.system.activities.Activity;

@@ -136,7 +136,7 @@ public class Server extends Bootstrap implements Runnable {
                 new MessageFilterBindings(),
                 new AlarmCallbackBindings(),
                 new InitializerBindings(),
-                new MessageOutputBindings(configuration),
+                new MessageOutputBindings(),
                 new RotationStrategyBindings(),
                 new PeriodicalBindings());
     }
