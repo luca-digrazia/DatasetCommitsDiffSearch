@@ -167,8 +167,6 @@ public final class CppConfiguration extends Fragment
   private final boolean collectCodeCoverage;
   private final boolean isToolConfigurationDoNotUseWillBeRemovedFor129045294;
 
-  private final boolean appleGenerateDsym;
-
   static CppConfiguration create(CpuTransformer cpuTransformer, BuildOptions options)
       throws InvalidConfigurationException {
     CppOptions cppOptions = options.get(CppOptions.class);
@@ -238,9 +236,7 @@ public final class CppConfiguration extends Fragment
                 && compilationMode == CompilationMode.FASTBUILD)),
         compilationMode,
         commonOptions.collectCodeCoverage,
-        commonOptions.isHost || commonOptions.isExec,
-        (cppOptions.appleGenerateDsym
-            || (cppOptions.appleEnableAutoDsymDbg && compilationMode == CompilationMode.DBG)));
+        commonOptions.isHost || commonOptions.isExec);
   }
 
   private CppConfiguration(
@@ -259,8 +255,7 @@ public final class CppConfiguration extends Fragment
       boolean stripBinaries,
       CompilationMode compilationMode,
       boolean collectCodeCoverage,
-      boolean isToolConfiguration,
-      boolean appleGenerateDsym) {
+      boolean isToolConfiguration) {
     this.transformedCpuFromOptions = transformedCpuFromOptions;
     this.desiredCpu = desiredCpu;
     this.fdoPath = fdoPath;
@@ -277,7 +272,6 @@ public final class CppConfiguration extends Fragment
     this.compilationMode = compilationMode;
     this.collectCodeCoverage = collectCodeCoverage;
     this.isToolConfigurationDoNotUseWillBeRemovedFor129045294 = isToolConfiguration;
-    this.appleGenerateDsym = appleGenerateDsym;
   }
 
   /** Returns the label of the <code>cc_compiler</code> rule for the C++ configuration. */
@@ -370,9 +364,9 @@ public final class CppConfiguration extends Fragment
     return ImmutableList.copyOf(cppOptions.perFileLtoBackendOpts);
   }
 
-  /** Returns the custom malloc library label. */
-  @Override
-  @SkylarkConfigurationField(name = "custom_malloc", doc = "The label specified in --custom_malloc")
+  /**
+   * Returns the custom malloc library label.
+   */
   public Label customMalloc() {
     return cppOptions.customMalloc;
   }
@@ -722,9 +716,5 @@ public final class CppConfiguration extends Fragment
 
   public boolean validateTopLevelHeaderInclusions() {
     return cppOptions.validateTopLevelHeaderInclusions;
-  }
-
-  public boolean appleGenerateDsym() {
-    return appleGenerateDsym;
   }
 }
