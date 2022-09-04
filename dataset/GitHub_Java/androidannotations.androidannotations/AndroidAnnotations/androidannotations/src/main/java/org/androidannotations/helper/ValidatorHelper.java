@@ -79,8 +79,6 @@ public class ValidatorHelper {
 	private static final List<String> ANDROID_FRAGMENT_QUALIFIED_NAMES = asList(CanonicalNameConstants.FRAGMENT, CanonicalNameConstants.SUPPORT_V4_FRAGMENT);
 
 	private static final String METHOD_NAME_SET_ROOT_URL = "setRootUrl";
-	private static final String METHOD_NAME_GET_COOKIE = "getCookie";
-	private static final String METHOD_NAME_GET_HEADER = "getHeader";
 
 	private static final List<String> VALID_PREF_RETURN_TYPES = Arrays.asList("int", "boolean", "float", "long", CanonicalNameConstants.STRING);
 
@@ -92,9 +90,12 @@ public class ValidatorHelper {
 
 	public final ValidatorParameterHelper param;
 
+	private final ThirdPartyLibHelper thirdPartyLibHelper;
+
 	public ValidatorHelper(TargetAnnotationHelper targetAnnotationHelper) {
 		annotationHelper = targetAnnotationHelper;
 		param = new ValidatorParameterHelper(annotationHelper);
+		thirdPartyLibHelper = new ThirdPartyLibHelper(annotationHelper);
 	}
 
 	public void isNotFinal(Element element, IsValid valid) {
@@ -499,6 +500,20 @@ public class ValidatorHelper {
 		extendsType(element, CanonicalNameConstants.CONTEXT, valid);
 	}
 
+	public void extendsMenuItem(Element element, IsValid valid) {
+		Element enclosingElement = element.getEnclosingElement();
+		String enclosingQualifiedName = enclosingElement.asType().toString();
+		TypeElement enclosingTypeElement = annotationHelper.typeElementFromQualifiedName(enclosingQualifiedName);
+
+		if (enclosingTypeElement != null) {
+			if (thirdPartyLibHelper.usesActionBarSherlock(enclosingTypeElement)) {
+				extendsType(element, CanonicalNameConstants.SHERLOCK_MENU_ITEM, valid);
+			} else {
+				extendsType(element, CanonicalNameConstants.MENU_ITEM, valid);
+			}
+		}
+	}
+
 	public void extendsOrmLiteDaoWithValidModelParameter(Element element, IsValid valid) {
 		TypeMirror elementType = element.asType();
 
@@ -765,8 +780,6 @@ public class ValidatorHelper {
 		boolean foundGetRestTemplateMethod = false;
 		boolean foundSetRestTemplateMethod = false;
 		boolean foundSetRootUrlMethod = false;
-		boolean foundGetCookieMethod = false;
-		boolean foundGetHeaderMethod = false;
 		for (Element enclosedElement : enclosedElements) {
 			if (enclosedElement.getKind() != ElementKind.METHOD) {
 				valid.invalidate();
@@ -815,38 +828,9 @@ public class ValidatorHelper {
 								annotationHelper.printError(enclosedElement, "The method to set a RestTemplate should have only one RestTemplate parameter on a " + TargetAnnotationHelper.annotationName(Rest.class) + " annotated interface");
 
 							}
-						} else if (parameters.size() == 2) {
-							VariableElement firstParameter = parameters.get(0);
-							VariableElement secondParameter = parameters.get(1);
-							if (!(firstParameter.asType().toString().equals(CanonicalNameConstants.STRING) && secondParameter.asType().toString().equals(CanonicalNameConstants.STRING))) {
-								valid.invalidate();
-								annotationHelper.printError(enclosedElement, "The method to set headers or cookies should have only String parameters on a " + TargetAnnotationHelper.annotationName(Rest.class) + " annotated interface");
-							}
 						} else {
 							valid.invalidate();
 							annotationHelper.printError(enclosedElement, "The method to set a RestTemplate should have only one RestTemplate parameter on a " + TargetAnnotationHelper.annotationName(Rest.class) + " annotated interface");
-						}
-					} else if (returnType.toString().equals(CanonicalNameConstants.STRING)) {
-						List<? extends VariableElement> parameters = executableElement.getParameters();
-						if (parameters.size() == 1) {
-							VariableElement firstParameter = parameters.get(0);
-							if (firstParameter.asType().toString().equals(CanonicalNameConstants.STRING)) {
-								if (executableElement.getSimpleName().toString().equals(METHOD_NAME_GET_COOKIE) && !foundGetCookieMethod) {
-									foundGetCookieMethod = true;
-								} else if (executableElement.getSimpleName().toString().equals(METHOD_NAME_GET_HEADER) && !foundGetHeaderMethod) {
-									foundGetHeaderMethod = true;
-								} else {
-									valid.invalidate();
-									annotationHelper.printError(enclosedElement, "Only one getCookie(String) and one getHeader(String) method are allowed on a " + TargetAnnotationHelper.annotationName(Rest.class) + " annotated interface");
-								}
-							} else {
-								valid.invalidate();
-								annotationHelper.printError(enclosedElement, "Only getCookie(String) and getHeader(String) can return a String on a " + TargetAnnotationHelper.annotationName(Rest.class) + " annotated interface");
-							}
-
-						} else {
-							valid.invalidate();
-							annotationHelper.printError(enclosedElement, "The only methods that can return a String on a " + TargetAnnotationHelper.annotationName(Rest.class) + " annotated interface are getCookie(String) and getHeader(String)");
 						}
 					} else {
 						valid.invalidate();
