@@ -26,7 +26,7 @@ public class NonblockingServletHolder extends ServletHolder {
     @Override
     public int hashCode() {
         int result = super.hashCode();
-        result = (31 * result) + ((servlet != null) ? servlet.hashCode() : 0);
+        result = (31 * result) + servlet.hashCode();
         return result;
     }
 
