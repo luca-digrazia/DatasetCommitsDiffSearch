@@ -1,71 +1,35 @@
 package io.quarkus.flyway.runtime;
 
-import java.util.List;
-import java.util.Optional;
-import java.util.OptionalInt;
+import java.util.Collections;
+import java.util.Map;
 
+import io.quarkus.datasource.common.runtime.DataSourceUtil;
 import io.quarkus.runtime.annotations.ConfigItem;
 import io.quarkus.runtime.annotations.ConfigPhase;
 import io.quarkus.runtime.annotations.ConfigRoot;
 
 @ConfigRoot(name = "flyway", phase = ConfigPhase.RUN_TIME)
 public final class FlywayRuntimeConfig {
+
     /**
-     * The maximum number of retries when attempting to connect to the database. After each failed attempt, Flyway will wait 1
-     * second before attempting to connect again, up to the maximum number of times specified by connectRetries.
+     * Gets the {@link FlywayDataSourceRuntimeConfig} for the given datasource name.
      */
-    @ConfigItem
-    public OptionalInt connectRetries;
+    public FlywayDataSourceRuntimeConfig getConfigForDataSourceName(String dataSourceName) {
+        if (DataSourceUtil.isDefault(dataSourceName)) {
+            return defaultDataSource;
+        }
+        return namedDataSources.getOrDefault(dataSourceName, FlywayDataSourceRuntimeConfig.defaultConfig());
+    }
+
     /**
-     * Comma-separated case-sensitive list of schemas managed by Flyway.
-     * The first schema in the list will be automatically set as the default one during the migration.
-     * It will also be the one containing the schema history table.
+     * Flyway configuration for the default datasource.
      */
-    @ConfigItem
-    public List<String> schemas;
+    @ConfigItem(name = ConfigItem.PARENT)
+    public FlywayDataSourceRuntimeConfig defaultDataSource = FlywayDataSourceRuntimeConfig.defaultConfig();
+
     /**
-     * The name of Flyway's schema history table.
-     * By default (single-schema mode) the schema history table is placed in the default schema for the connection provided by
-     * the datasource.
-     * When the flyway.schemas property is set (multi-schema mode), the schema history table is placed in the first schema of
-     * the list.
+     * Flyway configurations for named datasources.
      */
-    @ConfigItem
-    public Optional<String> table;
-    /**
-     * The file name prefix for versioned SQL migrations.
-     *
-     * Versioned SQL migrations have the following file name structure: prefixVERSIONseparatorDESCRIPTIONsuffix , which using
-     * the defaults translates to V1.1__My_description.sql
-     */
-    @ConfigItem
-    public Optional<String> sqlMigrationPrefix;
-    /**
-     * The file name prefix for repeatable SQL migrations.
-     *
-     * Repeatable SQL migrations have the following file name structure: prefixSeparatorDESCRIPTIONsuffix , which using the
-     * defaults translates to R__My_description.sql
-     */
-    @ConfigItem
-    public Optional<String> repeatableSqlMigrationPrefix;
-    /**
-     * true to execute Flyway automatically when the application starts, false otherwise.
-     *
-     */
-    public boolean migrateAtStart = false;
-    /**
-     * Enable the creation of the history table if it does not exist already.
-     */
-    @ConfigItem
-    public boolean baselineOnMigrate = false;
-    /**
-     * The initial baseline version.
-     */
-    @ConfigItem
-    public Optional<String> baselineVersion;
-    /**
-     * The description to tag an existing schema with when executing baseline.
-     */
-    @ConfigItem
-    public Optional<String> baselineDescription;
+    @ConfigItem(name = ConfigItem.PARENT)
+    public Map<String, FlywayDataSourceRuntimeConfig> namedDataSources = Collections.emptyMap();
 }
