@@ -395,7 +395,10 @@ public final class RunfilesSupport {
         ruleContext,
         executable,
         runfiles,
-        computeArgs(ruleContext, CommandLine.EMPTY));
+        computeArgs(
+            ruleContext,
+            CommandLine.EMPTY,
+            ruleContext.getConfigurationMakeVariableContext()));
   }
 
   /**
@@ -408,7 +411,10 @@ public final class RunfilesSupport {
         ruleContext,
         executable,
         runfiles,
-        computeArgs(ruleContext, CommandLine.of(appendingArgs)));
+        computeArgs(
+            ruleContext,
+            CommandLine.of(appendingArgs),
+            ruleContext.getConfigurationMakeVariableContext()));
   }
 
   /**
@@ -421,13 +427,26 @@ public final class RunfilesSupport {
         ruleContext,
         executable,
         runfiles,
-        computeArgs(ruleContext, appendingArgs));
+        computeArgs(ruleContext, appendingArgs, ruleContext.getConfigurationMakeVariableContext()));
+  }
+
+  public static RunfilesSupport withExecutable(
+      RuleContext ruleContext,
+      Runfiles runfiles,
+      Artifact executable,
+      ConfigurationMakeVariableContext makeVariableContext) {
+    return new RunfilesSupport(
+        ruleContext,
+        executable,
+        runfiles,
+        computeArgs(ruleContext, CommandLine.EMPTY, makeVariableContext));
   }
 
   private static CommandLine computeArgs(
       RuleContext ruleContext,
-      CommandLine additionalArgs) {
+      CommandLine additionalArgs,
+      ConfigurationMakeVariableContext makeVariableContext) {
     return CommandLine.concat(
-        ruleContext.getTokenizedStringListAttr("args"), additionalArgs);
+        ruleContext.getTokenizedStringListAttr("args", makeVariableContext), additionalArgs);
   }
 }

@@ -173,28 +173,6 @@ public class JavaCommon {
     }
   }
 
-  /**
-   * Creates an action to aggregate all metadata artifacts into a single
-   * &lt;target_name&gt;_instrumented.jar file.
-   */
-  public static void createInstrumentedJarAction(
-      RuleContext ruleContext,
-      JavaSemantics semantics,
-      List<Artifact> metadataArtifacts,
-      Artifact instrumentedJar,
-      String mainClass)
-      throws InterruptedException {
-    // In Jacoco's setup, metadata artifacts are real jars.
-    new DeployArchiveBuilder(semantics, ruleContext)
-        .setOutputJar(instrumentedJar)
-        // We need to save the original mainClass because we're going to run inside CoverageRunner
-        .setJavaStartClass(mainClass)
-        .setAttributes(new JavaTargetAttributes.Builder(semantics).build())
-        .addRuntimeJars(ImmutableList.copyOf(metadataArtifacts))
-        .setCompression(DeployArchiveBuilder.Compression.UNCOMPRESSED)
-        .build();
-  }
-
   public static ImmutableList<String> getConstraints(RuleContext ruleContext) {
     return ruleContext.getRule().isAttrDefined("constraints", Type.STRING_LIST)
         ? ImmutableList.copyOf(ruleContext.attributes().get("constraints", Type.STRING_LIST))
@@ -461,7 +439,7 @@ public class JavaCommon {
     return Streams.concat(
             JavaToolchainProvider.fromRuleContext(ruleContext).getJavacOptions().stream(),
             Streams.stream(extraJavacOpts),
-            ruleContext.getExpander().withDataLocations().tokenized("javacopts").stream())
+            ruleContext.getTokenizedStringListAttr("javacopts").stream())
         .collect(toImmutableList());
   }
 
@@ -569,7 +547,7 @@ public class JavaCommon {
   public static List<String> getJvmFlags(RuleContext ruleContext) {
     List<String> jvmFlags = new ArrayList<>();
     jvmFlags.addAll(ruleContext.getFragment(JavaConfiguration.class).getDefaultJvmFlags());
-    jvmFlags.addAll(ruleContext.getExpander().withDataLocations().list("jvm_flags"));
+    jvmFlags.addAll(ruleContext.getExpandedStringListAttr("jvm_flags"));
     return jvmFlags;
   }
 
@@ -756,7 +734,6 @@ public class JavaCommon {
         .addTransitiveTargets(runtimeDepInfo, true, ClasspathType.RUNTIME_ONLY)
         .build();
     attributes.addRuntimeClassPathEntries(args.getRuntimeJars());
-    attributes.addInstrumentationMetadataEntries(args.getInstrumentationMetadata());
   }
 
   /**
