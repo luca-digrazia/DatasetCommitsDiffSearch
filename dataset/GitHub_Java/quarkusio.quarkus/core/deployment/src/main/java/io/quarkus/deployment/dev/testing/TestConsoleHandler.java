@@ -39,7 +39,6 @@ public class TestConsoleHandler implements TestListener {
             if (disabled) {
                 for (int i : keys) {
                     if (i == 'r') {
-                        promptHandler.setStatus("\u001B[33mStarting tests\u001b[0m");
                         TestSupport.instance().get().start();
                     }
                 }
@@ -48,7 +47,8 @@ public class TestConsoleHandler implements TestListener {
                 for (int k : keys) {
                     if (k == 'r') {
                         testController.runAllTests();
-                    } else if (k == 'f') {
+                    }
+                    if (k == 'f') {
                         testController.runFailedTests();
                     } else if (k == 'v') {
                         testController.printFullResults();
@@ -88,22 +88,16 @@ public class TestConsoleHandler implements TestListener {
     }
 
     public void printUsage() {
-        System.out.println("\nThe following commands are available:");
-        System.out.println("[\u001b[32mr\u001b[0m] - Re-run all tests");
-        System.out.println("[\u001b[32mf\u001b[0m] - Re-run failed tests");
-        System.out.println("[\u001b[32mb\u001b[0m] - Toggle 'broken only' mode, where only failing tests are run ("
-                + (testController.isBrokenOnlyMode() ? "\u001b[32menabled\u001b[0m" : "\u001B[91mdisabled\u001b[0m") + ")");
-        System.out.println("[\u001b[32mv\u001b[0m] - Print failures from the last test run");
-        System.out.println("[\u001b[32mo\u001b[0m] - Toggle test output ("
-                + (testController.isDisplayTestOutput() ? "\u001b[32menabled\u001b[0m" : "\u001B[91mdisabled\u001b[0m") + ")");
-        System.out.println("[\u001b[32mp\u001b[0m] - Pause tests");
-        System.out.println("[\u001b[32mi\u001b[0m] - Toggle instrumentation based reload ("
-                + (testController.isInstrumentationEnabled() ? "\u001b[32menabled\u001b[0m" : "\u001B[91mdisabled\u001b[0m")
-                + ")");
-        System.out.println("[\u001b[32ml\u001b[0m] - Toggle live reload ("
-                + (testController.isLiveReloadEnabled() ? "\u001b[32menabled\u001b[0m" : "\u001B[91mdisabled\u001b[0m") + ")");
-        System.out.println("[\u001b[32ms\u001b[0m] - Force live reload scan");
-        System.out.println("[\u001b[32mh\u001b[0m] - Display this help");
+        System.out.println("r - Re-run all tests");
+        System.out.println("f - Re-run failed tests");
+        System.out.println("b - Toggle 'broken only' mode, where only failing tests are run");
+        System.out.println("v - Print failures from the last test run");
+        System.out.println("o - Toggle test output");
+        System.out.println("p - Pause tests");
+        System.out.println("i - Toggle instrumentation based reload");
+        System.out.println("l - Toggle live reload");
+        System.out.println("s - Force live reload scan");
+        System.out.println("h - Display this help");
 
     }
 
@@ -152,19 +146,14 @@ public class TestConsoleHandler implements TestListener {
 
             @Override
             public void runComplete(TestRunResults results) {
-                String resultString = String.format(
-                        "%d/%d tests are failing (%d/%d from the last run). %d tests are skipped. Run %d took %dms.",
-                        results.getFailedCount(), results.getTotalCount(), results.getCurrentFailedCount(),
-                        results.getCurrentTotalCount(), results.getSkippedCount(),
-                        results.getId(), results.getTotalTime());
                 firstRun = false;
                 if (results.getCurrentFailing().isEmpty()) {
-                    lastStatus = "\u001B[32m" + resultString + "\u001b[0m";
+                    lastStatus = "\u001B[32mTests all passed, " + methodCount.get() + " tests were run, " + skipped.get()
+                            + " were skipped. Tests took " + (results.getTotalTime())
+                            + "ms." + "\u001b[0m";
                 } else {
-                    //TODO: this should not use the logger, it should print a nicer status
-                    log.error(
-                            "==================== \u001B[91m" + results.getCurrentFailedCount()
-                                    + " TESTS FAILED\u001b[0m ====================");
+                    int failedTestsNum = results.getCurrentFailing().size();
+                    boolean hasFailingTests = failedTestsNum > 0;
                     for (Map.Entry<String, TestClassResult> classEntry : results.getCurrentFailing().entrySet()) {
                         for (TestResult test : classEntry.getValue().getFailing()) {
                             log.error(
@@ -172,9 +161,12 @@ public class TestConsoleHandler implements TestListener {
                                     test.getTestExecutionResult().getThrowable().get());
                         }
                     }
-                    log.error(
-                            "==================== \u001B[91mEND TEST REPORT\u001b[0m ====================");
-                    lastStatus = "\u001B[91m" + resultString + "\u001b[0m";
+                    String output = String.format("Test run failed, %d tests were run, ", methodCount.get())
+                            + String.format("%s%d failed%s, ",
+                                    hasFailingTests ? "\u001B[1m" : "", failedTestsNum,
+                                    hasFailingTests ? "\u001B[2m" : "")
+                            + String.format("%d were skipped. Tests took %dms", skipped.get(), results.getTotalTime());
+                    lastStatus = "\u001B[91m" + output + "\u001b[0m";
                 }
                 //this will re-print when using the basic console
                 promptHandler.setPrompt(RUNNING_PROMPT);
