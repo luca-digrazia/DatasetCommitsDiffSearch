@@ -18,7 +18,6 @@ import org.jboss.jandex.DotName;
 import org.jboss.jandex.IndexView;
 import org.jboss.jandex.Type;
 
-import com.fasterxml.jackson.annotation.SimpleObjectIdResolver;
 import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.Module;
@@ -30,12 +29,9 @@ import com.fasterxml.jackson.databind.module.SimpleModule;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.GeneratedBeanBuildItem;
 import io.quarkus.arc.deployment.GeneratedBeanGizmoAdaptor;
-import io.quarkus.arc.deployment.SyntheticBeanBuildItem;
 import io.quarkus.deployment.Capability;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
-import io.quarkus.deployment.annotations.ExecutionTime;
-import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.CapabilityBuildItem;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
@@ -47,9 +43,6 @@ import io.quarkus.gizmo.MethodCreator;
 import io.quarkus.gizmo.MethodDescriptor;
 import io.quarkus.gizmo.ResultHandle;
 import io.quarkus.jackson.ObjectMapperCustomizer;
-import io.quarkus.jackson.runtime.JacksonBuildTimeConfig;
-import io.quarkus.jackson.runtime.JacksonConfigSupport;
-import io.quarkus.jackson.runtime.JacksonRecorder;
 import io.quarkus.jackson.runtime.ObjectMapperProducer;
 import io.quarkus.jackson.spi.ClassPathJacksonModuleBuildItem;
 import io.quarkus.jackson.spi.JacksonModuleBuildItem;
@@ -60,7 +53,6 @@ public class JacksonProcessor {
     private static final DotName JSON_SERIALIZE = DotName.createSimple(JsonSerialize.class.getName());
     private static final DotName JSON_CREATOR = DotName.createSimple("com.fasterxml.jackson.annotation.JsonCreator");
     private static final DotName JSON_NAMING = DotName.createSimple("com.fasterxml.jackson.databind.annotation.JsonNaming");
-    private static final DotName JSON_IDENTITY_INFO = DotName.createSimple("com.fasterxml.jackson.annotation.JsonIdentityInfo");
     private static final DotName BUILDER_VOID = DotName.createSimple(Void.class.getName());
 
     private static final String TIME_MODULE = "com.fasterxml.jackson.datatype.jsr310.JavaTimeModule";
@@ -145,21 +137,6 @@ public class JacksonProcessor {
             }
         }
 
-        // register @JsonIdentityInfo strategy implementations for reflection
-        for (AnnotationInstance jsonIdentityInfoInstance : index.getAnnotations(JSON_IDENTITY_INFO)) {
-            AnnotationValue generatorValue = jsonIdentityInfoInstance.value("generator");
-            AnnotationValue resolverValue = jsonIdentityInfoInstance.value("resolver");
-            if (generatorValue != null) {
-                reflectiveClass.produce(new ReflectiveClassBuildItem(true, true, generatorValue.asClass().name().toString()));
-            }
-            if (resolverValue != null) {
-                reflectiveClass.produce(new ReflectiveClassBuildItem(true, true, resolverValue.asClass().name().toString()));
-            } else {
-                // Registering since SimpleObjectIdResolver is the default value of @JsonIdentityInfo.resolver
-                reflectiveClass.produce(new ReflectiveClassBuildItem(true, true, SimpleObjectIdResolver.class));
-            }
-        }
-
         // this needs to be registered manually since the runtime module is not indexed by Jandex
         additionalBeans.produce(new AdditionalBeanBuildItem(ObjectMapperProducer.class));
 
@@ -189,16 +166,6 @@ public class JacksonProcessor {
             classPathJacksonModules.produce(new ClassPathJacksonModuleBuildItem(moduleClassName));
         } catch (Exception ignored) {
         }
-    }
-
-    @BuildStep
-    @Record(ExecutionTime.STATIC_INIT)
-    SyntheticBeanBuildItem pushConfigurationBean(JacksonRecorder jacksonRecorder,
-            JacksonBuildTimeConfig jacksonBuildTimeConfig) {
-        return SyntheticBeanBuildItem.configure(JacksonConfigSupport.class)
-                .scope(Singleton.class)
-                .supplier(jacksonRecorder.jacksonConfigSupport(jacksonBuildTimeConfig))
-                .done();
     }
 
     // Generate a ObjectMapperCustomizer bean that registers each serializer / deserializer as well as detected modules with the ObjectMapper
@@ -280,7 +247,7 @@ public class JacksonProcessor {
 
             // ensure that the things we auto-register have the lower priority - this ensures that user registered modules take priority
             try (MethodCreator priority = classCreator.getMethodCreator("priority", int.class)) {
-                priority.returnValue(priority.load(ObjectMapperCustomizer.QUARKUS_CUSTOMIZER_PRIORITY));
+                priority.returnValue(priority.load(ObjectMapperCustomizer.MINIMUM_PRIORITY));
             }
         }
     }

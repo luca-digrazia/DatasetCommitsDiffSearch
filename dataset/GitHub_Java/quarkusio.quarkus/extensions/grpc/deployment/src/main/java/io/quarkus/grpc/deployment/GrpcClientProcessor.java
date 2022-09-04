@@ -3,19 +3,15 @@ package io.quarkus.grpc.deployment;
 import static io.quarkus.deployment.Feature.GRPC_CLIENT;
 import static io.quarkus.grpc.deployment.GrpcDotNames.CREATE_CHANNEL_METHOD;
 import static io.quarkus.grpc.deployment.GrpcDotNames.RETRIEVE_CHANNEL_METHOD;
-import static io.quarkus.grpc.deployment.ResourceRegistrationUtils.registerResourcesForProperties;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
-import java.util.regex.Pattern;
 
 import javax.enterprise.inject.spi.DeploymentException;
 import javax.inject.Singleton;
 
-import org.eclipse.microprofile.config.Config;
-import org.eclipse.microprofile.config.ConfigProvider;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.ClassType;
 import org.jboss.jandex.DotName;
@@ -31,8 +27,6 @@ import io.quarkus.arc.processor.InjectionPointInfo;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.RuntimeInitializedClassBuildItem;
 import io.quarkus.gizmo.MethodCreator;
 import io.quarkus.gizmo.MethodDescriptor;
 import io.quarkus.gizmo.ResultHandle;
@@ -45,11 +39,6 @@ import io.quarkus.grpc.runtime.supports.IOThreadClientInterceptor;
 public class GrpcClientProcessor {
 
     private static final Logger LOGGER = Logger.getLogger(GrpcClientProcessor.class.getName());
-
-    private static final String SSL_PREFIX = "quarkus\\.grpc\\.clients\\..*.ssl\\.";
-    private static final Pattern KEY_PATTERN = Pattern.compile(SSL_PREFIX + "key");
-    private static final Pattern CERTIFICATE_PATTERN = Pattern.compile(SSL_PREFIX + "certificate");
-    private static final Pattern TRUST_STORE_PATTERN = Pattern.compile(SSL_PREFIX + "trust-store");
 
     @BuildStep
     void registerBeans(BuildProducer<AdditionalBeanBuildItem> beans) {
@@ -168,18 +157,6 @@ public class GrpcClientProcessor {
                 beans.produce(new BeanRegistrationPhaseBuildItem.BeanConfiguratorBuildItem(stubProducer));
             }
         }
-    }
-
-    @BuildStep
-    void registerSslResources(BuildProducer<NativeImageResourceBuildItem> resourceBuildItem) {
-        Config config = ConfigProvider.getConfig();
-        registerResourcesForProperties(config, resourceBuildItem, TRUST_STORE_PATTERN, CERTIFICATE_PATTERN, KEY_PATTERN);
-    }
-
-    @BuildStep
-    void runtimeInitialize(BuildProducer<RuntimeInitializedClassBuildItem> producer) {
-        // io.grpc.internal.RetriableStream uses j.u.Ramdom, so needs to be runtime-initialized
-        producer.produce(new RuntimeInitializedClassBuildItem("io.grpc.internal.RetriableStream"));
     }
 
     private void generateChannelProducer(MethodCreator mc, GrpcServiceBuildItem svc) {
