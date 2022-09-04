@@ -17,7 +17,6 @@
 package io.quarkus.undertow.runtime;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.file.Paths;
 import java.security.SecureRandom;
@@ -25,7 +24,6 @@ import java.util.EventListener;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import javax.servlet.DispatcherType;
 import javax.servlet.Filter;
@@ -35,14 +33,12 @@ import javax.servlet.ServletContext;
 import javax.servlet.ServletException;
 
 import org.jboss.logging.Logger;
-import org.wildfly.common.net.Inet;
 
 import io.quarkus.arc.ManagedContext;
 import io.quarkus.arc.runtime.BeanContainer;
 import io.quarkus.runtime.LaunchMode;
 import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.runtime.ShutdownContext;
-import io.quarkus.runtime.Timing;
 import io.quarkus.runtime.annotations.Template;
 import io.undertow.Undertow;
 import io.undertow.server.HandlerWrapper;
@@ -121,7 +117,7 @@ public class UndertowDeploymentTemplate {
         }
         d.setResourceManager(resourceManager);
 
-        if (launchMode == LaunchMode.DEVELOPMENT || launchMode == LaunchMode.TEST) {
+        if (launchMode == LaunchMode.DEVELOPMENT) {
             d.setServletStackTraces(ServletStackTraces.LOCAL_ONLY);
         } else {
             d.setServletStackTraces(ServletStackTraces.NONE);
@@ -282,19 +278,6 @@ public class UndertowDeploymentTemplate {
             main = i.wrap(main);
         }
         currentRoot = main;
-
-        Timing.setHttpServer(String.format(
-                "Listening on: " + undertow.getListenerInfo().stream().map(l -> {
-                    String address;
-                    if (l.getAddress() instanceof InetSocketAddress) {
-                        InetSocketAddress inetAddress = (InetSocketAddress) l.getAddress();
-                        address = Inet.toURLString(inetAddress.getAddress(), true) + ":" + inetAddress.getPort();
-                    } else {
-                        address = l.getAddress().toString();
-                    }
-                    return l.getProtcol() + "://" + address;
-                }).collect(Collectors.joining(", "))));
-
         return new RuntimeValue<>(undertow);
     }
 
