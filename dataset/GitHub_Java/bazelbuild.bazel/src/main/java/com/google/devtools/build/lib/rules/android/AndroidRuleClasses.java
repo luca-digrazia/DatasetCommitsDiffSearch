@@ -141,8 +141,6 @@ public final class AndroidRuleClasses {
       fromTemplates("%{name}_symbols/assets.bin");
   public static final SafeImplicitOutputsFunction ANDROID_COMPILED_SYMBOLS =
       fromTemplates("%{name}_symbols/symbols.zip");
-  public static final SafeImplicitOutputsFunction ANDROID_ASSET_COMPILED_SYMBOLS =
-      fromTemplates("%{name}_symbols/assets.zip");
   public static final SafeImplicitOutputsFunction ANDROID_SYMLINKED_MANIFEST =
       fromTemplates("%{name}_symlinked_manifest/AndroidManifest.xml");
   public static final SafeImplicitOutputsFunction ANDROID_PROCESSED_MANIFEST =
@@ -672,9 +670,6 @@ public final class AndroidRuleClasses {
                   .allowedRuleClasses(ALLOWED_DEPENDENCIES)
                   .allowedFileTypes()
                   .mandatoryProviders(JavaRuleClasses.CONTAINS_JAVA_PROVIDER)
-                  .mandatoryProviders(
-                      SkylarkProviderIdentifier.forKey(AndroidResourcesInfo.PROVIDER.getKey()),
-                      SkylarkProviderIdentifier.forKey(AndroidAssetsInfo.PROVIDER.getKey()))
                   .aspect(androidNeverlinkAspect)
                   .aspect(dexArchiveAspect, DexArchiveAspect.PARAM_EXTRACTOR))
           /* <!-- #BLAZE_RULE($android_binary_base).ATTRIBUTE(debug_key) -->
