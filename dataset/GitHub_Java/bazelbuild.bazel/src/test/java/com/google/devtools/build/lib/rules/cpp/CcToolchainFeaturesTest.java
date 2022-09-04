@@ -15,7 +15,7 @@
 package com.google.devtools.build.lib.rules.cpp;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 import static org.junit.Assert.fail;
 
 import com.google.common.base.Joiner;
@@ -27,7 +27,6 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Multimap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
-import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.ActionConfig;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.ExpansionException;
@@ -134,12 +133,10 @@ public class CcToolchainFeaturesTest extends BuildViewTestCase {
 
   private Artifact scratchArtifact(String s) {
     Path execRoot = outputBase.getRelative("exec");
-    String outSegment = "out";
-    Path outputRoot = execRoot.getRelative(outSegment);
-    ArtifactRoot root = ArtifactRoot.asDerivedRoot(execRoot, outSegment);
+    Path outputRoot = execRoot.getRelative("out");
+    ArtifactRoot root = ArtifactRoot.asDerivedRoot(execRoot, outputRoot);
     try {
-      return ActionsTestUtil.createArtifact(
-          root, scratch.overwriteFile(outputRoot.getRelative(s).toString()));
+      return new Artifact(scratch.overwriteFile(outputRoot.getRelative(s).toString()), root);
     } catch (IOException e) {
       throw new RuntimeException(e);
     }

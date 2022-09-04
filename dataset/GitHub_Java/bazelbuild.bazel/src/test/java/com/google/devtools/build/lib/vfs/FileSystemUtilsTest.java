@@ -27,6 +27,8 @@ import static com.google.devtools.build.lib.vfs.FileSystemUtils.traverseTree;
 import static java.nio.charset.StandardCharsets.ISO_8859_1;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
+import com.google.common.base.Predicate;
+import com.google.common.base.Predicates;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.testutil.BlazeTestUtils;
 import com.google.devtools.build.lib.testutil.ManualClock;
@@ -580,7 +582,12 @@ public class FileSystemUtilsTest {
   public void testTraverseTree() throws IOException {
     createTestDirectoryTree();
 
-    Collection<Path> paths = traverseTree(topDir, p -> !p.getPathString().contains("a-dir"));
+    Collection<Path> paths = traverseTree(topDir, new Predicate<Path>() {
+      @Override
+      public boolean apply(Path p) {
+        return !p.getPathString().contains("a-dir");
+      }
+    });
     assertThat(paths).containsExactly(file1, file2, bDir, file5);
   }
 
@@ -588,7 +595,8 @@ public class FileSystemUtilsTest {
   public void testTraverseTreeDeep() throws IOException {
     createTestDirectoryTree();
 
-    Collection<Path> paths = traverseTree(topDir, ignored -> true);
+    Collection<Path> paths = traverseTree(topDir,
+        Predicates.alwaysTrue());
     assertThat(paths).containsExactly(aDir,
         file3,
         innerDir,
@@ -618,10 +626,10 @@ public class FileSystemUtilsTest {
     FileSystemUtils.createEmptyFile(linkedDirFile);  // created through the link
 
     // traverseTree doesn't follow links:
-    Collection<Path> paths = traverseTree(topDir, ignored -> true);
+    Collection<Path> paths = traverseTree(topDir, Predicates.alwaysTrue());
     assertThat(paths).containsExactly(dirLink2);
 
-    paths = traverseTree(linkedDir, ignored -> true);
+    paths = traverseTree(linkedDir, Predicates.alwaysTrue());
     assertThat(paths).containsExactly(fileSystem.getPath("/linked-dir/file"));
   }
 
