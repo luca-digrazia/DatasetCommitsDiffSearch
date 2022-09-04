@@ -26,7 +26,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.Objects;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -158,7 +157,7 @@ public class ResourceLinker {
               .whenVersionIsAtLeast(new Revision(23))
               .thenAdd("--no-version-vectors")
               .add("--no-static-lib-packages")
-              .when(Objects.equals(logger.getLevel(), Level.FINE))
+              .when(logger.getLevel() == Level.FINE)
               .thenAdd("-v")
               .add("--manifest", compiled.getManifest())
               .add("--auto-add-overlay")
@@ -184,24 +183,8 @@ public class ResourceLinker {
               .add("-o", outPath)
               .execute(String.format("Linking %s", compiled.getManifest())));
       profiler.recordEndOf("fulllink");
-      profiler.startTask("optimize");
-      if (densities.size() < 2) {
-        return PackagedResources.of(
-            outPath, rTxt, proguardConfig, mainDexProguard, javaSourceDirectory);
-      }
-      final Path optimized = workingDirectory.resolve("optimized.apk");
-      logger.finer(
-          new AaptCommandBuilder(aapt2)
-              .forBuildToolsVersion(buildToolsVersion)
-              .forVariantType(VariantType.DEFAULT)
-              .add("optimize")
-              .add("--target-densities", densities.stream().collect(Collectors.joining(",")))
-              .add("-o", optimized)
-              .add(outPath.toString())
-              .execute(String.format("Optimizing %s", compiled.getManifest())));
-      profiler.recordEndOf("optimize");
       return PackagedResources.of(
-          optimized, rTxt, proguardConfig, mainDexProguard, javaSourceDirectory);
+          outPath, rTxt, proguardConfig, mainDexProguard, javaSourceDirectory);
     } catch (IOException e) {
       throw new LinkError(e);
     }
