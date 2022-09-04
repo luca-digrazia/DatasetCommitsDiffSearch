@@ -20,19 +20,16 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Multimap;
-import com.google.devtools.build.android.Converters.DependencySymbolFileProviderConverter;
 import com.google.devtools.build.android.Converters.DependencySymbolFileProviderListConverter;
 import com.google.devtools.build.android.Converters.PathConverter;
 import com.google.devtools.build.android.resources.ResourceSymbols;
 import com.google.devtools.common.options.Option;
-import com.google.devtools.common.options.OptionDocumentationCategory;
-import com.google.devtools.common.options.OptionEffectTag;
-import com.google.devtools.common.options.OptionMetadataTag;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
@@ -41,15 +38,15 @@ import java.util.logging.Logger;
  * Provides an entry point for the compiling resource classes using a custom compiler (simply parse
  * R.txt and make a jar, which is simpler than parsing R.java and running errorprone, etc.).
  *
- * <p>For now, we assume this is only worthwhile for android_binary and not libraries.
+ * For now, we assume this is only worthwhile for android_binary and not libraries.
  *
  * <pre>
  * Example Usage:
  *   java/com/google/build/android/RClassGeneratorAction\
  *      --primaryRTxt path/to/R.txt\
  *      --primaryManifest path/to/AndroidManifest.xml\
- *      --library p/t/1/AndroidManifest.txt,p/t/1/R.txt\
- *      --library p/t/2/AndroidManifest.txt,p/t/2/R.txt\
+ *      --libraries p/t/1/AndroidManifest.txt:p/t/1/R.txt,\
+ *                  p/t/2/AndroidManifest.txt:p/t/2/R.txt\
  *      --classJarOutput path/to/write/archive_resources.jar
  * </pre>
  */
@@ -65,80 +62,41 @@ public class RClassGeneratorAction {
    */
   public static final class Options extends OptionsBase {
 
-    @Option(
-      name = "primaryRTxt",
-      defaultValue = "null",
-      converter = PathConverter.class,
-      category = "input",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      help = "The path to the binary's R.txt file"
-    )
+    @Option(name = "primaryRTxt",
+        defaultValue = "null",
+        converter = PathConverter.class,
+        category = "input",
+        help = "The path to the binary's R.txt file")
     public Path primaryRTxt;
 
-    @Option(
-      name = "primaryManifest",
-      defaultValue = "null",
-      converter = PathConverter.class,
-      category = "input",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      help = "The path to the binary's AndroidManifest.xml file. This helps provide the package."
-    )
+    @Option(name = "primaryManifest",
+        defaultValue = "null",
+        converter = PathConverter.class,
+        category = "input",
+        help = "The path to the binary's AndroidManifest.xml file. This helps provide the package.")
     public Path primaryManifest;
 
-    @Option(
-      name = "packageForR",
-      defaultValue = "null",
-      category = "config",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      help = "Custom java package to generate the R class files."
-    )
+    @Option(name = "packageForR",
+        defaultValue = "null",
+        category = "config",
+        help = "Custom java package to generate the R class files.")
     public String packageForR;
 
-    @Option(
-      name = "library",
-      allowMultiple = true,
-      defaultValue = "",
-      converter = DependencySymbolFileProviderConverter.class,
-      category = "input",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      help =
-          "R.txt and manifests for the libraries in this binary's deps. We will write "
-              + "class files for the libraries as well. Expected format: lib1/R.txt[:lib2/R.txt]"
-    )
+    @Option(name = "libraries",
+        defaultValue = "",
+        converter = DependencySymbolFileProviderListConverter.class,
+        category = "input",
+        help = "R.txt and manifests for the libraries in this binary's deps. We will write "
+            + "class files for the libraries as well. Expected format: lib1/R.txt[:lib2/R.txt]")
     public List<DependencySymbolFileProvider> libraries;
 
-    // TODO(laszlocsomor): remove this flag after 2018-02-28 (about 6 months from now). Everyone
-    // should have updated to newer Bazel versions by then.
-    @Deprecated
-    @Option(
-      name = "libraries",
-      defaultValue = "",
-      deprecationWarning = "Deprecated in favour of \"--library\"",
-      converter = DependencySymbolFileProviderListConverter.class,
-      category = "input",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      help =
-          "R.txt and manifests for the libraries in this binary's deps. We will write "
-              + "class files for the libraries as well. Expected format: lib1/R.txt[:lib2/R.txt]",
-      metadataTags = {OptionMetadataTag.DEPRECATED}
-    )
-    public List<DependencySymbolFileProvider> deprecatedLibraries;
-
-    @Option(
-      name = "classJarOutput",
-      defaultValue = "null",
-      converter = PathConverter.class,
-      category = "output",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      help = "Path for the generated jar of R.class files."
-    )
+    @Option(name = "classJarOutput",
+        defaultValue = "null",
+        converter = PathConverter.class,
+        category = "output",
+        help = "Path for the generated jar of R.class files.")
     public Path classJarOutput;
+
   }
 
   public static void main(String[] args) throws Exception {
@@ -155,8 +113,10 @@ public class RClassGeneratorAction {
       Path classOutPath = tmp.resolve("compiled_classes");
 
       logger.fine(String.format("Setup finished at %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
-      List<SymbolFileProvider> libraries =
-          Converters.concatLists(options.libraries, options.deprecatedLibraries);
+      List<SymbolFileProvider> libraries = new ArrayList<>();
+      for (DependencySymbolFileProvider library : options.libraries) {
+        libraries.add(library);
+      }
       // Note that we need to write the R class for the main binary (so proceed even if there
       // are no libraries).
       if (options.primaryRTxt != null) {
