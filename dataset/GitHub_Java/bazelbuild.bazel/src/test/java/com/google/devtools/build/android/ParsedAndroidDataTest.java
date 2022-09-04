@@ -337,6 +337,8 @@ public class ParsedAndroidDataTest {
     DataSource otherRootValuesPath = DataSource.of(otherRoot.resolve("res/values/attr.xml"));
     FullyQualifiedName idSomeId = fqnFactory.parse("id/some_id");
 
+
+
     Truth.assertAbout(parsedAndroidData)
         .that(dataSet)
         .isEqualTo(
@@ -380,9 +382,10 @@ public class ParsedAndroidDataTest {
                 ImmutableMap.<DataKey, DataResource>of(
                     idSomeId, // key
                     DataResourceXml.createWithNoNamespace(
-                        otherRootValuesPath, IdXmlResourceValue.of()) // value
+                        rootValuesPath, IdXmlResourceValue.of()) // value
                     ),
                 ImmutableMap.<DataKey, DataAsset>of()));
+
   }
 
   @Test
@@ -605,15 +608,15 @@ public class ParsedAndroidDataTest {
       assertThat(e).hasMessageThat().isEqualTo("3 Parse Error(s)");
       String combinedSuberrors = Joiner.on('\n').join(e.getSuppressed());
       assertThat(combinedSuberrors)
-          .contains(fs.getPath("values/unique_strings.xml") + ": ParseError at [row,col]:[3,35]");
+          .contains("values/unique_strings.xml: ParseError at [row,col]:[3,35]");
       assertThat(combinedSuberrors)
           .contains("unrecognized resource type: <not_string name='invalid_string'>");
       assertThat(combinedSuberrors)
-          .contains(fs.getPath("layout/unique_layout.xml") + ": ParseError at [row,col]:[6,3]");
+          .contains("layout/unique_layout.xml: ParseError at [row,col]:[6,3]");
       assertThat(combinedSuberrors)
           .contains("must be terminated by the matching end-tag");
       assertThat(combinedSuberrors)
-          .contains(fs.getPath("menu/unique_menu.xml") + ": ParseError at [row,col]:[1,30]");
+          .contains("menu/unique_menu.xml: ParseError at [row,col]:[1,30]");
       assertThat(combinedSuberrors)
           .contains("XML version \"not_a_version\" is not supported, only XML 1.0 is supported");
     }
@@ -648,15 +651,15 @@ public class ParsedAndroidDataTest {
     } catch (MergingException e) {
       assertThat(e).hasMessageThat().isEqualTo("5 Parse Error(s)");
       String combinedSuberrors = Joiner.on('\n').join(e.getSuppressed());
-      assertThat(combinedSuberrors).contains(fs.getPath("values/missing_name.xml").toString());
+      assertThat(combinedSuberrors).contains("values/missing_name.xml");
       assertThat(combinedSuberrors).contains("resource name is required for public");
-      assertThat(combinedSuberrors).contains(fs.getPath("values/missing_type.xml").toString());
+      assertThat(combinedSuberrors).contains("values/missing_type.xml");
       assertThat(combinedSuberrors).contains("missing type attribute");
-      assertThat(combinedSuberrors).contains(fs.getPath("values/bad_type.xml").toString());
+      assertThat(combinedSuberrors).contains("values/bad_type.xml");
       assertThat(combinedSuberrors).contains("has invalid type attribute");
-      assertThat(combinedSuberrors).contains(fs.getPath("values/invalid_id.xml").toString());
+      assertThat(combinedSuberrors).contains("values/invalid_id.xml");
       assertThat(combinedSuberrors).contains("has invalid id number");
-      assertThat(combinedSuberrors).contains(fs.getPath("values/overflow_id.xml").toString());
+      assertThat(combinedSuberrors).contains("values/overflow_id.xml");
       assertThat(combinedSuberrors).contains("has invalid id number");
     }
   }

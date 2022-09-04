@@ -15,6 +15,7 @@
 package com.google.devtools.build.lib.windows;
 
 import static com.google.common.truth.Truth.assertThat;
+import static com.google.devtools.build.lib.windows.WindowsFileSystem.SHORT_NAME_MATCHER;
 import static org.junit.Assert.fail;
 
 import com.google.common.base.Function;
@@ -28,7 +29,6 @@ import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Symlinks;
 import com.google.devtools.build.lib.windows.WindowsFileSystem.WindowsPath;
-import com.google.devtools.build.lib.windows.jni.WindowsFileOperations;
 import com.google.devtools.build.lib.windows.util.WindowsTestUtil;
 import java.io.File;
 import java.io.IOException;
@@ -55,7 +55,8 @@ public class WindowsFileSystemTest {
 
   @Before
   public void loadJni() throws Exception {
-    scratchRoot = new File(System.getenv("TEST_TMPDIR"), "x").getAbsolutePath();
+    WindowsTestUtil.loadJni();
+    scratchRoot = new File(System.getenv("TEST_TMPDIR")).getAbsolutePath() + "/x";
     testUtil = new WindowsTestUtil(scratchRoot);
     fs = new WindowsFileSystem();
     cleanupScratchDir();
@@ -64,6 +65,48 @@ public class WindowsFileSystemTest {
   @After
   public void cleanupScratchDir() throws Exception {
     testUtil.deleteAllUnder("");
+  }
+
+  @Test
+  public void testShortNameMatcher() {
+    assertThat(SHORT_NAME_MATCHER.apply("abc")).isFalse(); // no ~ in the name
+    assertThat(SHORT_NAME_MATCHER.apply("abc~")).isFalse(); // no number after the ~
+    assertThat(SHORT_NAME_MATCHER.apply("~abc")).isFalse(); // no ~ followed by number
+    assertThat(SHORT_NAME_MATCHER.apply("too_long_path")).isFalse(); // too long for 8dot3
+    assertThat(SHORT_NAME_MATCHER.apply("too_long_path~1")).isFalse(); // too long for 8dot3
+    assertThat(SHORT_NAME_MATCHER.apply("abcd~1234")).isFalse(); // too long for 8dot3
+    assertThat(SHORT_NAME_MATCHER.apply("h~1")).isTrue();
+    assertThat(SHORT_NAME_MATCHER.apply("h~12")).isTrue();
+    assertThat(SHORT_NAME_MATCHER.apply("h~12.")).isTrue();
+    assertThat(SHORT_NAME_MATCHER.apply("h~12.a")).isTrue();
+    assertThat(SHORT_NAME_MATCHER.apply("h~12.abc")).isTrue();
+    assertThat(SHORT_NAME_MATCHER.apply("h~123456")).isTrue();
+    assertThat(SHORT_NAME_MATCHER.apply("hellow~1")).isTrue();
+    assertThat(SHORT_NAME_MATCHER.apply("hellow~1.")).isTrue();
+    assertThat(SHORT_NAME_MATCHER.apply("hellow~1.a")).isTrue();
+    assertThat(SHORT_NAME_MATCHER.apply("hellow~1.abc")).isTrue();
+    assertThat(SHORT_NAME_MATCHER.apply("hello~1.abcd")).isFalse(); // too long for 8dot3
+    assertThat(SHORT_NAME_MATCHER.apply("hellow~1.abcd")).isFalse(); // too long for 8dot3
+    assertThat(SHORT_NAME_MATCHER.apply("hello~12")).isTrue();
+    assertThat(SHORT_NAME_MATCHER.apply("hello~12.")).isTrue();
+    assertThat(SHORT_NAME_MATCHER.apply("hello~12.a")).isTrue();
+    assertThat(SHORT_NAME_MATCHER.apply("hello~12.abc")).isTrue();
+    assertThat(SHORT_NAME_MATCHER.apply("hello~12.abcd")).isFalse(); // too long for 8dot3
+    assertThat(SHORT_NAME_MATCHER.apply("hellow~12")).isFalse(); // too long for 8dot3
+    assertThat(SHORT_NAME_MATCHER.apply("hellow~12.")).isFalse(); // too long for 8dot3
+    assertThat(SHORT_NAME_MATCHER.apply("hellow~12.a")).isFalse(); // too long for 8dot3
+    assertThat(SHORT_NAME_MATCHER.apply("hellow~12.ab")).isFalse(); // too long for 8dot3
+    assertThat(SHORT_NAME_MATCHER.apply("~h~1")).isTrue();
+    assertThat(SHORT_NAME_MATCHER.apply("~h~1.")).isTrue();
+    assertThat(SHORT_NAME_MATCHER.apply("~h~1.a")).isTrue();
+    assertThat(SHORT_NAME_MATCHER.apply("~h~1.abc")).isTrue();
+    assertThat(SHORT_NAME_MATCHER.apply("~h~1.abcd")).isFalse(); // too long for 8dot3
+    assertThat(SHORT_NAME_MATCHER.apply("~h~12")).isTrue();
+    assertThat(SHORT_NAME_MATCHER.apply("~h~12~1")).isTrue();
+    assertThat(SHORT_NAME_MATCHER.apply("~h~12~1.")).isTrue();
+    assertThat(SHORT_NAME_MATCHER.apply("~h~12~1.a")).isTrue();
+    assertThat(SHORT_NAME_MATCHER.apply("~h~12~1.abc")).isTrue();
+    assertThat(SHORT_NAME_MATCHER.apply("~h~12~1.abcd")).isFalse(); // too long for 8dot3
   }
 
   @Test
