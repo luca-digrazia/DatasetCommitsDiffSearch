@@ -21,10 +21,14 @@ import static org.mockito.Mockito.when;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.devtools.build.lib.actions.ArtifactRoot.RootType;
+import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
+import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.testutil.Scratch;
+import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
-import java.util.List;
 import java.util.Map;
 import org.junit.Before;
 import org.junit.Test;
@@ -38,15 +42,36 @@ public class CompositeRunfilesSupplierTest {
   private RunfilesSupplier mockFirst;
   private RunfilesSupplier mockSecond;
 
-  private Root rootDir;
+  private Path execRoot;
+  private ArtifactRoot rootDir;
 
   @Before
   public final void createMocks() throws IOException {
     Scratch scratch = new Scratch();
-    rootDir = Root.asDerivedRoot(scratch.dir("/fake/root/dont/matter"));
+    execRoot = scratch.getFileSystem().getPath("/");
+    rootDir =
+        ArtifactRoot.asDerivedRoot(execRoot, RootType.Output, "fake", "root", "dont", "matter");
 
     mockFirst = mock(RunfilesSupplier.class);
     mockSecond = mock(RunfilesSupplier.class);
+  }
+
+  @Test
+  public void emptySuppliersIgnored() {
+    assertThat(
+            CompositeRunfilesSupplier.of(
+                EmptyRunfilesSupplier.INSTANCE, EmptyRunfilesSupplier.INSTANCE))
+        .isSameInstanceAs(EmptyRunfilesSupplier.INSTANCE);
+    assertThat(CompositeRunfilesSupplier.of(EmptyRunfilesSupplier.INSTANCE, mockFirst))
+        .isSameInstanceAs(mockFirst);
+    assertThat(CompositeRunfilesSupplier.of(mockFirst, EmptyRunfilesSupplier.INSTANCE))
+        .isSameInstanceAs(mockFirst);
+  }
+
+  @Test
+  public void fromSuppliersSeleton() {
+    assertThat(CompositeRunfilesSupplier.fromSuppliers(ImmutableList.of(mockFirst)))
+        .isSameInstanceAs(mockFirst);
   }
 
   @Test
@@ -54,97 +79,101 @@ public class CompositeRunfilesSupplierTest {
     when(mockFirst.getArtifacts()).thenReturn(mkArtifacts(rootDir, "first", "shared"));
     when(mockSecond.getArtifacts()).thenReturn(mkArtifacts(rootDir, "second", "shared"));
 
-    CompositeRunfilesSupplier underTest = new CompositeRunfilesSupplier(mockFirst, mockSecond);
-    assertThat(underTest.getArtifacts()).containsExactlyElementsIn(
-        mkArtifacts(rootDir, "first", "second", "shared"));
+    RunfilesSupplier underTest = CompositeRunfilesSupplier.of(mockFirst, mockSecond);
+    assertThat(underTest.getArtifacts().toList())
+        .containsExactlyElementsIn(mkArtifacts(rootDir, "first", "second", "shared").toList());
   }
 
   @Test
   public void testGetRunfilesDirsReturnsCombinedPaths() {
-    PathFragment first = new PathFragment("first");
-    PathFragment second = new PathFragment("second");
-    PathFragment shared = new PathFragment("shared");
+    PathFragment first = PathFragment.create("first");
+    PathFragment second = PathFragment.create("second");
+    PathFragment shared = PathFragment.create("shared");
 
     when(mockFirst.getRunfilesDirs()).thenReturn(ImmutableSet.of(first, shared));
     when(mockSecond.getRunfilesDirs()).thenReturn(ImmutableSet.of(second, shared));
 
-    CompositeRunfilesSupplier underTest = new CompositeRunfilesSupplier(mockFirst, mockSecond);
-    assertThat(underTest.getRunfilesDirs()).containsExactlyElementsIn(
-        ImmutableSet.of(first, second, shared));
+    RunfilesSupplier underTest = CompositeRunfilesSupplier.of(mockFirst, mockSecond);
+    assertThat(underTest.getRunfilesDirs()).containsExactly(first, second, shared);
   }
 
   @Test
   public void testGetMappingsReturnsMappingsWithFirstPrecedenceOverSecond() throws IOException {
-    PathFragment first = new PathFragment("first");
+    PathFragment first = PathFragment.create("first");
     Map<PathFragment, Artifact> firstMappings = mkMappings(rootDir, "first1", "first2");
 
-    PathFragment second = new PathFragment("second");
+    PathFragment second = PathFragment.create("second");
     Map<PathFragment, Artifact> secondMappings = mkMappings(rootDir, "second1", "second2");
 
-    PathFragment shared = new PathFragment("shared");
+    PathFragment shared = PathFragment.create("shared");
     Map<PathFragment, Artifact> firstSharedMappings = mkMappings(rootDir, "shared1", "shared2");
     Map<PathFragment, Artifact> secondSharedMappings = mkMappings(rootDir, "lost1", "lost2");
 
-    when(mockFirst.getMappings()).thenReturn(ImmutableMap.of(
-        first, firstMappings,
-        shared, firstSharedMappings));
-    when(mockSecond.getMappings()).thenReturn(ImmutableMap.of(
-        second, secondMappings,
-        shared, secondSharedMappings));
+    when(mockFirst.getMappings())
+        .thenReturn(
+            ImmutableMap.of(
+                first, firstMappings,
+                shared, firstSharedMappings));
+    when(mockSecond.getMappings())
+        .thenReturn(
+            ImmutableMap.of(
+                second, secondMappings,
+                shared, secondSharedMappings));
 
     // We expect the mappings for shared added by mockSecond to be dropped.
-    CompositeRunfilesSupplier underTest = new CompositeRunfilesSupplier(mockFirst, mockSecond);
-    assertThat(underTest.getMappings()).containsExactly(
-        first, firstMappings,
-        second, secondMappings,
-        shared, firstSharedMappings);
+    RunfilesSupplier underTest = CompositeRunfilesSupplier.of(mockFirst, mockSecond);
+    assertThat(underTest.getMappings())
+        .containsExactly(
+            first, firstMappings,
+            second, secondMappings,
+            shared, firstSharedMappings);
   }
 
   @Test
   public void testGetMappingsViaListConstructorReturnsMappingsWithFirstPrecedenceOverSecond()
       throws IOException {
-    PathFragment first = new PathFragment("first");
+    PathFragment first = PathFragment.create("first");
     Map<PathFragment, Artifact> firstMappings = mkMappings(rootDir, "first1", "first2");
 
-    PathFragment second = new PathFragment("second");
+    PathFragment second = PathFragment.create("second");
     Map<PathFragment, Artifact> secondMappings = mkMappings(rootDir, "second1", "second2");
 
-    PathFragment shared = new PathFragment("shared");
+    PathFragment shared = PathFragment.create("shared");
     Map<PathFragment, Artifact> firstSharedMappings = mkMappings(rootDir, "shared1", "shared2");
     Map<PathFragment, Artifact> secondSharedMappings = mkMappings(rootDir, "lost1", "lost2");
 
-    when(mockFirst.getMappings()).thenReturn(ImmutableMap.of(
-        first, firstMappings,
-        shared, firstSharedMappings));
-    when(mockSecond.getMappings()).thenReturn(ImmutableMap.of(
-        second, secondMappings,
-        shared, secondSharedMappings));
+    when(mockFirst.getMappings())
+        .thenReturn(
+            ImmutableMap.of(
+                first, firstMappings,
+                shared, firstSharedMappings));
+    when(mockSecond.getMappings())
+        .thenReturn(
+            ImmutableMap.of(
+                second, secondMappings,
+                shared, secondSharedMappings));
 
     // We expect the mappings for shared added by mockSecond to be dropped.
-    CompositeRunfilesSupplier underTest =
-        new CompositeRunfilesSupplier(ImmutableList.of(mockFirst, mockSecond));
-    assertThat(underTest.getMappings()).containsExactly(
-        first, firstMappings,
-        second, secondMappings,
-        shared, firstSharedMappings);
+    RunfilesSupplier underTest = CompositeRunfilesSupplier.of(mockFirst, mockSecond);
+    assertThat(underTest.getMappings())
+        .containsExactly(
+            first, firstMappings,
+            second, secondMappings,
+            shared, firstSharedMappings);
    }
 
-  private static Map<PathFragment, Artifact> mkMappings(Root rootDir, String... paths) {
+  private static Map<PathFragment, Artifact> mkMappings(ArtifactRoot rootDir, String... paths) {
     ImmutableMap.Builder<PathFragment, Artifact> builder = ImmutableMap.builder();
     for (String path : paths) {
-      builder.put(new PathFragment(path), mkArtifact(rootDir, path));
+      builder.put(PathFragment.create(path), ActionsTestUtil.createArtifact(rootDir, path));
     }
     return builder.build();
   }
 
-  private static Artifact mkArtifact(Root rootDir, String path) {
-    return new Artifact(new PathFragment(path), rootDir);
-  }
-
-  private static List<Artifact> mkArtifacts(Root rootDir, String... paths) {
-    ImmutableList.Builder<Artifact> builder = ImmutableList.builder();
+  private static NestedSet<Artifact> mkArtifacts(ArtifactRoot rootDir, String... paths) {
+    NestedSetBuilder<Artifact> builder = NestedSetBuilder.stableOrder();
     for (String path : paths) {
-      builder.add(mkArtifact(rootDir, path));
+      builder.add(ActionsTestUtil.createArtifact(rootDir, path));
     }
     return builder.build();
   }

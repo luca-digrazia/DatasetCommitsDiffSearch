@@ -24,6 +24,7 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
+import com.google.devtools.build.lib.actions.ArtifactRoot.RootType;
 import com.google.devtools.build.lib.actions.FileArtifactValue;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.clock.JavaClock;
@@ -58,7 +59,7 @@ public class MerkleTreeTest {
   public void setup() {
     FileSystem fs = new InMemoryFileSystem(new JavaClock(), DigestHashFunction.SHA256);
     execRoot = fs.getPath("/exec");
-    artifactRoot = ArtifactRoot.asDerivedRoot(execRoot, execRoot.getRelative("srcs"));
+    artifactRoot = ArtifactRoot.asDerivedRoot(execRoot, RootType.Output, "srcs");
     digestUtil = new DigestUtil(fs.getDigestFunction());
   }
 
@@ -87,13 +88,13 @@ public class MerkleTreeTest {
 
     Directory fizzDir =
         Directory.newBuilder()
-            .addFiles(newFileNode("buzz.cc", digestUtil.computeAsUtf8("buzz")))
-            .addFiles(newFileNode("fizzbuzz.cc", digestUtil.computeAsUtf8("fizzbuzz")))
+            .addFiles(newFileNode("buzz.cc", digestUtil.computeAsUtf8("buzz"), false))
+            .addFiles(newFileNode("fizzbuzz.cc", digestUtil.computeAsUtf8("fizzbuzz"), false))
             .build();
     Directory srcsDir =
         Directory.newBuilder()
-            .addFiles(newFileNode("bar.cc", digestUtil.computeAsUtf8("bar")))
-            .addFiles(newFileNode("foo.cc", digestUtil.computeAsUtf8("foo")))
+            .addFiles(newFileNode("bar.cc", digestUtil.computeAsUtf8("bar"), false))
+            .addFiles(newFileNode("foo.cc", digestUtil.computeAsUtf8("foo"), false))
             .addDirectories(
                 DirectoryNode.newBuilder().setName("fizz").setDigest(digestUtil.compute(fizzDir)))
             .build();
@@ -126,15 +127,15 @@ public class MerkleTreeTest {
           digestUtil.computeAsUtf8("buzz"),
           digestUtil.computeAsUtf8("fizzbuzz")
         };
-    assertThat(tree.getInputByDigest(inputDigests[0])).isEqualTo(foo);
-    assertThat(tree.getInputByDigest(inputDigests[1])).isEqualTo(bar);
-    assertThat(tree.getInputByDigest(inputDigests[2])).isEqualTo(buzz);
-    assertThat(tree.getInputByDigest(inputDigests[3])).isEqualTo(fizzbuzz);
+    assertThat(tree.getFileByDigest(inputDigests[0]).getPath()).isEqualTo(foo.getPath());
+    assertThat(tree.getFileByDigest(inputDigests[1]).getPath()).isEqualTo(bar.getPath());
+    assertThat(tree.getFileByDigest(inputDigests[2]).getPath()).isEqualTo(buzz.getPath());
+    assertThat(tree.getFileByDigest(inputDigests[3]).getPath()).isEqualTo(fizzbuzz.getPath());
 
     Digest[] allDigests = Iterables.toArray(tree.getAllDigests(), Digest.class);
     assertThat(allDigests.length).isEqualTo(dirDigests.length + inputDigests.length);
-    assertThat(allDigests).asList().containsAllIn(dirDigests);
-    assertThat(allDigests).asList().containsAllIn(inputDigests);
+    assertThat(allDigests).asList().containsAtLeastElementsIn(dirDigests);
+    assertThat(allDigests).asList().containsAtLeastElementsIn(inputDigests);
   }
 
   private Artifact addFile(
@@ -149,11 +150,15 @@ public class MerkleTreeTest {
     Artifact a = ActionsTestUtil.createArtifact(artifactRoot, p);
 
     sortedInputs.put(PathFragment.create(path), a);
-    metadata.put(a, FileArtifactValue.create(a));
+    metadata.put(a, FileArtifactValue.createForTesting(a));
     return a;
   }
 
-  private static FileNode newFileNode(String name, Digest digest) {
-    return FileNode.newBuilder().setName(name).setDigest(digest).setIsExecutable(true).build();
+  private static FileNode newFileNode(String name, Digest digest, boolean isExecutable) {
+    return FileNode.newBuilder()
+        .setName(name)
+        .setDigest(digest)
+        .setIsExecutable(isExecutable)
+        .build();
   }
 }

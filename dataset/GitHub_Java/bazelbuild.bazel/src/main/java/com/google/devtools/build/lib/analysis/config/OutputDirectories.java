@@ -15,16 +15,21 @@
 package com.google.devtools.build.lib.analysis.config;
 
 import com.google.common.base.Joiner;
+import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
+import com.google.devtools.build.lib.actions.ArtifactRoot.RootType;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
+import com.google.devtools.build.lib.server.FailureDetails.BuildConfiguration.Code;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.OS;
+import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import com.google.devtools.build.lib.vfs.PathFragment.InvalidBaseNameException;
 import java.util.ArrayList;
+import java.util.Map;
 
 /**
  * Logic for figuring out what base directories to place outputs generated from a given
@@ -79,7 +84,7 @@ public class OutputDirectories {
     INCLUDE(BlazeDirectories.RELATIVE_INCLUDE_DIR),
     OUTPUT(false);
 
-    private final PathFragment nameFragment;
+    private final String nameFragment;
     private final boolean middleman;
 
     /**
@@ -89,12 +94,14 @@ public class OutputDirectories {
      * @param isMiddleman whether the root should be a middleman root or a "normal" derived root.
      */
     OutputDirectory(boolean isMiddleman) {
-      this.nameFragment = PathFragment.EMPTY_FRAGMENT;
+      this.nameFragment = isMiddleman ? "internal" : "";
       this.middleman = isMiddleman;
     }
 
     OutputDirectory(String name) {
-      this.nameFragment = PathFragment.create(name);
+      this.nameFragment = name;
+      // Must be a legal basename for root: no segments allowed.
+      FileSystemUtils.checkBaseName(nameFragment);
       this.middleman = false;
     }
 
@@ -103,146 +110,153 @@ public class OutputDirectories {
         String outputDirName, BlazeDirectories directories, RepositoryName mainRepositoryName) {
       // e.g., execroot/repo1
       Path execRoot = directories.getExecRoot(mainRepositoryName.strippedName());
-      // e.g., execroot/repo1/bazel-out/config/bin
-      if (middleman) {
-        Path outputDir =
-            execRoot.getRelative(directories.getRelativeOutputPath()).getRelative(outputDirName);
-        return ArtifactRoot.middlemanRoot(execRoot, outputDir);
-      }
       // e.g., [[execroot/repo1]/bazel-out/config/bin]
       return ArtifactRoot.asDerivedRoot(
           execRoot,
-          PathFragment.create(directories.getRelativeOutputPath()),
-          PathFragment.create(outputDirName),
+          middleman ? RootType.Middleman : RootType.Output,
+          directories.getRelativeOutputPath(),
+          outputDirName,
           nameFragment);
     }
   }
 
   private final BlazeDirectories directories;
-  private final RepositoryName mainRepositoryName;
   private final String mnemonic;
   private final String outputDirName;
 
-  // We precompute the roots for the main repository, since that's the common case.
-  private final ArtifactRoot outputDirectoryForMainRepository;
-  private final ArtifactRoot binDirectoryForMainRepository;
-  private final ArtifactRoot includeDirectoryForMainRepository;
-  private final ArtifactRoot genfilesDirectoryForMainRepository;
-  private final ArtifactRoot coverageDirectoryForMainRepository;
-  private final ArtifactRoot testlogsDirectoryForMainRepository;
-  private final ArtifactRoot middlemanDirectoryForMainRepository;
+  private final ArtifactRoot outputDirectory;
+  private final ArtifactRoot binDirectory;
+  private final ArtifactRoot includeDirectory;
+  private final ArtifactRoot genfilesDirectory;
+  private final ArtifactRoot coverageDirectory;
+  private final ArtifactRoot testlogsDirectory;
+  private final ArtifactRoot middlemanDirectory;
 
   private final boolean mergeGenfilesDirectory;
+
+  private final boolean siblingRepositoryLayout;
+
+  private final Path execRoot;
 
   OutputDirectories(
       BlazeDirectories directories,
       CoreOptions options,
       ImmutableSortedMap<Class<? extends Fragment>, Fragment> fragments,
-      RepositoryName mainRepositoryName) {
+      RepositoryName mainRepositoryName,
+      boolean siblingRepositoryLayout)
+      throws InvalidMnemonicException {
     this.directories = directories;
-    this.mainRepositoryName = mainRepositoryName;
     this.mnemonic = buildMnemonic(options, fragments);
     this.outputDirName =
         (options.outputDirectoryName != null) ? options.outputDirectoryName : mnemonic;
 
-    this.outputDirectoryForMainRepository =
+    this.outputDirectory =
         OutputDirectory.OUTPUT.getRoot(outputDirName, directories, mainRepositoryName);
-    this.binDirectoryForMainRepository =
-        OutputDirectory.BIN.getRoot(outputDirName, directories, mainRepositoryName);
-    this.includeDirectoryForMainRepository =
+    this.binDirectory = OutputDirectory.BIN.getRoot(outputDirName, directories, mainRepositoryName);
+    this.includeDirectory =
         OutputDirectory.INCLUDE.getRoot(outputDirName, directories, mainRepositoryName);
-    this.genfilesDirectoryForMainRepository =
+    this.genfilesDirectory =
         OutputDirectory.GENFILES.getRoot(outputDirName, directories, mainRepositoryName);
-    this.coverageDirectoryForMainRepository =
+    this.coverageDirectory =
         OutputDirectory.COVERAGE.getRoot(outputDirName, directories, mainRepositoryName);
-    this.testlogsDirectoryForMainRepository =
+    this.testlogsDirectory =
         OutputDirectory.TESTLOGS.getRoot(outputDirName, directories, mainRepositoryName);
-    this.middlemanDirectoryForMainRepository =
+    this.middlemanDirectory =
         OutputDirectory.MIDDLEMAN.getRoot(outputDirName, directories, mainRepositoryName);
 
     this.mergeGenfilesDirectory = options.mergeGenfilesDirectory;
+    this.siblingRepositoryLayout = siblingRepositoryLayout;
+    this.execRoot = directories.getExecRoot(mainRepositoryName.strippedName());
   }
 
-  private String buildMnemonic(
-      CoreOptions options, ImmutableSortedMap<Class<? extends Fragment>, Fragment> fragments) {
+  private static String buildMnemonic(
+      CoreOptions options, ImmutableSortedMap<Class<? extends Fragment>, Fragment> fragments)
+      throws InvalidMnemonicException {
     // See explanation at declaration for outputRoots.
-    String platformSuffix = (options.platformSuffix != null) ? options.platformSuffix : "";
     ArrayList<String> nameParts = new ArrayList<>();
-    for (Fragment fragment : fragments.values()) {
-      nameParts.add(fragment.getOutputDirectoryName());
+    for (Map.Entry<Class<? extends Fragment>, Fragment> entry : fragments.entrySet()) {
+      String outputDirectoryName = entry.getValue().getOutputDirectoryName();
+      if (Strings.isNullOrEmpty(outputDirectoryName)) {
+        continue;
+      }
+      try {
+        PathFragment.checkSeparators(outputDirectoryName);
+      } catch (InvalidBaseNameException e) {
+        throw new InvalidMnemonicException(
+            "Output directory name '"
+                + outputDirectoryName
+                + "' specified by "
+                + entry.getKey().getSimpleName(),
+            e);
+      }
+      nameParts.add(outputDirectoryName);
     }
-    nameParts.add(options.compilationMode + platformSuffix);
+    String platformSuffix = (options.platformSuffix != null) ? options.platformSuffix : "";
+    try {
+      PathFragment.checkSeparators(platformSuffix);
+    } catch (InvalidBaseNameException e) {
+      throw new InvalidMnemonicException("Platform suffix '" + platformSuffix + "'", e);
+    }
+    String shortString = options.compilationMode + platformSuffix;
+    nameParts.add(shortString);
     if (options.transitionDirectoryNameFragment != null) {
+      try {
+        PathFragment.checkSeparators(options.transitionDirectoryNameFragment);
+      } catch (InvalidBaseNameException e) {
+        throw new InvalidMnemonicException(
+            "Transition directory name fragment '" + options.transitionDirectoryNameFragment + "'",
+            e);
+      }
       nameParts.add(options.transitionDirectoryNameFragment);
     }
     return Joiner.on('-').skipNulls().join(nameParts);
   }
 
-  /** Returns the output directory for this build configuration. */
-  ArtifactRoot getOutputDirectory(RepositoryName repositoryName) {
-    return repositoryName.isMain() || repositoryName.equals(mainRepositoryName)
-        ? outputDirectoryForMainRepository
-        : OutputDirectory.OUTPUT.getRoot(outputDirName, directories, mainRepositoryName);
+  private ArtifactRoot buildDerivedRoot(
+      String nameFragment, RepositoryName repository, boolean isMiddleman) {
+    // e.g., execroot/mainRepoName/bazel-out/[repoName/]config/bin
+    // TODO(jungjw): Ideally, we would like to do execroot_base/repoName/bazel-out/config/bin
+    // instead. However, it requires individually symlinking the top-level elements of external
+    // repositories, which is blocked by a Windows symlink issue #8704.
+    RootType rootType;
+    if (repository.isMain() || repository.isDefault()) {
+      rootType = isMiddleman ? RootType.SiblingMainMiddleman : RootType.SiblingMainOutput;
+    } else {
+      rootType = isMiddleman ? RootType.SiblingExternalMiddleman : RootType.SiblingExternalOutput;
+    }
+    return ArtifactRoot.asDerivedRoot(
+        execRoot,
+        rootType,
+        directories.getRelativeOutputPath(),
+        repository.strippedName(),
+        outputDirName,
+        nameFragment);
   }
 
-  ArtifactRoot getBinDir() {
-    return getBinDirectory(RepositoryName.MAIN);
+  /** Returns the output directory for this build configuration. */
+  ArtifactRoot getOutputDirectory(RepositoryName repositoryName) {
+    return siblingRepositoryLayout ? buildDerivedRoot("", repositoryName, false) : outputDirectory;
   }
 
   /** Returns the bin directory for this build configuration. */
-  ArtifactRoot getBinDirectory() {
-    return getBinDirectory(RepositoryName.MAIN);
-  }
-
-  /**
-   * TODO(kchodorow): This (and the other get*Directory functions) won't work with external
-   * repositories without changes to how ArtifactFactory resolves derived roots. This is not an
-   * issue right now because it only effects Blaze's include scanning (internal) and Bazel's
-   * repositories (external) but will need to be fixed.
-   */
   ArtifactRoot getBinDirectory(RepositoryName repositoryName) {
-    return repositoryName.isMain() || repositoryName.equals(mainRepositoryName)
-        ? binDirectoryForMainRepository
-        : OutputDirectory.BIN.getRoot(outputDirName, directories, mainRepositoryName);
-  }
-
-  /** Returns a relative path to the bin directory at execution time. */
-  PathFragment getBinFragment() {
-    return getBinDirectory().getExecPath();
+    return siblingRepositoryLayout ? buildDerivedRoot("bin", repositoryName, false) : binDirectory;
   }
 
   /** Returns the include directory for this build configuration. */
   ArtifactRoot getIncludeDirectory(RepositoryName repositoryName) {
-    return repositoryName.isMain() || repositoryName.equals(mainRepositoryName)
-        ? includeDirectoryForMainRepository
-        : OutputDirectory.INCLUDE.getRoot(outputDirName, directories, mainRepositoryName);
-  }
-
-  ArtifactRoot getGenfilesDir() {
-    return getGenfilesDirectory(RepositoryName.MAIN);
+    return siblingRepositoryLayout
+        ? buildDerivedRoot(BlazeDirectories.RELATIVE_INCLUDE_DIR, repositoryName, false)
+        : includeDirectory;
   }
 
   /** Returns the genfiles directory for this build configuration. */
-  ArtifactRoot getGenfilesDirectory() {
-    if (mergeGenfilesDirectory) {
-      return getBinDirectory();
-    }
-
-    return getGenfilesDirectory(RepositoryName.MAIN);
-  }
-
   ArtifactRoot getGenfilesDirectory(RepositoryName repositoryName) {
-    if (mergeGenfilesDirectory) {
-      return getBinDirectory(repositoryName);
-    }
-
-    return repositoryName.isMain() || repositoryName.equals(mainRepositoryName)
-        ? genfilesDirectoryForMainRepository
-        : OutputDirectory.GENFILES.getRoot(outputDirName, directories, mainRepositoryName);
-  }
-
-  boolean hasSeparateGenfilesDirectory() {
-    return !mergeGenfilesDirectory;
+    return mergeGenfilesDirectory
+        ? getBinDirectory(repositoryName)
+        : siblingRepositoryLayout
+            ? buildDerivedRoot("genfiles", repositoryName, false)
+            : genfilesDirectory;
   }
 
   /**
@@ -251,21 +265,21 @@ public class OutputDirectories {
    * tools.
    */
   ArtifactRoot getCoverageMetadataDirectory(RepositoryName repositoryName) {
-    return repositoryName.isMain() || repositoryName.equals(mainRepositoryName)
-        ? coverageDirectoryForMainRepository
-        : OutputDirectory.COVERAGE.getRoot(outputDirName, directories, mainRepositoryName);
+    return siblingRepositoryLayout
+        ? buildDerivedRoot("coverage-metadata", repositoryName, false)
+        : coverageDirectory;
   }
 
   /** Returns the testlogs directory for this build configuration. */
   ArtifactRoot getTestLogsDirectory(RepositoryName repositoryName) {
-    return repositoryName.isMain() || repositoryName.equals(mainRepositoryName)
-        ? testlogsDirectoryForMainRepository
-        : OutputDirectory.TESTLOGS.getRoot(outputDirName, directories, mainRepositoryName);
+    return siblingRepositoryLayout
+        ? buildDerivedRoot("testlogs", repositoryName, false)
+        : testlogsDirectory;
   }
 
   /** Returns a relative path to the genfiles directory at execution time. */
-  PathFragment getGenfilesFragment() {
-    return getGenfilesDirectory().getExecPath();
+  PathFragment getGenfilesFragment(RepositoryName repositoryName) {
+    return getGenfilesDirectory(repositoryName).getExecPath();
   }
 
   /**
@@ -281,9 +295,9 @@ public class OutputDirectories {
 
   /** Returns the internal directory (used for middlemen) for this build configuration. */
   ArtifactRoot getMiddlemanDirectory(RepositoryName repositoryName) {
-    return repositoryName.isMain() || repositoryName.equals(mainRepositoryName)
-        ? middlemanDirectoryForMainRepository
-        : OutputDirectory.MIDDLEMAN.getRoot(outputDirName, directories, mainRepositoryName);
+    return siblingRepositoryLayout
+        ? buildDerivedRoot("internal", repositoryName, true)
+        : middlemanDirectory;
   }
 
   String getMnemonic() {
@@ -297,4 +311,14 @@ public class OutputDirectories {
   BlazeDirectories getDirectories() {
     return directories;
   }
+
+  /** Indicates a failure to construct the mnemonic for an output directory. */
+  public static class InvalidMnemonicException extends InvalidConfigurationException {
+    InvalidMnemonicException(String message, InvalidBaseNameException e) {
+      super(
+          message + " is invalid as part of a path: " + e.getMessage(),
+          Code.INVALID_OUTPUT_DIRECTORY_MNEMONIC);
+    }
+  }
 }
+

@@ -98,8 +98,11 @@ public final class LinkCommandLineTest extends BuildViewTestCase {
                     ImmutableSet.of(),
                     "MOCK_LINKER_TOOL",
                     /* supportsEmbeddedRuntimes= */ true,
-                    /* supportsInterfaceSharedLibraries= */ false))
-            .addAll(CppActionConfigs.getFeaturesToAppearLastInFeaturesList(ImmutableSet.of()))
+                    /* supportsInterfaceSharedLibraries= */ false,
+                    /* doNotSplitLinkingCmdline= */ true))
+            .addAll(
+                CppActionConfigs.getFeaturesToAppearLastInFeaturesList(
+                    ImmutableSet.of(), /* doNotSplitLinkingCmdline= */ true))
             .build();
 
     ImmutableList<CToolchain.ActionConfig> actionConfigs =
@@ -247,6 +250,7 @@ public final class LinkCommandLineTest extends BuildViewTestCase {
             .setActionName(LinkTargetType.NODEPS_DYNAMIC_LIBRARY.getActionName())
             .setLinkTargetType(LinkTargetType.NODEPS_DYNAMIC_LIBRARY)
             .setLinkingMode(Link.LinkingMode.STATIC)
+            .doNotSplitLinkingCmdLine()
             .build();
     assertThat(linkConfig.getRawLinkArgv()).contains("@foo/bar.param");
   }
@@ -333,6 +337,7 @@ public final class LinkCommandLineTest extends BuildViewTestCase {
             .setLinkTargetType(LinkTargetType.DYNAMIC_LIBRARY)
             .forceToolPath("foo/bar/linker")
             .setParamFile(paramFile)
+            .doNotSplitLinkingCmdLine()
             .build();
     Pair<List<String>, List<String>> result = linkConfig.splitCommandline();
     assertThat(result.first).containsExactly("foo/bar/linker", "@some/file.params").inOrder();

@@ -78,12 +78,19 @@ public class TopLevelArtifactHelperTest {
     assertThat(allArtifacts.getAllArtifacts().toList()).hasSize(5);
     assertThat(allArtifacts.getImportantArtifacts().toList()).hasSize(5);
 
-    ImmutableMap<String, ArtifactsInOutputGroup> artifactsByGroup =
+    NestedSet<ArtifactsInOutputGroup> artifactsByGroup =
         allArtifacts.getAllArtifactsByOutputGroup();
     // Two groups
-    assertThat(artifactsByGroup.keySet()).containsExactly("foo", "bar");
-    assertThat(artifactsByGroup.get("foo").getArtifacts().toList()).hasSize(3);
-    assertThat(artifactsByGroup.get("bar").getArtifacts().toList()).hasSize(2);
+    assertThat(artifactsByGroup.toList()).hasSize(2);
+
+    for (ArtifactsInOutputGroup artifacts : artifactsByGroup.toList()) {
+      String outputGroup = artifacts.getOutputGroup();
+      if ("foo".equals(outputGroup)) {
+        assertThat(artifacts.getArtifacts().toList()).hasSize(3);
+      } else if ("bar".equals(outputGroup)) {
+        assertThat(artifacts.getArtifacts().toList()).hasSize(2);
+      }
+    }
   }
 
   @Test
@@ -94,10 +101,11 @@ public class TopLevelArtifactHelperTest {
     assertThat(allArtifacts.getAllArtifacts().toList()).hasSize(1);
     assertThat(allArtifacts.getImportantArtifacts().toList()).hasSize(1);
 
-    ImmutableMap<String, ArtifactsInOutputGroup> artifactsByGroup =
+    NestedSet<ArtifactsInOutputGroup> artifactsByGroup =
         allArtifacts.getAllArtifactsByOutputGroup();
     // The bar list should not appear here, as it contains no artifacts.
-    assertThat(artifactsByGroup.keySet()).containsExactly("foo");
+    assertThat(artifactsByGroup.toList()).hasSize(1);
+    assertThat(artifactsByGroup.toList().get(0).getOutputGroup()).isEqualTo("foo");
   }
 
   @Test

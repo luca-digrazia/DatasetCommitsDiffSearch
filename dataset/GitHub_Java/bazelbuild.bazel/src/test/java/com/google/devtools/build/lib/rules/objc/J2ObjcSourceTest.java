@@ -15,11 +15,15 @@
 package com.google.devtools.build.lib.rules.objc;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.testing.EqualsTester;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.Root;
+import com.google.devtools.build.lib.actions.ArtifactRoot;
+import com.google.devtools.build.lib.actions.ArtifactRoot.RootType;
+import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.testutil.Scratch;
+import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import org.junit.Before;
 import org.junit.Test;
@@ -31,35 +35,51 @@ import org.junit.runners.JUnit4;
  */
 @RunWith(JUnit4.class)
 public class J2ObjcSourceTest {
-  private Root rootDir;
+  private ArtifactRoot rootDir;
 
   @Before
   public final void setRootDir() throws Exception  {
     Scratch scratch = new Scratch();
-    rootDir = Root.asDerivedRoot(scratch.dir("/exec/root"));
+    Path execRoot = scratch.getFileSystem().getPath("/exec");
+    String outSegment = "root";
+    execRoot.getChild(outSegment).createDirectoryAndParents();
+    rootDir = ArtifactRoot.asDerivedRoot(execRoot, RootType.Output, outSegment);
   }
 
   @Test
   public void testEqualsAndHashCode() throws Exception {
     new EqualsTester()
         .addEqualityGroup(
-            getJ2ObjcSource("//a/b:c", "sourceA", J2ObjcSource.SourceType.JAVA),
-            getJ2ObjcSource("//a/b:c", "sourceA", J2ObjcSource.SourceType.JAVA))
+            getJ2ObjcSource("//a/b:c", "sourceA", J2ObjcSource.SourceType.JAVA, false),
+            getJ2ObjcSource("//a/b:c", "sourceA", J2ObjcSource.SourceType.JAVA, false))
         .addEqualityGroup(
-            getJ2ObjcSource("//a/b:d", "sourceA", J2ObjcSource.SourceType.JAVA),
-            getJ2ObjcSource("//a/b:d", "sourceA", J2ObjcSource.SourceType.JAVA))
+            getJ2ObjcSource("//a/b:d", "sourceA", J2ObjcSource.SourceType.JAVA, false),
+            getJ2ObjcSource("//a/b:d", "sourceA", J2ObjcSource.SourceType.JAVA, false))
         .addEqualityGroup(
-            getJ2ObjcSource("//a/b:d", "sourceC", J2ObjcSource.SourceType.JAVA),
-            getJ2ObjcSource("//a/b:d", "sourceC", J2ObjcSource.SourceType.JAVA))
+            getJ2ObjcSource("//a/b:d", "sourceC", J2ObjcSource.SourceType.JAVA, false),
+            getJ2ObjcSource("//a/b:d", "sourceC", J2ObjcSource.SourceType.JAVA, false))
         .addEqualityGroup(
-            getJ2ObjcSource("//a/b:d", "sourceC", J2ObjcSource.SourceType.PROTO),
-            getJ2ObjcSource("//a/b:d", "sourceC", J2ObjcSource.SourceType.PROTO))
+            getJ2ObjcSource("//a/b:d", "sourceC", J2ObjcSource.SourceType.PROTO, false),
+            getJ2ObjcSource("//a/b:d", "sourceC", J2ObjcSource.SourceType.PROTO, false))
+        .addEqualityGroup(
+            getJ2ObjcSource("//a/b:c", "sourceA", J2ObjcSource.SourceType.JAVA, true),
+            getJ2ObjcSource("//a/b:c", "sourceA", J2ObjcSource.SourceType.JAVA, true))
+        .addEqualityGroup(
+            getJ2ObjcSource("//a/b:d", "sourceA", J2ObjcSource.SourceType.JAVA, true),
+            getJ2ObjcSource("//a/b:d", "sourceA", J2ObjcSource.SourceType.JAVA, true))
+        .addEqualityGroup(
+            getJ2ObjcSource("//a/b:d", "sourceC", J2ObjcSource.SourceType.JAVA, true),
+            getJ2ObjcSource("//a/b:d", "sourceC", J2ObjcSource.SourceType.JAVA, true))
+        .addEqualityGroup(
+            getJ2ObjcSource("//a/b:d", "sourceC", J2ObjcSource.SourceType.PROTO, true),
+            getJ2ObjcSource("//a/b:d", "sourceC", J2ObjcSource.SourceType.PROTO, true))
         .testEquals();
   }
 
-  private J2ObjcSource getJ2ObjcSource(String label, String fileName,
-      J2ObjcSource.SourceType sourceType) throws Exception {
-    Label ruleLabel = Label.parseAbsolute(label);
+  private J2ObjcSource getJ2ObjcSource(
+      String label, String fileName, J2ObjcSource.SourceType sourceType, boolean compileWithARC)
+      throws Exception {
+    Label ruleLabel = Label.parseAbsolute(label, ImmutableMap.of());
     PathFragment path = ruleLabel.toPathFragment();
     return new J2ObjcSource(
         ruleLabel,
@@ -67,10 +87,11 @@ public class J2ObjcSourceTest {
         ImmutableList.of(getArtifactForTest(path.getRelative(fileName + ".h").toString())),
         path,
         sourceType,
-        ImmutableList.of(path));
+        ImmutableList.of(path),
+        compileWithARC);
   }
 
   private Artifact getArtifactForTest(String path) throws Exception {
-    return new Artifact(PathFragment.create(path), rootDir);
+    return ActionsTestUtil.createArtifact(rootDir, path);
   }
 }

@@ -14,30 +14,28 @@
 package com.google.devtools.build.lib.analysis.actions;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.assertThrows;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.actions.ActionInputHelper;
+import com.google.common.collect.ImmutableSet;
+import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifactType;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
-import com.google.devtools.build.lib.actions.ArtifactOwner;
-import com.google.devtools.build.lib.actions.ArtifactPrefixConflictException;
-import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
-import com.google.devtools.build.lib.actions.Root;
+import com.google.devtools.build.lib.actions.ArtifactRoot;
+import com.google.devtools.build.lib.actions.ArtifactRoot.RootType;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.actions.SpawnActionTemplate.OutputPathMapper;
 import com.google.devtools.build.lib.testutil.Scratch;
+import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-
+import java.util.List;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-
-import java.util.List;
 
 /**
  * Tests {@link SpawnActionTemplate}.
@@ -51,25 +49,26 @@ public class SpawnActionTemplateTest {
     }
   };
 
-  private Root root;
+  private ArtifactRoot root;
 
   @Before
   public void setRootDir() throws Exception  {
     Scratch scratch = new Scratch();
-    root = Root.asDerivedRoot(scratch.dir("/exec/root"));
+    Path execRoot = scratch.getFileSystem().getPath("/");
+    root = ArtifactRoot.asDerivedRoot(execRoot, RootType.Output, "root");
   }
 
   @Test
   public void testInputAndOutputTreeArtifacts() {
     SpawnActionTemplate actionTemplate = createSimpleSpawnActionTemplate();
-    assertThat(actionTemplate.getInputs()).containsExactly(createInputTreeArtifact());
+    assertThat(actionTemplate.getInputs().toList()).containsExactly(createInputTreeArtifact());
     assertThat(actionTemplate.getOutputs()).containsExactly(createOutputTreeArtifact());
   }
 
   @Test
   public void testCommonToolsAndInputs() {
-    Artifact inputTreeArtifact = createInputTreeArtifact();
-    Artifact outputTreeArtifact = createOutputTreeArtifact();
+    SpecialArtifact inputTreeArtifact = createInputTreeArtifact();
+    SpecialArtifact outputTreeArtifact = createOutputTreeArtifact();
     Artifact commonInput = createDerivedArtifact("common/input");
     Artifact commonTool = createDerivedArtifact("common/tool");
     Artifact executable = createDerivedArtifact("bin/cp");
@@ -86,31 +85,30 @@ public class SpawnActionTemplateTest {
         .addCommonInputs(ImmutableList.of(commonInput))
         .build(ActionsTestUtil.NULL_ACTION_OWNER);
 
-    assertThat(actionTemplate.getTools()).containsAllOf(commonTool, executable);
-    assertThat(actionTemplate.getInputs()).containsAllOf(commonInput, commonTool, executable);
+    assertThat(actionTemplate.getTools().toList()).containsAtLeast(commonTool, executable);
+    assertThat(actionTemplate.getInputs().toList())
+        .containsAtLeast(commonInput, commonTool, executable);
   }
 
   @Test
   public void testBuilder_outputPathMapperRequired() {
-    Artifact inputTreeArtifact = createInputTreeArtifact();
-    Artifact outputTreeArtifact = createOutputTreeArtifact();
+    SpecialArtifact inputTreeArtifact = createInputTreeArtifact();
+    SpecialArtifact outputTreeArtifact = createOutputTreeArtifact();
     SpawnActionTemplate.Builder builder = builder(inputTreeArtifact, outputTreeArtifact)
         .setExecutionInfo(ImmutableMap.<String, String>of("local", ""))
-        .setExecutable(new PathFragment("/bin/cp"))
+        .setExecutable(PathFragment.create("/bin/cp"))
         .setCommandLineTemplate(
             createSimpleCommandLineTemplate(inputTreeArtifact, outputTreeArtifact))
         .setMnemonics("ActionTemplate", "ExpandedAction");
 
-    try {
-      builder.build(ActionsTestUtil.NULL_ACTION_OWNER);
-      fail("Expected exception");
-    } catch (NullPointerException expected) {}
+    assertThrows(
+        NullPointerException.class, () -> builder.build(ActionsTestUtil.NULL_ACTION_OWNER));
   }
 
   @Test
   public void testBuilder_executableRequired() {
-    Artifact inputTreeArtifact = createInputTreeArtifact();
-    Artifact outputTreeArtifact = createOutputTreeArtifact();
+    SpecialArtifact inputTreeArtifact = createInputTreeArtifact();
+    SpecialArtifact outputTreeArtifact = createOutputTreeArtifact();
     SpawnActionTemplate.Builder builder = builder(inputTreeArtifact, outputTreeArtifact)
         .setExecutionInfo(ImmutableMap.<String, String>of("local", ""))
         .setOutputPathMapper(IDENTITY_MAPPER)
@@ -118,98 +116,157 @@ public class SpawnActionTemplateTest {
             createSimpleCommandLineTemplate(inputTreeArtifact, outputTreeArtifact))
         .setMnemonics("ActionTemplate", "ExpandedAction");
 
-    try {
-      builder.build(ActionsTestUtil.NULL_ACTION_OWNER);
-      fail("Expected exception");
-    } catch (NullPointerException expected) {}
+    assertThrows(
+        NullPointerException.class, () -> builder.build(ActionsTestUtil.NULL_ACTION_OWNER));
   }
 
   @Test
   public void testBuilder_commandlineTemplateRequired() {
-    Artifact inputTreeArtifact = createInputTreeArtifact();
-    Artifact outputTreeArtifact = createOutputTreeArtifact();
+    SpecialArtifact inputTreeArtifact = createInputTreeArtifact();
+    SpecialArtifact outputTreeArtifact = createOutputTreeArtifact();
     SpawnActionTemplate.Builder builder = builder(inputTreeArtifact, outputTreeArtifact)
         .setExecutionInfo(ImmutableMap.<String, String>of("local", ""))
         .setOutputPathMapper(IDENTITY_MAPPER)
-        .setExecutable(new PathFragment("/bin/cp"))
+        .setExecutable(PathFragment.create("/bin/cp"))
         .setMnemonics("ActionTemplate", "ExpandedAction");
 
-    try {
-      builder.build(ActionsTestUtil.NULL_ACTION_OWNER);
-      fail("Expected exception");
-    } catch (NullPointerException expected) {}
+    assertThrows(
+        NullPointerException.class, () -> builder.build(ActionsTestUtil.NULL_ACTION_OWNER));
   }
 
   @Test
-  public void testExpandedAction_inputAndOutputTreeFileArtifacts() throws Exception {
-    SpawnActionTemplate actionTemplate = createSimpleSpawnActionTemplate();
-    Artifact inputTreeArtifact = createInputTreeArtifact();
-    Artifact outputTreeArtifact = createOutputTreeArtifact();
+  public void getKey_same() throws Exception {
+    ActionKeyContext keyContext = new ActionKeyContext();
+    SpecialArtifact inputTreeArtifact = createInputTreeArtifact();
+    SpecialArtifact outputTreeArtifact = createOutputTreeArtifact();
+    Artifact executable = createDerivedArtifact("bin/cp");
 
-    Iterable<TreeFileArtifact> inputTreeFileArtifacts =
+    // Use two different builders because the same builder would share the underlying
+    // SpawnActionBuilder.
+    SpawnActionTemplate actionTemplate =
+        builder(inputTreeArtifact, outputTreeArtifact)
+            .setExecutable(executable)
+            .setCommandLineTemplate(
+                createSimpleCommandLineTemplate(inputTreeArtifact, outputTreeArtifact))
+            .setOutputPathMapper(IDENTITY_MAPPER)
+            .setMnemonics("ActionTemplate", "ExpandedAction")
+            .build(ActionsTestUtil.NULL_ACTION_OWNER);
+    SpawnActionTemplate actionTemplate2 =
+        builder(inputTreeArtifact, outputTreeArtifact)
+            .setExecutable(executable)
+            .setCommandLineTemplate(
+                createSimpleCommandLineTemplate(inputTreeArtifact, outputTreeArtifact))
+            .setOutputPathMapper(IDENTITY_MAPPER)
+            .setMnemonics("ActionTemplate", "ExpandedAction")
+            .build(ActionsTestUtil.NULL_ACTION_OWNER);
+    assertThat(actionTemplate2.getKey(keyContext, /*artifactExpander=*/ null))
+        .isEqualTo(actionTemplate.getKey(keyContext, /*artifactExpander=*/ null));
+  }
+
+  @Test
+  public void getKey_differs() throws Exception {
+    ActionKeyContext keyContext = new ActionKeyContext();
+    SpecialArtifact inputTreeArtifact = createInputTreeArtifact();
+    SpecialArtifact outputTreeArtifact = createOutputTreeArtifact();
+    Artifact executable = createDerivedArtifact("bin/cp");
+
+    // Use two different builders because the same builder would share the underlying
+    // SpawnActionBuilder.
+    SpawnActionTemplate actionTemplate =
+        builder(inputTreeArtifact, outputTreeArtifact)
+            .setExecutable(executable)
+            .setCommandLineTemplate(
+                createSimpleCommandLineTemplate(inputTreeArtifact, outputTreeArtifact))
+            .setOutputPathMapper(IDENTITY_MAPPER)
+            .setMnemonics("ActionTemplate", "ExpandedAction")
+            .build(ActionsTestUtil.NULL_ACTION_OWNER);
+    SpawnActionTemplate actionTemplate2 =
+        builder(inputTreeArtifact, outputTreeArtifact)
+            .setExecutable(executable)
+            .setCommandLineTemplate(
+                createSimpleCommandLineTemplate(inputTreeArtifact, outputTreeArtifact))
+            .setOutputPathMapper(IDENTITY_MAPPER)
+            .setMnemonics("ActionTemplate", "ExpandedAction2")
+            .build(ActionsTestUtil.NULL_ACTION_OWNER);
+    assertThat(actionTemplate2.getKey(keyContext, /*artifactExpander=*/ null))
+        .isNotEqualTo(actionTemplate.getKey(keyContext, /*artifactExpander=*/ null));
+  }
+
+  @Test
+  public void testExpandedAction_inputAndOutputTreeFileArtifacts() {
+    SpawnActionTemplate actionTemplate = createSimpleSpawnActionTemplate();
+    SpecialArtifact inputTreeArtifact = createInputTreeArtifact();
+    SpecialArtifact outputTreeArtifact = createOutputTreeArtifact();
+
+    ImmutableSet<TreeFileArtifact> inputTreeFileArtifacts =
         createInputTreeFileArtifacts(inputTreeArtifact);
 
-    List<SpawnAction> expandedActions = ImmutableList.copyOf(
-        actionTemplate.generateActionForInputArtifacts(
-            inputTreeFileArtifacts, ArtifactOwner.NULL_OWNER));
+    List<SpawnAction> expandedActions =
+        actionTemplate.generateActionsForInputArtifacts(
+            inputTreeFileArtifacts, ActionsTestUtil.NULL_TEMPLATE_EXPANSION_ARTIFACT_OWNER);
 
     assertThat(expandedActions).hasSize(3);
 
     for (int i = 0; i < expandedActions.size(); ++i) {
-      String baseName = String.format("child%d", i);
-      assertThat(expandedActions.get(i).getInputs()).containsExactly(
-          ActionInputHelper.treeFileArtifact(
-              inputTreeArtifact, new PathFragment("children/" + baseName)));
-      assertThat(expandedActions.get(i).getOutputs()).containsExactly(
-          ActionInputHelper.treeFileArtifact(
-              outputTreeArtifact, new PathFragment("children/" + baseName)));
+      String baseName = "child" + i;
+      assertThat(expandedActions.get(i).getInputs().toList())
+          .containsExactly(
+              TreeFileArtifact.createTreeOutput(inputTreeArtifact, "children/" + baseName));
+      assertThat(expandedActions.get(i).getOutputs())
+          .containsExactly(
+              TreeFileArtifact.createTemplateExpansionOutput(
+                  outputTreeArtifact,
+                  "children/" + baseName,
+                  ActionsTestUtil.NULL_TEMPLATE_EXPANSION_ARTIFACT_OWNER));
     }
   }
 
   @Test
-  public void testExpandedAction_commonToolsAndInputs() throws Exception {
-    Artifact inputTreeArtifact = createInputTreeArtifact();
-    Artifact outputTreeArtifact = createOutputTreeArtifact();
+  public void testExpandedAction_commonToolsAndInputs() {
+    SpecialArtifact inputTreeArtifact = createInputTreeArtifact();
+    SpecialArtifact outputTreeArtifact = createOutputTreeArtifact();
     Artifact commonInput = createDerivedArtifact("common/input");
     Artifact commonTool = createDerivedArtifact("common/tool");
     Artifact executable = createDerivedArtifact("bin/cp");
 
-    SpawnActionTemplate actionTemplate = builder(inputTreeArtifact, outputTreeArtifact)
-        .setExecutionInfo(ImmutableMap.<String, String>of("local", ""))
-        .setExecutable(executable)
-        .setCommandLineTemplate(
-            createSimpleCommandLineTemplate(inputTreeArtifact, outputTreeArtifact))
-        .setOutputPathMapper(IDENTITY_MAPPER)
-        .setMnemonics("ActionTemplate", "ExpandedAction")
-        .addCommonTools(ImmutableList.of(commonTool))
-        .addCommonInputs(ImmutableList.of(commonInput))
-        .build(ActionsTestUtil.NULL_ACTION_OWNER);
+    SpawnActionTemplate actionTemplate =
+        builder(inputTreeArtifact, outputTreeArtifact)
+            .setExecutionInfo(ImmutableMap.of("local", ""))
+            .setExecutable(executable)
+            .setCommandLineTemplate(
+                createSimpleCommandLineTemplate(inputTreeArtifact, outputTreeArtifact))
+            .setOutputPathMapper(IDENTITY_MAPPER)
+            .setMnemonics("ActionTemplate", "ExpandedAction")
+            .addCommonTools(ImmutableList.of(commonTool))
+            .addCommonInputs(ImmutableList.of(commonInput))
+            .build(ActionsTestUtil.NULL_ACTION_OWNER);
 
-    Iterable<TreeFileArtifact> inputTreeFileArtifacts =
+    ImmutableSet<TreeFileArtifact> inputTreeFileArtifacts =
         createInputTreeFileArtifacts(inputTreeArtifact);
-    List<SpawnAction> expandedActions = ImmutableList.copyOf(
-        actionTemplate.generateActionForInputArtifacts(
-            inputTreeFileArtifacts, ArtifactOwner.NULL_OWNER));
+    List<SpawnAction> expandedActions =
+        actionTemplate.generateActionsForInputArtifacts(
+            inputTreeFileArtifacts, ActionsTestUtil.NULL_TEMPLATE_EXPANSION_ARTIFACT_OWNER);
 
     for (int i = 0; i < expandedActions.size(); ++i) {
-      assertThat(expandedActions.get(i).getInputs()).containsAllOf(
-          commonInput, commonTool, executable);
-      assertThat(expandedActions.get(i).getTools()).containsAllOf(commonTool, executable);
+      assertThat(expandedActions.get(i).getInputs().toList())
+          .containsAtLeast(commonInput, commonTool, executable);
+      assertThat(expandedActions.get(i).getTools().toList())
+          .containsAtLeast(commonTool, executable);
     }
   }
 
   @Test
   public void testExpandedAction_arguments() throws Exception {
     SpawnActionTemplate actionTemplate = createSimpleSpawnActionTemplate();
-    Artifact inputTreeArtifact = createInputTreeArtifact();
-    Artifact outputTreeArtifact = createOutputTreeArtifact();
+    SpecialArtifact inputTreeArtifact = createInputTreeArtifact();
+    SpecialArtifact outputTreeArtifact = createOutputTreeArtifact();
 
-    Iterable<TreeFileArtifact> inputTreeFileArtifacts =
+    ImmutableSet<TreeFileArtifact> inputTreeFileArtifacts =
         createInputTreeFileArtifacts(inputTreeArtifact);
 
-    List<SpawnAction> expandedActions = ImmutableList.copyOf(
-        actionTemplate.generateActionForInputArtifacts(
-            inputTreeFileArtifacts, ArtifactOwner.NULL_OWNER));
+    List<SpawnAction> expandedActions =
+        actionTemplate.generateActionsForInputArtifacts(
+            inputTreeFileArtifacts, ActionsTestUtil.NULL_TEMPLATE_EXPANSION_ARTIFACT_OWNER);
 
     assertThat(expandedActions).hasSize(3);
 
@@ -225,162 +282,85 @@ public class SpawnActionTemplateTest {
   }
 
   @Test
-  public void testExpandedAction_executionInfoAndEnvironment() throws Exception {
+  public void testExpandedAction_executionInfoAndEnvironment() {
     SpawnActionTemplate actionTemplate = createSimpleSpawnActionTemplate();
-    Artifact inputTreeArtifact = createInputTreeArtifact();
-    Iterable<TreeFileArtifact> inputTreeFileArtifacts =
+    SpecialArtifact inputTreeArtifact = createInputTreeArtifact();
+    ImmutableSet<TreeFileArtifact> inputTreeFileArtifacts =
         createInputTreeFileArtifacts(inputTreeArtifact);
 
-    List<SpawnAction> expandedActions = ImmutableList.copyOf(
-        actionTemplate.generateActionForInputArtifacts(
-            inputTreeFileArtifacts, ArtifactOwner.NULL_OWNER));
+    List<SpawnAction> expandedActions =
+        actionTemplate.generateActionsForInputArtifacts(
+            inputTreeFileArtifacts, ActionsTestUtil.NULL_TEMPLATE_EXPANSION_ARTIFACT_OWNER);
 
     assertThat(expandedActions).hasSize(3);
 
     for (int i = 0; i < expandedActions.size(); ++i) {
-      assertThat(expandedActions.get(i).getEnvironment()).containsExactly("env", "value");
+      assertThat(expandedActions.get(i).getIncompleteEnvironmentForTesting())
+          .containsExactly("env", "value");
       assertThat(expandedActions.get(i).getExecutionInfo()).containsExactly("local", "");
     }
   }
 
   @Test
   public void testExpandedAction_illegalOutputPath() throws Exception {
-    Artifact inputTreeArtifact = createInputTreeArtifact();
-    Artifact outputTreeArtifact = createOutputTreeArtifact();
-    Iterable<TreeFileArtifact> inputTreeFileArtifacts =
+    SpecialArtifact inputTreeArtifact = createInputTreeArtifact();
+    SpecialArtifact outputTreeArtifact = createOutputTreeArtifact();
+    ImmutableSet<TreeFileArtifact> inputTreeFileArtifacts =
         createInputTreeFileArtifacts(inputTreeArtifact);
 
     SpawnActionTemplate.Builder builder = builder(inputTreeArtifact, outputTreeArtifact)
-        .setExecutable(new PathFragment("/bin/cp"))
+        .setExecutable(PathFragment.create("/bin/cp"))
         .setCommandLineTemplate(
             createSimpleCommandLineTemplate(inputTreeArtifact, outputTreeArtifact));
 
     OutputPathMapper mapper = new OutputPathMapper() {
       @Override
       public PathFragment parentRelativeOutputPath(TreeFileArtifact inputTreeFileArtifact) {
-        return new PathFragment("//absolute/" + inputTreeFileArtifact.getParentRelativePath());
+        return PathFragment.create("//absolute/" + inputTreeFileArtifact.getParentRelativePath());
       }
     };
 
     SpawnActionTemplate actionTemplate =
         builder.setOutputPathMapper(mapper).build(ActionsTestUtil.NULL_ACTION_OWNER);
 
-    try {
-      actionTemplate.generateActionForInputArtifacts(
-          inputTreeFileArtifacts, ArtifactOwner.NULL_OWNER);
-      fail("Absolute output paths not allowed, expected IllegalArgumentException");
-    } catch (IllegalArgumentException e) {
-      // expected
-    }
+    assertThrows(
+        "Absolute output paths not allowed, expected IllegalArgumentException",
+        IllegalArgumentException.class,
+        () ->
+            actionTemplate.generateActionsForInputArtifacts(
+                inputTreeFileArtifacts, ActionsTestUtil.NULL_TEMPLATE_EXPANSION_ARTIFACT_OWNER));
 
     mapper = new OutputPathMapper() {
       @Override
       public PathFragment parentRelativeOutputPath(TreeFileArtifact inputTreeFileArtifact) {
-        return new PathFragment("../" + inputTreeFileArtifact.getParentRelativePath());
+        return PathFragment.create("../" + inputTreeFileArtifact.getParentRelativePath());
       }
     };
 
-    actionTemplate = builder.setOutputPathMapper(mapper).build(
-        ActionsTestUtil.NULL_ACTION_OWNER);
+    SpawnActionTemplate actionTemplate2 =
+        builder.setOutputPathMapper(mapper).build(ActionsTestUtil.NULL_ACTION_OWNER);
 
-    try {
-      actionTemplate.generateActionForInputArtifacts(
-          inputTreeFileArtifacts, ArtifactOwner.NULL_OWNER);
-      fail("Output paths containing '..' not allowed, expected IllegalArgumentException");
-    } catch (IllegalArgumentException e) {
-      // expected
-    }
+    assertThrows(
+        "Output paths containing '..' not allowed, expected IllegalArgumentException",
+        IllegalArgumentException.class,
+        () ->
+            actionTemplate2.generateActionsForInputArtifacts(
+                inputTreeFileArtifacts, ActionsTestUtil.NULL_TEMPLATE_EXPANSION_ARTIFACT_OWNER));
   }
 
-  @Test
-  public void testExpandedAction_actionConflicts() throws Exception {
-    Artifact inputTreeArtifact = createInputTreeArtifact();
-    Artifact outputTreeArtifact = createOutputTreeArtifact();
-
-    OutputPathMapper mapper = new OutputPathMapper() {
-      @Override
-      public PathFragment parentRelativeOutputPath(TreeFileArtifact inputTreeFileArtifact) {
-        return new PathFragment("conflict_path");
-      }
-    };
-
-    SpawnActionTemplate actionTemplate = builder(inputTreeArtifact, outputTreeArtifact)
-        .setExecutable(new PathFragment("/bin/cp"))
-        .setCommandLineTemplate(
-            createSimpleCommandLineTemplate(inputTreeArtifact, outputTreeArtifact))
-        .setOutputPathMapper(mapper)
-        .build(ActionsTestUtil.NULL_ACTION_OWNER);
-
-    Iterable<TreeFileArtifact> inputTreeFileArtifacts =
-        createInputTreeFileArtifacts(inputTreeArtifact);
-
-    try {
-      actionTemplate.generateActionForInputArtifacts(
-          inputTreeFileArtifacts, ArtifactOwner.NULL_OWNER);
-      fail("Expected ActionConflictException");
-    } catch (ActionConflictException e) {
-      // expected
-    }
-  }
-
-  @Test
-  public void testExpandedAction_artifactPrefixConflicts() throws Exception {
-    Artifact inputTreeArtifact = createInputTreeArtifact();
-    Artifact outputTreeArtifact = createOutputTreeArtifact();
-
-    OutputPathMapper mapper = new OutputPathMapper() {
-      private int i = 0;
-      @Override
-      public PathFragment parentRelativeOutputPath(TreeFileArtifact inputTreeFileArtifact) {
-        PathFragment path;
-        switch (i) {
-          case 0:
-            path = new PathFragment("path_prefix");
-            break;
-          case 1:
-            path = new PathFragment("path_prefix/conflict");
-            break;
-          default:
-            path = inputTreeFileArtifact.getParentRelativePath();
-        }
-
-        ++i;
-        return path;
-      }
-    };
-
-    SpawnActionTemplate actionTemplate = builder(inputTreeArtifact, outputTreeArtifact)
-        .setExecutable(new PathFragment("/bin/cp"))
-        .setCommandLineTemplate(
-            createSimpleCommandLineTemplate(inputTreeArtifact, outputTreeArtifact))
-        .setOutputPathMapper(mapper)
-        .build(ActionsTestUtil.NULL_ACTION_OWNER);
-
-    Iterable<TreeFileArtifact> inputTreeFileArtifacts =
-        createInputTreeFileArtifacts(inputTreeArtifact);
-
-    try {
-      actionTemplate.generateActionForInputArtifacts(
-          inputTreeFileArtifacts, ArtifactOwner.NULL_OWNER);
-      fail("Expected ArtifactPrefixConflictException");
-    } catch (ArtifactPrefixConflictException e) {
-      // expected
-    }
-  }
-
-  private SpawnActionTemplate.Builder builder(Artifact inputTreeArtifact,
-      Artifact outputTreeArtifact) {
+  private SpawnActionTemplate.Builder builder(
+      SpecialArtifact inputTreeArtifact, SpecialArtifact outputTreeArtifact) {
     return new SpawnActionTemplate.Builder(inputTreeArtifact, outputTreeArtifact);
   }
 
   private SpawnActionTemplate createSimpleSpawnActionTemplate() {
-    Artifact inputTreeArtifact = createInputTreeArtifact();
-    Artifact outputTreeArtifact = createOutputTreeArtifact();
+    SpecialArtifact inputTreeArtifact = createInputTreeArtifact();
+    SpecialArtifact outputTreeArtifact = createOutputTreeArtifact();
 
     return builder(inputTreeArtifact, outputTreeArtifact)
-        .setExecutionInfo(ImmutableMap.<String, String>of("local", ""))
-        .setEnvironment(ImmutableMap.<String, String>of("env", "value"))
-        .setExecutable(new PathFragment("/bin/cp"))
+        .setExecutionInfo(ImmutableMap.of("local", ""))
+        .setEnvironment(ImmutableMap.of("env", "value"))
+        .setExecutable(PathFragment.create("/bin/cp"))
         .setCommandLineTemplate(
             createSimpleCommandLineTemplate(inputTreeArtifact, outputTreeArtifact))
         .setOutputPathMapper(IDENTITY_MAPPER)
@@ -388,42 +368,43 @@ public class SpawnActionTemplateTest {
         .build(ActionsTestUtil.NULL_ACTION_OWNER);
   }
 
-  private Artifact createInputTreeArtifact() {
+  private SpecialArtifact createInputTreeArtifact() {
     return createTreeArtifact("my/inputTree");
   }
 
-  private Artifact createOutputTreeArtifact() {
+  private SpecialArtifact createOutputTreeArtifact() {
     return createTreeArtifact("my/outputTree");
   }
 
-  private Artifact createTreeArtifact(String rootRelativePath) {
-    PathFragment relpath = new PathFragment(rootRelativePath);
-    return new SpecialArtifact(
-        root.getPath().getRelative(relpath),
-        root,
-        root.getExecPath().getRelative(relpath),
-        ArtifactOwner.NULL_OWNER,
-        SpecialArtifactType.TREE);
+  private SpecialArtifact createTreeArtifact(String rootRelativePath) {
+    PathFragment relpath = PathFragment.create(rootRelativePath);
+    SpecialArtifact result =
+        new SpecialArtifact(
+            root,
+            root.getExecPath().getRelative(relpath),
+            ActionsTestUtil.NULL_ARTIFACT_OWNER,
+            SpecialArtifactType.TREE);
+    result.setGeneratingActionKey(ActionsTestUtil.NULL_ACTION_LOOKUP_DATA);
+    return result;
   }
 
   private Artifact createDerivedArtifact(String rootRelativePath) {
-    return new Artifact(new PathFragment(rootRelativePath), root);
+    return ActionsTestUtil.createArtifact(root, rootRelativePath);
   }
 
   private CustomCommandLine createSimpleCommandLineTemplate(
       Artifact inputTreeArtifact, Artifact outputTreeArtifact) {
     return CustomCommandLine.builder()
-        .addTreeFileArtifactExecPath(inputTreeArtifact)
-        .addTreeFileArtifactExecPath(outputTreeArtifact)
+        .addPlaceholderTreeArtifactExecPath(inputTreeArtifact)
+        .addPlaceholderTreeArtifactExecPath(outputTreeArtifact)
         .build();
   }
 
-  private Iterable<TreeFileArtifact> createInputTreeFileArtifacts(Artifact inputTreeArtifact) {
-    return ActionInputHelper.asTreeFileArtifacts(
-        inputTreeArtifact,
-        ImmutableList.of(
-            new PathFragment("children/child0"),
-            new PathFragment("children/child1"),
-            new PathFragment("children/child2")));
+  private static ImmutableSet<TreeFileArtifact> createInputTreeFileArtifacts(
+      SpecialArtifact inputTreeArtifact) {
+    return ImmutableSet.of(
+        TreeFileArtifact.createTreeOutput(inputTreeArtifact, "children/child0"),
+        TreeFileArtifact.createTreeOutput(inputTreeArtifact, "children/child1"),
+        TreeFileArtifact.createTreeOutput(inputTreeArtifact, "children/child2"));
   }
 }

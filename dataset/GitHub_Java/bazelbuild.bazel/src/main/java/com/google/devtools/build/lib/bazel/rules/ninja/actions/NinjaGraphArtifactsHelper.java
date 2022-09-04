@@ -76,7 +76,9 @@ class NinjaGraphArtifactsHelper {
         Preconditions.checkNotNull(ruleContext.getConfiguration())
             .getDirectories()
             .getExecRoot(ruleContext.getWorkspaceName());
-    this.derivedOutputRoot = ArtifactRoot.asDerivedRoot(execRoot, RootType.Output, outputRootPath);
+    this.derivedOutputRoot =
+        ArtifactRoot.asDerivedRoot(
+            execRoot, RootType.Output, outputRootPath.getSegments().toArray(new String[0]));
     this.sourceRoot = ruleContext.getRule().getPackage().getSourceRoot().get();
   }
 

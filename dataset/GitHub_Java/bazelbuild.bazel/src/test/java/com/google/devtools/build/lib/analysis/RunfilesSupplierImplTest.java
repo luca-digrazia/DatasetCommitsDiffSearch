@@ -1,4 +1,4 @@
-// Copyright 2015 Google Inc. All rights reserved.
+// Copyright 2015 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,63 +17,71 @@ package com.google.devtools.build.lib.analysis;
 import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.Root;
+import com.google.devtools.build.lib.actions.ArtifactRoot;
+import com.google.devtools.build.lib.actions.ArtifactRoot.RootType;
+import com.google.devtools.build.lib.actions.RunfilesSupplier;
+import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.testutil.Scratch;
+import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-
+import java.util.List;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-import java.io.IOException;
-import java.util.List;
-
 /** Tests for RunfilesSupplierImpl */
 @RunWith(JUnit4.class)
 public class RunfilesSupplierImplTest {
-
-  private Root rootDir;
+  private ArtifactRoot rootDir;
 
   @Before
-  public void setup() throws IOException {
+  public final void setRoot() {
     Scratch scratch = new Scratch();
-    rootDir = Root.asDerivedRoot(scratch.dir("/fake/root/dont/matter"));
+    Path execRoot = scratch.getFileSystem().getPath("/");
+    rootDir =
+        ArtifactRoot.asDerivedRoot(execRoot, RootType.Output, "fake", "root", "dont", "matter");
   }
 
   @Test
   public void testGetArtifactsWithSingleMapping() {
     List<Artifact> artifacts = mkArtifacts(rootDir, "thing1", "thing2");
 
-    RunfilesSupplierImpl underTest = new RunfilesSupplierImpl(
-        ImmutableMap.of(new PathFragment("notimportant"), mkRunfiles(artifacts)));
+    RunfilesSupplierImpl underTest =
+        new RunfilesSupplierImpl(PathFragment.create("notimportant"), mkRunfiles(artifacts));
 
-    assertThat(underTest.getArtifacts()).containsExactlyElementsIn(artifacts);
+    assertThat(underTest.getArtifacts().toList()).containsExactlyElementsIn(artifacts);
   }
 
   @Test
-  public void testGetArtifactsWithMultipleMappings() {
-    List<Artifact> artifacts1 = mkArtifacts(rootDir, "thing_1", "thing_2", "duplicated");
-    List<Artifact> artifacts2 = mkArtifacts(rootDir, "thing_3", "thing_4", "duplicated");
-
-    RunfilesSupplierImpl underTest = new RunfilesSupplierImpl(ImmutableMap.of(
-        new PathFragment("notimportant"), mkRunfiles(artifacts1),
-        new PathFragment("stillnotimportant"), mkRunfiles(artifacts2)));
-
-    assertThat(underTest.getArtifacts()).containsExactlyElementsIn(
-        mkArtifacts(rootDir, "thing_1", "thing_2", "thing_3", "thing_4", "duplicated"));
+  public void testGetManifestsWhenNone() {
+    RunfilesSupplier underTest =
+        new RunfilesSupplierImpl(PathFragment.create("ignored"), Runfiles.EMPTY);
+    assertThat(underTest.getManifests()).isEmpty();
   }
 
-  private static Runfiles mkRunfiles(List<Artifact> artifacts) {
-    return new Runfiles.Builder().addArtifacts(artifacts).build();
+  @Test
+  public void testGetManifestsWhenSupplied() {
+    Artifact manifest = ActionsTestUtil.createArtifact(rootDir, "manifest");
+    RunfilesSupplier underTest =
+        new RunfilesSupplierImpl(
+            PathFragment.create("ignored"),
+            Runfiles.EMPTY,
+            manifest,
+            /* buildRunfileLinks= */ false,
+            /* runfileLinksEnabled= */ false);
+    assertThat(underTest.getManifests()).containsExactly(manifest);
   }
 
-  private static List<Artifact> mkArtifacts(Root rootDir, String... paths) {
+  private static Runfiles mkRunfiles(Iterable<Artifact> artifacts) {
+    return new Runfiles.Builder("TESTING", false).addArtifacts(artifacts).build();
+  }
+
+  private static List<Artifact> mkArtifacts(ArtifactRoot rootDir, String... paths) {
     ImmutableList.Builder<Artifact> builder = ImmutableList.builder();
     for (String path : paths) {
-      builder.add(new Artifact(new PathFragment(path), rootDir));
+      builder.add(ActionsTestUtil.createArtifact(rootDir, path));
     }
     return builder.build();
   }

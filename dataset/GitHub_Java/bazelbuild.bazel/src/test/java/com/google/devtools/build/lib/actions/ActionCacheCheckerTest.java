@@ -39,7 +39,6 @@ import com.google.devtools.build.lib.clock.Clock;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.events.NullEventHandler;
 import com.google.devtools.build.lib.testutil.ManualClock;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.util.Fingerprint;
@@ -51,7 +50,6 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 import java.io.IOException;
-import java.io.PrintStream;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -65,7 +63,7 @@ import org.junit.runners.JUnit4;
 
 @RunWith(JUnit4.class)
 public class ActionCacheCheckerTest {
-  private CorruptibleActionCache cache;
+  private CorruptibleCompactPersistentActionCache cache;
   private ActionCacheChecker cacheChecker;
   private Set<Path> filesToDelete;
 
@@ -75,7 +73,7 @@ public class ActionCacheCheckerTest {
     Clock clock = new ManualClock();
     ArtifactResolver artifactResolver = new FakeArtifactResolverBase();
 
-    cache = new CorruptibleActionCache(scratch.resolve("/cache/test.dat"), clock);
+    cache = new CorruptibleCompactPersistentActionCache(scratch.resolve("/cache/test.dat"), clock);
     cacheChecker =
         new ActionCacheChecker(
             cache, artifactResolver, new ActionKeyContext(), Predicates.alwaysTrue(), null);
@@ -382,22 +380,21 @@ public class ActionCacheCheckerTest {
             cacheChecker.getTokenIfNeedToExecute(
                 action,
                 null,
-                ImmutableMap.of(),
+                ImmutableMap.<String, String>of(),
                 null,
                 new FakeMetadataHandler(),
                 null,
-                ImmutableMap.of()))
+                ImmutableMap.<String, String>of()))
         .isNotNull();
   }
 
-  /** An {@link ActionCache} that allows injecting corruption for testing. */
-  private static class CorruptibleActionCache implements ActionCache {
-    private final CompactPersistentActionCache delegate;
+  /** A {@link CompactPersistentActionCache} that allows injecting corruption for testing. */
+  private static class CorruptibleCompactPersistentActionCache
+      extends CompactPersistentActionCache {
     private boolean corrupted = false;
 
-    CorruptibleActionCache(Path cacheRoot, Clock clock) throws IOException {
-      this.delegate =
-          CompactPersistentActionCache.create(cacheRoot, clock, NullEventHandler.INSTANCE);
+    CorruptibleCompactPersistentActionCache(Path cacheRoot, Clock clock) throws IOException {
+      super(cacheRoot, clock);
     }
 
     void corruptAllEntries() {
@@ -406,52 +403,11 @@ public class ActionCacheCheckerTest {
 
     @Override
     public Entry get(String key) {
-      return corrupted ? ActionCache.Entry.CORRUPTED : delegate.get(key);
-    }
-
-    @Override
-    public void put(String key, Entry entry) {
-      delegate.put(key, entry);
-    }
-
-    @Override
-    public void remove(String key) {
-      delegate.remove(key);
-    }
-
-    @Override
-    public long save() throws IOException {
-      return delegate.save();
-    }
-
-    @Override
-    public void clear() {
-      delegate.clear();
-    }
-
-    @Override
-    public void dump(PrintStream out) {
-      delegate.dump(out);
-    }
-
-    @Override
-    public void accountHit() {
-      delegate.accountHit();
-    }
-
-    @Override
-    public void accountMiss(MissReason reason) {
-      delegate.accountMiss(reason);
-    }
-
-    @Override
-    public void mergeIntoActionCacheStatistics(ActionCacheStatistics.Builder builder) {
-      delegate.mergeIntoActionCacheStatistics(builder);
-    }
-
-    @Override
-    public void resetStatistics() {
-      delegate.resetStatistics();
+      if (corrupted) {
+        return ActionCache.Entry.CORRUPTED;
+      } else {
+        return super.get(key);
+      }
     }
   }
 

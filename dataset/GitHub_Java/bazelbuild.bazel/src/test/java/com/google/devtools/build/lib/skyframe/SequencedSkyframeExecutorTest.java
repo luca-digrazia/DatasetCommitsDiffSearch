@@ -18,7 +18,9 @@ import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
 import static com.google.devtools.build.lib.actions.util.ActionCacheTestHelper.AMNESIAC_CACHE;
 import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.NULL_ACTION_OWNER;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertContainsEventRegex;
 import static com.google.devtools.build.lib.testutil.MoreAsserts.assertEventCount;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertNotContainsEventRegex;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
@@ -45,11 +47,11 @@ import com.google.devtools.build.lib.actions.ActionInputPrefetcher;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionLookupData;
 import com.google.devtools.build.lib.actions.ActionLookupKey;
-import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.ActionTemplate;
 import com.google.devtools.build.lib.actions.Actions;
+import com.google.devtools.build.lib.actions.Actions.GeneratingActions;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
@@ -57,7 +59,6 @@ import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.actions.ArtifactResolver;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.ArtifactRoot.RootType;
-import com.google.devtools.build.lib.actions.BasicActionLookupValue;
 import com.google.devtools.build.lib.actions.BuildFailedException;
 import com.google.devtools.build.lib.actions.FileArtifactValue;
 import com.google.devtools.build.lib.actions.FileStateValue;
@@ -77,7 +78,6 @@ import com.google.devtools.build.lib.analysis.TopLevelArtifactContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.analysis.config.CoreOptions;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
-import com.google.devtools.build.lib.bugreport.BugReporter;
 import com.google.devtools.build.lib.buildtool.BuildRequestOptions;
 import com.google.devtools.build.lib.buildtool.SkyframeBuilder;
 import com.google.devtools.build.lib.clock.BlazeClock;
@@ -94,7 +94,6 @@ import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.events.NullEventHandler;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.exec.BinTools;
-import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.packages.BuiltinProvider;
 import com.google.devtools.build.lib.packages.Info;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
@@ -158,7 +157,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.regex.Pattern;
 import javax.annotation.Nullable;
 import net.starlark.java.eval.EvalException;
 import net.starlark.java.eval.Printer;
@@ -198,8 +196,7 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
                     KeepGoingOption.class,
                     BuildRequestOptions.class,
                     AnalysisOptions.class,
-                    CoreOptions.class,
-                    ExecutionOptions.class))
+                    CoreOptions.class))
             .build();
     options.parse("--jobs=20");
   }
@@ -671,7 +668,7 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
     Action action1 =
         new MissingOutputAction(
             NestedSetBuilder.emptySet(Order.STABLE_ORDER), output1, MiddlemanType.NORMAL);
-    ActionLookupValue ctValue1 = createActionLookupValue(action1, lc1);
+    ConfiguredTargetValue ctValue1 = createConfiguredTargetValue(action1, lc1);
     ActionLookupKey lc2 = new InjectedActionLookupKey("lc2");
     Artifact output2 =
         new Artifact.DerivedArtifact(
@@ -679,7 +676,7 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
     Action action2 =
         new MissingOutputAction(
             NestedSetBuilder.emptySet(Order.STABLE_ORDER), output2, MiddlemanType.NORMAL);
-    ActionLookupValue ctValue2 = createActionLookupValue(action2, lc2);
+    ConfiguredTargetValue ctValue2 = createConfiguredTargetValue(action2, lc2);
     // Inject the "configured targets" into the graph.
     skyframeExecutor
         .getDifferencerForTesting()
@@ -735,7 +732,7 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
             inputKey);
     Action baseAction =
         new DummyAction(NestedSetBuilder.emptySet(Order.STABLE_ORDER), input, MiddlemanType.NORMAL);
-    ActionLookupValue ctBase = createActionLookupValue(baseAction, inputKey);
+    ConfiguredTargetValue ctBase = createConfiguredTargetValue(baseAction, inputKey);
     ActionLookupKey lc1 = new InjectedActionLookupKey("lc1");
     Artifact output1 =
         new Artifact.DerivedArtifact(
@@ -743,7 +740,7 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
     Action action1 =
         new DummyAction(
             NestedSetBuilder.create(Order.STABLE_ORDER, input), output1, MiddlemanType.NORMAL);
-    ActionLookupValue ctValue1 = createActionLookupValue(action1, lc1);
+    ConfiguredTargetValue ctValue1 = createConfiguredTargetValue(action1, lc1);
     ActionLookupKey lc2 = new InjectedActionLookupKey("lc2");
     Artifact output2 =
         new Artifact.DerivedArtifact(
@@ -751,7 +748,7 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
     Action action2 =
         new DummyAction(
             NestedSetBuilder.create(Order.STABLE_ORDER, input), output2, MiddlemanType.NORMAL);
-    ActionLookupValue ctValue2 = createActionLookupValue(action2, lc2);
+    ConfiguredTargetValue ctValue2 = createConfiguredTargetValue(action2, lc2);
 
     // Stall both actions during the "checking inputs" phase so that neither will enter
     // SkyframeActionExecutor before both have asked SkyframeActionExecutor if another shared action
@@ -849,7 +846,7 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
                 },
             NestedSetBuilder.emptySet(Order.STABLE_ORDER),
             ImmutableSet.of(outputA));
-    ActionLookupValue ctA = createActionLookupValue(actionA, lcA);
+    ConfiguredTargetValue ctA = createConfiguredTargetValue(actionA, lcA);
 
     // Shared actions: they look the same from the point of view of Blaze data.
     ActionLookupKey lcB = new InjectedActionLookupKey("lcB");
@@ -859,7 +856,7 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
     Action actionB =
         new DummyAction(
             NestedSetBuilder.emptySet(Order.STABLE_ORDER), outputB, MiddlemanType.NORMAL);
-    ActionLookupValue ctB = createActionLookupValue(actionB, lcB);
+    ConfiguredTargetValue ctB = createConfiguredTargetValue(actionB, lcB);
     ActionLookupKey lcC = new InjectedActionLookupKey("lcC");
     Artifact outputC =
         new Artifact.DerivedArtifact(
@@ -867,7 +864,7 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
     Action actionC =
         new DummyAction(
             NestedSetBuilder.emptySet(Order.STABLE_ORDER), outputC, MiddlemanType.NORMAL);
-    ActionLookupValue ctC = createActionLookupValue(actionC, lcC);
+    ConfiguredTargetValue ctC = createConfiguredTargetValue(actionC, lcC);
 
     // Both shared actions wait for A to start executing. We do that by stalling their dep requests
     // on their configured targets. We then let B proceed. Once B finishes its SkyFunction run, it
@@ -994,7 +991,7 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
     ImmutableList<PathFragment> children = ImmutableList.of(PathFragment.create("child"));
     Action action1 =
         new TreeArtifactAction(NestedSetBuilder.emptySet(Order.STABLE_ORDER), output1, children);
-    ActionLookupValue ctValue1 = createActionLookupValue(action1, lc1);
+    ConfiguredTargetValue ctValue1 = createConfiguredTargetValue(action1, lc1);
     ActionLookupKey lc2 = new InjectedActionLookupKey("lc2");
     SpecialArtifact output2 =
         new SpecialArtifact(
@@ -1004,7 +1001,7 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
             Artifact.SpecialArtifactType.TREE);
     Action action2 =
         new TreeArtifactAction(NestedSetBuilder.emptySet(Order.STABLE_ORDER), output2, children);
-    ActionLookupValue ctValue2 = createActionLookupValue(action2, lc2);
+    ConfiguredTargetValue ctValue2 = createConfiguredTargetValue(action2, lc2);
     // Inject the "configured targets" into the graph.
     skyframeExecutor
         .getDifferencerForTesting()
@@ -1091,7 +1088,7 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
     ImmutableList<PathFragment> children = ImmutableList.of(PathFragment.create("child"));
     Action action1 =
         new TreeArtifactAction(NestedSetBuilder.emptySet(Order.STABLE_ORDER), baseOutput, children);
-    ActionLookupValue baseCt = createActionLookupValue(action1, baseKey);
+    ConfiguredTargetValue baseCt = createConfiguredTargetValue(action1, baseKey);
     ActionLookupKey shared1 = new InjectedActionLookupKey("shared1");
     PathFragment execPath2 = PathFragment.create("out").getRelative("treesShared");
     SpecialArtifact sharedOutput1 =
@@ -1102,7 +1099,7 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
             Artifact.SpecialArtifactType.TREE);
     ActionTemplate<DummyAction> template1 =
         new DummyActionTemplate(baseOutput, sharedOutput1, ActionOwner.SYSTEM_ACTION_OWNER);
-    ActionLookupValue shared1Ct = createActionLookupValue(template1, shared1);
+    ConfiguredTargetValue shared1Ct = createConfiguredTargetValue(template1, shared1);
     ActionLookupKey shared2 = new InjectedActionLookupKey("shared2");
     SpecialArtifact sharedOutput2 =
         new SpecialArtifact(
@@ -1112,7 +1109,7 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
             Artifact.SpecialArtifactType.TREE);
     ActionTemplate<DummyAction> template2 =
         new DummyActionTemplate(baseOutput, sharedOutput2, ActionOwner.SYSTEM_ACTION_OWNER);
-    ActionLookupValue shared2Ct = createActionLookupValue(template2, shared2);
+    ConfiguredTargetValue shared2Ct = createConfiguredTargetValue(template2, shared2);
     // Inject the "configured targets" into the graph.
     skyframeExecutor
         .getDifferencerForTesting()
@@ -1282,7 +1279,7 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
     Action action1 =
         new DummyAction(
             NestedSetBuilder.emptySet(Order.STABLE_ORDER), output1, MiddlemanType.NORMAL);
-    ActionLookupValue ctValue1 = createActionLookupValue(action1, lc1);
+    ConfiguredTargetValue ctValue1 = createConfiguredTargetValue(action1, lc1);
     ActionLookupKey lc2 = new InjectedActionLookupKey("lc2");
     Artifact output2 =
         new Artifact.DerivedArtifact(
@@ -1300,7 +1297,7 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
                 },
             NestedSetBuilder.emptySet(Order.STABLE_ORDER),
             ImmutableSet.of(output2));
-    ActionLookupValue ctValue2 = createActionLookupValue(action2, lc2);
+    ConfiguredTargetValue ctValue2 = createConfiguredTargetValue(action2, lc2);
 
     ActionLookupKey topLc = new InjectedActionLookupKey("top");
     Artifact top =
@@ -1323,7 +1320,7 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
                 },
             NestedSetBuilder.create(Order.STABLE_ORDER, output1),
             ImmutableSet.of(top));
-    ActionLookupValue ctTop = createActionLookupValue(topAction, topLc);
+    ConfiguredTargetValue ctTop = createConfiguredTargetValue(topAction, topLc);
 
     // Inject the "configured targets" and artifact into the graph.
     skyframeExecutor
@@ -1385,7 +1382,7 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
     Action action1 = new WarningAction(ImmutableList.of(), output, "action 1");
     SkyValue ctValue1 =
         ValueWithMetadata.normal(
-            createActionLookupValue(action1, lc1),
+            createConfiguredTargetValue(action1, lc1),
             null,
             NestedSetBuilder.create(
                 Order.STABLE_ORDER,
@@ -1400,7 +1397,7 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
     Action action2 = new WarningAction(ImmutableList.of(output), output2, "action 2");
     SkyValue ctValue2 =
         ValueWithMetadata.normal(
-            createActionLookupValue(action2, lc2),
+            createConfiguredTargetValue(action2, lc2),
             null,
             NestedSetBuilder.create(
                 Order.STABLE_ORDER,
@@ -1560,7 +1557,7 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
             execPath.getRelative("foo"),
             lc1);
     Action action1 = new CatastrophicAction(output);
-    ActionLookupValue ctValue1 = createActionLookupValue(action1, lc1);
+    ConfiguredTargetValue ctValue1 = createConfiguredTargetValue(action1, lc1);
     ActionLookupKey lc2 = new InjectedActionLookupKey("lc2");
     Artifact output2 =
         new Artifact.DerivedArtifact(
@@ -1569,7 +1566,7 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
             lc2);
     AtomicBoolean markerRan = new AtomicBoolean(false);
     Action action2 = new MarkerAction(output2, markerRan);
-    ActionLookupValue ctValue2 = createActionLookupValue(action2, lc2);
+    ConfiguredTargetValue ctValue2 = createConfiguredTargetValue(action2, lc2);
 
     // Perform testing-related setup.
     skyframeExecutor
@@ -1590,8 +1587,7 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
             null,
             ModifiedFileSet.EVERYTHING_MODIFIED,
             /* fileCache= */ null,
-            ActionInputPrefetcher.NONE,
-            BugReporter.defaultInstance());
+            ActionInputPrefetcher.NONE);
     Set<ConfiguredTargetKey> builtTargets = new HashSet<>();
     Set<AspectKey> builtAspects = new HashSet<>();
     // Note that since ImmutableSet iterates through its elements in the order they are passed in
@@ -1624,10 +1620,12 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
     assertThat(markerRan.get()).isFalse();
   }
 
-  private static ActionLookupValue createActionLookupValue(
+  private static NonRuleConfiguredTargetValue createConfiguredTargetValue(
       ActionAnalysisMetadata generatingAction, ActionLookupKey actionLookupKey) {
-    return new BasicActionLookupValue(
-        Actions.GeneratingActions.fromSingleAction(generatingAction, actionLookupKey));
+    return new NonRuleConfiguredTargetValue(
+        new SerializableConfiguredTarget(),
+        GeneratingActions.fromSingleAction(generatingAction, actionLookupKey),
+        NestedSetBuilder.<Package>stableOrder().build());
   }
 
   @Test
@@ -1669,7 +1667,8 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
             return super.execute(actionExecutionContext);
           }
         };
-    ActionLookupValue catastropheALV = createActionLookupValue(catastrophicAction, catastropheCTK);
+    ConfiguredTargetValue catastropheCTV =
+        createConfiguredTargetValue(catastrophicAction, catastropheCTK);
     ActionLookupKey failureCTK = new InjectedActionLookupKey("failure");
     Artifact failureArtifact =
         new Artifact.DerivedArtifact(
@@ -1677,7 +1676,7 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
             execPath.getRelative("fail"),
             failureCTK);
     Action failureAction = new FailedExecAction(failureArtifact, USER_DETAILED_EXIT_CODE);
-    ActionLookupValue failureALV = createActionLookupValue(failureAction, failureCTK);
+    ConfiguredTargetValue failureCTV = createConfiguredTargetValue(failureAction, failureCTK);
     ActionLookupKey topCTK = new InjectedActionLookupKey("top");
     Artifact topArtifact =
         new Artifact.DerivedArtifact(
@@ -1688,15 +1687,15 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
         new DummyAction(
             NestedSetBuilder.create(Order.STABLE_ORDER, failureArtifact, catastropheArtifact),
             topArtifact);
-    ActionLookupValue topALV = createActionLookupValue(topAction, topCTK);
+    ConfiguredTargetValue topCTV = createConfiguredTargetValue(topAction, topCTK);
     // Perform testing-related setup.
     skyframeExecutor
         .getDifferencerForTesting()
         .inject(
             ImmutableMap.of(
-                catastropheCTK, catastropheALV,
-                failureCTK, failureALV,
-                topCTK, topALV));
+                catastropheCTK, catastropheCTV,
+                failureCTK, failureCTV,
+                topCTK, topCTV));
     skyframeExecutor
         .getDriver()
         .getGraphForTesting()
@@ -1725,8 +1724,7 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
             null,
             ModifiedFileSet.EVERYTHING_MODIFIED,
             /*fileCache=*/ null,
-            ActionInputPrefetcher.NONE,
-            BugReporter.defaultInstance());
+            ActionInputPrefetcher.NONE);
     Set<ConfiguredTargetKey> builtTargets = new HashSet<>();
     Set<AspectKey> builtAspects = new HashSet<>();
     Set<Artifact> normalArtifacts = ImmutableSet.of(topArtifact);
@@ -1798,8 +1796,9 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
       failedArtifacts.add(failureArtifact);
       failedActions.add(new FailedExecAction(failureArtifact, USER_DETAILED_EXIT_CODE));
     }
-    ActionLookupValue nonRuleActionLookupValue =
-        new BasicActionLookupValue(
+    NonRuleConfiguredTargetValue nonRuleConfiguredTargetValue =
+        new NonRuleConfiguredTargetValue(
+            new SerializableConfiguredTarget(),
             Actions.assignOwnersAndFilterSharedActionsAndThrowActionConflict(
                 new ActionKeyContext(),
                 ImmutableList.<ActionAnalysisMetadata>builder()
@@ -1807,7 +1806,8 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
                     .addAll(failedActions)
                     .build(),
                 configuredTargetKey,
-                /*outputFiles=*/ null));
+                /*outputFiles=*/ null),
+            NestedSetBuilder.<Package>stableOrder().build());
     HashSet<ActionLookupData> failedActionKeys = new HashSet<>();
     for (Action failedAction : failedActions) {
       failedActionKeys.add(
@@ -1817,7 +1817,7 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
     // Perform testing-related setup.
     skyframeExecutor
         .getDifferencerForTesting()
-        .inject(ImmutableMap.of(configuredTargetKey, nonRuleActionLookupValue));
+        .inject(ImmutableMap.of(configuredTargetKey, nonRuleConfiguredTargetValue));
     skyframeExecutor
         .getDriver()
         .getGraphForTesting()
@@ -1850,8 +1850,7 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
             null,
             ModifiedFileSet.EVERYTHING_MODIFIED,
             /*fileCache=*/ null,
-            ActionInputPrefetcher.NONE,
-            BugReporter.defaultInstance());
+            ActionInputPrefetcher.NONE);
     Set<ConfiguredTargetKey> builtTargets = new HashSet<>();
     Set<AspectKey> builtAspects = new HashSet<>();
     BuildFailedException e =
@@ -1928,7 +1927,7 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
             NestedSetBuilder.emptySet(Order.STABLE_ORDER),
             ImmutableSet.of(failedOutput));
     failedActionReference.set(failedAction);
-    ActionLookupValue failedTarget = createActionLookupValue(failedAction, failedKey);
+    ConfiguredTargetValue failedTarget = createConfiguredTargetValue(failedAction, failedKey);
 
     // And an action that throws a catastrophic exception when it is executed,
     ActionLookupKey catastrophicKey = new InjectedActionLookupKey("catastrophic");
@@ -1938,8 +1937,8 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
             execPath.getRelative("catastrophic"),
             catastrophicKey);
     Action catastrophicAction = new CatastrophicAction(catastrophicOutput);
-    ActionLookupValue catastrophicTarget =
-        createActionLookupValue(catastrophicAction, catastrophicKey);
+    ConfiguredTargetValue catastrophicTarget =
+        createConfiguredTargetValue(catastrophicAction, catastrophicKey);
 
     // And the relevant configured targets have been injected into the graph,
     skyframeExecutor
@@ -1966,8 +1965,7 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
             null,
             ModifiedFileSet.EVERYTHING_MODIFIED,
             /* fileCache= */ null,
-            ActionInputPrefetcher.NONE,
-            BugReporter.defaultInstance());
+            ActionInputPrefetcher.NONE);
     Set<ConfiguredTargetKey> builtTargets = new HashSet<>();
     Set<AspectKey> builtAspects = new HashSet<>();
     // Note that since ImmutableSet iterates through its elements in the order they are passed in
@@ -2045,9 +2043,10 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
     // Create 1 succeeded key and 1 failed key with user error
     Action succeededAction =
         new DummyAction(NestedSetBuilder.emptySet(Order.STABLE_ORDER), succeededOutput);
-    ActionLookupValue succeededTarget = createActionLookupValue(succeededAction, succeededKey);
+    ConfiguredTargetValue succeededTarget =
+        createConfiguredTargetValue(succeededAction, succeededKey);
     Action failedAction = new FailedExecAction(failedOutput, USER_DETAILED_EXIT_CODE);
-    ActionLookupValue failedTarget = createActionLookupValue(failedAction, failedKey);
+    ConfiguredTargetValue failedTarget = createConfiguredTargetValue(failedAction, failedKey);
 
     // Inject the targets into the graph,
     skyframeExecutor
@@ -2074,8 +2073,7 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
             null,
             ModifiedFileSet.EVERYTHING_MODIFIED,
             /* fileCache= */ null,
-            ActionInputPrefetcher.NONE,
-            BugReporter.defaultInstance());
+            ActionInputPrefetcher.NONE);
     Set<ConfiguredTargetKey> builtTargets = new HashSet<>();
     Set<AspectKey> builtAspects = new HashSet<>();
     Set<Artifact> normalArtifacts = ImmutableSet.of(succeededOutput, failedOutput);
@@ -2140,11 +2138,12 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
 
     Action succeededAction =
         new DummyAction(NestedSetBuilder.emptySet(Order.STABLE_ORDER), succeededOutput);
-    ActionLookupValue succeededTarget = createActionLookupValue(succeededAction, succeededKey);
+    ConfiguredTargetValue succeededTarget =
+        createConfiguredTargetValue(succeededAction, succeededKey);
     Action failedAction1 = new FailedExecAction(failedOutput1, USER_DETAILED_EXIT_CODE);
-    ActionLookupValue failedTarget1 = createActionLookupValue(failedAction1, failedKey1);
+    ConfiguredTargetValue failedTarget1 = createConfiguredTargetValue(failedAction1, failedKey1);
     Action failedAction2 = new FailedExecAction(failedOutput2, INFRA_DETAILED_EXIT_CODE);
-    ActionLookupValue failedTarget2 = createActionLookupValue(failedAction2, failedKey2);
+    ConfiguredTargetValue failedTarget2 = createConfiguredTargetValue(failedAction2, failedKey2);
 
     // Inject the targets into the graph,
     skyframeExecutor
@@ -2172,8 +2171,7 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
             null,
             ModifiedFileSet.EVERYTHING_MODIFIED,
             /* fileCache= */ null,
-            ActionInputPrefetcher.NONE,
-            BugReporter.defaultInstance());
+            ActionInputPrefetcher.NONE);
     Set<ConfiguredTargetKey> builtTargets = new HashSet<>();
     Set<AspectKey> builtAspects = new HashSet<>();
     Set<Artifact> normalArtifacts = ImmutableSet.of(failedOutput1, failedOutput2);
@@ -2240,7 +2238,7 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
           }
         };
 
-    ActionLookupValue topTarget = createActionLookupValue(inputDiscoveringAction, topKey);
+    ConfiguredTargetValue topTarget = createConfiguredTargetValue(inputDiscoveringAction, topKey);
     skyframeExecutor.getDifferencerForTesting().inject(ImmutableMap.of(topKey, topTarget));
     // Collect all events.
     eventCollector = new EventCollector();
@@ -2256,8 +2254,7 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
             null,
             ModifiedFileSet.EVERYTHING_MODIFIED,
             /*fileCache=*/ null,
-            ActionInputPrefetcher.NONE,
-            BugReporter.defaultInstance());
+            ActionInputPrefetcher.NONE);
     builder.buildArtifacts(
         reporter,
         ImmutableSet.of(topOutput),
@@ -2273,10 +2270,9 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
         null,
         null,
         /* trustRemoteArtifacts= */ false);
-    MoreAsserts.assertContainsEvent(
-        eventCollector, Pattern.compile(".*during scanning.*\n.*Scanning.*\n.*Test dir/top.*"));
-    MoreAsserts.assertNotContainsEvent(
-        eventCollector, Pattern.compile(".*after scanning.*\n.*Scanning.*\n.*Test dir/top.*"));
+    assertContainsEventRegex(eventCollector, ".*during scanning.*\n.*Scanning.*\n.*Test dir/top.*");
+    assertNotContainsEventRegex(
+        eventCollector, ".*after scanning.*\n.*Scanning.*\n.*Test dir/top.*");
   }
 
   private static AnalysisProtos.Artifact getArtifact(
