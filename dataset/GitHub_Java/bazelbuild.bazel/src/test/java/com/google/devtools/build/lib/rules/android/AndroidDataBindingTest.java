@@ -120,13 +120,13 @@ public class AndroidDataBindingTest extends AndroidBuildViewTestCase {
     // output:
     Artifact libResourceInfoOutput = getFirstArtifactEndingWith(allArtifacts,
         "databinding/lib_with_data_binding/layout-info.zip");
-    assertThat(getGeneratingSpawnActionArgs(libResourceInfoOutput))
+    assertThat(getGeneratingSpawnAction(libResourceInfoOutput).getArguments())
         .containsAllOf("--dataBindingInfoOut", libResourceInfoOutput.getExecPathString())
         .inOrder();
 
     Artifact binResourceInfoOutput = getFirstArtifactEndingWith(allArtifacts,
         "databinding/app/layout-info.zip");
-    assertThat(getGeneratingSpawnActionArgs(binResourceInfoOutput))
+    assertThat(getGeneratingSpawnAction(binResourceInfoOutput).getArguments())
         .containsAllOf("--dataBindingInfoOut", binResourceInfoOutput.getExecPathString())
         .inOrder();
 
