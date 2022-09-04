@@ -75,9 +75,7 @@ public class Cli {
                 command.run(bootstrap, namespace);
             }
             return true;
-        } catch (HelpScreenException ignored) {
-            // This exception is triggered when the user passes in a help flag.
-            // Return true to signal that the process executed normally.
+        } catch (HelpScreenException e) {
             return true;
         } catch (ArgumentParserException e) {
             stdErr.println(e.getMessage());

@@ -1,5 +1,6 @@
 package io.dropwizard.cli;
 
+import com.google.common.base.Optional;
 import io.dropwizard.Application;
 import io.dropwizard.Configuration;
 import io.dropwizard.setup.Bootstrap;
@@ -7,17 +8,18 @@ import io.dropwizard.setup.Environment;
 import io.dropwizard.util.JarLocation;
 import net.sourceforge.argparse4j.inf.Namespace;
 import net.sourceforge.argparse4j.inf.Subparser;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.Before;
+import org.junit.Test;
 
 import java.io.ByteArrayOutputStream;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Matchers.any;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-class CommandTest {
+public class CommandTest {
     private static class TestCommand extends Command {
         protected TestCommand() {
             super("test", "test");
@@ -44,8 +46,8 @@ class CommandTest {
     private final Command command = new TestCommand();
     private Cli cli;
 
-    @BeforeEach
-    void setUp() {
+    @Before
+    public void setUp() throws Exception {
         final JarLocation location = mock(JarLocation.class);
         final Bootstrap<Configuration> bootstrap = new Bootstrap<>(app);
         when(location.toString()).thenReturn("dw-thing.jar");
@@ -56,9 +58,9 @@ class CommandTest {
     }
 
     @Test
-    void listHelpOnceOnArgumentOmission() throws Exception {
+    public void listHelpOnceOnArgumentOmission() throws Exception {
         assertThat(cli.run("test", "-h"))
-            .isEmpty();
+            .isTrue();
 
         assertThat(stdOut.toString())
             .isEqualTo(String.format(
@@ -69,7 +71,7 @@ class CommandTest {
                     "positional arguments:%n" +
                     "  {a,b,c}                Type to use%n" +
                     "%n" +
-                    "named arguments:%n" +
+                    "optional arguments:%n" +
                     "  -h, --help             show this help message and exit%n"
             ));
 
