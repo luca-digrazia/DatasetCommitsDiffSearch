@@ -5,17 +5,33 @@ import org.hibernate.SessionFactory;
 import org.hibernate.Transaction;
 import org.hibernate.context.internal.ManagedSessionContext;
 
-import static org.hibernate.resource.transaction.spi.TransactionStatus.ACTIVE;
-import static org.hibernate.resource.transaction.spi.TransactionStatus.MARKED_ROLLBACK;
-
 import java.util.Map;
 
 /**
  * An aspect providing operations around a method with the {@link UnitOfWork} annotation.
  * It opens a Hibernate session and optionally a transaction.
  * <p>It should be created for every invocation of the method.</p>
+ * <p>Usage :</p>
+ * <pre>
+ * {@code
+ *   UnitOfWorkProxyFactory unitOfWorkProxyFactory = ...
+ *   UnitOfWork unitOfWork = ...         // get annotation from method.
+ *
+ *   UnitOfWorkAspect aspect = unitOfWorkProxyFactory.newAspect();
+ *   try {
+ *     aspect.beforeStart(unitOfWork);
+ *     ...                               // perform business logic.
+ *     aspect.afterEnd();
+ *   } catch (Exception e) {
+ *     aspect.onError();
+ *     throw e;
+ *   } finally {
+ *     aspect.onFinish();
+ *   }
+ * }
+ * </pre>
  */
-class UnitOfWorkAspect {
+public class UnitOfWorkAspect {
 
     private final Map<String, SessionFactory> sessionFactories;
 
@@ -67,12 +83,9 @@ class UnitOfWorkAspect {
         } catch (Exception e) {
             rollbackTransaction();
             throw e;
-        } finally {
-            session.close();
-            session = null;
-            ManagedSessionContext.unbind(sessionFactory);
         }
-
+        // We should not close the session to let the lazy loading work during serializing a response to the client.
+        // If the response successfully serialized, then the session will be closed by the `onFinish` method
     }
 
     public void onError() {
@@ -83,13 +96,22 @@ class UnitOfWorkAspect {
         try {
             rollbackTransaction();
         } finally {
-            session.close();
+            onFinish();
+        }
+    }
+
+    public void onFinish() {
+        try {
+            if (session != null) {
+                session.close();
+            }
+        } finally {
             session = null;
             ManagedSessionContext.unbind(sessionFactory);
         }
     }
 
-    private void configureSession() {
+    protected void configureSession() {
         session.setDefaultReadOnly(unitOfWork.readOnly());
         session.setCacheMode(unitOfWork.cacheMode());
         session.setFlushMode(unitOfWork.flushMode());
@@ -107,7 +129,7 @@ class UnitOfWorkAspect {
             return;
         }
         final Transaction txn = session.getTransaction();
-        if (txn != null && (txn.getStatus() == ACTIVE || txn.getStatus() == MARKED_ROLLBACK)) {
+        if (txn != null && txn.getStatus().canRollback()) {
             txn.rollback();
         }
     }
@@ -117,8 +139,17 @@ class UnitOfWorkAspect {
             return;
         }
         final Transaction txn = session.getTransaction();
-        if (txn != null && (txn.getStatus() == ACTIVE || txn.getStatus() == MARKED_ROLLBACK)) {
+        if (txn != null && txn.getStatus().canRollback()) {
             txn.commit();
         }
     }
+
+    protected Session getSession() {
+        return session;
+    }
+
+    protected SessionFactory getSessionFactory() {
+        return sessionFactory;
+    }
+
 }

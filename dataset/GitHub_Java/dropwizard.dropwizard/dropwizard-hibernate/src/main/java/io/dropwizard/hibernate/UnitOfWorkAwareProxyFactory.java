@@ -71,11 +71,11 @@ public class UnitOfWorkAwareProxyFactory {
 
         try {
             final Proxy proxy = (Proxy) (constructorParamTypes.length == 0 ?
-                    factory.createClass().newInstance() :
+                    factory.createClass().getConstructor().newInstance() :
                     factory.create(constructorParamTypes, constructorArguments));
             proxy.setHandler((self, overridden, proceed, args) -> {
                 final UnitOfWork unitOfWork = overridden.getAnnotation(UnitOfWork.class);
-                final UnitOfWorkAspect unitOfWorkAspect = new UnitOfWorkAspect(sessionFactories);
+                final UnitOfWorkAspect unitOfWorkAspect = newAspect(sessionFactories);
                 try {
                     unitOfWorkAspect.beforeStart(unitOfWork);
                     Object result = proceed.invoke(self, args);
@@ -96,5 +96,20 @@ public class UnitOfWorkAwareProxyFactory {
                 InvocationTargetException e) {
             throw new IllegalStateException("Unable to create a proxy for the class '" + clazz + "'", e);
         }
+    }
+
+    /**
+     * @return a new aspect
+     */
+    public UnitOfWorkAspect newAspect() {
+        return new UnitOfWorkAspect(sessionFactories);
+    }
+
+    /**
+     * @return a new aspect
+     * @param sessionFactories
+     */
+    public UnitOfWorkAspect newAspect(ImmutableMap<String, SessionFactory> sessionFactories) {
+        return new UnitOfWorkAspect(sessionFactories);
     }
 }

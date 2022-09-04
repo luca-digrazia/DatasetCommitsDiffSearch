@@ -9,15 +9,15 @@ import io.dropwizard.logging.BootstrapLogging;
 import io.dropwizard.setup.Environment;
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
-import org.hibernate.Transaction;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 
 import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -28,6 +28,9 @@ public class UnitOfWorkAwareProxyFactoryTest {
     }
 
     private SessionFactory sessionFactory;
+
+    @Rule
+    public ExpectedException thrown = ExpectedException.none();
 
     @Before
     public void setUp() throws Exception {
@@ -48,12 +51,10 @@ public class UnitOfWorkAwareProxyFactoryTest {
         sessionFactory = new SessionFactoryFactory()
                 .build(bundle, environment, dataSourceFactory, ImmutableList.of());
         try (Session session = sessionFactory.openSession()) {
-            Transaction transaction = session.beginTransaction();
-            session.createNativeQuery("create table user_sessions (token varchar(64) primary key, username varchar(16))")
+            session.createSQLQuery("create table user_sessions (token varchar(64) primary key, username varchar(16))")
                 .executeUpdate();
-            session.createNativeQuery("insert into user_sessions values ('67ab89d', 'jeff_28')")
+            session.createSQLQuery("insert into user_sessions values ('67ab89d', 'jeff_28')")
                 .executeUpdate();
-            transaction.commit();
         }
     }
 
@@ -79,11 +80,12 @@ public class UnitOfWorkAwareProxyFactoryTest {
 
     @Test
     public void testProxyHandlesErrors() {
-        assertThatExceptionOfType(IllegalStateException.class).isThrownBy(()->
-            new UnitOfWorkAwareProxyFactory("default", sessionFactory)
+        thrown.expect(IllegalStateException.class);
+        thrown.expectMessage("Session cluster is down");
+
+        new UnitOfWorkAwareProxyFactory("default", sessionFactory)
                 .create(BrokenAuthenticator.class)
-                .authenticate("b812ae4"))
-            .withMessage("Session cluster is down");
+                .authenticate("b812ae4");
     }
 
     @Test
@@ -123,7 +125,7 @@ public class UnitOfWorkAwareProxyFactoryTest {
 
         public boolean isExist(String token) {
             return sessionFactory.getCurrentSession()
-                    .createNativeQuery("select username from user_sessions where token=:token")
+                    .createSQLQuery("select username from user_sessions where token=:token")
                     .setParameter("token", token)
                     .list()
                     .size() > 0;
@@ -168,10 +170,8 @@ public class UnitOfWorkAwareProxyFactoryTest {
         @Override
         protected void configureSession() {
             super.configureSession();
-            Transaction transaction = getSession().beginTransaction();
-            getSession().createNativeQuery("insert into user_sessions values ('gr6f9y0', 'jeff_29')")
+            getSession().createSQLQuery("insert into user_sessions values ('gr6f9y0', 'jeff_29')")
                 .executeUpdate();
-            transaction.commit();
         }
     }
 }
