@@ -68,38 +68,22 @@ public class MultiArchBinarySupport {
   }
 
   /**
-   * A tuple of values about dependency trees in a specific child configuration.
+   * Configuration, toolchain, and provider for for single-arch dependency configurations of a
+   * multi-arch target.
    */
   @AutoValue
   abstract static class DependencySpecificConfiguration {
     static DependencySpecificConfiguration create(
-        BuildConfiguration config, CcToolchainProvider toolchain, ObjcProvider objcLinkProvider,
-        ObjcProvider objcPropagateProvider) {
+        BuildConfiguration config, CcToolchainProvider toolchain, ObjcProvider objcProvider) {
       return new AutoValue_MultiArchBinarySupport_DependencySpecificConfiguration(
-          config, toolchain, objcLinkProvider, objcPropagateProvider);
+          config, toolchain, objcProvider);
     }
 
-    /**
-     * Returns the child configuration for this tuple.
-     */
     abstract BuildConfiguration config();
 
-    /**
-     * Returns the cc toolchain for this configuration.
-     */
     abstract CcToolchainProvider toolchain();
 
-    /**
-     * Returns the {@link ObjcProvider} to use as input to the support controlling link actoins;
-     * dylib symbols should be subtracted from this provider.
-     */
-    abstract ObjcProvider objcLinkProvider();
-    
-    /**
-     * Returns the {@link ObjcProvider} to propagate up to dependers; this will not have dylib
-     * symbols subtracted, thus signaling that this target is still responsible for those symbols.
-     */
-    abstract ObjcProvider objcProviderWithDylibSymbols();
+    abstract ObjcProvider objcProvider();
   }
 
 
@@ -165,7 +149,7 @@ public class MultiArchBinarySupport {
 
       binariesToLipo.add(intermediateArtifacts.strippedSingleArchitectureBinary());
 
-      ObjcProvider objcProvider = dependencySpecificConfiguration.objcLinkProvider();
+      ObjcProvider objcProvider = dependencySpecificConfiguration.objcProvider();
       CompilationArtifacts compilationArtifacts =
           CompilationSupport.compilationArtifacts(
               ruleContext,
@@ -269,16 +253,12 @@ public class MultiArchBinarySupport {
               nullToEmptyList(configToDepsCollectionMap.get(childConfig)),
               nullToEmptyList(configurationToNonPropagatedObjcMap.get(childConfig)),
               additionalDepProviders);
-      ObjcProvider objcProviderWithDylibSymbols = common.getObjcProvider();
-      ObjcProvider objcProvider = objcProviderWithDylibSymbols.subtractSubtrees(dylibObjcProviders,
+      ObjcProvider objcProvider = common.getObjcProvider().subtractSubtrees(dylibObjcProviders,
           ImmutableList.<CcLinkParamsProvider>of());
 
       childInfoBuilder.add(
           DependencySpecificConfiguration.create(
-              childConfig,
-              childConfigurationsAndToolchains.get(childConfig),
-              objcProvider,
-              objcProviderWithDylibSymbols));
+              childConfig, childConfigurationsAndToolchains.get(childConfig), objcProvider));
     }
 
     return childInfoBuilder.build();

@@ -53,7 +53,6 @@ import com.google.devtools.build.lib.rules.cpp.CppLinkAction;
 import com.google.devtools.build.lib.rules.cpp.CppLinkActionBuilder;
 import com.google.devtools.build.lib.rules.cpp.CppRuleClasses;
 import com.google.devtools.build.lib.rules.cpp.FdoSupportProvider;
-import com.google.devtools.build.lib.rules.cpp.FeatureSpecification;
 import com.google.devtools.build.lib.rules.cpp.IncludeProcessing;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkStaticness;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
@@ -455,8 +454,8 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
 
   private static FeatureConfiguration getFeatureConfiguration(RuleContext ruleContext,
       BuildConfiguration configuration) {
-    ImmutableSet.Builder<String> activatedCrosstoolSelectables =
-        ImmutableSet.<String>builder()
+    ImmutableList.Builder<String> activatedCrosstoolSelectables =
+        ImmutableList.<String>builder()
             .addAll(ACTIVATED_ACTIONS)
             .addAll(
                 ruleContext
@@ -515,9 +514,7 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
     return configuration
         .getFragment(CppConfiguration.class)
         .getFeatures()
-        .getFeatureConfiguration(
-            FeatureSpecification.create(
-                activatedCrosstoolSelectables.build(), ImmutableSet.<String>of()));
+        .getFeatureConfiguration(activatedCrosstoolSelectables.build());
   }
 
   private static ImmutableList<Artifact> getObjFiles(
