@@ -103,12 +103,8 @@ public class Blacklist {
         BasicDBList rawRules = (BasicDBList) this.mongoObject.get("blacklisted_terms");
         if (rawRules != null && rawRules.size() > 0) {
             for (Object ruleObj : rawRules) {
-                try {
-                    BlacklistRule rule = new BlacklistRule((DBObject) ruleObj);
-                    tempRules.add(rule);
-                } catch (Exception e) {
-                    Log.warn("Skipping rule in Blacklist.getRules(): " + e.toString());
-                }
+                BlacklistRule rule = new BlacklistRule((DBObject) ruleObj);
+                tempRules.add(rule);
             }
         }
 

@@ -51,7 +51,6 @@ public class GELFMessage {
     private String facility = null;
     private Map<String, String> additionalData = new HashMap<String, String>();
     private List<ObjectId> streams = null;
-    private boolean convertedFromSyslog = false;
 
     private boolean filterOut = false;
 
@@ -291,14 +290,6 @@ public class GELFMessage {
 
         // No rule hit.
         return false;
-    }
-
-    public void setConvertedFromSyslog(boolean x) {
-        this.convertedFromSyslog = x;
-    }
-
-    public boolean convertedFromSyslog() {
-        return this.convertedFromSyslog;
     }
 
     /**

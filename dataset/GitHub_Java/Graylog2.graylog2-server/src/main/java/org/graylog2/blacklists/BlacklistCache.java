@@ -20,19 +20,28 @@
 
 package org.graylog2.blacklists;
 
+import org.graylog2.streams.*;
 import java.util.ArrayList;
-import org.graylog2.SimpleObjectCache;
+import org.graylog2.Tools;
 
 /**
  * StreamCache.java: Mar 31, 2011 6:11:14 PM
  *
  * Singleton caching the already fetched blacklist.
  *
+ * THIS IS PRETTY DUPLICATED FROM THE STREAMS CACHE. May be done in a smarter
+ * way soon. Not sure yet.
+ *
  * @author: Lennart Koopmann <lennart@socketfeed.com>
  */
-public class BlacklistCache extends SimpleObjectCache {
-    
+public class BlacklistCache {
+
+    public static final int TIMEOUT_SECONDS = 5;
+
     private static BlacklistCache instance;
+
+    private ArrayList<Blacklist> blacklists = new ArrayList<Blacklist>();
+    private int lastSet = 0;
 
     private BlacklistCache() { }
 
@@ -43,13 +52,22 @@ public class BlacklistCache extends SimpleObjectCache {
         return instance;
     }
 
-    @Override
-    public ArrayList<Blacklist> get() {
-        return (ArrayList<Blacklist>) super.get();
+    public void set(ArrayList<Blacklist> blacklists) {
+        this.blacklists = blacklists;
+        this.lastSet = Tools.getUTCTimestamp();
     }
 
-    public void set(ArrayList<Blacklist> lists) {
-        super.set(lists);
+    public ArrayList<Blacklist> get() {
+        return blacklists;
+    }
+
+    public boolean valid() {
+        // For the first request.
+        if (this.lastSet == 0) {
+            return false;
+        }
+
+        return this.lastSet >= (Tools.getUTCTimestamp()-TIMEOUT_SECONDS);
     }
 
 }

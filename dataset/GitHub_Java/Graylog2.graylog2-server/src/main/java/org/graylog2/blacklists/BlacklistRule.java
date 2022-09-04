@@ -44,8 +44,4 @@ public class BlacklistRule {
         return this.term;
     }
 
-    public ObjectId getId() {
-        return this.id;
-    }
-
 }
