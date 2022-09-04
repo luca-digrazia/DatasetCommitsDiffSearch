@@ -37,7 +37,6 @@ public class TestResourceManager implements Closeable {
     private final List<TestResourceEntry> allTestResourceEntries;
     private Map<String, String> oldSystemProps;
     private boolean started = false;
-    private boolean hasPerTestResources = false;
 
     public TestResourceManager(Class<?> testClass) {
         this(testClass, Collections.emptyList(), false);
@@ -285,7 +284,6 @@ public class TestResourceManager implements Closeable {
 
                     boolean isParallel = testResource.parallel();
 
-                    hasPerTestResources = true;
                     uniqueEntries.add(new TestResourceClassEntry(testResourceClass, args, reflAnnotation, isParallel));
 
                     break;
@@ -313,11 +311,6 @@ public class TestResourceManager implements Closeable {
                 AnnotationValue parallelAnnotationValue = annotation.value("parallel");
                 if (parallelAnnotationValue != null) {
                     isParallel = parallelAnnotationValue.asBoolean();
-                }
-
-                AnnotationValue restrict = annotation.value("restrictToAnnotatedTest");
-                if (restrict != null && restrict.asBoolean()) {
-                    hasPerTestResources = true;
                 }
 
                 uniqueEntries.add(new TestResourceClassEntry(testResourceClass, args, null, isParallel));
@@ -358,11 +351,6 @@ public class TestResourceManager implements Closeable {
             }
         }
         return testResourceAnnotations;
-    }
-
-    // NOTE: called by reflection in QuarkusTestExtension
-    public boolean hasPerTestResources() {
-        return hasPerTestResources;
     }
 
     private boolean keepTestResourceAnnotation(AnnotationInstance annotation, ClassInfo targetClass, Class<?> testClass) {
