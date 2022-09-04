@@ -14,7 +14,6 @@
 
 package com.google.devtools.common.options;
 
-import static com.google.devtools.common.options.OptionPriority.PriorityCategory.INVOCATION_POLICY;
 import static java.util.Comparator.comparing;
 import static java.util.stream.Collectors.toCollection;
 
@@ -165,12 +164,7 @@ class OptionsParserImpl {
     return result;
   }
 
-  private void maybeAddDeprecationWarning(
-      OptionDefinition optionDefinition, PriorityCategory priority) {
-    // Don't add a warning for deprecated flag set by the invocation policy.
-    if (priority.equals(INVOCATION_POLICY)) {
-      return;
-    }
+  private void maybeAddDeprecationWarning(OptionDefinition optionDefinition) {
     // Continue to support the old behavior for @Deprecated options.
     String warning = optionDefinition.getDeprecationWarning();
     if (!warning.isEmpty() || (optionDefinition.getField().isAnnotationPresent(Deprecated.class))) {
@@ -399,7 +393,7 @@ class OptionsParserImpl {
       throws OptionsParsingException {
     OptionDefinition optionDefinition = parsedOption.getOptionDefinition();
     // All options can be deprecated; check and warn before doing any option-type specific work.
-    maybeAddDeprecationWarning(optionDefinition, parsedOption.getPriority().getPriorityCategory());
+    maybeAddDeprecationWarning(optionDefinition);
     // Track the value, before any remaining option-type specific work that is done outside of
     // the OptionValueDescription.
     OptionValueDescription entry =
