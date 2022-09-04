@@ -22,8 +22,8 @@ public class NetUtilTest {
      */
     @Test
     public void testDefaultTcpBacklogForWindows() {
-        assumeThat(System.getProperty(OS_NAME_PROPERTY), containsString("win"));
-        assumeThat(isTcpBacklogSettingReadable(), is(false));
+        assumeThat(System.getProperty(OS_NAME_PROPERTY),containsString("win"));
+        assumeThat(isTcpBacklogSettingReadable(),is(false));
         assertEquals(NetUtil.DEFAULT_TCP_BACKLOG_WINDOWS, NetUtil.getTcpBacklog());
     }
 
@@ -33,7 +33,7 @@ public class NetUtilTest {
     @Test
     public void testNonWindowsDefaultTcpBacklog() {
         assumeThat(System.getProperty(OS_NAME_PROPERTY), containsString("Mac OS X"));
-        assumeThat(isTcpBacklogSettingReadable(), is(false));
+        assumeThat(isTcpBacklogSettingReadable(),is(false));
         assertEquals(NetUtil.DEFAULT_TCP_BACKLOG_LINUX, NetUtil.getTcpBacklog());
     }
 
@@ -43,7 +43,7 @@ public class NetUtilTest {
     @Test
     public void testNonWindowsSpecifiedTcpBacklog() {
         assumeThat(System.getProperty(OS_NAME_PROPERTY), containsString("Mac OS X"));
-        assumeThat(isTcpBacklogSettingReadable(), is(false));
+        assumeThat(isTcpBacklogSettingReadable(),is(false));
         assertEquals(100, NetUtil.getTcpBacklog(100));
     }
 
@@ -52,11 +52,11 @@ public class NetUtilTest {
      */
     @Test
     public void testOsSetting() {
-        assumeThat(System.getProperty(OS_NAME_PROPERTY), containsString("Linux"));
-        assumeThat(isTcpBacklogSettingReadable(), is(true));
+        assumeThat(System.getProperty(OS_NAME_PROPERTY),containsString("Linux"));
+        assumeThat(isTcpBacklogSettingReadable(),is(true));
         assertNotEquals(-1, NetUtil.getTcpBacklog(-1));
     }
-
+    
     @Test
     public void testAllLocalIps() throws Exception {
         NetUtil.setLocalIpFilter((nif, adr) ->
@@ -65,7 +65,7 @@ public class NetUtilTest {
         assertThat(addresses.size()).isGreaterThan(0);
         assertThat(addresses).doesNotContain(InetAddress.getLoopbackAddress());
     }
-
+    
     @Test
     public void testLocalIpsWithLocalFilter() throws Exception {
         NetUtil.setLocalIpFilter((inf, adr) -> adr != null);
@@ -75,14 +75,17 @@ public class NetUtilTest {
     }
 
     public boolean isTcpBacklogSettingReadable() {
-        return AccessController.doPrivileged((PrivilegedAction<Boolean>) () -> {
-            try {
-                File f = new File(NetUtil.TCP_BACKLOG_SETTING_LOCATION);
-                return f.exists() && f.canRead();
-            } catch (Exception e) {
-                return false;
-            }
+        return AccessController.doPrivileged(new PrivilegedAction<Boolean>() {
+            @Override
+            public Boolean run() {
+                try {
+                    File f = new File(NetUtil.TCP_BACKLOG_SETTING_LOCATION);
+                    return (f.exists() && f.canRead());
+                } catch (Exception e) {
+                    return false;
+                }
 
+            }
         });
     }
 }
