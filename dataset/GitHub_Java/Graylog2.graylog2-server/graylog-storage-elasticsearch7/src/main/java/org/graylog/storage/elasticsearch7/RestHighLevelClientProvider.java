@@ -2,7 +2,6 @@ package org.graylog.storage.elasticsearch7;
 
 import com.github.joschi.jadconfig.util.Duration;
 import org.graylog.shaded.elasticsearch7.org.apache.http.HttpHost;
-import org.graylog.shaded.elasticsearch7.org.apache.http.client.CredentialsProvider;
 import org.graylog.shaded.elasticsearch7.org.elasticsearch.client.RestClient;
 import org.graylog.shaded.elasticsearch7.org.elasticsearch.client.RestClientBuilder;
 import org.graylog.shaded.elasticsearch7.org.elasticsearch.client.RestHighLevelClient;
@@ -41,17 +40,13 @@ public class RestHighLevelClientProvider implements Provider<RestHighLevelClient
             @Named("elasticsearch_discovery_filter") @Nullable String discoveryFilter,
             @Named("elasticsearch_discovery_frequency") Duration discoveryFrequency,
             @Named("elasticsearch_discovery_default_scheme") String defaultSchemeForDiscoveredNodes,
-            @Named("elasticsearch_compression_enabled") boolean compressionEnabled,
-            @Named("elasticsearch_use_expect_continue") boolean useExpectContinue,
-            CredentialsProvider credentialsProvider) {
+            @Named("elasticsearch_compression_enabled") boolean compressionEnabled) {
         client = buildClient(
                 hosts,
                 connectTimeout,
                 socketTimeout,
                 maxTotalConnections,
-                maxTotalConnectionsPerRoute,
-                useExpectContinue,
-                credentialsProvider);
+                maxTotalConnectionsPerRoute);
 
         registerShutdownHook(shutdownService);
     }
@@ -66,22 +61,17 @@ public class RestHighLevelClientProvider implements Provider<RestHighLevelClient
             Duration connectTimeout,
             Duration socketTimeout,
             int maxTotalConnections,
-            int maxTotalConnectionsPerRoute,
-            boolean useExpectContinue,
-            CredentialsProvider credentialsProvider) {
+            int maxTotalConnectionsPerRoute) {
         final HttpHost[] esHosts = hosts.stream().map(uri -> new HttpHost(uri.getHost(), uri.getPort(), uri.getScheme())).toArray(HttpHost[]::new);
 
         final RestClientBuilder restClientBuilder = RestClient.builder(esHosts)
                 .setRequestConfigCallback(requestConfig -> requestConfig
                         .setConnectTimeout(Math.toIntExact(connectTimeout.toMilliseconds()))
                         .setSocketTimeout(Math.toIntExact(socketTimeout.toMilliseconds()))
-                        .setExpectContinueEnabled(useExpectContinue)
-                        .setAuthenticationEnabled(true)
                 )
                 .setHttpClientConfigCallback(httpClientConfig -> httpClientConfig
                         .setMaxConnTotal(maxTotalConnections)
                         .setMaxConnPerRoute(maxTotalConnectionsPerRoute)
-                        .setDefaultCredentialsProvider(credentialsProvider)
                 );
 
         return new RestHighLevelClient(restClientBuilder);

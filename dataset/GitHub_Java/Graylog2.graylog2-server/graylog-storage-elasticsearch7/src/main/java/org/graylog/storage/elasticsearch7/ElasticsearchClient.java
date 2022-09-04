@@ -1,6 +1,5 @@
 package org.graylog.storage.elasticsearch7;
 
-import com.google.common.collect.Streams;
 import org.graylog.shaded.elasticsearch7.org.elasticsearch.ElasticsearchException;
 import org.graylog.shaded.elasticsearch7.org.elasticsearch.action.search.MultiSearchRequest;
 import org.graylog.shaded.elasticsearch7.org.elasticsearch.action.search.MultiSearchResponse;
@@ -11,22 +10,16 @@ import org.graylog.shaded.elasticsearch7.org.elasticsearch.client.RestHighLevelC
 import org.graylog2.indexer.IndexNotFoundException;
 
 import javax.inject.Inject;
-import javax.inject.Named;
 import java.io.IOException;
-import java.util.List;
-import java.util.stream.Collectors;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
 public class ElasticsearchClient {
     private final RestHighLevelClient client;
-    private final boolean compressionEnabled;
 
     @Inject
-    public ElasticsearchClient(RestHighLevelClient client,
-                               @Named("elasticsearch_compression_enabled") boolean compressionEnabled) {
+    public ElasticsearchClient(RestHighLevelClient client) {
         this.client = client;
-        this.compressionEnabled = compressionEnabled;
     }
 
     public SearchResponse search(SearchRequest searchRequest, String errorMessage) {
@@ -40,17 +33,6 @@ public class ElasticsearchClient {
 
     public SearchResponse singleSearch(SearchRequest searchRequest, String errorMessage) {
         return execute((c, requestOptions) -> c.search(searchRequest, requestOptions), errorMessage);
-    }
-
-    public List<MultiSearchResponse.Item> msearch(List<SearchRequest> searchRequests, String errorMessage) {
-        final MultiSearchRequest multiSearchRequest = new MultiSearchRequest();
-
-        searchRequests.forEach(multiSearchRequest::add);
-
-        final MultiSearchResponse result = this.execute((c, requestOptions) -> c.msearch(multiSearchRequest, requestOptions), errorMessage);
-
-        return Streams.stream(result)
-                .collect(Collectors.toList());
     }
 
     private SearchResponse firstResponseFrom(MultiSearchResponse result, String errorMessage) {
@@ -88,17 +70,12 @@ public class ElasticsearchClient {
     }
 
     private RequestOptions requestOptions() {
-        return compressionEnabled
-                ? RequestOptions.DEFAULT.toBuilder()
-                .addHeader("Accept-Encoding", "gzip")
-                .addHeader("Content-type", "application/json")
-                .build()
-                : RequestOptions.DEFAULT;
+        return RequestOptions.DEFAULT;
     }
 
     private ElasticsearchException exceptionFrom(Exception e, String errorMessage) {
         if (e instanceof ElasticsearchException) {
-            final ElasticsearchException elasticsearchException = (ElasticsearchException) e;
+            final ElasticsearchException elasticsearchException = (ElasticsearchException)e;
             if (isIndexNotFoundException(elasticsearchException)) {
                 throw IndexNotFoundException.create(errorMessage + elasticsearchException.getResourceId(), elasticsearchException.getIndex().getName());
             }
