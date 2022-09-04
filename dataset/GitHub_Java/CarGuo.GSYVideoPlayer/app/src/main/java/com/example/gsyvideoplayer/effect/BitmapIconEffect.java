@@ -2,7 +2,6 @@ package com.example.gsyvideoplayer.effect;
 
 import android.graphics.Bitmap;
 import android.opengl.GLSurfaceView;
-import android.opengl.Matrix;
 
 import com.shuyu.gsyvideoplayer.GSYVideoGLView.ShaderInterface;
 
@@ -12,7 +11,6 @@ import com.shuyu.gsyvideoplayer.GSYVideoGLView.ShaderInterface;
  */
 public class BitmapIconEffect implements ShaderInterface {
 
-    private final static int NEVER_SET = -5555;
 
     private GLSurfaceView mGlSurfaceViewl;
 
@@ -25,10 +23,6 @@ public class BitmapIconEffect implements ShaderInterface {
     private float mAlpha = 1.0f;
 
     private float mPositionOffset = 1.0f;
-
-    private float mPositionX = NEVER_SET;
-
-    private float mPositionY = NEVER_SET;
 
     public BitmapIconEffect(Bitmap bitmap) {
         this(bitmap, bitmap.getWidth(), bitmap.getHeight());
@@ -62,13 +56,6 @@ public class BitmapIconEffect implements ShaderInterface {
 
     }
 
-    public void setPositionX(float positionX) {
-        this.mPositionX = positionX;
-    }
-
-    public void setPositionY(float positionY) {
-        this.mPositionY = positionY;
-    }
 
     public float getAlpha() {
         return mAlpha;
@@ -104,9 +91,6 @@ public class BitmapIconEffect implements ShaderInterface {
      * 水印图的起始位置，默认右边
      */
     public float getPositionX() {
-        if (mPositionX != NEVER_SET) {
-            return mPositionX;
-        }
         return -(mGlSurfaceViewl.getWidth() / (getWidth()) - mPositionOffset);
     }
 
@@ -114,9 +98,6 @@ public class BitmapIconEffect implements ShaderInterface {
      * 水印图的起始位置，默认上
      */
     public float getPositionY() {
-        if (mPositionY != NEVER_SET) {
-            return mPositionY;
-        }
         return -(mGlSurfaceViewl.getHeight() / (getHeight()) - mPositionOffset);
     }
 
@@ -136,6 +117,7 @@ public class BitmapIconEffect implements ShaderInterface {
     public float getMinPositionY() {
         return -(mGlSurfaceViewl.getHeight() / (getHeight()) - mPositionOffset);
     }
+
 
     public Bitmap getBitmap() {
         return mBitmap;
