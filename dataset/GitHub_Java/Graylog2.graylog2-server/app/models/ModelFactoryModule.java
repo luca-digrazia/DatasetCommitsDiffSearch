@@ -1,5 +1,5 @@
-/**
- * Copyright 2013 Kay Roepke <kay@torch.sh>
+/*
+ * Copyright 2013 TORCH UG
  *
  * This file is part of Graylog2.
  *
@@ -15,12 +15,13 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
  */
 package models;
 
 import com.google.inject.AbstractModule;
 import com.google.inject.assistedinject.FactoryModuleBuilder;
+import models.accounts.LdapSettings;
+import models.dashboards.Dashboard;
 
 /**
  * Provides the bindings for the factories of our models to avoid having lots of static methods everywhere.
@@ -29,7 +30,14 @@ public class ModelFactoryModule extends AbstractModule {
     @Override
     protected void configure() {
         install(new FactoryModuleBuilder().build(Node.Factory.class));
+        install(new FactoryModuleBuilder().build(Input.Factory.class));
         install(new FactoryModuleBuilder().build(SystemJob.Factory.class));
+        install(new FactoryModuleBuilder().build(UniversalSearch.Factory.class));
+        install(new FactoryModuleBuilder().build(User.Factory.class));
+        install(new FactoryModuleBuilder().build(Extractor.Factory.class));
+        install(new FactoryModuleBuilder().build(Dashboard.Factory.class));
+        install(new FactoryModuleBuilder().build(LdapSettings.Factory.class));
+        install(new FactoryModuleBuilder().build(Stream.Factory.class));
         // TODO crutch, because we need the factory for systemjobs in all().
         // can this be done with a second factory for the list?
         // or possibly with a factory method returning List<SystemJob> ?
