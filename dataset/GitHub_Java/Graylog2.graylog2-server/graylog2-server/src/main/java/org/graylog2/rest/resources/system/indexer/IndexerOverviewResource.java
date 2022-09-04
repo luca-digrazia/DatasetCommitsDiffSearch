@@ -17,12 +17,11 @@
 package org.graylog2.rest.resources.system.indexer;
 
 import com.codahale.metrics.annotation.Timed;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.google.common.collect.ImmutableMap;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
+import org.elasticsearch.action.admin.indices.stats.IndexStats;
 import org.graylog2.indexer.IndexSet;
 import org.graylog2.indexer.IndexSetRegistry;
 import org.graylog2.indexer.cluster.Cluster;
@@ -47,11 +46,9 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.ServiceUnavailableException;
 import javax.ws.rs.core.MediaType;
-import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
+import java.util.stream.Collectors;
 
 @RequiresAuthentication
 @Api(value = "Indexer/Overview", description = "Indexing overview")
@@ -119,60 +116,34 @@ public class IndexerOverviewResource extends RestResource {
 
         final DeflectorSummary deflectorSummary = deflectorResource.deflector(indexSetId);
         final List<IndexRangeSummary> indexRanges = indexRangesResource.list().ranges();
-        final JsonNode indexStats = indices.getIndexStats(indexSet);
-        final List<String> indexNames = new ArrayList<>();
-        indexStats.fieldNames().forEachRemaining(indexNames::add);
-        final Map<String, Boolean> areReopened = indices.areReopened(indexNames);
-        final Map<String, IndexSummary> indicesSummaries = buildIndexSummaries(deflectorSummary, indexRanges, indexStats, areReopened);
+        final Map<String, IndexStats> allDocCounts = indices.getAllDocCounts(indexSet).entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        final Map<String, Boolean> areReopened = indices.areReopened(allDocCounts.keySet());
+        final Map<String, IndexSummary> indicesSummaries = allDocCounts.values()
+                .stream()
+                .parallel()
+                .collect(Collectors.toMap(IndexStats::getIndex,
+                        (indexStats) -> IndexSummary.create(
+                                IndexSizeSummary.create(indexStats.getPrimaries().getDocs().getCount(),
+                                        indexStats.getPrimaries().getDocs().getDeleted(),
+                                        indexStats.getPrimaries().getStore().sizeInBytes()),
+                                indexRanges.stream().filter((indexRangeSummary) -> indexRangeSummary.indexName().equals(indexStats.getIndex())).findFirst().orElse(null),
+                                deflectorSummary.currentTarget() != null && deflectorSummary.currentTarget().equals(indexStats.getIndex()),
+                                false,
+                                areReopened.get(indexStats.getIndex()))
+                ));
 
         indices.getClosedIndices(indexSet).forEach(indexName -> indicesSummaries.put(indexName, IndexSummary.create(
                 null,
                 indexRanges.stream().filter((indexRangeSummary) -> indexRangeSummary.indexName().equals(indexName)).findFirst().orElse(null),
-                indexName.equals(deflectorSummary.currentTarget()),
+                deflectorSummary.currentTarget() != null && deflectorSummary.equals(indexName),
                 true,
                 false
         )));
 
         return IndexerOverview.create(deflectorSummary,
                 IndexerClusterOverview.create(indexerClusterResource.clusterHealth(), indexerClusterResource.clusterName().name()),
-                countResource.total(indexSetId), indicesSummaries);
-    }
-
-    private Map<String, IndexSummary> buildIndexSummaries(DeflectorSummary deflectorSummary, List<IndexRangeSummary> indexRanges, JsonNode indexStats, Map<String, Boolean> areReopened) {
-        final Iterator<Map.Entry<String, JsonNode>> fields = indexStats.fields();
-        final ImmutableMap.Builder<String, IndexSummary> indexSummaries = ImmutableMap.builder();
-        while (fields.hasNext()) {
-            final Map.Entry<String, JsonNode> entry = fields.next();
-            indexSummaries.put(entry.getKey(), buildIndexSummary(entry, indexRanges, deflectorSummary, areReopened));
-
-        }
-        return indexSummaries.build();
-    }
-
-    private IndexSummary buildIndexSummary(Map.Entry<String, JsonNode> indexStats,
-                                           List<IndexRangeSummary> indexRanges,
-                                           DeflectorSummary deflectorSummary,
-                                           Map<String, Boolean> areReopened) {
-        final String index = indexStats.getKey();
-        final JsonNode primaries = indexStats.getValue().path("primaries");
-        final JsonNode docs = primaries.path("docs");
-        final long count = docs.path("count").asLong();
-        final long deleted = docs.path("deleted").asLong();
-        final JsonNode store = primaries.path("store");
-        final long sizeInBytes = store.path("size_in_bytes").asLong();
-
-        final Optional<IndexRangeSummary> range = indexRanges.stream()
-                .filter(indexRangeSummary -> indexRangeSummary.indexName().equals(index))
-                .findFirst();
-        final boolean isDeflector = index.equals(deflectorSummary.currentTarget());
-        final boolean isReopened = areReopened.get(index);
-
-        return IndexSummary.create(
-                IndexSizeSummary.create(count, deleted, sizeInBytes),
-                range.orElse(null),
-                isDeflector,
-                false,
-                isReopened);
+                countResource.total(indexSetId),indicesSummaries);
     }
 
 }
