@@ -13,15 +13,12 @@
 // limitations under the License.
 package com.google.devtools.build.lib.collect.nestedset;
 
-import static com.google.common.util.concurrent.Futures.immediateFuture;
-
 import com.google.auto.value.AutoValue;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Stopwatch;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.ImmutableList;
-import com.google.common.flogger.GoogleLogger;
 import com.google.common.hash.Hashing;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -43,6 +40,7 @@ import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
+import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
 /**
@@ -64,25 +62,15 @@ import javax.annotation.Nullable;
  * <p>Then, in memory, A = [[D, E], C]. To store the NestedSet, we would rely on the fingerprint
  * value FPb = fingerprint([D, E]) and write
  *
- * <pre>{@code A -> fingerprint(FPb, C)}</pre>
+ * <pre>A -> fingerprint(FPb, C)</pre>
  *
  * <p>On retrieval, A will be reconstructed by first retrieving A using its fingerprint, and then
  * recursively retrieving B using its fingerprint.
  */
 public class NestedSetStore {
 
-  private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
+  private static final Logger logger = Logger.getLogger(NestedSetStore.class.getName());
   private static final Duration FETCH_FROM_STORAGE_LOGGING_THRESHOLD = Duration.ofSeconds(5);
-
-  /**
-   * Exception indicating that {@link NestedSetStorageEndpoint#get} was called with a fingerprint
-   * that does not exist in the store.
-   */
-  public static final class MissingNestedSetException extends Exception {
-    public MissingNestedSetException(ByteString fingerprint) {
-      super("No NestedSet data for " + fingerprint);
-    }
-  }
 
   /** Stores fingerprint -> NestedSet associations. */
   public interface NestedSetStorageEndpoint {
@@ -97,9 +85,6 @@ public class NestedSetStore {
 
     /**
      * Retrieves the serialized bytes for the NestedSet contents associated with this fingerprint.
-     *
-     * <p>If the given fingerprint does not exist in the store, the returned future fails with a
-     * {@link MissingNestedSetException}.
      *
      * <p>It is the responsibility of the caller to deduplicate {@code get} calls, to avoid multiple
      * fetches of the same fingerprint.
@@ -116,12 +101,12 @@ public class NestedSetStore {
     @Override
     public ListenableFuture<Void> put(ByteString fingerprint, byte[] serializedBytes) {
       fingerprintToContents.put(fingerprint, serializedBytes);
-      return immediateFuture(null);
+      return Futures.immediateFuture(null);
     }
 
     @Override
     public ListenableFuture<byte[]> get(ByteString fingerprint) {
-      return immediateFuture(fingerprintToContents.get(fingerprint));
+      return Futures.immediateFuture(fingerprintToContents.get(fingerprint));
     }
   }
 
@@ -212,7 +197,7 @@ public class NestedSetStore {
               // doesn't provide it to us.
               contentsToFingerprint.put(
                   contents,
-                  FingerprintComputationResult.create(fingerprint, immediateFuture(null)));
+                  FingerprintComputationResult.create(fingerprint, Futures.immediateFuture(null)));
 
             } catch (ExecutionException e) {
               // Failure to fetch the NestedSet contents is unexpected, but the failed future can
@@ -358,7 +343,7 @@ public class NestedSetStore {
   @SuppressWarnings("unchecked")
   private static ListenableFuture<Object[]> maybeWrapInFuture(Object contents) {
     if (contents instanceof Object[]) {
-      return immediateFuture((Object[]) contents);
+      return Futures.immediateFuture((Object[]) contents);
     }
     return (ListenableFuture<Object[]>) contents;
   }
@@ -371,8 +356,7 @@ public class NestedSetStore {
    * future that will contain the results of the deserialization. If that future is not owned by the
    * current call of this method, it doesn't have to do anything further.
    *
-   * <p>The return value is either an {@code Object[]} or a {@code ListenableFuture<Object[]>},
-   * which may be completed with a {@link MissingNestedSetException}.
+   * <p>The return value is either an {@code Object[]} or a {@code ListenableFuture<Object[]>}.
    */
   // All callers will test on type and check return value if it's a future.
   @SuppressWarnings("FutureReturnValueIgnored")
@@ -391,9 +375,10 @@ public class NestedSetStore {
             bytes -> {
               Duration fetchDuration = fetchStopwatch.elapsed();
               if (FETCH_FROM_STORAGE_LOGGING_THRESHOLD.compareTo(fetchDuration) < 0) {
-                logger.atInfo().log(
-                    "NestedSet fetch took: %dms, size: %dB",
-                    fetchDuration.toMillis(), bytes.length);
+                logger.info(
+                    String.format(
+                        "NestedSet fetch took: %dms, size: %dB",
+                        fetchDuration.toMillis(), bytes.length));
               }
 
               CodedInputStream codedIn = CodedInputStream.newInstance(bytes);

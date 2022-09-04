@@ -14,9 +14,7 @@
 package com.google.devtools.build.lib.collect.nestedset;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.common.util.concurrent.Futures.immediateFailedFuture;
-import static com.google.common.util.concurrent.Futures.immediateFuture;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -24,11 +22,11 @@ import static org.mockito.Mockito.when;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.testing.GcFinalization;
+import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetStore.InMemoryNestedSetStorageEndpoint;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetStore.MissingNestedSetException;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetStore.NestedSetCache;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetStore.NestedSetStorageEndpoint;
 import com.google.devtools.build.lib.skyframe.serialization.AutoRegistry;
@@ -41,7 +39,6 @@ import com.google.protobuf.ByteString;
 import java.io.IOException;
 import java.lang.ref.WeakReference;
 import java.nio.charset.Charset;
-import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -53,8 +50,7 @@ import org.mockito.Mockito;
 
 /** Tests for {@link NestedSet} serialization. */
 @RunWith(JUnit4.class)
-public final class NestedSetCodecTest {
-
+public class NestedSetCodecTest {
   @Test
   public void testAutoCodecedCodec() throws Exception {
     ObjectCodecs objectCodecs =
@@ -110,18 +106,17 @@ public final class NestedSetCodecTest {
   }
 
   @Test
-  public void missingNestedSetException_hiddenUntilNestedSetIsConsumed() throws Exception {
+  public void failedRetrievalHiddenUntilNestedSetIsConsumed() throws Exception {
     NestedSetStorageEndpoint storageEndpoint =
         new NestedSetStorageEndpoint() {
           @Override
           public ListenableFuture<Void> put(ByteString fingerprint, byte[] serializedBytes) {
-            return immediateFuture(null);
+            return Futures.immediateFuture(null);
           }
 
           @Override
           public ListenableFuture<byte[]> get(ByteString fingerprint) {
-            return immediateFailedFuture(
-                new MissingNestedSetException(ByteString.copyFromUtf8("fingerprint")));
+            return Futures.immediateFailedFuture(new Exception("Failed to retrieve nested set"));
           }
         };
     ObjectCodecs serializer = createCodecs(new NestedSetStore(storageEndpoint));
@@ -132,9 +127,8 @@ public final class NestedSetCodecTest {
     Object deserialized = deserializer.deserializeMemoized(result.getObject());
 
     assertThat(deserialized).isInstanceOf(NestedSet.class);
-    assertThrows(
-        MissingNestedSetException.class,
-        () -> ((NestedSet<?>) deserialized).toListWithTimeout(Duration.ofNanos(1)));
+    Exception thrown = assertThrows(Exception.class, () -> ((NestedSet<?>) deserialized).toList());
+    assertThat(thrown).hasMessageThat().contains("Failed to retrieve nested set");
   }
 
   /**
@@ -178,11 +172,11 @@ public final class NestedSetCodecTest {
         // The write of the shared inner NestedSet {"a", "b"}
         .thenReturn(sharedInnerWrite)
         // The write of the inner NestedSet {"c", "d"}
-        .thenReturn(immediateFuture(null))
+        .thenReturn(Futures.immediateFuture(null))
         // The write of the outer NestedSet {{"a", "b"}, {"c", "d"}}
         .thenReturn(outerWrite)
         // The write of the inner NestedSet {"e", "f"}
-        .thenReturn(immediateFuture(null));
+        .thenReturn(Futures.immediateFuture(null));
     ObjectCodecs objectCodecs = createCodecs(new NestedSetStore(mockStorage));
 
     NestedSet<String> sharedInnerNestedSet = NestedSetBuilder.create(Order.STABLE_ORDER, "a", "b");
@@ -227,10 +221,11 @@ public final class NestedSetCodecTest {
     Object[] contents = new Object[0];
     ByteString fingerprint = ByteString.copyFrom(new byte[2]);
     cache.put(
-        NestedSetStore.FingerprintComputationResult.create(fingerprint, immediateFuture(null)),
+        NestedSetStore.FingerprintComputationResult.create(
+            fingerprint, Futures.immediateFuture(null)),
         contents);
     GcFinalization.awaitFullGc();
-    assertThat(cache.putIfAbsent(fingerprint, immediateFuture(null))).isEqualTo(contents);
+    assertThat(cache.putIfAbsent(fingerprint, Futures.immediateFuture(null))).isEqualTo(contents);
     WeakReference<Object[]> weakRef = new WeakReference<>(contents);
     contents = null;
     fingerprint = null;
