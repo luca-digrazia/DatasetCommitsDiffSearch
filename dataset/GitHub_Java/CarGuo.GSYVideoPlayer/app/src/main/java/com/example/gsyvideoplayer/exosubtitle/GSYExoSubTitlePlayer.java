@@ -9,7 +9,6 @@ import com.google.android.exoplayer2.C;
 import com.google.android.exoplayer2.DefaultLoadControl;
 import com.google.android.exoplayer2.DefaultRenderersFactory;
 import com.google.android.exoplayer2.Format;
-import com.google.android.exoplayer2.MediaItem;
 import com.google.android.exoplayer2.SimpleExoPlayer;
 import com.google.android.exoplayer2.source.MediaSource;
 import com.google.android.exoplayer2.source.MergingMediaSource;
@@ -25,8 +24,6 @@ import com.shuyu.gsyvideoplayer.utils.Debuger;
 
 import tv.danmaku.ijk.media.exo2.IjkExo2MediaPlayer;
 import tv.danmaku.ijk.media.exo2.demo.EventLogger;
-
-import static com.google.android.exoplayer2.util.Assertions.checkNotNull;
 
 public class GSYExoSubTitlePlayer extends IjkExo2MediaPlayer {
 
@@ -91,13 +88,7 @@ public class GSYExoSubTitlePlayer extends IjkExo2MediaPlayer {
 
     public MediaSource getTextSource(Uri subTitle) {
         //todo C.SELECTION_FLAG_AUTOSELECT language MimeTypes
-        Format textFormat = new Format.Builder()
-                .setSampleMimeType(MimeTypes.APPLICATION_SUBRIP)
-                .setSelectionFlags(C.SELECTION_FLAG_FORCED)
-                .setLanguage("en").build();
-
-        MediaItem.Subtitle subtitle = new MediaItem.Subtitle(
-                subTitle, checkNotNull(textFormat.sampleMimeType), textFormat.language, textFormat.selectionFlags);
+        Format textFormat = Format.createTextSampleFormat(null, MimeTypes.APPLICATION_SUBRIP, C.SELECTION_FLAG_FORCED, "en");
 
         DefaultHttpDataSourceFactory factory = new DefaultHttpDataSourceFactory(Util.getUserAgent(mAppContext,
                 "GSYExoSubTitlePlayer"), new DefaultBandwidthMeter.Builder(mAppContext).build(),
@@ -106,7 +97,7 @@ public class GSYExoSubTitlePlayer extends IjkExo2MediaPlayer {
 
         MediaSource textMediaSource = new SingleSampleMediaSource.Factory(new DefaultDataSourceFactory(mAppContext, null,
                 factory))
-                .createMediaSource(subtitle, C.TIME_UNSET);
+                .createMediaSource(subTitle, textFormat, C.TIME_UNSET);
         return textMediaSource;
 
     }
@@ -129,13 +120,13 @@ public class GSYExoSubTitlePlayer extends IjkExo2MediaPlayer {
     }
 
     public void addTextOutputPlaying(TextOutput textOutput) {
-        if (mInternalPlayer != null) {
+        if(mInternalPlayer != null) {
             mInternalPlayer.addTextOutput(textOutput);
         }
     }
 
     public void removeTextOutput(TextOutput textOutput) {
-        if (mInternalPlayer != null) {
+        if(mInternalPlayer != null) {
             mInternalPlayer.removeTextOutput(textOutput);
         }
     }

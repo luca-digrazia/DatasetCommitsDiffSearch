@@ -87,6 +87,7 @@ public class GSYExo2MediaPlayer extends IjkExo2MediaPlayer {
     }
 
 
+
     /**
      * 上一集
      */
@@ -172,7 +173,7 @@ public class GSYExo2MediaPlayer extends IjkExo2MediaPlayer {
         int nextWindowIndex = mInternalPlayer.getNextWindowIndex();
         if (nextWindowIndex != C.INDEX_UNSET) {
             mInternalPlayer.seekTo(nextWindowIndex, C.TIME_UNSET);
-        } else if (timeline.getWindow(windowIndex, window).isDynamic) {
+        } else if (timeline.getWindow(windowIndex, window, false).isDynamic) {
             mInternalPlayer.seekTo(windowIndex, C.TIME_UNSET);
         }
     }
