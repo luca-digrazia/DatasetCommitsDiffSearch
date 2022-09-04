@@ -52,13 +52,13 @@ public final class NativeLibraryNestedSetBuilder {
 
   /** Include native Java libraries of a specified target into the nested set. */
   public NativeLibraryNestedSetBuilder addJavaTarget(TransitiveInfoCollection dep) {
-    JavaNativeLibraryInfo javaProvider = dep.get(JavaNativeLibraryInfo.PROVIDER);
+    JavaNativeLibraryProvider javaProvider = dep.getProvider(JavaNativeLibraryProvider.class);
     if (javaProvider != null) {
       builder.addTransitive(javaProvider.getTransitiveJavaNativeLibraries());
       return this;
     }
 
-    CcNativeLibraryProvider ccProvider = dep.get(CcNativeLibraryProvider.PROVIDER);
+    CcNativeLibraryProvider ccProvider = dep.getProvider(CcNativeLibraryProvider.class);
     if (ccProvider != null) {
       builder.addTransitive(ccProvider.getTransitiveCcNativeLibraries());
       return this;
@@ -80,7 +80,7 @@ public final class NativeLibraryNestedSetBuilder {
 
   /** Include native Java libraries of a specified target into the nested set. */
   private void addCcTarget(TransitiveInfoCollection dep) {
-    CcNativeLibraryProvider provider = dep.get(CcNativeLibraryProvider.PROVIDER);
+    CcNativeLibraryProvider provider = dep.getProvider(CcNativeLibraryProvider.class);
     if (provider != null) {
       builder.addTransitive(provider.getTransitiveCcNativeLibraries());
     } else {

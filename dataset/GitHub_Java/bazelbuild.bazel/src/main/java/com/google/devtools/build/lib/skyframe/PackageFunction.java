@@ -76,6 +76,7 @@ import com.google.devtools.build.skyframe.ValueOrException2;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -890,9 +891,9 @@ public class PackageFunction implements SkyFunction {
     }
 
     @Override
-    public List<String> fetchUnsorted(Token token)
+    public List<String> fetch(Token token)
         throws BadGlobException, IOException, InterruptedException {
-      return delegate.fetchUnsorted(token);
+      return delegate.fetch(token);
     }
 
     @Override
@@ -1015,7 +1016,7 @@ public class PackageFunction implements SkyFunction {
     }
 
     @Override
-    public List<String> fetchUnsorted(Token token)
+    public List<String> fetch(Token token)
         throws BadGlobException, IOException, InterruptedException {
       HybridToken hybridToken = (HybridToken) token;
       return hybridToken.resolve(legacyGlobber);
@@ -1082,10 +1083,13 @@ public class PackageFunction implements SkyFunction {
           }
         }
         if (legacyIncludesToken != null) {
-          matches.addAll(delegate.fetchUnsorted(legacyIncludesToken));
+          matches.addAll(delegate.fetch(legacyIncludesToken));
         }
         UnixGlob.removeExcludes(matches, excludes);
         List<String> result = new ArrayList<>(matches);
+        // Skyframe glob results are unsorted. And we used a LegacyGlobber that doesn't sort.
+        // Therefore, we want to unconditionally sort here.
+        Collections.sort(result);
 
         if (!allowEmpty && result.isEmpty()) {
           throw new BadGlobException(
@@ -1201,7 +1205,7 @@ public class PackageFunction implements SkyFunction {
           // If control flow reaches here, we're in territory that is deliberately unsound.
           // See the javadoc for ActionOnIOExceptionReadingBuildFile.
         }
-        input = ParserInput.create(buildFileBytes, inputFile.toString());
+        input = ParserInput.create(buildFileBytes, inputFile.asFragment());
         file = PackageFactory.parseBuildFile(packageId, input, preludeStatements);
         fileSyntaxCache.put(packageId, file);
       }

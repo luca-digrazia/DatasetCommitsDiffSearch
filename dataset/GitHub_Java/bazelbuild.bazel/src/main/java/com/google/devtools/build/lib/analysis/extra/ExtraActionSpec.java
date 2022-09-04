@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.analysis.CommandHelper;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.AspectDescriptor;
@@ -46,7 +45,7 @@ import java.util.Map;
 @Immutable
 public final class ExtraActionSpec implements TransitiveInfoProvider {
   private final PathFragment shExecutable;
-  private final NestedSet<Artifact> resolvedTools;
+  private final ImmutableList<Artifact> resolvedTools;
   private final RunfilesSupplier runfilesSupplier;
   private final ImmutableList<Artifact> resolvedData;
   private final ImmutableList<String> outputTemplates;
@@ -57,16 +56,16 @@ public final class ExtraActionSpec implements TransitiveInfoProvider {
 
   public ExtraActionSpec(
       PathFragment shExecutable,
-      NestedSet<Artifact> resolvedTools,
+      Iterable<Artifact> resolvedTools,
       RunfilesSupplier runfilesSupplier,
-      List<Artifact> resolvedData,
-      List<String> outputTemplates,
+      Iterable<Artifact> resolvedData,
+      Iterable<String> outputTemplates,
       String command,
       Label label,
       Map<String, String> executionInfo,
       boolean requiresActionOutput) {
     this.shExecutable = shExecutable;
-    this.resolvedTools = resolvedTools;
+    this.resolvedTools = ImmutableList.copyOf(resolvedTools);
     this.runfilesSupplier = runfilesSupplier;
     this.resolvedData = ImmutableList.copyOf(resolvedData);
     this.outputTemplates = ImmutableList.copyOf(outputTemplates);
@@ -82,7 +81,7 @@ public final class ExtraActionSpec implements TransitiveInfoProvider {
 
   /** Adds an extra_action to the action graph based on the action to shadow. */
   public Collection<Artifact.DerivedArtifact> addExtraAction(
-      RuleContext owningRule, Action actionToShadow) throws InterruptedException {
+      RuleContext owningRule, Action actionToShadow) {
     Collection<Artifact.DerivedArtifact> extraActionOutputs = new LinkedHashSet<>();
     Collection<Artifact.DerivedArtifact> protoOutputs = new ArrayList<>();
     NestedSetBuilder<Artifact> extraActionInputs = NestedSetBuilder.stableOrder();
@@ -92,7 +91,7 @@ public final class ExtraActionSpec implements TransitiveInfoProvider {
       extraActionInputs.addAll(actionToShadow.getOutputs());
     }
 
-    extraActionInputs.addTransitive(resolvedTools);
+    extraActionInputs.addAll(resolvedTools);
     extraActionInputs.addAll(resolvedData);
 
     boolean createDummyOutput = false;
@@ -130,7 +129,7 @@ public final class ExtraActionSpec implements TransitiveInfoProvider {
     String actionUniquifier =
         actionToShadow.getPrimaryOutput().getExecPath().getBaseName()
             + "."
-            + actionToShadow.getKey(owningRule.getActionKeyContext(), /*artifactExpander=*/ null);
+            + actionToShadow.getKey(owningRule.getActionKeyContext());
     BashCommandConstructor constructor =
         CommandHelper.buildBashCommandConstructor(
             executionInfo, shExecutable, "." + actionUniquifier + ".extra_action_script.sh");
@@ -157,14 +156,15 @@ public final class ExtraActionSpec implements TransitiveInfoProvider {
   }
 
   /**
-   * Expand extra_action specific variables: $(EXTRA_ACTION_FILE): expands to a path of the file
-   * containing a protocol buffer describing the action being shadowed. $(output <out_template>):
-   * expands the output template to the execPath of the file. e.g. $(output $(ACTION_ID).out) ->
+   * Expand extra_action specific variables:
+   * $(EXTRA_ACTION_FILE): expands to a path of the file containing a protocol buffer
+   * describing the action being shadowed.
+   * $(output <out_template>): expands the output template to the execPath of the file.
+   * e.g. $(output $(ACTION_ID).out) ->
    * <build_path>/extra_actions/bar/baz/devtools/build/test_A41234.out
    */
-  private String createExpandedCommand(
-      RuleContext owningRule, Action action, Artifact extraActionInfoFile)
-      throws InterruptedException {
+  private String createExpandedCommand(RuleContext owningRule,
+      Action action, Artifact extraActionInfoFile) {
     String realCommand = command.replace(
         "$(EXTRA_ACTION_FILE)", extraActionInfoFile.getExecPathString());
 
@@ -190,7 +190,7 @@ public final class ExtraActionSpec implements TransitiveInfoProvider {
    * foo/bar/extra/foo/bar/4683026f7ac1dd1a873ccc8c3d764132.analysis
    */
   private Artifact.DerivedArtifact getExtraActionOutputArtifact(
-      RuleContext ruleContext, Action action, String template) throws InterruptedException {
+      RuleContext ruleContext, Action action, String template) {
     String actionId =
         getActionId(ruleContext.getActionKeyContext(), ruleContext.getActionOwner(), action);
 
@@ -235,8 +235,7 @@ public final class ExtraActionSpec implements TransitiveInfoProvider {
    */
   @VisibleForTesting
   public static String getActionId(
-      ActionKeyContext actionKeyContext, ActionOwner owner, Action action)
-      throws InterruptedException {
+      ActionKeyContext actionKeyContext, ActionOwner owner, Action action) {
     Fingerprint f = new Fingerprint();
     f.addString(owner.getLabel().toString());
     ImmutableList<AspectDescriptor> aspectDescriptors = owner.getAspectDescriptors();
@@ -244,7 +243,7 @@ public final class ExtraActionSpec implements TransitiveInfoProvider {
     for (AspectDescriptor aspectDescriptor : aspectDescriptors) {
       f.addString(aspectDescriptor.getDescription());
     }
-    f.addString(action.getKey(actionKeyContext, /*artifactExpander=*/ null));
+    f.addString(action.getKey(actionKeyContext));
     return f.hexDigestAndReset();
   }
 }

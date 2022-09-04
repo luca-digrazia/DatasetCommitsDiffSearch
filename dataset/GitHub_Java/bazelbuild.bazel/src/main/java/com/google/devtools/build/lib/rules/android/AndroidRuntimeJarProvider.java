@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import java.util.HashMap;
-import javax.annotation.Nullable;
 
 /**
  * Provider of Jar files transitively to be included into the runtime classpath of an Android app.
@@ -37,17 +36,14 @@ public class AndroidRuntimeJarProvider implements TransitiveInfoProvider {
       new AndroidRuntimeJarProvider(
           NestedSetBuilder.<ImmutableMap<Artifact, Artifact>>emptySet(STABLE_ORDER));
 
-  /**
-   * Builder for {@link AndroidRuntimeJarProvider}.
-   */
+  /** Builder for {@link AndroidRuntimeJarProvider}. */
   public static class Builder {
 
     private final ImmutableMap.Builder<Artifact, Artifact> newlyDesugared = ImmutableMap.builder();
     private final NestedSetBuilder<ImmutableMap<Artifact, Artifact>> transitiveMappings =
         NestedSetBuilder.stableOrder();
 
-    public Builder() {
-    }
+    public Builder() {}
 
     /**
      * Copies all mappings from the given providers, which is useful to aggregate providers from
@@ -66,9 +62,7 @@ public class AndroidRuntimeJarProvider implements TransitiveInfoProvider {
       return this;
     }
 
-    /**
-     * Returns the finished {@link AndroidRuntimeJarProvider}.
-     */
+    /** Returns the finished {@link AndroidRuntimeJarProvider}. */
     public AndroidRuntimeJarProvider build() {
       return new AndroidRuntimeJarProvider(transitiveMappings.add(newlyDesugared.build()).build());
     }
@@ -87,16 +81,12 @@ public class AndroidRuntimeJarProvider implements TransitiveInfoProvider {
    */
   public Function<Artifact, Artifact> collapseToFunction() {
     final HashMap<Artifact, Artifact> collapsed = new HashMap<>();
-    for (ImmutableMap<Artifact, Artifact> partialMapping : runtimeJars) {
+    for (ImmutableMap<Artifact, Artifact> partialMapping : runtimeJars.toList()) {
       collapsed.putAll(partialMapping);
     }
-    return new Function<Artifact, Artifact>() {
-      @Override
-      @Nullable
-      public Artifact apply(@Nullable Artifact jar) {
-        Artifact result = collapsed.get(jar);
-        return result != null ? result : jar; // return null iff input == null
-      }
+    return jar -> {
+      Artifact result = collapsed.get(jar);
+      return result != null ? result : jar; // return null iff input == null
     };
   }
 }

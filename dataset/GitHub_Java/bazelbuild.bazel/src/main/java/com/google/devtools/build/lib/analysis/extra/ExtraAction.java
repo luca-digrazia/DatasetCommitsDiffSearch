@@ -18,6 +18,7 @@ import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.AbstractAction;
@@ -115,7 +116,7 @@ public final class ExtraAction extends SpawnAction {
    */
   @Nullable
   @Override
-  public NestedSet<Artifact> discoverInputs(ActionExecutionContext actionExecutionContext)
+  public Iterable<Artifact> discoverInputs(ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException, InterruptedException {
     Preconditions.checkState(discoversInputs(), this);
     // We depend on the outputs of actions doing input discovery and they should know their inputs
@@ -124,7 +125,7 @@ public final class ExtraAction extends SpawnAction {
 
     // We need to update our inputs to take account of any additional
     // inputs the shadowed action may need to do its work.
-    NestedSet<Artifact> oldInputs = getInputs();
+    Iterable<Artifact> oldInputs = getInputs();
     Iterable<Artifact> inputFilesForExtraAction =
         shadowedAction.getInputFilesForExtraAction(actionExecutionContext);
     if (inputFilesForExtraAction == null) {
@@ -132,19 +133,24 @@ public final class ExtraAction extends SpawnAction {
     }
     updateInputs(
         createInputs(shadowedAction.getInputs(), inputFilesForExtraAction, extraActionInputs));
-    return NestedSetBuilder.wrap(
-        Order.STABLE_ORDER, Sets.<Artifact>difference(getInputs().toSet(), oldInputs.toSet()));
+    return Sets.<Artifact>difference(
+        ImmutableSet.<Artifact>copyOf(getInputs()), ImmutableSet.<Artifact>copyOf(oldInputs));
   }
 
   private static NestedSet<Artifact> createInputs(
-      NestedSet<Artifact> shadowedActionInputs,
+      Iterable<Artifact> shadowedActionInputs,
       Iterable<Artifact> inputFilesForExtraAction,
       NestedSet<Artifact> extraActionInputs) {
-    return new NestedSetBuilder<Artifact>(Order.STABLE_ORDER)
-        .addTransitive(shadowedActionInputs)
-        .addAll(inputFilesForExtraAction)
-        .addTransitive(extraActionInputs)
-        .build();
+    NestedSetBuilder<Artifact> result = new NestedSetBuilder<>(Order.STABLE_ORDER);
+    for (Iterable<Artifact> inputSet : ImmutableList.of(
+        shadowedActionInputs, inputFilesForExtraAction)) {
+      if (inputSet instanceof NestedSet) {
+        result.addTransitive((NestedSet<Artifact>) inputSet);
+      } else {
+        result.addAll(inputSet);
+      }
+    }
+    return result.addTransitive(extraActionInputs).build();
   }
 
   @Override

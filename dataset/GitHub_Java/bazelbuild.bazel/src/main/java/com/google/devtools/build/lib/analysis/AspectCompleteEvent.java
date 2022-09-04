@@ -22,9 +22,8 @@ import com.google.devtools.build.lib.actions.EventReportingArtifacts;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactHelper.ArtifactsInOutputGroup;
 import com.google.devtools.build.lib.buildeventstream.ArtifactGroupNamer;
 import com.google.devtools.build.lib.buildeventstream.BuildEventContext;
-import com.google.devtools.build.lib.buildeventstream.BuildEventIdUtil;
+import com.google.devtools.build.lib.buildeventstream.BuildEventId;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
-import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos.BuildEventId;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos.OutputGroup;
 import com.google.devtools.build.lib.buildeventstream.BuildEventWithOrderConstraint;
 import com.google.devtools.build.lib.buildeventstream.GenericBuildEvent;
@@ -58,7 +57,7 @@ public class AspectCompleteEvent
         (rootCauses == null) ? NestedSetBuilder.<Cause>emptySet(Order.STABLE_ORDER) : rootCauses;
     ImmutableList.Builder<BuildEventId> postedAfterBuilder = ImmutableList.builder();
     for (Cause cause : getRootCauses().toList()) {
-      postedAfterBuilder.add(cause.getIdProto());
+      postedAfterBuilder.add(BuildEventId.fromCause(cause));
     }
     this.postedAfter = postedAfterBuilder.build();
     this.completionContext = completionContext;
@@ -109,7 +108,7 @@ public class AspectCompleteEvent
 
   @Override
   public BuildEventId getEventId() {
-    return BuildEventIdUtil.aspectCompleted(
+    return BuildEventId.aspectCompleted(
         aspectValue.getLabel(),
         configurationEventId,
         aspectValue.getAspect().getDescriptor().getDescription());

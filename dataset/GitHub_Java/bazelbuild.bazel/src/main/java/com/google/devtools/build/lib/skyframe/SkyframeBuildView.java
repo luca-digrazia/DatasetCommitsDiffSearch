@@ -112,8 +112,9 @@ public final class SkyframeBuildView {
   // This hack allows us to see when a configured target has been invalidated, and thus when the set
   // of artifact conflicts needs to be recomputed (whenever a configured target has been invalidated
   // or newly evaluated).
-  private final ConfiguredTargetValueProgressReceiver progressReceiver =
+  private final EvaluationProgressReceiver progressReceiver =
       new ConfiguredTargetValueProgressReceiver();
+  private final Set<SkyKey> evaluatedConfiguredTargets = Sets.newConcurrentHashSet();
   // Used to see if checks of graph consistency need to be done after analysis.
   private volatile boolean someConfiguredTargetEvaluated = false;
 
@@ -121,6 +122,8 @@ public final class SkyframeBuildView {
   // has been invalidated after graph pruning has been executed.
   private Set<SkyKey> dirtiedConfiguredTargetKeys = Sets.newConcurrentHashSet();
   private volatile boolean anyConfiguredTargetDeleted = false;
+
+  private final AtomicInteger evaluatedActionCount = new AtomicInteger();
 
   private final ConfiguredRuleClassProvider ruleClassProvider;
 
@@ -156,12 +159,12 @@ public final class SkyframeBuildView {
     this.ruleClassProvider = ruleClassProvider;
   }
 
-  public void resetProgressReceiver() {
-    progressReceiver.reset();
+  public void resetEvaluatedConfiguredTargetKeysSet() {
+    evaluatedConfiguredTargets.clear();
   }
 
-  public ImmutableSet<SkyKey> getEvaluatedTargetKeys() {
-    return ImmutableSet.copyOf(progressReceiver.evaluatedConfiguredTargets);
+  public Set<SkyKey> getEvaluatedTargetKeys() {
+    return ImmutableSet.copyOf(evaluatedConfiguredTargets);
   }
 
   ConfiguredTargetFactory getConfiguredTargetFactory() {
@@ -169,7 +172,11 @@ public final class SkyframeBuildView {
   }
 
   public int getEvaluatedActionCount() {
-    return progressReceiver.evaluatedActionCount.get();
+    return evaluatedActionCount.get();
+  }
+
+  public void resetEvaluationActionCount() {
+    evaluatedActionCount.set(0);
   }
 
   /**
@@ -865,11 +872,8 @@ public final class SkyframeBuildView {
     return skyframeExecutor.getActionKeyContext();
   }
 
-  private final class ConfiguredTargetValueProgressReceiver
+  private class ConfiguredTargetValueProgressReceiver
       extends EvaluationProgressReceiver.NullEvaluationProgressReceiver {
-    private final Set<SkyKey> evaluatedConfiguredTargets = Sets.newConcurrentHashSet();
-    private final AtomicInteger evaluatedActionCount = new AtomicInteger();
-
     @Override
     public void invalidated(SkyKey skyKey, InvalidationState state) {
       if (skyKey.functionName().equals(SkyFunctions.CONFIGURED_TARGET)) {
@@ -914,11 +918,6 @@ public final class SkyframeBuildView {
           && value instanceof AspectValue) {
         evaluatedActionCount.addAndGet(((AspectValue) value).getNumActions());
       }
-    }
-
-    public void reset() {
-      evaluatedConfiguredTargets.clear();
-      evaluatedActionCount.set(0);
     }
   }
 }

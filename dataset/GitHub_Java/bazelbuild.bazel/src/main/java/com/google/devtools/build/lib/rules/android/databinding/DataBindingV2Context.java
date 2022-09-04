@@ -26,6 +26,8 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
+import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
+import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.rules.android.AndroidCommon;
 import com.google.devtools.build.lib.rules.android.AndroidDataBindingProcessorBuilder;
@@ -33,8 +35,8 @@ import com.google.devtools.build.lib.rules.android.AndroidDataContext;
 import com.google.devtools.build.lib.rules.android.AndroidResources;
 import com.google.devtools.build.lib.rules.java.JavaInfo;
 import com.google.devtools.build.lib.rules.java.JavaPluginInfoProvider;
-import com.google.devtools.build.lib.starlarkbuildapi.android.DataBindingV2ProviderApi;
-import com.google.devtools.build.lib.starlarkbuildapi.android.DataBindingV2ProviderApi.LabelJavaPackagePair;
+import com.google.devtools.build.lib.skylarkbuildapi.android.DataBindingV2ProviderApi;
+import com.google.devtools.build.lib.skylarkbuildapi.android.DataBindingV2ProviderApi.LabelJavaPackagePair;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map.Entry;
@@ -102,8 +104,8 @@ class DataBindingV2Context implements DataBindingContext {
 
     ImmutableSet.Builder<String> javaPackagesOfDirectDependencies = ImmutableSet.builder();
     if (ruleContext.attributes().has("deps", BuildType.LABEL_LIST)) {
-      Iterable<DataBindingV2Provider> providers =
-          ruleContext.getPrerequisites("deps", DataBindingV2Provider.PROVIDER);
+      Iterable<DataBindingV2Provider> providers = ruleContext.getPrerequisites(
+          "deps", RuleConfiguredTarget.Mode.TARGET, DataBindingV2Provider.PROVIDER);
 
       for (DataBindingV2Provider provider : providers) {
         for (LabelJavaPackagePair labelJavaPackagePair : provider.getLabelAndJavaPackages()) {
@@ -120,10 +122,10 @@ class DataBindingV2Context implements DataBindingContext {
       RuleContext ruleContext,
       BiConsumer<JavaPluginInfoProvider, Iterable<Artifact>> consumer) {
 
-    JavaPluginInfoProvider javaPluginInfoProvider =
-        JavaInfo.getProvider(
-            JavaPluginInfoProvider.class,
-            ruleContext.getPrerequisite(DataBinding.DATABINDING_ANNOTATION_PROCESSOR_ATTR));
+    JavaPluginInfoProvider javaPluginInfoProvider = JavaInfo.getProvider(
+        JavaPluginInfoProvider.class,
+        ruleContext.getPrerequisite(
+            DataBinding.DATABINDING_ANNOTATION_PROCESSOR_ATTR, RuleConfiguredTarget.Mode.HOST));
 
     ImmutableList<Artifact> annotationProcessorOutputs =
         DataBinding.getMetadataOutputs(ruleContext, useUpdatedArgs, metadataOutputSuffixes);
@@ -147,7 +149,6 @@ class DataBindingV2Context implements DataBindingContext {
 
       for (Entry<String, Collection<String>> entry : javaPackagesToLabel.asMap().entrySet()) {
         if (entry.getValue().size() > 1) {
-          String javaPackage = entry.getKey().isEmpty() ? "<default package>" : entry.getKey();
           ruleContext.attributeError(
               "deps",
               String.format(
@@ -157,7 +158,7 @@ class DataBindingV2Context implements DataBindingContext {
                       + "android_library targets are:\n"
                       + "  Java package %s:\n"
                       + "    %s",
-                  javaPackage, Joiner.on("\n    ").join(entry.getValue())));
+                  entry.getKey(), Joiner.on("\n    ").join(entry.getValue())));
         }
       }
     }
@@ -190,8 +191,8 @@ class DataBindingV2Context implements DataBindingContext {
     ImmutableList.Builder<Artifact> brFiles = ImmutableList.builder();
     if (context.attributes().has("deps", BuildType.LABEL_LIST)) {
 
-      Iterable<DataBindingV2Provider> providers =
-          context.getPrerequisites("deps", DataBindingV2Provider.PROVIDER);
+      Iterable<DataBindingV2Provider> providers = context.getPrerequisites(
+          "deps", RuleConfiguredTarget.Mode.TARGET, DataBindingV2Provider.PROVIDER);
 
       for (DataBindingV2Provider provider : providers) {
         brFiles.addAll(provider.getTransitiveBRFiles().toList());
@@ -204,8 +205,8 @@ class DataBindingV2Context implements DataBindingContext {
     ImmutableList.Builder<Artifact> setterStoreFiles = ImmutableList.builder();
     if (context.attributes().has("deps", BuildType.LABEL_LIST)) {
 
-      Iterable<DataBindingV2Provider> providers =
-          context.getPrerequisites("deps", DataBindingV2Provider.PROVIDER);
+      Iterable<DataBindingV2Provider> providers = context.getPrerequisites(
+          "deps", RuleConfiguredTarget.Mode.TARGET, DataBindingV2Provider.PROVIDER);
 
       for (DataBindingV2Provider provider : providers) {
         setterStoreFiles.addAll(provider.getSetterStores());
@@ -238,7 +239,8 @@ class DataBindingV2Context implements DataBindingContext {
     if (context.attributes().has("deps", BuildType.LABEL_LIST)) {
 
       Iterable<DataBindingV2Provider> providers =
-          context.getPrerequisites("deps", DataBindingV2Provider.PROVIDER);
+          context.getPrerequisites(
+              "deps", RuleConfiguredTarget.Mode.TARGET, DataBindingV2Provider.PROVIDER);
 
       for (DataBindingV2Provider provider : providers) {
         for (LabelJavaPackagePair labelJavaPackagePair :
@@ -272,8 +274,8 @@ class DataBindingV2Context implements DataBindingContext {
     Artifact classInfoFile = getClassInfoFile(ruleContext);
     Artifact srcOutFile = DataBinding.getDataBindingArtifact(ruleContext, "baseClassSrc.srcjar");
 
-    FilesToRunProvider exec =
-        ruleContext.getExecutablePrerequisite(DataBinding.DATABINDING_EXEC_PROCESSOR_ATTR);
+    FilesToRunProvider exec = ruleContext
+        .getExecutablePrerequisite(DataBinding.DATABINDING_EXEC_PROCESSOR_ATTR, Mode.HOST);
 
     CustomCommandLine.Builder commandLineBuilder = CustomCommandLine.builder()
         .add("GEN_BASE_CLASSES")
@@ -308,8 +310,8 @@ class DataBindingV2Context implements DataBindingContext {
     ImmutableList.Builder<Artifact> classInfoFiles = ImmutableList.builder();
     if (context.attributes().has("deps", BuildType.LABEL_LIST)) {
 
-      Iterable<DataBindingV2Provider> providers =
-          context.getPrerequisites("deps", DataBindingV2Provider.PROVIDER);
+      Iterable<DataBindingV2Provider> providers = context.getPrerequisites(
+          "deps", RuleConfiguredTarget.Mode.TARGET, DataBindingV2Provider.PROVIDER);
 
       for (DataBindingV2Provider provider : providers) {
         classInfoFiles.addAll(provider.getClassInfos());
@@ -337,12 +339,14 @@ class DataBindingV2Context implements DataBindingContext {
     String javaPackage = AndroidCommon.getJavaPackage(ruleContext);
 
     Iterable<? extends DataBindingV2ProviderApi<Artifact>> providersFromDeps =
-        ruleContext.getPrerequisites("deps", DataBindingV2Provider.PROVIDER);
+        ruleContext.getPrerequisites(
+            "deps", RuleConfiguredTarget.Mode.TARGET, DataBindingV2Provider.PROVIDER);
 
     Iterable<? extends DataBindingV2ProviderApi<Artifact>> providersFromExports;
     if (ruleContext.attributes().has("exports", BuildType.LABEL_LIST)) {
       providersFromExports =
-          ruleContext.getPrerequisites("exports", DataBindingV2Provider.PROVIDER);
+          ruleContext.getPrerequisites(
+              "exports", RuleConfiguredTarget.Mode.TARGET, DataBindingV2Provider.PROVIDER);
     } else {
       providersFromExports = null;
     }

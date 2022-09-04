@@ -886,7 +886,6 @@ public class ActionExecutionFunction implements SkyFunction {
 
     ActionExecutionContext actionExecutionContext =
         skyframeActionExecutor.getContext(
-            action,
             metadataHandler,
             metadataHandler,
             skyframeActionExecutor.probeCompletedAndReset(action)
