@@ -161,7 +161,6 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
   private final BuildEventArtifactUploaderFactoryMap buildEventArtifactUploaderFactoryMap;
   private final ActionKeyContext actionKeyContext;
   private final ImmutableMap<String, AuthHeadersProvider> authHeadersProviderMap;
-  private final RetainedHeapLimiter retainedHeapLimiter = new RetainedHeapLimiter();
 
   // Workspace state (currently exactly one workspace per server)
   private BlazeWorkspace workspace;
@@ -489,10 +488,6 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
 
   public QueryRuntimeHelper.Factory getQueryRuntimeHelperFactory() {
     return queryRuntimeHelperFactory;
-  }
-
-  RetainedHeapLimiter getRetainedHeapLimiter() {
-    return retainedHeapLimiter;
   }
 
   /**
