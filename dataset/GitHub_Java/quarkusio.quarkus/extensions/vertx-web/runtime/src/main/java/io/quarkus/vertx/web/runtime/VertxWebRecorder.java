@@ -5,6 +5,7 @@ import java.util.function.Function;
 
 import io.quarkus.runtime.annotations.Recorder;
 import io.quarkus.vertx.http.runtime.RouterProducer;
+import io.quarkus.vertx.web.Route;
 import io.vertx.core.Handler;
 import io.vertx.core.http.HttpMethod;
 import io.vertx.ext.web.Router;
@@ -29,34 +30,34 @@ public class VertxWebRecorder {
         }
     }
 
-    public Function<Router, io.vertx.ext.web.Route> createRouteFunction(RouteMatcher matcher,
+    public Function<Router, io.vertx.ext.web.Route> createRouteFunction(Route routeAnnotation,
             Handler<RoutingContext> bodyHandler) {
         return new Function<Router, io.vertx.ext.web.Route>() {
             @Override
             public io.vertx.ext.web.Route apply(Router router) {
                 io.vertx.ext.web.Route route;
-                if (matcher.getRegex() != null && !matcher.getRegex().isEmpty()) {
-                    route = router.routeWithRegex(matcher.getRegex());
-                } else if (matcher.getPath() != null && !matcher.getPath().isEmpty()) {
-                    route = router.route(matcher.getPath());
+                if (!routeAnnotation.regex().isEmpty()) {
+                    route = router.routeWithRegex(routeAnnotation.regex());
+                } else if (!routeAnnotation.path().isEmpty()) {
+                    route = router.route(ensureStartWithSlash(routeAnnotation.path()));
                 } else {
                     route = router.route();
                 }
-                if (matcher.getMethods().length > 0) {
-                    for (HttpMethod method : matcher.getMethods()) {
+                if (routeAnnotation.methods().length > 0) {
+                    for (HttpMethod method : routeAnnotation.methods()) {
                         route.method(method);
                     }
                 }
-                if (matcher.getOrder() > 0) {
-                    route.order(matcher.getOrder());
+                if (routeAnnotation.order() > 0) {
+                    route.order(routeAnnotation.order());
                 }
-                if (matcher.getProduces().length > 0) {
-                    for (String produces : matcher.getProduces()) {
+                if (routeAnnotation.produces().length > 0) {
+                    for (String produces : routeAnnotation.produces()) {
                         route.produces(produces);
                     }
                 }
-                if (matcher.getConsumes().length > 0) {
-                    for (String consumes : matcher.getConsumes()) {
+                if (routeAnnotation.consumes().length > 0) {
+                    for (String consumes : routeAnnotation.consumes()) {
                         route.consumes(consumes);
                     }
                 }
@@ -66,6 +67,14 @@ public class VertxWebRecorder {
                 return route;
             }
         };
+    }
+
+    private String ensureStartWithSlash(String path) {
+        if (path.startsWith("/")) {
+            return path;
+        } else {
+            return "/" + path;
+        }
     }
 
 }
