@@ -320,7 +320,9 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
     ImmutableSet.Builder<Artifact> javaSourceJarsBuilder = ImmutableSet.builder();
     if (sourceInfoProvider != null) {
       javaSourceFilesBuilder.addAll(sourceInfoProvider.getSourceFiles());
-      javaSourceJarsBuilder.addAll(sourceInfoProvider.getSourceJars());
+      javaSourceJarsBuilder
+          .addAll(sourceInfoProvider.getSourceJars())
+          .addAll(sourceInfoProvider.getSourceJarsForJarFiles());
     }
 
     if (genJarProvider != null && genJarProvider.getGenSourceJar() != null) {
