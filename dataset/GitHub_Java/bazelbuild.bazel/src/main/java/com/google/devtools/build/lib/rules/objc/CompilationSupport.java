@@ -94,10 +94,10 @@ import com.google.devtools.build.lib.rules.cpp.CppLinkAction;
 import com.google.devtools.build.lib.rules.cpp.CppLinkActionBuilder;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMap;
 import com.google.devtools.build.lib.rules.cpp.CppRuleClasses;
-import com.google.devtools.build.lib.rules.cpp.CppSemantics;
 import com.google.devtools.build.lib.rules.cpp.FdoContext;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkingMode;
+import com.google.devtools.build.lib.rules.cpp.ObjcCppSemantics;
 import com.google.devtools.build.lib.rules.cpp.PrecompiledFiles;
 import com.google.devtools.build.lib.rules.objc.ObjcProvider.Flag;
 import com.google.devtools.build.lib.rules.objc.ObjcVariablesExtension.VariableCategory;
@@ -229,6 +229,7 @@ public class CompilationSupport {
       Artifact pchHdr,
       CppModuleMap moduleMap,
       FeatureConfiguration moduleMapFeatureConfiguration,
+      ObjcCppSemantics semantics,
       String purpose,
       boolean generateModuleMap,
       boolean shouldProcessHeaders)
@@ -239,7 +240,7 @@ public class CompilationSupport {
                 ruleContext,
                 ruleContext.getLabel(),
                 CppHelper.getGrepIncludes(ruleContext),
-                cppSemantics,
+                semantics,
                 moduleMapFeatureConfiguration,
                 CcCompilationHelper.SourceCategory.CC_AND_OBJC,
                 ccToolchain,
@@ -275,7 +276,7 @@ public class CompilationSupport {
             .addVariableExtension(extension)
             .setPurpose(purpose)
             .setCodeCoverageEnabled(CcCompilationHelper.isCodeCoverageEnabled(ruleContext))
-            .setHeadersCheckingMode(cppSemantics.determineHeadersCheckingMode(ruleContext));
+            .setHeadersCheckingMode(semantics.determineHeadersCheckingMode(ruleContext));
 
     if (pchHdr != null) {
       result.addPublicTextualHeaders(ImmutableList.of(pchHdr));
@@ -339,11 +340,12 @@ public class CompilationSupport {
                 compilationArtifacts.getAdditionalHdrs().toList().stream())
             .collect(toImmutableSortedSet(naturalOrder()));
     Artifact pchHdr = getPchFile().orNull();
+    ObjcCppSemantics semantics = createObjcCppSemantics();
     FeatureConfiguration featureConfiguration =
-        getFeatureConfiguration(ruleContext, toolchain, buildConfiguration, cppSemantics);
+        getFeatureConfiguration(ruleContext, toolchain, buildConfiguration, semantics);
     FeatureConfiguration featureConfigurationForSwiftModuleMap =
         getFeatureConfigurationForSwiftModuleMap(
-            ruleContext, toolchain, buildConfiguration, cppSemantics);
+            ruleContext, toolchain, buildConfiguration, semantics);
 
     // Generate up to two module maps, while minimizing the number of actions created.  If
     // module_map feature is off, generate a swift module map.  If module_map feature is on,
@@ -383,6 +385,7 @@ public class CompilationSupport {
             pchHdr,
             primaryModuleMap,
             primaryModuleMapFeatureConfiguration,
+            semantics,
             purpose,
             /* generateModuleMap= */ true,
             /* shouldProcessHeaders= */ true);
@@ -403,6 +406,7 @@ public class CompilationSupport {
             pchHdr,
             primaryModuleMap,
             primaryModuleMapFeatureConfiguration,
+            semantics,
             purpose,
             // Only generate the module map once (see above) and re-use it here.
             /* generateModuleMap= */ false,
@@ -417,6 +421,7 @@ public class CompilationSupport {
           objcCompilationContext.getPublicTextualHeaders(),
           getPchFile(),
           objcCompilationContext.getCcCompilationContexts(),
+          semantics,
           extraModuleMapFeatureConfiguration.get());
     }
 
@@ -426,7 +431,7 @@ public class CompilationSupport {
                 ruleContext.getLabel(),
                 ruleContext,
                 ruleContext,
-                cppSemantics,
+                semantics,
                 featureConfiguration,
                 ccToolchain,
                 fdoContext,
@@ -517,11 +522,15 @@ public class CompilationSupport {
         ImmutableMap.copyOf(mergedOutputGroups));
   }
 
+  ObjcCppSemantics createObjcCppSemantics() {
+    return ObjcCppSemantics.INSTANCE;
+  }
+
   private FeatureConfiguration getFeatureConfiguration(
       RuleContext ruleContext,
       CcToolchainProvider ccToolchain,
       BuildConfiguration configuration,
-      CppSemantics cppSemantics,
+      ObjcCppSemantics semantics,
       boolean forSwiftModuleMap) {
     ImmutableSet.Builder<String> activatedCrosstoolSelectables =
         ImmutableSet.<String>builder()
@@ -572,25 +581,25 @@ public class CompilationSupport {
         activatedCrosstoolSelectables.build(),
         disabledFeatures.build(),
         ccToolchain,
-        cppSemantics);
+        semantics);
   }
 
   private FeatureConfiguration getFeatureConfiguration(
       RuleContext ruleContext,
       CcToolchainProvider ccToolchain,
       BuildConfiguration configuration,
-      CppSemantics cppSemantics) {
+      ObjcCppSemantics semantics) {
     return getFeatureConfiguration(
-        ruleContext, ccToolchain, configuration, cppSemantics, /* forSwiftModuleMap= */ false);
+        ruleContext, ccToolchain, configuration, semantics, /* forSwiftModuleMap= */ false);
   }
 
   private FeatureConfiguration getFeatureConfigurationForSwiftModuleMap(
       RuleContext ruleContext,
       CcToolchainProvider ccToolchain,
       BuildConfiguration configuration,
-      CppSemantics cppSemantics) {
+      ObjcCppSemantics semantics) {
     return getFeatureConfiguration(
-        ruleContext, ccToolchain, configuration, cppSemantics, /* forSwiftModuleMap= */ true);
+        ruleContext, ccToolchain, configuration, semantics, /* forSwiftModuleMap= */ true);
   }
 
   /** Iterable wrapper providing strong type safety for arguments to binary linking. */
@@ -671,7 +680,6 @@ public class CompilationSupport {
   private final BuildConfiguration buildConfiguration;
   private final ObjcConfiguration objcConfiguration;
   private final AppleConfiguration appleConfiguration;
-  private final CppSemantics cppSemantics;
   private final CompilationAttributes attributes;
   private final IntermediateArtifacts intermediateArtifacts;
   private final Map<String, NestedSet<Artifact>> outputGroupCollector;
@@ -708,7 +716,6 @@ public class CompilationSupport {
   private CompilationSupport(
       RuleContext ruleContext,
       BuildConfiguration buildConfiguration,
-      CppSemantics cppSemantics,
       IntermediateArtifacts intermediateArtifacts,
       CompilationAttributes compilationAttributes,
       Map<String, NestedSet<Artifact>> outputGroupCollector,
@@ -722,7 +729,6 @@ public class CompilationSupport {
     this.buildConfiguration = buildConfiguration;
     this.objcConfiguration = buildConfiguration.getFragment(ObjcConfiguration.class);
     this.appleConfiguration = buildConfiguration.getFragment(AppleConfiguration.class);
-    this.cppSemantics = cppSemantics;
     this.attributes = compilationAttributes;
     this.intermediateArtifacts = intermediateArtifacts;
     this.outputGroupCollector = outputGroupCollector;
@@ -743,8 +749,7 @@ public class CompilationSupport {
 
   /** Builder for {@link CompilationSupport} */
   public static class Builder {
-    private final RuleContext ruleContext;
-    private final CppSemantics cppSemantics;
+    private RuleContext ruleContext;
     private BuildConfiguration buildConfiguration;
     private IntermediateArtifacts intermediateArtifacts;
     private CompilationAttributes compilationAttributes;
@@ -755,9 +760,10 @@ public class CompilationSupport {
     private boolean disableLayeringCheck = false;
     private boolean disableParseHeaders = false;
 
-    public Builder(RuleContext ruleContext, CppSemantics cppSemantics) {
+    /** Sets the {@link RuleContext} for the calling target. */
+    public Builder setRuleContext(RuleContext ruleContext) {
       this.ruleContext = ruleContext;
-      this.cppSemantics = cppSemantics;
+      return this;
     }
 
     /** Sets the {@link BuildConfiguration} for the calling target. */
@@ -836,6 +842,8 @@ public class CompilationSupport {
 
     /** Returns a {@link CompilationSupport} instance. */
     public CompilationSupport build() throws InterruptedException, RuleErrorException {
+      checkNotNull(ruleContext, "CompilationSupport is missing RuleContext");
+
       if (buildConfiguration == null) {
         buildConfiguration = ruleContext.getConfiguration();
       }
@@ -860,7 +868,6 @@ public class CompilationSupport {
       return new CompilationSupport(
           ruleContext,
           buildConfiguration,
-          cppSemantics,
           intermediateArtifacts,
           compilationAttributes,
           outputGroupCollector,
@@ -1163,8 +1170,10 @@ public class CompilationSupport {
             .addVariableCategory(VariableCategory.EXECUTABLE_LINKING_VARIABLES);
 
     Artifact binaryToLink = getBinaryToLink();
+    ObjcCppSemantics cppSemantics = createObjcCppSemantics();
     FeatureConfiguration featureConfiguration =
-        getFeatureConfiguration(ruleContext, toolchain, buildConfiguration, cppSemantics);
+        getFeatureConfiguration(
+            ruleContext, toolchain, buildConfiguration, createObjcCppSemantics());
 
     Label binaryLabel = null;
     try {
@@ -1374,8 +1383,9 @@ public class CompilationSupport {
             archiveLabel,
             ruleContext,
             ruleContext,
-            cppSemantics,
-            getFeatureConfiguration(ruleContext, toolchain, buildConfiguration, cppSemantics),
+            createObjcCppSemantics(),
+            getFeatureConfiguration(
+                ruleContext, toolchain, buildConfiguration, createObjcCppSemantics()),
             toolchain,
             toolchain.getFdoContext(),
             buildConfiguration,
@@ -1644,15 +1654,16 @@ public class CompilationSupport {
     // TODO(bazel-team): Include textual headers in the module map when Xcode 6 support is
     // dropped.
     // TODO(b/32225593): Include private headers in the module map.
+    ObjcCppSemantics semantics = createObjcCppSemantics();
     CcCompilationHelper ccCompilationHelper =
         new CcCompilationHelper(
             ruleContext,
             ruleContext,
             ruleContext.getLabel(),
             CppHelper.getGrepIncludes(ruleContext),
-            cppSemantics,
+            semantics,
             getFeatureConfigurationForSwiftModuleMap(
-                ruleContext, toolchain, buildConfiguration, cppSemantics),
+                ruleContext, toolchain, buildConfiguration, semantics),
             CcCompilationHelper.SourceCategory.CC_AND_OBJC,
             toolchain,
             toolchain.getFdoContext(),
@@ -1684,6 +1695,7 @@ public class CompilationSupport {
       List<Artifact> textualHeaders,
       Optional<Artifact> pchHdr,
       Iterable<CcCompilationContext> ccCompilationContexts,
+      ObjcCppSemantics semantics,
       FeatureConfiguration featureConfiguration)
       throws RuleErrorException, InterruptedException {
     String purpose = String.format("%s_extra_module_map", getPurpose());
@@ -1693,7 +1705,7 @@ public class CompilationSupport {
             ruleContext,
             ruleContext.getLabel(),
             CppHelper.getGrepIncludes(ruleContext),
-            cppSemantics,
+            semantics,
             featureConfiguration,
             CcCompilationHelper.SourceCategory.CC_AND_OBJC,
             toolchain,
