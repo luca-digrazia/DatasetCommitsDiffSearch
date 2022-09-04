@@ -510,13 +510,10 @@ public class AppleConfiguration extends BuildConfiguration.Fragment {
   @Nullable public Label getDefaultProvisioningProfileLabel() {
     return defaultProvisioningProfileLabel;
   }
-
+  
   /**
-   * Returns the bitcode mode to use for compilation steps. This should only be invoked in
-   * single-architecture contexts.
-   *
-   * <p>Users can control bitcode mode using the {@code apple_bitcode} build flag, but bitcode
-   * will be disabled for all simulator architectures regardless of this flag.
+   * Returns the bitcode mode to use for compilation steps. Users can control bitcode mode using the
+   * {@code apple_bitcode} build flag.
    *
    * @see AppleBitcodeMode
    */
@@ -526,11 +523,7 @@ public class AppleConfiguration extends BuildConfiguration.Fragment {
     structField = true
   )
   public AppleBitcodeMode getBitcodeMode() {
-    if (getSingleArchPlatform().isDevice()) {
-      return bitcodeMode;
-    } else {
-      return AppleBitcodeMode.NONE;
-    }
+    return bitcodeMode;
   }
 
   /**
@@ -706,18 +699,12 @@ public class AppleConfiguration extends BuildConfiguration.Fragment {
     FRAMEWORK("framework"),
     /** Split transition distinguisher for {@code apple_watch1_extension} rule. */
     WATCH_OS1_EXTENSION("watch_os1_extension"),
-    /** Distinguisher for non-extension {@code apple_binary} rule with "ios" platform_type. */
+    /** Distinguisher for {@code apple_binary} rule with "ios" platform_type. */
     APPLEBIN_IOS("applebin_ios"),
-    /** Distinguisher for non-extension  {@code apple_binary} rule with "watchos" platform_type. */
+    /** Distinguisher for {@code apple_binary} rule with "watchos" platform_type. */
     APPLEBIN_WATCHOS("applebin_watchos"),
-    /** Distinguisher for non-extension  {@code apple_binary} rule with "tvos" platform_type. */
+    /** Distinguisher for {@code apple_binary} rule with "tvos" platform_type. */
     APPLEBIN_TVOS("applebin_tvos"),
-    /** Distinguisher for extension {@code apple_binary} rule with "ios" platform_type. */
-    APPLEBIN_IOS_EXT("applebin_ios_ext"),
-    /** Distinguisher for extension {@code apple_binary} rule with "watchos" platform_type. */
-    APPLEBIN_WATCHOS_EXT("applebin_watchos_ext"),
-    /** Distinguisher for extension {@code apple_binary} rule with "tvos" platform_type. */
-    APPLEBIN_TVOS_EXT("applebin_tvos_ext"),
     /**
      * Distinguisher for the apple crosstool configuration.  We use "apl" for output directory
      * names instead of "apple_crosstool" to avoid oversized path names, which can be problematic
