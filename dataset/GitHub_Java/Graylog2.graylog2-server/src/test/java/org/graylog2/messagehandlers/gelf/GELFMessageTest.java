@@ -20,13 +20,18 @@
 
 package org.graylog2.messagehandlers.gelf;
 
+import java.util.Map;
+import java.lang.Object;
 import com.mongodb.BasicDBList;
-import org.bson.types.ObjectId;
 import com.mongodb.BasicDBObject;
-import java.util.ArrayList;
-import java.util.List;
+import org.bson.types.ObjectId;
 import org.graylog2.blacklists.Blacklist;
 import org.junit.Test;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+
 import static org.junit.Assert.*;
 
 public class GELFMessageTest {
@@ -97,4 +102,137 @@ public class GELFMessageTest {
         assertTrue(msg.blacklisted(blacklists));
     }
 
+    @Test
+    public void testBlacklistedWithPositiveResultAndNewline() {
+        BasicDBObject mongoList = new BasicDBObject();
+        mongoList.put("_id", new ObjectId());
+        mongoList.put("title", "foo");
+
+        BasicDBObject mongoRule1 = new BasicDBObject();
+        mongoRule1.put("_id", new ObjectId());
+        mongoRule1.put("blacklist_id", mongoList.get("_id"));
+        mongoRule1.put("term", "^ohai.+");
+
+        BasicDBObject mongoRule2 = new BasicDBObject();
+        mongoRule2.put("_id", new ObjectId());
+        mongoRule1.put("blacklist_id", mongoList.get("_id"));
+        mongoRule2.put("term", ".+aarrghhhllll");
+
+        BasicDBList rules = new BasicDBList();
+        rules.add(mongoRule1);
+        rules.add(mongoRule2);
+
+        mongoList.put("blacklisted_terms", rules);
+
+        Blacklist blacklist = new Blacklist(mongoList);
+
+        GELFMessage msg = new GELFMessage();
+        msg.setShortMessage("ohai thar\nfoo");
+
+        List<Blacklist> blacklists = new ArrayList<Blacklist>();
+        blacklists.add(blacklist);
+
+        assertTrue(msg.blacklisted(blacklists));
+    }
+
+    @Test
+    public void testToOneliner() {
+
+        GELFMessage gelfMessage = createGELFMessage();
+
+        String oneLiner = "host.example.com - short message severity=Emergency,facility=local0,file=test.file,line=42,_test=test";
+        assertEquals(oneLiner, gelfMessage.toOneLiner());
+    }
+
+    private GELFMessage createGELFMessage() {
+
+        GELFMessage gelfMessage = new GELFMessage();
+
+        gelfMessage.setHost("host.example.com");
+        gelfMessage.setShortMessage("short message");
+        gelfMessage.setFullMessage("full message");
+        gelfMessage.setVersion("1");
+        gelfMessage.setLevel(0);
+        gelfMessage.setFacility("local0");
+        gelfMessage.setFile("test.file");
+        gelfMessage.setLine(42);
+        gelfMessage.addAdditionalData("test", "test");
+
+        return gelfMessage;
+    }
+
+    @Test
+    public void testToString() {
+
+        String stringDelim = " | ";
+
+        GELFMessage gelfMessage = createGELFMessage();
+
+        String toString = "shortMessage: short message" + stringDelim;
+        toString += "fullMessage: full message" + stringDelim;
+        toString += "level: 0" + stringDelim;
+        toString += "host: host.example.com" + stringDelim;
+        toString += "file: test.file" + stringDelim;
+        toString += "line: 42" + stringDelim;
+        toString += "facility: local0" + stringDelim;
+        toString += "version: 1" + stringDelim;
+        toString += "additional: 1";
+
+        assertEquals(toString, gelfMessage.toString());
+    }
+
+    @Test
+    public void testToStringWithLongMessage() {
+
+        GELFMessage gelfMessage = createGELFMessage();
+        gelfMessage.setFullMessage("Really, really, really, really, really, really, really, really, really, really, "
+                + "really, really, really, really, really, really, really, really, really, really, really, really, "
+                + "really, really, really, really, really, really, really, really, really, really, really, really, "
+                + "really, really long");
+
+        String toString = "shortMessage: short message | fullMessage: Really, really, really, really, really, really, "
+                + "really, really, really, really, really, really, really, really, really, really, really, really, "
+                + "really, really, really, really, really (...)";
+
+        assertEquals(toString, gelfMessage.toString());
+    }
+
+    @Test
+    public void testAllRequiredFieldsSet() {
+
+        GELFMessage emptyGelfMessage = new GELFMessage();
+        assertFalse(emptyGelfMessage.allRequiredFieldsSet());
+
+        GELFMessage versionMissingGelfMessage = createGELFMessage();
+        versionMissingGelfMessage.setVersion("");
+        assertFalse(versionMissingGelfMessage.allRequiredFieldsSet());
+
+        GELFMessage gelfMessage = createGELFMessage();
+        assertTrue(gelfMessage.allRequiredFieldsSet());
+    }
+
+    @Test
+    public void testAddAdditionalData() {
+        GELFMessage msg = new GELFMessage();
+        msg.addAdditionalData("_foo", "bar");
+        msg.addAdditionalData("lol", "wat"); // _ should be added automatically.
+
+        Map<String, Object> expected = new HashMap<String, Object>();
+        expected.put("_foo", "bar");
+        expected.put(("_lol"), "wat");
+
+        assertEquals(expected, msg.getAdditionalData());
+    }
+
+    @Test
+    public void testAddAdditionalDataWithMap() {
+        Map<String, String> fields = new HashMap<String, String>();
+        fields.put("_foo", "bar");
+        fields.put("_lol", "wat");
+
+        GELFMessage msg = new GELFMessage();
+        msg.addAdditionalData(fields);
+
+        assertEquals(fields, msg.getAdditionalData());
+    }
 }
