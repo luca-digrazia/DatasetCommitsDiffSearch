@@ -19,6 +19,7 @@ import static org.junit.Assert.fail;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.primitives.Ints;
@@ -882,7 +883,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
                     ArtifactCategory.STATIC_LIBRARY,
                     null,
                     ImmutableList.<Artifact>of(testTreeArtifact),
-                    LtoCompilationContext.EMPTY,
+                    new LtoCompilationContext(ImmutableMap.of()),
                     null,
                     /* mustKeepDebug= */ false));
 
