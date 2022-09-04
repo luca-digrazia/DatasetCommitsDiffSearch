@@ -1,7 +1,6 @@
 package com.tencent.angel.common;
 
-import static com.tencent.angel.common.ByteBufSerdeUtils.emptyFloats;
-
+import com.tencent.angel.PartitionKey;
 import com.tencent.angel.ml.math2.VFactory;
 import com.tencent.angel.ml.math2.storage.IntDoubleSparseVectorStorage;
 import com.tencent.angel.ml.math2.storage.IntDoubleVectorStorage;
@@ -138,7 +137,7 @@ public class StreamSerdeUtils {
       byte[] strBytes = value.getBytes("UTF-8");
       serializeBytes(out, strBytes);
     } catch (UnsupportedEncodingException e) {
-      throw new IOException(
+      throw new IOException (
           "Serialize " + value + " failed, details = " + StringUtils.stringifyException(e));
     }
   }
@@ -178,22 +177,13 @@ public class StreamSerdeUtils {
 
   // =======================================================
   // Byte array
-  public static void serializeBytes(DataOutputStream out, byte[] values, int start, int end)
-      throws IOException {
-    if (values == null) {
-      serializeInt(out, 0);
-    } else {
-      serializeInt(out, end - start);
-      out.write(values, start, end - start);
-    }
+  public static void serializeBytes(DataOutputStream out, byte[] values, int start, int end) throws IOException {
+    serializeInt(out, end - start);
+    out.write(values, start, end - start);
   }
 
   public static void serializeBytes(DataOutputStream out, byte[] values) throws IOException {
-    if (values == null) {
-      serializeInt(out, 0);
-    } else {
-      serializeBytes(out, values, 0, values.length);
-    }
+    serializeBytes(out, values, 0, values.length);
   }
 
   public static byte[] deserializeBytes(DataInputStream in) throws IOException {
@@ -204,37 +194,24 @@ public class StreamSerdeUtils {
   }
 
   public static int serializedBytesLen(byte[] values, int start, int end) {
-    return INT_LENGTH + (end - start) * BYTE_LENGTH;
+    return BYTE_LENGTH + (end - start) * BYTE_LENGTH;
   }
 
   public static int serializedBytesLen(byte[] values) {
-    if (values == null) {
-      return INT_LENGTH;
-    } else {
-      return serializedBytesLen(values, 0, values.length);
-    }
+    return serializedBytesLen(values, 0, values.length);
   }
 
   // =======================================================
   // Int array
-  public static void serializeInts(DataOutputStream out, int[] values, int start, int end)
-      throws IOException {
-    if (values == null) {
-      serializeInt(out, 0);
-    } else {
-      serializeInt(out, end - start);
-      for (int i = start; i < end; i++) {
-        serializeInt(out, values[i]);
-      }
+  public static void serializeInts(DataOutputStream out, int[] values, int start, int end) throws IOException {
+    serializeInt(out, end - start);
+    for (int i = start; i < end; i++) {
+      serializeInt(out, values[i]);
     }
   }
 
   public static void serializeInts(DataOutputStream out, int[] values) throws IOException {
-    if(values == null) {
-      serializeInt(out, 0);
-    } else {
-      serializeInts(out, values, 0, values.length);
-    }
+    serializeInts(out, values, 0, values.length);
   }
 
   public static int[] deserializeInts(DataInputStream in) throws IOException {
@@ -251,33 +228,20 @@ public class StreamSerdeUtils {
   }
 
   public static int serializedIntsLen(int[] values) {
-    if (values == null) {
-      return INT_LENGTH;
-    } else {
-      return serializedIntsLen(values, 0, values.length);
-    }
+    return serializedIntsLen(values, 0, values.length);
   }
 
   // =======================================================
   // Long array
-  public static void serializeLongs(DataOutputStream out, long[] values, int start, int end)
-      throws IOException {
-    if (values == null) {
-      serializeInt(out, 0);
-    } else {
-      serializeInt(out, end - start);
-      for (int i = start; i < end; i++) {
-        serializeLong(out, values[i]);
-      }
+  public static void serializeLongs(DataOutputStream out, long[] values, int start, int end) throws IOException {
+    serializeInt(out, end - start);
+    for (int i = start; i < end; i++) {
+      serializeLong(out, values[i]);
     }
   }
 
   public static void serializeLongs(DataOutputStream out, long[] values) throws IOException {
-    if (values == null) {
-      serializeInt(out, 0);
-    } else {
-      serializeLongs(out, values, 0, values.length);
-    }
+    serializeLongs(out, values, 0, values.length);
   }
 
   public static long[] deserializeLongs(DataInputStream in) throws IOException {
@@ -290,37 +254,24 @@ public class StreamSerdeUtils {
   }
 
   public static int serializedLongsLen(long[] values, int start, int end) {
-    return INT_LENGTH + (end - start) * LONG_LENGTH;
+    return LONG_LENGTH + (end - start) * LONG_LENGTH;
   }
 
   public static int serializedLongsLen(long[] values) {
-    if (values == null) {
-      return INT_LENGTH;
-    } else {
-      return serializedLongsLen(values, 0, values.length);
-    }
+    return serializedLongsLen(values, 0, values.length);
   }
 
   // =======================================================
   // Float array
-  public static void serializeFloats(DataOutputStream out, float[] values, int start, int end)
-      throws IOException {
-    if (values == null) {
-      serializeInt(out, 0);
-    } else {
-      serializeInt(out, end - start);
-      for (int i = start; i < end; i++) {
-        serializeFloat(out, values[i]);
-      }
+  public static void serializeFloats(DataOutputStream out, float[] values, int start, int end) throws IOException {
+    serializeInt(out, end - start);
+    for (int i = start; i < end; i++) {
+      serializeFloat(out, values[i]);
     }
   }
 
   public static void serializeFloats(DataOutputStream out, float[] values) throws IOException {
-    if (values == null) {
-      serializeInt(out, 0);
-    } else {
-      serializeFloats(out, values, 0, values.length);
-    }
+    serializeFloats(out, values, 0, values.length);
   }
 
   public static float[] deserializeFloats(DataInputStream in) throws IOException {
@@ -333,37 +284,24 @@ public class StreamSerdeUtils {
   }
 
   public static int serializedFloatsLen(float[] values, int start, int end) {
-    return INT_LENGTH + (end - start) * FLOAT_LENGTH;
+    return FLOAT_LENGTH + (end - start) * FLOAT_LENGTH;
   }
 
   public static int serializedFloatsLen(float[] values) {
-    if (values == null) {
-      return INT_LENGTH;
-    } else {
-      return serializedFloatsLen(values, 0, values.length);
-    }
+    return serializedFloatsLen(values, 0, values.length);
   }
 
   // =======================================================
   // Double array
-  public static void serializeDoubles(DataOutputStream out, double[] values, int start, int end)
-      throws IOException {
-    if (values == null) {
-      serializeInt(out, 0);
-    } else {
-      serializeInt(out, end - start);
-      for (int i = start; i < end; i++) {
-        serializeDouble(out, values[i]);
-      }
+  public static void serializeDoubles(DataOutputStream out, double[] values, int start, int end) throws IOException {
+    serializeInt(out, end - start);
+    for (int i = start; i < end; i++) {
+      serializeDouble(out, values[i]);
     }
   }
 
   public static void serializeDoubles(DataOutputStream out, double[] values) throws IOException {
-    if (values == null) {
-      serializeInt(out, 0);
-    } else {
-      serializeDoubles(out, values, 0, values.length);
-    }
+    serializeDoubles(out, values, 0, values.length);
   }
 
   public static double[] deserializeDoubles(DataInputStream in) throws IOException {
@@ -376,15 +314,11 @@ public class StreamSerdeUtils {
   }
 
   public static int serializedDoublesLen(double[] values, int start, int end) {
-    return INT_LENGTH + (end - start) * DOUBLE_LENGTH;
+    return DOUBLE_LENGTH + (end - start) * DOUBLE_LENGTH;
   }
 
   public static int serializedDoublesLen(double[] values) {
-    if (values == null) {
-      return INT_LENGTH;
-    } else {
-      return serializedDoublesLen(values, 0, values.length);
-    }
+    return serializedDoublesLen(values, 0, values.length);
   }
 
   // =======================================================
@@ -415,8 +349,7 @@ public class StreamSerdeUtils {
 
   // =======================================================
   // 2-D Int array
-  public static void serialize2DInts(DataOutputStream out, int[][] values, int start, int end)
-      throws IOException {
+  public static void serialize2DInts(DataOutputStream out, int[][] values, int start, int end) throws IOException {
     serializeInt(out, end - start);
     for (int i = start; i < end; i++) {
       serializeInts(out, values[i]);
@@ -450,8 +383,7 @@ public class StreamSerdeUtils {
 
   // =======================================================
   // 2-D Long array
-  public static void serialize2DLongs(DataOutputStream out, long[][] values, int start, int end)
-      throws IOException {
+  public static void serialize2DLongs(DataOutputStream out, long[][] values, int start, int end) throws IOException {
     serializeInt(out, end - start);
     for (int i = start; i < end; i++) {
       serializeLongs(out, values[i]);
@@ -485,8 +417,7 @@ public class StreamSerdeUtils {
 
   // =======================================================
   // 2-D Float array
-  public static void serialize2DFloats(DataOutputStream out, float[][] values, int start, int end)
-      throws IOException {
+  public static void serialize2DFloats(DataOutputStream out, float[][] values, int start, int end) throws IOException {
     serializeInt(out, end - start);
     for (int i = start; i < end; i++) {
       serializeFloats(out, values[i]);
@@ -520,16 +451,14 @@ public class StreamSerdeUtils {
 
   // =======================================================
   // 2-D Double array
-  public static void serialize2DDoubles(DataOutputStream out, double[][] values, int start, int end)
-      throws IOException {
+  public static void serialize2DDoubles(DataOutputStream out, double[][] values, int start, int end) throws IOException {
     serializeInt(out, end - start);
     for (int i = start; i < end; i++) {
       serializeDoubles(out, values[i]);
     }
   }
 
-  public static void serialize2DDoubles(DataOutputStream out, double[][] values)
-      throws IOException {
+  public static void serialize2DDoubles(DataOutputStream out, double[][] values) throws IOException {
     serialize2DDoubles(out, values, 0, values.length);
   }
 
@@ -691,8 +620,7 @@ public class StreamSerdeUtils {
   }
 
   // IntDoubleVector
-  private static void serializeIntDoubleVector(DataOutputStream out, IntDoubleVector vector)
-      throws IOException {
+  private static void serializeIntDoubleVector(DataOutputStream out, IntDoubleVector vector) throws IOException {
     IntDoubleVectorStorage storage = vector.getStorage();
     if (storage.isDense()) {
       serializeInt(out, DENSE_STORAGE_TYPE);
@@ -743,8 +671,7 @@ public class StreamSerdeUtils {
   }
 
   // IntFloatVector
-  private static void serializeIntFloatVector(DataOutputStream out, IntFloatVector vector)
-      throws IOException {
+  private static void serializeIntFloatVector(DataOutputStream out, IntFloatVector vector) throws IOException {
     IntFloatVectorStorage storage = vector.getStorage();
     if (storage.isDense()) {
       serializeInt(out, DENSE_STORAGE_TYPE);
@@ -795,8 +722,7 @@ public class StreamSerdeUtils {
   }
 
   // IntFloatVector array
-  public static void serializeIntFloatVectors(DataOutputStream out, IntFloatVector[] vectors)
-      throws IOException {
+  public static void serializeIntFloatVectors(DataOutputStream out, IntFloatVector[] vectors) throws IOException {
     int start = 0;
     int end = vectors.length;
     serializeInt(out, end - start);
@@ -822,7 +748,7 @@ public class StreamSerdeUtils {
     return values;
   }
 
-  public static int serializedIntFloatVectorsLen(IntFloatVector[] values) {
+  public static int serializedIntFloatVectorsLen(IntFloatVector[] values)  {
     int start = 0;
     int end = values.length;
     int len = 0;
@@ -832,7 +758,7 @@ public class StreamSerdeUtils {
     return len;
   }
 
-  public static int serializedLongFloatVectorLen(LongFloatVector vector) {
+  public static int serializedLongFloatVectorLen(LongFloatVector vector)  {
     int len = 0;
     LongFloatVectorStorage storage = vector.getStorage();
     if (storage.isSparse()) {
@@ -852,8 +778,7 @@ public class StreamSerdeUtils {
   }
 
   // LongFloatVector
-  private static void serializeLongFloatVector(DataOutputStream out, LongFloatVector vector)
-      throws IOException {
+  private static void serializeLongFloatVector(DataOutputStream out, LongFloatVector vector) throws IOException {
     LongFloatVectorStorage storage = vector.getStorage();
     if (storage.isSparse()) {
       serializeInt(out, SPARSE_STORAGE_TYPE);
@@ -876,8 +801,7 @@ public class StreamSerdeUtils {
     }
   }
 
-  private static LongFloatVector deserializeLongFloatVector(DataInputStream in, long dim)
-      throws IOException {
+  private static LongFloatVector deserializeLongFloatVector(DataInputStream in, long dim) throws IOException {
     int storageType = deserializeInt(in);
     switch (storageType) {
 
@@ -891,8 +815,7 @@ public class StreamSerdeUtils {
             new LongFloatSparseVectorStorage((int) dim, idToValueMap));
 
       case SORTED_STORAGE_TYPE:
-        return VFactory
-            .sortedLongKeyFloatVector((int) dim, deserializeLongs(in), deserializeFloats(in));
+        return VFactory.sortedLongKeyFloatVector((int) dim, deserializeLongs(in), deserializeFloats(in));
 
       default:
         throw new UnsupportedOperationException("Unsupport storage type " + storageType);
@@ -900,8 +823,7 @@ public class StreamSerdeUtils {
   }
 
   // LongFloatVector array
-  public static void serializeLongFloatVectors(DataOutputStream out, LongFloatVector[] vectors)
-      throws IOException {
+  public static void serializeLongFloatVectors(DataOutputStream out, LongFloatVector[] vectors) throws IOException {
     int start = 0;
     int end = vectors.length;
     serializeInt(out, end - start);
@@ -914,8 +836,7 @@ public class StreamSerdeUtils {
     }
   }
 
-  public static LongFloatVector[] deserializeLongFloatVectors(DataInputStream in)
-      throws IOException {
+  public static LongFloatVector[] deserializeLongFloatVectors(DataInputStream in) throws IOException {
     int len = in.readInt();
     LongFloatVector[] values = new LongFloatVector[len];
     for (int i = 0; i < len; i++) {
@@ -958,8 +879,7 @@ public class StreamSerdeUtils {
   }
 
   // LongFloatVector
-  private static void serializeLongIntVector(DataOutputStream out, LongIntVector vector)
-      throws IOException {
+  private static void serializeLongIntVector(DataOutputStream out, LongIntVector vector) throws IOException {
     LongIntVectorStorage storage = vector.getStorage();
     if (storage.isSparse()) {
       serializeInt(out, SPARSE_STORAGE_TYPE);
@@ -997,8 +917,7 @@ public class StreamSerdeUtils {
             new LongIntSparseVectorStorage((int) dim, idToValueMap));
 
       case SORTED_STORAGE_TYPE:
-        return VFactory
-            .sortedLongKeyIntVector((int) dim, deserializeLongs(in), deserializeInts(in));
+        return VFactory.sortedLongKeyIntVector((int) dim, deserializeLongs(in), deserializeInts(in));
 
       default:
         throw new UnsupportedOperationException("Unsupport storage type " + storageType);
@@ -1006,8 +925,7 @@ public class StreamSerdeUtils {
   }
 
   // LongFloatVector array
-  public static void serializeLongIntVectors(DataOutputStream out, LongIntVector[] vectors)
-      throws IOException {
+  public static void serializeLongIntVectors(DataOutputStream out, LongIntVector[] vectors) throws IOException {
     int start = 0;
     int end = vectors.length;
     serializeInt(out, end - start);
@@ -1080,8 +998,7 @@ public class StreamSerdeUtils {
     return serializedUTF8Len(obj.getClass().getName()) + obj.bufferLen();
   }
 
-  public static void serializeObjects(DataOutputStream out, IElement[] objs, int startPos,
-      int endPos)
+  public static void serializeObjects(DataOutputStream out, IElement[] objs, int startPos, int endPos)
       throws IOException {
     serializeInt(out, endPos - startPos);
     if (endPos - startPos > 0) {
@@ -1154,13 +1071,5 @@ public class StreamSerdeUtils {
   }
 
   public static void main(String[] args) {
-  }
-
-  public static void serializeEmptyFloats(DataOutputStream output) throws IOException {
-    serializeFloats(output, emptyFloats);
-  }
-
-  public static int serializedEmptyFloatsLen() {
-    return serializedFloatsLen(emptyFloats);
   }
 }
