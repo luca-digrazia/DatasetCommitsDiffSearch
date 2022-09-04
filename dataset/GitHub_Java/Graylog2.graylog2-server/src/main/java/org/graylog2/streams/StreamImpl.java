@@ -44,7 +44,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import org.graylog2.plugin.outputs.MessageOutput;
 
 /**
  * Representing a single stream from the streams collection. Also provides method
@@ -64,7 +63,7 @@ public class StreamImpl implements Stream {
     private final int alarmPeriod;
     private final int lastAlarm;
     
-    protected final Map<String, Set<Map<String, String>>> outputs;
+    private final Map<String, Set<Map<String, String>>> outputs;
 
     private List<StreamRule> streamRules;
     private Set<String> alarmCallbacks;
