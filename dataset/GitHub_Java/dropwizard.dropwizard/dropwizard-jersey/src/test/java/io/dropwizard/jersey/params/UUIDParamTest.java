@@ -1,22 +1,23 @@
 package io.dropwizard.jersey.params;
 
 import io.dropwizard.jersey.errors.ErrorMessage;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import javax.ws.rs.WebApplicationException;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class UUIDParamTest {
     private void UuidParamNegativeTest(String input) {
-        assertThatExceptionOfType(WebApplicationException.class)
-            .isThrownBy(() -> new UUIDParam(input))
-            .satisfies(e -> assertThat(e.getResponse().getStatus()).isEqualTo(400))
-            .satisfies(e -> assertThat(e.getResponse().getEntity()).isEqualTo(
-                new ErrorMessage(400, "Parameter is not a UUID.")
-            ));
+        assertThatThrownBy(() -> new UUIDParam(input))
+            .isInstanceOfSatisfying(WebApplicationException.class, e -> {
+                assertThat(e.getResponse().getStatus()).isEqualTo(400);
+                assertThat(e.getResponse().getEntity()).isEqualTo(
+                    new ErrorMessage(400, "Parameter is not a UUID.")
+                );
+            });
     }
 
     @Test
@@ -24,7 +25,9 @@ public class UUIDParamTest {
         final String uuidString = "067e6162-3b6f-4ae2-a171-2470b63dff00";
         final UUID uuid = UUID.fromString(uuidString);
 
-        assertThat(new UUIDParam(uuidString).get()).isEqualTo(uuid);
+        final UUIDParam param = new UUIDParam(uuidString);
+        assertThat(param.get())
+                .isEqualTo(uuid);
     }
 
     @Test

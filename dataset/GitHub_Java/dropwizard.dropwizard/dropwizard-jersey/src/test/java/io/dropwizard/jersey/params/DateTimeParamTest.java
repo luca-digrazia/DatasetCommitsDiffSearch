@@ -2,13 +2,13 @@ package io.dropwizard.jersey.params;
 
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class DateTimeParamTest {
     @Test
-    void parsesDateTimes() {
+    public void parsesDateTimes() {
         final DateTimeParam param = new DateTimeParam("2012-11-19");
 
         assertThat(param.get())
