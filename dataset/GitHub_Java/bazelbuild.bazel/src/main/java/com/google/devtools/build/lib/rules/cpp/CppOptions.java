@@ -693,7 +693,7 @@ public class CppOptions extends FragmentOptions {
 
   @Option(
       name = "incompatible_disable_cc_configuration_make_variables",
-      defaultValue = "true",
+      defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
       effectTags = {OptionEffectTag.UNKNOWN},
       metadataTags = {
