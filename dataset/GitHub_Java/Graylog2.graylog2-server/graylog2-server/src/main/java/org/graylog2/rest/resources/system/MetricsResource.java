@@ -21,7 +21,6 @@ package org.graylog2.rest.resources.system;
 
 import com.codahale.metrics.Metric;
 import com.codahale.metrics.annotation.Timed;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import org.graylog2.rest.documentation.annotations.*;
 import org.graylog2.rest.resources.RestResource;
@@ -30,7 +29,6 @@ import org.slf4j.LoggerFactory;
 
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -91,25 +89,24 @@ public class MetricsResource extends RestResource {
     })
     @Produces(MediaType.APPLICATION_JSON)
     public String byNamespace(@ApiParam(title = "namespace", required = true) @PathParam("namespace") String namespace) {
-        List<Map<String, Object>> metrics = Lists.newArrayList();
+        Map<String, Object> metrics = Maps.newHashMap();
 
         for(Map.Entry<String, Metric> e : core.metrics().getMetrics().entrySet()) {
             if (e.getKey().startsWith(namespace)) {
                 try {
                     String type = e.getValue().getClass().getSimpleName().toLowerCase();
-                    String metricName = e.getKey();
 
                     if (type.isEmpty()) {
                         type = "gauge";
                     }
 
-                    Map<String, Object> metric = Maps.newHashMap();
-                    metric.put("full_name", metricName);
-                    metric.put("name", metricName.substring(metricName.lastIndexOf(".") + 1));
-                    metric.put("type", type);
-                    metric.put("metric", e.getValue());
+                    String metricName = e.getKey();
+                    Map<String, Object> m = Maps.newHashMap();
+                    m.put("name", metricName.substring(metricName.lastIndexOf(".") + 1));
+                    m.put("type", type);
+                    m.put("metric", e.getValue());
 
-                    metrics.add(metric);
+                    metrics.put(metricName, m);
                 } catch(Exception ex) {
                     LOG.warn("Could not read metric in namespace list.", ex);
                     continue;
