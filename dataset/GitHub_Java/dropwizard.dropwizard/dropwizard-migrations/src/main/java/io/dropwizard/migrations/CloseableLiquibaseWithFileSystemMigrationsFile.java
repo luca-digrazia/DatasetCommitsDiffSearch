@@ -11,24 +11,16 @@ import java.sql.SQLException;
 
 public class CloseableLiquibaseWithFileSystemMigrationsFile extends CloseableLiquibase implements AutoCloseable {
 
-    CloseableLiquibaseWithFileSystemMigrationsFile(
-        ManagedDataSource dataSource,
-        Database database,
-        String file
-    ) throws LiquibaseException, SQLException {
+    CloseableLiquibaseWithFileSystemMigrationsFile(ManagedDataSource dataSource, Database database, String file) throws LiquibaseException, SQLException {
         super(file,
               new FileSystemResourceAccessor(),
               database,
               dataSource);
     }
 
-    public CloseableLiquibaseWithFileSystemMigrationsFile(
-        ManagedDataSource dataSource,
-        String file
-    ) throws LiquibaseException, SQLException {
+    public CloseableLiquibaseWithFileSystemMigrationsFile(ManagedDataSource dataSource, String file) throws LiquibaseException, SQLException {
         this(dataSource,
-            DatabaseFactory.getInstance()
-                .findCorrectDatabaseImplementation(new JdbcConnection(dataSource.getConnection())),
+            DatabaseFactory.getInstance().findCorrectDatabaseImplementation(new JdbcConnection(dataSource.getConnection())),
             file);
     }
 }

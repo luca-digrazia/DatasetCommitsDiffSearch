@@ -5,8 +5,8 @@ import io.dropwizard.db.DataSourceFactory;
 import io.dropwizard.db.ManagedPooledDataSource;
 import net.jcip.annotations.NotThreadSafe;
 import org.apache.tomcat.jdbc.pool.ConnectionPool;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.Before;
+import org.junit.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -16,8 +16,8 @@ public class CloseableLiquibaseTest {
     CloseableLiquibase liquibase;
     ManagedPooledDataSource dataSource;
 
-    @BeforeEach
-    void setUp() throws Exception {
+    @Before
+    public void setUp() throws Exception {
         DataSourceFactory factory = new DataSourceFactory();
 
         factory.setDriverClass(org.h2.Driver.class.getName());
@@ -29,7 +29,7 @@ public class CloseableLiquibaseTest {
     }
 
     @Test
-    void testWhenClosingAllConnectionsInPoolIsReleased() throws Exception {
+    public void testWhenClosingAllConnectionsInPoolIsReleased() throws Exception {
 
         ConnectionPool pool = dataSource.getPool();
         assertThat(pool.getActive()).isEqualTo(1);
