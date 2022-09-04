@@ -20,12 +20,10 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileTime;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -54,9 +52,6 @@ import org.jboss.logging.Logger;
 
 import io.quarkus.bootstrap.runner.Timing;
 import io.quarkus.changeagent.ClassChangeAgent;
-import io.quarkus.deployment.dev.filewatch.FileChangeCallback;
-import io.quarkus.deployment.dev.filewatch.FileChangeEvent;
-import io.quarkus.deployment.dev.filewatch.WatchServiceFileSystemWatcher;
 import io.quarkus.deployment.dev.testing.TestListener;
 import io.quarkus.deployment.dev.testing.TestRunner;
 import io.quarkus.deployment.dev.testing.TestSupport;
@@ -64,10 +59,8 @@ import io.quarkus.deployment.util.FileUtil;
 import io.quarkus.dev.spi.DevModeType;
 import io.quarkus.dev.spi.HotReplacementContext;
 import io.quarkus.dev.spi.HotReplacementSetup;
-import io.quarkus.dev.testing.TestScanningLock;
 
 public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable {
-    public static final boolean IS_LINUX = System.getProperty("os.name").toLowerCase(Locale.ENGLISH).contains("linux");
 
     private static final Logger log = Logger.getLogger(RuntimeUpdatesProcessor.class);
 
@@ -107,6 +100,7 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable
     private final BiConsumer<Set<String>, ClassScanResult> restartCallback;
     private final BiConsumer<DevModeContext.ModuleInfo, String> copyResourceNotification;
     private final BiFunction<String, byte[], byte[]> classTransformers;
+    private Timer timer;
     private final ReentrantLock scanLock = new ReentrantLock();
 
     /**
@@ -119,9 +113,6 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable
     private volatile boolean firstTestScanComplete;
     private volatile Boolean instrumentationEnabled;
     private volatile boolean liveReloadEnabled = true;
-
-    private WatchServiceFileSystemWatcher testClassChangeWatcher;
-    private Timer testClassChangeTimer;
 
     public RuntimeUpdatesProcessor(Path applicationRoot, DevModeContext context, QuarkusCompiler compiler,
             DevModeType devModeType, BiConsumer<Set<String>, ClassScanResult> restartCallback,
@@ -150,17 +141,9 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable
                 @Override
                 public void testsDisabled() {
                     synchronized (RuntimeUpdatesProcessor.this) {
-                        if (testClassChangeWatcher != null) {
-                            try {
-                                testClassChangeWatcher.close();
-                            } catch (IOException e) {
-                                //ignore
-                            }
-                            testClassChangeWatcher = null;
-                        }
-                        if (testClassChangeTimer != null) {
-                            testClassChangeTimer.cancel();
-                            testClassChangeTimer = null;
+                        if (timer != null) {
+                            timer.cancel();
+                            timer = null;
                         }
                     }
                 }
@@ -187,87 +170,47 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable
                 .collect(toList());
     }
 
-    private void startTestScanningTimer() {
+    private Timer startTestScanningTimer() {
         synchronized (this) {
-            if (testClassChangeWatcher == null && testClassChangeTimer == null) {
-                if (IS_LINUX) {
-                    //note that this is only used for notifications that something has changed,
-                    //this triggers the same file scan as the polling approach
-                    //this is not as efficient as it could be, but saves having two separate code paths
-                    testClassChangeWatcher = new WatchServiceFileSystemWatcher("Quarkus Test Watcher", true);
-                    FileChangeCallback callback = new FileChangeCallback() {
-                        @Override
-                        public void handleChanges(Collection<FileChangeEvent> changes) {
-                            //sometimes changes come through as two events
-                            //which can cause problems for our CI tests
-                            //and cause unessesary runs.
-                            //we add a half second delay for CI tests, to make sure this does not cause
-                            //problems
-                            try {
-                                if (context.isTest()) {
-                                    Thread.sleep(500);
-                                }
-                            } catch (InterruptedException e) {
-                                throw new RuntimeException(e);
-                            }
-                            periodicTestCompile();
-                        }
-                    };
-                    for (DevModeContext.ModuleInfo module : context.getAllModules()) {
-                        for (String path : module.getMain().getSourcePaths()) {
-                            testClassChangeWatcher.watchPath(new File(path), callback);
-                        }
-                        if (module.getMain().getResourcePath() != null) {
-                            testClassChangeWatcher.watchPath(new File(module.getMain().getResourcePath()), callback);
-                        }
+            if (timer == null) {
+                timer = new Timer("Test Compile Timer", true);
+                timer.schedule(new TimerTask() {
+                    @Override
+                    public void run() {
+                        periodicTestCompile();
                     }
-                    for (String path : context.getApplicationRoot().getTest().get().getSourcePaths()) {
-                        testClassChangeWatcher.watchPath(new File(path), callback);
-                    }
-                    if (context.getApplicationRoot().getTest().get().getResourcePath() != null) {
-                        testClassChangeWatcher
-                                .watchPath(new File(context.getApplicationRoot().getTest().get().getResourcePath()), callback);
-                    }
-                    periodicTestCompile();
-                } else {
-                    testClassChangeTimer = new Timer("Test Compile Timer", true);
-                    testClassChangeTimer.schedule(new TimerTask() {
-                        @Override
-                        public void run() {
-                            periodicTestCompile();
-                        }
-                    }, 1, 1000);
-                }
+                }, 1, 1000);
             }
         }
+        return timer;
     }
 
     private void periodicTestCompile() {
-        scanLock.lock();
-        TestScanningLock.lockForTests();
-        try {
-            ClassScanResult changedTestClassResult = compileTestClasses();
-            ClassScanResult changedApp = checkForChangedClasses(compiler, DevModeContext.ModuleInfo::getMain, false, test);
-            Set<String> filesChanged = checkForFileChange(DevModeContext.ModuleInfo::getMain, test);
-            boolean configFileRestartNeeded = filesChanged.stream().map(watchedFilePaths::get)
-                    .anyMatch(Boolean.TRUE::equals);
-            ClassScanResult merged = ClassScanResult.merge(changedTestClassResult, changedApp);
-            if (configFileRestartNeeded) {
-                if (compileProblem != null) {
-                    testSupport.getTestRunner().testCompileFailed(compileProblem);
-                } else {
-                    testSupport.getTestRunner().runTests(null);
+        //noop if already scanning
+        if (scanLock.tryLock()) {
+            try {
+                ClassScanResult changedTestClassResult = compileTestClasses();
+                ClassScanResult changedApp = checkForChangedClasses(compiler, DevModeContext.ModuleInfo::getMain, false, test);
+                Set<String> filesChanged = checkForFileChange(DevModeContext.ModuleInfo::getMain, test);
+                boolean configFileRestartNeeded = filesChanged.stream().map(watchedFilePaths::get)
+                        .anyMatch(Boolean.TRUE::equals);
+                ClassScanResult merged = ClassScanResult.merge(changedTestClassResult, changedApp);
+                if (configFileRestartNeeded) {
+                    if (compileProblem != null) {
+                        testSupport.getTestRunner().testCompileFailed(compileProblem);
+                    } else {
+                        testSupport.getTestRunner().runTests(null);
+                    }
+                } else if (merged.isChanged()) {
+                    if (compileProblem != null) {
+                        testSupport.getTestRunner().testCompileFailed(compileProblem);
+                    } else {
+                        testSupport.getTestRunner().runTests(merged);
+                    }
                 }
-            } else if (merged.isChanged()) {
-                if (compileProblem != null) {
-                    testSupport.getTestRunner().testCompileFailed(compileProblem);
-                } else {
-                    testSupport.getTestRunner().runTests(merged);
-                }
+            } finally {
+                scanLock.unlock();
             }
-        } finally {
-            TestScanningLock.unlockForTests();
-            scanLock.unlock();
         }
     }
 
@@ -913,13 +856,10 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable
 
     @Override
     public void close() throws IOException {
+        if (timer != null) {
+            timer.cancel();
+        }
         compiler.close();
-        if (testClassChangeWatcher != null) {
-            testClassChangeWatcher.close();
-        }
-        if (testClassChangeTimer != null) {
-            testClassChangeTimer.cancel();
-        }
     }
 
     private Map<Path, Long> expandGlobPattern(Path root, Path configFile) {

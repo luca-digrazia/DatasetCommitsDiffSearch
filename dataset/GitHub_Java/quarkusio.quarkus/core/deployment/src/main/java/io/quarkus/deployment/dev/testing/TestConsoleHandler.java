@@ -152,11 +152,7 @@ public class TestConsoleHandler implements TestListener {
                             + " were skipped. Tests took " + (results.getTotalTime())
                             + "ms." + "\u001b[0m";
                 } else {
-                    int failedTestsNum = results.getCurrentFailing().values().stream().mapToInt((s) -> s.getFailing().size())
-                            .sum();
-                    //TODO: this should not use the logger, it should print a nicer status
-                    log.error(
-                            "==================== \u001B[91m" + failedTestsNum + " TESTS FAILED\u001b[0m ====================");
+                    int failedTestsNum = results.getCurrentFailing().size();
                     boolean hasFailingTests = failedTestsNum > 0;
                     for (Map.Entry<String, TestClassResult> classEntry : results.getCurrentFailing().entrySet()) {
                         for (TestResult test : classEntry.getValue().getFailing()) {
@@ -165,8 +161,6 @@ public class TestConsoleHandler implements TestListener {
                                     test.getTestExecutionResult().getThrowable().get());
                         }
                     }
-                    log.error(
-                            "==================== \u001B[91mEND TEST REPORT\u001b[0m ====================");
                     String output = String.format("Test run failed, %d tests were run, ", methodCount.get())
                             + String.format("%s%d failed%s, ",
                                     hasFailingTests ? "\u001B[1m" : "", failedTestsNum,
