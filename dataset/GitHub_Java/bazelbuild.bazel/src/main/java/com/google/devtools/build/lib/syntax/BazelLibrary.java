@@ -129,8 +129,7 @@ public class BazelLibrary {
             throws EvalException {
           Order order;
           try {
-            order = Order.parse(
-                orderString, env.getSemantics().incompatibleDisallowSetConstructor());
+            order = Order.parse(orderString, env.getSemantics().incompatibleDisallowSetConstructor);
           } catch (IllegalArgumentException ex) {
             throw new EvalException(loc, ex);
           }
@@ -205,7 +204,7 @@ public class BazelLibrary {
       new BuiltinFunction("set") {
         public SkylarkNestedSet invoke(Object items, String order, Location loc, Environment env)
             throws EvalException {
-          if (env.getSemantics().incompatibleDisallowSetConstructor()) {
+          if (env.getSemantics().incompatibleDisallowSetConstructor) {
             throw new EvalException(
                 loc,
                 "The `set` constructor for depsets is deprecated and will be removed. Please use "
@@ -267,7 +266,7 @@ public class BazelLibrary {
       new BuiltinFunction("to_list") {
         @SuppressWarnings("unused")
         public MutableList<Object> invoke(SkylarkNestedSet input, Environment env) {
-          return MutableList.copyOf(env, input.toCollection());
+          return new MutableList<>(input.toCollection(), env);
         }
       };
 
