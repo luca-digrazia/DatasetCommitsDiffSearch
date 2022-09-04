@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.exec;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
@@ -23,6 +22,9 @@ import com.google.devtools.build.lib.actions.EnvironmentalExecException;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ExecutionStrategy;
 import com.google.devtools.build.lib.actions.Executor;
+import com.google.devtools.build.lib.actions.ResourceManager;
+import com.google.devtools.build.lib.actions.ResourceManager.ResourceHandle;
+import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.actions.TestExecException;
@@ -36,7 +38,6 @@ import com.google.devtools.build.lib.rules.test.TestAttempt;
 import com.google.devtools.build.lib.rules.test.TestResult;
 import com.google.devtools.build.lib.rules.test.TestRunnerAction;
 import com.google.devtools.build.lib.rules.test.TestRunnerAction.ResolvedPaths;
-import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
@@ -154,19 +155,7 @@ public class StandaloneTestStrategy extends TestStrategy {
                 workingDirectory);
       }
       processLastTestAttempt(attempt, dataBuilder, data);
-      ImmutableList.Builder<Pair<String, Path>> testOutputsBuilder = new ImmutableList.Builder<>();
-      if (action.getTestLog().getPath().exists()) {
-        testOutputsBuilder.add(Pair.of("test.log", action.getTestLog().getPath()));
-      }
-      if (resolvedPaths.getXmlOutputPath().exists()) {
-        testOutputsBuilder.add(Pair.of("test.xml", resolvedPaths.getXmlOutputPath()));
-      }
-      executor
-          .getEventBus()
-          .post(
-              new TestAttempt(
-                  action, attempt, data.getTestPassed(), testOutputsBuilder.build(), true));
-      finalizeTest(actionExecutionContext, action, dataBuilder.build());
+      finalizeTest(attempt, actionExecutionContext, action, dataBuilder.build());
     } catch (IOException e) {
       executor.getEventHandler().handle(Event.error("Caught I/O exception: " + e));
       throw new EnvironmentalExecException("unexpected I/O exception", e);
@@ -181,7 +170,6 @@ public class StandaloneTestStrategy extends TestStrategy {
       TestResultData data,
       FileOutErr outErr)
       throws IOException {
-    ImmutableList.Builder<Pair<String, Path>> testOutputsBuilder = new ImmutableList.Builder<>();
     // Rename outputs
     String namePrefix =
         FileSystemUtils.removeExtension(action.getTestLog().getExecPath().getBaseName());
@@ -192,21 +180,17 @@ public class StandaloneTestStrategy extends TestStrategy {
     Path testLog = attemptsDir.getChild(attemptPrefix + ".log");
     if (action.getTestLog().getPath().exists()) {
       action.getTestLog().getPath().renameTo(testLog);
-      testOutputsBuilder.add(Pair.of("test.log", testLog));
     }
     ResolvedPaths resolvedPaths = action.resolve(executor.getExecRoot());
     if (resolvedPaths.getXmlOutputPath().exists()) {
       Path destinationPath = attemptsDir.getChild(attemptPrefix + ".xml");
       resolvedPaths.getXmlOutputPath().renameTo(destinationPath);
-      testOutputsBuilder.add(Pair.of("test.xml", destinationPath));
     }
     // Add the test log to the output
     dataBuilder.addFailedLogs(testLog.toString());
     dataBuilder.addTestTimes(data.getTestTimes(0));
     dataBuilder.addAllTestProcessTimes(data.getTestProcessTimesList());
-    executor
-        .getEventBus()
-        .post(new TestAttempt(action, attempt, data.getTestPassed(), testOutputsBuilder.build()));
+    executor.getEventBus().post(new TestAttempt(action, attempt));
     processTestOutput(executor, outErr, new TestResult(action, data, false), testLog);
   }
 
@@ -243,10 +227,13 @@ public class StandaloneTestStrategy extends TestStrategy {
       Path workingDirectory)
       throws IOException, ExecException, InterruptedException {
     prepareFileSystem(action, tmpDir, coverageDir, workingDirectory);
+    ResourceSet resources =
+        action.getTestProperties().getLocalResourceUsage(executionOptions.usingLocalTestJobs());
 
     try (FileOutErr fileOutErr =
             new FileOutErr(
-                action.getTestLog().getPath(), action.resolve(execRoot).getTestStderr())) {
+                action.getTestLog().getPath(), action.resolve(execRoot).getTestStderr());
+        ResourceHandle handle = ResourceManager.instance().acquireResources(action, resources)) {
       TestResultData data =
           executeTest(
               action,
@@ -378,9 +365,12 @@ public class StandaloneTestStrategy extends TestStrategy {
   }
 
   private final void finalizeTest(
-      ActionExecutionContext actionExecutionContext, TestRunnerAction action, TestResultData data)
+      int attempt,
+      ActionExecutionContext actionExecutionContext,
+      TestRunnerAction action,
+      TestResultData data)
       throws IOException, ExecException {
-    TestResult result = new TestResult(action, data, false);
+    TestResult result = new TestResult(action, data, false, attempt);
     postTestResult(actionExecutionContext.getExecutor(), result);
 
     processTestOutput(
@@ -400,6 +390,6 @@ public class StandaloneTestStrategy extends TestStrategy {
   @Override
   public TestResult newCachedTestResult(
       Path execRoot, TestRunnerAction action, TestResultData data) {
-    return new TestResult(action, data, /*cached*/ true, execRoot);
+    return new TestResult(action, data, /*cached*/ true);
   }
 }
