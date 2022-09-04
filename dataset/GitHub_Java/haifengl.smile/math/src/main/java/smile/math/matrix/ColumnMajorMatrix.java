@@ -103,21 +103,11 @@ public class ColumnMajorMatrix extends DenseMatrix {
 
     /**
      * Constructor.
-     * @param value the array of matrix values arranged in column major format
      */
-    public ColumnMajorMatrix(int rows, int cols, double[] value) {
+    ColumnMajorMatrix(int rows, int cols, double[] value) {
         this.nrows = rows;
         this.ncols = cols;
         this.A = value;
-    }
-
-    /**
-     * Constructor of a square diagonal matrix with the elements of vector diag on the main diagonal.
-     */
-    public ColumnMajorMatrix(double[] diag) {
-        this(diag.length, diag.length);
-        for (int i = 0; i < diag.length; i++)
-            set(i, i, diag[i]);
     }
 
     /**
