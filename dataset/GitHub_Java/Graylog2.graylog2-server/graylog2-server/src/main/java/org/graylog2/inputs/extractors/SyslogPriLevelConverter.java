@@ -17,19 +17,36 @@
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package org.graylog2.inputs.converters;
+package org.graylog2.inputs.extractors;
+
+import com.google.common.primitives.Ints;
+import org.graylog2.inputs.converters.SyslogPriUtilities;
+import org.graylog2.plugin.inputs.Converter;
+
+import java.util.Map;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
-public class SyslogPriUtilities {
+public class SyslogPriLevelConverter extends Converter {
 
-    public static int levelFromPriority(int priority) {
-        return priority - (facilityFromPriority(priority) << 3);
+    public SyslogPriLevelConverter(Map<String, Object> config) {
+        super(Type.SYSLOG_PRI_LEVEL, config);
     }
 
-    public static int facilityFromPriority(int priority) {
-        return priority >> 3;
+    @Override
+    public Object convert(String value) {
+        if (value == null || value.isEmpty()) {
+            return value;
+        }
+
+        Integer priority = Ints.tryParse(value);
+
+        if (priority == null) {
+            return value;
+        }
+
+        return SyslogPriUtilities.levelFromPriority(priority);
     }
 
 }

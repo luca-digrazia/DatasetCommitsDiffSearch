@@ -17,19 +17,31 @@
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package org.graylog2.inputs.converters;
+package org.graylog2.inputs.extractors;
+
+import org.graylog2.plugin.inputs.Converter;
+import org.junit.Test;
+
+import java.util.HashMap;
+
+import static junit.framework.Assert.assertEquals;
+import static junit.framework.Assert.assertNull;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
-public class SyslogPriUtilities {
+public class SyslogPriFacilityConverterTest {
 
-    public static int levelFromPriority(int priority) {
-        return priority - (facilityFromPriority(priority) << 3);
-    }
+    @Test
+    public void testConvert() throws Exception {
+        Converter hc = new SyslogPriFacilityConverter(new HashMap<String, Object>());
+        assertNull(hc.convert(null));
+        assertEquals("", hc.convert(""));
+        assertEquals("lol no number", hc.convert("lol no number"));
 
-    public static int facilityFromPriority(int priority) {
-        return priority >> 3;
+        assertEquals("user-level", hc.convert("14")); // user-level
+        assertEquals("kernel", hc.convert("5")); // kernel
+        assertEquals("security/authorization", hc.convert("87")); // security/authorization
     }
 
 }
