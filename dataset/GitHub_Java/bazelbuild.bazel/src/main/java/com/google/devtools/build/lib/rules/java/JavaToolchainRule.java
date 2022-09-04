@@ -75,6 +75,13 @@ public final class JavaToolchainRule<C extends JavaToolchain> implements RuleDef
                 .allowedFileTypes(FileTypeSet.ANY_FILE)
                 // This should be in the target configuration.
                 .cfg(NoTransition.createFactory()))
+        .add(
+            attr("extclasspath", LABEL_LIST)
+                .undocumented("internal")
+                .value(ImmutableList.of())
+                .allowedFileTypes(FileTypeSet.ANY_FILE)
+                // This should be in the target configuration.
+                .cfg(NoTransition.createFactory()))
         /* <!-- #BLAZE_RULE(java_toolchain).ATTRIBUTE(xlint) -->
         The list of warning to add or removes from default list. Precedes it with a dash to
         removes it. Please see the Javac documentation on the -Xlint options for more information.
@@ -257,8 +264,7 @@ public final class JavaToolchainRule<C extends JavaToolchain> implements RuleDef
                 .allowedFileTypes()
                 // This needs to be in the execution configuration.
                 .cfg(ExecutionTransitionFactory.create())
-                .mandatoryBuiltinProviders(
-                    ImmutableList.of(JavaPackageConfigurationProvider.class)))
+                .mandatoryNativeProviders(ImmutableList.of(JavaPackageConfigurationProvider.class)))
         /* <!-- #BLAZE_RULE(java_toolchain).ATTRIBUTE(jacocorunner) -->
         Label of the JacocoCoverageRunner deploy jar.
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
