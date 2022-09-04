@@ -48,14 +48,13 @@ import io.quarkus.gizmo.MethodCreator;
 import io.quarkus.gizmo.MethodDescriptor;
 import io.quarkus.gizmo.ResultHandle;
 import io.quarkus.vertx.http.deployment.FilterBuildItem;
-import io.quarkus.vertx.http.deployment.RequireBodyHandlerBuildItem;
 import io.quarkus.vertx.http.deployment.RouteBuildItem;
 import io.quarkus.vertx.http.runtime.HandlerType;
+import io.quarkus.vertx.http.runtime.HttpConfiguration;
 import io.quarkus.vertx.web.Route;
 import io.quarkus.vertx.web.RouteBase;
 import io.quarkus.vertx.web.RouteFilter;
 import io.quarkus.vertx.web.RoutingExchange;
-import io.quarkus.vertx.web.runtime.RouteHandler;
 import io.quarkus.vertx.web.runtime.RoutingExchangeImpl;
 import io.quarkus.vertx.web.runtime.VertxWebRecorder;
 import io.vertx.core.Handler;
@@ -105,7 +104,7 @@ class VertxWebProcessor {
 
         // Collect all business methods annotated with @Route and @RouteFilter
         AnnotationStore annotationStore = validationPhase.getContext().get(BuildExtension.Key.ANNOTATION_STORE);
-        for (BeanInfo bean : validationPhase.getContext().beans().classBeans()) {
+        for (BeanInfo bean : validationPhase.getContext().get(BuildExtension.Key.BEANS)) {
             if (bean.isClassBean()) {
                 // NOTE: inherited business methods are not taken into account
                 ClassInfo beanClass = bean.getTarget().get().asClass();
@@ -150,8 +149,9 @@ class VertxWebProcessor {
     }
 
     @BuildStep
-    BodyHandlerBuildItem bodyHandler(io.quarkus.vertx.http.deployment.BodyHandlerBuildItem realOne) {
-        return new BodyHandlerBuildItem(realOne.getHandler());
+    @Record(ExecutionTime.RUNTIME_INIT)
+    BodyHandlerBuildItem bodyHandler(VertxWebRecorder recorder, HttpConfiguration httpConfiguration) {
+        return new BodyHandlerBuildItem(recorder.createBodyHandler(httpConfiguration));
     }
 
     @BuildStep
@@ -163,10 +163,9 @@ class VertxWebProcessor {
             BuildProducer<GeneratedClassBuildItem> generatedClass,
             AnnotationProxyBuildItem annotationProxy,
             BuildProducer<ReflectiveClassBuildItem> reflectiveClasses,
-            io.quarkus.vertx.http.deployment.BodyHandlerBuildItem bodyHandler,
+            BodyHandlerBuildItem bodyHandler,
             BuildProducer<RouteBuildItem> routeProducer,
-            BuildProducer<FilterBuildItem> filterProducer,
-            List<RequireBodyHandlerBuildItem> bodyHandlerRequired) throws IOException {
+            BuildProducer<FilterBuildItem> filterProducer) throws IOException {
 
         ClassOutput classOutput = new GeneratedClassGizmoAdaptor(generatedClass, true);
 
@@ -333,10 +332,9 @@ class VertxWebProcessor {
                 + HashUtil.sha1(sigBuilder.toString());
 
         ClassCreator invokerCreator = ClassCreator.builder().classOutput(classOutput).className(generatedName)
-                .interfaces(RouteHandler.class).build();
+                .interfaces(Handler.class).build();
 
-        // The descriptor is: void invokeBean(Object context)
-        MethodCreator invoke = invokerCreator.getMethodCreator("invokeBean", void.class, Object.class);
+        MethodCreator invoke = invokerCreator.getMethodCreator("handle", void.class, Object.class);
         // ArcContainer container = Arc.container();
         // InjectableBean<Foo: bean = container.bean("1");
         // InstanceHandle<Foo> handle = container().instance(bean);
