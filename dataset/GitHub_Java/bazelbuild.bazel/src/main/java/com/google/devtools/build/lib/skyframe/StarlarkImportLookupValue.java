@@ -20,7 +20,7 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.syntax.Module;
+import com.google.devtools.build.lib.syntax.StarlarkThread.Extension;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
@@ -32,38 +32,35 @@ import java.util.Objects;
  * one Starlark file, identified by an absolute {@link Label} {@link SkyKey} argument. The Label
  * should not reference the special {@code external} package.
  */
+@AutoCodec
 public class StarlarkImportLookupValue implements SkyValue {
 
-  private final Module module; // .bzl module
-  private final byte[] transitiveDigest; // of .bzl file and load dependencies
-
+  private final Extension environmentExtension;
   /**
-   * The immediate Starlark file dependency descriptor class corresponding to this value. Using this
-   * reference it's possible to reach the transitive closure of Starlark files on which this
-   * Starlark file depends.
+   * The immediate Starlark file dependency descriptor class corresponding to this value.
+   * Using this reference it's possible to reach the transitive closure of Starlark files
+   * on which this Starlark file depends.
    */
-  private final StarlarkFileDependency dependency;
+  private final SkylarkFileDependency dependency;
 
   @VisibleForTesting
   public StarlarkImportLookupValue(
-      Module module, byte[] transitiveDigest, StarlarkFileDependency dependency) {
-    this.module = Preconditions.checkNotNull(module);
-    this.transitiveDigest = Preconditions.checkNotNull(transitiveDigest);
+      Extension environmentExtension, SkylarkFileDependency dependency) {
+    this.environmentExtension = Preconditions.checkNotNull(environmentExtension);
     this.dependency = Preconditions.checkNotNull(dependency);
   }
 
-  /** Returns the .bzl module. */
-  public Module getModule() {
-    return module;
+  /**
+   * Returns the Extension
+   */
+  public Extension getEnvironmentExtension() {
+    return environmentExtension;
   }
 
-  /** Returns the digest of the .bzl module and its transitive load dependencies. */
-  public byte[] getTransitiveDigest() {
-    return transitiveDigest;
-  }
-
-  /** Returns the immediate Starlark file dependency corresponding to this import lookup value. */
-  public StarlarkFileDependency getDependency() {
+  /**
+   * Returns the immediate Starlark file dependency corresponding to this import lookup value.
+   */
+  public SkylarkFileDependency getDependency() {
     return dependency;
   }
 
@@ -157,5 +154,23 @@ public class StarlarkImportLookupValue implements SkyValue {
   static Key key(Label importLabel) {
     return Key.create(
         importLabel, /* inWorkspace= */ false, /* workspaceChunk= */ -1, /* workspacePath= */ null);
+  }
+
+  @Override
+  public boolean equals(Object obj) {
+    if (this == obj) {
+      return true;
+    }
+    if (!(obj instanceof StarlarkImportLookupValue)) {
+      return false;
+    }
+    StarlarkImportLookupValue other = (StarlarkImportLookupValue) obj;
+    return environmentExtension.equals(other.getEnvironmentExtension())
+        && dependency.equals(other.getDependency());
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(environmentExtension, dependency);
   }
 }
