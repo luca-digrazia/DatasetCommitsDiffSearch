@@ -19,6 +19,7 @@ import com.google.devtools.build.lib.skyframe.serialization.DeserializationConte
 import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.SerializationContext;
 import com.google.devtools.build.lib.skyframe.serialization.SerializationException;
+import com.google.devtools.build.lib.skyframe.serialization.strings.StringCodecs;
 import com.google.protobuf.CodedInputStream;
 import com.google.protobuf.CodedOutputStream;
 import java.io.IOException;
@@ -49,19 +50,21 @@ public abstract class NativeAspectClass implements AspectClass {
     public void serialize(
         SerializationContext context, NativeAspectClass obj, CodedOutputStream codedOut)
         throws SerializationException, IOException {
-      RuleClassProvider ruleClassProvider = context.getDependency(RuleClassProvider.class);
+      RuleClassProvider ruleClassProvider =
+          Preconditions.checkNotNull(context.getDependency(RuleClassProvider.class), obj);
       NativeAspectClass storedAspect = ruleClassProvider.getNativeAspectClass(obj.getKey());
       Preconditions.checkState(
           obj == storedAspect, "Not stored right: %s %s %s", obj, storedAspect, ruleClassProvider);
-      context.serialize(obj.getKey(), codedOut);
+      StringCodecs.asciiOptimized().serialize(context, obj.getKey(), codedOut);
     }
 
     @Override
     public NativeAspectClass deserialize(DeserializationContext context, CodedInputStream codedIn)
         throws SerializationException, IOException {
-      String aspectKey = context.deserialize(codedIn);
+      String aspectKey = StringCodecs.asciiOptimized().deserialize(context, codedIn);
       return Preconditions.checkNotNull(
-          context.getDependency(RuleClassProvider.class).getNativeAspectClass(aspectKey),
+          Preconditions.checkNotNull(context.getDependency(RuleClassProvider.class), aspectKey)
+              .getNativeAspectClass(aspectKey),
           aspectKey);
     }
   }

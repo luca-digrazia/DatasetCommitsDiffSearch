@@ -71,6 +71,8 @@ import javax.annotation.Nullable;
  */
 @SuppressWarnings("JavaLangClash")
 public class Package {
+  public static final ObjectCodec<Package> CODEC = new PackageCodec();
+
   /**
    * Common superclass for all name-conflict exceptions.
    */
@@ -719,7 +721,7 @@ public class Package {
    */
   public static class Builder {
 
-    public interface Helper {
+    public static interface Helper {
       /**
        * Returns a fresh {@link Package} instance that a {@link Builder} will internally mutate
        * during package loading. Called by {@link PackageFactory}.
@@ -728,16 +730,10 @@ public class Package {
 
       /**
        * Called after {@link com.google.devtools.build.lib.skyframe.PackageFunction} is completely
-       * done loading the given {@link Package}.
-       *
-       * @param pkg the loaded {@link Package}
-       * @param skylarkSemantics are the semantics used to load the package
-       * @param loadTimeMs the wall time, in ms, that it took to load the package. More precisely,
-       *     this is the wall time of the call to {@link PackageFactory#createPackageFromAst}.
-       *     Notably, this does not include the time to read and parse the package's BUILD file, nor
-       *     the time to read, parse, or evaluate any of the transitively loaded .bzl files.
+       * done loading the given {@link Package}. {@code skylarkSemantics} are the semantics used to
+       * evaluate the build.
        */
-      void onLoadingComplete(Package pkg, SkylarkSemantics skylarkSemantics, long loadTimeMs);
+      void onLoadingComplete(Package pkg, SkylarkSemantics skylarkSemantics);
     }
 
     /** {@link Helper} that simply calls the {@link Package} constructor. */
@@ -753,8 +749,7 @@ public class Package {
       }
 
       @Override
-      public void onLoadingComplete(
-          Package pkg, SkylarkSemantics skylarkSemantics, long loadTimeMs) {
+      public void onLoadingComplete(Package pkg, SkylarkSemantics skylarkSemantics) {
       }
     }
 
@@ -1582,8 +1577,7 @@ public class Package {
   }
 
   /** Package codec implementation. */
-  @VisibleForTesting
-  static final class PackageCodec implements ObjectCodec<Package> {
+  private static final class PackageCodec implements ObjectCodec<Package> {
     @Override
     public Class<Package> getEncodedClass() {
       return Package.class;
