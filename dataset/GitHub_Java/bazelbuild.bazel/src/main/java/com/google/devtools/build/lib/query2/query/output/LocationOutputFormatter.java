@@ -15,10 +15,9 @@
 package com.google.devtools.build.lib.query2.query.output;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.hash.HashFunction;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.query2.common.AbstractBlazeQueryEnvironment;
-import com.google.devtools.build.lib.query2.common.CommonQueryOptions;
+import com.google.devtools.build.lib.query2.AbstractBlazeQueryEnvironment;
 import com.google.devtools.build.lib.query2.engine.AggregatingQueryExpressionVisitor.ContainsFunctionQueryExpressionVisitor;
 import com.google.devtools.build.lib.query2.engine.OutputFormatterCallback;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment;
@@ -26,8 +25,6 @@ import com.google.devtools.build.lib.query2.engine.QueryException;
 import com.google.devtools.build.lib.query2.engine.QueryExpression;
 import com.google.devtools.build.lib.query2.engine.SynchronizedDelegatingOutputFormatterCallback;
 import com.google.devtools.build.lib.query2.engine.ThreadSafeOutputFormatterCallback;
-import com.google.devtools.build.lib.query2.query.aspectresolvers.AspectResolver;
-import com.google.devtools.build.lib.server.FailureDetails.Query;
 import java.io.IOException;
 import java.io.OutputStream;
 
@@ -39,20 +36,9 @@ import java.io.OutputStream;
  */
 class LocationOutputFormatter extends AbstractUnorderedFormatter {
 
-  private boolean relativeLocations;
-  private boolean displaySourceFileLocation;
-
   @Override
   public String getName() {
     return "location";
-  }
-
-  @Override
-  public void setOptions(
-      CommonQueryOptions options, AspectResolver aspectResolver, HashFunction hashFunction) {
-    super.setOptions(options, aspectResolver, hashFunction);
-    this.relativeLocations = options.relativeLocations;
-    this.displaySourceFileLocation = options.displaySourceFileLocation;
   }
 
   @Override
@@ -68,8 +54,7 @@ class LocationOutputFormatter extends AbstractUnorderedFormatter {
     if (expr.accept(noteBuildFilesAndLoadLilesVisitor)) {
       throw new QueryException(
           "Query expressions involving 'buildfiles' or 'loadfiles' cannot be used with "
-              + "--output=location",
-          Query.Code.BUILDFILES_AND_LOADFILES_CANNOT_USE_OUTPUT_LOCATION_ERROR);
+          + "--output=location");
     }
   }
 
@@ -82,12 +67,13 @@ class LocationOutputFormatter extends AbstractUnorderedFormatter {
       public void processOutput(Iterable<Target> partialResult) throws IOException {
         final String lineTerm = options.getLineTerminator();
         for (Target target : partialResult) {
+          Location location = target.getLocation();
           writer
-              .append(FormatUtils.getLocation(target, relativeLocations, displaySourceFileLocation))
+              .append(location.print())
               .append(": ")
               .append(target.getTargetKind())
               .append(" ")
-              .append(target.getLabel().getCanonicalForm())
+              .append(target.getLabel().getDefaultCanonicalForm())
               .append(lineTerm);
         }
       }

@@ -34,7 +34,6 @@ import com.google.devtools.build.lib.packages.AggregatingAttributeMapper;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.AttributeFormatter;
 import com.google.devtools.build.lib.packages.BuildType;
-import com.google.devtools.build.lib.packages.DependencyFilter;
 import com.google.devtools.build.lib.packages.EnvironmentGroup;
 import com.google.devtools.build.lib.packages.InputFile;
 import com.google.devtools.build.lib.packages.OutputFile;
@@ -88,14 +87,16 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
           Type.INTEGER, Type.STRING, BuildType.LABEL, BuildType.NODEP_LABEL, BuildType.OUTPUT,
           Type.BOOLEAN, BuildType.TRISTATE, BuildType.LICENSE);
 
-  private AspectResolver aspectResolver;
-  private DependencyFilter dependencyFilter;
   private boolean relativeLocations;
   protected boolean includeDefaultValues = true;
   private Predicate<String> ruleAttributePredicate = Predicates.alwaysTrue();
   private boolean flattenSelects = true;
   private boolean includeLocations = true;
   private boolean includeRuleInputsAndOutputs = true;
+
+  protected void setDependencyFilter(QueryOptions options) {
+    this.dependencyFilter = OutputFormatter.getDependencyFilter(options);
+  }
 
   @Override
   public String getName() {
@@ -105,8 +106,6 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
   @Override
   public void setOptions(CommonQueryOptions options, AspectResolver aspectResolver) {
     super.setOptions(options, aspectResolver);
-    this.aspectResolver = aspectResolver;
-    this.dependencyFilter = OutputFormatter.getDependencyFilter(options);
     this.relativeLocations = options.relativeLocations;
     this.includeDefaultValues = options.protoIncludeDefaultValues;
     this.ruleAttributePredicate = newAttributePredicate(options.protoOutputRuleAttributes);

@@ -14,7 +14,7 @@
 
 package com.google.devtools.build.lib.query2.query.output;
 
-import com.google.devtools.build.lib.cmdline.Label;
+import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.query2.engine.OutputFormatterCallback;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment;
@@ -22,39 +22,42 @@ import com.google.devtools.build.lib.query2.engine.SynchronizedDelegatingOutputF
 import com.google.devtools.build.lib.query2.engine.ThreadSafeOutputFormatterCallback;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.Set;
 
 /**
- * An output formatter that prints the labels of the resulting target set in
- * topological order, optionally with the target's kind.
+ * An output formatter that prints the names of the packages of the target
+ * set, in lexicographical order without duplicates.
  */
-class LabelOutputFormatter extends AbstractUnorderedFormatter {
-
-  private final boolean showKind;
-
-  LabelOutputFormatter(boolean showKind) {
-    this.showKind = showKind;
-  }
+class PackageOutputFormatter extends AbstractUnorderedFormatter {
 
   @Override
   public String getName() {
-    return showKind ? "label_kind" : "label";
+    return "package";
   }
 
   @Override
   public OutputFormatterCallback<Target> createPostFactoStreamCallback(
       OutputStream out, final QueryOptions options) {
     return new TextOutputFormatterCallback<Target>(out) {
+      private final Set<String> packageNames = Sets.newTreeSet();
+
       @Override
-      public void processOutput(Iterable<Target> partialResult) throws IOException {
-        String lineTerm = options.getLineTerminator();
+      public void processOutput(Iterable<Target> partialResult) {
+
         for (Target target : partialResult) {
-          if (showKind) {
-            writer.append(target.getTargetKind());
-            writer.append(' ');
-          }
-          Label label = target.getLabel();
-          writer.append(label.getDefaultCanonicalForm()).append(lineTerm);
+          packageNames.add(target.getLabel().getPackageIdentifier().toString());
         }
+      }
+
+      @Override
+      public void close(boolean failFast) throws IOException {
+        if (!failFast) {
+          final String lineTerm = options.getLineTerminator();
+          for (String packageName : packageNames) {
+            writer.append(packageName).append(lineTerm);
+          }
+        }
+        super.close(failFast);
       }
     };
   }

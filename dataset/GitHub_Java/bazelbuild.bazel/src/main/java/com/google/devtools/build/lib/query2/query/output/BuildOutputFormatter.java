@@ -115,7 +115,7 @@ public class BuildOutputFormatter extends AbstractUnorderedFormatter {
           continue;
         }
         PossibleAttributeValues values = attrReader.getPossibleValues(rule, attr);
-        if (values.getSource() != AttributeValueSource.RULE) {
+        if (values.source != AttributeValueSource.RULE) {
           continue; // Don't print default values.
         }
         if (Iterables.size(values) != 1) {
@@ -200,8 +200,7 @@ public class BuildOutputFormatter extends AbstractUnorderedFormatter {
     @Override
     public void processOutput(Iterable<Target> partialResult) throws IOException {
       for (Target target : partialResult) {
-        targetOutputter.output(
-            target, (rule, attr) -> PossibleAttributeValues.forRuleAndAttribute(rule, attr));
+        targetOutputter.output(target, (rule, attr) -> getPossibleAttributeValues(rule, attr));
       }
     }
   }

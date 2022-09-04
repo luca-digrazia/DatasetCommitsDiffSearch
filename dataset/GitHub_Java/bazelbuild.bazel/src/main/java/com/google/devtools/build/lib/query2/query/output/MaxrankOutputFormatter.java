@@ -51,7 +51,11 @@ class MaxrankOutputFormatter extends OutputFormatter {
 
   @Override
   public void output(
-      QueryOptions options, Digraph<Target> result, OutputStream out, AspectResolver aspectResolver)
+      QueryOptions options,
+      Digraph<Target> result,
+      OutputStream out,
+      AspectResolver aspectResolver,
+      ConditionalEdges conditionalEdges)
       throws IOException {
     // In order to handle cycles correctly, we need work on the strong
     // component graph, as cycles should be treated a "clump" of nodes all on
