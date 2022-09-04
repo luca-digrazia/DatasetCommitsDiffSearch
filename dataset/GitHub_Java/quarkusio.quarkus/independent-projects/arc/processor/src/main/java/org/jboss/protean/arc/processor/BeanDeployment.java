@@ -344,24 +344,10 @@ public class BeanDeployment {
                 continue;
             }
 
-            if (!beanClass.hasNoArgsConstructor()) {
-                int numberOfConstructorsWithoutInject = 0;
-                int numberOfConstructorsWithInject = 0;
-                for (MethodInfo m : beanClass.methods()) {
-                    if (m.name().equals("<init>")) {
-                        if (m.hasAnnotation(DotNames.INJECT)) {
-                            numberOfConstructorsWithInject++;
-                        } else {
-                            numberOfConstructorsWithoutInject++;
-                        }
-                    }
-                }
-
-                // a bean without no-arg constructor needs to have either a constructor annotated with @Inject
-                // or a single constructor
-                if (numberOfConstructorsWithInject == 0 && numberOfConstructorsWithoutInject != 1) {
-                    continue;
-                }
+            if (!beanClass.hasNoArgsConstructor()
+                    && beanClass.methods().stream().noneMatch(m -> m.name().equals("<init>") && m.hasAnnotation(DotNames.INJECT))) {
+                // Must have a constructor with no parameters or declare a constructor annotated with @Inject
+                continue;
             }
 
             if (annotationStore.hasAnnotation(beanClass, DotNames.VETOED)) {
@@ -548,9 +534,7 @@ public class BeanDeployment {
             beanDefiningAnnotations.add(scope.getDotName());
         }
         if (additionalBeanDefiningAnnotations != null) {
-            for (BeanDefiningAnnotation additional : additionalBeanDefiningAnnotations) {
-                beanDefiningAnnotations.add(additional.getAnnotation());
-            }
+            beanDefiningAnnotations.addAll(additionalBeanDefiningAnnotations.stream().map(BeanDefiningAnnotation::getAnnotation).collect(Collectors.toSet()));
         }
         beanDefiningAnnotations.addAll(stereotypes);
         beanDefiningAnnotations.add(DotNames.create(Model.class));
