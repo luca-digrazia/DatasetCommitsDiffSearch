@@ -10,32 +10,26 @@ import com.yammer.dropwizard.db.ConfigurationStrategy;
 import com.yammer.dropwizard.db.DatabaseConfiguration;
 import org.hibernate.SessionFactory;
 
-public abstract class HibernateBundle<T extends Configuration> implements ConfiguredBundle<T>, ConfigurationStrategy<T> {
+public abstract class HibernateBundle<T extends Configuration> extends ConfiguredBundle<T> implements ConfigurationStrategy<T> {
     private SessionFactory sessionFactory;
 
-    private final ImmutableList<Class<?>> entities;
-    private final SessionFactoryFactory sessionFactoryFactory;
+    private final ImmutableList<String> packages;
 
-    protected HibernateBundle(Class<?>... entities) {
-        this(ImmutableList.copyOf(entities), new SessionFactoryFactory());
-    }
-
-    protected HibernateBundle(ImmutableList<Class<?>> entities,
-                              SessionFactoryFactory sessionFactoryFactory) {
-        this.entities = entities;
-        this.sessionFactoryFactory = sessionFactoryFactory;
+    protected HibernateBundle(String... packages) {
+        this.packages = ImmutableList.copyOf(packages);
     }
 
     @Override
     public final void initialize(Bootstrap<?> bootstrap) {
-        bootstrap.getObjectMapperFactory().registerModule(new Hibernate4Module());
+        final Hibernate4Module module = new Hibernate4Module();
+        bootstrap.getObjectMapperFactory().registerModule(module);
     }
 
     @Override
     public final void run(T configuration, Environment environment) throws Exception {
         final DatabaseConfiguration dbConfig = getDatabaseConfiguration(configuration);
-        this.sessionFactory = sessionFactoryFactory.build(environment, dbConfig, entities);
-        environment.addProvider(new UnitOfWorkResourceMethodDispatchAdapter(sessionFactory));
+        this.sessionFactory = new SessionFactoryFactory(environment).build(dbConfig, packages);
+        environment.addProvider(new TransactionalResourceMethodDispatchAdapter(sessionFactory));
         environment.addHealthCheck(new SessionFactoryHealthCheck("hibernate",
                                                                  sessionFactory,
                                                                  dbConfig.getValidationQuery()));

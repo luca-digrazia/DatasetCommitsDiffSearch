@@ -1,6 +1,7 @@
 package com.yammer.dropwizard.hibernate;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.sun.jersey.core.spi.scanning.PackageNamesScanner;
 import com.sun.jersey.spi.scanning.AnnotationScannerListener;
@@ -34,16 +35,13 @@ public class SessionFactoryFactory {
         final ManagedDataSourceFactory dataSourceFactory = new ManagedDataSourceFactory(dbConfig);
         final ManagedDataSource dataSource = dataSourceFactory.build();
         environment.manage(dataSource);
-        return buildSessionFactory(buildConnectionProvider(dataSource, dbConfig.getProperties()),
-                                   dbConfig.getProperties(),
-                                   packages);
+        return buildSessionFactory(buildConnectionProvider(dataSource), dbConfig.getProperties(), packages);
     }
 
-    private ConnectionProvider buildConnectionProvider(DataSource dataSource,
-                                                       ImmutableMap<String, String> properties) {
+    private ConnectionProvider buildConnectionProvider(DataSource dataSource) {
         final DatasourceConnectionProviderImpl connectionProvider = new DatasourceConnectionProviderImpl();
         connectionProvider.setDataSource(dataSource);
-        connectionProvider.configure(properties);
+        connectionProvider.configure(Maps.newHashMap());
         return connectionProvider;
     }
 
