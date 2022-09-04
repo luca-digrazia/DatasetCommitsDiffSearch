@@ -536,7 +536,8 @@ public class MatrixContext implements Serializable {
    */
   public void init(Configuration conf) throws IOException {
     initPartitioner();
-
+    adaptParams();
+    check();
     String loadPath = attributes.get(MatrixConf.MATRIX_LOAD_PATH);
     if (loadPath == null) {
       loadPath = conf.get(AngelConf.ANGEL_LOAD_MODEL_PATH);
@@ -549,9 +550,6 @@ public class MatrixContext implements Serializable {
     } else {
       loadMatrixMetaFromFile(name, loadPath, conf);
     }
-
-    adaptParams();
-    check();
   }
 
   private boolean matrixPathExist(String loadPath, String name, Configuration conf)
