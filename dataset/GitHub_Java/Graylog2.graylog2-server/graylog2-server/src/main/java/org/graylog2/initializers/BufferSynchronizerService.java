@@ -62,7 +62,7 @@ public class BufferSynchronizerService extends AbstractIdleService {
     @Override
     protected void shutDown() throws Exception {
         LOG.debug("Stopping BufferSynchronizerService");
-        if (cluster.isConnected() && cluster.isDeflectorHealthy()) {
+        if (cluster.isConnected() && cluster.isHealthy()) {
             final ExecutorService executorService = executorService(metricRegistry);
 
             executorService.submit(new Runnable() {

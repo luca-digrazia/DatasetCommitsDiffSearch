@@ -16,19 +16,15 @@
  */
 package org.graylog2.periodical;
 
-import org.elasticsearch.cluster.health.ClusterHealthStatus;
+import org.elasticsearch.action.admin.cluster.health.ClusterHealthStatus;
 import org.graylog2.indexer.Deflector;
 import org.graylog2.indexer.NoTargetIndexException;
 import org.graylog2.indexer.cluster.Cluster;
 import org.graylog2.indexer.indices.Indices;
-import org.graylog2.indexer.indices.TooManyAliasesException;
-import org.graylog2.indexer.management.IndexManagementConfig;
 import org.graylog2.notifications.Notification;
 import org.graylog2.notifications.NotificationService;
-import org.graylog2.plugin.cluster.ClusterConfigService;
 import org.graylog2.plugin.indexer.rotation.RotationStrategy;
 import org.graylog2.plugin.periodical.Periodical;
-import org.graylog2.plugin.system.NodeId;
 import org.graylog2.shared.system.activities.Activity;
 import org.graylog2.shared.system.activities.ActivityWriter;
 import org.slf4j.Logger;
@@ -36,7 +32,6 @@ import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import javax.inject.Provider;
-import java.util.Map;
 
 public class IndexRotationThread extends Periodical {
     private static final Logger LOG = LoggerFactory.getLogger(IndexRotationThread.class);
@@ -46,9 +41,7 @@ public class IndexRotationThread extends Periodical {
     private final Cluster cluster;
     private final ActivityWriter activityWriter;
     private final Indices indices;
-    private final NodeId nodeId;
-    private final ClusterConfigService clusterConfigService;
-    private final Map<String, Provider<RotationStrategy>> rotationStrategyMap;
+    private final Provider<RotationStrategy> rotationStrategyProvider;
 
     @Inject
     public IndexRotationThread(NotificationService notificationService,
@@ -56,17 +49,13 @@ public class IndexRotationThread extends Periodical {
                                Deflector deflector,
                                Cluster cluster,
                                ActivityWriter activityWriter,
-                               NodeId nodeId,
-                               ClusterConfigService clusterConfigService,
-                               Map<String, Provider<RotationStrategy>> rotationStrategyMap) {
+                               Provider<RotationStrategy> rotationStrategyProvider) {
         this.notificationService = notificationService;
         this.deflector = deflector;
         this.cluster = cluster;
         this.activityWriter = activityWriter;
         this.indices = indices;
-        this.nodeId = nodeId;
-        this.clusterConfigService = clusterConfigService;
-        this.rotationStrategyMap = rotationStrategyMap;
+        this.rotationStrategyProvider = rotationStrategyProvider;
     }
 
     @Override
@@ -90,42 +79,27 @@ public class IndexRotationThread extends Periodical {
     }
 
     protected void checkForRotation() {
-        final IndexManagementConfig config = clusterConfigService.get(IndexManagementConfig.class);
-
-        if (config == null) {
-            LOG.warn("No index management configuration found, not running index rotation!");
-            rotationProblemNotification("Index Rotation Problem!",
-                    "No index management configuration found, not running index rotation! Please fix your index rotation configuration!");
-            return;
-        }
-
-        final Provider<RotationStrategy> rotationStrategyProvider = rotationStrategyMap.get(config.rotationStrategy());
-
-        if (rotationStrategyProvider == null) {
-            LOG.warn("Rotation strategy \"{}\" not found, not running index rotation!", config.rotationStrategy());
-            rotationProblemNotification("Index Rotation Problem!",
-                    "Index rotation strategy " + config.rotationStrategy() + " not found! Please fix your index rotation configuration!");
-            return;
-        }
-
         final RotationStrategy rotationStrategy = rotationStrategyProvider.get();
 
-        if (rotationStrategy == null) {
-            LOG.warn("No rotation strategy found, not running index rotation!");
+        String currentTarget;
+        try {
+            currentTarget = deflector.getNewestTargetName();
+        } catch (NoTargetIndexException e) {
+            LOG.error("Could not find current deflector target. Aborting.", e);
             return;
         }
-
-        rotationStrategy.rotate();
-    }
-
-    private void rotationProblemNotification(String title, String description) {
-        final Notification notification = notificationService.buildNow()
-                .addNode(nodeId.toString())
-                .addType(Notification.Type.GENERIC)
-                .addSeverity(Notification.Severity.URGENT)
-                .addDetail("title", title)
-                .addDetail("description", description);
-        notificationService.publishIfFirst(notification);
+        final RotationStrategy.Result rotate = rotationStrategy.shouldRotate(currentTarget);
+        if (rotate == null) {
+            LOG.error("Cannot perform rotation at this moment.");
+            return;
+        }
+        LOG.debug("Rotation strategy result: {}", rotate.getDescription());
+        if (rotate.shouldRotate()) {
+            LOG.info("Deflector index <{}> should be rotated, Pointing deflector to new index now!", currentTarget);
+            deflector.cycle();
+        } else {
+            LOG.debug("Deflector index <{}> should not be rotated. Not doing anything.", currentTarget);
+        }
     }
 
     protected void checkAndRepair() {
@@ -144,20 +118,7 @@ public class IndexRotationThread extends Periodical {
             }
         } else {
             try {
-                String currentTarget;
-                try {
-                    currentTarget = deflector.getCurrentActualTargetIndex();
-                } catch (TooManyAliasesException e) {
-                    // If we get this exception, there are multiple indices which have the deflector alias set.
-                    // We try to cleanup the alias and try again. This should not happen, but might under certain
-                    // circumstances.
-                    deflector.cleanupAliases(e.getIndices());
-                    try {
-                        currentTarget = deflector.getCurrentActualTargetIndex();
-                    } catch (TooManyAliasesException e1) {
-                        throw new IllegalStateException(e1);
-                    }
-                }
+                String currentTarget = deflector.getCurrentActualTargetIndex();
                 String shouldBeTarget = deflector.getNewestTargetName();
 
                 if (!shouldBeTarget.equals(currentTarget)) {

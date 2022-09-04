@@ -17,18 +17,15 @@
 package org.graylog2.indexer.cluster;
 
 import com.github.joschi.jadconfig.util.Duration;
-import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Lists;
 import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthRequest;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthResponse;
+import org.elasticsearch.action.admin.cluster.health.ClusterHealthStatus;
 import org.elasticsearch.action.admin.cluster.node.info.NodeInfo;
 import org.elasticsearch.action.admin.cluster.node.info.NodesInfoRequest;
 import org.elasticsearch.action.admin.cluster.node.info.NodesInfoResponse;
-import org.elasticsearch.action.admin.cluster.node.stats.NodeStats;
-import org.elasticsearch.action.admin.cluster.node.stats.NodesStatsRequest;
 import org.elasticsearch.client.Client;
-import org.elasticsearch.client.ClusterAdminClient;
-import org.elasticsearch.cluster.health.ClusterHealthStatus;
 import org.elasticsearch.cluster.node.DiscoveryNode;
 import org.graylog2.indexer.Deflector;
 import org.graylog2.indexer.esplugin.ClusterStateMonitor;
@@ -38,6 +35,7 @@ import org.slf4j.LoggerFactory;
 import javax.inject.Inject;
 import javax.inject.Named;
 import javax.inject.Singleton;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ScheduledExecutorService;
@@ -45,7 +43,6 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
 
 @Singleton
 public class Cluster {
@@ -71,58 +68,36 @@ public class Cluster {
         ClusterStateMonitor.setCluster(this);
     }
 
-    /**
-     * Requests the cluster health for all indices managed by Graylog. (default: graylog_*)
-     *
-     * @return the cluster health response
-     */
     public ClusterHealthResponse health() {
         ClusterHealthRequest request = new ClusterHealthRequest(deflector.getDeflectorWildcard());
         return c.admin().cluster().health(request).actionGet();
     }
 
-    /**
-     * Requests the cluster health for the current write index. (deflector)
-     *
-     * This can be used to decide if the current write index is healthy and writable even when older indices have
-     * problems.
-     *
-     * @return the cluster health response
-     */
-    public ClusterHealthResponse deflectorHealth() {
-        ClusterHealthRequest request = new ClusterHealthRequest(deflector.getName());
-        return c.admin().cluster().health(request).actionGet();
+    public int getNumberOfNodes() {
+        return c.admin().cluster().nodesInfo(new NodesInfoRequest().all()).actionGet().getNodes().length;
     }
 
-    public Map<String, NodeInfo> getDataNodes() {
-        return getAllNodes().entrySet().stream()
-                .filter(n -> n.getValue().getSettings().getAsBoolean("node.data", true))
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-    }
+    public List<NodeInfo> getDataNodes() {
+        List<NodeInfo> dataNodes = Lists.newArrayList();
 
-    public Map<String, NodeInfo> getAllNodes() {
-        final ClusterAdminClient clusterAdminClient = c.admin().cluster();
-        final NodesInfoRequest request = clusterAdminClient.prepareNodesInfo()
-                .all()
-                .request();
+        for (NodeInfo nodeInfo : getAllNodes()) {
+            /*
+             * We are setting node.data to false for our graylog2-server nodes.
+             * If it's not set or not false it is a data storing node.
+             */
+            String isData = nodeInfo.getSettings().get("node.data");
+            if (isData != null && isData.equals("false")) {
+                continue;
+            }
 
-        final ImmutableMap.Builder<String, NodeInfo> builder = ImmutableMap.builder();
-        for (NodeInfo nodeInfo : clusterAdminClient.nodesInfo(request).actionGet().getNodes()) {
-            builder.put(nodeInfo.getNode().id(), nodeInfo);
+            dataNodes.add(nodeInfo);
         }
 
-        return builder.build();
+        return dataNodes;
     }
 
-    public Map<String, NodeStats> getNodesStats(String... nodesIds) {
-        final ClusterAdminClient clusterAdminClient = c.admin().cluster();
-        final NodesStatsRequest request = clusterAdminClient.prepareNodesStats(nodesIds).request();
-        final ImmutableMap.Builder<String, NodeStats> builder = ImmutableMap.builder();
-        for (NodeStats nodeStats : clusterAdminClient.nodesStats(request).actionGet().getNodes()) {
-            builder.put(nodeStats.getNode().id(), nodeStats);
-        }
-
-        return builder.build();
+    public List<NodeInfo> getAllNodes() {
+        return Lists.newArrayList(c.admin().cluster().nodesInfo(new NodesInfoRequest().all()).actionGet().getNodes());
     }
 
     public String nodeIdToName(String nodeId) {
@@ -176,59 +151,32 @@ public class Cluster {
         }
     }
 
-    /**
-     * Check if the deflector (write index) health status is not {@link ClusterHealthStatus#RED} and that the
-     * {@link org.graylog2.indexer.Deflector#isUp() deflector is up}.
-     *
-     * @return {@code true} if the deflector is healthy and up, {@code false} otherwise
-     */
-    public boolean isDeflectorHealthy() {
-        try {
-            return deflectorHealth().getStatus() != ClusterHealthStatus.RED && deflector.isUp();
-        } catch (ElasticsearchException e) {
-            LOG.trace("Couldn't determine deflector index health properly", e);
-            return false;
-        }
-    }
-
-    /**
-     * Blocks until the Elasticsearch cluster and current write index is healthy again or the given timeout fires.
-     *
-     * @param timeout the timeout value
-     * @param unit the timeout unit
-     * @throws InterruptedException
-     * @throws TimeoutException
-     */
-    public void waitForConnectedAndDeflectorHealthy(long timeout, TimeUnit unit) throws InterruptedException, TimeoutException {
-        LOG.debug("Waiting until the write-active index is healthy again, checking once per second.");
+    public void waitForConnectedAndHealthy(long timeout, TimeUnit unit) throws InterruptedException, TimeoutException {
+        LOG.debug("Waiting until cluster connection comes back and cluster is healthy, checking once per second.");
 
         final CountDownLatch latch = new CountDownLatch(1);
-        final ScheduledFuture<?> scheduledFuture = scheduler.scheduleAtFixedRate(() -> {
-            try {
-                if (isConnected() && isDeflectorHealthy()) {
-                    LOG.debug("Write-active index is healthy again, unblocking waiting threads.");
-                    latch.countDown();
-                }
-            } catch (Exception ignore) {
-            } // to not cancel the schedule
+        final ScheduledFuture<?> scheduledFuture = scheduler.scheduleAtFixedRate(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    if (isConnected() && isHealthy()) {
+                        LOG.debug("Cluster is healthy again, unblocking waiting threads.");
+                        latch.countDown();
+                    }
+                } catch (Exception ignore) {} // to not cancel the schedule
+            }
         }, 0, 1, TimeUnit.SECONDS); // TODO should this be configurable?
 
         final boolean waitSuccess = latch.await(timeout, unit);
         scheduledFuture.cancel(true); // Make sure to cancel the task to avoid task leaks!
 
-        if (!waitSuccess) {
-            throw new TimeoutException("Write-active index didn't get healthy within timeout");
+        if(!waitSuccess) {
+            throw new TimeoutException("Elasticsearch cluster didn't get healthy within timeout");
         }
     }
 
-    /**
-     * Blocks until the Elasticsearch cluster and current write index is healthy again or the default timeout fires.
-     *
-     * @throws InterruptedException
-     * @throws TimeoutException
-     */
-    public void waitForConnectedAndDeflectorHealthy() throws InterruptedException, TimeoutException {
-        waitForConnectedAndDeflectorHealthy(requestTimeout.getQuantity(), requestTimeout.getUnit());
+    public void waitForConnectedAndHealthy() throws InterruptedException, TimeoutException {
+        waitForConnectedAndHealthy(requestTimeout.getQuantity(), requestTimeout.getUnit());
     }
 
     public void updateDataNodeList(Map<String, DiscoveryNode> nodes) {

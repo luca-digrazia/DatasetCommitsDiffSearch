@@ -107,9 +107,9 @@ public class BlockingBatchedESOutput extends ElasticSearchOutput {
     }
 
     private void flush(List<Message> messages) {
-        if (!cluster.isConnected() || !cluster.isDeflectorHealthy()) {
+        if (!cluster.isConnected() || !cluster.isHealthy()) {
             try {
-                cluster.waitForConnectedAndDeflectorHealthy();
+                cluster.waitForConnectedAndHealthy();
             } catch (TimeoutException | InterruptedException e) {
                 log.warn("Error while waiting for healthy Elasticsearch cluster. Not flushing.", e);
                 return;
@@ -136,7 +136,7 @@ public class BlockingBatchedESOutput extends ElasticSearchOutput {
     }
 
     public void forceFlushIfTimedout() {
-        if (!cluster.isConnected() || !cluster.isDeflectorHealthy()) {
+        if (!cluster.isConnected() || !cluster.isHealthy()) {
             // do not actually try to flush, because that will block until the cluster comes back.
             // simply check and return.
             log.debug("Cluster unavailable, but not blocking for periodic flush attempt. This will try again.");
@@ -161,7 +161,7 @@ public class BlockingBatchedESOutput extends ElasticSearchOutput {
 
     public interface Factory extends ElasticSearchOutput.Factory {
         @Override
-        BlockingBatchedESOutput create(Stream stream, Configuration configuration);
+        BatchedElasticSearchOutput create(Stream stream, Configuration configuration);
 
         @Override
         Config getConfig();

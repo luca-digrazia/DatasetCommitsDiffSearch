@@ -154,7 +154,7 @@ public class BatchedElasticSearchOutputTest {
     private List<Message> buildMessages(final int count) {
         final ImmutableList.Builder<Message> builder = ImmutableList.builder();
         for (int i = 0; i < count; i++) {
-            builder.add(new Message("message" + i, "test", Tools.nowUTC()));
+            builder.add(new Message("message" + i, "test", Tools.iso8601()));
         }
 
         return builder.build();
