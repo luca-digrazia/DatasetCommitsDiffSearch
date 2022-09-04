@@ -20,12 +20,15 @@
 
 package org.graylog2.messagehandlers.gelf;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.DatagramPacket;
 import java.util.zip.DataFormatException;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.Inflater;
 import org.graylog2.Log;
-import org.graylog2.Tools;
 import org.graylog2.database.MongoBridge;
 import org.graylog2.messagehandlers.common.MessageCounterHook;
 import org.graylog2.messagehandlers.common.ReceiveHookManager;
@@ -54,20 +57,30 @@ public class SimpleGELFClientHandler extends GELFClientHandlerBase implements GE
     public SimpleGELFClientHandler(DatagramPacket clientMessage) throws DataFormatException, UnsupportedEncodingException, InvalidGELFCompressionMethodException, IOException {
 
         // Determine compression type.
-        int type = GELF.getGELFType(clientMessage.getData());
+        int type = GELF.getGELFType(clientMessage);
 
         // Decompress.
+        byte[] buffer = new byte[clientMessage.getLength()];
         switch (type) {
             // Decompress ZLIB
             case GELF.TYPE_ZLIB:
                 Log.info("Handling ZLIB compressed SimpleGELFClient");
-                this.clientMessage = Tools.decompressZlib(clientMessage.getData());
+                Inflater decompresser = new Inflater();
+                decompresser.setInput(clientMessage.getData(), 0, clientMessage.getLength());
+                int finalLength = decompresser.inflate(clientMessage.getData());
+                this.clientMessage = new String(clientMessage.getData(), 0, finalLength, "UTF-8");
+                decompresser.end();
                 break;
 
             // Decompress GZIP
             case GELF.TYPE_GZIP:
                 Log.info("Handling GZIP compressed SimpleGELFClient");
-                this.clientMessage = Tools.decompressGzip(clientMessage.getData());
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                GZIPInputStream in = new GZIPInputStream(new ByteArrayInputStream(clientMessage.getData()));
+                for (int bytesRead = 0; bytesRead != -1; bytesRead = in.read(buffer)) {
+                    out.write(buffer, 0, bytesRead);
+                }
+                this.clientMessage = new String(out.toByteArray(), "UTF-8");
                 break;
 
             // Unsupported encoding if not handled by prior cases.
@@ -84,8 +97,14 @@ public class SimpleGELFClientHandler extends GELFClientHandlerBase implements GE
      */
     public boolean handle() {
         try {
-             // Fills properties with values from JSON.
-            try { this.parse(); } catch(Exception e) {
+            JSONObject json = this.getJSON(this.clientMessage.toString());
+            if (json == null) {
+                Log.warn("JSON is null/could not be parsed (invalid JSON) - clientMessage was: " + this.clientMessage);
+                return false;
+            }
+
+            // Fills properties with values from JSON.
+            try { this.parse(json); } catch(Exception e) {
                 Log.warn("Could not parse GELF JSON: " + e.toString() + " - clientMessage was: " + this.clientMessage);
                 return false;
             }
