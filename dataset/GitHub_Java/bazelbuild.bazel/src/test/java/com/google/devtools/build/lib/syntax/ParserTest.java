@@ -1099,6 +1099,7 @@ public class ParserTest extends EvaluationTestCase {
     SkylarkImport imp = SkylarkImports.create(stmt.getImport().getValue());
 
     assertThat(imp.getImportString()).named("getImportString()").isEqualTo(importString);
+    assertThat(imp.hasAbsolutePath()).named("hasAbsolutePath()").isFalse();
 
     Label containingFileLabel = Label.parseAbsoluteUnchecked(containingFileLabelString);
     assertThat(imp.getLabel(containingFileLabel)).named("containingFileLabel()")
@@ -1118,8 +1119,15 @@ public class ParserTest extends EvaluationTestCase {
   }
 
   @Test
-  public void testRelativeImportPathInIsInvalid() throws Exception {
-    invalidImportTest("file", SkylarkImports.INVALID_PATH_SYNTAX);
+  public void testValidRelativeImportPathInPackageDir() throws Exception {
+    validNonAbsoluteImportTest("file", /*containing*/ "//some/skylark:BUILD",
+        /*expected*/ "//some/skylark:file.bzl");
+  }
+
+  @Test
+  public void testValidRelativeImportPathInPackageSubdir() throws Exception {
+    validNonAbsoluteImportTest("file", /*containing*/ "//some/path/to:skylark/parent.bzl",
+        /*expected*/ "//some/path/to:skylark/file.bzl");
   }
 
   @Test
@@ -1134,7 +1142,7 @@ public class ParserTest extends EvaluationTestCase {
 
   @Test
   public void testInvalidRelativePathInvalidFilename() throws Exception {
-    invalidImportTest("\tfile", SkylarkImports.INVALID_PATH_SYNTAX);
+    invalidImportTest("\tfile", SkylarkImports.INVALID_FILENAME_PREFIX);
   }
 
   private void validAbsoluteImportLabelTest(String importString)
@@ -1212,36 +1220,39 @@ public class ParserTest extends EvaluationTestCase {
  @Test
   public void testLoadNoSymbol() throws Exception {
     setFailFast(false);
-    parseFileForSkylark("load('//foo/bar:file.bzl')\n");
+    parseFileForSkylark("load('/foo/bar/file')\n");
     assertContainsError("expected at least one symbol to load");
   }
 
   @Test
   public void testLoadOneSymbol() throws Exception {
-    List<Statement> statements = parseFileForSkylark("load('//foo/bar:file.bzl', 'fun_test')\n");
+    List<Statement> statements = parseFileForSkylark(
+        "load('/foo/bar/file', 'fun_test')\n");
     LoadStatement stmt = (LoadStatement) statements.get(0);
-    assertThat(stmt.getImport().getValue()).isEqualTo("//foo/bar:file.bzl");
+    assertThat(stmt.getImport().getValue()).isEqualTo("/foo/bar/file");
     assertThat(stmt.getSymbols()).hasSize(1);
     Identifier sym = stmt.getSymbols().get(0);
     int startOffset = sym.getLocation().getStartOffset();
     int endOffset = sym.getLocation().getEndOffset();
-    assertThat(startOffset).named("getStartOffset()").isEqualTo(27);
+    assertThat(startOffset).named("getStartOffset()").isEqualTo(22);
     assertThat(endOffset).named("getEndOffset()").isEqualTo(startOffset + 10);
   }
 
   @Test
   public void testLoadOneSymbolWithTrailingComma() throws Exception {
-    List<Statement> statements = parseFileForSkylark("load('//foo/bar:file.bzl', 'fun_test',)\n");
+    List<Statement> statements = parseFileForSkylark(
+        "load('/foo/bar/file', 'fun_test',)\n");
     LoadStatement stmt = (LoadStatement) statements.get(0);
-    assertThat(stmt.getImport().getValue()).isEqualTo("//foo/bar:file.bzl");
+    assertThat(stmt.getImport().getValue()).isEqualTo("/foo/bar/file");
     assertThat(stmt.getSymbols()).hasSize(1);
   }
 
   @Test
   public void testLoadMultipleSymbols() throws Exception {
-    List<Statement> statements = parseFileForSkylark("load(':file.bzl', 'foo', 'bar')\n");
+    List<Statement> statements = parseFileForSkylark(
+        "load('file', 'foo', 'bar')\n");
     LoadStatement stmt = (LoadStatement) statements.get(0);
-    assertThat(stmt.getImport().getValue()).isEqualTo(":file.bzl");
+    assertThat(stmt.getImport().getValue()).isEqualTo("file");
     assertThat(stmt.getSymbols()).hasSize(2);
   }
 
@@ -1275,8 +1286,8 @@ public class ParserTest extends EvaluationTestCase {
 
   @Test
   public void testLoadAlias() throws Exception {
-    List<Statement> statements =
-        parseFileForSkylark("load('//foo/bar:file.bzl', my_alias = 'lawl')\n");
+    List<Statement> statements = parseFileForSkylark(
+        "load('/foo/bar/file', my_alias = 'lawl')\n");
     LoadStatement stmt = (LoadStatement) statements.get(0);
     ImmutableList<Identifier> actualSymbols = stmt.getSymbols();
 
@@ -1285,7 +1296,7 @@ public class ParserTest extends EvaluationTestCase {
     assertThat(sym.getName()).isEqualTo("my_alias");
     int startOffset = sym.getLocation().getStartOffset();
     int endOffset = sym.getLocation().getEndOffset();
-    assertThat(startOffset).named("getStartOffset()").isEqualTo(27);
+    assertThat(startOffset).named("getStartOffset()").isEqualTo(22);
     assertThat(endOffset).named("getEndOffset()").isEqualTo(startOffset + 8);
   }
 
@@ -1297,7 +1308,7 @@ public class ParserTest extends EvaluationTestCase {
 
   private void runLoadAliasTestForSymbols(String loadSymbolString, String... expectedSymbols) {
     List<Statement> statements =
-        parseFileForSkylark(String.format("load('//foo/bar:file.bzl', %s)\n", loadSymbolString));
+        parseFileForSkylark(String.format("load('/foo/bar/file', %s)\n", loadSymbolString));
     LoadStatement stmt = (LoadStatement) statements.get(0);
     ImmutableList<Identifier> actualSymbols = stmt.getSymbols();
 
@@ -1315,13 +1326,13 @@ public class ParserTest extends EvaluationTestCase {
   @Test
   public void testLoadAliasSyntaxError() throws Exception {
     setFailFast(false);
-    parseFileForSkylark("load('//foo:bzl', test1 = )\n");
+    parseFileForSkylark("load('/foo', test1 = )\n");
     assertContainsError("syntax error at ')': expected string");
 
-    parseFileForSkylark("load(':foo.bzl', test2 = 1)\n");
+    parseFileForSkylark("load('/foo', test2 = 1)\n");
     assertContainsError("syntax error at '1': expected string");
 
-    parseFileForSkylark("load(':foo.bzl', test3 = old)\n");
+    parseFileForSkylark("load('/foo', test3 = old)\n");
     assertContainsError("syntax error at 'old': expected string");
   }
 
