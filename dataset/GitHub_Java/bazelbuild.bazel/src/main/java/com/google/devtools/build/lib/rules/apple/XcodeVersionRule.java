@@ -92,7 +92,7 @@ public class XcodeVersionRule implements RuleDefinition {
   public Metadata getMetadata() {
     return RuleDefinition.Metadata.builder()
         .name("xcode_version")
-        .ancestors(BaseRuleClasses.NativeBuildRule.class)
+        .ancestors(BaseRuleClasses.BaseRule.class)
         .factoryClass(XcodeVersion.class)
         .build();
   }

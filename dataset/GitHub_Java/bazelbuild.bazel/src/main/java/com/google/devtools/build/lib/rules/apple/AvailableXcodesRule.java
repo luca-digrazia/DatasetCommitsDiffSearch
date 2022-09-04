@@ -59,7 +59,7 @@ public class AvailableXcodesRule implements RuleDefinition {
   public Metadata getMetadata() {
     return RuleDefinition.Metadata.builder()
         .name("available_xcodes")
-        .ancestors(BaseRuleClasses.NativeBuildRule.class)
+        .ancestors(BaseRuleClasses.BaseRule.class)
         .factoryClass(AvailableXcodes.class)
         .build();
   }
