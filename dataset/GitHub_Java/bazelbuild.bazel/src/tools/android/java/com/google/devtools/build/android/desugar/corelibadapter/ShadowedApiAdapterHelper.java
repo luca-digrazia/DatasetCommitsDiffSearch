@@ -143,8 +143,7 @@ public class ShadowedApiAdapterHelper {
         .setMethod(
             methodInvocationSite
                 .method()
-                .toAdapterMethodForArgsAndReturnTypes(
-                    methodInvocationSite.isStaticInvocation(), methodInvocationSite.hashCode()))
+                .toAdapterMethodForArgsAndReturnTypes(methodInvocationSite.isStaticInvocation()))
         .setIsInterface(false)
         .build();
   }
