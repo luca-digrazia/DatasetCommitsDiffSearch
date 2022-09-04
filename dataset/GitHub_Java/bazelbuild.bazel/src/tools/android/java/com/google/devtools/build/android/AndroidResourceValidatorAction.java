@@ -27,7 +27,6 @@ import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
-import com.google.devtools.common.options.ShellQuotedParamsFilePreProcessor;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.IOException;
@@ -125,8 +124,7 @@ public class AndroidResourceValidatorAction {
     final Stopwatch timer = Stopwatch.createStarted();
     OptionsParser optionsParser =
         OptionsParser.newOptionsParser(Options.class, AaptConfigOptions.class);
-    optionsParser.enableParamsFileSupport(
-        new ShellQuotedParamsFilePreProcessor(FileSystems.getDefault()));
+    optionsParser.enableParamsFileSupport(FileSystems.getDefault());
     optionsParser.parseAndExitUponError(args);
     AaptConfigOptions aaptConfigOptions = optionsParser.getOptions(AaptConfigOptions.class);
     Options options = optionsParser.getOptions(Options.class);
@@ -149,7 +147,7 @@ public class AndroidResourceValidatorAction {
       logger.fine(String.format("unpacked zip at %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
 
       // We need to make the manifest aapt safe (w.r.t., placeholders). For now, just stub it out.
-      AndroidResourceProcessor.writeDummyManifestForAapt(dummyManifest, options.packageForR);
+      resourceProcessor.writeDummyManifestForAapt(dummyManifest, options.packageForR);
 
       resourceProcessor.runAapt(
           tmp,
