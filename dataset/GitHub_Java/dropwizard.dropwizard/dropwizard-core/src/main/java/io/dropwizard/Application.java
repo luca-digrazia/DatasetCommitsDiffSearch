@@ -40,7 +40,7 @@ public abstract class Application<T extends Configuration> {
      * @return the configuration class
      * @see Generics#getTypeParameter(Class, Class)
      */
-    public Class<T> getConfigurationClass() {
+    public final Class<T> getConfigurationClass() {
         return Generics.getTypeParameter(getClass(), Configuration.class);
     }
 
