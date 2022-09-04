@@ -178,8 +178,7 @@ public final class StringModule {
       name = "lstrip",
       doc =
           "Returns a copy of the string where leading characters that appear in "
-              + "<code>chars</code> are removed. Note that <code>chars</code> "
-              + "is not a prefix: all combinations of its value are removed:"
+              + "<code>chars</code> are removed."
               + "<pre class=\"language-python\">"
               + "\"abcba\".lstrip(\"ba\") == \"cba\""
               + "</pre>",
@@ -203,8 +202,7 @@ public final class StringModule {
       name = "rstrip",
       doc =
           "Returns a copy of the string where trailing characters that appear in "
-              + "<code>chars</code> are removed. Note that <code>chars</code> "
-              + "is not a suffix: all combinations of its value are removed:"
+              + "<code>chars</code> are removed."
               + "<pre class=\"language-python\">"
               + "\"abcbaa\".rstrip(\"ab\") == \"abc\""
               + "</pre>",
@@ -228,9 +226,7 @@ public final class StringModule {
       name = "strip",
       doc =
           "Returns a copy of the string where leading or trailing characters that appear in "
-              + "<code>chars</code> are removed. Note that <code>chars</code> "
-              + "is neither a prefix nor a suffix: all combinations of its value "
-              + "are removed:"
+              + "<code>chars</code> are removed."
               + "<pre class=\"language-python\">"
               + "\"aabcbcbaa\".strip(\"ab\") == \"cbc\""
               + "</pre>",
