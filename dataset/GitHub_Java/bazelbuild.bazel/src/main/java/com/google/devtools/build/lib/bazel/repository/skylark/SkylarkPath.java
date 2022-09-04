@@ -14,22 +14,47 @@
 
 package com.google.devtools.build.lib.bazel.repository.skylark;
 
+import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.vfs.Path;
+import java.io.IOException;
 
 /**
  * A Path object to be used into Skylark remote repository.
+ *
+ * <p>This path object enable non-hermetic operations from Skylark and should not be returned by
+ * something other than a SkylarkRepositoryContext.
  */
 @Immutable
-@SkylarkModule(name = "path", doc = "A structure representing a file to be used inside a repository"
+@SkylarkModule(
+  name = "path",
+  category = SkylarkModuleCategory.NONE,
+  doc = "A structure representing a file to be used inside a repository."
 )
-final class SkylarkPath {
-  final Path path;
+final class SkylarkPath implements SkylarkValue {
+  private final Path path;
 
-  public SkylarkPath(Path path) {
+  SkylarkPath(Path path) {
     this.path = path;
+  }
+
+  Path getPath() {
+    return path;
+  }
+
+  @Override
+  public boolean equals(Object obj) {
+    return (obj instanceof SkylarkPath) &&  path.equals(((SkylarkPath) obj).path);
+  }
+
+  @Override
+  public int hashCode() {
+    return path.hashCode();
   }
 
   @SkylarkCallable(
@@ -39,6 +64,19 @@ final class SkylarkPath {
   )
   public String getBasename() {
     return path.getBaseName();
+  }
+
+  @SkylarkCallable(
+      name = "readdir",
+      structField = false,
+      doc = "The list of entries in the directory denoted by this path."
+  )
+  public ImmutableList<SkylarkPath> readdir() throws IOException {
+    ImmutableList.Builder<SkylarkPath> builder = ImmutableList.builder();
+    for (Path p : path.getDirectoryEntries()) {
+      builder.add(new SkylarkPath(p));
+    }
+    return builder.build();
   }
 
   @SkylarkCallable(
@@ -68,8 +106,23 @@ final class SkylarkPath {
     return path.exists();
   }
 
+  @SkylarkCallable(
+    name = "realpath",
+    structField = true,
+    doc = "Returns the canonical path for this path by repeatedly replacing all symbolic links "
+        + "with their referents."
+  )
+  public SkylarkPath realpath() throws IOException {
+    return new SkylarkPath(path.resolveSymbolicLinks());
+  }
+
   @Override
   public String toString() {
     return path.toString();
+  }
+
+  @Override
+  public void repr(SkylarkPrinter printer) {
+    printer.append(toString());
   }
 }

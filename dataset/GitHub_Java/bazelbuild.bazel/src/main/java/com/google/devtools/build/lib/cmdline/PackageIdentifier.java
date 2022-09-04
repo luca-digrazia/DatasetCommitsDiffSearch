@@ -111,10 +111,8 @@ public final class PackageIdentifier
 
   private PackageIdentifier(RepositoryName repository, PathFragment pkgName) {
     this.repository = Preconditions.checkNotNull(repository);
-    if (!pkgName.isNormalized()) {
-      pkgName = pkgName.normalize();
-    }
-    this.pkgName = Canonicalizer.fragments().intern(Preconditions.checkNotNull(pkgName));
+    this.pkgName = Canonicalizer.fragments().intern(
+            Preconditions.checkNotNull(pkgName).normalize());
     this.hashCode = Objects.hash(repository, pkgName);
   }
 
