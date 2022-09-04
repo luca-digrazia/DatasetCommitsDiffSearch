@@ -7,7 +7,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.URL;
-import java.net.URLConnection;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
@@ -40,9 +39,7 @@ public final class ServiceUtil {
 
         while (resources.hasMoreElements()) {
             final URL url = resources.nextElement();
-            URLConnection con = url.openConnection();
-            con.setUseCaches(false);
-            try (InputStream is = con.getInputStream()) {
+            try (InputStream is = url.openStream()) {
                 try (BufferedInputStream bis = new BufferedInputStream(is)) {
                     try (InputStreamReader isr = new InputStreamReader(bis, StandardCharsets.UTF_8)) {
                         try (BufferedReader br = new BufferedReader(isr)) {
@@ -50,8 +47,6 @@ public final class ServiceUtil {
                         }
                     }
                 }
-            } catch (IOException e) {
-                throw new IOException("Error reading " + url, e);
             }
         }
 
@@ -72,17 +67,12 @@ public final class ServiceUtil {
         return set;
     }
 
-    /**
-     * - Lines starting by a # (or white spaces and a #) are ignored. - For
-     * lines containing data before a comment (#) are parsed and only the value
-     * before the comment is used.
-     */
     private static void readStream(final Set<String> classNames, final BufferedReader br) throws IOException {
         String line;
         while ((line = br.readLine()) != null) {
             int commentMarkerIndex = line.indexOf('#');
-            if (commentMarkerIndex >= 0) {
-                line = line.substring(0, commentMarkerIndex);
+            if (commentMarkerIndex > 0) {
+                line = line.substring(commentMarkerIndex);
             }
             line = line.trim();
 
