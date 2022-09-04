@@ -84,10 +84,6 @@ public class MockPlatformSupport {
         "constraint_value(",
         "    name = 'freebsd',",
         "    constraint_setting = ':os',",
-        ")",
-        "constraint_value(",
-        "    name = 'openbsd',",
-        "    constraint_setting = ':os',",
         ")");
     String basePlatform;
     if (TestConstants.LOCAL_CONFIG_PLATFORM_PATH != null) {
@@ -99,13 +95,11 @@ public class MockPlatformSupport {
     mockToolsConfig.create(
         TestConstants.PLATFORMS_PATH + "/BUILD",
         "package(default_visibility=['//visibility:public'])",
-        "constraint_setting(name = 'os')",
-        "constraint_value(name = 'android', constraint_setting = ':os')",
         "platform(",
         "    name = 'default_target',",
         "    parents = ['" + basePlatform + "'],",
         "    constraint_values = [",
-        "        '" + TestConstants.PLATFORM_PACKAGE_ROOT + "/java/constraints:jdk11',",
+        "        '" + TestConstants.PLATFORM_PACKAGE_ROOT + "/java/constraints:jdk8',",
         "        '" + TestConstants.PLATFORM_PACKAGE_ROOT + "/java/constraints:java8',",
         "    ],",
         ")",
