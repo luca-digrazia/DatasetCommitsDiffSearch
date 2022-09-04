@@ -140,12 +140,12 @@ public class BootstrapAppModelResolver implements AppModelResolver {
 
     @Override
     public AppModel resolveModel(AppArtifact appArtifact) throws AppModelResolverException {
-        return resolveManagedModel(appArtifact, Collections.emptyList(), Collections.emptyList());
+        return resolveManagedModel(appArtifact, Collections.emptyList(), readManagedDependencies(appArtifact));
     }
 
     @Override
     public AppModel resolveModel(AppArtifact appArtifact, List<AppDependency> directDeps) throws AppModelResolverException {
-        return resolveManagedModel(appArtifact, directDeps, Collections.emptyList());
+        return resolveManagedModel(appArtifact, directDeps, readManagedDependencies(appArtifact));
     }
 
     public AppModel resolveManagedModel(AppArtifact appArtifact, List<AppDependency> directDeps, List<AppDependency> managedDeps) throws AppModelResolverException {
