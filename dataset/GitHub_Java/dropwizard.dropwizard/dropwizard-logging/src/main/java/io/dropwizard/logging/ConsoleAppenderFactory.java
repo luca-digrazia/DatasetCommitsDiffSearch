@@ -103,7 +103,6 @@ public class ConsoleAppenderFactory<E extends DeferredProcessingAware> extends A
         appender.setEncoder(layoutEncoder);
 
         appender.addFilter(levelFilterFactory.build(threshold));
-        getFilterFactories().forEach(f -> appender.addFilter(f.build()));
         appender.start();
 
         return wrapAsync(appender, asyncAppenderFactory);

@@ -1,28 +1,28 @@
 package io.dropwizard.logging;
 
-import javax.validation.constraints.Min;
-
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.annotation.JsonTypeName;
-
 import ch.qos.logback.classic.LoggerContext;
 import ch.qos.logback.core.Appender;
 import ch.qos.logback.core.FileAppender;
 import ch.qos.logback.core.encoder.LayoutWrappingEncoder;
 import ch.qos.logback.core.rolling.DefaultTimeBasedFileNamingAndTriggeringPolicy;
-import ch.qos.logback.core.rolling.FixedWindowRollingPolicy;
 import ch.qos.logback.core.rolling.RollingFileAppender;
 import ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP;
-import ch.qos.logback.core.rolling.SizeBasedTriggeringPolicy;
 import ch.qos.logback.core.rolling.TimeBasedFileNamingAndTriggeringPolicy;
 import ch.qos.logback.core.rolling.TimeBasedRollingPolicy;
+import ch.qos.logback.core.rolling.FixedWindowRollingPolicy;
+import ch.qos.logback.core.rolling.SizeBasedTriggeringPolicy;
 import ch.qos.logback.core.spi.DeferredProcessingAware;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonTypeName;
 import io.dropwizard.logging.async.AsyncAppenderFactory;
 import io.dropwizard.logging.filter.LevelFilterFactory;
 import io.dropwizard.logging.layout.LayoutFactory;
 import io.dropwizard.util.Size;
 import io.dropwizard.validation.ValidationMethod;
+
+import javax.validation.constraints.Min;
+import javax.validation.constraints.NotNull;
 
 /**
  * An {@link AppenderFactory} implementation which provides an appender that writes events to a file, archiving older
@@ -59,20 +59,16 @@ import io.dropwizard.validation.ValidationMethod;
  *         <td>{@code archivedLogFilenamePattern}</td>
  *         <td><b>REQUIRED</b> if {@code archive} is {@code true}.</td>
  *         <td>
- *             The filename pattern for archived files.
- *             If {@code maxFileSize} is specified, rollover is size-based, and the pattern must contain {@code %i} for
- *             an integer index of the archived file.
- *             Otherwise rollover is date-based, and the pattern must contain {@code %d}, which is replaced with the
- *             date in {@code yyyy-MM-dd} form.
- *             If the pattern ends with {@code .gz} or {@code .zip}, files will be compressed as they are archived.
+ *             The filename pattern for archived files. {@code %d} is replaced with the date in {@code yyyy-MM-dd} form,
+ *             and the fact that it ends with {@code .gz} indicates the file will be gzipped as it's archived. Likewise,
+ *             filename patterns which end in {@code .zip} will be filled as they are archived.
  *         </td>
  *     </tr>
  *     <tr>
  *         <td>{@code archivedFileCount}</td>
  *         <td>{@code 5}</td>
  *         <td>
- *             The number of archived files to keep. Must be greater than or equal to {@code 0}. Zero is a
- *             special value signifying to keep infinite logs (use with caution)
+ *             The number of archived files to keep. Must be greater than {@code 0}.
  *         </td>
  *     </tr>
  *     <tr>
@@ -105,14 +101,14 @@ import io.dropwizard.validation.ValidationMethod;
  */
 @JsonTypeName("file")
 public class FileAppenderFactory<E extends DeferredProcessingAware> extends AbstractAppenderFactory<E> {
-
-	private String currentLogFilename;
+    @NotNull
+    private String currentLogFilename;
 
     private boolean archive = true;
 
     private String archivedLogFilenamePattern;
 
-    @Min(0)
+    @Min(1)
     private int archivedFileCount = 5;
 
     private Size maxFileSize;
@@ -186,12 +182,6 @@ public class FileAppenderFactory<E extends DeferredProcessingAware> extends Abst
         return !archive || !(archivedLogFilenamePattern != null && archivedLogFilenamePattern.contains("%i")) ||
                 maxFileSize != null;
     }
-    
-    @JsonIgnore
-    @ValidationMethod(message = "currentLogFilename can only be null when archiving is enabled")
-    public boolean isValidFileConfiguration() {
-    	return archive || currentLogFilename != null;
-    }
 
     @Override
     public Appender<E> build(LoggerContext context, String applicationName, LayoutFactory<E> layoutFactory,
@@ -208,7 +198,7 @@ public class FileAppenderFactory<E extends DeferredProcessingAware> extends Abst
 
         appender.setPrudent(false);
         appender.addFilter(levelFilterFactory.build(threshold));
-        getFilterFactories().stream().forEach(f -> appender.addFilter(f.build()));
+        appender.stop();
         appender.start();
 
         return wrapAsync(appender, asyncAppenderFactory);

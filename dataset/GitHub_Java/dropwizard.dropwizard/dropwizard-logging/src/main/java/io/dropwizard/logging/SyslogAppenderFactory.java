@@ -216,7 +216,6 @@ public class SyslogAppenderFactory extends AbstractAppenderFactory<ILoggingEvent
         appender.setThrowableExcluded(!includeStackTrace);
         appender.setStackTracePattern(stackTracePrefix);
         appender.addFilter(levelFilterFactory.build(threshold));
-        getFilterFactories().forEach(f -> appender.addFilter(f.build()));
         appender.start();
         return wrapAsync(appender, asyncAppenderFactory);
     }
