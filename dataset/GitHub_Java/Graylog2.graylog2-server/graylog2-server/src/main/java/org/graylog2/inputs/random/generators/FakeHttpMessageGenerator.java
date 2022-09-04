@@ -81,12 +81,12 @@ public class FakeHttpMessageGenerator {
 
         sb.append(method).append(" ").append(resource)
                 .append(" [").append(code).append("]")
-                .append(" ").append(tookMs).append("ms");
+                .append(" ").append(tookMs);
 
         return sb.toString();
     }
 
-    private <T extends Weighted> T getWeighted(List<Weighted> list) {
+    private <T> T getWeighted(List<Weighted> list) {
         while (true) {
             int x = rand.nextInt(MAX_WEIGHT);
             Weighted obj = list.get(rand.nextInt(list.size()));
@@ -100,27 +100,15 @@ public class FakeHttpMessageGenerator {
     // GET
 
     private Message buildGETMessage(boolean isSuccessful) {
-        return get(isSuccessful);
+        return isSuccessful ? successfulGET() : failedGET();
     }
 
-    private Message get(boolean isSuccessful) {
+    private Message successfulGET() {
         Resource resource = getWeighted(GET_RESOURCES);
 
-        int msBase = 100;
-        int deviation = 30;
-        int code = isSuccessful ? 200 : 500;
+        int code = 200;
 
-        if (!isSuccessful && rand.nextInt(5) == 1) {
-            // Simulate an internal API timeout from time to time.
-            msBase = 5000;
-            deviation = 10;
-            code = 504;
-        } else if (rand.nextInt(500) == 1) {
-            // ...or just something a bit too slow
-            msBase = 400;
-        }
-
-        int tookMs = org.graylog2.inputs.random.generators.Tools.deviation(msBase, deviation, rand);
+        int tookMs = 86; // TODO make more random, some that are really long
         UserId userId = getWeighted(USER_IDS);
 
         Message msg = new Message(shortMessage("GET", resource.getResource(), code, tookMs), source, Tools.getUTCTimestampWithMilliseconds());
@@ -136,6 +124,10 @@ public class FakeHttpMessageGenerator {
         msg.addField("took_ms", tookMs);
 
         return msg;
+    }
+
+    private Message failedGET() {
+        return new Message("failed GET", source, Tools.getUTCTimestampWithMilliseconds());
     }
 
     // POST
