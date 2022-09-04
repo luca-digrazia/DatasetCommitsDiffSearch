@@ -175,7 +175,7 @@ public class BlazeCommandDispatcher {
     // holding the lock has changed under the hood.  There have been multiple bug reports where
     // users (especially macOS ones) mention that the Blaze invocation hangs on a non-existent PID.
     // This should help troubleshoot those scenarios in case there really is a bug somewhere.
-    boolean multipleAttempts = false;
+    int attempts = 0;
     long clockBefore = BlazeClock.nanoTime();
     String otherClientDescription = "";
     synchronized (commandLock) {
@@ -183,7 +183,10 @@ public class BlazeCommandDispatcher {
         switch (lockingMode) {
           case WAIT:
             if (!otherClientDescription.equals(currentClientDescription)) {
-              outErr.printErrLn("Another command (" + currentClientDescription + ") is running. "
+              if (attempts > 0) {
+                outErr.printErrLn(" lock taken by another command");
+              }
+              outErr.printErr("Another command (" + currentClientDescription + ") is running. "
                   + " Waiting for it to complete on the server...");
               otherClientDescription = currentClientDescription;
             }
@@ -199,16 +202,18 @@ public class BlazeCommandDispatcher {
             throw new IllegalStateException();
         }
 
-        multipleAttempts = true;
+        attempts += 1;
       }
       Verify.verify(currentClientDescription == null);
       currentClientDescription = clientDescription;
     }
+    if (attempts > 0) {
+      outErr.printErrLn(" done!");
+    }
     // If we took the lock on the first try, force the reported wait time to 0 to avoid unnecessary
     // noise in the logs.  In this metric, we are only interested in knowing how long it took for
     // other commands to complete, not how fast acquiring a lock is.
-    long waitTimeInMs =
-        !multipleAttempts ? 0 : (BlazeClock.nanoTime() - clockBefore) / (1000L * 1000L);
+    long waitTimeInMs = attempts == 0 ? 0 : (BlazeClock.nanoTime() - clockBefore) / (1000L * 1000L);
 
     try {
       if (shutdownReason != null) {
@@ -262,11 +267,7 @@ public class BlazeCommandDispatcher {
             commandAnnotation,
             // Provide the options parser so that we can cache OptionsData here.
             createOptionsParser(command),
-            invocationPolicy,
-            runtime
-                .getStartupOptionsProvider()
-                .getOptions(BlazeServerStartupOptions.class)
-                .expandConfigsInPlace);
+            invocationPolicy);
     ExitCode earlyExitCode = optionHandler.parseOptions(args, storedEventHandler);
     OptionsProvider options = optionHandler.getOptionsResult();
 
@@ -277,8 +278,7 @@ public class BlazeCommandDispatcher {
         new CommandLineEvent.CanonicalCommandLineEvent(runtime, commandName, options);
 
     // The initCommand call also records the start time for the timestamp granularity monitor.
-    List<String> commandEnvWarnings = new ArrayList<>();
-    CommandEnvironment env = workspace.initCommand(commandAnnotation, options, commandEnvWarnings);
+    CommandEnvironment env = workspace.initCommand(commandAnnotation, options);
     // Record the command's starting time for use by the commands themselves.
     env.recordCommandStartTime(firstContactTime);
 
@@ -420,9 +420,6 @@ public class BlazeCommandDispatcher {
         module.checkEnvironment(env);
       }
 
-      for (String warning : commandEnvWarnings) {
-        reporter.handle(Event.warn(warning));
-      }
       if (commonOptions.announceRcOptions) {
         if (startupOptionsTaggedWithBazelRc.isPresent()) {
           String lastBlazerc = "";
