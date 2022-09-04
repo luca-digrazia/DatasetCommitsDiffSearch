@@ -37,12 +37,12 @@ public class MessageRetention {
         this.graylogServer = server;
     }
 
-    public void performCleanup(int timeDays) {
+    public boolean performCleanup(int timeDays) {
         int to = Tools.getTimestampDaysAgo(Tools.getUTCTimestamp(), timeDays);
         String msg = "Deleting all messages older than " + to + " (" + timeDays + " days ago)";
         LOG.debug(msg);
         graylogServer.getActivityWriter().write(new Activity(msg, MessageRetention.class));
-        graylogServer.getIndexer().deleteMessagesByTimeRange(to);
+        return graylogServer.getIndexer().deleteMessagesByTimeRange(to);
     }
 
     public void updateLastPerformedTime() {
