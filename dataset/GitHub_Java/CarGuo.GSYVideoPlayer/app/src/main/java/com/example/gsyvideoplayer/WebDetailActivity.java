@@ -14,8 +14,6 @@ import com.example.gsyvideoplayer.video.PreViewGSYVideoPlayer;
 import com.example.gsyvideoplayer.view.ScrollWebView;
 import com.shuyu.gsyvideoplayer.GSYBaseActivityDetail;
 import com.shuyu.gsyvideoplayer.builder.GSYVideoOptionBuilder;
-import com.shuyu.gsyvideoplayer.utils.GSYVideoType;
-import com.shuyu.gsyvideoplayer.video.StandardGSYVideoPlayer;
 import com.shuyu.gsyvideoplayer.video.base.GSYBaseVideoPlayer;
 import com.shuyu.gsyvideoplayer.listener.LockClickListener;
 import com.shuyu.gsyvideoplayer.utils.CommonUtil;
@@ -27,7 +25,7 @@ import butterknife.ButterKnife;
  * Created by shuyu on 2016/12/26.
  */
 
-public class WebDetailActivity extends GSYBaseActivityDetail<StandardGSYVideoPlayer> {
+public class WebDetailActivity extends GSYBaseActivityDetail {
 
     @BindView(R.id.scroll_webView)
     ScrollWebView webView;
@@ -38,9 +36,7 @@ public class WebDetailActivity extends GSYBaseActivityDetail<StandardGSYVideoPla
     @BindView(R.id.web_top_layout_video)
     RelativeLayout webTopLayoutVideo;
 
-    private boolean isSmall;
-
-    private int backupRendType;
+    private boolean isSamll;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -48,10 +44,6 @@ public class WebDetailActivity extends GSYBaseActivityDetail<StandardGSYVideoPla
         setContentView(R.layout.activity_web_detail);
         ButterKnife.bind(this);
 
-        backupRendType = GSYVideoType.getRenderType();
-
-        //设置为Surface播放模式，注意此设置是全局的
-        GSYVideoType.setRenderType(GSYVideoType.SUFRACE);
 
         resolveNormalVideoUI();
 
@@ -83,15 +75,15 @@ public class WebDetailActivity extends GSYBaseActivityDetail<StandardGSYVideoPla
                 if (!webPlayer.isIfCurrentIsFullscreen() && scrollY >= 0 && isPlay) {
                     if (scrollY > webPlayer.getHeight()) {
                         //如果是小窗口就不需要处理
-                        if (!isSmall) {
-                            isSmall = true;
+                        if (!isSamll) {
+                            isSamll = true;
                             int size = CommonUtil.dip2px(WebDetailActivity.this, 150);
                             webPlayer.showSmallVideo(new Point(size, size), true, true);
                             orientationUtils.setEnable(false);
                         }
                     } else {
-                        if (isSmall) {
-                            isSmall = false;
+                        if (isSamll) {
+                            isSamll = false;
                             orientationUtils.setEnable(true);
                             //必须
                             webTopLayoutVideo.postDelayed(new Runnable() {
@@ -110,14 +102,7 @@ public class WebDetailActivity extends GSYBaseActivityDetail<StandardGSYVideoPla
     }
 
     @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        //设置为GL播放模式，才能支持滤镜，注意此设置是全局的
-        GSYVideoType.setRenderType(backupRendType);
-    }
-
-    @Override
-    public StandardGSYVideoPlayer getGSYVideoPlayer() {
+    public GSYBaseVideoPlayer getGSYVideoPlayer() {
         return webPlayer;
     }
 

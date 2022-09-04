@@ -9,7 +9,6 @@ import android.widget.ImageView;
 import android.widget.RelativeLayout;
 
 import com.example.gsyvideoplayer.video.LandLayoutVideo;
-import com.shuyu.gsyvideoplayer.GSYVideoManager;
 import com.shuyu.gsyvideoplayer.listener.GSYSampleCallBack;
 import com.shuyu.gsyvideoplayer.listener.GSYVideoProgressListener;
 import com.shuyu.gsyvideoplayer.video.base.GSYVideoPlayer;
@@ -18,6 +17,7 @@ import com.shuyu.gsyvideoplayer.builder.GSYVideoOptionBuilder;
 import com.shuyu.gsyvideoplayer.listener.LockClickListener;
 import com.shuyu.gsyvideoplayer.utils.Debuger;
 import com.shuyu.gsyvideoplayer.utils.OrientationUtils;
+import com.shuyu.gsyvideoplayer.video.StandardGSYVideoPlayer;
 
 
 import butterknife.BindView;
@@ -54,7 +54,6 @@ public class DetailPlayer extends AppCompatActivity {
         //String url = "http://7xjmzj.com1.z0.glb.clouddn.com/20171026175005_JObCxCE2.mp4";
 
         String url =  "http://video.7k.cn/app_video/20171202/6c8cf3ea/v.m3u8.mp4";
-        //String url =  "rtsp://cloud.easydarwin.org:554/stream0.sdp";
         //String url =  "http://s.swao.cn/o_1c4gm8o1nniu1had13bk1t0l1rq64m.mov";
         //String url =  "http://api.ciguang.tv/avideo/play?num=02-041-0491&type=flv&v=1&client=android";
         //String url = "http://video.7k.cn/app_video/20171213/276d8195/v.m3u8.mp4";
@@ -112,7 +111,7 @@ public class DetailPlayer extends AppCompatActivity {
                 .setUrl(url)
                 .setCacheWithPlay(false)
                 .setVideoTitle("测试视频")
-                .setVideoAllCallBack(new GSYSampleCallBack() {
+                .setStandardVideoAllCallBack(new GSYSampleCallBack() {
                     @Override
                     public void onPrepared(String url, Object... objects) {
                         Debuger.printfError("***** onPrepared **** " + objects[0]);
@@ -177,6 +176,7 @@ public class DetailPlayer extends AppCompatActivity {
                 detailPlayer.startWindowFullscreen(DetailPlayer.this, true, true);
             }
         });
+
     }
 
     @Override
@@ -186,7 +186,7 @@ public class DetailPlayer extends AppCompatActivity {
             orientationUtils.backToProtVideo();
         }
 
-        if (GSYVideoManager.backFromWindowFull(this)) {
+        if (StandardGSYVideoPlayer.backFromWindowFull(this)) {
             return;
         }
         super.onBackPressed();

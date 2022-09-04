@@ -77,7 +77,7 @@ public class RecyclerItemNormalHolder extends RecyclerItemBaseHolder {
                 .setShowFullAnimation(true)
                 .setNeedLockFull(true)
                 .setPlayPosition(position)
-                .setVideoAllCallBack(new GSYSampleCallBack() {
+                .setStandardVideoAllCallBack(new GSYSampleCallBack() {
                     @Override
                     public void onPrepared(String url, Object... objects) {
                         super.onPrepared(url, objects);
