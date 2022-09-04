@@ -1,5 +1,7 @@
 package io.quarkus.netty.deployment;
 
+import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 import java.util.function.Supplier;
 
@@ -10,17 +12,18 @@ import org.jboss.logging.Logger;
 
 import io.netty.channel.EventLoopGroup;
 import io.netty.util.internal.logging.InternalLoggerFactory;
-import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
-import io.quarkus.arc.deployment.SyntheticBeanBuildItem;
+import io.quarkus.arc.deployment.RuntimeBeanBuildItem;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
+import io.quarkus.deployment.builditem.JniBuildItem;
 import io.quarkus.deployment.builditem.SystemPropertyBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.NativeImageConfigBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.NativeImageSystemPropertyBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.RuntimeReinitializedClassBuildItem;
+import io.quarkus.deployment.builditem.nativeimage.UnsafeAccessedFieldBuildItem;
 import io.quarkus.netty.BossEventLoopGroup;
 import io.quarkus.netty.MainEventLoopGroup;
 import io.quarkus.netty.runtime.NettyRecorder;
@@ -51,7 +54,8 @@ class NettyProcessor {
     }
 
     @BuildStep
-    NativeImageConfigBuildItem build() {
+    NativeImageConfigBuildItem build(BuildProducer<JniBuildItem> jni) {
+        boolean enableJni = false;
 
         reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, "io.netty.channel.socket.nio.NioSocketChannel"));
         reflectiveClass
@@ -93,6 +97,7 @@ class NettyProcessor {
 
         try {
             Class.forName("io.netty.channel.unix.UnixChannel");
+            enableJni = true;
             builder.addRuntimeInitializedClass("io.netty.channel.unix.Errors")
                     .addRuntimeInitializedClass("io.netty.channel.unix.FileDescriptor")
                     .addRuntimeInitializedClass("io.netty.channel.unix.IovArray")
@@ -104,6 +109,7 @@ class NettyProcessor {
 
         try {
             Class.forName("io.netty.channel.epoll.EpollMode");
+            enableJni = true;
             builder.addRuntimeInitializedClass("io.netty.channel.epoll.Epoll")
                     .addRuntimeInitializedClass("io.netty.channel.epoll.EpollEventArray")
                     .addRuntimeInitializedClass("io.netty.channel.epoll.EpollEventLoop")
@@ -115,6 +121,7 @@ class NettyProcessor {
 
         try {
             Class.forName("io.netty.channel.kqueue.AcceptFilter");
+            enableJni = true;
             builder.addRuntimeInitializedClass("io.netty.channel.kqueue.KQueue")
                     .addRuntimeInitializedClass("io.netty.channel.kqueue.KQueueEventArray")
                     .addRuntimeInitializedClass("io.netty.channel.kqueue.KQueueEventLoop")
@@ -122,6 +129,10 @@ class NettyProcessor {
         } catch (ClassNotFoundException e) {
             //ignore
             log.debug("Not registering Netty native kqueue classes as they were not found");
+        }
+
+        if (enableJni) {
+            jni.produce(new JniBuildItem());
         }
 
         return builder //TODO: make configurable
@@ -137,10 +148,9 @@ class NettyProcessor {
         recorder.eagerlyInitChannelId();
     }
 
-    @SuppressWarnings("unchecked")
     @BuildStep
     @Record(ExecutionTime.STATIC_INIT)
-    void createExecutors(BuildProducer<SyntheticBeanBuildItem> syntheticBeans,
+    void createExecutors(BuildProducer<RuntimeBeanBuildItem> runtimeBeanBuildItemBuildProducer,
             Optional<EventLoopSupplierBuildItem> loopSupplierBuildItem,
             NettyRecorder recorder) {
         //TODO: configuration
@@ -153,30 +163,29 @@ class NettyProcessor {
             boss = recorder.createEventLoop(1);
             main = recorder.createEventLoop(0);
         }
-
-        syntheticBeans.produce(SyntheticBeanBuildItem.configure(EventLoopGroup.class)
-                .supplier(boss)
-                .scope(ApplicationScoped.class)
+        runtimeBeanBuildItemBuildProducer.produce(RuntimeBeanBuildItem.builder(EventLoopGroup.class)
+                .setSupplier(boss)
+                .setScope(ApplicationScoped.class)
                 .addQualifier(BossEventLoopGroup.class)
-                .done());
-
-        syntheticBeans.produce(SyntheticBeanBuildItem.configure(EventLoopGroup.class)
-                .supplier(main)
-                .scope(ApplicationScoped.class)
+                .build());
+        runtimeBeanBuildItemBuildProducer.produce(RuntimeBeanBuildItem.builder(EventLoopGroup.class)
+                .setSupplier(main)
+                .setScope(ApplicationScoped.class)
                 .addQualifier(MainEventLoopGroup.class)
-                .done());
-    }
-
-    @BuildStep
-    AdditionalBeanBuildItem registerQualifiers() {
-        // We need to register the qualifiers manually because they're not part of the index
-        // Previously they were indexed because we indexed the "uber-producer-class" generated for RuntimeBeanBuildItems
-        return AdditionalBeanBuildItem.builder().addBeanClasses(BossEventLoopGroup.class, MainEventLoopGroup.class).build();
+                .build());
     }
 
     @BuildStep
     public RuntimeReinitializedClassBuildItem reinitScheduledFutureTask() {
         return new RuntimeReinitializedClassBuildItem(
                 "io.quarkus.netty.runtime.graal.Holder_io_netty_util_concurrent_ScheduledFutureTask");
+    }
+
+    // TODO: Remove this when netty.version is 4.1.43.Final or greater.
+    @BuildStep
+    public List<UnsafeAccessedFieldBuildItem> unsafeAccessedFields() {
+        return Arrays.asList(
+                new UnsafeAccessedFieldBuildItem("sun.nio.ch.SelectorImpl", "selectedKeys"),
+                new UnsafeAccessedFieldBuildItem("sun.nio.ch.SelectorImpl", "publicSelectedKeys"));
     }
 }
