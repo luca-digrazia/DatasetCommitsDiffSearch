@@ -15,17 +15,17 @@
  */
 package org.androidannotations.otto.handler;
 
-import org.androidannotations.AndroidAnnotationsEnvironment;
+import org.androidannotations.helper.CanonicalNameConstants;
 import org.androidannotations.helper.ValidatorParameterHelper;
-import org.androidannotations.otto.helper.OttoClasses;
 import org.androidannotations.process.ElementValidation;
 
+import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.ExecutableElement;
 
 public class SubscribeHandler extends AbstractOttoHandler {
 
-	public SubscribeHandler(AndroidAnnotationsEnvironment environment) {
-		super(OttoClasses.SUBSCRIBE, environment);
+	public SubscribeHandler(ProcessingEnvironment processingEnvironment) {
+		super(CanonicalNameConstants.SUBSCRIBE, processingEnvironment);
 	}
 
 	@Override

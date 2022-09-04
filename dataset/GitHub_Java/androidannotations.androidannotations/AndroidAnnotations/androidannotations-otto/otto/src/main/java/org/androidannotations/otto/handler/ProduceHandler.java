@@ -15,17 +15,17 @@
  */
 package org.androidannotations.otto.handler;
 
-import org.androidannotations.AndroidAnnotationsEnvironment;
+import org.androidannotations.helper.CanonicalNameConstants;
 import org.androidannotations.helper.ValidatorParameterHelper;
-import org.androidannotations.otto.helper.OttoClasses;
 import org.androidannotations.process.ElementValidation;
 
+import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.ExecutableElement;
 
 public class ProduceHandler extends AbstractOttoHandler {
 
-	public ProduceHandler(AndroidAnnotationsEnvironment environment) {
-		super(OttoClasses.PRODUCE, environment);
+	public ProduceHandler(ProcessingEnvironment processingEnvironment) {
+		super(CanonicalNameConstants.PRODUCE, processingEnvironment);
 	}
 
 	@Override

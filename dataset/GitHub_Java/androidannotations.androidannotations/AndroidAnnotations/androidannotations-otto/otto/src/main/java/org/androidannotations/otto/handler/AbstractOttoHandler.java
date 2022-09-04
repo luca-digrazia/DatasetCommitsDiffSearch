@@ -15,25 +15,28 @@
  */
 package org.androidannotations.otto.handler;
 
-import com.sun.codemodel.JMethod;
-import org.androidannotations.AndroidAnnotationsEnvironment;
 import org.androidannotations.handler.BaseAnnotationHandler;
+import org.androidannotations.helper.TargetAnnotationHelper;
 import org.androidannotations.helper.ValidatorParameterHelper;
 import org.androidannotations.holder.EComponentHolder;
+import org.androidannotations.model.AnnotationElements;
 import org.androidannotations.process.ElementValidation;
 
-import javax.lang.model.element.AnnotationMirror;
+import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
 
 public abstract class AbstractOttoHandler extends BaseAnnotationHandler<EComponentHolder> {
 
-	public AbstractOttoHandler(String target, AndroidAnnotationsEnvironment environment) {
-		super(target, environment);
+	protected final TargetAnnotationHelper annotationHelper;
+
+	public AbstractOttoHandler(String target, ProcessingEnvironment processingEnvironment) {
+		super(target, processingEnvironment);
+		annotationHelper = new TargetAnnotationHelper(processingEnv, getTarget());
 	}
 
 	@Override
-	public void validate(Element element, ElementValidation valid) {
+	public void validate(Element element, AnnotationElements validatedElements, ElementValidation valid) {
 		if (!annotationHelper.enclosingElementHasEnhancedComponentAnnotation(element)) {
 			valid.invalidate();
 			return;
@@ -65,18 +68,7 @@ public abstract class AbstractOttoHandler extends BaseAnnotationHandler<ECompone
 	public void process(Element element, EComponentHolder holder) throws Exception {
 		ExecutableElement executableElement = (ExecutableElement) element;
 
-		JMethod method = codeModelHelper.overrideAnnotatedMethod(executableElement, holder);
-
-		addOttoAnnotation(executableElement, method);
-	}
-
-	private void addOttoAnnotation(ExecutableElement element, JMethod method) {
-		for (AnnotationMirror annotationMirror : element.getAnnotationMirrors()) {
-			if (annotationMirror.getAnnotationType().toString().equals(getTarget())) {
-				codeModelHelper.copyAnnotation(method, annotationMirror);
-				break;
-			}
-		}
+		codeModelHelper.overrideAnnotatedMethod(executableElement, holder);
 	}
 
 }
