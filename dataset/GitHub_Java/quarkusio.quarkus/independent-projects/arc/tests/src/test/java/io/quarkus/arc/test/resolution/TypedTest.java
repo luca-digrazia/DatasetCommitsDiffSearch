@@ -1,13 +1,28 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.arc.test.resolution;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.ArcContainer;
-import io.quarkus.arc.InjectableBean;
 import io.quarkus.arc.InstanceHandle;
 import io.quarkus.arc.test.ArcTestContainer;
 import java.io.IOException;
@@ -15,16 +30,15 @@ import java.util.concurrent.atomic.AtomicReference;
 import javax.enterprise.event.Observes;
 import javax.enterprise.inject.Produces;
 import javax.enterprise.inject.Typed;
-import javax.enterprise.inject.spi.Bean;
 import javax.inject.Singleton;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.Rule;
+import org.junit.Test;
 
 public class TypedTest {
 
     static final AtomicReference<String> EVENT = new AtomicReference<String>();
 
-    @RegisterExtension
+    @Rule
     public ArcTestContainer container = new ArcTestContainer(MyBean.class, MyOtherBean.class, Stage.class);
 
     @Test
@@ -37,19 +51,9 @@ public class TypedTest {
         InstanceHandle<Stage> stage = container.instance(Stage.class);
         assertTrue(stage.isAvailable());
         assertEquals("produced", stage.get().id);
-        assertTrue(container.instance(MyOtherBean.class).isAvailable());
-        boolean found = false;
-        for (Bean<?> bean : container.beanManager().getBeans(Object.class)) {
-            InjectableBean<?> injectable = (InjectableBean<?>) bean;
-            if (injectable.getDeclaringBean() == null && injectable.getBeanClass().equals(MyOtherBean.class)) {
-                found = true;
-                break;
-            }
-        }
-        assertTrue(found, "MyOtherBean not found");
     }
 
-    @Typed // -> bean types = [Object.class]
+    @Typed // -> bean types = { Object.class }
     @Singleton
     static class MyBean {
 
@@ -59,11 +63,9 @@ public class TypedTest {
 
     }
 
-    @Typed(MyOtherBean.class) // -> bean types = [MyOtherBean.class, Object.class]
     @Singleton
     static class MyOtherBean {
 
-        // -> bean types = [Stage.class, Object.class]
         @Produces
         Stage myStage() {
             return new Stage("produced");
@@ -71,7 +73,7 @@ public class TypedTest {
 
     }
 
-    @Typed // -> bean types = [Object.class]
+    @Typed
     static class Stage {
 
         final String id;

@@ -136,6 +136,7 @@ final class Types {
     }
 
     static Type getProviderType(ClassInfo classInfo) {
+        // TODO hack
         List<TypeVariable> typeParameters = classInfo.typeParameters();
         if (!typeParameters.isEmpty()) {
             return ParameterizedType.create(classInfo.name(), typeParameters.toArray(new Type[] {}), null);
@@ -147,7 +148,7 @@ final class Types {
     static Set<Type> getProducerMethodTypeClosure(MethodInfo producerMethod, BeanDeployment beanDeployment) {
         Set<Type> types;
         Type returnType = producerMethod.returnType();
-        if (returnType.kind() == Kind.PRIMITIVE || returnType.kind() == Kind.ARRAY) {
+        if (returnType.kind() == Kind.PRIMITIVE) {
             types = new HashSet<>();
             types.add(returnType);
             types.add(OBJECT_TYPE);
@@ -175,7 +176,7 @@ final class Types {
     static Set<Type> getProducerFieldTypeClosure(FieldInfo producerField, BeanDeployment beanDeployment) {
         Set<Type> types;
         Type fieldType = producerField.type();
-        if (fieldType.kind() == Kind.PRIMITIVE || fieldType.kind() == Kind.ARRAY) {
+        if (fieldType.kind() == Kind.PRIMITIVE) {
             types = new HashSet<>();
             types.add(fieldType);
             types.add(OBJECT_TYPE);
