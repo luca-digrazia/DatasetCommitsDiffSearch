@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.events.util.EventCollectionApparatus;
 import com.google.devtools.build.lib.syntax.BazelLibrary;
 import com.google.devtools.build.lib.syntax.BuildFileAST;
 import com.google.devtools.build.lib.syntax.Environment;
-import com.google.devtools.build.lib.syntax.Environment.FailFastException;
 import com.google.devtools.build.lib.syntax.Environment.Phase;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Expression;
@@ -202,11 +201,12 @@ public class EvaluationTestCase {
   }
 
   public void checkEvalError(String msg, String... input) throws Exception {
+    setFailFast(true);
     try {
       eval(input);
       fail("Expected error '" + msg + "' but got no error");
-    } catch (EvalException | FailFastException e) {
-      assertThat(e).hasMessageThat().isEqualTo(msg);
+    } catch (IllegalArgumentException | EvalException e) {
+      assertThat(e).hasMessage(msg);
     }
   }
 
@@ -214,7 +214,7 @@ public class EvaluationTestCase {
     try {
       eval(input);
       fail("Expected error containing '" + msg + "' but got no error");
-    } catch (EvalException | FailFastException e) {
+    } catch (IllegalArgumentException | EvalException e) {
       assertThat(e).hasMessageThat().contains(msg);
     }
   }
@@ -579,15 +579,11 @@ public class EvaluationTestCase {
    * A class that runs all tests in Build mode
    */
   protected class BuildTest extends ModalTestCase {
-    private final String[] skylarkOptions;
-
-    public BuildTest(String... skylarkOptions) {
-      this.skylarkOptions = skylarkOptions;
-    }
+    public BuildTest() {}
 
     @Override
     protected void run(Testable testable) throws Exception {
-      enableBuildMode(skylarkOptions);
+      enableBuildMode();
       testable.run();
     }
   }

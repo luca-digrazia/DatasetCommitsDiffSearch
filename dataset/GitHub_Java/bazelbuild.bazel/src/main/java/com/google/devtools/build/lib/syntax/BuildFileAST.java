@@ -41,7 +41,7 @@ import javax.annotation.Nullable;
 // does not itself extend ASTNode. This would help keep the AST minimalistic.
 public class BuildFileAST extends ASTNode {
 
-  private final ImmutableList<Statement> statements;
+  private final ImmutableList<Statement> stmts;
 
   private final ImmutableList<Comment> comments;
 
@@ -55,13 +55,13 @@ public class BuildFileAST extends ASTNode {
   @Nullable private final String contentHashCode;
 
   private BuildFileAST(
-      ImmutableList<Statement> statements,
+      ImmutableList<Statement> stmts,
       boolean containsErrors,
       String contentHashCode,
       Location location,
       ImmutableList<Comment> comments,
       @Nullable ImmutableList<SkylarkImport> imports) {
-    this.statements = statements;
+    this.stmts = stmts;
     this.containsErrors = containsErrors;
     this.contentHashCode = contentHashCode;
     this.comments = comments;
@@ -74,18 +74,17 @@ public class BuildFileAST extends ASTNode {
       ParseResult result,
       String contentHashCode,
       EventHandler eventHandler) {
-    ImmutableList<Statement> statements =
+    ImmutableList<Statement> stmts =
         ImmutableList.<Statement>builder()
             .addAll(preludeStatements)
             .addAll(result.statements)
             .build();
 
     boolean containsErrors = result.containsErrors;
-    Pair<Boolean, ImmutableList<SkylarkImport>> skylarkImports =
-        fetchLoads(statements, eventHandler);
+    Pair<Boolean, ImmutableList<SkylarkImport>> skylarkImports = fetchLoads(stmts, eventHandler);
     containsErrors |= skylarkImports.first;
     return new BuildFileAST(
-        statements,
+        stmts,
         containsErrors,
         contentHashCode,
         result.location,
@@ -98,9 +97,9 @@ public class BuildFileAST extends ASTNode {
    * {@code lastStatement} excluded.
    */
   public BuildFileAST subTree(int firstStatement, int lastStatement) {
-    ImmutableList<Statement> statements = this.statements.subList(firstStatement, lastStatement);
+    ImmutableList<Statement> stmts = this.stmts.subList(firstStatement, lastStatement);
     ImmutableList.Builder<SkylarkImport> imports = ImmutableList.builder();
-    for (Statement stmt : statements) {
+    for (Statement stmt : stmts) {
       if (stmt instanceof LoadStatement) {
         String str = ((LoadStatement) stmt).getImport().getValue();
         try {
@@ -112,11 +111,11 @@ public class BuildFileAST extends ASTNode {
       }
     }
     return new BuildFileAST(
-        statements,
+        stmts,
         containsErrors,
         null,
-        this.statements.get(firstStatement).getLocation(),
-        ImmutableList.of(),
+        this.stmts.get(firstStatement).getLocation(),
+        ImmutableList.<Comment>of(),
         imports.build());
   }
 
@@ -126,10 +125,10 @@ public class BuildFileAST extends ASTNode {
    */
   @VisibleForTesting
   static Pair<Boolean, ImmutableList<SkylarkImport>> fetchLoads(
-      List<Statement> statements, EventHandler eventHandler) {
+      List<Statement> stmts, EventHandler eventHandler) {
     ImmutableList.Builder<SkylarkImport> imports = ImmutableList.builder();
     boolean error = false;
-    for (Statement stmt : statements) {
+    for (Statement stmt : stmts) {
       if (stmt instanceof LoadStatement) {
         String importString = ((LoadStatement) stmt).getImport().getValue();
         try {
@@ -156,7 +155,7 @@ public class BuildFileAST extends ASTNode {
    * Returns an (immutable, ordered) list of statements in this BUILD file.
    */
   public ImmutableList<Statement> getStatements() {
-    return statements;
+    return stmts;
   }
 
   /**
@@ -175,7 +174,7 @@ public class BuildFileAST extends ASTNode {
   /** Returns a list of loads as strings in this BUILD file. */
   public ImmutableList<StringLiteral> getRawImports() {
     ImmutableList.Builder<StringLiteral> imports = ImmutableList.builder();
-    for (Statement stmt : statements) {
+    for (Statement stmt : stmts) {
       if (stmt instanceof LoadStatement) {
         imports.add(((LoadStatement) stmt).getImport());
       }
@@ -200,7 +199,7 @@ public class BuildFileAST extends ASTNode {
    */
   public boolean exec(Environment env, EventHandler eventHandler) throws InterruptedException {
     boolean ok = true;
-    for (Statement stmt : statements) {
+    for (Statement stmt : stmts) {
       if (!execTopLevelStatement(stmt, env, eventHandler)) {
         ok = false;
       }
@@ -248,16 +247,8 @@ public class BuildFileAST extends ASTNode {
   }
 
   @Override
-  public void prettyPrint(Appendable buffer, int indentLevel) throws IOException {
-    // Only statements are printed, not comments and processed import data.
-    for (Statement stmt : statements) {
-      stmt.prettyPrint(buffer, indentLevel);
-    }
-  }
-
-  @Override
   public String toString() {
-    return "<BuildFileAST with " + statements.size() + " statements>";
+    return "BuildFileAST" + getStatements();
   }
 
   @Override
@@ -297,13 +288,8 @@ public class BuildFileAST extends ASTNode {
     ParserInputSource input = ParserInputSource.create(file, fileSize);
     Parser.ParseResult result = Parser.parseFile(input, eventHandler, SKYLARK);
     return create(
-        ImmutableList.of(), result,
+        ImmutableList.<Statement>of(), result,
         HashCode.fromBytes(file.getDigest()).toString(), eventHandler);
-  }
-
-  public static BuildFileAST parseSkylarkFile(ParserInputSource input, EventHandler eventHandler) {
-    Parser.ParseResult result = Parser.parseFile(input, eventHandler, SKYLARK);
-    return create(ImmutableList.<Statement>of(), result, /*contentHashCode=*/ null, eventHandler);
   }
 
   /**
@@ -334,11 +320,11 @@ public class BuildFileAST extends ASTNode {
    * @return a new AST (or the same), with the containsErrors flag updated.
    */
   public BuildFileAST validate(Environment env, EventHandler eventHandler) {
-    boolean valid = ValidationEnvironment.validateAst(env, statements, eventHandler);
+    boolean valid = ValidationEnvironment.validateAst(env, stmts, eventHandler);
     if (valid || containsErrors) {
       return this;
     }
-    return new BuildFileAST(statements, true, contentHashCode, getLocation(), comments, imports);
+    return new BuildFileAST(stmts, true, contentHashCode, getLocation(), comments, imports);
   }
 
   private static BuildFileAST parseString(
@@ -346,7 +332,7 @@ public class BuildFileAST extends ASTNode {
     String str = Joiner.on("\n").join(content);
     ParserInputSource input = ParserInputSource.create(str, PathFragment.EMPTY_FRAGMENT);
     Parser.ParseResult result = Parser.parseFile(input, eventHandler, dialect);
-    return create(ImmutableList.of(), result, null, eventHandler);
+    return create(ImmutableList.<Statement>of(), result, null, eventHandler);
   }
 
   public static BuildFileAST parseBuildString(EventHandler eventHandler, String... content) {
@@ -373,7 +359,7 @@ public class BuildFileAST extends ASTNode {
    */
   @Nullable public Object eval(Environment env) throws EvalException, InterruptedException {
     Object last = null;
-    for (Statement statement : statements) {
+    for (Statement statement : stmts) {
       if (statement instanceof ExpressionStatement) {
         last = ((ExpressionStatement) statement).getExpression().eval(env);
       } else {
