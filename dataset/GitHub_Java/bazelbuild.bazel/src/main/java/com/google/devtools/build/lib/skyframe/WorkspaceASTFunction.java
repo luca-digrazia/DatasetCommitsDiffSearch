@@ -89,7 +89,7 @@ public class WorkspaceASTFunction implements SkyFunction {
             // These three options follow BUILD norms, but should probably be flipped.
             .allowToplevelRebinding(true)
             .requireLoadStatementsFirst(false)
-            .recordScope(false) // mustn't mutate (resolve) syntax in a downstream skyframe function
+            .recordScope(false)
             .restrictStringEscapes(
                 semantics != null && semantics.incompatibleRestrictStringEscapes())
             .build();

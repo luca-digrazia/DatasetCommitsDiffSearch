@@ -29,6 +29,8 @@ import com.google.devtools.build.lib.query2.engine.OutputFormatterCallback;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment;
 import com.google.devtools.build.lib.query2.engine.SynchronizedDelegatingOutputFormatterCallback;
 import com.google.devtools.build.lib.query2.engine.ThreadSafeOutputFormatterCallback;
+import com.google.devtools.build.lib.syntax.Printer;
+import com.google.devtools.build.lib.syntax.StarlarkThread;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.Writer;
@@ -36,8 +38,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.function.BiPredicate;
-import net.starlark.java.eval.Printer;
-import net.starlark.java.eval.StarlarkThread;
 
 /**
  * An output formatter that prints the generating rules using the syntax of the BUILD files. If
@@ -51,7 +51,7 @@ public class BuildOutputFormatter extends AbstractUnorderedFormatter {
    * </code> takes, while query doesn't.
    */
   public interface AttributeReader {
-    Iterable<Object> getPossibleValues(Rule rule, Attribute attr);
+    PossibleAttributeValues getPossibleValues(Rule rule, Attribute attr);
   }
 
   /**
@@ -119,13 +119,10 @@ public class BuildOutputFormatter extends AbstractUnorderedFormatter {
               .append(lineTerm);
           continue;
         }
-        AttributeValueSource attributeValueSource =
-            AttributeValueSource.forRuleAndAttribute(rule, attr);
-        if (attributeValueSource != AttributeValueSource.RULE) {
+        PossibleAttributeValues values = attrReader.getPossibleValues(rule, attr);
+        if (values.getSource() != AttributeValueSource.RULE) {
           continue; // Don't print default values.
         }
-
-        Iterable<Object> values = attrReader.getPossibleValues(rule, attr);
         if (Iterables.size(values) != 1) {
           // Computed defaults that depend on configurable attributes can have multiple values.
           continue;

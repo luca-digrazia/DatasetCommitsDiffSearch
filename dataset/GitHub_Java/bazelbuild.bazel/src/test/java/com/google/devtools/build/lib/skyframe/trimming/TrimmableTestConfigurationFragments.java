@@ -32,6 +32,7 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
+import com.google.devtools.build.lib.analysis.TransitionMode;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.BuildOptionsView;
@@ -676,7 +677,8 @@ public final class TrimmableTestConfigurationFragments {
         throws InterruptedException, RuleErrorException, ActionConflictException {
       NestedSetBuilder<Artifact> filesToBuild = NestedSetBuilder.stableOrder();
       filesToBuild.addAll(ruleContext.getOutputArtifacts());
-      for (FileProvider dep : ruleContext.getPrerequisites("deps", FileProvider.class)) {
+      for (FileProvider dep :
+          ruleContext.getPrerequisites("deps", TransitionMode.TARGET, FileProvider.class)) {
         filesToBuild.addTransitive(dep.getFilesToBuild());
       }
       for (Artifact artifact : ruleContext.getOutputArtifacts()) {

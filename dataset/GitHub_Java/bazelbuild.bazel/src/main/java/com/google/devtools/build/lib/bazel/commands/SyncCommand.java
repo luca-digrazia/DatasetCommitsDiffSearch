@@ -45,6 +45,7 @@ import com.google.devtools.build.lib.server.FailureDetails.SyncCommand.Code;
 import com.google.devtools.build.lib.skyframe.PackageLookupValue;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
+import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.lib.util.ExitCode;
@@ -59,7 +60,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
-import net.starlark.java.eval.Starlark;
 
 /** Syncs all repositories specified in the workspace file */
 @Command(
@@ -313,7 +313,7 @@ public final class SyncCommand implements BlazeCommand {
   private static BlazeCommandResult blazeCommandResultWithNoBuildReport(
       CommandEnvironment env, ExitCode exitCode, Code syncCommandCode, String message) {
     reportNoBuildRequestFinished(env, exitCode);
-    return createFailedBlazeCommandResult(syncCommandCode, message);
+    return createFailedBlazeCommandResult(exitCode, syncCommandCode, message);
   }
 
   private static void reportNoBuildRequestFinished(CommandEnvironment env, ExitCode exitCode) {
@@ -322,9 +322,10 @@ public final class SyncCommand implements BlazeCommand {
   }
 
   private static BlazeCommandResult createFailedBlazeCommandResult(
-      Code syncCommandCode, String message) {
+      ExitCode exitCode, Code syncCommandCode, String message) {
     return BlazeCommandResult.detailedExitCode(
         DetailedExitCode.of(
+            exitCode,
             FailureDetail.newBuilder()
                 .setMessage(message)
                 .setSyncCommand(

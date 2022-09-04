@@ -564,17 +564,17 @@ public final class StarlarkEvaluationTest {
   }
 
   @Test
-  public void testIfElifElse_ifExecutes() throws Exception {
+  public void testIfElifElse_IfExecutes() throws Exception {
     execIfElifElse(1, 0, 1);
   }
 
   @Test
-  public void testIfElifElse_elifExecutes() throws Exception {
+  public void testIfElifElse_ElifExecutes() throws Exception {
     execIfElifElse(0, 1, 2);
   }
 
   @Test
-  public void testIfElifElse_elseExecutes() throws Exception {
+  public void testIfElifElse_ElseExecutes() throws Exception {
     execIfElifElse(0, 0, 3);
   }
 
@@ -1512,7 +1512,7 @@ public final class StarlarkEvaluationTest {
   }
 
   @Test
-  public void testInvalidAugmentedAssignment_listExpression() throws Exception {
+  public void testInvalidAugmentedAssignment_ListExpression() throws Exception {
     assertResolutionError(
         "cannot perform augmented assignment on a list or tuple expression",
         //
@@ -1521,8 +1521,9 @@ public final class StarlarkEvaluationTest {
         "f(1, 2)");
   }
 
+
   @Test
-  public void testInvalidAugmentedAssignment_notAnLValue() throws Exception {
+  public void testInvalidAugmentedAssignment_NotAnLValue() throws Exception {
     assertResolutionError(
         "cannot assign to 'x + 1'",
         //
@@ -1552,7 +1553,7 @@ public final class StarlarkEvaluationTest {
   }
 
   @Test
-  public void testDictComprehensions_iterationOrder() throws Exception {
+  public void testDictComprehensions_IterationOrder() throws Exception {
     ev.new Scenario()
         .setUp(
             "def foo():",

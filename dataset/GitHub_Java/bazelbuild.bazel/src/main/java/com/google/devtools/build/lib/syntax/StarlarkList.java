@@ -14,24 +14,21 @@
 
 package com.google.devtools.build.lib.syntax;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Lists;
-import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.skylarkinterface.Param;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
-import java.util.ArrayList;
+import java.util.AbstractList;
+import java.util.Arrays;
 import java.util.Collection;
-import java.util.List;
 import javax.annotation.Nullable;
+import net.starlark.java.annot.Param;
+import net.starlark.java.annot.StarlarkBuiltin;
+import net.starlark.java.annot.StarlarkDocumentationCategory;
+import net.starlark.java.annot.StarlarkMethod;
 
 /** A StarlarkList is a mutable finite sequence of values. */
-@SkylarkModule(
+@StarlarkBuiltin(
     name = "list",
-    category = SkylarkModuleCategory.BUILTIN,
+    category = StarlarkDocumentationCategory.BUILTIN,
     doc =
         "The built-in list type. Example list expressions:<br>"
             + "<pre class=language-python>x = [1, 2, 3]</pre>"
@@ -46,34 +43,57 @@ import javax.annotation.Nullable;
             + "['a', 'b', 'c', 'd'][::2]  # ['a', 'c']\n"
             + "['a', 'b', 'c', 'd'][3:0:-1]  # ['d', 'c', 'b']</pre>"
             + "Lists are mutable, as in Python.")
-public final class StarlarkList<E> extends Sequence<E> {
+public final class StarlarkList<E> extends AbstractList<E>
+    implements Sequence<E>, StarlarkValue, Mutability.Freezable {
 
-  private final ArrayList<E> contents;
+  // The implementation strategy is similar to ArrayList,
+  // but without the extra indirection of using ArrayList.
+
+  private int size;
+  private int iteratorCount; // number of active iterators (unused once frozen)
+  private Object[] elems = EMPTY_ARRAY; // elems[i] == null  iff  i >= size
 
   /** Final except for {@link #unsafeShallowFreeze}; must not be modified any other way. */
   private Mutability mutability;
 
-  private StarlarkList(ArrayList<E> rawContents, @Nullable Mutability mutability) {
-    this.contents = Preconditions.checkNotNull(rawContents);
-    this.mutability = mutability == null ? Mutability.IMMUTABLE : mutability;
-    }
+  private static final Object[] EMPTY_ARRAY = {};
 
-  /**
-   * Creates an instance, taking ownership of the supplied {@link ArrayList}. This is exposed for
-   * performance reasons. May be used when the calling code will not modify the supplied list after
-   * calling (honor system).
-   */
-  static <T> StarlarkList<T> wrapUnsafe(@Nullable StarlarkThread thread, ArrayList<T> rawContents) {
-    return wrapUnsafe(thread == null ? null : thread.mutability(), rawContents);
+  private StarlarkList(@Nullable Mutability mutability, Object[] elems) {
+    this.elems = elems;
+    this.size = elems.length;
+    this.mutability = mutability == null ? Mutability.IMMUTABLE : mutability;
   }
 
   /**
-   * Create an instance, taking ownership of the supplied {@link ArrayList}. This is exposed for
-   * performance reasons. May be used when the calling code will not modify the supplied list after
-   * calling (honor system).
+   * Takes ownership of the supplied array and returns a new StarlarkList instance that initially
+   * wraps the array. The caller must not subsequently modify the array, but the StarlarkList
+   * instance may do so.
    */
-  static <T> StarlarkList<T> wrapUnsafe(@Nullable Mutability mutability, ArrayList<T> rawContents) {
-    return new StarlarkList<>(rawContents, mutability);
+  static <T> StarlarkList<T> wrap(@Nullable Mutability mutability, Object[] elems) {
+    return new StarlarkList<>(mutability, elems);
+  }
+
+  @Override
+  public boolean isImmutable() {
+    return mutability().isFrozen();
+  }
+
+  @Override
+  public boolean isHashable() {
+    return false; // even a frozen list is unhashable in Starlark
+  }
+
+  @Override
+  public boolean updateIteratorCount(int delta) {
+    if (mutability().isFrozen()) {
+      return false;
+    }
+    if (delta > 0) {
+      iteratorCount++;
+    } else if (delta < 0) {
+      iteratorCount--;
+    }
+    return iteratorCount > 0;
   }
 
   /**
@@ -83,320 +103,374 @@ public final class StarlarkList<E> extends Sequence<E> {
    * environments were then frozen. This instance is for empty lists that were always frozen from
    * the beginning.
    */
-  private static final StarlarkList<?> EMPTY =
-      StarlarkList.copyOf(Mutability.IMMUTABLE, ImmutableList.of());
+  private static final StarlarkList<?> EMPTY = wrap(Mutability.IMMUTABLE, EMPTY_ARRAY);
 
-  /** Returns an empty frozen list, cast to have an arbitrary content type. */
+  /** Returns an empty frozen list of the desired type. */
   @SuppressWarnings("unchecked")
   public static <T> StarlarkList<T> empty() {
     return (StarlarkList<T>) EMPTY;
-    }
+  }
+
+  /** Returns a new, empty list with the specified Mutability. */
+  public static <T> StarlarkList<T> newList(Mutability mutability) {
+    return wrap(mutability, EMPTY_ARRAY);
+  }
 
   /**
    * Returns a {@code StarlarkList} whose items are given by an iterable and which has the given
    * {@link Mutability}. If {@code mutability} is null, the list is immutable.
    */
   public static <T> StarlarkList<T> copyOf(
-      @Nullable Mutability mutability, Iterable<? extends T> contents) {
-    return new StarlarkList<>(Lists.newArrayList(contents), mutability);
-    }
-
-  /**
-   * Returns a {@code StarlarkList} whose items are given by an iterable and which has the {@link
-   * Mutability} belonging to the given {@link StarlarkThread}. If {@code thread} is null, the list
-   * is immutable.
-   */
-  public static <T> StarlarkList<T> copyOf(
-      @Nullable StarlarkThread thread, Iterable<? extends T> contents) {
-    return StarlarkList.copyOf(thread == null ? null : thread.mutability(), contents);
+      @Nullable Mutability mutability, Iterable<? extends T> elems) {
+    return wrap(mutability, Iterables.toArray(elems, Object.class));
   }
 
   /**
-   * Returns a {@code StarlarkList} with the given items and the {@link Mutability} of the given
-   * {@link StarlarkThread}. If {@code thread} is null, the list is immutable.
+   * Returns an immutable list with the given elements. Equivalent to {@code copyOf(null, elems)}.
    */
-  public static <T> StarlarkList<T> of(@Nullable StarlarkThread thread, T... contents) {
-    // Safe since we're taking a copy of the input.
-    return StarlarkList.wrapUnsafe(
-        thread == null ? null : thread.mutability(), Lists.newArrayList(contents));
+  public static <T> StarlarkList<T> immutableCopyOf(Iterable<? extends T> elems) {
+    return copyOf(null, elems);
+  }
+
+  /**
+   * Returns a {@code StarlarkList} with the given items and the {@link Mutability}. If {@code
+   * mutability} is null, the list is immutable.
+   */
+  public static <T> StarlarkList<T> of(@Nullable Mutability mutability, T... elems) {
+    return wrap(mutability, Arrays.copyOf(elems, elems.length));
+  }
+
+  @Override
+  public Mutability mutability() {
+    return mutability;
+  }
+
+  @Override
+  public void unsafeShallowFreeze() {
+    Mutability.Freezable.checkUnsafeShallowFreezePrecondition(this);
+    this.mutability = Mutability.IMMUTABLE;
+  }
+
+  @Override
+  public ImmutableList<E> getImmutableList() {
+    // Optimization: a frozen array needn't be copied.
+    // If the entire array is full, we can wrap it directly.
+    if (elems.length == size && mutability().isFrozen()) {
+      return Tuple.wrapImmutable(elems);
     }
 
-    @Override
-    public Mutability mutability() {
-      return mutability;
-    }
-
-    @Override
-    public void unsafeShallowFreeze() {
-      Mutability.Freezable.checkUnsafeShallowFreezePrecondition(this);
-      this.mutability = Mutability.IMMUTABLE;
-    }
-
-    @Override
-    public ImmutableList<E> getImmutableList() {
-      return ImmutableList.copyOf(contents);
-    }
-
-    @Override
-    protected List<E> getContentsUnsafe() {
-      return contents;
-    }
+    return ImmutableList.copyOf(this);
+  }
 
   /**
    * Returns a new {@code StarlarkList} that is the concatenation of two {@code StarlarkList}s. The
    * new list will have the given {@link Mutability}.
    */
   public static <T> StarlarkList<T> concat(
-      StarlarkList<? extends T> left, StarlarkList<? extends T> right, Mutability mutability) {
-
-      ArrayList<T> newContents = new ArrayList<>(left.size() + right.size());
-      addAll(newContents, left.contents);
-      addAll(newContents, right.contents);
-    return new StarlarkList<>(newContents, mutability);
-    }
-
-    /** More efficient {@link List#addAll} replacement when both lists are {@link ArrayList}s. */
-    private static <T> void addAll(ArrayList<T> addTo, ArrayList<? extends T> addFrom) {
-      // Hot code path, skip iterator.
-      for (int i = 0; i < addFrom.size(); i++) {
-        addTo.add(addFrom.get(i));
-      }
-    }
+      StarlarkList<? extends T> x, StarlarkList<? extends T> y, Mutability mutability) {
+    Object[] res = new Object[x.size + y.size];
+    System.arraycopy(x.elems, 0, res, 0, x.size);
+    System.arraycopy(y.elems, 0, res, x.size, y.size);
+    return wrap(mutability, res);
+  }
 
   @Override
-  public StarlarkList<E> repeat(int times, Mutability mutability) {
-      if (times <= 0) {
-      return StarlarkList.wrapUnsafe(mutability, new ArrayList<>());
-      }
+  public boolean equals(Object that) {
+    // This slightly violates the java.util.List equivalence contract
+    // because it considers the class, not just the elements.
+    return this == that || (that instanceof StarlarkList && sameElems(this, ((StarlarkList) that)));
+  }
 
-      ArrayList<E> repeated = new ArrayList<>(this.size() * times);
-      for (int i = 0; i < times; i++) {
-        repeated.addAll(this);
-      }
-    return StarlarkList.wrapUnsafe(mutability, repeated);
+  private static boolean sameElems(StarlarkList<?> x, StarlarkList<?> y) {
+    if (x.size != y.size) {
+      return false;
     }
+    for (int i = 0; i < x.size; i++) {
+      if (!x.elems[i].equals(y.elems[i])) {
+        return false;
+      }
+    }
+    return true;
+  }
 
   @Override
-  public StarlarkList<E> getSlice(
-      Object start, Object end, Object step, Location loc, Mutability mutability)
-      throws EvalException {
-      List<Integer> sliceIndices = EvalUtils.getSliceIndices(start, end, step, this.size(), loc);
-      ArrayList<E> list = new ArrayList<>(sliceIndices.size());
-      // foreach is not used to avoid iterator overhead
-      for (int i = 0; i < sliceIndices.size(); ++i) {
-        list.add(this.get(sliceIndices.get(i)));
+  public int hashCode() {
+    // Roll our own hash code to avoid iterating through null part of elems.
+    int result = 1;
+    for (int i = 0; i < size; i++) {
+      result = 31 * result + elems[i].hashCode();
+    }
+    return 6047 + 4673 * result;
+  }
+
+  @Override
+  public void repr(Printer printer) {
+    printer.printList(this, "[", ", ", "]");
+  }
+
+  // TODO(adonovan): StarlarkValue has 3 String methods yet still we need this fourth. Why?
+  @Override
+  public String toString() {
+    return Starlark.repr(this);
+  }
+
+  /** Returns a new StarlarkList containing n consecutive repeats of this tuple. */
+  public StarlarkList<E> repeat(int n, Mutability mutability) {
+    if (n <= 0) {
+      return wrap(mutability, EMPTY_ARRAY);
+    }
+
+    // TODO(adonovan): reject unreasonably large n.
+    Object[] res = new Object[n * size];
+    for (int i = 0; i < n; i++) {
+      System.arraycopy(elems, 0, res, i * size, size);
+    }
+    return wrap(mutability, res);
+  }
+
+  @Override
+  @SuppressWarnings("unchecked")
+  public E get(int i) {
+    return (E) elems[i]; // unchecked
+  }
+
+  @Override
+  public int size() {
+    return size;
+  }
+
+  @Override
+  public StarlarkList<E> getSlice(Mutability mu, int start, int stop, int step) {
+    RangeList indices = new RangeList(start, stop, step);
+    int n = indices.size();
+    Object[] res = new Object[n];
+    if (step == 1) { // common case
+      System.arraycopy(elems, indices.at(0), res, 0, n);
+    } else {
+      for (int i = 0; i < n; ++i) {
+        res[i] = elems[indices.at(i)];
       }
-    return StarlarkList.wrapUnsafe(mutability, list);
     }
+    return wrap(mu, res);
+  }
 
-    /**
-     * Appends an element to the end of the list, after validating that mutation is allowed.
-     *
-     * @param element the element to add
-     * @param loc the location to use for error reporting
-     * @param mutability the {@link Mutability} associated with the operation
-     */
-    public void add(E element, Location loc, Mutability mutability) throws EvalException {
-      checkMutable(loc, mutability);
-      contents.add(element);
-    }
-
-    /**
-     * Inserts an element at a given position to the list.
-     *
-     * @param index the new element's index
-     * @param element the element to add
-     * @param loc the location to use for error reporting
-     * @param mutability the {@link Mutability} associated with the operation
-     */
-    public void add(int index, E element, Location loc, Mutability mutability)
-        throws EvalException {
-      checkMutable(loc, mutability);
-      contents.add(index, element);
-    }
-
-    /**
-     * Appends all the elements to the end of the list.
-     *
-     * @param elements the elements to add
-     * @param loc the location to use for error reporting
-     * @param mutability the {@link Mutability} associated with the operation
-     */
-    public void addAll(Iterable<? extends E> elements, Location loc, Mutability mutability)
-        throws EvalException {
-      checkMutable(loc, mutability);
-      Iterables.addAll(contents, elements);
-    }
-
-    /**
-     * Removes the element at a given index. The index must already have been validated to be in
-     * range.
-     *
-     * @param index the index of the element to remove
-     * @param loc the location to use for error reporting
-     * @param mutability the {@link Mutability} associated with the operation
-     */
-    public void remove(int index, Location loc, Mutability mutability) throws EvalException {
-      checkMutable(loc, mutability);
-      contents.remove(index);
-    }
-
-    @SkylarkCallable(
-        name = "remove",
-        doc =
-            "Removes the first item from the list whose value is x. "
-                + "It is an error if there is no such item.",
-        parameters = {@Param(name = "x", type = Object.class, doc = "The object to remove.")},
-        useLocation = true,
-        useStarlarkThread = true)
-    public NoneType removeObject(Object x, Location loc, StarlarkThread thread)
-        throws EvalException {
-      for (int i = 0; i < size(); i++) {
-        if (get(i).equals(x)) {
-          remove(i, loc, thread.mutability());
-          return Starlark.NONE;
-        }
+  // Postcondition: elems.length >= mincap.
+  private void grow(int mincap) {
+    int oldcap = elems.length;
+    if (oldcap < mincap) {
+      int newcap = oldcap + (oldcap >> 1); // grow by at least 50%
+      if (newcap < mincap) {
+        newcap = mincap;
       }
-      throw new EvalException(loc, Printer.format("item %r not found in list", x));
-    }
-
-    /**
-     * Sets the position at the given index to contain the given value. The index must already have
-     * been validated to be in range.
-     *
-     * @param index the position to change
-     * @param value the new value
-     * @param loc the location to use for error reporting
-     * @param mutability the {@link Mutability} associated with the operation
-     */
-    public void set(int index, E value, Location loc, Mutability mutability) throws EvalException {
-      checkMutable(loc, mutability);
-      contents.set(index, value);
-    }
-
-    @SkylarkCallable(
-        name = "append",
-        doc = "Adds an item to the end of the list.",
-        parameters = {
-          @Param(
-              name = "item",
-              type = Object.class,
-              doc = "Item to add at the end.",
-              noneable = true)
-        },
-        useLocation = true,
-        useStarlarkThread = true)
-    @SuppressWarnings("unchecked") // Cast of Object item to E
-    public NoneType append(Object item, Location loc, StarlarkThread thread) throws EvalException {
-      add((E) item, loc, thread.mutability());
-      return Starlark.NONE;
-    }
-
-    @SkylarkCallable(
-        name = "clear",
-        doc = "Removes all the elements of the list.",
-        useLocation = true,
-        useStarlarkThread = true)
-    public NoneType clearMethod(Location loc, StarlarkThread thread) throws EvalException {
-      checkMutable(loc, thread.mutability());
-      contents.clear();
-      return Starlark.NONE;
-    }
-
-    @SkylarkCallable(
-        name = "insert",
-        doc = "Inserts an item at a given position.",
-        parameters = {
-          @Param(name = "index", type = Integer.class, doc = "The index of the given position."),
-          @Param(name = "item", type = Object.class, doc = "The item.", noneable = true)
-        },
-        useLocation = true,
-        useStarlarkThread = true)
-    @SuppressWarnings("unchecked") // Cast of Object item to E
-    public NoneType insert(Integer index, Object item, Location loc, StarlarkThread thread)
-        throws EvalException {
-      add(EvalUtils.clampRangeEndpoint(index, size()), (E) item, loc, thread.mutability());
-      return Starlark.NONE;
-    }
-
-    @SkylarkCallable(
-        name = "extend",
-        doc = "Adds all items to the end of the list.",
-        parameters = {
-          @Param(name = "items", type = Object.class, doc = "Items to add at the end.")
-        },
-        useLocation = true,
-        useStarlarkThread = true)
-    @SuppressWarnings("unchecked")
-    public NoneType extend(Object items, Location loc, StarlarkThread thread) throws EvalException {
-      addAll(
-          (Collection<? extends E>) EvalUtils.toCollection(items, loc, thread),
-          loc,
-          thread.mutability());
-      return Starlark.NONE;
-    }
-
-    @SkylarkCallable(
-        name = "index",
-        doc =
-            "Returns the index in the list of the first item whose value is x. "
-                + "It is an error if there is no such item.",
-        parameters = {
-          @Param(name = "x", type = Object.class, doc = "The object to search."),
-          @Param(
-              name = "start",
-              type = Integer.class,
-              defaultValue = "None",
-              noneable = true,
-              named = true,
-              doc = "The start index of the list portion to inspect."),
-          @Param(
-              name = "end",
-              type = Integer.class,
-              defaultValue = "None",
-              noneable = true,
-              named = true,
-              doc = "The end index of the list portion to inspect.")
-        },
-        useLocation = true)
-    public Integer index(Object x, Object start, Object end, Location loc) throws EvalException {
-      int i =
-          start == Starlark.NONE ? 0 : EvalUtils.clampRangeEndpoint((Integer) start, this.size());
-      int j =
-          end == Starlark.NONE
-              ? this.size()
-              : EvalUtils.clampRangeEndpoint((Integer) end, this.size());
-
-      while (i < j) {
-        if (this.get(i).equals(x)) {
-          return i;
-        }
-        i++;
-      }
-      throw new EvalException(loc, Printer.format("item %r not found in list", x));
-    }
-
-    @SkylarkCallable(
-        name = "pop",
-        doc =
-            "Removes the item at the given position in the list, and returns it. "
-                + "If no <code>index</code> is specified, "
-                + "it removes and returns the last item in the list.",
-        parameters = {
-          @Param(
-              name = "i",
-              type = Integer.class,
-              noneable = true,
-              defaultValue = "None",
-              doc = "The index of the item.")
-        },
-        useLocation = true,
-        useStarlarkThread = true)
-    public Object pop(Object i, Location loc, StarlarkThread thread) throws EvalException {
-      int arg = i == Starlark.NONE ? -1 : (Integer) i;
-      int index = EvalUtils.getSequenceIndex(arg, size(), loc);
-      Object result = get(index);
-      remove(index, loc, thread.mutability());
-      return result;
+      elems = Arrays.copyOf(elems, newcap);
     }
   }
+
+  /**
+   * Appends an element to the end of the list, after validating that mutation is allowed.
+   *
+   * @param element the element to add
+   * @param unused a nonce value to select this overload, not List.add
+   */
+  public void add(E element, Location unused) throws EvalException {
+    Starlark.checkMutable(this);
+    grow(size + 1);
+    elems[size++] = element;
+  }
+
+  /**
+   * Inserts an element at a given position to the list.
+   *
+   * @param index the new element's index
+   * @param element the element to add
+   * @param unused a nonce value to select this overload, not List.add
+   */
+  public void add(int index, E element, Location unused) throws EvalException {
+    Starlark.checkMutable(this);
+    grow(size + 1);
+    System.arraycopy(elems, index, elems, index + 1, size - index);
+    elems[index] = element;
+    size++;
+  }
+
+  /**
+   * Appends all the elements to the end of the list.
+   *
+   * @param elements the elements to add
+   * @param unused a nonce value to select this overload, not List.addAll
+   */
+  public void addAll(Iterable<? extends E> elements, Location unused) throws EvalException {
+    Starlark.checkMutable(this);
+    if (elements instanceof StarlarkList) {
+      StarlarkList<?> that = (StarlarkList) elements;
+      // (safe even if this == that)
+      grow(this.size + that.size);
+      System.arraycopy(that.elems, 0, this.elems, this.size, that.size);
+      this.size += that.size;
+    } else if (elements instanceof Collection) {
+      // collection of known size
+      Collection<?> that = (Collection) elements;
+      grow(size + that.size());
+      for (Object x : that) {
+        elems[size++] = x;
+      }
+    } else {
+      // iterable
+      for (Object x : elements) {
+        grow(size + 1);
+        elems[size++] = x;
+      }
+    }
+  }
+
+  /**
+   * Removes the element at a given index. The index must already have been validated to be in
+   * range.
+   *
+   * @param index the index of the element to remove
+   * @param unused a nonce value to select this overload, not List.remove
+   */
+  public void remove(int index, Location unused) throws EvalException {
+    Starlark.checkMutable(this);
+    int n = size - index - 1;
+    if (n > 0) {
+      System.arraycopy(elems, index + 1, elems, index, n);
+    }
+    elems[--size] = null; // aid GC
+  }
+
+  @StarlarkMethod(
+      name = "remove",
+      doc =
+          "Removes the first item from the list whose value is x. "
+              + "It is an error if there is no such item.",
+      parameters = {@Param(name = "x", type = Object.class, doc = "The object to remove.")})
+  public NoneType removeObject(Object x) throws EvalException {
+    for (int i = 0; i < size; i++) {
+      if (elems[i].equals(x)) {
+        remove(i, (Location) null);
+        return Starlark.NONE;
+      }
+    }
+    throw Starlark.errorf("item %s not found in list", Starlark.repr(x));
+  }
+
+  /**
+   * Sets the position at the given index to contain the given value. The index must already have
+   * been validated to be in range.
+   *
+   * @param index the position to change
+   * @param value the new value
+   * @param unused a nonce value to select this overload, not List.set
+   */
+  public void set(int index, E value, Location unused) throws EvalException {
+    Starlark.checkMutable(this);
+    elems[index] = value;
+  }
+
+  @StarlarkMethod(
+      name = "append",
+      doc = "Adds an item to the end of the list.",
+      parameters = {
+        @Param(name = "item", type = Object.class, doc = "Item to add at the end.", noneable = true)
+      })
+  @SuppressWarnings("unchecked")
+  public NoneType append(Object item) throws EvalException {
+    add((E) item, (Location) null); // unchecked
+    return Starlark.NONE;
+  }
+
+  @StarlarkMethod(name = "clear", doc = "Removes all the elements of the list.")
+  public NoneType clearMethod() throws EvalException {
+    Starlark.checkMutable(this);
+    for (int i = 0; i < size; i++) {
+      elems[i] = null; // aid GC
+    }
+    size = 0;
+    return Starlark.NONE;
+  }
+
+  @StarlarkMethod(
+      name = "insert",
+      doc = "Inserts an item at a given position.",
+      parameters = {
+        @Param(name = "index", type = Integer.class, doc = "The index of the given position."),
+        @Param(name = "item", type = Object.class, doc = "The item.", noneable = true)
+      })
+  @SuppressWarnings("unchecked")
+  public NoneType insert(Integer index, Object item) throws EvalException {
+    add(EvalUtils.toIndex(index, size), (E) item, (Location) null); // unchecked
+    return Starlark.NONE;
+  }
+
+  @StarlarkMethod(
+      name = "extend",
+      doc = "Adds all items to the end of the list.",
+      parameters = {@Param(name = "items", type = Object.class, doc = "Items to add at the end.")})
+  public NoneType extend(Object items) throws EvalException {
+    @SuppressWarnings("unchecked")
+    Iterable<? extends E> src = (Iterable<? extends E>) Starlark.toIterable(items);
+    addAll(src, (Location) null);
+    return Starlark.NONE;
+  }
+
+  @StarlarkMethod(
+      name = "index",
+      doc =
+          "Returns the index in the list of the first item whose value is x. "
+              + "It is an error if there is no such item.",
+      parameters = {
+        @Param(name = "x", type = Object.class, doc = "The object to search."),
+        @Param(
+            name = "start",
+            type = Integer.class,
+            defaultValue = "None",
+            noneable = true, // TODO(adonovan): this is wrong
+            named = true,
+            doc = "The start index of the list portion to inspect."),
+        @Param(
+            name = "end",
+            type = Integer.class,
+            defaultValue = "None",
+            noneable = true, // TODO(adonovan): this is wrong
+            named = true,
+            doc = "The end index of the list portion to inspect.")
+      })
+  public Integer index(Object x, Object start, Object end) throws EvalException {
+    int i = start == Starlark.NONE ? 0 : EvalUtils.toIndex((Integer) start, size);
+    int j = end == Starlark.NONE ? size : EvalUtils.toIndex((Integer) end, size);
+    for (; i < j; i++) {
+      if (elems[i].equals(x)) {
+        return i;
+      }
+    }
+    throw Starlark.errorf("item %s not found in list", Starlark.repr(x));
+  }
+
+  @StarlarkMethod(
+      name = "pop",
+      doc =
+          "Removes the item at the given position in the list, and returns it. "
+              + "If no <code>index</code> is specified, "
+              + "it removes and returns the last item in the list.",
+      parameters = {
+        @Param(
+            name = "i",
+            type = Integer.class,
+            noneable = true, // TODO(adonovan): this is wrong
+            defaultValue = "-1",
+            doc = "The index of the item.")
+      })
+  public Object pop(Object i) throws EvalException {
+    int arg = i == Starlark.NONE ? -1 : (Integer) i;
+    int index = EvalUtils.getSequenceIndex(arg, size);
+    Object result = elems[index];
+    remove(index, (Location) null);
+    return result;
+  }
+
+  @Override
+  public Object[] toArray() {
+    return size != 0 ? Arrays.copyOf(elems, size) : EMPTY_ARRAY;
+  }
+}

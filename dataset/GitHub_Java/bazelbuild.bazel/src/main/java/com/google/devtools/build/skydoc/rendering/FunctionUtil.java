@@ -17,18 +17,14 @@ package com.google.devtools.build.skydoc.rendering;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.google.devtools.build.lib.syntax.FunctionSignature;
-import com.google.devtools.build.lib.syntax.Printer;
-import com.google.devtools.build.lib.syntax.Printer.BasePrinter;
-import com.google.devtools.build.lib.syntax.SkylarkType;
+import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkFunction;
-import com.google.devtools.build.lib.syntax.StringLiteral;
 import com.google.devtools.build.skydoc.rendering.proto.StardocOutputProtos.FunctionParamInfo;
 import com.google.devtools.build.skydoc.rendering.proto.StardocOutputProtos.StarlarkFunctionInfo;
-import com.google.devtools.skylark.common.DocstringUtils;
-import com.google.devtools.skylark.common.DocstringUtils.DocstringInfo;
-import com.google.devtools.skylark.common.DocstringUtils.DocstringParseError;
-import com.google.devtools.skylark.common.DocstringUtils.ParameterDoc;
+import com.google.devtools.starlark.common.DocstringUtils;
+import com.google.devtools.starlark.common.DocstringUtils.DocstringInfo;
+import com.google.devtools.starlark.common.DocstringUtils.DocstringParseError;
+import com.google.devtools.starlark.common.DocstringUtils.ParameterDoc;
 import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
@@ -42,24 +38,21 @@ public final class FunctionUtil {
    * @param functionName the name of the function in the target scope. (Note this is not necessarily
    *     the original exported function name; the function may have been renamed in the target
    *     Starlark file's scope)
-   * @param userDefinedFunction the raw function object
+   * @param fn the function object
    * @throws com.google.devtools.build.skydoc.rendering.DocstringParseException if the function's
    *     docstring is malformed
    */
-  public static StarlarkFunctionInfo fromNameAndFunction(
-      String functionName, StarlarkFunction userDefinedFunction) throws DocstringParseException {
+  public static StarlarkFunctionInfo fromNameAndFunction(String functionName, StarlarkFunction fn)
+      throws DocstringParseException {
     String functionDescription = "";
     Map<String, String> paramNameToDocMap = Maps.newLinkedHashMap();
 
-    StringLiteral docStringLiteral =
-        DocstringUtils.extractDocstring(userDefinedFunction.getStatements());
-
-    if (docStringLiteral != null) {
+    String doc = fn.getDocumentation();
+    if (doc != null) {
       List<DocstringParseError> parseErrors = Lists.newArrayList();
-      DocstringInfo docstringInfo = DocstringUtils.parseDocstring(docStringLiteral, parseErrors);
+      DocstringInfo docstringInfo = DocstringUtils.parseDocstring(doc, parseErrors);
       if (!parseErrors.isEmpty()) {
-        throw new DocstringParseException(
-            functionName, userDefinedFunction.getLocation(), parseErrors);
+        throw new DocstringParseException(functionName, fn.getLocation(), parseErrors);
       }
       functionDescription += docstringInfo.getSummary();
       if (!docstringInfo.getSummary().isEmpty() && !docstringInfo.getLongDescription().isEmpty()) {
@@ -70,7 +63,7 @@ public final class FunctionUtil {
         paramNameToDocMap.put(paramDoc.getParameterName(), paramDoc.getDescription());
       }
     }
-    List<FunctionParamInfo> paramsInfo = parameterInfos(userDefinedFunction, paramNameToDocMap);
+    List<FunctionParamInfo> paramsInfo = parameterInfos(fn, paramNameToDocMap);
     return StarlarkFunctionInfo.newBuilder()
         .setFunctionName(functionName)
         .setDocString(functionDescription)
@@ -86,14 +79,7 @@ public final class FunctionUtil {
     if (defaultValue == null) {
       paramBuilder.setMandatory(true);
     } else {
-      BasePrinter printer = Printer.getSimplifiedPrinter();
-      printer.repr(defaultValue);
-      String defaultValueString = printer.toString();
-
-      if (defaultValueString.isEmpty()) {
-        defaultValueString = "{unknown object}";
-      }
-      paramBuilder.setDefaultValue(defaultValueString).setMandatory(false);
+      paramBuilder.setDefaultValue(Starlark.repr(defaultValue)).setMandatory(false);
     }
     return paramBuilder.build();
   }
@@ -108,64 +94,32 @@ public final class FunctionUtil {
   }
 
   private static List<FunctionParamInfo> parameterInfos(
-      StarlarkFunction userDefinedFunction, Map<String, String> paramNameToDocMap) {
-    FunctionSignature.WithValues<Object, SkylarkType> signature =
-        userDefinedFunction.getSignature();
-    ImmutableList.Builder<FunctionParamInfo> parameterInfos = ImmutableList.builder();
+      StarlarkFunction fn, Map<String, String> parameterDoc) {
+    List<String> names = fn.getParameterNames();
+    int nparams = names.size();
+    int kwargsIndex = fn.hasKwargs() ? --nparams : -1;
+    int varargsIndex = fn.hasVarargs() ? --nparams : -1;
+    // Inv: nparams is number of regular parameters.
 
-    List<String> paramNames = signature.getSignature().getNames();
-    int numMandatoryParams = signature.getSignature().getShape().getMandatoryPositionals();
-
-    int paramIndex;
-    // Mandatory parameters.
-    // Mandatory parameters must always come before optional parameters, so this counts
-    // down until all mandatory parameters have been exhausted, and then starts filling in
-    // the optional parameters accordingly.
-    for (paramIndex = 0; paramIndex < numMandatoryParams; paramIndex++) {
-      String paramName = paramNames.get(paramIndex);
-      String paramDoc = paramNameToDocMap.getOrDefault(paramName, "");
-      parameterInfos.add(forParam(paramName, paramDoc, /*default param*/ null));
-    }
-
-    // Parameters with defaults.
-    if (signature.getDefaultValues() != null) {
-      for (Object element : signature.getDefaultValues()) {
-        String paramName = paramNames.get(paramIndex);
-        String paramDoc = "";
-        Object defaultParamValue = element;
-        if (paramNameToDocMap.containsKey(paramName)) {
-          paramDoc = paramNameToDocMap.get(paramName);
-        }
-        parameterInfos.add(forParam(paramName, paramDoc, defaultParamValue));
-        paramIndex++;
+    ImmutableList.Builder<FunctionParamInfo> infos = ImmutableList.builder();
+    for (int i = 0; i < names.size(); i++) {
+      String name = names.get(i);
+      FunctionParamInfo info;
+      if (i == varargsIndex) {
+        // *args
+        String doc = parameterDoc.getOrDefault("*" + name, "");
+        info = forSpecialParam(name, doc);
+      } else if (i == kwargsIndex) {
+        // **kwargs
+        String doc = parameterDoc.getOrDefault("**" + name, "");
+        info = forSpecialParam(name, doc);
+      } else {
+        // regular parameter
+        String doc = parameterDoc.getOrDefault(name, "");
+        info = forParam(name, doc, fn.getDefaultValue(i));
       }
+      infos.add(info);
     }
-
-    // *arg
-    if (signature.getSignature().getShape().hasStarArg()) {
-      String paramName = paramNames.get(paramIndex);
-      String paramDoc = "";
-      if (paramNameToDocMap.containsKey(paramName)) {
-        paramDoc = paramNameToDocMap.get(paramName);
-      } else if (paramNameToDocMap.containsKey("*" + paramName)) {
-        paramDoc = paramNameToDocMap.get("*" + paramName);
-      }
-      parameterInfos.add(forSpecialParam(paramName, paramDoc));
-      paramIndex++;
-    }
-
-    // **kwargs
-    if (signature.getSignature().getShape().hasKwArg()) {
-      String paramName = paramNames.get(paramIndex);
-      String paramDoc = "";
-      if (paramNameToDocMap.containsKey(paramName)) {
-        paramDoc = paramNameToDocMap.get(paramName);
-      } else if (paramNameToDocMap.containsKey("**" + paramName)) {
-        paramDoc = paramNameToDocMap.get("**" + paramName);
-      }
-      parameterInfos.add(forSpecialParam(paramName, paramDoc));
-      paramIndex++;
-    }
-    return parameterInfos.build();
+    return infos.build();
   }
 }
