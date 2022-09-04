@@ -879,9 +879,6 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
         if (what != 38 && what != -38) {
             setStateAndUi(CURRENT_STATE_ERROR);
             deleteCacheFileWhenError();
-            if (mVideoAllCallBack != null) {
-                mVideoAllCallBack.onPlayError(mUrl, mObjects);
-            }
         }
     }
 
