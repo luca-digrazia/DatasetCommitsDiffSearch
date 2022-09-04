@@ -18,7 +18,6 @@ package org.androidannotations.holder;
 import static com.sun.codemodel.JExpr._this;
 import static com.sun.codemodel.JMod.PRIVATE;
 import static com.sun.codemodel.JMod.PUBLIC;
-import static org.androidannotations.helper.ModelConstants.generationSuffix;
 
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.TypeMirror;
@@ -62,7 +61,7 @@ public class EServiceHolder extends EComponentHolder implements HasIntentBuilder
 
 	@Override
 	protected void setInit() {
-		init = generatedClass.method(PRIVATE, codeModel().VOID, "init" + generationSuffix());
+		init = generatedClass.method(PRIVATE, codeModel().VOID, "init_");
 		setOnCreate();
 	}
 

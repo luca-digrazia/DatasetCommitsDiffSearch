@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,6 +15,8 @@
  */
 package org.androidannotations.holder;
 
+import static com.sun.codemodel.JExpr.FALSE;
+import static com.sun.codemodel.JExpr.TRUE;
 import static com.sun.codemodel.JExpr._new;
 import static com.sun.codemodel.JExpr._null;
 import static com.sun.codemodel.JExpr._super;
@@ -44,6 +46,7 @@ import org.androidannotations.helper.AnnotationHelper;
 import org.androidannotations.helper.CanonicalNameConstants;
 import org.androidannotations.helper.IntentBuilder;
 import org.androidannotations.helper.OrmLiteHelper;
+import org.androidannotations.holder.ReceiverRegistrationHolder.IntentFilterData;
 import org.androidannotations.process.ProcessHolder;
 
 import com.sun.codemodel.JBlock;
@@ -72,7 +75,7 @@ public class EActivityHolder extends EComponentWithViewSupportHolder implements 
 	private JDefinedClass intentBuilderClass;
 	private InstanceStateHolder instanceStateHolder;
 	private OnActivityResultHolder onActivityResultHolder;
-	private ReceiverRegistrationHolder receiverRegistrationHolder;
+	private ReceiverRegistrationHolder<EActivityHolder> receiverRegistrationHolder;
 	private RoboGuiceHolder roboGuiceHolder;
 	private JMethod injectExtrasMethod;
 	private JBlock injectExtrasBlock;
@@ -82,7 +85,7 @@ public class EActivityHolder extends EComponentWithViewSupportHolder implements 
 	private JVar onCreateOptionsMenuMenuParam;
 	private JVar onOptionsItemSelectedItem;
 	private JVar onOptionsItemSelectedItemId;
-	private JBlock onOptionsItemSelectedMiddleBlock;
+	private JBlock onOptionsItemSelectedIfElseBlock;
 	private NonConfigurationHolder nonConfigurationHolder;
 	private JBlock initIfNonConfigurationNotNullBlock;
 	private JVar initNonConfigurationInstance;
@@ -100,7 +103,7 @@ public class EActivityHolder extends EComponentWithViewSupportHolder implements 
 		super(processHolder, annotatedElement);
 		instanceStateHolder = new InstanceStateHolder(this);
 		onActivityResultHolder = new OnActivityResultHolder(this);
-		receiverRegistrationHolder = new ReceiverRegistrationHolder(this);
+		receiverRegistrationHolder = new ReceiverRegistrationHolder<EActivityHolder>(this);
 		setSetContentView();
 		intentBuilder = new ActivityIntentBuilder(this, androidManifest);
 		intentBuilder.build();
@@ -271,10 +274,11 @@ public class EActivityHolder extends EComponentWithViewSupportHolder implements 
 		method.annotate(Override.class);
 		JBlock methodBody = method.body();
 		onOptionsItemSelectedItem = method.param(menuItemClass, "item");
+		JVar handled = methodBody.decl(codeModel().BOOLEAN, "handled", invoke(_super(), method).arg(onOptionsItemSelectedItem));
+		methodBody._if(handled)._then()._return(TRUE);
 		onOptionsItemSelectedItemId = methodBody.decl(codeModel().INT, "itemId_", onOptionsItemSelectedItem.invoke("getItemId"));
-		onOptionsItemSelectedMiddleBlock = methodBody.block();
-
-		methodBody._return(invoke(_super(), method).arg(onOptionsItemSelectedItem));
+		onOptionsItemSelectedIfElseBlock = methodBody.block();
+		methodBody._return(FALSE);
 	}
 
 	private boolean usesActionBarSherlock() {
@@ -560,11 +564,11 @@ public class EActivityHolder extends EComponentWithViewSupportHolder implements 
 	}
 
 	@Override
-	public JBlock getOnOptionsItemSelectedMiddleBlock() {
-		if (onOptionsItemSelectedMiddleBlock == null) {
+	public JBlock getOnOptionsItemSelectedIfElseBlock() {
+		if (onOptionsItemSelectedIfElseBlock == null) {
 			setOnOptionsItemSelected();
 		}
-		return onOptionsItemSelectedMiddleBlock;
+		return onOptionsItemSelectedIfElseBlock;
 	}
 
 	public NonConfigurationHolder getNonConfigurationHolder() throws JClassAlreadyExistsException {
@@ -755,8 +759,13 @@ public class EActivityHolder extends EComponentWithViewSupportHolder implements 
 	}
 
 	@Override
-	public JFieldVar getIntentFilterField(String[] actions, String[] dataSchemes) {
-		return receiverRegistrationHolder.getIntentFilterField(actions, dataSchemes);
+	public JFieldVar getIntentFilterField(IntentFilterData intentFilterData) {
+		return receiverRegistrationHolder.getIntentFilterField(intentFilterData);
+	}
+
+	@Override
+	public JBlock getIntentFilterInitializationBlock(IntentFilterData intentFilterData) {
+		return getInitBody();
 	}
 
 	@Override
@@ -766,5 +775,4 @@ public class EActivityHolder extends EComponentWithViewSupportHolder implements 
 
 		return databaseHelperRef;
 	}
-
 }
