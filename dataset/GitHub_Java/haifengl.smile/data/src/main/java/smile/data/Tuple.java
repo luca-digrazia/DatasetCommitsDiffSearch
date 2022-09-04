@@ -1,4 +1,4 @@
-/*
+/*******************************************************************************
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ ******************************************************************************/
 
 package smile.data;
 
@@ -51,10 +51,11 @@ public interface Tuple extends Serializable {
     }
 
     /** Returns the tuple as an array of doubles. */
+    /*
     default double[] toArray() {
         return toArray(false, CategoricalEncoder.LEVEL);
     }
-
+*/
     /**
      * Return an array obtained by converting all the variables
      * in a data frame to numeric mode. Missing values/nulls will be

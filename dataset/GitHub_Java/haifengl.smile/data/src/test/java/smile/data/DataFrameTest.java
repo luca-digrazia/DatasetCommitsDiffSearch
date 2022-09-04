@@ -1,4 +1,4 @@
-/*
+/*******************************************************************************
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ ******************************************************************************/
 package smile.data;
 
 import org.junit.After;
@@ -27,7 +27,6 @@ import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.List;
 
-import smile.data.measure.NominalScale;
 import smile.data.type.DataType;
 import smile.data.type.DataTypes;
 import smile.data.type.StructField;
@@ -126,7 +125,7 @@ public class DataFrameTest {
         smile.data.type.StructType schema = DataTypes.struct(
                 new StructField("age", DataTypes.IntegerType),
                 new StructField("birthday", DataTypes.DateType),
-                new StructField("gender", DataTypes.ByteType, new NominalScale("Male", "Female")),
+                new StructField("gender", DataTypes.ByteType),
                 new StructField("name", DataTypes.StringType),
                 new StructField("salary", DataTypes.object(Double.class))
         );
