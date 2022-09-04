@@ -25,9 +25,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.net.MalformedURLException;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.UnknownHostException;
 
@@ -44,24 +41,16 @@ public class MongoDbSeedRule implements MethodRule {
         final MongoDbSeed annotation = firstNonNull(method.getAnnotation(MongoDbSeed.class),
                 method.getDeclaringClass().getAnnotation(MongoDbSeed.class));
         if (annotation != null) {
-            final String databaseName = firstNonNull(emptyToNull(annotation.database()), IntegrationTestsConfig.getMongodbDatabase());
+            final String databaseName = firstNonNull(emptyToNull(annotation.database()), System.getProperty("mongodb.database", "graylog2"));
             final MongodbSeed mongodbSeed;
             try {
                 mongodbSeed = new MongodbSeed(databaseName);
             } catch (UnknownHostException e) {
-                final String msg = "Unable to seed database: ";
-                log.error(msg, e);
-                return new IgnoreStatement(msg + e.toString());
+                log.error("Unable to seed database: ", e);
+                return new IgnoreStatement("Unable to seed database: " + e.toString());
             }
             final ServerHelper graylogController = new ServerHelper();
-            final String nodeId;
-            try {
-                nodeId = graylogController.getNodeId();
-            } catch (MalformedURLException | URISyntaxException e) {
-                final String msg = "Unable to determine graylog node id for seeding: ";
-                log.error(msg, e);
-                return new IgnoreStatement(msg + e.toString());
-            }
+            final String nodeId = graylogController.getNodeId();
 
             if (annotation.locations().length > 0) {
                 for (String location : annotation.locations()) {
