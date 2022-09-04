@@ -29,8 +29,7 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.HttpHeaders;
 import java.io.IOException;
-import java.net.URI;
-import java.net.URISyntaxException;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
@@ -60,39 +59,29 @@ public class AppConfigResource {
             throw new RuntimeException("Unable to read AppConfig template while generating web interface configuration: ", e);
         }
 
+        final String serverTransportUri = serverUriFromHeadersOrDefault(headers);
         final Map<String, Object> model = new HashMap<String, Object>() {{
             put("rootTimeZone", configuration.getRootTimeZone());
-            put("serverUri", buildEndpointUri(headers));
+            put("serverUri", serverTransportUri);
             put("appPathPrefix", "");
         }};
         return engine.transform(template, model);
     }
 
-    private String buildEndpointUri(HttpHeaders httpHeaders) {
-        Optional<String> endpointUri = Optional.empty();
-        final List<String> headers = httpHeaders.getRequestHeader(CK_OVERRIDE_SERVER_URI);
-        if (headers != null && !headers.isEmpty()) {
-            endpointUri = headers.stream().filter(s -> {
+    private String serverUriFromHeadersOrDefault(HttpHeaders httpHeaders) {
+        final List<String> overrideServerUriHeaders = httpHeaders.getRequestHeader(CK_OVERRIDE_SERVER_URI);
+        if (overrideServerUriHeaders != null && !overrideServerUriHeaders.isEmpty()) {
+            Optional<String> firstHeader = overrideServerUriHeaders.stream().filter(s -> {
                 try {
-                    if (Strings.isNullOrEmpty(s)) {
-                        return false;
-                    }
-                    final URI uri = new URI(s);
-                    if (!uri.isAbsolute()) {
-                        return true;
-                    }
-                    switch (uri.getScheme()) {
-                        case "http":
-                        case "https":
-                            return true;
-                    }
-                    return false;
-                } catch (URISyntaxException e) {
+                    return !Strings.isNullOrEmpty(s) && new URL(s) != null;
+                } catch (MalformedURLException e) {
                     return false;
                 }
             }).findFirst();
+
+            return firstHeader.orElse(configuration.getRestTransportUri().toString());
         }
 
-        return endpointUri.orElse(configuration.getWebEndpointUri().toString());
+        return configuration.getRestTransportUri().toString();
     }
 }
