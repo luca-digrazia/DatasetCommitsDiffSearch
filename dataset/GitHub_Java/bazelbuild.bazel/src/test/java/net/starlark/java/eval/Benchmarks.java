@@ -19,7 +19,6 @@ import com.google.common.collect.ImmutableMap;
 import com.sun.management.ThreadMXBean;
 import java.io.File;
 import java.lang.management.ManagementFactory;
-import java.util.Arrays;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.regex.Pattern;
@@ -145,9 +144,7 @@ public final class Benchmarks {
       src = new File("src"); // bazel
     }
     File testdata = new File(src, "test/java/net/starlark/java/eval/testdata");
-    File[] files = testdata.listFiles();
-    Arrays.sort(files); // for determinism
-    for (File file : files) {
+    for (File file : testdata.listFiles()) {
       String basename = file.getName();
       if (!(basename.startsWith("bench_") && basename.endsWith(".star"))) {
         continue;
@@ -186,7 +183,7 @@ public final class Benchmarks {
 
       // Sort bench_* functions by name.
       TreeMap<String, StarlarkFunction> benchmarks = new TreeMap<>();
-      for (Map.Entry<String, Object> e : module.getGlobals().entrySet()) {
+      for (Map.Entry<String, Object> e : module.getExportedGlobals().entrySet()) {
         if (e.getKey().startsWith("bench_") && e.getValue() instanceof StarlarkFunction) {
           String name = e.getKey();
           if (filter == null || filter.matcher(basename + ":" + name).find()) {
