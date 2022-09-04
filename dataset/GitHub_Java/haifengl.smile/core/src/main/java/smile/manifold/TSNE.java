@@ -20,7 +20,9 @@ import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
-import smile.math.MathEx;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import smile.math.Math;
 import smile.stat.distribution.GaussianDistribution;
 import smile.util.MulticoreExecutor;
 
@@ -55,7 +57,7 @@ import smile.util.MulticoreExecutor;
  * @author Haifeng Li
  */
 public class TSNE {
-    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(TSNE.class);
+    private static final Logger logger = LoggerFactory.getLogger(TSNE.class);
 
     /**
      * Coordinate matrix.
@@ -103,7 +105,7 @@ public class TSNE {
             D = X;
         } else {
             D = new double[n][n];
-            MathEx.pdist(X, D, true, false);
+            Math.pdist(X, D, true, false);
         }
 
         coordinates = new double[n][d];
@@ -159,7 +161,7 @@ public class TSNE {
         }
 
         for (int iter = 1; iter <= iterations; iter++, totalIter++) {
-            MathEx.pdist(Y, Q, true, false);
+            Math.pdist(Y, Q, true, false);
             Qsum = 0.0;
             for (int i = 0; i < n; i++) {
                 double[] Qi = Q[i];
@@ -198,7 +200,7 @@ public class TSNE {
                         double p = Pi[j];
                         double q = Qi[j] / Qsum;
                         if (Double.isNaN(q) || q < 1E-16) q = 1E-16;
-                        C += p * MathEx.log2(p / q);
+                        C += p * Math.log2(p / q);
                     }
                 }
                 logger.info("Error after {} iterations: {}", totalIter, 2 * C);
@@ -206,7 +208,7 @@ public class TSNE {
         }
 
         // Make solution zero-mean
-        double[] colMeans = MathEx.colMeans(Y);
+        double[] colMeans = Math.colMeans(Y);
         for (int i = 0; i < n; i++) {
             double[] Yi = Y[i];
             for (int j = 0; j < d; j++) {
@@ -262,7 +264,7 @@ public class TSNE {
             // Perform the update
             for (int k = 0; k < d; k++) {
                 // Update gains
-                g[k] = (MathEx.signum(dC[k]) != MathEx.signum(dYi[k])) ? (g[k] + .2) : (g[k] * .8);
+                g[k] = (Math.signum(dC[k]) != Math.signum(dYi[k])) ? (g[k] + .2) : (g[k] * .8);
                 if (g[k] < minGain) g[k] = minGain;
 
                 // gradient update with momentum and gains
@@ -276,7 +278,7 @@ public class TSNE {
     private double[][] expd(double[][] D, double perplexity, double tol) {
         int n          = D.length;
         double[][] P   = new double[n][n];
-        double[] DiSum = MathEx.rowSums(D);
+        double[] DiSum = Math.rowSums(D);
 
         int nprocs = MulticoreExecutor.getThreadPoolSize();
         int chunk = n / nprocs;
@@ -325,25 +327,25 @@ public class TSNE {
 
         private void compute(int i) {
             int n       = D.length;
-            double logU = MathEx.log2(perplexity);
+            double logU = Math.log2(perplexity);
 
             double[] Pi = P[i];
             double[] Di = D[i];
 
             // Use sqrt(1 / avg of distance) to initialize beta
-            double beta = MathEx.sqrt((n-1) / DiSum[i]);
+            double beta = Math.sqrt((n-1) / DiSum[i]);
             double betamin = 0.0;
             double betamax = Double.POSITIVE_INFINITY;
             logger.debug("initial beta[{}] = {}", i, beta);
 
             // Evaluate whether the perplexity is within tolerance
             double Hdiff = Double.MAX_VALUE;
-            for (int iter = 0; MathEx.abs(Hdiff) > tol && iter < 50; iter++) {
+            for (int iter = 0; Math.abs(Hdiff) > tol && iter < 50; iter++) {
                 double Pisum = 0.0;
                 double H = 0.0;
                 for (int j = 0; j < n; j++) {
                     double d = beta * Di[j];
-                    double p = MathEx.exp(-d);
+                    double p = Math.exp(-d);
                     Pi[j] = p;
                     Pisum += p;
                     H += p * d;
@@ -353,10 +355,10 @@ public class TSNE {
                 Pi[i] = 0.0;
                 Pisum -= 1.0;
 
-                H = MathEx.log2(Pisum) + H / Pisum;
+                H = Math.log2(Pisum) + H / Pisum;
                 Hdiff = H - logU;
 
-                if (MathEx.abs(Hdiff) > tol) {
+                if (Math.abs(Hdiff) > tol) {
                     if (Hdiff > 0) {
                         betamin = beta;
                         if (Double.isInfinite(betamax))
