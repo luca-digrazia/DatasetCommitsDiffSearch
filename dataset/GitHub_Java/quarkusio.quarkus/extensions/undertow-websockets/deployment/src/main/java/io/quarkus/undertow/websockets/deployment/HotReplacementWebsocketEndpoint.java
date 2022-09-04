@@ -72,18 +72,16 @@ public class HotReplacementWebsocketEndpoint {
 
     @OnOpen
     public void onConnect(Session session) {
-        Session old = null;
         synchronized (lock) {
             if (connection != null) {
-                old = HotReplacementWebsocketEndpoint.connection.connection;
+                //only one open connection at a time
+                IoUtils.safeClose(connection.connection);
                 //add an empty message to unblock a waiting request
-                HotReplacementWebsocketEndpoint.connection.messages.add(new Message());
+                connection.messages.add(new Message());
             }
             currentConnection = new ConnectionContext(session);
-            connection = currentConnection;
+            this.connection = currentConnection;
         }
-        //only one open connection at a time
-        IoUtils.safeClose(old);
     }
 
     public static void checkForChanges(HotReplacementContext hrc) {
