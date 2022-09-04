@@ -25,9 +25,9 @@ import org.graylog.security.BuiltinCapabilities;
 import org.graylog.security.Capability;
 import org.graylog.security.DBGrantService;
 import org.graylog.security.GrantDTO;
+import org.graylog.security.entities.EntityDependency;
 import org.graylog.security.entities.EntityDependencyPermissionChecker;
 import org.graylog.security.entities.EntityDependencyResolver;
-import org.graylog.security.entities.EntityDescriptor;
 import org.graylog.security.shares.EntityShareResponse.ActiveShare;
 import org.graylog.security.shares.EntityShareResponse.AvailableCapability;
 import org.graylog2.plugin.database.users.User;
@@ -41,7 +41,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.stream.Collectors;
 
 import static java.util.Objects.requireNonNull;
@@ -186,13 +185,8 @@ public class EntitySharesService {
 
         final List<GrantDTO> allEntityGrants = grantService.getForTarget(ownedEntity);
         final List<GrantDTO> existingGrants = grantService.getForTargetExcludingGrantee(ownedEntity, sharingUserGRN);
-
-        // The initial request doesn't submit a grantee selection. Just return.
-        if (!request.selectedGranteeCapabilities().isPresent()) {
-            return validationResult;
-        }
-
-        final ImmutableMap<GRN, Capability> selectedGranteeCapabilities = request.selectedGranteeCapabilities().get();
+        final ImmutableMap<GRN, Capability> selectedGranteeCapabilities = request.selectedGranteeCapabilities()
+                .orElse(ImmutableMap.of());
 
         // If there is still an owner in the selection, everything is fine
         if (selectedGranteeCapabilities.containsValue(Capability.OWN)) {
@@ -222,9 +216,6 @@ public class EntitySharesService {
         }
         validationResult.addError(EntityShareRequest.SELECTED_GRANTEE_CAPABILITIES,
                 String.format(Locale.US, "Removing the following owners <%s> will leave the entity ownerless.", removedOwners));
-        // Also return the grantees as list to be used by the frontend
-        validationResult.addContext(EntityShareRequest.SELECTED_GRANTEE_CAPABILITIES,
-                removedOwners.stream().map(Objects::toString).collect(Collectors.toSet()));
 
         return validationResult;
     }
@@ -257,8 +248,8 @@ public class EntitySharesService {
                 .collect(ImmutableSet.toImmutableSet());
     }
 
-    private ImmutableMap<GRN, Collection<EntityDescriptor>> checkMissingPermissionsOnDependencies(GRN entity, GRN sharingUser, EntityShareRequest shareRequest) {
-        final ImmutableSet<EntityDescriptor> dependencies = entityDependencyResolver.resolve(entity);
+    private ImmutableMap<GRN, Collection<EntityDependency>> checkMissingPermissionsOnDependencies(GRN entity, GRN sharingUser, EntityShareRequest shareRequest) {
+        final ImmutableSet<EntityDependency> dependencies = entityDependencyResolver.resolve(entity);
         final ImmutableSet<GRN> selectedGrantees = shareRequest.selectedGranteeCapabilities()
                 .orElse(ImmutableMap.of()).keySet();
         return entityDependencyPermissionChecker.check(sharingUser, dependencies, selectedGrantees).asMap();

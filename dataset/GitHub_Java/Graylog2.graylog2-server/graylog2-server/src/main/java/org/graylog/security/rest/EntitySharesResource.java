@@ -25,30 +25,19 @@ import org.graylog.grn.GRN;
 import org.graylog.grn.GRNRegistry;
 import org.graylog.security.DBGrantService;
 import org.graylog.security.GrantDTO;
-import org.graylog.security.entities.EntityDescriptor;
 import org.graylog.security.shares.EntityShareRequest;
 import org.graylog.security.shares.EntityShareResponse;
 import org.graylog.security.shares.EntitySharesService;
-import org.graylog.security.shares.GranteeSharesService;
 import org.graylog2.audit.AuditEventTypes;
 import org.graylog2.audit.jersey.AuditEvent;
 import org.graylog2.audit.jersey.NoAuditEvent;
-import org.graylog2.plugin.database.users.User;
-import org.graylog2.rest.PaginationParameters;
-import org.graylog2.rest.models.PaginatedResponse;
-import org.graylog2.shared.users.UserService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import javax.validation.Valid;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
-import javax.ws.rs.BeanParam;
 import javax.ws.rs.Consumes;
-import javax.ws.rs.ForbiddenException;
 import javax.ws.rs.GET;
-import javax.ws.rs.NotFoundException;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
@@ -58,7 +47,6 @@ import javax.ws.rs.core.Response;
 import java.util.List;
 
 import static java.util.Objects.requireNonNull;
-import static org.graylog2.shared.security.RestPermissions.USERS_EDIT;
 
 @Path("shares")
 @Consumes(MediaType.APPLICATION_JSON)
@@ -66,42 +54,23 @@ import static org.graylog2.shared.security.RestPermissions.USERS_EDIT;
 @Api(value = "Permissions/Sharing", description = "Manage share permissions on entities")
 @RequiresAuthentication
 public class EntitySharesResource extends RestResourceWithOwnerCheck {
-    private static final Logger LOG = LoggerFactory.getLogger(EntitySharesResource.class);
-
     private final GRNRegistry grnRegistry;
     private final DBGrantService grantService;
-    private final UserService userService;
-    private final GranteeSharesService granteeSharesService;
     private final EntitySharesService entitySharesService;
 
     @Inject
     public EntitySharesResource(GRNRegistry grnRegistry,
                                 DBGrantService grantService,
-                                UserService userService,
-                                GranteeSharesService granteeSharesService,
                                 EntitySharesService entitySharesService) {
         this.grnRegistry = grnRegistry;
         this.grantService = grantService;
-        this.userService = userService;
-        this.granteeSharesService = granteeSharesService;
         this.entitySharesService = entitySharesService;
     }
 
     @GET
-    @ApiOperation(value = "Return shares for a user")
-    @Path("user/{username}")
-    public PaginatedResponse<EntityDescriptor> get(@ApiParam(name = "pagination parameters") @BeanParam PaginationParameters paginationParameters,
-                                                   @ApiParam(name = "username", required = true) @PathParam("username") @NotBlank String username) {
-        if (!isPermitted(USERS_EDIT, username)) {
-            throw new ForbiddenException("Couldn't access user " + username);
-        }
-
-        final User user = userService.load(username);
-        if (user == null) {
-            throw new NotFoundException("Couldn't find user " + username);
-        }
-
-        return granteeSharesService.getPaginatedSharesFor(grnRegistry.ofUser(user), paginationParameters);
+    @Path("my")
+    public Response get() {
+        return Response.ok().build();
     }
 
     @POST
@@ -125,12 +94,17 @@ public class EntitySharesResource extends RestResourceWithOwnerCheck {
     @Path("entities/{entityGRN}")
     // TODO add description to GraylogServerEventFormatter
     @AuditEvent(type = AuditEventTypes.GRANTS_UPDATE)
-    public EntityShareResponse updateEntityShares(@ApiParam(name = "entityGRN", required = true) @PathParam("entityGRN") @NotBlank String entityGRN,
+    public Response updateEntityShares(@ApiParam(name = "entityGRN", required = true) @PathParam("entityGRN") @NotBlank String entityGRN,
                                                   @ApiParam(name = "JSON Body", required = true) @NotNull @Valid EntityShareRequest request) {
         final GRN entity = grnRegistry.parse(entityGRN);
         checkOwnership(entity);
 
-        return entitySharesService.updateEntityShares(entity, request, requireNonNull(getCurrentUser()));
+        final EntityShareResponse entityShareResponse = entitySharesService.updateEntityShares(entity, request, requireNonNull(getCurrentUser()));
+        if (entityShareResponse.validationResult().failed()) {
+            return Response.status(Response.Status.BAD_REQUEST).entity(entityShareResponse).build();
+        } else {
+            return Response.ok(entityShareResponse).build();
+        }
     }
 
     @GET
