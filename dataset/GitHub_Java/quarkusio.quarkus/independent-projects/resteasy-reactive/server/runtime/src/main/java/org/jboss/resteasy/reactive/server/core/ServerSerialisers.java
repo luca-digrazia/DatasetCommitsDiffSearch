@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Reader;
+import java.lang.reflect.Type;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -16,6 +17,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import javax.ws.rs.RuntimeType;
 import javax.ws.rs.WebApplicationException;
@@ -27,9 +29,12 @@ import javax.ws.rs.core.Variant;
 import javax.ws.rs.ext.MessageBodyReader;
 import javax.ws.rs.ext.MessageBodyWriter;
 import javax.ws.rs.ext.WriterInterceptor;
+import org.jboss.resteasy.reactive.FilePart;
+import org.jboss.resteasy.reactive.PathPart;
+import org.jboss.resteasy.reactive.common.PreserveTargetException;
 import org.jboss.resteasy.reactive.common.core.Serialisers;
 import org.jboss.resteasy.reactive.common.headers.HeaderUtil;
-import org.jboss.resteasy.reactive.common.jaxrs.QuarkusRestConfiguration;
+import org.jboss.resteasy.reactive.common.jaxrs.ConfigurationImpl;
 import org.jboss.resteasy.reactive.common.model.ResourceReader;
 import org.jboss.resteasy.reactive.common.model.ResourceWriter;
 import org.jboss.resteasy.reactive.common.util.MediaTypeHelper;
@@ -37,7 +42,7 @@ import org.jboss.resteasy.reactive.common.util.QuarkusMultivaluedHashMap;
 import org.jboss.resteasy.reactive.common.util.QuarkusMultivaluedMap;
 import org.jboss.resteasy.reactive.server.core.serialization.EntityWriter;
 import org.jboss.resteasy.reactive.server.core.serialization.FixedEntityWriterArray;
-import org.jboss.resteasy.reactive.server.jaxrs.QuarkusRestWriterInterceptorContext;
+import org.jboss.resteasy.reactive.server.jaxrs.WriterInterceptorContextImpl;
 import org.jboss.resteasy.reactive.server.mapping.RuntimeResource;
 import org.jboss.resteasy.reactive.server.providers.serialisers.ServerBooleanMessageBodyHandler;
 import org.jboss.resteasy.reactive.server.providers.serialisers.ServerByteArrayMessageBodyHandler;
@@ -45,16 +50,26 @@ import org.jboss.resteasy.reactive.server.providers.serialisers.ServerCharArrayM
 import org.jboss.resteasy.reactive.server.providers.serialisers.ServerCharacterMessageBodyHandler;
 import org.jboss.resteasy.reactive.server.providers.serialisers.ServerDefaultTextPlainBodyHandler;
 import org.jboss.resteasy.reactive.server.providers.serialisers.ServerFileBodyHandler;
+import org.jboss.resteasy.reactive.server.providers.serialisers.ServerFilePartBodyHandler;
 import org.jboss.resteasy.reactive.server.providers.serialisers.ServerFormUrlEncodedProvider;
 import org.jboss.resteasy.reactive.server.providers.serialisers.ServerInputStreamMessageBodyHandler;
 import org.jboss.resteasy.reactive.server.providers.serialisers.ServerNumberMessageBodyHandler;
+import org.jboss.resteasy.reactive.server.providers.serialisers.ServerPathBodyHandler;
+import org.jboss.resteasy.reactive.server.providers.serialisers.ServerPathPartBodyHandler;
 import org.jboss.resteasy.reactive.server.providers.serialisers.ServerReaderBodyHandler;
 import org.jboss.resteasy.reactive.server.providers.serialisers.ServerStringMessageBodyHandler;
-import org.jboss.resteasy.reactive.server.spi.QuarkusRestMessageBodyWriter;
 import org.jboss.resteasy.reactive.server.spi.ServerHttpRequest;
 import org.jboss.resteasy.reactive.server.spi.ServerHttpResponse;
+import org.jboss.resteasy.reactive.server.spi.ServerMessageBodyWriter;
 
 public class ServerSerialisers extends Serialisers {
+
+    private static final Consumer<ResteasyReactiveRequestContext> HEADER_FUNCTION = new Consumer<ResteasyReactiveRequestContext>() {
+        @Override
+        public void accept(ResteasyReactiveRequestContext context) {
+            ServerSerialisers.encodeResponseHeaders(context);
+        }
+    };
 
     public static BuiltinReader[] BUILTIN_READERS = new BuiltinReader[] {
             new BuiltinReader(String.class, ServerStringMessageBodyHandler.class,
@@ -94,6 +109,12 @@ public class ServerSerialisers extends Serialisers {
             new BuiltinWriter(Reader.class, ServerReaderBodyHandler.class,
                     MediaType.WILDCARD),
             new BuiltinWriter(File.class, ServerFileBodyHandler.class,
+                    MediaType.WILDCARD),
+            new BuiltinWriter(FilePart.class, ServerFilePartBodyHandler.class,
+                    MediaType.WILDCARD),
+            new BuiltinWriter(java.nio.file.Path.class, ServerPathBodyHandler.class,
+                    MediaType.WILDCARD),
+            new BuiltinWriter(PathPart.class, ServerPathPartBodyHandler.class,
                     MediaType.WILDCARD),
     };
     private static final String CONTENT_TYPE = "Content-Type"; // use this instead of the Vert.x constant because the TCK expects upper case
@@ -163,46 +184,70 @@ public class ServerSerialisers extends Serialisers {
 
         WriterInterceptor[] writerInterceptors = context.getWriterInterceptors();
         boolean outputStreamSet = context.getOutputStream() != null;
-        if (writer instanceof QuarkusRestMessageBodyWriter && writerInterceptors == null && !outputStreamSet) {
-            QuarkusRestMessageBodyWriter<Object> quarkusRestWriter = (QuarkusRestMessageBodyWriter<Object>) writer;
-            RuntimeResource target = context.getTarget();
-            ServerSerialisers.encodeResponseHeaders(context);
-            if (quarkusRestWriter.isWriteable(entity.getClass(), target == null ? null : target.getLazyMethod(),
-                    context.getResponseContentMediaType())) {
-                if (mediaType != null) {
-                    context.setResponseContentType(mediaType);
-                }
-                quarkusRestWriter.writeResponse(entity, context);
-                return true;
-            } else {
-                return false;
-            }
-        } else {
-            if (writer.isWriteable(entity.getClass(), context.getGenericReturnType(), context.getAllAnnotations(),
-                    context.getResponseContentMediaType())) {
-                Response response = context.getResponse().get();
-                if (mediaType != null) {
-                    context.setResponseContentType(mediaType);
-                }
-                if (writerInterceptors == null) {
-                    writer.writeTo(entity, entity.getClass(), context.getGenericReturnType(),
-                            context.getAllAnnotations(), response.getMediaType(), response.getHeaders(),
-                            context.getOrCreateOutputStream());
-                    ServerSerialisers.encodeResponseHeaders(context);
-                    context.getOrCreateOutputStream().close();
+        context.serverResponse().setPreCommitListener(HEADER_FUNCTION);
+        try {
+            if (writer instanceof ServerMessageBodyWriter && writerInterceptors == null && !outputStreamSet) {
+                ServerMessageBodyWriter<Object> quarkusRestWriter = (ServerMessageBodyWriter<Object>) writer;
+                RuntimeResource target = context.getTarget();
+                Type genericType;
+                if (context.hasGenericReturnType()) { // make sure that when a Response with a GenericEntity was returned, we use it
+                    genericType = context.getGenericReturnType();
                 } else {
-                    runWriterInterceptors(context, entity, writer, response, writerInterceptors, serialisers);
+                    genericType = target == null ? null : target.getReturnType();
                 }
-                return true;
+                Class<?> entityClass = entity.getClass();
+                if (quarkusRestWriter.isWriteable(
+                        entityClass,
+                        genericType,
+                        target == null ? null : target.getLazyMethod(),
+                        context.getResponseMediaType())) {
+                    if (mediaType != null) {
+                        context.setResponseContentType(mediaType);
+                    }
+                    quarkusRestWriter.writeResponse(entity, genericType, context);
+                    return true;
+                } else {
+                    return false;
+                }
             } else {
-                return false;
+                if (writer.isWriteable(entity.getClass(), context.getGenericReturnType(), context.getAllAnnotations(),
+                        context.getResponseMediaType())) {
+                    Response response = context.getResponse().get();
+                    if (mediaType != null) {
+                        context.setResponseContentType(mediaType);
+                    }
+                    if (writerInterceptors == null) {
+                        writer.writeTo(entity, entity.getClass(), context.getGenericReturnType(),
+                                context.getAllAnnotations(), response.getMediaType(), response.getHeaders(),
+                                context.getOrCreateOutputStream());
+                        context.getOrCreateOutputStream().close();
+                    } else {
+                        runWriterInterceptors(context, entity, writer, response, writerInterceptors, serialisers);
+                    }
+                    return true;
+                } else {
+                    return false;
+                }
             }
+        } catch (Throwable e) {
+            //clear the pre-commit listener, as if this error is unrecoverable
+            //the error handling will want to write out its own response
+            //and the pre commit listener will interfere with that
+            context.serverResponse().setPreCommitListener(null);
+            if (e instanceof RuntimeException) {
+                throw new PreserveTargetException(e);
+            } else if (e instanceof IOException) {
+                throw new PreserveTargetException(e);
+            } else {
+                throw new PreserveTargetException(new RuntimeException(e));
+            }
+
         }
     }
 
     public static void runWriterInterceptors(ResteasyReactiveRequestContext context, Object entity, MessageBodyWriter writer,
             Response response, WriterInterceptor[] writerInterceptor, ServerSerialisers serialisers) throws IOException {
-        QuarkusRestWriterInterceptorContext wc = new QuarkusRestWriterInterceptorContext(context, writerInterceptor, writer,
+        WriterInterceptorContextImpl wc = new WriterInterceptorContextImpl(context, writerInterceptor, writer,
                 context.getAllAnnotations(), entity.getClass(), context.getGenericReturnType(), entity, response.getMediaType(),
                 response.getHeaders(), serialisers);
         wc.proceed();
@@ -221,7 +266,7 @@ public class ServerSerialisers extends Serialisers {
      * This is probably more complex than it needs to be, but some RESTEasy tests show that the response type
      * is influenced by the provider's weight of the media types
      */
-    public BestMatchingServerWriterResult findBestMatchingServerWriter(QuarkusRestConfiguration configuration,
+    public BestMatchingServerWriterResult findBestMatchingServerWriter(ConfigurationImpl configuration,
             Class<?> entityType, ServerHttpRequest request) {
         // TODO: refactor to have use common code from findWriters
         Class<?> klass = entityType;
@@ -353,12 +398,12 @@ public class ServerSerialisers extends Serialisers {
     }
 
     @Override
-    public BuiltinWriter[] getBultinWriters() {
+    public BuiltinWriter[] getBuiltinWriters() {
         return BUILTIN_WRITERS;
     }
 
     @Override
-    public BuiltinReader[] getBultinReaders() {
+    public BuiltinReader[] getBuiltinReaders() {
         return BUILTIN_READERS;
     }
 
@@ -449,7 +494,9 @@ public class ServerSerialisers extends Serialisers {
         for (Map.Entry<String, List<Object>> entry : headers.entrySet()) {
             if (entry.getValue().size() == 1) {
                 Object o = entry.getValue().get(0);
-                if (o instanceof CharSequence) {
+                if (o == null) {
+                    vertxResponse.setResponseHeader(entry.getKey(), "");
+                } else if (o instanceof CharSequence) {
                     vertxResponse.setResponseHeader(entry.getKey(), (CharSequence) o);
                 } else {
                     vertxResponse.setResponseHeader(entry.getKey(), (CharSequence) HeaderUtil.headerToString(o));

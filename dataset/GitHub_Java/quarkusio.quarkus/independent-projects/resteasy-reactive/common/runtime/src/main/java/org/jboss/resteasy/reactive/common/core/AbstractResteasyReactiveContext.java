@@ -121,7 +121,7 @@ public abstract class AbstractResteasyReactiveContext<T extends AbstractResteasy
     @Override
     public void run() {
         running = true;
-        boolean processingSuspended = false;
+        boolean submittedToExecutor = false;
         //if this is a blocking target we don't activate for the initial non-blocking part
         //unless there are pre-mapping filters as these may require CDI
         boolean disasociateRequestScope = false;
@@ -153,14 +153,13 @@ public abstract class AbstractResteasyReactiveContext<T extends AbstractResteasy
                                 this.executor = null;
                             } else if (suspended) {
                                 running = false;
-                                processingSuspended = true;
                                 return;
                             }
                         }
                         if (exec != null) {
                             //outside sync block
                             exec.execute(this);
-                            processingSuspended = true;
+                            submittedToExecutor = true;
                             return;
                         }
                     }
@@ -184,7 +183,7 @@ public abstract class AbstractResteasyReactiveContext<T extends AbstractResteasy
         } finally {
             // we need to make sure we don't close the underlying stream in the event loop if the task
             // has been offloaded to the executor
-            if (position == handlers.length && !processingSuspended) {
+            if (position == handlers.length && !suspended && !submittedToExecutor) {
                 close();
             } else {
                 if (disasociateRequestScope) {
