@@ -15,22 +15,45 @@
 package com.google.devtools.build.lib.rules.objc;
 
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.packages.BuiltinProvider;
+import com.google.devtools.build.lib.packages.NativeInfo;
 
 /**
- * This provider is exported by java_library rules and proto_library rules with attribute
- * "j2objc_api_version=1" to support distributed J2ObjC translation and proto compilation.
+ * This provider is exported by java_library rules and proto_library rules via the j2objc aspect.
  */
 @Immutable
-public final class J2ObjcMappingFileProvider implements TransitiveInfoProvider {
+public final class J2ObjcMappingFileProvider extends NativeInfo {
 
   private final NestedSet<Artifact> headerMappingFiles;
   private final NestedSet<Artifact> classMappingFiles;
   private final NestedSet<Artifact> dependencyMappingFiles;
   private final NestedSet<Artifact> archiveSourceMappingFiles;
+
+  public static final String NAME = "J2ObjcMappingFileInfo";
+  public static final J2ObjcMappingFileProvider.Provider PROVIDER =
+      new J2ObjcMappingFileProvider.Provider();
+
+  @Override
+  public BuiltinProvider<J2ObjcMappingFileProvider> getProvider() {
+    return PROVIDER;
+  }
+
+  /**
+   * Returns a {@link J2ObjcMappingFileProvider} which combines all input
+   * {@link J2ObjcMappingFileProvider}s. All mapping files present in any of the input providers
+   * will be present in the output provider.
+   */
+  public static J2ObjcMappingFileProvider union(Iterable<J2ObjcMappingFileProvider> providers) {
+    J2ObjcMappingFileProvider.Builder builder = new J2ObjcMappingFileProvider.Builder();
+    for (J2ObjcMappingFileProvider provider : providers) {
+      builder.addTransitive(provider);
+    }
+
+    return builder.build();
+  }
 
   /**
    * Constructs a {@link J2ObjcMappingFileProvider} with mapping files to export mappings required
@@ -119,6 +142,13 @@ public final class J2ObjcMappingFileProvider implements TransitiveInfoProvider {
           classMappingFiles.build(),
           depEntryFiles.build(),
           archiveSourceMappingFiles.build());
+    }
+  }
+
+  /** Provider */
+  public static class Provider extends BuiltinProvider<J2ObjcMappingFileProvider> {
+    public Provider() {
+      super(J2ObjcMappingFileProvider.NAME, J2ObjcMappingFileProvider.class);
     }
   }
 }

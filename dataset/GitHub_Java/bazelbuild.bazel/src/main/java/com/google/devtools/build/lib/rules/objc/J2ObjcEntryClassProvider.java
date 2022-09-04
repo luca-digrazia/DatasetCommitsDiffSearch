@@ -14,21 +14,30 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
-import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.BuildType;
+import com.google.devtools.build.lib.packages.BuiltinProvider;
+import com.google.devtools.build.lib.packages.NativeInfo;
 
 /**
  * This provider is exported by j2objc_library to export entry class information necessary for
  * J2ObjC dead code removal performed at the binary level in ObjC rules.
  */
 @Immutable
-public final class J2ObjcEntryClassProvider implements TransitiveInfoProvider {
+public final class J2ObjcEntryClassProvider extends NativeInfo {
   private final NestedSet<String> entryClasses;
+
+  public static final String NAME = "J2ObjcEntryClassInfo";
+  public static final J2ObjcEntryClassProvider.Provider PROVIDER =
+      new J2ObjcEntryClassProvider.Provider();
+
+  @Override
+  public BuiltinProvider<J2ObjcEntryClassProvider> getProvider() {
+    return PROVIDER;
+  }
 
   /**
    * A builder for J2ObjcEntryClassProvider.
@@ -54,6 +63,20 @@ public final class J2ObjcEntryClassProvider implements TransitiveInfoProvider {
     }
 
     /**
+     * Transitively adds the given {@link J2ObjcEntryClassProvider}s
+     * and all their properties to this builder.
+     *
+     * @param providers the J2ObjcEntryClassProviders to add
+     * @return this builder
+     */
+    public Builder addTransitive(Iterable<J2ObjcEntryClassProvider> providers) {
+      for (J2ObjcEntryClassProvider provider : providers) {
+        addTransitive(provider);
+      }
+      return this;
+    }
+
+    /**
      * Transitively adds all the J2ObjcEntryClassProviders and all their properties
      * that can be reached through the "deps" attribute.
      *
@@ -62,10 +85,7 @@ public final class J2ObjcEntryClassProvider implements TransitiveInfoProvider {
      */
     public Builder addTransitive(RuleContext ruleContext) {
       if (ruleContext.attributes().has("deps", BuildType.LABEL_LIST)) {
-        for (J2ObjcEntryClassProvider provider :
-            ruleContext.getPrerequisites("deps", Mode.TARGET, J2ObjcEntryClassProvider.class)) {
-          addTransitive(provider);
-        }
+        addTransitive(ruleContext.getPrerequisites("deps", J2ObjcEntryClassProvider.PROVIDER));
       }
 
       return this;
@@ -93,16 +113,6 @@ public final class J2ObjcEntryClassProvider implements TransitiveInfoProvider {
   }
 
   /**
-   * Constructs a new J2ObjcEntryClassProvider that contains all the information
-   * that can be transitively reached through the "deps" attribute of the given rule context.
-   *
-   * @param ruleContext the rule context in which to look for deps
-   */
-  public static J2ObjcEntryClassProvider buildFrom(RuleContext ruleContext) {
-    return new Builder().addTransitive(ruleContext).build();
-  }
-
-  /**
    * Constructs a {@link J2ObjcEntryClassProvider} to supply J2ObjC-translated ObjC sources to
    * objc_binary for compilation and linking.
    *
@@ -120,5 +130,12 @@ public final class J2ObjcEntryClassProvider implements TransitiveInfoProvider {
    */
   public NestedSet<String> getEntryClasses() {
     return entryClasses;
+  }
+
+  /** Provider */
+  public static class Provider extends BuiltinProvider<J2ObjcEntryClassProvider> {
+    public Provider() {
+      super(J2ObjcEntryClassProvider.NAME, J2ObjcEntryClassProvider.class);
+    }
   }
 }
