@@ -1,8 +1,8 @@
 package io.quarkus.arc.test.unused;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.ArcContainer;
@@ -20,17 +20,15 @@ import javax.inject.Inject;
 import javax.inject.Named;
 import javax.inject.Provider;
 import javax.inject.Singleton;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.Rule;
+import org.junit.Test;
 
 public class RemoveUnusedBeansTest {
 
-    @RegisterExtension
+    @Rule
     public ArcTestContainer container = ArcTestContainer.builder()
             .beanClasses(HasObserver.class, Foo.class, FooAlternative.class, HasName.class, UnusedProducers.class,
-                    InjectedViaInstance.class, InjectedViaInstanceWithWildcard.class, InjectedViaInstanceWithWildcard2.class,
-                    InjectedViaProvider.class, Excluded.class,
-                    UsedProducers.class,
+                    InjectedViaInstance.class, InjectedViaProvider.class, Excluded.class, UsedProducers.class,
                     UnusedProducerButInjected.class, UsedViaInstanceWithUnusedProducer.class, UsesBeanViaInstance.class)
             .removeUnusedBeans(true)
             .addRemovalExclusion(b -> b.getBeanClass().toString().equals(Excluded.class.getName()))
@@ -42,8 +40,6 @@ public class RemoveUnusedBeansTest {
         assertTrue(container.instance(HasObserver.class).isAvailable());
         assertTrue(container.instance(HasName.class).isAvailable());
         assertTrue(container.instance(InjectedViaInstance.class).isAvailable());
-        assertTrue(container.instance(InjectedViaInstanceWithWildcard.class).isAvailable());
-        assertTrue(container.instance(InjectedViaInstanceWithWildcard2.class).isAvailable());
         assertTrue(container.instance(InjectedViaProvider.class).isAvailable());
         assertTrue(container.instance(String.class).isAvailable());
         assertTrue(container.instance(UsedProducers.class).isAvailable());
@@ -101,33 +97,12 @@ public class RemoveUnusedBeansTest {
         Instance<InjectedViaInstance> instance;
 
         @Inject
-        Instance<? extends InjectedViaInstanceWithWildcard> instanceWildcard;
-
-        @Inject
-        Instance<Comparable<? extends Foo>> instanceWildcard2;
-
-        @Inject
         String foo;
 
     }
 
     @Singleton
     static class InjectedViaInstance {
-
-    }
-
-    @Singleton
-    static class InjectedViaInstanceWithWildcard {
-
-    }
-
-    @Singleton
-    static class InjectedViaInstanceWithWildcard2 implements Comparable<FooAlternative> {
-
-        @Override
-        public int compareTo(FooAlternative o) {
-            return 0;
-        }
 
     }
 
