@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,13 +13,16 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.vq;
 
 import smile.data.USPS;
 import smile.math.MathEx;
-import smile.math.TimeFunction;
+import smile.validation.MutualInformation;
+import smile.validation.NormalizedMutualInformation;
+import smile.validation.RandIndex;
+import smile.validation.AdjustedRandIndex;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -61,13 +64,12 @@ public class NeuralGasTest {
         double[][] testx = USPS.testx;
 
         int epochs = 20;
-        int T = x.length * epochs;
-        NeuralGas model = new NeuralGas(NeuralGas.seed(400, x),
-                TimeFunction.exp(0.3, T / 2),
-                TimeFunction.exp(30, T / 8),
-                TimeFunction.constant(x.length * 2));
+        NeuralGas model = new NeuralGas(NeuralGas.random(400, x),
+                LearningRate.exp(0.3, x.length * epochs / 2),
+                LearningRate.exp(30, x.length * epochs / 8),
+                LearningRate.exp(20, x.length * epochs / -2));
 
-        for (int i = 1; i <= epochs; i++) {
+        for (int i = 0; i < epochs; i++) {
             for (int j : MathEx.permutate(x.length)) {
                 model.update(x[j]);
             }
@@ -75,7 +77,7 @@ public class NeuralGasTest {
 
         double error = 0.0;
         for (double[] xi : x) {
-            double[] yi = model.quantize(xi);
+            double[] yi = model.quantize(xi).get();
             error += MathEx.distance(xi, yi);
         }
         error /= x.length;
@@ -84,7 +86,7 @@ public class NeuralGasTest {
 
         error = 0.0;
         for (double[] xi : testx) {
-            double[] yi = model.quantize(xi);
+            double[] yi = model.quantize(xi).get();
             error += MathEx.distance(xi, yi);
         }
         error /= testx.length;
