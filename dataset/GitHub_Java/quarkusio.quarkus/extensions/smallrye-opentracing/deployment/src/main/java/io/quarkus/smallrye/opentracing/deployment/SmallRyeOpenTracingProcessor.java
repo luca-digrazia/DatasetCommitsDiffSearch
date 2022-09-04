@@ -1,24 +1,6 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package io.quarkus.smallrye.opentracing.deployment;
 
 import java.lang.reflect.Method;
-import java.util.Arrays;
-import java.util.List;
 
 import javax.enterprise.inject.spi.ObserverMethod;
 import javax.servlet.DispatcherType;
@@ -26,20 +8,28 @@ import javax.servlet.DispatcherType;
 import io.opentracing.contrib.interceptors.OpenTracingInterceptor;
 import io.opentracing.contrib.jaxrs2.server.SpanFinishingFilter;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
+import io.quarkus.deployment.Capabilities;
+import io.quarkus.deployment.Capability;
+import io.quarkus.deployment.Feature;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
-import io.quarkus.deployment.builditem.substrate.ReflectiveMethodBuildItem;
-import io.quarkus.resteasy.common.deployment.ResteasyJaxrsProviderBuildItem;
+import io.quarkus.deployment.builditem.nativeimage.ReflectiveMethodBuildItem;
+import io.quarkus.resteasy.common.spi.ResteasyJaxrsProviderBuildItem;
+import io.quarkus.resteasy.reactive.spi.CustomContainerResponseFilterBuildItem;
+import io.quarkus.resteasy.reactive.spi.DynamicFeatureBuildItem;
+import io.quarkus.resteasy.reactive.spi.WriterInterceptorBuildItem;
 import io.quarkus.smallrye.opentracing.runtime.QuarkusSmallRyeTracingDynamicFeature;
+import io.quarkus.smallrye.opentracing.runtime.QuarkusSmallRyeTracingStandaloneContainerResponseFilter;
+import io.quarkus.smallrye.opentracing.runtime.QuarkusSmallRyeTracingStandaloneVertxDynamicFeature;
 import io.quarkus.smallrye.opentracing.runtime.TracerProducer;
 import io.quarkus.undertow.deployment.FilterBuildItem;
 
 public class SmallRyeOpenTracingProcessor {
 
     @BuildStep
-    List<AdditionalBeanBuildItem> registerBeans() {
-        return Arrays.asList(new AdditionalBeanBuildItem(OpenTracingInterceptor.class, TracerProducer.class));
+    AdditionalBeanBuildItem registerBeans() {
+        return new AdditionalBeanBuildItem(OpenTracingInterceptor.class, TracerProducer.class);
     }
 
     @BuildStep
@@ -49,23 +39,41 @@ public class SmallRyeOpenTracingProcessor {
     }
 
     @BuildStep
-    void setupFilter(BuildProducer<ResteasyJaxrsProviderBuildItem> providers,
+    void setupFilter(
+            BuildProducer<AdditionalBeanBuildItem> additionalBeans,
+            BuildProducer<ResteasyJaxrsProviderBuildItem> providers,
             BuildProducer<FilterBuildItem> filterProducer,
-            BuildProducer<FeatureBuildItem> feature) {
+            BuildProducer<FeatureBuildItem> feature,
+            BuildProducer<CustomContainerResponseFilterBuildItem> customResponseFilters,
+            BuildProducer<DynamicFeatureBuildItem> dynamicFeatures,
+            BuildProducer<WriterInterceptorBuildItem> writerInterceptors,
+            Capabilities capabilities) {
 
-        feature.produce(new FeatureBuildItem(FeatureBuildItem.SMALLRYE_OPENTRACING));
+        feature.produce(new FeatureBuildItem(Feature.SMALLRYE_OPENTRACING));
 
+        additionalBeans.produce(new AdditionalBeanBuildItem(QuarkusSmallRyeTracingDynamicFeature.class));
         providers.produce(new ResteasyJaxrsProviderBuildItem(QuarkusSmallRyeTracingDynamicFeature.class.getName()));
 
-        FilterBuildItem filterInfo = FilterBuildItem.builder("tracingFilter", SpanFinishingFilter.class.getName())
-                .setAsyncSupported(true)
-                .addFilterUrlMapping("*", DispatcherType.FORWARD)
-                .addFilterUrlMapping("*", DispatcherType.INCLUDE)
-                .addFilterUrlMapping("*", DispatcherType.REQUEST)
-                .addFilterUrlMapping("*", DispatcherType.ASYNC)
-                .addFilterUrlMapping("*", DispatcherType.ERROR)
-                .build();
-        filterProducer.produce(filterInfo);
+        if (capabilities.isPresent(Capability.SERVLET)) {
+            FilterBuildItem filterInfo = FilterBuildItem.builder("tracingFilter", SpanFinishingFilter.class.getName())
+                    .setAsyncSupported(true)
+                    .addFilterUrlMapping("*", DispatcherType.FORWARD)
+                    .addFilterUrlMapping("*", DispatcherType.INCLUDE)
+                    .addFilterUrlMapping("*", DispatcherType.REQUEST)
+                    .addFilterUrlMapping("*", DispatcherType.ASYNC)
+                    .addFilterUrlMapping("*", DispatcherType.ERROR)
+                    .build();
+            filterProducer.produce(filterInfo);
+        } else if (capabilities.isPresent(Capability.RESTEASY)) {
+            providers.produce(
+                    new ResteasyJaxrsProviderBuildItem(QuarkusSmallRyeTracingStandaloneVertxDynamicFeature.class.getName()));
+        } else if (capabilities.isPresent(Capability.RESTEASY_REACTIVE)) {
+            customResponseFilters.produce(new CustomContainerResponseFilterBuildItem(
+                    QuarkusSmallRyeTracingStandaloneContainerResponseFilter.class.getName()));
+            dynamicFeatures.produce(new DynamicFeatureBuildItem(QuarkusSmallRyeTracingDynamicFeature.class.getName()));
+            writerInterceptors.produce(
+                    new WriterInterceptorBuildItem.Builder(
+                            QuarkusSmallRyeTracingStandaloneContainerResponseFilter.class.getName()).build());
+        }
     }
-
 }
