@@ -1062,7 +1062,7 @@ public class CppLinkActionBuilder {
                 toolchain,
                 configuration.isCodeCoverageEnabled(),
                 cppConfiguration,
-                CppHelper.getFdoBuildStamp(cppConfiguration, fdoContext, featureConfiguration),
+                CppHelper.getFdoBuildStamp(ruleContext, fdoContext, featureConfiguration),
                 featureConfiguration,
                 cppConfiguration.forcePic()
                     || (linkType.isDynamicLibrary()
