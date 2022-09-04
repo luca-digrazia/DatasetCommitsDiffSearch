@@ -23,7 +23,6 @@ import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.PackageSpecificationProvider;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
-import com.google.devtools.build.lib.analysis.config.ConfigAwareRuleClassBuilder;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.syntax.Type;
@@ -34,10 +33,7 @@ public class JavaPackageConfigurationRule implements RuleDefinition {
 
   @Override
   public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment environment) {
-    return ConfigAwareRuleClassBuilder.of(builder)
-        .requiresHostConfigurationFragments(JavaConfiguration.class)
-        .originalBuilder()
-        .requiresConfigurationFragments(JavaConfiguration.class)
+    return builder
         /* <!-- #BLAZE_RULE(java_package_configuration).ATTRIBUTE(packages) -->
         The set of <code><a href="${link package_group}">package_group</a></code>s
         the configuration should be applied to.

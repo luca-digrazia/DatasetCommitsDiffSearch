@@ -16,26 +16,19 @@ package com.google.devtools.build.lib.rules.android;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
-import static com.google.devtools.build.lib.packages.Type.BOOLEAN;
-import static com.google.devtools.build.lib.packages.Type.INTEGER;
+import static com.google.devtools.build.lib.syntax.Type.BOOLEAN;
+import static com.google.devtools.build.lib.syntax.Type.INTEGER;
 
-import com.google.devtools.build.lib.analysis.Allowlist;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
+import com.google.devtools.build.lib.analysis.Whitelist;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
 
 /** Rule definition for android_device. */
 public final class AndroidDeviceRule implements RuleDefinition {
-
-  private final Class<? extends AndroidDevice> factoryClass;
-
-  public AndroidDeviceRule(Class<? extends AndroidDevice> factoryClass) {
-    this.factoryClass = factoryClass;
-  }
-
   @Override
   public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment env) {
     return builder
@@ -170,8 +163,8 @@ public final class AndroidDeviceRule implements RuleDefinition {
                 .value(true)
                 .nonconfigurable("Called from RunCommand.isExecutable, which takes a Target"))
         .add(
-            Allowlist.getAttributeFromAllowlistName(AndroidDevice.ALLOWLIST_NAME)
-                .value(env.getToolsLabel("//tools/android:android_device_allowlist")))
+            Whitelist.getAttributeFromWhitelistName(AndroidDevice.WHITELIST_NAME)
+                .value(env.getToolsLabel("//tools/android:android_device_whitelist")))
         .removeAttribute("deps")
         .removeAttribute("data")
         .build();
@@ -181,8 +174,8 @@ public final class AndroidDeviceRule implements RuleDefinition {
   public Metadata getMetadata() {
     return RuleDefinition.Metadata.builder()
         .name("android_device")
-        .ancestors(BaseRuleClasses.NativeActionCreatingRule.class)
-        .factoryClass(factoryClass)
+        .ancestors(BaseRuleClasses.RuleBase.class)
+        .factoryClass(AndroidDevice.class)
         .build();
   }
 }

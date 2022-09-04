@@ -281,10 +281,9 @@ public class AttributeTest {
   public void testSplitTransition() throws Exception {
     TestSplitTransition splitTransition = new TestSplitTransition();
     Attribute attr = attr("foo", LABEL).cfg(splitTransition).allowedFileTypes().build();
-    assertThat(attr.getTransitionFactory().isSplit()).isTrue();
+    assertThat(attr.hasSplitConfigurationTransition()).isTrue();
     ConfigurationTransition transition =
-        attr.getTransitionFactory()
-            .create(AttributeTransitionData.create(FakeAttributeMapper.empty()));
+        attr.getTransitionFactory().create(RuleTransitionData.create(FakeAttributeMapper.empty()));
     assertThat(transition).isEqualTo(splitTransition);
   }
 
@@ -293,10 +292,9 @@ public class AttributeTest {
     TestSplitTransitionProvider splitTransitionProvider = new TestSplitTransitionProvider();
     Attribute attr =
         attr("foo", LABEL).cfg(splitTransitionProvider).allowedFileTypes().build();
-    assertThat(attr.getTransitionFactory().isSplit()).isTrue();
+    assertThat(attr.hasSplitConfigurationTransition()).isTrue();
     ConfigurationTransition transition =
-        attr.getTransitionFactory()
-            .create(AttributeTransitionData.create(FakeAttributeMapper.empty()));
+        attr.getTransitionFactory().create(RuleTransitionData.create(FakeAttributeMapper.empty()));
     assertThat(transition).isInstanceOf(TestSplitTransition.class);
   }
 
@@ -305,7 +303,7 @@ public class AttributeTest {
     Attribute attr =
         attr("foo", LABEL).cfg(HostTransition.createFactory()).allowedFileTypes().build();
     assertThat(attr.hasHostConfigurationTransition()).isTrue();
-    assertThat(attr.getTransitionFactory().isSplit()).isFalse();
+    assertThat(attr.hasSplitConfigurationTransition()).isFalse();
   }
 
   private static class TestSplitTransition implements SplitTransition {
@@ -316,9 +314,9 @@ public class AttributeTest {
   }
 
   private static class TestSplitTransitionProvider
-      implements TransitionFactory<AttributeTransitionData> {
+      implements TransitionFactory<RuleTransitionData> {
     @Override
-    public SplitTransition create(AttributeTransitionData data) {
+    public SplitTransition create(RuleTransitionData data) {
       return new TestSplitTransition();
     }
 

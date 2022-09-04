@@ -19,7 +19,7 @@ import static com.google.devtools.build.lib.analysis.configuredtargets.RuleConfi
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
@@ -291,7 +291,12 @@ public class AspectTest extends AnalysisTestCase {
     reporter.removeHandler(failFastHandler);
     // getConfiguredTarget() uses a separate code path that does not hit
     // SkyframeBuildView#configureTargets
-    assertThrows(ViewCreationFailedException.class, () -> update("//a:a"));
+    try {
+      update("//a:a");
+      fail();
+    } catch (ViewCreationFailedException e) {
+      // expected
+    }
     assertContainsEvent("Aspect error");
   }
 
@@ -309,7 +314,12 @@ public class AspectTest extends AnalysisTestCase {
     reporter.removeHandler(failFastHandler);
     // getConfiguredTarget() uses a separate code path that does not hit
     // SkyframeBuildView#configureTargets
-    assertThrows(ViewCreationFailedException.class, () -> update("//a:a"));
+    try {
+      update("//a:a");
+      fail();
+    } catch (ViewCreationFailedException e) {
+      // expected
+    }
     assertContainsEvent("Aspect error");
   }
 
@@ -589,11 +599,11 @@ public class AspectTest extends AnalysisTestCase {
         "x/extension.bzl",
         "def _aspect_impl(target, ctx):",
         "  ctx.actions.do_nothing(mnemonic='Mnemonic')",
-        "  return []",
+        "  return struct()",
         "aspect1 = aspect(_aspect_impl, attr_aspects=['deps'])",
         "aspect2 = aspect(_aspect_impl, attr_aspects=['extra_deps'])",
         "def _rule_impl(ctx):",
-        "  return []",
+        "  return struct()",
         "injector1 = rule(_rule_impl, attrs = { 'deps' : attr.label_list(aspects = [aspect1]) })",
         "null_rule = rule(_rule_impl, attrs = { 'deps' : attr.label_list() })",
         "injector2 = rule(",
@@ -654,16 +664,17 @@ public class AspectTest extends AnalysisTestCase {
         "x/extension.bzl",
         "def _aspect_impl(target, ctx):",
         "  ctx.actions.do_nothing(mnemonic='Mnemonic')",
-        "  return []",
+        "  return struct()",
         "aspect1 = aspect(_aspect_impl, attr_aspects=['deps'], attrs =",
         "    {'param': attr.string(values = ['a', 'b'])})",
         "aspect2 = aspect(_aspect_impl, attr_aspects=['deps'])",
         "def _rule_impl(ctx):",
-        "  return []",
+        "  return struct()",
         "injector1 = rule(_rule_impl, attrs =",
         "    { 'deps' : attr.label_list(aspects = [aspect1]), 'param' : attr.string() })",
         "injector2 = rule(_rule_impl, attrs = { 'deps' : attr.label_list(aspects = [aspect2]) })",
-        "null_rule = rule(_rule_impl, attrs = { 'deps' : attr.label_list() })");
+        "null_rule = rule(_rule_impl, attrs = { 'deps' : attr.label_list() })"
+    );
 
     scratch.file(
         "pkg1/BUILD",

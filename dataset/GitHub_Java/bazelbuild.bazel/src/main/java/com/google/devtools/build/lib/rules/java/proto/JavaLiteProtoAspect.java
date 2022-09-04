@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.rules.java.proto;
 
+import static com.google.common.collect.Iterables.getOnlyElement;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static com.google.devtools.build.lib.rules.java.JavaRuleClasses.HOST_JAVA_RUNTIME_ATTRIBUTE_NAME;
@@ -28,26 +29,25 @@ import com.google.devtools.build.lib.analysis.ConfiguredAspectFactory;
 import com.google.devtools.build.lib.analysis.PlatformConfiguration;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
-import com.google.devtools.build.lib.analysis.TransitionMode;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
+import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.AspectDefinition;
 import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.Attribute.LabelLateBoundDefault;
 import com.google.devtools.build.lib.packages.NativeAspectClass;
-import com.google.devtools.build.lib.packages.StarlarkProviderIdentifier;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
-import com.google.devtools.build.lib.rules.java.JavaInfo;
 import com.google.devtools.build.lib.rules.java.JavaRuleClasses;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
+import com.google.devtools.build.lib.rules.java.JavaSkylarkApiProvider;
 import com.google.devtools.build.lib.rules.java.JavaSourceJarsProvider;
-import com.google.devtools.build.lib.rules.java.JavaStarlarkApiProvider;
 import com.google.devtools.build.lib.rules.proto.ProtoCompileActionBuilder;
 import com.google.devtools.build.lib.rules.proto.ProtoCompileActionBuilder.Exports;
 import com.google.devtools.build.lib.rules.proto.ProtoCompileActionBuilder.Services;
@@ -89,7 +89,7 @@ public class JavaLiteProtoAspect extends NativeAspectClass implements Configured
       AspectParameters parameters,
       String toolsRepository)
       throws InterruptedException, ActionConflictException {
-    ConfiguredAspect.Builder aspect = new ConfiguredAspect.Builder(ruleContext);
+    ConfiguredAspect.Builder aspect = new ConfiguredAspect.Builder(this, parameters, ruleContext);
 
     ProtoInfo protoInfo = ctadBase.getConfiguredTarget().get(ProtoInfo.PROVIDER);
 
@@ -109,11 +109,9 @@ public class JavaLiteProtoAspect extends NativeAspectClass implements Configured
             .propagateAlongAttribute("exports")
             .requiresConfigurationFragments(
                 JavaConfiguration.class, ProtoConfiguration.class, PlatformConfiguration.class)
-            .requireStarlarkProviders(ProtoInfo.PROVIDER.id())
+            .requireSkylarkProviders(ProtoInfo.PROVIDER.id())
             .advertiseProvider(JavaProtoLibraryAspectProvider.class)
-            .advertiseProvider(
-                ImmutableList.of(StarlarkProviderIdentifier.forKey(JavaInfo.PROVIDER.getKey())))
-            .advertiseProvider(ImmutableList.of(JavaStarlarkApiProvider.SKYLARK_NAME))
+            .advertiseProvider(ImmutableList.of(JavaSkylarkApiProvider.SKYLARK_NAME))
             .add(
                 attr(JavaProtoAspectCommon.LITE_PROTO_TOOLCHAIN_ATTR, LABEL)
                     .mandatoryNativeProviders(
@@ -157,21 +155,20 @@ public class JavaLiteProtoAspect extends NativeAspectClass implements Configured
       this.aspectCommon = aspectCommon;
       this.javaProtoLibraryAspectProviders =
           ruleContext.getPrerequisites(
-              "deps", TransitionMode.TARGET, JavaProtoLibraryAspectProvider.class);
+              "deps", RuleConfiguredTarget.Mode.TARGET, JavaProtoLibraryAspectProvider.class);
 
       dependencyCompilationArgs =
           JavaCompilationArgsProvider.merge(
               ruleContext.getPrerequisites(
-                  "deps", TransitionMode.TARGET, JavaCompilationArgsProvider.class));
+                  "deps", RuleConfiguredTarget.Mode.TARGET, JavaCompilationArgsProvider.class));
 
       this.exportsCompilationArgs =
           JavaCompilationArgsProvider.merge(
               ruleContext.getPrerequisites(
-                  "exports", TransitionMode.TARGET, JavaCompilationArgsProvider.class));
+                  "exports", RuleConfiguredTarget.Mode.TARGET, JavaCompilationArgsProvider.class));
     }
 
-    void addProviders(ConfiguredAspect.Builder aspect) throws InterruptedException {
-      JavaInfo.Builder javaInfo = JavaInfo.Builder.create();
+    void addProviders(ConfiguredAspect.Builder aspect) {
       // Represents the result of compiling the code generated for this proto, including all of its
       // dependencies.
       JavaCompilationArgsProvider generatedCompilationArgsProvider;
@@ -192,10 +189,12 @@ public class JavaLiteProtoAspect extends NativeAspectClass implements Configured
             aspectCommon.createJavaCompileAction(
                 "java_lite_proto_library", sourceJar, outputJar, dependencyCompilationArgs);
 
+        NestedSet<Artifact> javaSourceJars =
+            NestedSetBuilder.<Artifact>stableOrder().add(sourceJar).build();
         transitiveOutputJars.add(outputJar);
 
         Artifact compileTimeJar =
-            generatedCompilationArgsProvider.getDirectCompileTimeJars().getSingleton();
+            getOnlyElement(generatedCompilationArgsProvider.getDirectCompileTimeJars());
         // TODO(carmi): Expose to native rules
         JavaRuleOutputJarsProvider ruleOutputJarsProvider =
             JavaRuleOutputJarsProvider.builder()
@@ -207,18 +206,14 @@ public class JavaLiteProtoAspect extends NativeAspectClass implements Configured
                 .build();
         JavaSourceJarsProvider sourceJarsProvider =
             JavaSourceJarsProvider.create(
-                NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER),
-                ImmutableList.of(sourceJar));
+                NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER), javaSourceJars);
 
         aspect.addProvider(ruleOutputJarsProvider).addProvider(sourceJarsProvider);
-        javaInfo.addProvider(JavaRuleOutputJarsProvider.class, ruleOutputJarsProvider);
-        javaInfo.addProvider(JavaSourceJarsProvider.class, sourceJarsProvider);
       } else {
         // No sources - this proto_library is an alias library, which exports its dependencies.
         // Simply propagate the compilation-args from its dependencies.
         generatedCompilationArgsProvider = dependencyCompilationArgs;
         aspect.addProvider(JavaRuleOutputJarsProvider.EMPTY);
-        javaInfo.addProvider(JavaRuleOutputJarsProvider.class, JavaRuleOutputJarsProvider.EMPTY);
       }
 
       generatedCompilationArgsProvider =
@@ -226,14 +221,12 @@ public class JavaLiteProtoAspect extends NativeAspectClass implements Configured
               ImmutableList.of(generatedCompilationArgsProvider, exportsCompilationArgs));
 
       aspect.addProvider(generatedCompilationArgsProvider);
-      javaInfo.addProvider(JavaCompilationArgsProvider.class, generatedCompilationArgsProvider);
       aspect.addNativeDeclaredProvider(
           createCcLinkingInfo(ruleContext, aspectCommon.getProtoRuntimeDeps()));
 
-      JavaStarlarkApiProvider skylarkApiProvider = JavaStarlarkApiProvider.fromRuleContext();
+      JavaSkylarkApiProvider skylarkApiProvider = JavaSkylarkApiProvider.fromRuleContext();
       aspect
-          .addStarlarkTransitiveInfo(JavaStarlarkApiProvider.NAME, skylarkApiProvider)
-          .addNativeDeclaredProvider(javaInfo.build())
+          .addSkylarkTransitiveInfo(JavaSkylarkApiProvider.NAME, skylarkApiProvider)
           .addProvider(
               new JavaProtoLibraryAspectProvider(
                   transitiveOutputJars.build(),
@@ -243,7 +236,7 @@ public class JavaLiteProtoAspect extends NativeAspectClass implements Configured
                       aspectCommon.getProtoRuntimeDeps())));
     }
 
-    private void createProtoCompileAction(Artifact sourceJar) throws InterruptedException {
+    private void createProtoCompileAction(Artifact sourceJar) {
       ProtoCompileActionBuilder.registerActions(
           ruleContext,
           ImmutableList.of(

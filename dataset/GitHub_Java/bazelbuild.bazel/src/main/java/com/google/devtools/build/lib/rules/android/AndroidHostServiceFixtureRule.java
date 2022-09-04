@@ -16,8 +16,8 @@ package com.google.devtools.build.lib.rules.android;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
-import static com.google.devtools.build.lib.packages.Type.BOOLEAN;
-import static com.google.devtools.build.lib.packages.Type.STRING_LIST;
+import static com.google.devtools.build.lib.syntax.Type.BOOLEAN;
+import static com.google.devtools.build.lib.syntax.Type.STRING_LIST;
 
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
@@ -27,13 +27,6 @@ import com.google.devtools.build.lib.packages.RuleClass;
 
 /** Rule definition for the {@code android_host_service_fixture} rule. */
 public class AndroidHostServiceFixtureRule implements RuleDefinition {
-
-  private final Class<? extends AndroidHostServiceFixture> factoryClass;
-
-  public AndroidHostServiceFixtureRule(Class<? extends AndroidHostServiceFixture> factoryClass) {
-    this.factoryClass = factoryClass;
-  }
-
   @Override
   public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment env) {
     return builder
@@ -58,8 +51,8 @@ public class AndroidHostServiceFixtureRule implements RuleDefinition {
   public Metadata getMetadata() {
     return RuleDefinition.Metadata.builder()
         .name("android_host_service_fixture")
-        .ancestors(BaseRuleClasses.NativeActionCreatingRule.class)
-        .factoryClass(factoryClass)
+        .ancestors(BaseRuleClasses.RuleBase.class)
+        .factoryClass(AndroidHostServiceFixture.class)
         .build();
   }
 }

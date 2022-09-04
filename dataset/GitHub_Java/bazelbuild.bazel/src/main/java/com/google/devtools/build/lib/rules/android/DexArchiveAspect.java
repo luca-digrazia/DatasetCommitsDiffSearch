@@ -49,7 +49,6 @@ import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.IterablesChain;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.AspectDefinition;
 import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.AttributeMap;
@@ -278,7 +277,7 @@ public final class DexArchiveAspect extends NativeAspectClass implements Configu
       }
 
       // For android_* targets we need to honor their bootclasspath (nicer in general to do so)
-      NestedSet<Artifact> bootclasspath = getBootclasspath(base, ruleContext);
+      ImmutableList<Artifact> bootclasspath = getBootclasspath(base, ruleContext);
 
       ImmutableSet<Artifact> jarsToProcess = jars.build();
       boolean basenameClash = checkBasenameClash(jarsToProcess);
@@ -382,27 +381,24 @@ public final class DexArchiveAspect extends NativeAspectClass implements Configu
     return result.build();
   }
 
-  private static NestedSet<Artifact> getBootclasspath(
+  private static ImmutableList<Artifact> getBootclasspath(
       ConfiguredTarget base, RuleContext ruleContext) {
     JavaCompilationInfoProvider compilationInfo =
         JavaInfo.getProvider(JavaCompilationInfoProvider.class, base);
     if (compilationInfo == null || compilationInfo.getBootClasspath().isEmpty()) {
-      return NestedSetBuilder.<Artifact>naiveLinkOrder()
-          .add(
-              ruleContext
-                  .getPrerequisite(
-                      ":dex_archive_android_sdk", Mode.TARGET, AndroidSdkProvider.PROVIDER)
-                  .getAndroidJar())
-          .build();
+      return ImmutableList.of(
+          ruleContext
+              .getPrerequisite(":dex_archive_android_sdk", Mode.TARGET, AndroidSdkProvider.PROVIDER)
+              .getAndroidJar());
     }
-    return compilationInfo.getBootClasspathAsNestedSet();
+    return compilationInfo.getBootClasspath();
   }
 
   private Artifact createDesugarAction(
       RuleContext ruleContext,
       boolean disambiguateBasenames,
       Artifact jar,
-      NestedSet<Artifact> bootclasspath,
+      ImmutableList<Artifact> bootclasspath,
       NestedSet<Artifact> compileTimeClasspath) {
     return createDesugarAction(
         ruleContext,
@@ -429,7 +425,7 @@ public final class DexArchiveAspect extends NativeAspectClass implements Configu
   static Artifact desugar(
       RuleContext ruleContext,
       Artifact jar,
-      NestedSet<Artifact> bootclasspath,
+      ImmutableList<Artifact> bootclasspath,
       NestedSet<Artifact> classpath,
       Artifact result) {
     return createDesugarAction(ruleContext, "$desugar", jar, bootclasspath, classpath, result);
@@ -439,7 +435,7 @@ public final class DexArchiveAspect extends NativeAspectClass implements Configu
       RuleContext ruleContext,
       String desugarPrereqName,
       Artifact jar,
-      NestedSet<Artifact> bootclasspath,
+      ImmutableList<Artifact> bootclasspath,
       NestedSet<Artifact> classpath,
       Artifact result) {
     CustomCommandLine.Builder args =
@@ -465,7 +461,6 @@ public final class DexArchiveAspect extends NativeAspectClass implements Configu
             .addOutput(result)
             .setMnemonic("Desugar")
             .setProgressMessage("Desugaring %s for Android", jar.prettyPrint())
-            .setExecutionInfo(ExecutionRequirements.WORKER_MODE_ENABLED)
             .addCommandLine(
                 // Always use params file, so we don't need to compute command line length first
                 args.build(), ParamFileInfo.builder(UNQUOTED).setUseAlways(true).build())
