@@ -46,6 +46,7 @@ import views.html.system.users.show;
 
 import javax.annotation.Nullable;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
@@ -67,7 +68,7 @@ public class UsersController extends AuthenticatedController {
     private StreamService streamService;
 
     public Result index() {
-        final List<User> allUsers = isPermitted(USERS_LIST) ? userService.all() : Lists.newArrayList(currentUser());
+        final List<User> allUsers = isPermitted(USERS_LIST) ? userService.all() : Collections.<User>emptyList();
         final List<String> permissions = permissionsService.all();
         return ok(views.html.system.users.index.render(currentUser(), breadcrumbs(), allUsers, permissions));
     }
@@ -75,8 +76,7 @@ public class UsersController extends AuthenticatedController {
     public Result show(String username) {
         final User user = userService.load(username);
         if (user == null) {
-            String message = "User not found! Maybe it has been deleted.";
-            return status(404, views.html.errors.error.render(message, new RuntimeException(), request()));
+            return notFound();
         }
 
         BreadcrumbList bc = breadcrumbs();
@@ -97,7 +97,6 @@ public class UsersController extends AuthenticatedController {
                     permissions,
                     ImmutableSet.<String>of(),
                     DateTools.getGroupedTimezoneIds().asMap(),
-                    DateTools.getApplicationTimeZone(),
                     streamService.all(),
                     bc));
         } catch (IOException e) {
@@ -151,7 +150,6 @@ public class UsersController extends AuthenticatedController {
                         permissions,
                         ImmutableSet.copyOf(request.permissions),
                         DateTools.getGroupedTimezoneIds().asMap(),
-                        DateTools.getApplicationTimeZone(),
                         streamService.all(),
                         bc));
             } catch (IOException e) {
