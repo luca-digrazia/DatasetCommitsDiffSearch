@@ -23,9 +23,9 @@ import smile.math.Math;
  *
  * @author Haifeng Li
  */
-public abstract class DenseMatrix extends Matrix implements MatrixMultiplication<DenseMatrix, DenseMatrix> {
+public interface DenseMatrix extends Matrix, MatrixMultiplication<DenseMatrix, DenseMatrix> {
     /** Returns the array of storing the matrix. */
-    public abstract double[] data();
+    public double[] data();
 
     /**
      * The LDA (and LDB, LDC, etc.) parameter in BLAS is effectively
@@ -41,125 +41,57 @@ public abstract class DenseMatrix extends Matrix implements MatrixMultiplication
      *
      * @return the leading dimension
      */
-    public abstract int ld();
+    public int ld();
 
     /**
      * Set the entry value at row i and column j.
      */
-    public abstract double set(int i, int j, double x);
+    public double set(int i, int j, double x);
 
     /**
      * Set the entry value at row i and column j. For Scala users.
      */
-    public double update(int i, int j, double x) {
+    default public double update(int i, int j, double x) {
         return set(i, j, x);
     }
 
     /**
      * Returns the LU decomposition.
-     * This input matrix will be overwritten with the decomposition.
      */
-    public abstract LU lu();
+    public LU lu();
 
     /**
      * Returns the LU decomposition.
      * @param inPlace if true, this matrix will be used for matrix decomposition.
      */
-    public LU lu(boolean inPlace) {
+    public default LU lu(boolean inPlace) {
         DenseMatrix a = inPlace ? this : copy();
         return a.lu();
     }
 
     /**
-     * Returns the Cholesky decomposition.
-     * This input matrix will be overwritten with the decomposition.
-     * @throws IllegalArgumentException if the matrix is not positive definite.
-     */
-    public abstract Cholesky cholesky();
-
-    /**
-     * Returns the Cholesky decomposition.
-     * @param inPlace if true, this matrix will be used for matrix decomposition.
-     * @throws IllegalArgumentException if the matrix is not positive definite.
-     */
-    public Cholesky cholesky(boolean inPlace) {
-        DenseMatrix a = inPlace ? this : copy();
-        return a.cholesky();
-    }
-
-    /**
      * Returns the QR decomposition.
-     * This input matrix will be overwritten with the decomposition.
      */
-    public abstract QR qr();
+    public QR qr();
 
     /**
      * Returns the QR decomposition.
      * @param inPlace if true, this matrix will be used for matrix decomposition.
      */
-    public QR qr(boolean inPlace) {
+    public default QR qr(boolean inPlace) {
         DenseMatrix a = inPlace ? this : copy();
         return a.qr();
     }
 
     /**
-     * Returns the singular value decomposition. Note that the input matrix
-     * will hold U on output.
-     */
-    public abstract SVD svd();
-
-    /**
-     * Returns the singular value decomposition.
-     * @param inPlace if true, this matrix will hold U on output.
-     */
-    public SVD svd(boolean inPlace) {
-        DenseMatrix a = inPlace ? this : copy();
-        return a.svd();
-    }
-
-    /**
-     * Returns the eigen value decomposition. Note that the input matrix
-     * will be overwritten on output.
-     */
-    public abstract EVD eigen();
-
-    /**
-     * Returns the eigen value decomposition.
-     * @param inPlace if true, this matrix will be overwritten U on output.
-     */
-    public EVD eigen(boolean inPlace) {
-        DenseMatrix a = inPlace ? this : copy();
-        return a.eigen();
-    }
-
-    /**
-     * Returns the eigen values in an array of size 2N. The first half and second half
-     * of returned array contain the real and imaginary parts, respectively, of the
-     * computed eigenvalues.
-     */
-    public abstract double[] eig();
-
-    /**
-     * Returns the eigen values in an array of size 2N. The first half and second half
-     * of returned array contain the real and imaginary parts, respectively, of the
-     * computed eigenvalues.
-     * @param inPlace if true, this matrix will be overwritten U on output.
-     */
-    public double[] eig(boolean inPlace) {
-        DenseMatrix a = inPlace ? this : copy();
-        return a.eig();
-    }
-
-    /**
      * Returns the matrix transpose.
      */
-    @Override
-    public abstract DenseMatrix transpose();
+    public DenseMatrix transpose();
 
     /**
      * Returns the inverse matrix.
      */
-    public DenseMatrix inverse() {
+    public default DenseMatrix inverse() {
         return inverse(false);
     }
 
@@ -167,19 +99,20 @@ public abstract class DenseMatrix extends Matrix implements MatrixMultiplication
      * Returns the inverse matrix.
      * @param inPlace if true, this matrix will be used for matrix decomposition.
      */
-    public DenseMatrix inverse(boolean inPlace) {
-        if (nrows() != ncols()) {
-            throw new UnsupportedOperationException("Call inverse() on a non-square matrix");
+    public default DenseMatrix inverse(boolean inPlace) {
+        if (nrows() == ncols()) {
+            LU lu = lu(inPlace);
+            return lu.inverse();
+        } else {
+            QR qr = qr(inPlace);
+            return qr.inverse();
         }
-
-        LU lu = lu(inPlace);
-        return lu.inverse();
     }
 
     /**
      * L1 matrix norm. Maximum column sum.
      */
-    public double norm1() {
+    public default double norm1() {
         int m = nrows();
         int n = ncols();
 
@@ -198,21 +131,21 @@ public abstract class DenseMatrix extends Matrix implements MatrixMultiplication
     /**
      * L2 matrix norm. Maximum singular value.
      */
-    public double norm2() {
-        return svd(false).norm();
+    public default double norm2() {
+        return new SingularValueDecomposition(this).norm();
     }
 
     /**
      * L2 matrix norm. Maximum singular value.
      */
-    public double norm() {
+    public default double norm() {
         return norm2();
     }
 
     /**
      * Infinity matrix norm. Maximum row sum.
      */
-    public double normInf() {
+    public default double normInf() {
         int m = nrows();
         int n = ncols();
 
@@ -229,7 +162,7 @@ public abstract class DenseMatrix extends Matrix implements MatrixMultiplication
     /**
      * Frobenius matrix norm. Sqrt of sum of squares of all elements.
      */
-    public double normFro() {
+    public default double normFro() {
         int m = nrows();
         int n = ncols();
 
@@ -248,7 +181,7 @@ public abstract class DenseMatrix extends Matrix implements MatrixMultiplication
      * The left upper submatrix of A is used in the computation based
      * on the size of x.
      */
-    public double xax(double[] x) {
+    public default double xax(double[] x) {
         if (nrows() != ncols()) {
             throw new IllegalArgumentException("The matrix is not square");
         }
@@ -271,7 +204,7 @@ public abstract class DenseMatrix extends Matrix implements MatrixMultiplication
     /**
      * Returns the row means for a matrix.
      */
-    public double[] rowMeans() {
+    public default double[] rowMeans() {
         int m = nrows();
         int n = ncols();
         double[] x = new double[m];
@@ -292,7 +225,7 @@ public abstract class DenseMatrix extends Matrix implements MatrixMultiplication
     /**
      * Returns the column means for a matrix.
      */
-    public double[] colMeans() {
+    public default double[] colMeans() {
         int m = nrows();
         int n = ncols();
         double[] x = new double[n];
@@ -310,39 +243,39 @@ public abstract class DenseMatrix extends Matrix implements MatrixMultiplication
     /**
      * Returns a copy of this matrix.
      */
-    public abstract DenseMatrix copy();
+    public DenseMatrix copy();
 
     @Override
-    public abstract DenseMatrix ata();
+    public DenseMatrix ata();
 
     @Override
-    public abstract DenseMatrix aat();
+    public DenseMatrix aat();
 
     /**
      * A[i][j] += x
      */
-    public abstract double add(int i, int j, double x);
+    public double add(int i, int j, double x);
 
     /**
      * A[i][j] -= x
      */
-    public abstract double sub(int i, int j, double x);
+    public double sub(int i, int j, double x);
 
     /**
      * A[i][j] *= x
      */
-    public abstract double mul(int i, int j, double x);
+    public double mul(int i, int j, double x);
 
     /**
      * A[i][j] /= x
      */
-    public abstract double div(int i, int j, double x);
+    public double div(int i, int j, double x);
 
     /**
      * C = A + B
      * @return the result matrix
      */
-    public DenseMatrix add(DenseMatrix b, DenseMatrix c) {
+    default public DenseMatrix add(DenseMatrix b, DenseMatrix c) {
         if (nrows() != b.nrows() || ncols() != b.ncols()) {
             throw new IllegalArgumentException("Matrix is not of same size.");
         }
@@ -366,7 +299,7 @@ public abstract class DenseMatrix extends Matrix implements MatrixMultiplication
      * In place addition A = A + B
      * @return this matrix
      */
-    public DenseMatrix add(DenseMatrix b) {
+    default public DenseMatrix add(DenseMatrix b) {
         if (nrows() != b.nrows() || ncols() != b.ncols()) {
             throw new IllegalArgumentException("Matrix is not of same size.");
         }
@@ -386,7 +319,7 @@ public abstract class DenseMatrix extends Matrix implements MatrixMultiplication
      * C = A - B
      * @return the result matrix
      */
-    public DenseMatrix sub(DenseMatrix b, DenseMatrix c) {
+    default public DenseMatrix sub(DenseMatrix b, DenseMatrix c) {
         if (nrows() != b.nrows() || ncols() != b.ncols()) {
             throw new IllegalArgumentException("Matrix is not of same size.");
         }
@@ -410,7 +343,7 @@ public abstract class DenseMatrix extends Matrix implements MatrixMultiplication
      * In place subtraction A = A - B
      * @return this matrix
      */
-    public DenseMatrix sub(DenseMatrix b) {
+    default public DenseMatrix sub(DenseMatrix b) {
         if (nrows() != b.nrows() || ncols() != b.ncols()) {
             throw new IllegalArgumentException("Matrix is not of same size.");
         }
@@ -430,7 +363,7 @@ public abstract class DenseMatrix extends Matrix implements MatrixMultiplication
      * C = A * B
      * @return the result matrix
      */
-    public DenseMatrix mul(DenseMatrix b, DenseMatrix c) {
+    default public DenseMatrix mul(DenseMatrix b, DenseMatrix c) {
         if (nrows() != b.nrows() || ncols() != b.ncols()) {
             throw new IllegalArgumentException("Matrix is not of same size.");
         }
@@ -454,7 +387,7 @@ public abstract class DenseMatrix extends Matrix implements MatrixMultiplication
      * In place element-wise multiplication A = A * B
      * @return this matrix
      */
-    public DenseMatrix mul(DenseMatrix b) {
+    default public DenseMatrix mul(DenseMatrix b) {
         if (nrows() != b.nrows() || ncols() != b.ncols()) {
             throw new IllegalArgumentException("Matrix is not of same size.");
         }
@@ -474,7 +407,7 @@ public abstract class DenseMatrix extends Matrix implements MatrixMultiplication
      * C = A / B
      * @return the result matrix
      */
-    public DenseMatrix div(DenseMatrix b, DenseMatrix c) {
+    default public DenseMatrix div(DenseMatrix b, DenseMatrix c) {
         if (nrows() != b.nrows() || ncols() != b.ncols()) {
             throw new IllegalArgumentException("Matrix is not of same size.");
         }
@@ -499,7 +432,7 @@ public abstract class DenseMatrix extends Matrix implements MatrixMultiplication
      * A = A - B
      * @return this matrix
      */
-    public DenseMatrix div(DenseMatrix b) {
+    default public DenseMatrix div(DenseMatrix b) {
         if (nrows() != b.nrows() || ncols() != b.ncols()) {
             throw new IllegalArgumentException("Matrix is not of same size.");
         }
@@ -518,7 +451,7 @@ public abstract class DenseMatrix extends Matrix implements MatrixMultiplication
     /**
      * Element-wise addition C = A + x
      */
-    public DenseMatrix add(double x, DenseMatrix c) {
+    default public DenseMatrix add(double x, DenseMatrix c) {
         if (nrows() != c.nrows() || ncols() != c.ncols()) {
             throw new IllegalArgumentException("Matrix is not of same size.");
         }
@@ -538,7 +471,7 @@ public abstract class DenseMatrix extends Matrix implements MatrixMultiplication
     /**
      * In place element-wise addition A = A + x
      */
-    public DenseMatrix add(double x) {
+    default public DenseMatrix add(double x) {
         int m = nrows();
         int n = ncols();
 
@@ -554,7 +487,7 @@ public abstract class DenseMatrix extends Matrix implements MatrixMultiplication
     /**
      * Element-wise addition C = A - x
      */
-    public DenseMatrix sub(double x, DenseMatrix c) {
+    default public DenseMatrix sub(double x, DenseMatrix c) {
         if (nrows() != c.nrows() || ncols() != c.ncols()) {
             throw new IllegalArgumentException("Matrix is not of same size.");
         }
@@ -574,7 +507,7 @@ public abstract class DenseMatrix extends Matrix implements MatrixMultiplication
     /**
      * In place element-wise subtraction A = A - x
      */
-    public DenseMatrix sub(double x) {
+    default public DenseMatrix sub(double x) {
         int m = nrows();
         int n = ncols();
 
@@ -590,7 +523,7 @@ public abstract class DenseMatrix extends Matrix implements MatrixMultiplication
     /**
      * Element-wise addition C = A * x
      */
-    public DenseMatrix mul(double x, DenseMatrix c) {
+    default public DenseMatrix mul(double x, DenseMatrix c) {
         if (nrows() != c.nrows() || ncols() != c.ncols()) {
             throw new IllegalArgumentException("Matrix is not of same size.");
         }
@@ -610,7 +543,7 @@ public abstract class DenseMatrix extends Matrix implements MatrixMultiplication
     /**
      * In place element-wise multiplication A = A * x
      */
-    public DenseMatrix mul(double x) {
+    default public DenseMatrix mul(double x) {
         int m = nrows();
         int n = ncols();
 
@@ -626,7 +559,7 @@ public abstract class DenseMatrix extends Matrix implements MatrixMultiplication
     /**
      * Element-wise addition C = A / x
      */
-    public DenseMatrix div(double x, DenseMatrix c) {
+    default public DenseMatrix div(double x, DenseMatrix c) {
         if (nrows() != c.nrows() || ncols() != c.ncols()) {
             throw new IllegalArgumentException("Matrix is not of same size.");
         }
@@ -646,7 +579,7 @@ public abstract class DenseMatrix extends Matrix implements MatrixMultiplication
     /**
      * In place element-wise division A = A / x
      */
-    public DenseMatrix div(double x) {
+    default public DenseMatrix div(double x) {
         int m = nrows();
         int n = ncols();
 
@@ -662,7 +595,7 @@ public abstract class DenseMatrix extends Matrix implements MatrixMultiplication
     /**
      * Replaces NaN's with given value.
      */
-    public DenseMatrix replaceNaN(double x) {
+    default public DenseMatrix replaceNaN(double x) {
         int m = nrows();
         int n = ncols();
 
@@ -681,7 +614,7 @@ public abstract class DenseMatrix extends Matrix implements MatrixMultiplication
      * Returns the sum of all elements in the matrix.
      * @return the sum of all elements.
      */
-    public double sum() {
+    default public double sum() {
         int m = nrows();
         int n = ncols();
 
@@ -699,7 +632,7 @@ public abstract class DenseMatrix extends Matrix implements MatrixMultiplication
      * Return the two-dimensional array of matrix.
      * @return the two-dimensional array of matrix.
      */
-    public double[][] array() {
+    default public double[][] array() {
         double[][] V = new double[nrows()][ncols()];
         for (int i = 0; i < nrows(); i++) {
             for (int j = 0; j < ncols(); j++) {
@@ -713,7 +646,7 @@ public abstract class DenseMatrix extends Matrix implements MatrixMultiplication
      * Returns the string representation of matrix.
      * @param full Print the full matrix if true. Otherwise only print top left 7 x 7 submatrix.
      */
-    public String toString(boolean full) {
+    default public String toString(boolean full) {
         StringBuilder sb = new StringBuilder();
         final int fields = 7;
         int m = Math.min(fields, nrows());
