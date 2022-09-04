@@ -175,7 +175,7 @@ public class InputServiceImpl extends PersistedServiceImpl implements InputServi
 
         final DBObject o = findOne(InputImpl.class, new BasicDBObject("$and", query));
         if (o == null) {
-            throw new NotFoundException("Couldn't find input " + id + " on Graylog node " + nodeId);
+            throw new NotFoundException();
         } else {
             return new InputImpl((ObjectId) o.get("_id"), o.toMap());
         }
