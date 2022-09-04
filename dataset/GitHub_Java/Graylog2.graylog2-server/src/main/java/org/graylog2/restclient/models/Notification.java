@@ -40,9 +40,7 @@ public class Notification {
         NO_INPUT_RUNNING,
         INPUT_FAILED_TO_START,
         CHECK_SERVER_CLOCKS,
-        OUTDATED_VERSION,
-        EMAIL_TRANSPORT_CONFIGURATION_INVALID,
-        EMAIL_TRANSPORT_FAILED;
+        OUTDATED_VERSION;
 
         public static Type fromString(String name) {
             return valueOf(name.toUpperCase());
