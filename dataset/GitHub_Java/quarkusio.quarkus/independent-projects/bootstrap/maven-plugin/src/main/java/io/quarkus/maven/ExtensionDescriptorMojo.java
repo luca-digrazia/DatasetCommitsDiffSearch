@@ -11,7 +11,6 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import io.quarkus.bootstrap.BootstrapConstants;
 import io.quarkus.bootstrap.model.AppArtifactCoords;
-import io.quarkus.bootstrap.model.AppArtifactKey;
 import io.quarkus.bootstrap.model.AppModel;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -269,13 +268,11 @@ public class ExtensionDescriptorMojo extends AbstractMojo {
 
         final AppArtifactCoords deploymentCoords = AppArtifactCoords.fromString(deployment);
 
-        final AppArtifactKey rootDeploymentGact = deploymentCoords.getKey();
+        final String rootDeploymentGact = gact(deploymentCoords);
         final Node rootDeployment = new Node(null, rootDeploymentGact, 2);
-        final Artifact artifact = project.getArtifact();
-        final Node rootRuntime = rootDeployment.newChild(new AppArtifactKey(artifact.getGroupId(), artifact.getArtifactId(),
-                artifact.getClassifier(), artifact.getType()), 1);
+        final Node rootRuntime = rootDeployment.newChild(gact(project.getArtifact()), 1);
 
-        final Map<AppArtifactKey, Node> expectedExtensionDeps = new HashMap<>();
+        final Map<String, Node> expectedExtensionDeps = new HashMap<>();
         expectedExtensionDeps.put(rootDeploymentGact, rootDeployment);
         expectedExtensionDeps.put(rootRuntime.gact, rootRuntime);
         // collect transitive extension deps
@@ -318,7 +315,7 @@ public class ExtensionDescriptorMojo extends AbstractMojo {
                                         + BootstrapConstants.PROP_DEPLOYMENT_ARTIFACT + " property in its "
                                         + BootstrapConstants.DESCRIPTOR_PATH);
                             }
-                            currentNode = currentNode.newChild(AppArtifactCoords.fromString(deploymentStr).getKey(),
+                            currentNode = currentNode.newChild(gact(AppArtifactCoords.fromString(deploymentStr)),
                                     currentNodeId);
                             expectedExtensionDeps.put(currentNode.gact, currentNode);
                             extDepsTotal.incrementAndGet();
@@ -356,8 +353,7 @@ public class ExtensionDescriptorMojo extends AbstractMojo {
                 if (artifact == null) {
                     return true;
                 }
-                final Node node = expectedExtensionDeps.get(new AppArtifactKey(artifact.getGroupId(), artifact.getArtifactId(),
-                        artifact.getClassifier(), artifact.getExtension()));
+                final Node node = expectedExtensionDeps.get(gact(artifact));
                 if (node != null && !node.included) {
                     node.included = true;
                     extDepsTotal.decrementAndGet();
@@ -376,12 +372,12 @@ public class ExtensionDescriptorMojo extends AbstractMojo {
             log.error("Quarkus Extension Dependency Verification Error");
             log.error("Deployment artifact " + deploymentCoords +
                     " was found to be missing dependencies on Quarkus extension artifacts marked with '-' below:");
-            final List<AppArtifactKey> missing = rootDeployment.collectMissing(log);
+            final List<String> missing = rootDeployment.collectMissing(log);
             final StringBuilder buf = new StringBuilder();
             buf.append("Deployment artifact ");
             buf.append(deploymentCoords);
             buf.append(" is missing the following dependencies from its configuration: ");
-            final Iterator<AppArtifactKey> i = missing.iterator();
+            final Iterator<String> i = missing.iterator();
             buf.append(i.next());
             while (i.hasNext()) {
                 buf.append(", ").append(i.next());
@@ -488,32 +484,62 @@ public class ExtensionDescriptorMojo extends AbstractMojo {
         }
     }
 
+    static String gact(AppArtifactCoords artifact) {
+        StringBuilder buf = new StringBuilder();
+        buf.append(artifact.getGroupId()).append(':').append(artifact.getArtifactId()).append(':');
+        final String classifier = artifact.getClassifier();
+        if (classifier != null && !classifier.isEmpty()) {
+            buf.append(classifier);
+        }
+        return buf.append(':').append(artifact.getType()).append(':').toString();
+    }
+
+    static String gact(Artifact artifact) {
+        StringBuilder buf = new StringBuilder();
+        buf.append(artifact.getGroupId()).append(':').append(artifact.getArtifactId()).append(':');
+        final String classifier = artifact.getClassifier();
+        if (classifier != null && !classifier.isEmpty()) {
+            buf.append(classifier);
+        }
+        return buf.append(':').append(artifact.getType()).append(':').toString();
+    }
+
+    static String gact(org.eclipse.aether.artifact.Artifact artifact) {
+        StringBuilder buf = new StringBuilder();
+        buf.append(artifact.getGroupId()).append(':').append(artifact.getArtifactId()).append(':');
+        final String classifier = artifact.getClassifier();
+        if (classifier != null && !classifier.isEmpty()) {
+            buf.append(classifier);
+        }
+        return buf.append(':').append(artifact.getExtension()).append(':').toString();
+    }
+
     private static class Node {
         final Node parent;
-        final AppArtifactKey gact;
+        final String gact;
         final int id;
         boolean included;
         List<Node> children = new ArrayList<>(0);
 
-        Node(Node parent, AppArtifactKey gact, int id) {
+        Node(Node parent, String gact, int id) {
             this.parent = parent;
             this.gact = gact;
             this.id = id;
         }
 
-        Node newChild(AppArtifactKey gact, int id) {
+        Node newChild(String gact, int id) {
             final Node child = new Node(this, gact, id);
             children.add(child);
             return child;
         }
 
-        List<AppArtifactKey> collectMissing(Log log) {
-            final List<AppArtifactKey> missing = new ArrayList<>();
+        List<String> collectMissing(Log log) {
+            final List<String> missing = new ArrayList<>();
             collectMissing(log, 0, missing);
             return missing;
         }
 
-        private void collectMissing(Log log, int depth, List<AppArtifactKey> missing) {
+        private void collectMissing(Log log, int depth, List<String> missing) {
             final StringBuilder buf = new StringBuilder();
             if (included) {
                 buf.append('+');
