@@ -17,7 +17,6 @@ package com.google.devtools.build.lib.rules.objc;
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.fail;
 
-import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
@@ -35,13 +34,10 @@ import com.google.devtools.build.lib.analysis.util.ScratchAttributeWriter;
 import com.google.devtools.build.lib.packages.util.MockObjcSupport;
 import com.google.devtools.build.lib.rules.cpp.CppCompileAction;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
-import com.google.devtools.build.lib.vfs.IORuntimeException;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -55,7 +51,7 @@ public class HeaderThinningTest extends ObjcRuleTestCase {
 
   @Before
   public void beforeEach() throws Exception {
-    MockObjcSupport.setupCcToolchainConfig(mockToolsConfig);
+    MockObjcSupport.createCrosstoolPackage(mockToolsConfig);
     MockObjcSupport.setupAppleSdks(mockToolsConfig);
     useConfiguration(
         "--crosstool_top=" + MockObjcSupport.DEFAULT_OSX_CROSSTOOL,
@@ -63,22 +59,6 @@ public class HeaderThinningTest extends ObjcRuleTestCase {
         "--objc_use_dotd_pruning",
         "--xcode_version=" + MockObjcSupport.DEFAULT_XCODE_VERSION,
         "--ios_sdk_version=" + MockObjcSupport.DEFAULT_IOS_SDK_VERSION);
-  }
-
-  private Iterable<Artifact> determineAdditionalInputs(
-      HeaderThinning headerThinning, CppCompileAction action)
-      throws ExecException, InterruptedException, IOException {
-    try {
-      return headerThinning.determineAdditionalInputs(null, action, null, null).get();
-    } catch (ExecutionException e) {
-      Throwables.throwIfInstanceOf(e.getCause(), ExecException.class);
-      Throwables.throwIfInstanceOf(e.getCause(), InterruptedException.class);
-      if (e.getCause() instanceof IORuntimeException) {
-        throw ((IORuntimeException) e.getCause()).getCauseIOException();
-      }
-      Throwables.throwIfUnchecked(e.getCause());
-      throw new IllegalStateException(e.getCause());
-    }
   }
 
   @Test
@@ -94,7 +74,8 @@ public class HeaderThinningTest extends ObjcRuleTestCase {
     HeaderThinning headerThinning = new HeaderThinning(getPotentialHeaders(expectedHeaders));
     writeToHeadersListFile(action, "objc/a.pch", "objc/b.h", "objc/c", "objc/d.hpp");
 
-    Iterable<Artifact> headersFound = determineAdditionalInputs(headerThinning, action);
+    Iterable<Artifact> headersFound =
+        headerThinning.determineAdditionalInputs(null, action, null, null);
     assertThat(headersFound).containsExactlyElementsIn(expectedHeaders);
   }
 
@@ -108,7 +89,7 @@ public class HeaderThinningTest extends ObjcRuleTestCase {
     writeToHeadersListFile(action, "objc/a.h", "objc/b.h", "objc/c.h");
 
     try {
-      determineAdditionalInputs(headerThinning, action);
+      headerThinning.determineAdditionalInputs(null, action, null, null);
       fail("Exception was not thrown");
     } catch (ExecException e) {
       assertThat(e).hasMessageThat().containsMatch("(objc/c.h)");
@@ -125,7 +106,8 @@ public class HeaderThinningTest extends ObjcRuleTestCase {
     HeaderThinning headerThinning = new HeaderThinning(getPotentialHeaders(expectedHeaders));
     writeToHeadersListFile(action, "objc/a.h", "tree/dir/c.h");
 
-    Iterable<Artifact> headersFound = determineAdditionalInputs(headerThinning, action);
+    Iterable<Artifact> headersFound =
+        headerThinning.determineAdditionalInputs(null, action, null, null);
     assertThat(headersFound).containsExactlyElementsIn(expectedHeaders);
   }
 

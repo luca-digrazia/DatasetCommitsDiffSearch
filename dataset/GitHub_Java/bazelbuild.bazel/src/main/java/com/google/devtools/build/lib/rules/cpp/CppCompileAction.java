@@ -23,7 +23,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
-import com.google.common.io.ByteStreams;
 import com.google.devtools.build.lib.actions.AbstractAction;
 import com.google.devtools.build.lib.actions.ActionEnvironment;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
@@ -63,7 +62,6 @@ import com.google.devtools.build.lib.skyframe.ActionExecutionValue;
 import com.google.devtools.build.lib.util.DependencySet;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.ShellEscaper;
-import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -72,7 +70,6 @@ import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
@@ -1111,61 +1108,27 @@ public class CppCompileAction extends AbstractAction
       throws ActionExecutionException, InterruptedException {
     setModuleFileFlags();
     CppCompileActionContext.Reply reply;
+    ShowIncludesFilter showIncludesFilterForStdout = null;
+    ShowIncludesFilter showIncludesFilterForStderr = null;
+    // If parse_showincludes feature is enabled, instead of parsing dotD file we parse the output of
+    // cl.exe caused by /showIncludes option.
+    if (featureConfiguration.isEnabled(CppRuleClasses.PARSE_SHOWINCLUDES)) {
+      showIncludesFilterForStdout = new ShowIncludesFilter(getSourceFile().getFilename());
+      showIncludesFilterForStderr = new ShowIncludesFilter(getSourceFile().getFilename());
+      actionExecutionContext.getFileOutErr().setOutputFilter(showIncludesFilterForStdout);
+      actionExecutionContext.getFileOutErr().setErrorFilter(showIncludesFilterForStderr);
+    }
 
     if (!shouldScanDotdFiles()) {
       updateActionInputs(NestedSetBuilder.wrap(Order.STABLE_ORDER, additionalInputs));
     }
 
-    ActionExecutionContext spawnContext;
-    ShowIncludesFilter showIncludesFilterForStdout;
-    ShowIncludesFilter showIncludesFilterForStderr;
-    if (featureConfiguration.isEnabled(CppRuleClasses.PARSE_SHOWINCLUDES)) {
-      showIncludesFilterForStdout = new ShowIncludesFilter(getSourceFile().getFilename());
-      showIncludesFilterForStderr = new ShowIncludesFilter(getSourceFile().getFilename());
-      FileOutErr originalOutErr = actionExecutionContext.getFileOutErr();
-      FileOutErr tempOutErr = originalOutErr.childOutErr();
-      spawnContext = actionExecutionContext.withFileOutErr(tempOutErr);
-    } else {
-      spawnContext = actionExecutionContext;
-      showIncludesFilterForStdout = null;
-      showIncludesFilterForStderr = null;
-    }
-
-    // We want the code to be executed in the finally clause, but we need to throw IOException if
-    // it failed, or add the IOException as a suppressed exception if the try block threw an
-    // exception in the first place. Errorprone recommends using AutoCloseable for this.
-    final class Defer implements AutoCloseable {
-      @Override
-      public void close() throws IOException {
-        // If parse_showincludes feature is enabled, instead of parsing dotD file we parse the
-        // output of cl.exe caused by /showIncludes option.
-        if (featureConfiguration.isEnabled(CppRuleClasses.PARSE_SHOWINCLUDES)) {
-          FileOutErr tempOutErr = spawnContext.getFileOutErr();
-          FileOutErr outErr = actionExecutionContext.getFileOutErr();
-          tempOutErr.close();
-          if (tempOutErr.hasRecordedStdout()) {
-            try (InputStream in = tempOutErr.getOutputPath().getInputStream()) {
-              ByteStreams.copy(
-                  in,
-                  showIncludesFilterForStdout.getFilteredOutputStream(outErr.getOutputStream()));
-            }
-          }
-          if (tempOutErr.hasRecordedStderr()) {
-            try (InputStream in = tempOutErr.getErrorPath().getInputStream()) {
-              ByteStreams.copy(
-                  in, showIncludesFilterForStderr.getFilteredOutputStream(outErr.getErrorStream()));
-            }
-          }
-        }
-      }
-    }
-
     List<SpawnResult> spawnResults;
-    try (Defer ignored = new Defer()) {
+    try {
       CppCompileActionResult cppCompileActionResult =
           actionExecutionContext
               .getContext(CppCompileActionContext.class)
-              .execWithReply(this, spawnContext);
+              .execWithReply(this, actionExecutionContext);
       reply = cppCompileActionResult.contextReply();
       spawnResults = cppCompileActionResult.spawnResults();
     } catch (ExecException e) {
@@ -1173,8 +1136,6 @@ public class CppCompileAction extends AbstractAction
           "C++ compilation of rule '" + getOwner().getLabel() + "'",
           actionExecutionContext.getVerboseFailures(),
           this);
-    } catch (IOException e) {
-      throw new ActionExecutionException(e, this, false);
     } finally {
       clearAdditionalInputs();
     }

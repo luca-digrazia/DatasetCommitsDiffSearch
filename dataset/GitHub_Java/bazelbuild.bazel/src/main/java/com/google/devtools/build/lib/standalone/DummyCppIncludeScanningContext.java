@@ -13,9 +13,10 @@
 // limitations under the License.
 package com.google.devtools.build.lib.standalone;
 
-import com.google.common.util.concurrent.ListenableFuture;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
+import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ExecutionStrategy;
 import com.google.devtools.build.lib.rules.cpp.CppCompileAction;
 import com.google.devtools.build.lib.rules.cpp.CppIncludeScanningContext;
@@ -28,11 +29,12 @@ import javax.annotation.Nullable;
 class DummyCppIncludeScanningContext implements CppIncludeScanningContext {
   @Override
   @Nullable
-  public ListenableFuture<Iterable<Artifact>> findAdditionalInputs(
+  public Iterable<Artifact> findAdditionalInputs(
       CppCompileAction action,
       ActionExecutionContext actionExecutionContext,
       IncludeProcessing includeProcessing,
-      IncludeScanningHeaderData includeScanningHeaderData) {
+      IncludeScanningHeaderData includeScanningHeaderData)
+      throws ExecException, InterruptedException, ActionExecutionException {
     return null;
   }
 }
