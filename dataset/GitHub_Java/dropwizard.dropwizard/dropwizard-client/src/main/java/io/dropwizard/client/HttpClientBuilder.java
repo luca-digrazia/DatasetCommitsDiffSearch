@@ -7,7 +7,6 @@ import com.codahale.metrics.httpclient.InstrumentedHttpClientConnectionManager;
 import com.codahale.metrics.httpclient.InstrumentedHttpRequestExecutor;
 import com.google.common.annotations.VisibleForTesting;
 import io.dropwizard.client.proxy.AuthConfiguration;
-import io.dropwizard.client.proxy.NonProxyListProxyRoutePlanner;
 import io.dropwizard.client.proxy.ProxyConfiguration;
 import io.dropwizard.setup.Environment;
 import io.dropwizard.util.Duration;
@@ -35,6 +34,7 @@ import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.DefaultConnectionKeepAliveStrategy;
 import org.apache.http.impl.client.DefaultHttpRequestRetryHandler;
+import org.apache.http.impl.conn.DefaultProxyRoutePlanner;
 import org.apache.http.impl.conn.SystemDefaultDnsResolver;
 import org.apache.http.protocol.HttpContext;
 
@@ -204,7 +204,7 @@ public class HttpClientBuilder {
             final org.apache.http.impl.client.HttpClientBuilder builder,
             final InstrumentedHttpClientConnectionManager manager,
             final String name) {
-        final String cookiePolicy = configuration.isCookiesEnabled() ? CookieSpecs.DEFAULT : CookieSpecs.IGNORE_COOKIES;
+        final String cookiePolicy = configuration.isCookiesEnabled() ? CookieSpecs.BEST_MATCH : CookieSpecs.IGNORE_COOKIES;
         final Integer timeout = (int) configuration.getTimeout().toMilliseconds();
         final Integer connectionTimeout = (int) configuration.getConnectionTimeout().toMilliseconds();
         final Integer connectionRequestTimeout = (int) configuration.getConnectionRequestTimeout().toMilliseconds();
@@ -222,6 +222,7 @@ public class HttpClientBuilder {
                 .setSocketTimeout(timeout)
                 .setConnectTimeout(connectionTimeout)
                 .setConnectionRequestTimeout(connectionRequestTimeout)
+                .setStaleConnectionCheckEnabled(false)
                 .build();
         final SocketConfig socketConfig = SocketConfig.custom()
                 .setTcpNoDelay(true)
@@ -252,7 +253,7 @@ public class HttpClientBuilder {
         ProxyConfiguration proxy = configuration.getProxyConfiguration();
         if (proxy != null) {
             HttpHost httpHost = new HttpHost(proxy.getHost(), proxy.getPort(), proxy.getScheme());
-            builder.setRoutePlanner(new NonProxyListProxyRoutePlanner(httpHost, proxy.getNonProxyHosts()));
+            builder.setRoutePlanner(new DefaultProxyRoutePlanner(httpHost));
             // if the proxy host requires authentication then add the host credentials to the credentials provider
             AuthConfiguration auth = proxy.getAuth();
             if (auth != null) {
@@ -316,7 +317,6 @@ public class HttpClientBuilder {
             InstrumentedHttpClientConnectionManager connectionManager) {
         connectionManager.setDefaultMaxPerRoute(configuration.getMaxConnectionsPerRoute());
         connectionManager.setMaxTotal(configuration.getMaxConnections());
-        connectionManager.setValidateAfterInactivity(0);
         return connectionManager;
     }
 }
