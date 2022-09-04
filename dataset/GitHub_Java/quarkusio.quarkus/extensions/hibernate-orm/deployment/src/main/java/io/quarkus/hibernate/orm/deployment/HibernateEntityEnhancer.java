@@ -12,7 +12,6 @@ import org.objectweb.asm.ClassWriter;
 
 import io.quarkus.deployment.QuarkusClassWriter;
 import io.quarkus.gizmo.Gizmo;
-import net.bytebuddy.ClassFileVersion;
 
 /**
  * Used to transform bytecode by registering to
@@ -28,8 +27,7 @@ import net.bytebuddy.ClassFileVersion;
  */
 public final class HibernateEntityEnhancer implements BiFunction<String, ClassVisitor, ClassVisitor> {
 
-    private static final BytecodeProvider PROVIDER = new org.hibernate.bytecode.internal.bytebuddy.BytecodeProviderImpl(
-            ClassFileVersion.JAVA_V8);
+    private static final BytecodeProvider PROVIDER = new org.hibernate.bytecode.internal.bytebuddy.BytecodeProviderImpl();
 
     @Override
     public ClassVisitor apply(String className, ClassVisitor outputClassVisitor) {
