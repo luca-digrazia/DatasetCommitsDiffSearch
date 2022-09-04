@@ -132,9 +132,6 @@ public class SyntaxTreeVisitor {
     visit(node.getReturnExpression());
   }
 
-  public void visit(FlowStatement node) {
-  }
-
   public void visit(DictionaryLiteral node) {
     visitAll(node.getEntries());
   }

@@ -174,13 +174,10 @@ public class ParserTest extends EvaluationTestCase {
 
   @Test
   public void testFuncallExpr() throws Exception {
-    FuncallExpression e = (FuncallExpression) parseExpression("foo[0](1, 2, bar=wiz)");
+    FuncallExpression e = (FuncallExpression) parseExpression("foo(1, 2, bar=wiz)");
 
-    IndexExpression function = (IndexExpression) e.getFunction();
-    Identifier functionList = (Identifier) function.getObject();
-    assertThat(functionList.getName()).isEqualTo("foo");
-    IntegerLiteral listIndex = (IntegerLiteral) function.getKey();
-    assertThat(listIndex.getValue()).isEqualTo(0);
+    Identifier ident = (Identifier) e.getFunction();
+    assertThat(ident.getName()).isEqualTo("foo");
 
     assertThat(e.getArguments()).hasSize(3);
     assertThat(e.getNumPositionalArguments()).isEqualTo(2);

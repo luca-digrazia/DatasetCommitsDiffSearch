@@ -727,13 +727,14 @@ public final class FuncallExpression extends Expression {
 
   @Override
   Object doEval(Environment env) throws EvalException, InterruptedException {
-    // TODO: Remove this special case once method resolution and invocation are supported as
-    // separate steps.
     if (function instanceof DotExpression) {
       return invokeObjectMethod(env, (DotExpression) function);
     }
-    Object funcValue = function.eval(env);
-    return callFunction(funcValue, env);
+    if (function instanceof Identifier) {
+      return invokeGlobalFunction(env);
+    }
+    throw new EvalException(
+        getLocation(), Printer.format("cannot evaluate function '%s'", function));
   }
 
   /** Invokes object.function() and returns the result. */
@@ -748,6 +749,14 @@ public final class FuncallExpression extends Expression {
     evalArguments(posargs, kwargs, env);
     return invokeObjectMethod(
         dot.getField().getName(), posargs.build(), ImmutableMap.copyOf(kwargs), this, env);
+  }
+
+  /**
+   * Invokes function() and returns the result.
+   */
+  private Object invokeGlobalFunction(Environment env) throws EvalException, InterruptedException {
+    Object funcValue = function.eval(env);
+    return callFunction(funcValue, env);
   }
 
   /**
