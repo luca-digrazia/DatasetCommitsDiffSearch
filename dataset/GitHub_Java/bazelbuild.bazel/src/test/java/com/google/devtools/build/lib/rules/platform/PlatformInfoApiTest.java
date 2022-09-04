@@ -21,13 +21,12 @@ import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.platform.ConstraintSettingInfo;
 import com.google.devtools.build.lib.analysis.platform.ConstraintValueInfo;
 import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
-import com.google.devtools.build.lib.cmdline.Label;
 import java.util.List;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-/** Tests Starlark API for {@link PlatformInfo} providers. */
+/** Tests Skylark API for {@link PlatformInfo} providers. */
 @RunWith(JUnit4.class)
 public class PlatformInfoApiTest extends PlatformTestCase {
 
@@ -40,9 +39,9 @@ public class PlatformInfoApiTest extends PlatformTestCase {
     PlatformInfo platformInfo = fetchPlatformInfo("//foo:my_platform");
     assertThat(platformInfo).isNotNull();
     ConstraintSettingInfo constraintSetting =
-        ConstraintSettingInfo.create(Label.parseAbsoluteUnchecked("//foo:basic"));
+        ConstraintSettingInfo.create(makeLabel("//foo:basic"));
     ConstraintValueInfo constraintValue =
-        ConstraintValueInfo.create(constraintSetting, Label.parseAbsoluteUnchecked("//foo:value1"));
+        ConstraintValueInfo.create(constraintSetting, makeLabel("//foo:value1"));
     assertThat(platformInfo.constraints().get(constraintSetting)).isEqualTo(constraintValue);
     assertThat(platformInfo.remoteExecutionProperties()).isEmpty();
   }
@@ -95,16 +94,14 @@ public class PlatformInfoApiTest extends PlatformTestCase {
     PlatformInfo platformInfo = fetchPlatformInfo("//foo:my_platform");
     assertThat(platformInfo).isNotNull();
     ConstraintSettingInfo constraintSetting1 =
-        ConstraintSettingInfo.create(Label.parseAbsoluteUnchecked("//foo:setting1"));
+        ConstraintSettingInfo.create(makeLabel("//foo:setting1"));
     ConstraintValueInfo constraintValue1 =
-        ConstraintValueInfo.create(
-            constraintSetting1, Label.parseAbsoluteUnchecked("//foo:value1"));
+        ConstraintValueInfo.create(constraintSetting1, makeLabel("//foo:value1"));
     assertThat(platformInfo.constraints().get(constraintSetting1)).isEqualTo(constraintValue1);
     ConstraintSettingInfo constraintSetting2 =
-        ConstraintSettingInfo.create(Label.parseAbsoluteUnchecked("//foo:setting2"));
+        ConstraintSettingInfo.create(makeLabel("//foo:setting2"));
     ConstraintValueInfo constraintValue2 =
-        ConstraintValueInfo.create(
-            constraintSetting2, Label.parseAbsoluteUnchecked("//foo:value2"));
+        ConstraintValueInfo.create(constraintSetting2, makeLabel("//foo:value2"));
     assertThat(platformInfo.constraints().get(constraintSetting2)).isEqualTo(constraintValue2);
   }
 
@@ -121,10 +118,9 @@ public class PlatformInfoApiTest extends PlatformTestCase {
     PlatformInfo platformInfo = fetchPlatformInfo("//foo:my_platform");
     assertThat(platformInfo).isNotNull();
     ConstraintSettingInfo constraintSetting1 =
-        ConstraintSettingInfo.create(Label.parseAbsoluteUnchecked("//foo:setting1"));
+        ConstraintSettingInfo.create(makeLabel("//foo:setting1"));
     ConstraintValueInfo constraintValue1 =
-        ConstraintValueInfo.create(
-            constraintSetting1, Label.parseAbsoluteUnchecked("//foo:value1b"));
+        ConstraintValueInfo.create(constraintSetting1, makeLabel("//foo:value1b"));
     assertThat(platformInfo.constraints().get(constraintSetting1)).isEqualTo(constraintValue1);
   }
 
