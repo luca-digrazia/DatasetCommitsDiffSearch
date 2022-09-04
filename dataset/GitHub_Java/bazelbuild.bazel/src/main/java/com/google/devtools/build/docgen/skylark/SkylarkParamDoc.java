@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.docgen.skylark;
 
+import com.google.devtools.build.docgen.DocgenConsts;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.ParamType;
 
@@ -73,6 +74,6 @@ public final class SkylarkParamDoc extends SkylarkDoc {
 
   @Override
   public String getDocumentation() {
-    return SkylarkDocUtils.substituteVariables(param.doc());
+    return param.doc().replace("$BE_ROOT", DocgenConsts.BEDocsRoot);
   }
 }
