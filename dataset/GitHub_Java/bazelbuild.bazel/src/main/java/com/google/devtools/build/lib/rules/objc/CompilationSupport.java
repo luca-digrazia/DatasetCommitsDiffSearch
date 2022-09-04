@@ -97,7 +97,6 @@ import com.google.devtools.build.lib.rules.cpp.CppRuleClasses;
 import com.google.devtools.build.lib.rules.cpp.FdoContext;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkingMode;
-import com.google.devtools.build.lib.rules.cpp.ObjcCppSemantics;
 import com.google.devtools.build.lib.rules.cpp.PrecompiledFiles;
 import com.google.devtools.build.lib.rules.objc.ObjcProvider.Flag;
 import com.google.devtools.build.lib.rules.objc.ObjcVariablesExtension.VariableCategory;
@@ -205,15 +204,6 @@ public class CompilationSupport {
       builder.add("-I" + path);
     }
     return builder.build();
-  }
-
-  private String getPurpose() {
-    // ProtoSupport creates multiple {@code CcCompilationContext}s for a single rule, potentially
-    // multiple archives per build configuration. This covers that worst case.
-    return "Objc_build_arch_"
-        + buildConfiguration.getMnemonic()
-        + "_with_suffix_"
-        + intermediateArtifacts.archiveFileNameSuffix();
   }
 
   private CompilationInfo compile(
@@ -369,7 +359,7 @@ public class CompilationSupport {
       extraModuleMapFeatureConfiguration = Optional.absent();
     }
 
-    String purpose = String.format("%s_objc_arc", getPurpose());
+    String purpose = String.format("%s_objc_arc", semantics.getPurpose());
     extensionBuilder.setArcEnabled(true);
     CompilationInfo objcArcCompilationInfo =
         compile(
@@ -390,7 +380,7 @@ public class CompilationSupport {
             /* generateModuleMap= */ true,
             /* shouldProcessHeaders= */ true);
 
-    purpose = String.format("%s_non_objc_arc", getPurpose());
+    purpose = String.format("%s_non_objc_arc", semantics.getPurpose());
     extensionBuilder.setArcEnabled(false);
     CompilationInfo nonObjcArcCompilationInfo =
         compile(
@@ -469,7 +459,7 @@ public class CompilationSupport {
             nonObjcArcCompilationInfo.getCcCompilationContext()),
         ImmutableList.of());
     ccCompilationContextBuilder.setPurpose(
-        String.format("%s_merged_arc_non_arc_objc", getPurpose()));
+        String.format("%s_merged_arc_non_arc_objc", semantics.getPurpose()));
 
     CcCompilationOutputs precompiledFilesObjects =
         CcCompilationOutputs.builder()
@@ -523,7 +513,10 @@ public class CompilationSupport {
   }
 
   ObjcCppSemantics createObjcCppSemantics() {
-    return attributes.enableModules() ? ObjcCppSemantics.MODULES : ObjcCppSemantics.NO_MODULES;
+    return new ObjcCppSemantics(
+        intermediateArtifacts,
+        buildConfiguration,
+        attributes.enableModules());
   }
 
   private FeatureConfiguration getFeatureConfiguration(
@@ -538,6 +531,8 @@ public class CompilationSupport {
             .addAll(ruleContext.getFeatures())
             .addAll(OBJC_ACTIONS)
             .add(CppRuleClasses.LANG_OBJC)
+            .add(CppRuleClasses.DEPENDENCY_FILE)
+            .add(CppRuleClasses.INCLUDE_PATHS)
             .add(isTool ? "host" : "nonhost");
 
     if (!attributes.enableModules()) {
@@ -545,6 +540,9 @@ public class CompilationSupport {
     }
     if (configuration.getFragment(ObjcConfiguration.class).shouldStripBinary()) {
       activatedCrosstoolSelectables.add(DEAD_STRIP_FEATURE_NAME);
+    }
+    if (getPchFile().isPresent()) {
+      activatedCrosstoolSelectables.add("pch");
     }
     if (configuration.getFragment(ObjcConfiguration.class).generateLinkmap()) {
       activatedCrosstoolSelectables.add(GENERATE_LINKMAP_FEATURE_NAME);
@@ -1217,7 +1215,7 @@ public class CompilationSupport {
 
     ImmutableList.Builder<Artifact> linkerOutputs = ImmutableList.builder();
 
-    if (cppConfiguration.appleGenerateDsym()) {
+    if (objcConfiguration.generateDsym()) {
       Artifact dsymSymbol =
           objcConfiguration.shouldStripBinary()
               ? intermediateArtifacts.dsymSymbolForUnstrippedBinary()
@@ -1695,7 +1693,7 @@ public class CompilationSupport {
       ObjcCppSemantics semantics,
       FeatureConfiguration featureConfiguration)
       throws RuleErrorException, InterruptedException {
-    String purpose = String.format("%s_extra_module_map", getPurpose());
+    String purpose = String.format("%s_extra_module_map", semantics.getPurpose());
     CcCompilationHelper result =
         new CcCompilationHelper(
             ruleContext,
