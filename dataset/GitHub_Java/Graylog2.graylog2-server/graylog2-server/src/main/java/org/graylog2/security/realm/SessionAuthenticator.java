@@ -1,44 +1,58 @@
 /*
- * Copyright 2013 TORCH GmbH
+ * Copyright (C) 2020 Graylog, Inc.
  *
- * This file is part of Graylog2.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the Server Side Public License, version 1,
+ * as published by MongoDB, Inc.
  *
- * Graylog2 is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Graylog2 is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * Server Side Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the Server Side Public License
+ * along with this program. If not, see
+ * <http://www.mongodb.com/licensing/server-side-public-license>.
  */
 package org.graylog2.security.realm;
 
-import org.apache.shiro.authc.*;
+import org.apache.shiro.authc.AuthenticationException;
+import org.apache.shiro.authc.AuthenticationInfo;
+import org.apache.shiro.authc.AuthenticationToken;
+import org.apache.shiro.authc.SimpleAccount;
 import org.apache.shiro.authc.credential.AllowAllCredentialsMatcher;
 import org.apache.shiro.realm.AuthenticatingRealm;
 import org.apache.shiro.session.Session;
 import org.apache.shiro.subject.Subject;
-import org.graylog2.Core;
-import org.graylog2.security.SessionIdToken;
-import org.graylog2.users.User;
+import org.apache.shiro.util.ThreadContext;
+import org.graylog2.plugin.cluster.ClusterConfigService;
+import org.graylog2.plugin.database.users.User;
+import org.graylog2.security.headerauth.HTTPHeaderAuthConfig;
+import org.graylog2.shared.security.SessionIdToken;
+import org.graylog2.shared.security.ShiroRequestHeadersBinder;
+import org.graylog2.shared.users.UserService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.inject.Inject;
+import java.util.Optional;
+
 public class SessionAuthenticator extends AuthenticatingRealm {
-    private static final Logger log = LoggerFactory.getLogger(SessionAuthenticator.class);
+    private static final Logger LOG = LoggerFactory.getLogger(SessionAuthenticator.class);
+    public static final String NAME = "mongodb-session";
+    public static final String X_GRAYLOG_NO_SESSION_EXTENSION = "X-Graylog-No-Session-Extension";
 
-    private final Core core;
+    private final UserService userService;
+    private final ClusterConfigService clusterConfigService;
 
-    public SessionAuthenticator(Core core) {
-        this.core = core;
+    @Inject
+    SessionAuthenticator(UserService userService, ClusterConfigService clusterConfigService) {
+        this.userService = userService;
+        this.clusterConfigService = clusterConfigService;
         // this realm either rejects a session, or allows the associated user implicitly
-        setAuthenticationTokenClass(SessionIdToken.class);
         setCredentialsMatcher(new AllowAllCredentialsMatcher());
+        setAuthenticationTokenClass(SessionIdToken.class);
+        setCachingEnabled(false);
     }
 
     @Override
@@ -47,22 +61,45 @@ public class SessionAuthenticator extends AuthenticatingRealm {
         final Subject subject = new Subject.Builder().sessionId(sessionIdToken.getSessionId()).buildSubject();
         final Session session = subject.getSession(false);
         if (session == null) {
-            log.debug("Invalid session {}. Either it has expired or did not exist.", sessionIdToken.getSessionId());
+            LOG.debug("Invalid session. Either it has expired or did not exist.");
             return null;
         }
 
-        final Object username = subject.getPrincipal();
-        final User user = User.load(String.valueOf(username), core);
+        final Object userId = subject.getPrincipal();
+        final User user = userService.loadById(String.valueOf(userId));
         if (user == null) {
+            LOG.debug("No user with userId {} found for session", userId);
             return null;
         }
-        if (user.isExternalUser() && !core.getLdapRealm().isEnabled()) {
-            throw new LockedAccountException("LDAP authentication is currently disabled.");
+
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Found session for userId {}", userId);
         }
 
-        if (log.isDebugEnabled()) {
-            log.debug("Found session {} for user name {}", session.getId(), username);
+        final String sessionUsername = (String) session.getAttribute(HTTPHeaderAuthenticationRealm.SESSION_AUTH_HEADER);
+        if (sessionUsername != null) {
+            final HTTPHeaderAuthConfig httpHeaderConfig = loadHTTPHeaderConfig();
+            final Optional<String> usernameHeader = ShiroRequestHeadersBinder.getHeaderFromThreadContext(httpHeaderConfig.usernameHeader());
+
+            if (httpHeaderConfig.enabled() && usernameHeader.isPresent() && !usernameHeader.get().equalsIgnoreCase(sessionUsername)) {
+                LOG.warn("Terminating session where user <{}> does not match trusted HTTP header <{}>.", sessionUsername, usernameHeader.get());
+                session.stop();
+                return null;
+            }
         }
-        return new SimpleAccount(user.getName(), null, "session authenticator");
+
+        final Optional<String> noSessionExtension = ShiroRequestHeadersBinder.getHeaderFromThreadContext(X_GRAYLOG_NO_SESSION_EXTENSION);
+        if (noSessionExtension.isPresent() && "true".equalsIgnoreCase(noSessionExtension.get())) {
+            LOG.debug("Not extending session because the request indicated not to.");
+        } else {
+            session.touch();
+        }
+        ThreadContext.bind(subject);
+
+        return new SimpleAccount(user.getId(), null, "session authenticator");
+    }
+
+    private HTTPHeaderAuthConfig loadHTTPHeaderConfig() {
+        return clusterConfigService.getOrDefault(HTTPHeaderAuthConfig.class, HTTPHeaderAuthConfig.createDisabled());
     }
 }
