@@ -30,13 +30,14 @@ import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.ConfiguredTargetValue;
 import com.google.devtools.build.lib.analysis.DependencyKind;
 import com.google.devtools.build.lib.analysis.DuplicateException;
-import com.google.devtools.build.lib.analysis.ExecGroupCollection.InvalidExecGroupException;
 import com.google.devtools.build.lib.analysis.InconsistentAspectOrderException;
 import com.google.devtools.build.lib.analysis.PlatformOptions;
 import com.google.devtools.build.lib.analysis.ResolvedToolchainContext;
+import com.google.devtools.build.lib.analysis.RuleContext.InvalidExecGroupException;
 import com.google.devtools.build.lib.analysis.TargetAndConfiguration;
 import com.google.devtools.build.lib.analysis.ToolchainCollection;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
+import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigConditions;
 import com.google.devtools.build.lib.analysis.config.DependencyEvaluationException;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
@@ -58,14 +59,12 @@ import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.OutputFile;
 import com.google.devtools.build.lib.packages.Package;
-import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.packages.StarlarkAspect;
 import com.google.devtools.build.lib.packages.StarlarkAspectClass;
 import com.google.devtools.build.lib.packages.StarlarkDefinedAspect;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.Type.ConversionException;
-import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
 import com.google.devtools.build.lib.profiler.memory.CurrentRuleTracker;
 import com.google.devtools.build.lib.skyframe.AspectValueKey.AspectKey;
 import com.google.devtools.build.lib.skyframe.BzlLoadFunction.BzlLoadFailedException;
@@ -80,28 +79,29 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import javax.annotation.Nullable;
-import net.starlark.java.eval.StarlarkSemantics;
 
 /**
  * The Skyframe function that generates aspects.
  *
- * <p>This class, together with {@link ConfiguredTargetFunction} drives the analysis phase. For more
+ * This class, together with {@link ConfiguredTargetFunction} drives the analysis phase. For more
  * information, see {@link com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory}.
  *
- * <p>{@link AspectFunction} takes a SkyKey containing an {@link AspectKey} [a tuple of (target
- * label, configurations, aspect class and aspect parameters)], loads an {@link Aspect} from aspect
- * class and aspect parameters, gets a {@link ConfiguredTarget} for label and configurations, and
- * then creates a {@link ConfiguredAspect} for a given {@link AspectKey}.
+ * {@link AspectFunction} takes a SkyKey containing an {@link AspectKey} [a tuple of
+ * (target label, configurations, aspect class and aspect parameters)],
+ * loads an {@link Aspect} from aspect class and aspect parameters,
+ * gets a {@link ConfiguredTarget} for label and configurations, and then creates
+ * a {@link ConfiguredAspect} for a given {@link AspectKey}.
  *
- * <p>See {@link com.google.devtools.build.lib.packages.AspectClass} documentation for an overview
- * of aspect-related classes
+ * See {@link com.google.devtools.build.lib.packages.AspectClass} documentation
+ * for an overview of aspect-related classes
  *
  * @see com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory
  * @see com.google.devtools.build.lib.packages.AspectClass
  */
-final class AspectFunction implements SkyFunction {
+public final class AspectFunction implements SkyFunction {
   private final BuildViewProvider buildViewProvider;
   private final RuleClassProvider ruleClassProvider;
+  private final BuildOptions defaultBuildOptions;
   /**
    * Indicates whether the set of packages transitively loaded for a given {@link AspectValue} will
    * be needed for package root resolution later in the build. If not, they are not collected and
@@ -112,11 +112,13 @@ final class AspectFunction implements SkyFunction {
   AspectFunction(
       BuildViewProvider buildViewProvider,
       RuleClassProvider ruleClassProvider,
-      boolean storeTransitivePackagesForPackageRootResolution) {
+      boolean storeTransitivePackagesForPackageRootResolution,
+      BuildOptions defaultBuildOptions) {
     this.buildViewProvider = buildViewProvider;
     this.ruleClassProvider = ruleClassProvider;
     this.storeTransitivePackagesForPackageRootResolution =
         storeTransitivePackagesForPackageRootResolution;
+    this.defaultBuildOptions = defaultBuildOptions;
   }
 
   /**
@@ -126,7 +128,7 @@ final class AspectFunction implements SkyFunction {
    * @throws AspectCreationException if the value loaded is not a {@link StarlarkDefinedAspect}.
    */
   @Nullable
-  private static StarlarkDefinedAspect loadStarlarkDefinedAspect(
+  static StarlarkDefinedAspect loadStarlarkDefinedAspect(
       Environment env, StarlarkAspectClass starlarkAspectClass)
       throws AspectCreationException, InterruptedException {
     Label extensionLabel = starlarkAspectClass.getExtensionLabel();
@@ -155,10 +157,7 @@ final class AspectFunction implements SkyFunction {
   static StarlarkAspect loadStarlarkAspect(
       Environment env, Label extensionLabel, String starlarkValueName)
       throws AspectCreationException, InterruptedException {
-    SkyKey importFileKey =
-        StarlarkBuiltinsValue.isBuiltinsRepo(extensionLabel.getRepository())
-            ? BzlLoadValue.keyForBuiltins(extensionLabel)
-            : BzlLoadValue.keyForBuild(extensionLabel);
+    SkyKey importFileKey = BzlLoadValue.keyForBuild(extensionLabel);
     try {
       BzlLoadValue bzlLoadValue =
           (BzlLoadValue) env.getValueOrThrow(importFileKey, BzlLoadFailedException.class);
@@ -270,6 +269,9 @@ final class AspectFunction implements SkyFunction {
         throw new IllegalStateException("Unexpected exception from BuildConfigurationFunction when "
             + "computing " + key.getAspectConfigurationKey(), e);
       }
+      if (aspectConfiguration.trimConfigurationsRetroactively()) {
+        throw new AssertionError("Aspects should NEVER be evaluated in retroactive trimming mode.");
+      }
     }
 
     ConfiguredTarget associatedTarget = baseConfiguredTargetValue.getConfiguredTarget();
@@ -299,6 +301,9 @@ final class AspectFunction implements SkyFunction {
       configuration =
           ((BuildConfigurationValue) result.get(associatedTarget.getConfigurationKey()))
               .getConfiguration();
+      if (configuration.trimConfigurationsRetroactively()) {
+        throw new AssertionError("Aspects should NEVER be evaluated in retroactive trimming mode.");
+      }
     }
     try {
       associatedConfiguredTargetAndData =
@@ -320,34 +325,6 @@ final class AspectFunction implements SkyFunction {
           baseConfiguredTargetValue.getConfiguredTarget());
     }
 
-    // If the incompatible flag is set, the top-level aspect should not be applied on top-level
-    // targets whose rules do not advertise the aspect's required providers. The aspect should not
-    // also propagate to these targets dependencies.
-    StarlarkSemantics starlarkSemantics = PrecomputedValue.STARLARK_SEMANTICS.get(env);
-    if (starlarkSemantics == null) {
-      return null;
-    }
-    boolean checkRuleAdvertisedProviders =
-        starlarkSemantics.getBool(
-            BuildLanguageOptions.INCOMPATIBLE_TOP_LEVEL_ASPECTS_REQUIRE_PROVIDERS);
-    if (checkRuleAdvertisedProviders) {
-      Target target = associatedConfiguredTargetAndData.getTarget();
-      if (target instanceof Rule) {
-        if (!aspect
-            .getDefinition()
-            .getRequiredProviders()
-            .isSatisfiedBy(((Rule) target).getRuleClassObject().getAdvertisedProviders())) {
-          return new AspectValue(
-              key,
-              aspect,
-              target.getLocation(),
-              ConfiguredAspect.forNonapplicableTarget(),
-              /*transitivePackagesForPackageRootResolution=*/ NestedSetBuilder
-                  .<Package>stableOrder()
-                  .build());
-        }
-      }
-    }
 
     ImmutableList.Builder<Aspect> aspectPathBuilder = ImmutableList.builder();
 
@@ -384,7 +361,7 @@ final class AspectFunction implements SkyFunction {
         associatedConfiguredTargetAndData.fromConfiguredTarget(associatedTarget);
     aspectPathBuilder.add(aspect);
 
-    SkyframeDependencyResolver resolver = new SkyframeDependencyResolver(env);
+    SkyframeDependencyResolver resolver = view.createDependencyResolver(env);
     NestedSetBuilder<Package> transitivePackagesForPackageRootResolution =
         storeTransitivePackagesForPackageRootResolution ? NestedSetBuilder.stableOrder() : null;
 
@@ -412,6 +389,8 @@ final class AspectFunction implements SkyFunction {
                       ToolchainContextKey.key()
                           .configurationKey(BuildConfigurationValue.key(configuration))
                           .requiredToolchainTypeLabels(requiredToolchains)
+                          .shouldSanityCheckConfiguration(
+                              configuration.trimConfigurationsRetroactively())
                           .build(),
                       ToolchainException.class);
         } catch (ToolchainException e) {
@@ -455,7 +434,8 @@ final class AspectFunction implements SkyFunction {
                 ruleClassProvider,
                 view.getHostConfiguration(originalTargetAndAspectConfiguration.getConfiguration()),
                 transitivePackagesForPackageRootResolution,
-                transitiveRootCauses);
+                transitiveRootCauses,
+                defaultBuildOptions);
       } catch (ConfiguredValueCreationException e) {
         throw new AspectCreationException(
             e.getMessage(), key.getLabel(), aspectConfiguration, e.getDetailedExitCode());
@@ -573,13 +553,14 @@ final class AspectFunction implements SkyFunction {
   }
 
   /**
-   * Collect all SkyKeys that are needed for a given list of AspectKeys, including transitive
-   * dependencies.
+   *  Collect all SkyKeys that are needed for a given list of AspectKeys,
+   *  including transitive dependencies.
    *
-   * <p>Also collects all propagating aspects in correct order.
+   *  Also collects all propagating aspects in correct order.
    */
-  private static ImmutableMap<AspectDescriptor, SkyKey> getSkyKeysForAspectsAndCollectAspectPath(
-      ImmutableList<AspectKey> keys, ImmutableList.Builder<SkyKey> aspectPathBuilder) {
+  private ImmutableMap<AspectDescriptor, SkyKey> getSkyKeysForAspectsAndCollectAspectPath(
+      ImmutableList<AspectKey> keys,
+      ImmutableList.Builder<SkyKey> aspectPathBuilder) {
     HashMap<AspectDescriptor, SkyKey> result = new HashMap<>();
     for (AspectKey key : keys) {
       buildSkyKeys(key, result, aspectPathBuilder);
@@ -587,9 +568,7 @@ final class AspectFunction implements SkyFunction {
     return ImmutableMap.copyOf(result);
   }
 
-  private static void buildSkyKeys(
-      AspectKey key,
-      HashMap<AspectDescriptor, SkyKey> result,
+  private void buildSkyKeys(AspectKey key, HashMap<AspectDescriptor, SkyKey> result,
       ImmutableList.Builder<SkyKey> aspectPathBuilder) {
     if (result.containsKey(key.getAspectDescriptor())) {
       return;
@@ -678,7 +657,7 @@ final class AspectFunction implements SkyFunction {
     StoredEventHandler events = new StoredEventHandler();
     CachingAnalysisEnvironment analysisEnvironment =
         view.createAnalysisEnvironment(
-            key, events, env, aspectConfiguration, starlarkBuiltinsValue);
+            key, false, events, env, aspectConfiguration, starlarkBuiltinsValue);
 
     ConfiguredAspect configuredAspect;
     if (aspect.getDefinition().applyToGeneratingRules()
