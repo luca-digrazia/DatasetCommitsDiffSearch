@@ -4,7 +4,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.Test;
 import org.wildfly.common.Assert;
@@ -68,19 +68,12 @@ public class ConnectionPoolsClosedTest {
     private TestPoolInterface grabPoolFromOtherThread(TestableThreadLocalPool globalPool)
             throws ExecutionException, InterruptedException {
         final ExecutorService e = Executors.newSingleThreadExecutor();
-        AtomicReference<Thread> thread = new AtomicReference<>();
-        final Future<TestPoolInterface> creation = e.submit(() -> {
-            thread.set(Thread.currentThread());
-            return globalPool.pool();
-        });
+        final Future<TestPoolInterface> creation = e.submit(() -> globalPool.pool());
         final TestPoolInterface poolInstance = creation.get();
-        e.shutdown();
-        while (thread.get().isAlive()) {
-            //even after the pool is shutdown the thread may not actually report itself
-            //as being dead yet, which can lead to race conditions
-            //so we wait just to be sure
-            Thread.sleep(1);
-        }
+        e.shutdownNow();
+        //We already blocked for the callable to be executed, so
+        //termination of the Executor should be immediate.
+        e.awaitTermination(1, TimeUnit.MILLISECONDS);
         return poolInstance;
     }
 
