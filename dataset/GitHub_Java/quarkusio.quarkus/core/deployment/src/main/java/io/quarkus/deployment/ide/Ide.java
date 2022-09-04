@@ -47,8 +47,7 @@ public enum Ide {
                     List<String> command = new ArrayList<>(1 + markerArgs.size());
                     command.add(defaultCommand);
                     command.addAll(markerArgs);
-                    new ProcessBuilder(command).redirectError(ProcessBuilder.Redirect.DISCARD.file())
-                            .redirectOutput(ProcessBuilder.Redirect.DISCARD.file()).start()
+                    new ProcessBuilder(command).redirectError(IdeUtil.NULL_FILE).redirectOutput(IdeUtil.NULL_FILE).start()
                             .waitFor(10,
                                     TimeUnit.SECONDS);
                     return defaultCommand;
@@ -67,10 +66,4 @@ public enum Ide {
         this.machineSpecificCommand = machineSpecificCommand;
     }
 
-    @Override
-    public String toString() {
-        return "Ide{" +
-                "defaultCommand='" + defaultCommand + '\'' +
-                '}';
-    }
 }

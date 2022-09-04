@@ -47,17 +47,16 @@ public class IdeProcessor {
         IDE_PROCESSES.put((processInfo -> processInfo.containInCommand("code")), Ide.VSCODE);
         IDE_PROCESSES.put((processInfo -> processInfo.containInCommand("eclipse")), Ide.ECLIPSE);
         IDE_PROCESSES.put(
-                (processInfo -> processInfo.containInArguments("netbeans")),
+                (processInfo -> processInfo.containInCommandWithArgument("java", "netbeans")),
                 Ide.NETBEANS);
 
         IDE_ARGUMENTS_EXEC_INDICATOR.put(Ide.NETBEANS, (ProcessInfo processInfo) -> {
-            String platform = processInfo.getArgumentThatContains("nbexec");
+            String platform = processInfo.getArgumentValue("-Dnetbeans.home");
             if (platform != null && !platform.isEmpty()) {
-                platform = platform.substring(0, platform.indexOf("platform")).concat("bin").concat(File.separator);
                 if (IdeUtil.isWindows()) {
-                    platform = platform.concat("netbeans.exe");
+                    platform = platform.replace("platform", "bin/netbeans.exe");
                 } else {
-                    platform = platform.concat("netbeans");
+                    platform = platform.replace("platform", "bin/netbeans");
                 }
                 return platform;
             }
@@ -238,11 +237,15 @@ public class IdeProcessor {
             return arguments;
         }
 
-        private boolean containInCommand(String value) {
+        public boolean containInCommandWithArgument(String command, String argument) {
+            return containInCommand(command) && containInArguments(argument);
+        }
+
+        public boolean containInCommand(String value) {
             return this.command.contains(value);
         }
 
-        private boolean containInArguments(String value) {
+        public boolean containInArguments(String value) {
             if (arguments != null) {
                 for (String argument : arguments) {
                     if (argument.contains(value)) {
@@ -253,11 +256,11 @@ public class IdeProcessor {
             return false;
         }
 
-        private String getArgumentThatContains(String contain) {
+        public String getArgumentValue(String argumentKey) {
             if (arguments != null) {
                 for (String argument : arguments) {
-                    if (argument.contains(contain)) {
-                        return argument;
+                    if (argument.startsWith(argumentKey) && argument.contains("=")) {
+                        return argument.substring(argument.indexOf("=") + 1);
                     }
                 }
             }
