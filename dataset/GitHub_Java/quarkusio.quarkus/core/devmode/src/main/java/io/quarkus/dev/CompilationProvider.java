@@ -1,9 +1,6 @@
 package io.quarkus.dev;
 
 import java.io.File;
-import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
 import java.util.Collections;
 import java.util.Set;
 
@@ -17,8 +14,6 @@ public interface CompilationProvider {
 
     void compile(Set<File> files, Context context);
 
-    Path getSourcePath(Path classFilePath, Set<String> sourcePaths, String classesPath);
-
     class Context {
 
         private final String name;
@@ -26,22 +21,19 @@ public interface CompilationProvider {
         private final File projectDirectory;
         private final File sourceDirectory;
         private final File outputDirectory;
-        private final Charset sourceEncoding;
 
         public Context(
                 String name,
                 Set<File> classpath,
                 File projectDirectory,
                 File sourceDirectory,
-                File outputDirectory,
-                String sourceEncoding) {
+                File outputDirectory) {
 
             this.name = name;
             this.classpath = classpath;
             this.projectDirectory = projectDirectory;
             this.sourceDirectory = sourceDirectory;
             this.outputDirectory = outputDirectory;
-            this.sourceEncoding = sourceEncoding == null ? StandardCharsets.UTF_8 : Charset.forName(sourceEncoding);
         }
 
         public String getName() {
@@ -62,10 +54,6 @@ public interface CompilationProvider {
 
         public File getOutputDirectory() {
             return outputDirectory;
-        }
-
-        public Charset getSourceEncoding() {
-            return sourceEncoding;
         }
     }
 }
