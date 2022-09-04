@@ -51,19 +51,8 @@ public class CoreLibraryInvocationRewriter extends ClassVisitor {
     @Override
     public void visitMethodInsn(int opcode, String owner, String name, String desc, boolean itf) {
       Class<?> coreInterface =
-          support.getCoreInterfaceRewritingTarget(opcode, owner, name, desc, itf);
-      String newOwner = support.getMoveTarget(owner, name);
-
-      if (newOwner != null) {
-        checkState(coreInterface == null,
-            "Can't move and use companion: %s.%s : %s", owner, name, desc);
-        if (opcode != Opcodes.INVOKESTATIC) {
-          // assuming a static method
-          desc = InterfaceDesugaring.companionDefaultMethodDescriptor(owner, desc);
-          opcode = Opcodes.INVOKESTATIC;
-        }
-        itf = false; // assuming a class
-      } else if (coreInterface != null) {
+          support.getEmulatedCoreLibraryInvocationTarget(opcode, owner, name, desc, itf);
+      if (coreInterface != null) {
         String coreInterfaceName = coreInterface.getName().replace('.', '/');
         name =
             InterfaceDesugaring.normalizeInterfaceMethodName(
@@ -71,17 +60,18 @@ public class CoreLibraryInvocationRewriter extends ClassVisitor {
         if (opcode == Opcodes.INVOKESTATIC) {
           checkState(owner.equals(coreInterfaceName));
         } else {
-          desc = InterfaceDesugaring.companionDefaultMethodDescriptor(coreInterfaceName, desc);
+          desc =
+              InterfaceDesugaring.companionDefaultMethodDescriptor(
+                  opcode == Opcodes.INVOKESPECIAL ? owner : coreInterfaceName, desc);
         }
 
         if (opcode == Opcodes.INVOKESTATIC || opcode == Opcodes.INVOKESPECIAL) {
           checkArgument(itf, "Expected interface to rewrite %s.%s : %s", owner, name, desc);
-          owner = InterfaceDesugaring.getCompanionClassName(coreInterfaceName);
+          owner = InterfaceDesugaring.getCompanionClassName(owner);
         } else {
           // TODO(kmb): Simulate dynamic dispatch instead of calling most general default method
           owner = InterfaceDesugaring.getCompanionClassName(coreInterfaceName);
         }
-
         opcode = Opcodes.INVOKESTATIC;
         itf = false;
       }

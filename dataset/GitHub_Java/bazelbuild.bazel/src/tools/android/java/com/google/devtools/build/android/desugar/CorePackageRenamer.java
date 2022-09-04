@@ -14,11 +14,12 @@
 package com.google.devtools.build.android.desugar;
 
 import org.objectweb.asm.ClassVisitor;
+import org.objectweb.asm.Handle;
 import org.objectweb.asm.commons.ClassRemapper;
 import org.objectweb.asm.commons.Remapper;
 
 /**
- * A visitor that renames packages so configured using {@link CoreLibrarySupport}..
+ * A visitor that renames some type names and only when the owner is also renamed.
  */
 class CorePackageRenamer extends ClassRemapper {
 
@@ -40,6 +41,14 @@ class CorePackageRenamer extends ClassRemapper {
     @Override
     public String map(String typeName) {
       return isRenamed(typeName) ? support.renameCoreLibrary(typeName) : typeName;
+    }
+
+    @Override
+    public Object mapValue(Object value) {
+      if (value instanceof Handle && !isRenamed(((Handle) value).getOwner())) {
+        return value;
+      }
+      return super.mapValue(value);
     }
   }
 }
