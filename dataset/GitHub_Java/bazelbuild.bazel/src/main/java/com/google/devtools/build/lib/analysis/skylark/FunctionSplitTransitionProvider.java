@@ -14,96 +14,165 @@
 
 package com.google.devtools.build.lib.analysis.skylark;
 
+import static com.google.devtools.build.lib.analysis.skylark.SkylarkAttributesCollection.ERROR_MESSAGE_FOR_NO_ATTR;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 
+import com.google.common.base.Joiner;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Sets;
 import com.google.common.io.BaseEncoding;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
+import com.google.devtools.build.lib.analysis.config.StarlarkDefinedConfigTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.SplitTransition;
-import com.google.devtools.build.lib.events.EventHandler;
+import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.Attribute.SplitTransitionProvider;
 import com.google.devtools.build.lib.packages.AttributeMap;
-import com.google.devtools.build.lib.syntax.BaseFunction;
+import com.google.devtools.build.lib.packages.ConfiguredAttributeMapper;
+import com.google.devtools.build.lib.packages.StructImpl;
+import com.google.devtools.build.lib.packages.StructProvider;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Mutability;
+import com.google.devtools.build.lib.syntax.Runtime;
+import com.google.devtools.build.lib.syntax.Runtime.NoneType;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
-import com.google.devtools.build.lib.syntax.SkylarkSemantics;
+import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.common.options.OptionDefinition;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
 import java.lang.reflect.Field;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 
 /**
  * This class implements a split transition provider that takes a Skylark transition function as
- * input.  The transition function takes a settings argument, which is a dictionary containing the
- * current option values.  It either returns a dictionary mapping option name to new option value
+ * input. The transition function takes a settings argument, which is a dictionary containing the
+ * current option values. It either returns a dictionary mapping option name to new option value
  * (for a patch transition), or a dictionary of such dictionaries (for a split transition).
  *
- * Currently the implementation ignores the attributes provided by the containing function.
+ * <p>TODO(bazel-team): Consider allowing dependency-typed attributes to actually return providers
+ * instead of just labels (see {@link SkylarkAttributesCollection#addAttribute}).
  */
 public class FunctionSplitTransitionProvider implements SplitTransitionProvider {
-  private final BaseFunction transitionFunction;
-  private final SkylarkSemantics semantics;
-  private final EventHandler eventHandler;
 
-  public FunctionSplitTransitionProvider(BaseFunction transitionFunction,
-      SkylarkSemantics semantics, EventHandler eventHandler) {
-    this.transitionFunction = transitionFunction;
-    this.semantics = semantics;
-    this.eventHandler = eventHandler;
+  private static final String COMMAND_LINE_OPTION_PREFIX = "//command_line_option:";
+
+  private final StarlarkDefinedConfigTransition starlarkDefinedConfigTransition;
+
+  public FunctionSplitTransitionProvider(
+      StarlarkDefinedConfigTransition starlarkDefinedConfigTransition) {
+    this.starlarkDefinedConfigTransition = starlarkDefinedConfigTransition;
   }
 
   @Override
   public SplitTransition apply(AttributeMap attributeMap) {
-    return new FunctionSplitTransition(transitionFunction, semantics, eventHandler);
+    return new FunctionSplitTransition(starlarkDefinedConfigTransition, attributeMap);
   }
 
   private static class FunctionSplitTransition implements SplitTransition {
-    private final BaseFunction transitionFunction;
-    private final SkylarkSemantics semantics;
-    private final EventHandler eventHandler;
+    private final StarlarkDefinedConfigTransition starlarkDefinedConfigTransition;
+    private final StructImpl attrObject;
 
-    public FunctionSplitTransition(BaseFunction transitionFunction, SkylarkSemantics semantics,
-        EventHandler eventHandler) {
-      this.transitionFunction = transitionFunction;
-      this.semantics = semantics;
-      this.eventHandler = eventHandler;
+    FunctionSplitTransition(
+        StarlarkDefinedConfigTransition starlarkDefinedConfigTransition,
+        AttributeMap attributeMap) {
+      Preconditions.checkArgument(attributeMap instanceof ConfiguredAttributeMapper);
+      this.starlarkDefinedConfigTransition = starlarkDefinedConfigTransition;
+
+      ConfiguredAttributeMapper configuredAttributeMapper =
+          (ConfiguredAttributeMapper) attributeMap;
+      LinkedHashMap<String, Object> attributes = new LinkedHashMap<>();
+      for (String attribute : attributeMap.getAttributeNames()) {
+        Object val =
+            configuredAttributeMapper.get(attribute, attributeMap.getAttributeType(attribute));
+        attributes.put(
+            Attribute.getSkylarkName(attribute),
+            val == null ? Runtime.NONE : SkylarkType.convertToSkylark(val, (Environment) null));
+      }
+      attrObject = StructProvider.STRUCT.create(attributes, ERROR_MESSAGE_FOR_NO_ATTR);
     }
 
     @Override
     public final List<BuildOptions> split(BuildOptions buildOptions) {
       // TODO(waltl): we should be able to build this once and use it across different split
       // transitions.
-      Map<String, OptionInfo> optionInfoMap = buildOptionInfo(buildOptions);
-      SkylarkDict<String, Object> settings = buildSettings(buildOptions, optionInfoMap);
-
-      ImmutableList.Builder<BuildOptions> splitBuildOptions = ImmutableList.builder();
-
       try {
+        Map<String, OptionInfo> optionInfoMap = buildOptionInfo(buildOptions);
+        SkylarkDict<String, Object> settings =
+            buildSettings(buildOptions, optionInfoMap, starlarkDefinedConfigTransition.getInputs());
+
+        ImmutableList.Builder<BuildOptions> splitBuildOptions = ImmutableList.builder();
+
         ImmutableList<Map<String, Object>> transitions =
-            evalTransitionFunction(transitionFunction, settings);
+            starlarkDefinedConfigTransition.getChangedSettings(settings, attrObject);
+        // TODO(juliexxia): Validate that the output values correctly match the output types.
+        validateFunctionOutputs(transitions, starlarkDefinedConfigTransition.getOutputs());
 
         for (Map<String, Object> transition : transitions) {
           BuildOptions options = buildOptions.clone();
           applyTransition(options, transition, optionInfoMap);
           splitBuildOptions.add(options);
         }
-      } catch (InterruptedException e) {
-        throw new RuntimeException(e);
-      } catch (EvalException e) {
-        throw new RuntimeException(e.print());
-      }
+        return splitBuildOptions.build();
 
-      return splitBuildOptions.build();
+      } catch (InterruptedException | EvalException e) {
+        // TODO(juliexxia): Throw an exception better than RuntimeException.
+        throw new RuntimeException(e);
+      }
+    }
+
+    private void validateFunctionOutputs(
+        ImmutableList<Map<String, Object>> transitions,
+        List<String> expectedOutputs) throws EvalException {
+      for (Map<String, Object> transition : transitions) {
+        LinkedHashSet<String> remainingOutputs = Sets.newLinkedHashSet(expectedOutputs);
+        for (String outputKey : transition.keySet()) {
+          if (!remainingOutputs.remove(outputKey)) {
+            throw new EvalException(
+                starlarkDefinedConfigTransition.getLocationForErrorReporting(),
+                String.format("transition function returned undeclared output '%s'", outputKey));
+          }
+        }
+
+        if (!remainingOutputs.isEmpty()) {
+          throw new EvalException(
+              starlarkDefinedConfigTransition.getLocationForErrorReporting(),
+              String.format(
+                  "transition outputs [%s] were not defined by transition function",
+                  Joiner.on(", ").join(remainingOutputs)));
+        }
+      }
+    }
+
+    /**
+     * Given a label-like string representing a command line option, returns the command line
+     * option string that it represents. This is a temporary measure to support command line
+     * options with strings that look "label-like", so that migrating users using this
+     * experimental syntax is easier later.
+     *
+     * @throws EvalException if the given string is not a valid format to represent to
+     *     a command line option
+     */
+    private String commandLineOptionLabelToOption(String label) throws EvalException {
+      if (label.startsWith(COMMAND_LINE_OPTION_PREFIX)) {
+        return label.substring(COMMAND_LINE_OPTION_PREFIX.length());
+      } else {
+        throw new EvalException(
+            starlarkDefinedConfigTransition.getLocationForErrorReporting(),
+            String.format(
+                "Option key '%s' is of invalid form. "
+                    + "Expected command line option to begin with %s",
+                label, COMMAND_LINE_OPTION_PREFIX));
+      }
     }
 
     /**
@@ -139,14 +208,24 @@ public class FunctionSplitTransitionProvider implements SplitTransitionProvider 
      * @throws RuntimeException If the field corresponding to an option value in buildOptions is
      *     inaccessible due to Java language access control, or if an option name is an invalid key
      *     to the Skylark dictionary.
+     * @throws EvalException if any of the specified transition inputs do not correspond to a valid
+     *     build setting
      */
     private SkylarkDict<String, Object> buildSettings(BuildOptions buildOptions,
-        Map<String, OptionInfo> optionInfoMap) {
+        Map<String, OptionInfo> optionInfoMap, List<String> inputs) throws EvalException {
+      LinkedHashSet<String> remainingInputs = Sets.newLinkedHashSet(inputs);
+
       try (Mutability mutability = Mutability.create("build_settings")) {
         SkylarkDict<String, Object> dict = SkylarkDict.withMutability(mutability);
 
         for (Map.Entry<String, OptionInfo> entry : optionInfoMap.entrySet()) {
           String optionName = entry.getKey();
+          String optionKey = COMMAND_LINE_OPTION_PREFIX + optionName;
+
+          if (!remainingInputs.remove(optionKey)) {
+            // This option was not present in inputs. Skip it.
+            continue;
+          }
           OptionInfo optionInfo = entry.getValue();
 
           try {
@@ -154,83 +233,23 @@ public class FunctionSplitTransitionProvider implements SplitTransitionProvider 
             FragmentOptions options = buildOptions.get(optionInfo.getOptionClass());
             Object optionValue = field.get(options);
 
-            dict.put(optionName, optionValue, null, mutability);
-          } catch (IllegalAccessException | EvalException e) {
+            dict.put(optionKey, optionValue, null, mutability);
+          } catch (IllegalAccessException e) {
             // These exceptions should not happen, but if they do, throw a RuntimeException.
             throw new RuntimeException(e);
           }
         }
 
+        if (!remainingInputs.isEmpty()) {
+          throw new EvalException(
+              starlarkDefinedConfigTransition.getLocationForErrorReporting(),
+              String.format(
+                  "transition inputs [%s] do not correspond to valid settings",
+                  Joiner.on(", ").join(remainingInputs)));
+        }
+
         return dict;
       }
-    }
-
-    /**
-     * Evaluate the input function with the given argument, and return the return value.
-     */
-    private Object evalFunction(BaseFunction function, Object arg)
-        throws InterruptedException, EvalException {
-      try (Mutability mutability = Mutability.create("eval_transition_function")) {
-        Environment env =
-            Environment.builder(mutability)
-            .setSemantics(semantics)
-            .setEventHandler(eventHandler)
-            .build();
-
-        return function.call(ImmutableList.of(arg), ImmutableMap.of(), null, env);
-      }
-    }
-
-    /**
-     * Evaluate the transition function, and convert the result into a list of optionName ->
-     * optionValue dictionaries.
-     */
-    private ImmutableList<Map<String, Object>> evalTransitionFunction(BaseFunction function,
-        SkylarkDict<String, Object> settings)
-        throws InterruptedException, EvalException {
-      Object result;
-      try {
-        result = evalFunction(function, settings);
-      } catch (EvalException e) {
-        throw new EvalException(function.getLocation(), e.getMessage());
-      }
-
-      if (!(result instanceof SkylarkDict<?, ?>)) {
-        throw new EvalException(function.getLocation(),
-            "Transition function must return a dictionary.");
-      }
-
-      // The result is either:
-      // 1. a dictionary mapping option name to new option value (for a single transition), or
-      // 2. a dictionary of such dictionaries (for a split transition).
-      //
-      // First try to parse the result as a dictionary of option dictionaries; then try it as an
-      // option dictionary.
-      SkylarkDict<?, ?> dictOrDictOfDict = (SkylarkDict<?, ?>) result;
-
-      try {
-        Map<String, SkylarkDict> dictOfDict = dictOrDictOfDict.getContents(String.class,
-            SkylarkDict.class, "dictionary of option dictionaries");
-
-        ImmutableList.Builder<Map<String, Object>> builder = ImmutableList.builder();
-        for (Map.Entry<String, SkylarkDict> entry : dictOfDict.entrySet()) {
-          Map<String, Object> dict =
-              entry.getValue().getContents(String.class, Object.class, "an option dictionary");
-          builder.add(dict);
-        }
-        return builder.build();
-      } catch (EvalException e) {
-        // Fall through.
-      }
-
-      Map<String, Object> dict;
-      try {
-        dict = dictOrDictOfDict.getContents(String.class, Object.class, "an option dictionary");
-      } catch (EvalException e) {
-        throw new EvalException(function.getLocation(), e.getMessage());
-      }
-
-      return ImmutableList.of(dict);
     }
 
     /**
@@ -243,13 +262,24 @@ public class FunctionSplitTransitionProvider implements SplitTransitionProvider 
         Map<String, OptionInfo> optionInfoMap)
         throws EvalException {
       for (Map.Entry<String, Object> entry : transition.entrySet()) {
-        String optionName = entry.getKey();
+        String optionKey = entry.getKey();
+
+        // TODO(juliexxia): Handle keys which correspond to build_setting target labels instead
+        // of assuming every key is for a command line option.
+        String optionName = commandLineOptionLabelToOption(optionKey);
         Object optionValue = entry.getValue();
+
+        // Convert NoneType to null.
+        if (optionValue instanceof NoneType) {
+          optionValue = null;
+        }
 
         try {
           if (!optionInfoMap.containsKey(optionName)) {
-            throw new EvalException(transitionFunction.getLocation(),
-                "Unknown option '" + optionName + "'");
+            throw new EvalException(
+                starlarkDefinedConfigTransition.getLocationForErrorReporting(),
+                String.format(
+                    "transition output '%s' does not correspond to a valid setting", optionKey));
           }
 
           OptionInfo optionInfo = optionInfoMap.get(optionName);
@@ -261,20 +291,26 @@ public class FunctionSplitTransitionProvider implements SplitTransitionProvider 
           } else if (optionValue instanceof String) {
             field.set(options, def.getConverter().convert((String) optionValue));
           } else {
-            throw new EvalException(transitionFunction.getLocation(),
+            throw new EvalException(
+                starlarkDefinedConfigTransition.getLocationForErrorReporting(),
                 "Invalid value type for option '" + optionName + "'");
           }
         } catch (IllegalAccessException e) {
           throw new RuntimeException(
               "IllegalAccess for option " + optionName + ": " + e.getMessage());
         } catch (OptionsParsingException e) {
-          throw new EvalException(transitionFunction.getLocation(),
+          throw new EvalException(
+              starlarkDefinedConfigTransition.getLocationForErrorReporting(),
               "OptionsParsingError for option '" + optionName + "': " + e.getMessage());
         }
       }
 
       BuildConfiguration.Options buildConfigOptions;
       buildConfigOptions = buildOptions.get(BuildConfiguration.Options.class);
+
+      if (starlarkDefinedConfigTransition.isForAnalysisTesting()) {
+        buildConfigOptions.evaluatingForAnalysisTest = true;
+      }
       updateOutputDirectoryNameFragment(buildConfigOptions, transition);
     }
 
