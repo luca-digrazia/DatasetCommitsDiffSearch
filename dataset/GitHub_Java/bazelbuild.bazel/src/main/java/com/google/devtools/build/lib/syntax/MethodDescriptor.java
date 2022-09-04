@@ -47,7 +47,7 @@ public final class MethodDescriptor {
   private final boolean allowReturnNones;
   private final boolean useLocation;
   private final boolean useAst;
-  private final boolean useStarlarkThread;
+  private final boolean useEnvironment;
   private final boolean useStarlarkSemantics;
 
   private MethodDescriptor(
@@ -64,7 +64,7 @@ public final class MethodDescriptor {
       boolean allowReturnNones,
       boolean useLocation,
       boolean useAst,
-      boolean useStarlarkThread,
+      boolean useEnvironment,
       boolean useStarlarkSemantics) {
     this.method = method;
     this.annotation = annotation;
@@ -79,7 +79,7 @@ public final class MethodDescriptor {
     this.allowReturnNones = allowReturnNones;
     this.useLocation = useLocation;
     this.useAst = useAst;
-    this.useStarlarkThread = useStarlarkThread;
+    this.useEnvironment = useEnvironment;
     this.useStarlarkSemantics = useStarlarkSemantics;
   }
 
@@ -110,7 +110,7 @@ public final class MethodDescriptor {
         annotation.allowReturnNones(),
         annotation.useLocation(),
         annotation.useAst(),
-        annotation.useStarlarkThread(),
+        annotation.useEnvironment(),
         annotation.useStarlarkSemantics());
   }
 
@@ -120,7 +120,7 @@ public final class MethodDescriptor {
    * <p>{@code obj} may be {@code null} in case this method is static. Methods with {@code void}
    * return type return {@code None} following Python convention.
    */
-  public Object call(Object obj, Object[] args, Location loc, StarlarkThread thread)
+  public Object call(Object obj, Object[] args, Location loc, Environment env)
       throws EvalException, InterruptedException {
     Preconditions.checkNotNull(obj);
     Object result;
@@ -154,13 +154,13 @@ public final class MethodDescriptor {
         return Runtime.NONE;
       } else {
         throw new IllegalStateException(
-            "method invocation returned None: "
+            "method invocation returned None "
                 + getName()
-                + SkylarkList.Tuple.copyOf(Arrays.asList(args)));
+                + Printer.printAbbreviatedList(ImmutableList.copyOf(args), "(", ", ", ")", null));
       }
     }
     // TODO(bazel-team): get rid of this, by having everyone use the Skylark data structures
-    result = SkylarkType.convertToSkylark(result, method, thread);
+    result = SkylarkType.convertToSkylark(result, method, env);
     if (result != null && !EvalUtils.isSkylarkAcceptable(result.getClass())) {
       throw new EvalException(
           loc,
@@ -180,9 +180,9 @@ public final class MethodDescriptor {
     return structField;
   }
 
-  /** @see SkylarkCallable#useStarlarkThread() */
-  public boolean isUseStarlarkThread() {
-    return useStarlarkThread;
+  /** @see SkylarkCallable#useEnvironment() */
+  public boolean isUseEnvironment() {
+    return useEnvironment;
   }
 
   /** @see SkylarkCallable#useStarlarkSemantics() */

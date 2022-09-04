@@ -82,19 +82,19 @@ public final class ValidationEnvironment extends NodeVisitor {
     }
   }
 
-  private final StarlarkThread thread;
+  private final Environment env;
   private Block block;
   private int loopCount;
   /** In BUILD files, we have a slightly different behavior for legacy reasons. */
   private final boolean isBuildFile;
 
-  /** Create a ValidationEnvironment for a given global StarlarkThread (containing builtins). */
-  private ValidationEnvironment(StarlarkThread thread, boolean isBuildFile) {
-    Preconditions.checkArgument(thread.isGlobal());
-    this.thread = thread;
+  /** Create a ValidationEnvironment for a given global Environment (containing builtins). */
+  private ValidationEnvironment(Environment env, boolean isBuildFile) {
+    Preconditions.checkArgument(env.isGlobal());
+    this.env = env;
     this.isBuildFile = isBuildFile;
     block = new Block(Scope.Universe, null);
-    Set<String> builtinVariables = thread.getVariableNames();
+    Set<String> builtinVariables = env.getVariableNames();
     block.variables.addAll(builtinVariables);
   }
 
@@ -134,24 +134,8 @@ public final class ValidationEnvironment extends NodeVisitor {
         declare(fctName.getName(), fctName.getLocation());
         break;
       case LOAD:
-        LoadStatement load = (LoadStatement) stmt;
-
-        // The global reassignment check is not yet enabled for BUILD files,
-        // but we apply it to load statements as a special case.
-        // Because (for now) its error message is better than the general
-        // message emitted by 'declare', we'll apply it to non-BUILD files too.
-        Set<String> names = new HashSet<>();
-        for (LoadStatement.Binding b : load.getBindings()) {
-          if (!names.add(b.getLocalName().getName())) {
-            throw new ValidationException(
-                b.getLocalName().getLocation(),
-                String.format(
-                    "load statement defines '%s' more than once", b.getLocalName().getName()));
-          }
-        }
-
-        for (LoadStatement.Binding b : load.getBindings()) {
-          declare(b.getLocalName().getName(), b.getLocalName().getLocation());
+        for (LoadStatement.Binding binding : ((LoadStatement) stmt).getBindings()) {
+          declare(binding.getLocalName().getName(), binding.getLocalName().getLocation());
         }
         break;
       case EXPRESSION:
@@ -190,11 +174,11 @@ public final class ValidationEnvironment extends NodeVisitor {
     if (b == null) {
       // The identifier might not exist because it was restricted (hidden) by the current semantics.
       // If this is the case, output a more helpful error message than 'not found'.
-      FlagGuardedValue result = thread.getRestrictedBindings().get(node.getName());
+      FlagGuardedValue result = env.getRestrictedBindings().get(node.getName());
       if (result != null) {
         throw new ValidationException(
             result.getEvalExceptionFromAttemptingAccess(
-                node.getLocation(), thread.getSemantics(), node.getName()));
+                node.getLocation(), env.getSemantics(), node.getName()));
       }
       throw new ValidationException(Eval.createInvalidIdentifierException(node, getAllSymbols()));
     }
@@ -334,10 +318,6 @@ public final class ValidationEnvironment extends NodeVisitor {
     // TODO(laurentlb): Forbid reassignment in BUILD files.
     if (!isBuildFile && block.scope == Scope.Module && block.variables.contains(varname)) {
       // Symbols defined in the module scope cannot be reassigned.
-      //
-      // TODO(adonovan): make error message more precise: "x reassigned at top level"
-      // and emit a secondary error "x previously declared here". This requires an
-      // upcoming changes to report events not exceptions.
       throw new ValidationException(
           location,
           String.format(
@@ -399,7 +379,7 @@ public final class ValidationEnvironment extends NodeVisitor {
 
   private void validateToplevelStatements(List<Statement> statements) {
     // Check that load() statements are on top.
-    if (!isBuildFile && thread.getSemantics().incompatibleBzlDisallowLoadAfterStatement()) {
+    if (!isBuildFile && env.getSemantics().incompatibleBzlDisallowLoadAfterStatement()) {
       checkLoadAfterStatement(statements);
     }
 
@@ -416,10 +396,10 @@ public final class ValidationEnvironment extends NodeVisitor {
 
   // Public entry point, throwing variant.
   // TODO(adonovan): combine with variant below.
-  public static void validateFile(StarlarkFile file, StarlarkThread thread, boolean isBuildFile)
+  public static void validateFile(BuildFileAST file, Environment env, boolean isBuildFile)
       throws EvalException {
     try {
-      ValidationEnvironment venv = new ValidationEnvironment(thread, isBuildFile);
+      ValidationEnvironment venv = new ValidationEnvironment(env, isBuildFile);
       venv.validateToplevelStatements(file.getStatements());
       // Check that no closeBlock was forgotten.
       Preconditions.checkState(venv.block.parent == null);
@@ -430,9 +410,9 @@ public final class ValidationEnvironment extends NodeVisitor {
 
   // Public entry point, error handling variant.
   public static boolean validateFile(
-      StarlarkFile file, StarlarkThread thread, boolean isBuildFile, EventHandler eventHandler) {
+      BuildFileAST file, Environment env, boolean isBuildFile, EventHandler eventHandler) {
     try {
-      validateFile(file, thread, isBuildFile);
+      validateFile(file, env, isBuildFile);
       return true;
     } catch (EvalException e) {
       if (!e.isDueToIncompleteAST()) {
