@@ -107,7 +107,8 @@ public class InputServiceImpl extends PersistedServiceImpl implements InputServi
     public <T extends Persisted> String save(T model) throws ValidationException {
         final String resultId = super.save(model);
         if (resultId != null && !resultId.isEmpty()) {
-            publishChange(InputCreated.create(resultId));
+            this.clusterEventBus.post(InputCreated.create(resultId));
+            this.serverEventBus.post(InputCreated.create(resultId));
         }
         return resultId;
     }
@@ -116,7 +117,8 @@ public class InputServiceImpl extends PersistedServiceImpl implements InputServi
     public <T extends Persisted> String saveWithoutValidation(T model) {
         final String resultId = super.saveWithoutValidation(model);
         if (resultId != null && !resultId.isEmpty()) {
-            publishChange(InputCreated.create(resultId));
+            this.clusterEventBus.post(InputCreated.create(resultId));
+            this.serverEventBus.post(InputCreated.create(resultId));
         }
         return resultId;
     }
@@ -125,7 +127,8 @@ public class InputServiceImpl extends PersistedServiceImpl implements InputServi
     public <T extends Persisted> int destroy(T model) {
         final int result = super.destroy(model);
         if (result > 0) {
-            publishChange(InputDeleted.create(model.getId()));
+            this.clusterEventBus.post(InputDeleted.create(model.getId()));
+            this.serverEventBus.post(InputDeleted.create(model.getId()));
         }
         return result;
     }
@@ -435,10 +438,5 @@ public class InputServiceImpl extends PersistedServiceImpl implements InputServi
         }
 
         return extractorsCountByType;
-    }
-
-    private void publishChange(Object event) {
-        this.clusterEventBus.post(event);
-        this.serverEventBus.post(event);
     }
 }
