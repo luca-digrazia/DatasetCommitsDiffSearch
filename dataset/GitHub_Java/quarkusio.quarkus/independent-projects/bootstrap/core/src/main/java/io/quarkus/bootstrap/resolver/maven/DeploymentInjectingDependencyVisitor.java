@@ -1,3 +1,19 @@
+/*
+ * Copyright 2019 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.bootstrap.resolver.maven;
 
 import java.io.BufferedReader;
@@ -6,13 +22,11 @@ import java.io.IOException;
 import java.nio.file.FileSystem;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 
 import org.eclipse.aether.artifact.Artifact;
 import org.eclipse.aether.artifact.DefaultArtifact;
-import org.eclipse.aether.graph.Dependency;
 import org.eclipse.aether.graph.DependencyNode;
 import org.eclipse.aether.graph.DependencyVisitor;
 import org.jboss.logging.Logger;
@@ -36,14 +50,12 @@ public class DeploymentInjectingDependencyVisitor implements DependencyVisitor {
     }
 
     private final MavenArtifactResolver resolver;
-    private final List<Dependency> managedDeps;
     private DependencyNode node;
 
     boolean injectedDeps;
 
-    public DeploymentInjectingDependencyVisitor(MavenArtifactResolver resolver, List<Dependency> managedDeps) {
+    public DeploymentInjectingDependencyVisitor(MavenArtifactResolver resolver) {
         this.resolver = resolver;
-        this.managedDeps = managedDeps;
     }
 
     public boolean isInjectedDeps() {
@@ -52,6 +64,7 @@ public class DeploymentInjectingDependencyVisitor implements DependencyVisitor {
 
     @Override
     public boolean visitEnter(DependencyNode node) {
+
         final Artifact artifact = node.getArtifact();
         if(!artifact.getExtension().equals("jar")) {
             return true;
@@ -74,11 +87,6 @@ public class DeploymentInjectingDependencyVisitor implements DependencyVisitor {
         return processChildren;
     }
 
-    @Override
-    public boolean visitLeave(DependencyNode node) {
-        return true;
-    }
-
     private boolean processMetaInfDir(Path metaInfDir) throws BootstrapDependencyProcessingException {
         if (!Files.exists(metaInfDir)) {
             return false;
@@ -96,7 +104,7 @@ public class DeploymentInjectingDependencyVisitor implements DependencyVisitor {
         if(rtProps == null) {
             return;
         }
-        log.debugf("Processing Quarkus extension %s", node);
+        log.debugf("Processing platform dependency %s", node);
 
         String value = rtProps.getProperty(BootstrapConstants.PROP_DEPLOYMENT_ARTIFACT);
         if(value != null) {
@@ -111,7 +119,7 @@ public class DeploymentInjectingDependencyVisitor implements DependencyVisitor {
                     "No dependencies collected for Quarkus extension deployment artifact " + depNode.getArtifact()
                             + " while at least the corresponding runtime artifact " + node.getArtifact() + " is expected");
         }
-        log.debugf("Injecting deployment dependency %s", depNode);
+        //BootstrapDependencyGraphTransformer.log("Replacing dependency " + depNode.getArtifact(), depNode);
         node.setData(INJECTED_DEPENDENCY, node.getArtifact());
         node.setArtifact(depNode.getArtifact());
         node.getDependency().setArtifact(depNode.getArtifact());
@@ -124,7 +132,7 @@ public class DeploymentInjectingDependencyVisitor implements DependencyVisitor {
             artifact = artifact.setVersion(node.getArtifact().getVersion());
         }
         try {
-            return managedDeps.isEmpty() ? resolver.collectDependencies(artifact).getRoot() : resolver.collectManagedDependencies(artifact, Collections.emptyList(), managedDeps).getRoot();
+            return resolver.collectDependencies(artifact).getRoot();
         } catch (AppModelResolverException e) {
             throw new DeploymentInjectionException(e);
         }
@@ -155,6 +163,11 @@ public class DeploymentInjectingDependencyVisitor implements DependencyVisitor {
             throw new BootstrapDependencyProcessingException("Failed to load " + path, e);
         }
         return rtProps;
+    }
+
+    @Override
+    public boolean visitLeave(DependencyNode node) {
+        return true;
     }
 
     public static Artifact toArtifact(String str) {
