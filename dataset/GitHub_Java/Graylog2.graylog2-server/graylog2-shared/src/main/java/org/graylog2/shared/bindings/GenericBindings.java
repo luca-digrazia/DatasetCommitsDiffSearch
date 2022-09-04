@@ -21,22 +21,17 @@ import com.google.common.eventbus.EventBus;
 import com.google.common.util.concurrent.ServiceManager;
 import com.google.inject.AbstractModule;
 import com.google.inject.Scopes;
-import com.google.inject.TypeLiteral;
 import com.google.inject.assistedinject.FactoryModuleBuilder;
 import com.google.inject.name.Names;
-import org.graylog2.plugin.IOState;
 import org.graylog2.plugin.LocalMetricRegistry;
 import org.graylog2.plugin.buffers.InputBuffer;
-import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.plugin.inputs.util.ThroughputCounter;
 import org.graylog2.plugin.system.NodeId;
+import org.graylog2.shared.bindings.providers.*;
 import org.graylog2.shared.buffers.InputBufferImpl;
 import org.graylog2.shared.buffers.ProcessBuffer;
+import org.graylog2.shared.buffers.ProcessBufferWatermark;
 import org.graylog2.shared.buffers.processors.DecodingProcessor;
-import org.graylog2.shared.bindings.providers.EventBusProvider;
-import org.graylog2.shared.bindings.providers.MetricRegistryProvider;
-import org.graylog2.shared.bindings.providers.NodeIdProvider;
-import org.graylog2.shared.bindings.providers.ServiceManagerProvider;
 import org.graylog2.shared.stats.ThroughputStats;
 import org.jboss.netty.util.HashedWheelTimer;
 
@@ -55,12 +50,14 @@ public class GenericBindings extends AbstractModule {
         bind(MetricRegistry.class).toProvider(MetricRegistryProvider.class).asEagerSingleton();
         bind(LocalMetricRegistry.class).in(Scopes.NO_SCOPE); // must not be a singleton!
         bind(ThroughputStats.class).toInstance(new ThroughputStats());
+        bind(ProcessBufferWatermark.class).toInstance(new ProcessBufferWatermark());
 
         bind(InstantiationService.class).toInstance(instantiationService);
 
+        install(new FactoryModuleBuilder().build(ProcessBuffer.Factory.class));
         install(new FactoryModuleBuilder().build(DecodingProcessor.Factory.class));
 
-        bind(ProcessBuffer.class).asEagerSingleton();
+        bind(ProcessBuffer.class).toProvider(ProcessBufferProvider.class);
         bind(InputBuffer.class).to(InputBufferImpl.class);
         bind(NodeId.class).toProvider(NodeIdProvider.class);
 
@@ -73,6 +70,5 @@ public class GenericBindings extends AbstractModule {
 
         bind(Semaphore.class).annotatedWith(Names.named("JournalSignal")).toInstance(new Semaphore(0));
 
-        install(new FactoryModuleBuilder().build(new TypeLiteral<IOState.Factory<MessageInput>>(){}));
     }
 }

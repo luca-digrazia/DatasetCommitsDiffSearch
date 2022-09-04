@@ -20,8 +20,8 @@ import com.codahale.metrics.Counter;
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.base.Function;
 import com.google.common.collect.Lists;
-import javax.inject.Inject;
-import javax.inject.Named;
+import com.google.inject.Inject;
+import com.google.inject.name.Named;
 import com.lmax.disruptor.EventHandler;
 import org.graylog2.shared.journal.Journal;
 import org.slf4j.Logger;
@@ -53,16 +53,16 @@ public class JournallingMessageHandler implements EventHandler<RawMessageEvent> 
         batch.add(event);
 
         if (endOfBatch) {
-            log.debug("End of batch, journalling {} messages", batch.size());
+            log.info("End of batch, journalling {} messages", batch.size());
             // write batch to journal
 
             final Converter converter = new Converter();
             // copy to avoid re-running this all the time
             final List<Journal.Entry> entries = Lists.newArrayList(transform(batch, converter));
             final long lastOffset = journal.write(entries);
-            log.debug("Processed batch, wrote {} bytes, last journal offset: {}, signalling reader.",
-                      converter.getBytesWritten(),
-                      lastOffset);
+            log.info("Processed batch, wrote {} bytes, last journal offset: {}, signalling reader.",
+                     converter.getBytesWritten(),
+                     lastOffset);
             journalFilled.release();
 
             batch.clear();
@@ -79,9 +79,7 @@ public class JournallingMessageHandler implements EventHandler<RawMessageEvent> 
         @Nullable
         @Override
         public Journal.Entry apply(RawMessageEvent input) {
-            if (log.isTraceEnabled()) {
-                log.trace("Journalling message {}", input.rawMessage.getId());
-            }
+            log.info("Journalling message {}", input.rawMessage.getId());
             // stats
             final int size = input.encodedRawMessage.length;
             bytesWritten += size;
