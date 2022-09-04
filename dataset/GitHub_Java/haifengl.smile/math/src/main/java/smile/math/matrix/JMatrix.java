@@ -1,18 +1,17 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
 
 package smile.math.matrix;
@@ -121,11 +120,6 @@ public class JMatrix implements DenseMatrix {
     }
 
     @Override
-    public void fill(double x) {
-        Arrays.fill(A, x);
-    }
-
-    @Override
     public JMatrix transpose() {
         JMatrix B = new JMatrix(ncols(), nrows());
         for (int i = 0; i < nrows(); i++) {
@@ -139,7 +133,7 @@ public class JMatrix implements DenseMatrix {
 
     @Override
     public String toString() {
-        return toString(7, 7);
+        return toString(false);
     }
 
     @Override
@@ -685,7 +679,7 @@ public class JMatrix implements DenseMatrix {
         int n = Math.min(nrows, y.length);
         int p = Math.min(ncols, x.length);
 
-        Arrays.fill(y, 0, n, 0.0);
+        Arrays.fill(y, 0.0);
         for (int k = 0; k < p; k++) {
             for (int i = 0; i < n; i++) {
                 y[i] += get(i, k) * x[k];
@@ -732,7 +726,7 @@ public class JMatrix implements DenseMatrix {
         int n = Math.min(ncols, y.length);
         int p = Math.min(nrows, x.length);
 
-        Arrays.fill(y, 0, n, 0.0);
+        Arrays.fill(y, 0.0);
         for (int i = 0; i < n; i++) {
             for (int k = 0; k < p; k++) {
                 y[i] += get(k, i) * x[k];
@@ -963,15 +957,6 @@ public class JMatrix implements DenseMatrix {
      */
     @Override
     public QR qr() {
-        return qr(1E-7);
-    }
-
-    /**
-     * QR Decomposition is computed by Householder reflections.
-     * @param tol The tolerance for detecting linear dependencies
-     *            in the column vectors.
-     */
-    public QR qr(double tol) {
         // Initialize.
         int m = nrows();
         int n = ncols();
@@ -1012,7 +997,7 @@ public class JMatrix implements DenseMatrix {
 
         boolean singular = false;
         for (int j = 0; j < rDiagonal.length; j++) {
-            if (Math.abs(rDiagonal[j]) < tol) {
+            if (rDiagonal[j] == 0) {
                 singular = true;
                 break;
             }
