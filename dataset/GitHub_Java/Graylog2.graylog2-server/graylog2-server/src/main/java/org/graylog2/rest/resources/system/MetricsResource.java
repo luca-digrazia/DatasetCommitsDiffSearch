@@ -1,18 +1,18 @@
 /**
- * This file is part of Graylog.
+ * This file is part of Graylog2.
  *
- * Graylog is free software: you can redistribute it and/or modify
+ * Graylog2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * Graylog2 is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.rest.resources.system;
 
@@ -35,7 +35,7 @@ import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.graylog2.database.MongoConnection;
 import org.graylog2.metrics.MetricUtils;
-import org.graylog2.shared.rest.resources.RestResource;
+import org.graylog2.rest.resources.RestResource;
 import org.graylog2.rest.resources.system.requests.MetricsReadRequest;
 import org.graylog2.security.RestPermissions;
 import org.slf4j.Logger;
@@ -82,8 +82,8 @@ public class MetricsResource extends RestResource {
     @ApiOperation(value = "Get all metrics",
             notes = "Note that this might return a huge result set.")
     @Produces(MediaType.APPLICATION_JSON)
-    public MetricRegistry metrics() {
-        return metricRegistry;
+    public String metrics() {
+        return json(ImmutableMap.of("metrics", metricRegistry.getMetrics()));
     }
 
     @GET
