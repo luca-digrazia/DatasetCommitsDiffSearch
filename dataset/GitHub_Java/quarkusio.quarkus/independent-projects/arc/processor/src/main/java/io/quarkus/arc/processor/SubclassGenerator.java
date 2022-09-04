@@ -421,8 +421,7 @@ public class SubclassGenerator extends AbstractGenerator {
         ClassCreator delegateSubclass = delegateSubclassBuilder.build();
 
         Map<MethodDescriptor, DecoratorInfo> nextDecorators = bean.getNextDecorators(decorator);
-        Collection<DecoratorInfo> nextDecoratorsValues = nextDecorators.values();
-        List<DecoratorInfo> decoratorParameters = new ArrayList<>(new HashSet<>(nextDecoratorsValues));
+        List<DecoratorInfo> decoratorParameters = new ArrayList<>(nextDecorators.values());
         Collections.sort(decoratorParameters);
         Set<MethodInfo> decoratedMethods = bean.getDecoratedMethods(decorator);
         Set<MethodDescriptor> decoratedMethodDescriptors = new HashSet<>(decoratedMethods.size());
@@ -433,7 +432,7 @@ public class SubclassGenerator extends AbstractGenerator {
         List<String> constructorParameterTypes = new ArrayList<>();
         // Fields and constructor
         FieldCreator subclassField = null;
-        if (decoratedMethods.size() != nextDecoratorsValues.size()) {
+        if (decoratedMethods.size() != decoratorParameters.size()) {
             subclassField = delegateSubclass.getFieldCreator("subclass", subclass.getClassName())
                     .setModifiers(ACC_PRIVATE | ACC_FINAL);
             constructorParameterTypes.add(subclass.getClassName());

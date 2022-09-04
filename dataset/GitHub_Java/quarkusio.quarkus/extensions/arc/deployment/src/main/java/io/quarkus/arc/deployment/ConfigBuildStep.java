@@ -15,10 +15,8 @@ import static org.jboss.jandex.AnnotationTarget.Kind.METHOD_PARAMETER;
 import static org.jboss.jandex.AnnotationValue.createStringValue;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
@@ -75,7 +73,6 @@ public class ConfigBuildStep {
     private static final DotName MP_CONFIG_VALUE_NAME = DotName.createSimple(ConfigValue.class.getName());
 
     private static final DotName CONFIG_MAPPING_NAME = DotName.createSimple(ConfigMapping.class.getName());
-    private static final DotName MAP_NAME = DotName.createSimple(Map.class.getName());
     private static final DotName SET_NAME = DotName.createSimple(Set.class.getName());
     private static final DotName LIST_NAME = DotName.createSimple(List.class.getName());
     private static final DotName SUPPLIER_NAME = DotName.createSimple(Supplier.class.getName());
@@ -183,18 +180,9 @@ public class ConfigBuildStep {
 
         Set<ConfigValidationMetadata> propertiesToValidate = new HashSet<>();
         for (ConfigPropertyBuildItem configProperty : configProperties) {
-            String rawTypeName = configProperty.getPropertyType().name().toString();
-            List<String> actualTypeArgumentNames = Collections.emptyList();
-            if (configProperty.getPropertyType().kind() == Kind.PARAMETERIZED_TYPE) {
-                List<Type> argumentTypes = configProperty.getPropertyType().asParameterizedType().arguments();
-                actualTypeArgumentNames = new ArrayList<>(argumentTypes.size());
-                for (Type argumentType : argumentTypes) {
-                    actualTypeArgumentNames.add(argumentType.name().toString());
-                }
-
-            }
             propertiesToValidate.add(new ConfigValidationMetadata(configProperty.getPropertyName(),
-                    rawTypeName, actualTypeArgumentNames, configProperty.getDefaultValue()));
+                    configProperty.getPropertyType().name().toString(),
+                    configProperty.getDefaultValue()));
         }
 
         recorder.validateConfigProperties(propertiesToValidate);
@@ -438,7 +426,6 @@ public class ConfigBuildStep {
                 DotNames.OPTIONAL_INT.equals(type.name()) ||
                 DotNames.OPTIONAL_LONG.equals(type.name()) ||
                 DotNames.OPTIONAL_DOUBLE.equals(type.name()) ||
-                MAP_NAME.equals(type.name()) ||
                 SET_NAME.equals(type.name()) ||
                 LIST_NAME.equals(type.name()) ||
                 DotNames.LONG.equals(type.name()) ||

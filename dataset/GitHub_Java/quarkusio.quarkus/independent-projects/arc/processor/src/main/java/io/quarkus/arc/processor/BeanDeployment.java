@@ -804,8 +804,7 @@ public class BeanDeployment {
                 if (annotationStore.getAnnotations(method).isEmpty()) {
                     continue;
                 }
-                if (annotationStore.hasAnnotation(method, DotNames.PRODUCES)
-                        && !annotationStore.hasAnnotation(method, DotNames.VETOED_PRODUCER)) {
+                if (annotationStore.hasAnnotation(method, DotNames.PRODUCES)) {
                     // Producers are not inherited
                     producerMethods.add(method);
                     if (!hasBeanDefiningAnnotation) {
@@ -875,8 +874,7 @@ public class BeanDeployment {
                         : null;
             }
             for (FieldInfo field : beanClass.fields()) {
-                if (annotationStore.hasAnnotation(field, DotNames.PRODUCES)
-                        && !annotationStore.hasAnnotation(field, DotNames.VETOED_PRODUCER)) {
+                if (annotationStore.hasAnnotation(field, DotNames.PRODUCES)) {
                     if (annotationStore.hasAnnotation(field, DotNames.INJECT)) {
                         throw new DefinitionException("Injected field cannot be annotated with @Produces: " + field);
                     }
