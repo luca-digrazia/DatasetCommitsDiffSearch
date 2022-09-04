@@ -25,7 +25,6 @@ import com.google.devtools.build.android.resources.FieldInitializer;
 import com.google.devtools.build.android.resources.FieldInitializers;
 import com.google.devtools.build.android.resources.IntArrayFieldInitializer;
 import com.google.devtools.build.android.resources.IntFieldInitializer;
-import com.google.devtools.build.android.resources.Visibility;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collection;
@@ -37,7 +36,6 @@ import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.TreeSet;
-import java.util.logging.Logger;
 
 /**
  * Generates {@link FieldInitializer}s placeholder unique ids. The real ids will be assigned when
@@ -112,9 +110,6 @@ class PlaceholderIdFieldInitializerBuilder {
   private static final int ATTR_TYPE_ID = 1;
   private static final String NORMALIZED_ANDROID_PREFIX = "android_";
 
-  private static final Logger logger =
-      Logger.getLogger(PlaceholderIdFieldInitializerBuilder.class.getName());
-
   private static int getInitialIdForTypeId(int typeId) {
     return APP_PACKAGE_MASK | (typeId << 16);
   }
@@ -149,24 +144,27 @@ class PlaceholderIdFieldInitializerBuilder {
     this.androidIdProvider = androidIdProvider;
   }
 
-  public void addSimpleResource(
-      DependencyInfo dependencyInfo, Visibility visibility, ResourceType type, String name) {
-    Object unused = visibility; // TODO(b/26297204): use 'visibility'
+  public void addSimpleResource(DependencyInfo dependencyInfo, ResourceType type, String name) {
     innerClasses
         .computeIfAbsent(type, t -> new TreeMap<>())
-        .put(normalizeName(name), dependencyInfo);
+        // com.google.devtools.build.android.xml.AttrXmlResourceValue might directly call this
+        // for enum/flag attributes instead of going through resource merging as normal.  So we take
+        // the minimum of all DependencyInfo instances passed in, making no assumptions on when
+        // we're called.
+        .merge(
+            normalizeName(name),
+            dependencyInfo,
+            (di1, di2) -> DependencyInfo.DISTANCE_COMPARATOR.compare(di1, di2) < 0 ? di1 : di2);
   }
 
   public void addStyleableResource(
       DependencyInfo dependencyInfo,
-      Visibility visibility,
       FullyQualifiedName key,
       Map<FullyQualifiedName, Boolean> attrs) {
-    Object unused = visibility; // TODO(b/26297204): use 'visibility'
     ResourceType type = ResourceType.STYLEABLE;
     // The configuration can play a role in sorting, but that isn't modeled yet.
     String normalizedStyleableName = normalizeName(key.name());
-    addSimpleResource(dependencyInfo, visibility, type, normalizedStyleableName);
+    addSimpleResource(dependencyInfo, type, normalizedStyleableName);
     // We should have merged styleables, so there should only be one definition per configuration.
     // However, we don't combine across configurations, so there can be a pre-existing definition.
     Map<String, Boolean> normalizedAttrs = styleableAttrs.get(normalizedStyleableName);
@@ -329,12 +327,7 @@ class PlaceholderIdFieldInitializerBuilder {
             // matter---this is the PlaceholderIdFieldInitializerBuilder, after all.
             attrId = 0x7FFFFFFF;
           } else {
-            logger.info(
-                String.format(
-                    "Attribute \"%s\" of styleable \"%s\" not defined among dependencies."
-                        + " Ignoring.",
-                    field, attr));
-            continue;
+            throw new AttrLookupException("App attribute not found: " + attr);
           }
         }
         arrayInitValues.put(attr, attrId);
