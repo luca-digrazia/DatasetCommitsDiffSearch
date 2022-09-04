@@ -32,16 +32,17 @@ import com.google.devtools.build.lib.packages.PackageFactory.PackageContext;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.ThirdPartyLicenseExistencePolicy;
 import com.google.devtools.build.lib.packages.Type.ConversionException;
 import com.google.devtools.build.lib.skylarkbuildapi.SkylarkNativeModuleApi;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.NoneType;
 import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.SkylarkUtils;
 import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkList;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
-import com.google.devtools.build.lib.syntax.StarlarkValue;
 import com.google.devtools.build.lib.syntax.Tuple;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -78,10 +79,12 @@ public class SkylarkNativeModule implements SkylarkNativeModuleApi {
       Sequence<?> exclude,
       Integer excludeDirs,
       Object allowEmptyArgument,
+      Location loc,
       StarlarkThread thread)
       throws EvalException, ConversionException, InterruptedException {
-    BazelStarlarkContext.from(thread).checkLoadingPhase("native.glob");
-    PackageContext context = getContext(thread);
+    SkylarkUtils.checkLoadingPhase(thread, "native.glob", loc);
+
+    PackageContext context = getContext(thread, loc);
 
     List<String> includes = Type.STRING_LIST.convert(include, "'glob' argument");
     List<String> excludes = Type.STRING_LIST.convert(exclude, "'glob' argument");
@@ -93,8 +96,8 @@ public class SkylarkNativeModule implements SkylarkNativeModuleApi {
     } else if (allowEmptyArgument instanceof Boolean) {
       allowEmpty = (Boolean) allowEmptyArgument;
     } else {
-      throw Starlark.errorf(
-          "expected boolean for argument `allow_empty`, got `%s`", allowEmptyArgument);
+      throw new EvalException(
+          loc, "expected boolean for argument `allow_empty`, got `" + allowEmptyArgument + "`");
     }
 
     try {
@@ -108,26 +111,25 @@ public class SkylarkNativeModule implements SkylarkNativeModuleApi {
               Joiner.on(", ").join(includes),
               excludes.isEmpty() ? "" : " - [" + Joiner.on(", ").join(excludes) + "]",
               e.getMessage());
-      Location loc = thread.getCallerLocation();
       context.eventHandler.handle(Event.error(loc, errorMessage));
       context.pkgBuilder.setIOExceptionAndMessage(e, errorMessage);
       matches = ImmutableList.of();
     } catch (BadGlobException e) {
-      throw new EvalException(null, e.getMessage());
+      throw new EvalException(loc, e.getMessage());
     } catch (IllegalArgumentException e) {
-      throw new EvalException(null, "illegal argument in call to glob", e);
+      throw new EvalException(loc, "illegal argument in call to glob", e);
     }
 
     return StarlarkList.copyOf(thread.mutability(), matches);
   }
 
   @Override
-  public Object existingRule(String name, StarlarkThread thread)
+  public Object existingRule(String name, Location loc, StarlarkThread thread)
       throws EvalException, InterruptedException {
-    BazelStarlarkContext.from(thread).checkLoadingOrWorkspacePhase("native.existing_rule");
-    PackageContext context = getContext(thread);
+    SkylarkUtils.checkLoadingOrWorkspacePhase(thread, "native.existing_rule", loc);
+    PackageContext context = getContext(thread, loc);
     Target target = context.pkgBuilder.getTarget(name);
-    Dict<String, Object> rule = targetDict(target, thread.mutability());
+    Dict<String, Object> rule = targetDict(target, loc, thread.mutability());
     return rule != null ? rule : Starlark.NONE;
   }
 
@@ -136,18 +138,18 @@ public class SkylarkNativeModule implements SkylarkNativeModuleApi {
     For now, we ignore this, since users can implement it in Skylark.
   */
   @Override
-  public Dict<String, Dict<String, Object>> existingRules(StarlarkThread thread)
+  public Dict<String, Dict<String, Object>> existingRules(Location loc, StarlarkThread thread)
       throws EvalException, InterruptedException {
-    BazelStarlarkContext.from(thread).checkLoadingOrWorkspacePhase("native.existing_rules");
-    PackageContext context = getContext(thread);
+    SkylarkUtils.checkLoadingOrWorkspacePhase(thread, "native.existing_rules", loc);
+    PackageContext context = getContext(thread, loc);
     Collection<Target> targets = context.pkgBuilder.getTargets();
     Mutability mu = thread.mutability();
     Dict<String, Dict<String, Object>> rules = Dict.of(mu);
     for (Target t : targets) {
       if (t instanceof Rule) {
-        Dict<String, Object> rule = targetDict(t, mu);
+        Dict<String, Object> rule = targetDict(t, loc, mu);
         Preconditions.checkNotNull(rule);
-        rules.put(t.getName(), rule, (Location) null);
+        rules.put(t.getName(), rule, loc);
       }
     }
 
@@ -159,10 +161,11 @@ public class SkylarkNativeModule implements SkylarkNativeModuleApi {
       String name,
       Sequence<?> packagesO,
       Sequence<?> includesO,
+      Location loc,
       StarlarkThread thread)
       throws EvalException {
-    BazelStarlarkContext.from(thread).checkLoadingPhase("native.package_group");
-    PackageContext context = getContext(thread);
+    SkylarkUtils.checkLoadingPhase(thread, "native.package_group", loc);
+    PackageContext context = getContext(thread, loc);
 
     List<String> packages =
         Type.STRING_LIST.convert(packagesO, "'package_group.packages argument'");
@@ -170,51 +173,57 @@ public class SkylarkNativeModule implements SkylarkNativeModuleApi {
         BuildType.LABEL_LIST.convert(
             includesO, "'package_group.includes argument'", context.pkgBuilder.getBuildFileLabel());
 
-    Location loc = thread.getCallerLocation();
     try {
       context.pkgBuilder.addPackageGroup(name, packages, includes, context.eventHandler, loc);
       return Starlark.NONE;
     } catch (LabelSyntaxException e) {
-      throw Starlark.errorf("package group has invalid name: %s: %s", name, e.getMessage());
+      throw new EvalException(
+          loc, "package group has invalid name: " + name + ": " + e.getMessage());
     } catch (Package.NameConflictException e) {
-      throw new EvalException(null, e.getMessage());
+      throw new EvalException(loc, e.getMessage());
     }
   }
 
   @Override
   public NoneType exportsFiles(
-      Sequence<?> srcs, Object visibilityO, Object licensesO, StarlarkThread thread)
+      Sequence<?> srcs, Object visibilityO, Object licensesO, Location loc, StarlarkThread thread)
       throws EvalException {
-    BazelStarlarkContext.from(thread).checkLoadingPhase("native.exports_files");
-    Package.Builder pkgBuilder = getContext(thread).pkgBuilder;
+    SkylarkUtils.checkLoadingPhase(thread, "native.exports_files", loc);
+    Package.Builder pkgBuilder = getContext(thread, loc).pkgBuilder;
     List<String> files = Type.STRING_LIST.convert(srcs, "'exports_files' operand");
 
-    RuleVisibility visibility =
-        EvalUtils.isNullOrNone(visibilityO)
-            ? ConstantRuleVisibility.PUBLIC
-            : PackageFactory.getVisibility(
-                pkgBuilder.getBuildFileLabel(),
-                BuildType.LABEL_LIST.convert(
-                    visibilityO, "'exports_files' operand", pkgBuilder.getBuildFileLabel()));
-
+    RuleVisibility visibility;
+    try {
+      visibility =
+          EvalUtils.isNullOrNone(visibilityO)
+              ? ConstantRuleVisibility.PUBLIC
+              : PackageFactory.getVisibility(
+                  pkgBuilder.getBuildFileLabel(),
+                  BuildType.LABEL_LIST.convert(
+                      visibilityO, "'exports_files' operand", pkgBuilder.getBuildFileLabel()));
+    } catch (EvalException e) {
+      throw new EvalException(loc, e.getMessage());
+    }
     // TODO(bazel-team): is licenses plural or singular?
     License license = BuildType.LICENSE.convertOptional(licensesO, "'exports_files' operand");
 
-    Location loc = thread.getCallerLocation();
     for (String file : files) {
       String errorMessage = LabelValidator.validateTargetName(file);
       if (errorMessage != null) {
-        throw Starlark.errorf("%s", errorMessage);
+        throw new EvalException(loc, errorMessage);
       }
       try {
         InputFile inputFile = pkgBuilder.createInputFile(file, loc);
         if (inputFile.isVisibilitySpecified() && inputFile.getVisibility() != visibility) {
-          throw Starlark.errorf(
-              "visibility for exported file '%s' declared twice", inputFile.getName());
+          throw new EvalException(
+              loc,
+              String.format(
+                  "visibility for exported file '%s' declared twice", inputFile.getName()));
         }
         if (license != null && inputFile.isLicenseSpecified()) {
-          throw Starlark.errorf(
-              "licenses for exported file '%s' declared twice", inputFile.getName());
+          throw new EvalException(
+              loc,
+              String.format("licenses for exported file '%s' declared twice", inputFile.getName()));
         }
 
         // See if we should check third-party licenses: first checking for any hard-coded policy,
@@ -234,38 +243,41 @@ public class SkylarkNativeModule implements SkylarkNativeModuleApi {
             && license == null
             && !pkgBuilder.getDefaultLicense().isSpecified()
             && RuleClass.isThirdPartyPackage(pkgBuilder.getPackageIdentifier())) {
-          throw Starlark.errorf(
-              "third-party file '%s' lacks a license declaration with one of the following types:"
-                  + " notice, reciprocal, permissive, restricted, unencumbered, by_exception_only",
-              inputFile.getName());
+          throw new EvalException(
+              loc,
+              "third-party file '"
+                  + inputFile.getName()
+                  + "' lacks a license declaration "
+                  + "with one of the following types: notice, reciprocal, permissive, "
+                  + "restricted, unencumbered, by_exception_only");
         }
 
         pkgBuilder.setVisibilityAndLicense(inputFile, visibility, license);
       } catch (Package.Builder.GeneratedLabelConflict e) {
-        throw Starlark.errorf("%s", e.getMessage());
+        throw new EvalException(loc, e.getMessage());
       }
     }
     return Starlark.NONE;
   }
 
   @Override
-  public String packageName(StarlarkThread thread) throws EvalException {
-    BazelStarlarkContext.from(thread).checkLoadingPhase("native.package_name");
+  public String packageName(Location loc, StarlarkThread thread) throws EvalException {
+    SkylarkUtils.checkLoadingPhase(thread, "native.package_name", loc);
     PackageIdentifier packageId =
-        PackageFactory.getContext(thread).getBuilder().getPackageIdentifier();
+        PackageFactory.getContext(thread, loc).getBuilder().getPackageIdentifier();
     return packageId.getPackageFragment().getPathString();
   }
 
   @Override
-  public String repositoryName(StarlarkThread thread) throws EvalException {
-    BazelStarlarkContext.from(thread).checkLoadingPhase("native.repository_name");
+  public String repositoryName(Location location, StarlarkThread thread) throws EvalException {
+    SkylarkUtils.checkLoadingPhase(thread, "native.repository_name", location);
     PackageIdentifier packageId =
-        PackageFactory.getContext(thread).getBuilder().getPackageIdentifier();
+        PackageFactory.getContext(thread, location).getBuilder().getPackageIdentifier();
     return packageId.getRepository().toString();
   }
 
   @Nullable
-  private static Dict<String, Object> targetDict(Target target, Mutability mu)
+  private static Dict<String, Object> targetDict(Target target, Location loc, Mutability mu)
       throws EvalException {
     if (!(target instanceof Rule)) {
       return null;
@@ -290,7 +302,7 @@ public class SkylarkNativeModule implements SkylarkNativeModuleApi {
         if (val == null) {
           continue;
         }
-        values.put(attr.getName(), val, (Location) null);
+        values.put(attr.getName(), val, loc);
       } catch (NotRepresentableException e) {
         throw new NotRepresentableException(
             String.format(
@@ -298,8 +310,8 @@ public class SkylarkNativeModule implements SkylarkNativeModuleApi {
       }
     }
 
-    values.put("name", rule.getName(), (Location) null);
-    values.put("kind", rule.getRuleClass(), (Location) null);
+    values.put("name", rule.getName(), loc);
+    values.put("kind", rule.getRuleClass(), loc);
     return values;
   }
 
@@ -383,11 +395,11 @@ public class SkylarkNativeModule implements SkylarkNativeModuleApi {
 
     if (val instanceof License) {
       // License is deprecated as a Starlark type, so omit this type from Starlark values
-      // to avoid exposing these objects, even though they are technically StarlarkValue.
+      // to avoid exposing these objects, even though they are technically SkylarkValue.
       return null;
     }
 
-    if (val instanceof StarlarkValue) {
+    if (val instanceof SkylarkValue) {
       return val;
     }
 

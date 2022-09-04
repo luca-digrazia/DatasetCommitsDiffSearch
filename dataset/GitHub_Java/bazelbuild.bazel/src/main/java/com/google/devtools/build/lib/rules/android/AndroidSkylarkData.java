@@ -157,7 +157,7 @@ public abstract class AndroidSkylarkData
               ctx,
               AssetDependencies.fromProviders(
                   deps.getContents(AndroidAssetsInfo.class, "deps"), neverlink),
-              AndroidAaptVersion.AAPT2)
+              getAndroidAaptVersionForLibrary(ctx))
           .toProvider();
     } catch (RuleErrorException e) {
       throw handleRuleException(errorReporter, e);
@@ -189,7 +189,7 @@ public abstract class AndroidSkylarkData
                   deps.getContents(AndroidResourcesInfo.class, "deps"), neverlink),
               DataBinding.contextFrom(
                   enableDataBinding, ctx.getActionConstructionContext(), ctx.getAndroidConfig()),
-              AndroidAaptVersion.AAPT2);
+              getAndroidAaptVersionForLibrary(ctx));
     } catch (RuleErrorException e) {
       throw handleRuleException(errorReporter, e);
     }
@@ -281,6 +281,7 @@ public abstract class AndroidSkylarkData
       Sequence<?> deps) // <ConfiguredTarget>
       throws InterruptedException, EvalException {
     List<ConfiguredTarget> depsTargets = deps.getContents(ConfiguredTarget.class, "deps");
+    AndroidAaptVersion aaptVersion = getAndroidAaptVersionForLibrary(ctx);
 
     ValidatedAndroidResources validatedResources =
         AndroidResources.forAarImport(resources)
@@ -291,7 +292,7 @@ public abstract class AndroidSkylarkData
                     getProviders(depsTargets, AndroidResourcesInfo.PROVIDER),
                     /* neverlink = */ false),
                 DataBinding.getDisabledDataBindingContext(ctx),
-                AndroidAaptVersion.AAPT2);
+                aaptVersion);
 
     MergedAndroidAssets mergedAssets =
         AndroidAssets.forAarImport(assets)
@@ -299,7 +300,7 @@ public abstract class AndroidSkylarkData
                 ctx,
                 AssetDependencies.fromProviders(
                     getProviders(depsTargets, AndroidAssetsInfo.PROVIDER), /* neverlink = */ false),
-                AndroidAaptVersion.AAPT2);
+                aaptVersion);
 
     ResourceApk resourceApk = ResourceApk.of(validatedResources, mergedAssets, null, null);
 
@@ -357,7 +358,7 @@ public abstract class AndroidSkylarkData
               AssetDependencies.fromProviders(
                   getProviders(depsTargets, AndroidAssetsInfo.PROVIDER), /* neverlink = */ false),
               manifestValues.getContents(String.class, String.class, "manifest_values"),
-              AndroidAaptVersion.AAPT2,
+              AndroidAaptVersion.chooseTargetAaptVersion(ctx, errorReporter, aaptVersionString),
               noCompressExtensions.getContents(String.class, "nocompress_extensions"));
 
       ImmutableMap.Builder<Provider, NativeInfo> builder = ImmutableMap.builder();
@@ -626,6 +627,23 @@ public abstract class AndroidSkylarkData
             resourceApk.getResourceJavaClassJar(), resourceApk.getResourceJavaSrcJar()));
 
     return Dict.copyOf((Mutability) null, builder.build());
+  }
+
+  /**
+   * An algorithm to select the aapt version.
+   *
+   * <p>The calling rule doesn't have the aapt_version attribute (e.g. android_library), so fall
+   * back to a simpler algorithm instead of {@code AndroidAaptVersion.chooseTargetAaptVersion}.
+   * <li>1. If value of --android_aapt is either aapt or aapt2, use it.
+   * <li>2. Else, use aapt2 if the sdk contains it. If it doesn't, use aapt.
+   */
+  private static AndroidAaptVersion getAndroidAaptVersionForLibrary(AndroidDataContext ctx) {
+    AndroidAaptVersion aaptVersion = ctx.getAndroidConfig().getAndroidAaptVersion();
+    if (aaptVersion == AndroidAaptVersion.AUTO) {
+      aaptVersion =
+          ctx.getSdk().getAapt2() == null ? AndroidAaptVersion.AAPT : AndroidAaptVersion.AAPT2;
+    }
+    return aaptVersion;
   }
 
   private static JavaInfo getJavaInfoForRClassJar(Artifact rClassJar, Artifact rClassSrcJar) {

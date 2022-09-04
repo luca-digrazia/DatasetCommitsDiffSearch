@@ -17,6 +17,8 @@ import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.events.EventCollector;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.util.EvaluationTestCase;
 import com.google.devtools.build.lib.testutil.TestMode;
 import java.util.Collections;
@@ -655,38 +657,33 @@ public class EvaluationTest extends EvaluationTestCase {
     newTest().testExpression("not 'a' in ['a'] or 0", 0);
   }
 
-  private StarlarkValue createObjWithStr() {
-    return new StarlarkValue() {
+  private SkylarkValue createObjWithStr() {
+    return new SkylarkValue() {
       @Override
-      public void repr(Printer printer) {
+      public void repr(SkylarkPrinter printer) {
         printer.append("<str marker>");
       }
     };
   }
 
-  private static class Dummy implements StarlarkValue {}
-
   @Test
-  public void testPercentOnDummyValue() throws Exception {
+  public void testPercOnObject() throws Exception {
     newTest().update("obj", createObjWithStr()).testExpression("'%s' % obj", "<str marker>");
     newTest()
-        .update("unknown", new Dummy())
-        .testExpression(
-            "'%s' % unknown",
-            "<unknown object com.google.devtools.build.lib.syntax.EvaluationTest$Dummy>");
+        .update("unknown", new Object())
+        .testExpression("'%s' % unknown", "<unknown object java.lang.Object>");
   }
 
   @Test
-  public void testPercentOnTupleOfDummyValues() throws Exception {
+  public void testPercOnObjectList() throws Exception {
     newTest()
         .update("obj", createObjWithStr())
         .testExpression("'%s %s' % (obj, obj)", "<str marker> <str marker>");
     newTest()
-        .update("unknown", new Dummy())
+        .update("unknown", new Object())
         .testExpression(
             "'%s %s' % (unknown, unknown)",
-            "<unknown object com.google.devtools.build.lib.syntax.EvaluationTest$Dummy> <unknown"
-                + " object com.google.devtools.build.lib.syntax.EvaluationTest$Dummy>");
+            "<unknown object java.lang.Object> <unknown object java.lang.Object>");
   }
 
   @Test

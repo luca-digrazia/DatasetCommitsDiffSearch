@@ -42,13 +42,13 @@ import com.google.devtools.build.lib.rules.objc.ObjcProvider.Key;
 import com.google.devtools.build.lib.skylarkbuildapi.SkylarkRuleContextApi;
 import com.google.devtools.build.lib.skylarkbuildapi.SplitTransitionProviderApi;
 import com.google.devtools.build.lib.skylarkbuildapi.apple.AppleCommonApi;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
-import com.google.devtools.build.lib.syntax.StarlarkValue;
 import java.util.Map;
 import javax.annotation.Nullable;
 
@@ -256,11 +256,10 @@ public class AppleSkylarkCommon
       AppleBinaryOutput output, StarlarkThread thread) {
     Provider constructor =
         new NativeProvider<StructImpl>(StructImpl.class, "apple_binary_output") {};
-    // We have to transform the output group dictionary into one that contains StarlarkValues
-    // instead
+    // We have to transform the output group dictionary into one that contains SkylarkValues instead
     // of plain NestedSets because the Skylark caller may want to return this directly from their
     // implementation function.
-    Map<String, StarlarkValue> outputGroups =
+    Map<String, SkylarkValue> outputGroups =
         Maps.transformValues(output.getOutputGroups(), v -> Depset.of(Artifact.TYPE, v));
 
     ImmutableMap<String, Object> fields =
@@ -268,6 +267,6 @@ public class AppleSkylarkCommon
             "binary_provider", output.getBinaryInfoProvider(),
             "debug_outputs_provider", output.getDebugOutputsProvider(),
             "output_groups", Dict.copyOf(thread.mutability(), outputGroups));
-    return SkylarkInfo.create(constructor, fields, Location.BUILTIN);
+    return SkylarkInfo.createSchemaless(constructor, fields, Location.BUILTIN);
   }
 }
