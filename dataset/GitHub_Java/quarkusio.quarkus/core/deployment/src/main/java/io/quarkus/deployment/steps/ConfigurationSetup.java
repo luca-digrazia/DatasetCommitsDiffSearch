@@ -20,7 +20,6 @@ import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
 
-import io.quarkus.deployment.builditem.BuildTimeConfigurationSourceBuildItem;
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.spi.ConfigBuilder;
 import org.eclipse.microprofile.config.spi.ConfigProviderResolver;
@@ -171,7 +170,6 @@ public class ConfigurationSetup {
      * @param resourceConsumer
      * @param niResourceConsumer
      * @param runTimeDefaultConsumer
-     * @param configSourceItems the build-time config source build items
      * @param extensionClassLoaderBuildItem the extension class loader build item
      * @param archiveRootBuildItem the application archive root
      * @throws IOException
@@ -185,14 +183,13 @@ public class ConfigurationSetup {
             Consumer<GeneratedResourceBuildItem> resourceConsumer,
             Consumer<SubstrateResourceBuildItem> niResourceConsumer,
             Consumer<RunTimeConfigurationDefaultBuildItem> runTimeDefaultConsumer,
-            List<BuildTimeConfigurationSourceBuildItem> configSourceItems,
             ExtensionClassLoaderBuildItem extensionClassLoaderBuildItem,
             ArchiveRootBuildItem archiveRootBuildItem) throws IOException, ClassNotFoundException {
 
         // set up the configuration definitions
         final ConfigDefinition buildTimeConfig = new ConfigDefinition(FieldDescriptor.of("Bogus", "No field", "Nothing"));
         final ConfigDefinition buildTimeRunTimeConfig = new ConfigDefinition(BUILD_TIME_CONFIG_FIELD);
-        final ConfigDefinition runTimeConfig = new ConfigDefinition(RUN_TIME_CONFIG_FIELD);
+        final ConfigDefinition runTimeConfig = new ConfigDefinition(RUN_TIME_CONFIG_FIELD, true);
 
         // populate it with all known types
         for (Class<?> clazz : ServiceUtil.classesNamedIn(extensionClassLoaderBuildItem.getExtensionClassLoader(),
@@ -226,13 +223,6 @@ public class ConfigurationSetup {
         final DefaultValuesConfigurationSource defaultSource = new DefaultValuesConfigurationSource(
                 buildTimeConfig.getLeafPatterns());
         builder.withSources(inJar, defaultSource);
-        final int cnt = configSourceItems.size();
-        final ConfigSource[] configSources = new ConfigSource[cnt];
-        int i = 0;
-        for (BuildTimeConfigurationSourceBuildItem item : configSourceItems) {
-            configSources[i++] = item.getConfigSourceSupplier().get();
-        }
-        builder.withSources(configSources);
 
         // populate builder with all converters loaded from ServiceLoader 
         ConverterSupport.populateConverters(builder);
