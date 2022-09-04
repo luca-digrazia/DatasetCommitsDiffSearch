@@ -14,8 +14,8 @@
 package com.google.devtools.build.lib.remote.util;
 
 import build.bazel.remote.execution.v2.ExecutionGrpc;
-import com.google.common.base.MoreObjects;
 import com.google.common.base.Stopwatch;
+import com.google.common.flogger.GoogleLogger;
 import com.google.devtools.build.lib.concurrent.ThreadSafety;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
@@ -32,6 +32,7 @@ import java.time.Duration;
 /** Reentrant wall clock stopwatch and grpc interceptor for network waits. */
 @ThreadSafety.ThreadSafe
 public class NetworkTime {
+  private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
 
   public static final Context.Key<NetworkTime> CONTEXT_KEY = Context.key("remote-network-time");
 
@@ -53,15 +54,6 @@ public class NetworkTime {
 
   public Duration getDuration() {
     return wallTime.elapsed();
-  }
-
-  @Override
-  public String toString() {
-    return MoreObjects.toStringHelper(this)
-        .add("outstanding", outstanding)
-        .add("wallTime", wallTime)
-        .add("wallTime.isRunning", wallTime.isRunning())
-        .toString();
   }
 
   /** The ClientInterceptor used to track network time. */
@@ -100,13 +92,13 @@ public class NetworkTime {
 
             @Override
             public void onClose(Status status, Metadata trailers) {
+              // There is a risk that networkTime.stop() would throw a IllegalStateException: if
+              // networkTime.outstanding is overflowed, wallTime.stop() will be called even it's
+              // already stopped.
               try {
                 networkTime.stop();
               } catch (RuntimeException e) {
-                // An unchecked exception means we have bugs in the above try block, force crash
-                // Bazel so we can have a chance to look into.
-                throw new AssertionError(
-                    "networkTime.stop() must not throw unchecked exception: " + networkTime, e);
+                logger.atWarning().withCause(e).log("Failed to stop networkTime");
               } finally {
                 // Make sure to call super.onClose, otherwise gRPC will silently hang indefinitely.
                 // See https://github.com/grpc/grpc-java/pull/6107.
