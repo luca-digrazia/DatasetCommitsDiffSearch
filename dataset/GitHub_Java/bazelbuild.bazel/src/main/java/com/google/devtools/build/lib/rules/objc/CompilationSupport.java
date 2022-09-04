@@ -1670,7 +1670,6 @@ public class CompilationSupport {
             publicHeaders,
             ImmutableList.of(),
             ImmutableList.of(),
-            ImmutableList.of(),
             /* compiledModule= */ true,
             /* moduleMapHomeIsCwd= */ false,
             /* generateSubmodules= */ false,
