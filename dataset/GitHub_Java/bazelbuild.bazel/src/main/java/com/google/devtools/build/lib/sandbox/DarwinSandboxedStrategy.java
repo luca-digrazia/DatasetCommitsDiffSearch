@@ -29,7 +29,9 @@ import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
+import com.google.devtools.build.lib.analysis.config.RunUnder;
 import com.google.devtools.build.lib.buildtool.BuildRequest;
+import com.google.devtools.build.lib.rules.test.TestRunnerAction;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.shell.Command;
 import com.google.devtools.build.lib.shell.CommandException;
@@ -41,6 +43,7 @@ import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import com.google.devtools.build.lib.vfs.SearchPath;
 import com.google.devtools.build.lib.vfs.Symlinks;
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -59,6 +62,7 @@ import java.util.concurrent.atomic.AtomicReference;
 )
 public class DarwinSandboxedStrategy extends SandboxStrategy {
 
+  private final ImmutableMap<String, String> clientEnv;
   private final BlazeDirectories blazeDirs;
   private final Path execRoot;
   private final boolean sandboxDebug;
@@ -81,6 +85,7 @@ public class DarwinSandboxedStrategy extends SandboxStrategy {
         sandboxBase,
         verboseFailures,
         buildRequest.getOptions(SandboxOptions.class));
+    this.clientEnv = ImmutableMap.copyOf(cmdEnv.getClientEnv());
     this.blazeDirs = cmdEnv.getDirectories();
     this.execRoot = blazeDirs.getExecRoot();
     this.sandboxDebug = buildRequest.getOptions(SandboxOptions.class).sandboxDebug;
@@ -169,6 +174,7 @@ public class DarwinSandboxedStrategy extends SandboxStrategy {
         StandaloneSpawnStrategy.locallyDeterminedEnv(execRoot, productName, spawn.getEnvironment());
 
     Set<Path> writableDirs = getWritableDirs(sandboxExecRoot, spawn.getEnvironment());
+    Path runUnderPath = getRunUnderPath(spawn);
     HardlinkedExecRoot hardlinkedExecRoot =
         new HardlinkedExecRoot(execRoot, sandboxPath, sandboxExecRoot, errWriter);
     ImmutableSet<PathFragment> outputs = SandboxHelpers.getOutputFiles(spawn);
@@ -181,7 +187,8 @@ public class DarwinSandboxedStrategy extends SandboxStrategy {
     }
 
     DarwinSandboxRunner runner =
-        new DarwinSandboxRunner(sandboxPath, sandboxExecRoot, writableDirs, verboseFailures);
+        new DarwinSandboxRunner(
+            sandboxPath, sandboxExecRoot, writableDirs, runUnderPath, verboseFailures);
     try {
       runSpawn(
           spawn,
@@ -291,5 +298,39 @@ public class DarwinSandboxedStrategy extends SandboxStrategy {
     // The source must exist.
     Preconditions.checkArgument(stat != null, "%s does not exist", source.toString());
     finalizedMounts.put(target, source);
+  }
+
+  /**
+   * If a --run_under= option is set and refers to a command via its path (as opposed to via its
+   * label), we have to mount this. Note that this is best effort and works fine for shell scripts
+   * and small binaries, but we can't track any further dependencies of this command.
+   *
+   * <p>If --run_under= refers to a label, it is automatically provided in the spawn's input files,
+   * so mountInputs() will catch that case.
+   */
+  private Path getRunUnderPath(Spawn spawn) {
+    if (spawn.getResourceOwner() instanceof TestRunnerAction) {
+      TestRunnerAction testRunnerAction = ((TestRunnerAction) spawn.getResourceOwner());
+      RunUnder runUnder = testRunnerAction.getExecutionSettings().getRunUnder();
+      if (runUnder != null && runUnder.getCommand() != null) {
+        PathFragment sourceFragment = PathFragment.create(runUnder.getCommand());
+        Path mount;
+        if (sourceFragment.isAbsolute()) {
+          mount = blazeDirs.getFileSystem().getPath(sourceFragment);
+        } else if (blazeDirs.getExecRoot().getRelative(sourceFragment).exists()) {
+          mount = blazeDirs.getExecRoot().getRelative(sourceFragment);
+        } else {
+          List<Path> searchPath =
+              SearchPath.parse(blazeDirs.getFileSystem(), clientEnv.get("PATH"));
+          mount = SearchPath.which(searchPath, runUnder.getCommand());
+        }
+        // only need to hardlink when under workspace
+        Path workspace = blazeDirs.getWorkspace();
+        if (mount != null && mount.startsWith(workspace)) {
+          return mount;
+        }
+      }
+    }
+    return null;
   }
 }

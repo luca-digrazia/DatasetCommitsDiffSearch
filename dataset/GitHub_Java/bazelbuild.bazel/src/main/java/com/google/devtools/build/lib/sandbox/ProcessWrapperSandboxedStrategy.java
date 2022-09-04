@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.buildtool.BuildRequest;
-import com.google.devtools.build.lib.exec.SpawnInputExpander;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.standalone.StandaloneSpawnStrategy;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -49,7 +48,6 @@ public class ProcessWrapperSandboxedStrategy extends SandboxStrategy {
   private final Path execRoot;
   private final boolean verboseFailures;
   private final String productName;
-  private final SpawnInputExpander spawnInputExpander;
 
   ProcessWrapperSandboxedStrategy(
       CommandEnvironment cmdEnv,
@@ -67,7 +65,6 @@ public class ProcessWrapperSandboxedStrategy extends SandboxStrategy {
     this.execRoot = cmdEnv.getExecRoot();
     this.verboseFailures = verboseFailures;
     this.productName = productName;
-    this.spawnInputExpander = new SpawnInputExpander(false);
   }
 
   @Override
@@ -95,10 +92,7 @@ public class ProcessWrapperSandboxedStrategy extends SandboxStrategy {
     SymlinkedExecRoot symlinkedExecRoot = new SymlinkedExecRoot(sandboxExecRoot);
     ImmutableSet<PathFragment> outputs = SandboxHelpers.getOutputFiles(spawn);
     symlinkedExecRoot.createFileSystem(
-        SandboxHelpers.getInputFiles(
-            spawnInputExpander, this.execRoot, spawn, actionExecutionContext),
-        outputs,
-        writableDirs);
+        getMounts(spawn, actionExecutionContext), outputs, writableDirs);
 
     SandboxRunner runner = new ProcessWrapperRunner(sandboxExecRoot, verboseFailures);
     try {

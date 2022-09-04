@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.actions.UserExecException;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.buildtool.BuildRequest;
-import com.google.devtools.build.lib.exec.SpawnInputExpander;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -45,7 +44,6 @@ import java.util.concurrent.atomic.AtomicReference;
   contextType = SpawnActionContext.class
 )
 public class LinuxSandboxedStrategy extends SandboxStrategy {
-
   public static boolean isSupported(CommandEnvironment cmdEnv) {
     return LinuxSandboxRunner.isSupported(cmdEnv);
   }
@@ -54,7 +52,6 @@ public class LinuxSandboxedStrategy extends SandboxStrategy {
   private final BlazeDirectories blazeDirs;
   private final Path execRoot;
   private final boolean verboseFailures;
-  private final SpawnInputExpander spawnInputExpander;
 
   LinuxSandboxedStrategy(
       CommandEnvironment cmdEnv,
@@ -71,7 +68,6 @@ public class LinuxSandboxedStrategy extends SandboxStrategy {
     this.blazeDirs = cmdEnv.getDirectories();
     this.execRoot = blazeDirs.getExecRoot();
     this.verboseFailures = verboseFailures;
-    spawnInputExpander = new SpawnInputExpander(false);
   }
 
   @Override
@@ -94,10 +90,7 @@ public class LinuxSandboxedStrategy extends SandboxStrategy {
     SymlinkedExecRoot symlinkedExecRoot = new SymlinkedExecRoot(sandboxExecRoot);
     ImmutableSet<PathFragment> outputs = SandboxHelpers.getOutputFiles(spawn);
     symlinkedExecRoot.createFileSystem(
-        SandboxHelpers.getInputFiles(
-            spawnInputExpander, this.execRoot, spawn, actionExecutionContext),
-        outputs,
-        writableDirs);
+        getMounts(spawn, actionExecutionContext), outputs, writableDirs);
 
     SandboxRunner runner =
         new LinuxSandboxRunner(

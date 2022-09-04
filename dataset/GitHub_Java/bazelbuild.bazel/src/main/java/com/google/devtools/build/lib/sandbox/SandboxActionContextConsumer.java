@@ -17,7 +17,7 @@ package com.google.devtools.build.lib.sandbox;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.Multimap;
-import com.google.devtools.build.lib.actions.ActionContext;
+import com.google.devtools.build.lib.actions.Executor.ActionContext;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.exec.ActionContextConsumer;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
@@ -38,7 +38,7 @@ final class SandboxActionContextConsumer implements ActionContextConsumer {
     ImmutableMap.Builder<String, String> spawnContexts = ImmutableMap.builder();
 
     if ((OS.getCurrent() == OS.LINUX && LinuxSandboxedStrategy.isSupported(cmdEnv))
-        || (OS.getCurrent() == OS.DARWIN && DarwinSandboxRunner.isSupported(cmdEnv))
+        || (OS.getCurrent() == OS.DARWIN && DarwinSandboxRunner.isSupported())
         || (OS.isPosixCompatible() && ProcessWrapperSandboxedStrategy.isSupported(cmdEnv))) {
       // This makes the "sandboxed" strategy available via --spawn_strategy=sandboxed,
       // but it is not necessarily the default.
