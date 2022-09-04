@@ -20,7 +20,6 @@ import com.google.common.base.Joiner;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.util.Properties;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -48,27 +47,13 @@ public class WriteBuildInfoPropertiesActionTest extends FoundationTestCase {
     assertStripFirstLine("", "");
     assertStripFirstLine("", "no linefeed");
     assertStripFirstLine("", "no", "linefeed");
-    assertStripFirstLine(
-        LINEFEED_JOINER.join("toto", "titi"),
+    assertStripFirstLine(LINEFEED_JOINER.join("toto", "titi"),
         LINEFEED_JOINER.join("# timestamp comment", "toto", "titi"));
-    assertStripFirstLine(
-        LINE_JOINER.join("toto", "titi"), LINE_JOINER.join("# timestamp comment", "toto", "titi"));
-    assertStripFirstLine(
-        LINEFEED_JOINER.join("toto", "titi"), "# timestamp comment\n", "toto\n", "titi");
-    assertStripFirstLine(
-        LINE_JOINER.join("toto", "titi"), "# timestamp comment\r\n", "toto\r\n", "titi");
-  }
-
-  @Test
-  public void deterministicProperties() throws IOException {
-    ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-    Properties underTest = new WriteBuildInfoPropertiesAction.DeterministicProperties();
-    underTest.put("second", "keyb");
-    underTest.put("first", "keya");
-    try (WriteBuildInfoPropertiesAction.StripFirstLineWriter writer =
-        new WriteBuildInfoPropertiesAction.StripFirstLineWriter(bytes)) {
-      underTest.store(writer, null);
-    }
-    assertThat(new String(bytes.toByteArray(), UTF_8)).isEqualTo("first=keya\nsecond=keyb\n");
+    assertStripFirstLine(LINE_JOINER.join("toto", "titi"),
+        LINE_JOINER.join("# timestamp comment", "toto", "titi"));
+    assertStripFirstLine(LINEFEED_JOINER.join("toto", "titi"),
+        "# timestamp comment\n", "toto\n", "titi");
+    assertStripFirstLine(LINE_JOINER.join("toto", "titi"),
+        "# timestamp comment\r\n", "toto\r\n", "titi");
   }
 }
