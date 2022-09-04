@@ -49,7 +49,6 @@ import com.google.devtools.build.lib.syntax.Identifier;
 import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkUtils;
-import com.google.devtools.build.lib.syntax.StarlarkThread;
 import java.util.Map;
 
 /**
@@ -63,13 +62,13 @@ public class SkylarkRepositoryModule implements RepositoryModuleApi {
       BaseFunction implementation,
       Object attrs,
       Boolean local,
-      SkylarkList<?> environ, // <String> expected
+      SkylarkList<String> environ,
       Boolean configure,
       String doc,
       FuncallExpression ast,
-      StarlarkThread funcallThread)
+      com.google.devtools.build.lib.syntax.Environment funcallEnv)
       throws EvalException {
-    SkylarkUtils.checkLoadingOrWorkspacePhase(funcallThread, "repository_rule", ast.getLocation());
+    SkylarkUtils.checkLoadingOrWorkspacePhase(funcallEnv, "repository_rule", ast.getLocation());
     // We'll set the name later, pass the empty string for now.
     RuleClass.Builder builder = new RuleClass.Builder("", RuleClassType.WORKSPACE, true);
 
@@ -91,8 +90,7 @@ public class SkylarkRepositoryModule implements RepositoryModuleApi {
     }
     builder.setConfiguredTargetFunction(implementation);
     builder.setRuleDefinitionEnvironmentLabelAndHashCode(
-        (Label) funcallThread.getGlobals().getLabel(),
-        funcallThread.getTransitiveContentHashCode());
+        (Label) funcallEnv.getGlobals().getLabel(), funcallEnv.getTransitiveContentHashCode());
     builder.setWorkspaceOnly();
     return new RepositoryRuleFunction(builder, ast.getLocation());
   }
@@ -132,9 +130,7 @@ public class SkylarkRepositoryModule implements RepositoryModuleApi {
 
     @Override
     public Object call(
-        Object[] args,
-        FuncallExpression ast,
-        com.google.devtools.build.lib.syntax.StarlarkThread thread)
+        Object[] args, FuncallExpression ast, com.google.devtools.build.lib.syntax.Environment env)
         throws EvalException, InterruptedException {
       String ruleClassName = null;
       Expression function = ast.getFunction();
@@ -156,7 +152,7 @@ public class SkylarkRepositoryModule implements RepositoryModuleApi {
       }
       try {
         RuleClass ruleClass = builder.build(ruleClassName, ruleClassName);
-        PackageContext context = PackageFactory.getContext(thread, ast.getLocation());
+        PackageContext context = PackageFactory.getContext(env, ast.getLocation());
         Package.Builder packageBuilder = context.getBuilder();
 
         @SuppressWarnings("unchecked")
@@ -171,12 +167,12 @@ public class SkylarkRepositoryModule implements RepositoryModuleApi {
                 .append(" (rule definition at ")
                 .append(ruleClassDefinitionLocation.toString())
                 .append("):");
-        for (DebugFrame frame : thread.listFrames(ast.getLocation())) {
+        for (DebugFrame frame : env.listFrames(ast.getLocation())) {
           callStack.append("\n - ").append(frame.location().toString());
         }
 
         WorkspaceFactoryHelper.addMainRepoEntry(
-            packageBuilder, externalRepoName, thread.getSemantics());
+            packageBuilder, externalRepoName, env.getSemantics());
 
         WorkspaceFactoryHelper.addRepoMappings(
             packageBuilder, attributeValues, externalRepoName, ast.getLocation());

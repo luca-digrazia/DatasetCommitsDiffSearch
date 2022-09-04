@@ -19,24 +19,22 @@ import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
-import com.google.devtools.build.lib.syntax.StarlarkThread.LexicalFrame;
+import com.google.devtools.build.lib.syntax.Environment.LexicalFrame;
 
 /** A StarlarkFunction is the function value created by a Starlark {@code def} statement. */
-public final class StarlarkFunction extends BaseFunction {
+public class StarlarkFunction extends BaseFunction {
 
   private final ImmutableList<Statement> statements;
 
   // we close over the globals at the time of definition
-  private final StarlarkThread.GlobalFrame definitionGlobals;
+  private final Environment.GlobalFrame definitionGlobals;
 
-  // TODO(adonovan): make this private. The CodecTests should go through interpreter to instantiate
-  // such things.
   public StarlarkFunction(
       String name,
       Location location,
-      FunctionSignature.WithValues signature,
+      FunctionSignature.WithValues<Object, SkylarkType> signature,
       ImmutableList<Statement> statements,
-      StarlarkThread.GlobalFrame definitionGlobals) {
+      Environment.GlobalFrame definitionGlobals) {
     super(name, signature, location);
     this.statements = statements;
     this.definitionGlobals = definitionGlobals;
@@ -46,39 +44,37 @@ public final class StarlarkFunction extends BaseFunction {
     return statements;
   }
 
-  public StarlarkThread.GlobalFrame getDefinitionGlobals() {
+  public Environment.GlobalFrame getDefinitionGlobals() {
     return definitionGlobals;
   }
 
   @Override
-  protected Object call(Object[] arguments, FuncallExpression ast, StarlarkThread thread)
+  public Object call(Object[] arguments, FuncallExpression ast, Environment env)
       throws EvalException, InterruptedException {
-    if (thread.mutability().isFrozen()) {
+    if (env.mutability().isFrozen()) {
       throw new EvalException(getLocation(), "Trying to call in frozen environment");
     }
-    if (thread.isRecursiveCall(this)) {
-      throw new EvalException(
-          getLocation(),
-          String.format(
-              "Recursion was detected when calling '%s' from '%s'",
-              getName(), thread.getCurrentFunction().getName()));
+    if (env.isRecursiveCall(this)) {
+      throw new EvalException(getLocation(),
+          String.format("Recursion was detected when calling '%s' from '%s'",
+              getName(), env.getCurrentFunction().getName()));
     }
 
-    ImmutableList<String> names = signature.getSignature().getParameterNames();
-    LexicalFrame lexicalFrame = LexicalFrame.create(thread.mutability(), /*numArgs=*/ names.size());
+    ImmutableList<String> names = signature.getSignature().getNames();
+    LexicalFrame lexicalFrame = LexicalFrame.create(env.mutability(), /*numArgs=*/ names.size());
     try (SilentCloseable c =
         Profiler.instance().profile(ProfilerTask.STARLARK_USER_FN, getName())) {
-      thread.enterScope(this, lexicalFrame, ast, definitionGlobals);
+      env.enterScope(this, lexicalFrame, ast, definitionGlobals);
 
-      // Registering the functions's arguments as variables in the local StarlarkThread
+      // Registering the functions's arguments as variables in the local Environment
       // foreach loop is not used to avoid iterator overhead
       for (int i = 0; i < names.size(); ++i) {
-        thread.update(names.get(i), arguments[i]);
+        env.update(names.get(i), arguments[i]);
       }
 
-      return Eval.execStatements(thread, statements);
+      return Eval.execStatements(env, statements);
     } finally {
-      thread.exitScope();
+      env.exitScope();
     }
   }
 

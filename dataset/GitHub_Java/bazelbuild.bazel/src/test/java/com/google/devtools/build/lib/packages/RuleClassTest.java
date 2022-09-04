@@ -58,8 +58,7 @@ import com.google.devtools.build.lib.packages.RuleClass.ExecutionPlatformConstra
 import com.google.devtools.build.lib.packages.RuleFactory.BuildLangTypedAttributeValuesMap;
 import com.google.devtools.build.lib.packages.util.PackageLoadingTestCase;
 import com.google.devtools.build.lib.syntax.BaseFunction;
-import com.google.devtools.build.lib.syntax.StarlarkSemantics;
-import com.google.devtools.build.lib.syntax.StarlarkThread;
+import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import java.util.ArrayList;
@@ -259,10 +258,7 @@ public class RuleClassTest extends PackageLoadingTestCase {
 
   private Package.Builder createDummyPackageBuilder() {
     return packageFactory
-        .newPackageBuilder(
-            PackageIdentifier.createInMainRepo(TEST_PACKAGE_NAME),
-            "TESTING",
-            StarlarkSemantics.DEFAULT_SEMANTICS)
+        .newPackageBuilder(PackageIdentifier.createInMainRepo(TEST_PACKAGE_NAME), "TESTING")
         .setFilename(RootedPath.toRootedPath(root, testBuildfilePath));
   }
 
@@ -876,15 +872,15 @@ public class RuleClassTest extends PackageLoadingTestCase {
       AdvertisedProviderSet advertisedProviders,
       @Nullable BaseFunction configuredTargetFunction,
       Function<? super Rule, Map<String, Label>> externalBindingsFunction,
-      @Nullable StarlarkThread ruleDefinitionStarlarkThread,
+      @Nullable Environment ruleDefinitionEnvironment,
       Set<Class<?>> allowedConfigurationFragments,
       MissingFragmentPolicy missingFragmentPolicy,
       boolean supportsConstraintChecking,
       Attribute... attributes) {
-    String ruleDefinitionStarlarkThreadHashCode =
-        ruleDefinitionStarlarkThread == null
+    String ruleDefinitionEnvironmentHashCode =
+        ruleDefinitionEnvironment == null
             ? null
-            : ruleDefinitionStarlarkThread.getTransitiveContentHashCode();
+            : ruleDefinitionEnvironment.getTransitiveContentHashCode();
     return new RuleClass(
         name,
         name,
@@ -909,10 +905,10 @@ public class RuleClassTest extends PackageLoadingTestCase {
         configuredTargetFunction,
         externalBindingsFunction,
         /*optionReferenceFunction=*/ RuleClass.NO_OPTION_REFERENCE,
-        ruleDefinitionStarlarkThread == null
+        ruleDefinitionEnvironment == null
             ? null
-            : (Label) ruleDefinitionStarlarkThread.getGlobals().getLabel(),
-        ruleDefinitionStarlarkThreadHashCode,
+            : (Label) ruleDefinitionEnvironment.getGlobals().getLabel(),
+        ruleDefinitionEnvironmentHashCode,
         new ConfigurationFragmentPolicy.Builder()
             .requiresConfigurationFragments(allowedConfigurationFragments)
             .setMissingFragmentPolicy(missingFragmentPolicy)
