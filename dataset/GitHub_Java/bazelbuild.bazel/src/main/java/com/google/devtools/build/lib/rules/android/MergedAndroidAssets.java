@@ -31,7 +31,7 @@ public class MergedAndroidAssets extends ParsedAndroidAssets {
         dataContext.createOutputArtifact(AndroidRuleClasses.ANDROID_ASSETS_ZIP);
 
     BusyBoxActionBuilder builder = BusyBoxActionBuilder.create(dataContext, "MERGE_ASSETS");
-    if (dataContext.throwOnResourceConflict()) {
+    if (dataContext.getAndroidConfig().throwOnResourceConflict()) {
       builder.addFlag("--throwOnAssetConflict");
     }
 
@@ -39,14 +39,16 @@ public class MergedAndroidAssets extends ParsedAndroidAssets {
         .addOutput("--assetsOutput", mergedAssets)
         .addInput(
             "--primaryData",
-            AndroidDataConverter.PARSED_ASSET_CONVERTER.map(parsed),
+            AndroidDataConverter.MERGABLE_DATA_CONVERTER.map(parsed),
             Iterables.concat(parsed.getAssets(), ImmutableList.of(parsed.getSymbols())))
         .addTransitiveFlag(
             "--directData",
             deps.getDirectParsedAssets(),
-            AndroidDataConverter.PARSED_ASSET_CONVERTER)
+            AndroidDataConverter.MERGABLE_DATA_CONVERTER)
         .addTransitiveFlag(
-            "--data", deps.getTransitiveParsedAssets(), AndroidDataConverter.PARSED_ASSET_CONVERTER)
+            "--data",
+            deps.getTransitiveParsedAssets(),
+            AndroidDataConverter.MERGABLE_DATA_CONVERTER)
         .addTransitiveInputValues(deps.getTransitiveAssets())
         .addTransitiveInputValues(deps.getTransitiveSymbols())
         .buildAndRegister("Merging Android assets", "AndroidAssetMerger");

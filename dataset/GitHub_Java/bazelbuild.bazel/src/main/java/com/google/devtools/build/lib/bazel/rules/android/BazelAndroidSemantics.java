@@ -19,16 +19,15 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.android.AndroidBinary;
 import com.google.devtools.build.lib.rules.android.AndroidCommon;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration;
 import com.google.devtools.build.lib.rules.android.AndroidDataContext;
 import com.google.devtools.build.lib.rules.android.AndroidSemantics;
-import com.google.devtools.build.lib.rules.android.ProguardHelper.ProguardOutput;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArtifacts;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.rules.java.JavaTargetAttributes;
+import com.google.devtools.build.lib.rules.java.ProguardHelper.ProguardOutput;
 
 /**
  * Implementation of Bazel-specific behavior in Android rules.
@@ -79,7 +78,7 @@ public class BazelAndroidSemantics implements AndroidSemantics {
   public ImmutableList<String> getAttributesWithJavaRuntimeDeps(RuleContext ruleContext) {
     switch (ruleContext.getRule().getRuleClass()) {
       case "android_binary":
-        return ImmutableList.of("application_resources", "deps");
+        return ImmutableList.of("deps");
       default:
         throw new UnsupportedOperationException("Only supported for top-level binaries");
     }
@@ -99,16 +98,5 @@ public class BazelAndroidSemantics implements AndroidSemantics {
       ProguardOutput proguardOutput)
       throws InterruptedException {
     return AndroidBinary.DexPostprocessingOutput.create(classesDexZip, proguardOutput.getMapping());
-  }
-
-  @Override
-  public void registerMigrationRuleError(RuleContext ruleContext) throws RuleErrorException {
-    ruleContext.attributeError(
-        "tags",
-        "The native Android rules are deprecated. Please use the Starlark Android rules by adding "
-            + "the following load statement to the BUILD file: "
-            + "load(\"@build_bazel_rules_android//android:rules.bzl\", \""
-            + ruleContext.getRule().getRuleClass()
-            + "\"). See http://github.com/bazelbuild/rules_android.");
   }
 }
