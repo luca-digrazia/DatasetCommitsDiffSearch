@@ -64,7 +64,7 @@ public abstract class MultilayerPerceptron implements Serializable {
     /**
      * The momentum factor.
      */
-    protected TimeFunction momentum = null;
+    protected TimeFunction momentum = TimeFunction.constant(0.0);
     /**
      * The discounting factor for the history/coming gradient in RMSProp.
      */
@@ -146,23 +146,9 @@ public abstract class MultilayerPerceptron implements Serializable {
 
     @Override
     public String toString() {
-        String s = String.format("%s -> %s(learning rate = %s",
+        return String.format("%s -> %s(learning rate = %s, momentum = %s, weight decay = %.2f)",
                 Arrays.stream(net).map(Object::toString).collect(Collectors.joining(" -> ")),
-                output, learningRate);
-
-        if (momentum != null) {
-            s = String.format("%s, momentum = %s", s, momentum);
-        }
-
-        if (lambda != 0.0) {
-            s = String.format("%s, weight decay = %f", s, lambda);
-        }
-
-        if (rho != 0.0) {
-            s = String.format("%s, RMSProp = %f", s, lambda);
-        }
-
-        return s + ")";
+                output, learningRate, momentum, lambda);
     }
 
     /**
@@ -253,7 +239,7 @@ public abstract class MultilayerPerceptron implements Serializable {
      * @return the momentum factor.
      */
     public double getMomentum() {
-        return momentum == null ? 0.0 : momentum.apply(t);
+        return momentum.apply(t);
     }
 
     /**
@@ -342,12 +328,12 @@ public abstract class MultilayerPerceptron implements Serializable {
         upper.backpropagate(null);
 
         if (update) {
-            double eta = getLearningRate();
+            double eta = learningRate.apply(t);
             if (eta <= 0) {
                 throw new IllegalArgumentException("Invalid learning rate: " + eta);
             }
 
-            double alpha = getMomentum();
+            double alpha = momentum.apply(t);
             if (alpha < 0.0 || alpha >= 1.0) {
                 throw new IllegalArgumentException("Invalid momentum factor: " + alpha);
             }
@@ -383,12 +369,12 @@ public abstract class MultilayerPerceptron implements Serializable {
      * @param m the mini-batch size.
      */
     protected void update(int m) {
-        double eta = getLearningRate();
+        double eta = learningRate.apply(t);
         if (eta <= 0) {
             throw new IllegalArgumentException("Invalid learning rate: " + eta);
         }
 
-        double alpha = getMomentum();
+        double alpha = momentum.apply(t);
         if (alpha < 0.0 || alpha >= 1.0) {
             throw new IllegalArgumentException("Invalid momentum factor: " + alpha);
         }
