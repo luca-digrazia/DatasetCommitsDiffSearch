@@ -45,14 +45,13 @@ import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
-import com.google.devtools.build.lib.actions.Artifact.SpecialArtifactType;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.actions.ArtifactResolver;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
-import com.google.devtools.build.lib.actions.BuildConfigurationEvent;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.FileArtifactValue;
+import com.google.devtools.build.lib.actions.FileArtifactValue.RemoteFileArtifactValue;
 import com.google.devtools.build.lib.actions.MutableActionGraph;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.actions.PackageRootResolver;
@@ -63,7 +62,6 @@ import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnActionTemplate;
 import com.google.devtools.build.lib.analysis.actions.SpawnActionTemplate.OutputPathMapper;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
-import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -74,10 +72,8 @@ import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.exec.SingleBuildFileCache;
-import com.google.devtools.build.lib.skyframe.ActionTemplateExpansionValue;
-import com.google.devtools.build.lib.skyframe.ActionTemplateExpansionValue.ActionTemplateExpansionKey;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.SerializationConstant;
-import com.google.devtools.build.lib.syntax.Location;
+import com.google.devtools.build.lib.packages.AspectDescriptor;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.ResourceUsage;
@@ -113,7 +109,10 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
-/** A bunch of utilities that are useful for tests concerning actions, artifacts, etc. */
+/**
+ * A bunch of utilities that are useful for test concerning actions, artifacts,
+ * etc.
+ */
 public final class ActionsTestUtil {
 
   private final ActionGraph actionGraph;
@@ -246,12 +245,10 @@ public final class ActionsTestUtil {
         : new Artifact.DerivedArtifact(root, execPath, NULL_ARTIFACT_OWNER);
   }
 
-  public static SpecialArtifact createTreeArtifactWithGeneratingAction(
-      ArtifactRoot root, PathFragment execPath) {
-    SpecialArtifact treeArtifact =
-        new SpecialArtifact(root, execPath, NULL_ARTIFACT_OWNER, SpecialArtifactType.TREE);
-    treeArtifact.setGeneratingActionKey(NULL_ACTION_LOOKUP_DATA);
-    return treeArtifact;
+  public static TreeFileArtifact createTreeFileArtifactWithNoGeneratingAction(
+      SpecialArtifact parent, String relativePath) {
+    return ActionInputHelper.treeFileArtifactWithNoGeneratingActionSet(
+        parent, PathFragment.create(relativePath), parent.getArtifactOwner());
   }
 
   public static void assertNoArtifactEndingWith(RuleConfiguredTarget target, String path) {
@@ -334,7 +331,16 @@ public final class ActionsTestUtil {
     }
   }
 
-  @SerializationConstant
+  static class NullArtifactOwner implements ArtifactOwner {
+    private NullArtifactOwner() {}
+
+    @Override
+    public Label getLabel() {
+      return NULL_LABEL;
+    }
+  }
+
+  @AutoCodec
   public static final ActionLookupKey NULL_ARTIFACT_OWNER =
       new ActionLookupValue.ActionLookupKey() {
         @Override
@@ -348,9 +354,6 @@ public final class ActionsTestUtil {
         }
       };
 
-  public static final ActionTemplateExpansionKey NULL_TEMPLATE_EXPANSION_ARTIFACT_OWNER =
-      ActionTemplateExpansionValue.key(NULL_ARTIFACT_OWNER, /*actionIndex=*/ 0);
-
   public static final Artifact DUMMY_ARTIFACT =
       new Artifact.SourceArtifact(
           ArtifactRoot.asSourceRoot(Root.absoluteRoot(new InMemoryFileSystem())),
@@ -360,19 +363,17 @@ public final class ActionsTestUtil {
   public static final ActionOwner NULL_ACTION_OWNER =
       ActionOwner.create(
           NULL_LABEL,
-          ImmutableList.of(),
-          new Location("dummy-file", 0, 0),
-          "dummy-configuration-mnemonic",
-          "dummy-kind",
-          "dummy-configuration",
-          new BuildConfigurationEvent(
-              BuildEventStreamProtos.BuildEventId.getDefaultInstance(),
-              BuildEventStreamProtos.BuildEvent.getDefaultInstance()),
+          ImmutableList.<AspectDescriptor>of(),
           null,
-          ImmutableMap.of(),
+          "dummy-configuration-mnemonic",
+          null,
+          "dummy-configuration",
+          null,
+          null,
+          ImmutableMap.<String, String>of(),
           null);
 
-  @SerializationConstant
+  @AutoCodec
   public static final ActionLookupData NULL_ACTION_LOOKUP_DATA =
       ActionLookupData.create(NULL_ARTIFACT_OWNER, 0);
 
@@ -929,23 +930,10 @@ public final class ActionsTestUtil {
   }
 
   /**
-   * A {@link MetadataHandler} for tests that throws {@link UnsupportedOperationException} for its
-   * operations.
-   */
-  public static final MetadataHandler THROWING_METADATA_HANDLER =
-      new FakeMetadataHandlerBase() {
-        @Override
-        public String toString() {
-          return "THROWING_METADATA_HANDLER";
-        }
-      };
-
-  /**
    * A {@link MetadataHandler} all of whose operations throw an exception.
    *
-   * <p>This is to be used as a base class by other test programs that need to implement only a few
-   * of the hooks required by the scenario under test. Tests that need an instance but do not need
-   * any functionality can use {@link #THROWING_METADATA_HANDLER}.
+   * <p>This is to be used as a base class by other test programs that need to implement only a
+   * few of the hooks required by the scenario under test.
    */
   public static class FakeMetadataHandlerBase implements MetadataHandler {
     @Override
@@ -969,24 +957,23 @@ public final class ActionsTestUtil {
     }
 
     @Override
-    public FileArtifactValue constructMetadataForDigest(
-        Artifact output, FileStatus statNoFollow, byte[] digest) {
+    public void injectDigest(ActionInput output, FileStatus statNoFollow, byte[] digest) {
       throw new UnsupportedOperationException();
     }
 
     @Override
-    public void injectFile(Artifact output, FileArtifactValue metadata) {
+    public void injectRemoteFile(Artifact output, RemoteFileArtifactValue metadata) {
       throw new UnsupportedOperationException();
     }
 
     @Override
-    public void injectDirectory(
-        SpecialArtifact treeArtifact, Map<TreeFileArtifact, FileArtifactValue> children) {
+    public void injectRemoteDirectory(
+        SpecialArtifact treeArtifact, Map<TreeFileArtifact, RemoteFileArtifactValue> children) {
       throw new UnsupportedOperationException();
     }
 
     @Override
-    public void markOmitted(Artifact output) {
+    public void markOmitted(ActionInput output) {
       throw new UnsupportedOperationException();
     }
 

@@ -39,12 +39,12 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.devtools.build.lib.actions.ActionInput;
+import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.EnvironmentalExecException;
 import com.google.devtools.build.lib.actions.ExecException;
-import com.google.devtools.build.lib.actions.FileArtifactValue;
 import com.google.devtools.build.lib.actions.FileArtifactValue.RemoteFileArtifactValue;
 import com.google.devtools.build.lib.actions.UserExecException;
 import com.google.devtools.build.lib.actions.cache.MetadataInjector;
@@ -615,11 +615,11 @@ public class RemoteCache implements AutoCloseable {
                 + "--experimental_remote_download_outputs=minimal");
       }
       SpecialArtifact parent = (SpecialArtifact) output;
-      ImmutableMap.Builder<TreeFileArtifact, FileArtifactValue> childMetadata =
+      ImmutableMap.Builder<TreeFileArtifact, RemoteFileArtifactValue> childMetadata =
           ImmutableMap.builderWithExpectedSize(directory.files.size());
       for (FileMetadata file : directory.files()) {
         TreeFileArtifact child =
-            TreeFileArtifact.createTreeOutput(parent, file.path().relativeTo(parent.getPath()));
+            ActionInputHelper.treeFileArtifact(parent, file.path().relativeTo(parent.getPath()));
         RemoteFileArtifactValue value =
             new RemoteFileArtifactValue(
                 DigestUtil.toBinaryDigest(file.digest()),
@@ -628,7 +628,7 @@ public class RemoteCache implements AutoCloseable {
                 actionId);
         childMetadata.put(child, value);
       }
-      metadataInjector.injectDirectory(parent, childMetadata.build());
+      metadataInjector.injectRemoteDirectory(parent, childMetadata.build());
     } else {
       FileMetadata outputMetadata = metadata.file(execRoot.getRelative(output.getExecPathString()));
       if (outputMetadata == null) {
@@ -636,7 +636,7 @@ public class RemoteCache implements AutoCloseable {
         // SkyFrame will make sure to fail.
         return;
       }
-      metadataInjector.injectFile(
+      metadataInjector.injectRemoteFile(
           output,
           new RemoteFileArtifactValue(
               DigestUtil.toBinaryDigest(outputMetadata.digest()),
