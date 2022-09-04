@@ -41,7 +41,6 @@ import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.packages.StarlarkInfo;
 import com.google.devtools.build.lib.packages.TargetUtils;
-import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
 import com.google.devtools.build.lib.rules.cpp.CcCompilationHelper.CompilationInfo;
 import com.google.devtools.build.lib.rules.cpp.CcLinkingContext.LinkOptions;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.ActionConfig;
@@ -61,6 +60,15 @@ import com.google.devtools.build.lib.rules.cpp.CppActionConfigs.CppPlatform;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkingMode;
 import com.google.devtools.build.lib.starlarkbuildapi.cpp.CcModuleApi;
+import com.google.devtools.build.lib.syntax.ClassObject;
+import com.google.devtools.build.lib.syntax.Dict;
+import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.NoneType;
+import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.syntax.StarlarkList;
+import com.google.devtools.build.lib.syntax.StarlarkThread;
+import com.google.devtools.build.lib.syntax.Tuple;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.StringUtil;
@@ -72,16 +80,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import javax.annotation.Nullable;
-import net.starlark.java.eval.ClassObject;
-import net.starlark.java.eval.Dict;
-import net.starlark.java.eval.EvalException;
-import net.starlark.java.eval.NoneType;
-import net.starlark.java.eval.Sequence;
-import net.starlark.java.eval.Starlark;
-import net.starlark.java.eval.StarlarkInt;
-import net.starlark.java.eval.StarlarkList;
-import net.starlark.java.eval.StarlarkThread;
-import net.starlark.java.eval.Tuple;
 
 /** A module that contains Starlark utilities for C++ support. */
 public abstract class CcModule
@@ -730,7 +728,7 @@ public abstract class CcModule
 
   @Override
   public void checkExperimentalCcSharedLibrary(StarlarkThread thread) throws EvalException {
-    if (!thread.getSemantics().getBool(BuildLanguageOptions.EXPERIMENTAL_CC_SHARED_LIBRARY)) {
+    if (!thread.getSemantics().experimentalCcSharedLibrary()) {
       throw Starlark.errorf("Pass --experimental_cc_shared_library to use cc_shared_library");
     }
   }
@@ -756,9 +754,7 @@ public abstract class CcModule
       StarlarkThread thread)
       throws EvalException {
     if (Starlark.isNullOrNone(linkerInputs)) {
-      if (thread
-          .getSemantics()
-          .getBool(BuildLanguageOptions.INCOMPATIBLE_REQUIRE_LINKER_INPUT_CC_API)) {
+      if (thread.getSemantics().incompatibleRequireLinkerInputCcApi()) {
         throw Starlark.errorf("linker_inputs cannot be None");
       }
       @SuppressWarnings("unchecked")
@@ -913,7 +909,7 @@ public abstract class CcModule
                   .getExecPath(
                       starlarkRuleContext
                           .getStarlarkSemantics()
-                          .getBool(BuildLanguageOptions.EXPERIMENTAL_SIBLING_REPOSITORY_LAYOUT))
+                          .experimentalSiblingRepositoryLayout())
                   .getRelative(PathFragment.create(tool.second))
                   .getPathString();
         }
@@ -963,9 +959,7 @@ public abstract class CcModule
               linkerToolPath,
               /* supportsEmbeddedRuntimes= */ false,
               /* supportsInterfaceSharedLibraries= */ false,
-              starlarkRuleContext
-                  .getStarlarkSemantics()
-                  .getBool(BuildLanguageOptions.INCOMPATIBLE_DO_NOT_SPLIT_LINKING_CMDLINE))) {
+              starlarkRuleContext.getStarlarkSemantics().incompatibleDoNotSplitLinkingCmdline())) {
         legacyFeaturesBuilder.add(new Feature(feature));
       }
       legacyFeaturesBuilder.addAll(
@@ -976,9 +970,7 @@ public abstract class CcModule
       for (CToolchain.Feature feature :
           CppActionConfigs.getFeaturesToAppearLastInFeaturesList(
               featureNames,
-              starlarkRuleContext
-                  .getStarlarkSemantics()
-                  .getBool(BuildLanguageOptions.INCOMPATIBLE_DO_NOT_SPLIT_LINKING_CMDLINE))) {
+              starlarkRuleContext.getStarlarkSemantics().incompatibleDoNotSplitLinkingCmdline())) {
         legacyFeaturesBuilder.add(new Feature(feature));
       }
 
@@ -1864,7 +1856,7 @@ public abstract class CcModule
       String language,
       String outputType,
       boolean linkDepsStatically,
-      StarlarkInt stamp,
+      int stamp,
       Sequence<?> additionalInputs,
       Object grepIncludes,
       StarlarkThread thread)
@@ -1872,7 +1864,7 @@ public abstract class CcModule
     validateLanguage(language);
     validateOutputType(outputType);
     boolean isStampingEnabled =
-        isStampingEnabled(stamp.toInt("stamp"), actions.getRuleContext().getConfiguration());
+        isStampingEnabled(stamp, actions.getRuleContext().getConfiguration());
     CcToolchainProvider ccToolchainProvider =
         convertFromNoneable(starlarkCcToolchainProvider, null);
     FeatureConfigurationForStarlark featureConfiguration =

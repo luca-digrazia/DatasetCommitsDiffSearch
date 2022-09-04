@@ -1,4 +1,4 @@
-// Copyright 2006 Google Inc. All Rights Reserved.
+// Copyright 2006 The Bazel Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,223 +14,123 @@
 
 package com.google.devtools.build.lib.syntax;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertThrows;
 
-import com.google.common.collect.Lists;
-
+import com.google.devtools.build.lib.syntax.EvalUtils.ComparisonException;
+import javax.annotation.Nullable;
+import net.starlark.java.annot.StarlarkBuiltin;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-import java.util.Arrays;
-import java.util.IllegalFormatException;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-
 /**
- *  Test properties of the evaluator's datatypes and utility functions
- *  without actually creating any parse trees.
+ * Test properties of the evaluator's datatypes and utility functions without actually creating any
+ * parse trees.
  */
 @RunWith(JUnit4.class)
-public class EvalUtilsTest {
+public final class EvalUtilsTest {
 
-  private static List<?> makeList(Object ...args) {
-    return EvalUtils.makeSequence(Arrays.<Object>asList(args), false);
+  private static StarlarkList<Object> makeList(@Nullable Mutability mu) {
+    return StarlarkList.of(mu, 1, 2, 3);
   }
-  private static List<?> makeTuple(Object ...args) {
-    return EvalUtils.makeSequence(Arrays.<Object>asList(args), true);
+
+  private static Dict<Object, Object> makeDict(@Nullable Mutability mu) {
+    return Dict.of(mu, 1, 1, 2, 2);
   }
-  private static Map<Object, Object> makeDict() {
-    return new LinkedHashMap<>();
-  }
-  private static FilesetEntry makeFilesetEntry() {
-    try {
-      return new FilesetEntry(Label.parseAbsolute("//foo:bar"),
-                              Lists.<Label>newArrayList(), Lists.newArrayList("xyz"), "",
-                              FilesetEntry.SymlinkBehavior.COPY, ".");
-    } catch (Label.SyntaxException e) {
-      throw new RuntimeException("Bad label: ", e);
-    }
+
+  /** MockClassA */
+  @StarlarkBuiltin(name = "MockClassA", doc = "MockClassA")
+  public static class MockClassA implements StarlarkValue {}
+
+  /** MockClassB */
+  public static class MockClassB extends MockClassA {
   }
 
   @Test
   public void testDataTypeNames() throws Exception {
-    assertEquals("string", EvalUtils.getDataTypeName("foo"));
-    assertEquals("int", EvalUtils.getDataTypeName(3));
-    assertEquals("tuple", EvalUtils.getDataTypeName(makeTuple(1, 2, 3)));
-    assertEquals("list",  EvalUtils.getDataTypeName(makeList(1, 2, 3)));
-    assertEquals("dict",  EvalUtils.getDataTypeName(makeDict()));
-    assertEquals("FilesetEntry",  EvalUtils.getDataTypeName(makeFilesetEntry()));
-    assertEquals("None", EvalUtils.getDataTypeName(Environment.NONE));
+    assertThat(Starlark.type("foo")).isEqualTo("string");
+    assertThat(Starlark.type(3)).isEqualTo("int");
+    assertThat(Starlark.type(Tuple.of(1, 2, 3))).isEqualTo("tuple");
+    assertThat(Starlark.type(makeList(null))).isEqualTo("list");
+    assertThat(Starlark.type(makeDict(null))).isEqualTo("dict");
+    assertThat(Starlark.type(Starlark.NONE)).isEqualTo("NoneType");
+    assertThat(Starlark.type(new MockClassA())).isEqualTo("MockClassA");
+    assertThat(Starlark.type(new MockClassB())).isEqualTo("MockClassA");
   }
 
   @Test
-  public void testDatatypeMutability() throws Exception {
-    assertTrue(EvalUtils.isImmutable("foo"));
-    assertTrue(EvalUtils.isImmutable(3));
-    assertTrue(EvalUtils.isImmutable(makeTuple(1, 2, 3)));
-    assertFalse(EvalUtils.isImmutable(makeList(1, 2, 3)));
-    assertFalse(EvalUtils.isImmutable(makeDict()));
-    assertFalse(EvalUtils.isImmutable(makeFilesetEntry()));
+  public void testDatatypeMutabilityPrimitive() throws Exception {
+    assertThat(Starlark.isImmutable("foo")).isTrue();
+    assertThat(Starlark.isImmutable(3)).isTrue();
   }
 
   @Test
-  public void testPrintValue() throws Exception {
-    // Note that prettyPrintValue and printValue only differ on behaviour of
-    // labels and strings at toplevel.
-    assertEquals("foo\nbar", EvalUtils.printValue("foo\nbar"));
-    assertEquals("\"foo\\nbar\"", EvalUtils.prettyPrintValue("foo\nbar"));
-    assertEquals("'", EvalUtils.printValue("'"));
-    assertEquals("\"'\"", EvalUtils.prettyPrintValue("'"));
-    assertEquals("\"", EvalUtils.printValue("\""));
-    assertEquals("\"\\\"\"", EvalUtils.prettyPrintValue("\""));
-    assertEquals("3", EvalUtils.printValue(3));
-    assertEquals("3", EvalUtils.prettyPrintValue(3));
-    assertEquals("None", EvalUtils.prettyPrintValue(Environment.NONE));
+  public void testDatatypeMutabilityShallow() throws Exception {
+    assertThat(Starlark.isImmutable(Tuple.of(1, 2, 3))).isTrue();
 
-    assertEquals("//x:x", EvalUtils.printValue(Label.parseAbsolute("//x")));
-    assertEquals("\"//x:x\"", EvalUtils.prettyPrintValue(Label.parseAbsolute("//x")));
+    assertThat(Starlark.isImmutable(makeList(null))).isTrue();
+    assertThat(Starlark.isImmutable(makeDict(null))).isTrue();
 
-    List<?> list = makeList("foo", "bar");
-    List<?> tuple = makeTuple("foo", "bar");
-
-    assertEquals("(1, [\"foo\", \"bar\"], 3)",
-                 EvalUtils.printValue(makeTuple(1, list, 3)));
-    assertEquals("(1, [\"foo\", \"bar\"], 3)",
-                 EvalUtils.prettyPrintValue(makeTuple(1, list, 3)));
-    assertEquals("[1, (\"foo\", \"bar\"), 3]",
-                 EvalUtils.printValue(makeList(1, tuple, 3)));
-    assertEquals("[1, (\"foo\", \"bar\"), 3]",
-                 EvalUtils.prettyPrintValue(makeList(1, tuple, 3)));
-
-    Map<Object, Object> dict = makeDict();
-    dict.put(1, tuple);
-    dict.put(2, list);
-    dict.put("foo", makeList());
-    assertEquals("{1: (\"foo\", \"bar\"), 2: [\"foo\", \"bar\"], \"foo\": []}",
-                EvalUtils.printValue(dict));
-    assertEquals("{1: (\"foo\", \"bar\"), 2: [\"foo\", \"bar\"], \"foo\": []}",
-                EvalUtils.prettyPrintValue(dict));
-    assertEquals("FilesetEntry(srcdir = \"//foo:bar\", files = [], "
-               + "excludes = [\"xyz\"], destdir = \"\", "
-               + "strip_prefix = \".\", symlinks = \"copy\")",
-                 EvalUtils.prettyPrintValue(makeFilesetEntry()));
+    Mutability mu = Mutability.create("test");
+    assertThat(Starlark.isImmutable(makeList(mu))).isFalse();
+    assertThat(Starlark.isImmutable(makeDict(mu))).isFalse();
   }
 
-  private void checkFormatPositionalFails(String format, List<?> tuple,
-                                          String errorMessage) {
-    try {
-      EvalUtils.formatString(format, tuple);
-      fail();
-    } catch (IllegalFormatException e) {
-      assertEquals(errorMessage, e.getMessage());
+  @Test
+  public void testDatatypeMutabilityDeep() throws Exception {
+    Mutability mu = Mutability.create("test");
+    assertThat(Starlark.isImmutable(Tuple.of(makeList(null)))).isTrue();
+    assertThat(Starlark.isImmutable(Tuple.of(makeList(mu)))).isFalse();
+  }
+
+  @Test
+  public void testComparatorWithDifferentTypes() throws Exception {
+    Mutability mu = Mutability.create("test");
+
+    StarlarkValue myValue = new StarlarkValue() {};
+
+    Object[] objects = {
+      "1",
+      2,
+      true,
+      Starlark.NONE,
+      Tuple.of(1, 2, 3),
+      Tuple.of("1", "2", "3"),
+      StarlarkList.of(mu, 1, 2, 3),
+      StarlarkList.of(mu, "1", "2", "3"),
+      Dict.of(mu, "key", 123),
+      Dict.of(mu, 123, "value"),
+      myValue,
+    };
+
+    for (int i = 0; i < objects.length; ++i) {
+      for (int j = 0; j < objects.length; ++j) {
+        if (i != j) {
+          Object first = objects[i];
+          Object second = objects[j];
+          assertThrows(
+              ComparisonException.class,
+              () -> EvalUtils.STARLARK_COMPARATOR.compare(first, second));
+        }
+      }
     }
   }
 
   @Test
-  public void testFormatPositional() throws Exception {
-    assertEquals("foo 3", EvalUtils.formatString("%s %d", makeTuple("foo", 3)));
-
-    // Note: formatString doesn't perform scalar x -> (x) conversion;
-    // The %-operator is responsible for that.
-    assertEquals("", EvalUtils.formatString("", makeTuple()));
-    assertEquals("foo", EvalUtils.formatString("%s", makeTuple("foo")));
-    assertEquals("3.14159", EvalUtils.formatString("%s", makeTuple(3.14159)));
-    checkFormatPositionalFails("%s", makeTuple(1, 2, 3),
-        "not all arguments converted during string formatting");
-    assertEquals("%foo", EvalUtils.formatString("%%%s", makeTuple("foo")));
-    checkFormatPositionalFails("%%s", makeTuple("foo"),
-        "not all arguments converted during string formatting");
-    checkFormatPositionalFails("% %s", makeTuple("foo"),
-        "invalid arguments for format string");
-    assertEquals("[1, 2, 3]", EvalUtils.formatString("%s", makeTuple(makeList(1, 2, 3))));
-    assertEquals("(1, 2, 3)", EvalUtils.formatString("%s", makeTuple(makeTuple(1, 2, 3))));
-    assertEquals("[]", EvalUtils.formatString("%s", makeTuple(makeList())));
-    assertEquals("()", EvalUtils.formatString("%s", makeTuple(makeTuple())));
-
-    checkFormatPositionalFails("%.3g", makeTuple(), "invalid arguments for format string");
-    checkFormatPositionalFails("%.3g", makeTuple(1, 2), "invalid arguments for format string");
-    checkFormatPositionalFails("%.s", makeTuple(), "invalid arguments for format string");
-  }
-
-  private String createExpectedFilesetEntryString(FilesetEntry.SymlinkBehavior symlinkBehavior) {
-    return "FilesetEntry(srcdir = \"//x:x\","
-           + " files = [\"//x:x\"],"
-           + " excludes = [],"
-           + " destdir = \"\","
-           + " strip_prefix = \".\","
-           + " symlinks = \"" + symlinkBehavior.toString().toLowerCase() + "\")";
-  }
-
-  private FilesetEntry createTestFilesetEntry(FilesetEntry.SymlinkBehavior symlinkBehavior)
-    throws Exception {
-    Label label = Label.parseAbsolute("//x");
-    return new FilesetEntry(label,
-                            Arrays.asList(label),
-                            Arrays.<String>asList(),
-                            "",
-                            symlinkBehavior,
-                            ".");
+  public void testComparatorWithNones() throws Exception {
+    assertThrows(
+        ComparisonException.class,
+        () -> EvalUtils.STARLARK_COMPARATOR.compare(Starlark.NONE, Starlark.NONE));
   }
 
   @Test
-  public void testFilesetEntrySymlinkAttr() throws Exception {
-    FilesetEntry entryDereference =
-      createTestFilesetEntry(FilesetEntry.SymlinkBehavior.DEREFERENCE);
-
-    assertEquals(createExpectedFilesetEntryString(FilesetEntry.SymlinkBehavior.DEREFERENCE),
-                 EvalUtils.prettyPrintValue(entryDereference));
-  }
-
-  private FilesetEntry createStripPrefixFilesetEntry(String stripPrefix)  throws Exception {
-    Label label = Label.parseAbsolute("//x");
-    return new FilesetEntry(
-        label,
-        Arrays.asList(label),
-        Arrays.<String>asList(),
-        "",
-        FilesetEntry.SymlinkBehavior.DEREFERENCE,
-        stripPrefix);
-  }
-
-  @Test
-  public void testFilesetEntryStripPrefixAttr() throws Exception {
-    FilesetEntry withoutStripPrefix = createStripPrefixFilesetEntry(".");
-    FilesetEntry withStripPrefix = createStripPrefixFilesetEntry("orange");
-
-    String prettyWithout = EvalUtils.prettyPrintValue(withoutStripPrefix);
-    String prettyWith = EvalUtils.prettyPrintValue(withStripPrefix);
-
-    assertTrue(prettyWithout.contains("strip_prefix = \".\""));
-    assertTrue(prettyWith.contains("strip_prefix = \"orange\""));
-  }
-
-  @Test
-  public void testRegressionCrashInPrettyPrintValue() throws Exception {
-    // Would cause crash in code such as this:
-    //  Fileset(name='x', entries=[], out=[FilesetEntry(files=['a'])])
-    // While formatting the "expected x, got y" message for the 'out'
-    // attribute, prettyPrintValue(FilesetEntry) would be recursively called
-    // with a List<Label> even though this isn't a valid datatype in the
-    // interpreter.
-    // Fileset isn't part of bazel, even though FilesetEntry is.
-    Label label = Label.parseAbsolute("//x");
-    assertEquals("FilesetEntry(srcdir = \"//x:x\","
-                 + " files = [\"//x:x\"],"
-                 + " excludes = [],"
-                 + " destdir = \"\","
-                 + " strip_prefix = \".\","
-                 + " symlinks = \"copy\")",
-                 EvalUtils.prettyPrintValue(
-                     new FilesetEntry(label,
-                                      Arrays.asList(label),
-                                      Arrays.<String>asList(),
-                                      "",
-                                      FilesetEntry.SymlinkBehavior.COPY,
-                                      ".")));
+  public void testLen() {
+    assertThat(Starlark.len("abc")).isEqualTo(3);
+    assertThat(Starlark.len(Tuple.of(1, 2, 3))).isEqualTo(3);
+    assertThat(Starlark.len(StarlarkList.of(null, 1, 2, 3))).isEqualTo(3);
+    assertThat(Starlark.len(Dict.of(null, "one", 1, "two", 2))).isEqualTo(2);
+    assertThat(Starlark.len(true)).isEqualTo(-1);
+    assertThrows(IllegalArgumentException.class, () -> Starlark.len(this));
   }
 }

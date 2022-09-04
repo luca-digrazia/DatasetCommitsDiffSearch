@@ -17,6 +17,7 @@ package com.google.devtools.build.lib.analysis.starlark;
 import static com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransition.PATCH_TRANSITION_KEY;
 import static com.google.devtools.build.lib.packages.RuleClass.Builder.STARLARK_BUILD_SETTING_DEFAULT_ATTR_NAME;
 
+import com.google.common.base.Function;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableCollection;
@@ -45,6 +46,7 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.ShToolchain;
+import com.google.devtools.build.lib.analysis.TransitionMode;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.FragmentCollection;
@@ -72,10 +74,20 @@ import com.google.devtools.build.lib.packages.StructProvider;
 import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.packages.Type.ConversionException;
 import com.google.devtools.build.lib.packages.Type.LabelClass;
-import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
 import com.google.devtools.build.lib.shell.ShellUtils;
 import com.google.devtools.build.lib.shell.ShellUtils.TokenizationException;
 import com.google.devtools.build.lib.starlarkbuildapi.StarlarkRuleContextApi;
+import com.google.devtools.build.lib.syntax.ClassObject;
+import com.google.devtools.build.lib.syntax.Dict;
+import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.Printer;
+import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.syntax.StarlarkList;
+import com.google.devtools.build.lib.syntax.StarlarkSemantics;
+import com.google.devtools.build.lib.syntax.StarlarkThread;
+import com.google.devtools.build.lib.syntax.StarlarkValue;
+import com.google.devtools.build.lib.syntax.Tuple;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -86,17 +98,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import javax.annotation.Nullable;
-import net.starlark.java.eval.ClassObject;
-import net.starlark.java.eval.Dict;
-import net.starlark.java.eval.EvalException;
-import net.starlark.java.eval.Printer;
-import net.starlark.java.eval.Sequence;
-import net.starlark.java.eval.Starlark;
-import net.starlark.java.eval.StarlarkList;
-import net.starlark.java.eval.StarlarkSemantics;
-import net.starlark.java.eval.StarlarkThread;
-import net.starlark.java.eval.StarlarkValue;
-import net.starlark.java.eval.Tuple;
 
 /**
  * A Starlark API for the ruleContext.
@@ -109,6 +110,14 @@ import net.starlark.java.eval.Tuple;
  */
 public final class StarlarkRuleContext implements StarlarkRuleContextApi<ConstraintValueInfo> {
 
+  public static final Function<Attribute, Object> ATTRIBUTE_VALUE_EXTRACTOR_FOR_ASPECT =
+      new Function<Attribute, Object>() {
+        @Nullable
+        @Override
+        public Object apply(Attribute attribute) {
+          return attribute.getDefaultValue(null);
+        }
+      };
   public static final String EXECUTABLE_OUTPUT_NAME = "executable";
 
   // This field is a copy of the info from ruleContext, stored separately so it can be accessed
@@ -229,7 +238,7 @@ public final class StarlarkRuleContext implements StarlarkRuleContextApi<Constra
       StarlarkAttributesCollection.Builder aspectBuilder =
           StarlarkAttributesCollection.builder(this);
       for (Attribute attribute : attributes) {
-        aspectBuilder.addAttribute(attribute, attribute.getDefaultValue(ruleContext.getRule()));
+        aspectBuilder.addAttribute(attribute, attribute.getDefaultValue(null));
       }
       this.attributesCollection = aspectBuilder.build();
 
@@ -246,7 +255,7 @@ public final class StarlarkRuleContext implements StarlarkRuleContextApi<Constra
           continue;
         }
         for (Attribute attribute : aspect.getDefinition().getAttributes().values()) {
-          ruleBuilder.addAttribute(attribute, attribute.getDefaultValue(ruleContext.getRule()));
+          ruleBuilder.addAttribute(attribute, attribute.getDefaultValue(null));
         }
       }
 
@@ -519,21 +528,21 @@ public final class StarlarkRuleContext implements StarlarkRuleContextApi<Constra
     return splitAttributes;
   }
 
-  /** See {@link RuleContext#getExecutablePrerequisite(String)}. */
+  /** See {@link RuleContext#getExecutablePrerequisite(String, TransitionMode)}. */
   @Override
   public StructImpl getExecutable() throws EvalException {
     checkMutable("executable");
     return attributesCollection.getExecutable();
   }
 
-  /** See {@link RuleContext#getPrerequisiteArtifact(String)}. */
+  /** See {@link RuleContext#getPrerequisiteArtifact(String, TransitionMode)}. */
   @Override
   public StructImpl getFile() throws EvalException {
     checkMutable("file");
     return attributesCollection.getFile();
   }
 
-  /** See {@link RuleContext#getPrerequisiteArtifacts(String)}. */
+  /** See {@link RuleContext#getPrerequisiteArtifacts(String, TransitionMode)}. */
   @Override
   public StructImpl getFiles() throws EvalException {
     checkMutable("files");
@@ -1031,7 +1040,7 @@ public final class StarlarkRuleContext implements StarlarkRuleContextApi<Constra
 
   private static void checkDeprecated(String newApi, String oldApi, StarlarkSemantics semantics)
       throws EvalException {
-    if (semantics.getBool(BuildLanguageOptions.INCOMPATIBLE_NEW_ACTIONS_API)) {
+    if (semantics.incompatibleNewActionsApi()) {
       throw Starlark.errorf(
           "Use %s instead of %s. \n"
               + "Use --incompatible_new_actions_api=false to temporarily disable this check.",

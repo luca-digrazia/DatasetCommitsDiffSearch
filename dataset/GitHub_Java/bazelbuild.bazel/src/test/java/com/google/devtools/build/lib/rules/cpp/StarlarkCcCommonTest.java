@@ -27,6 +27,7 @@ import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleContext;
+import com.google.devtools.build.lib.analysis.TransitionMode;
 import com.google.devtools.build.lib.analysis.util.AnalysisMock;
 import com.google.devtools.build.lib.analysis.util.AnalysisTestUtil;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
@@ -54,6 +55,10 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Tool;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.VariableWithValue;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.WithFeatureSet;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainVariables.StringValueParser;
+import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.syntax.StarlarkList;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.util.Pair;
@@ -67,10 +72,6 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import net.starlark.java.eval.EvalException;
-import net.starlark.java.eval.Sequence;
-import net.starlark.java.eval.Starlark;
-import net.starlark.java.eval.StarlarkList;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -81,8 +82,8 @@ import org.junit.runners.JUnit4;
 public class StarlarkCcCommonTest extends BuildViewTestCase {
 
   @Before
-  public void setBuildLanguageOptions() throws Exception {
-    this.setBuildLanguageOptions(StarlarkCcCommonTestHelper.CC_STARLARK_WHITELIST_FLAG);
+  public void setStarlarkSemanticsOptions() throws Exception {
+    this.setStarlarkSemanticsOptions(StarlarkCcCommonTestHelper.CC_STARLARK_WHITELIST_FLAG);
     invalidatePackages();
 
     scratch.file("myinfo/myinfo.bzl", "MyInfo = provider()");
@@ -131,7 +132,8 @@ public class StarlarkCcCommonTest extends BuildViewTestCase {
     Depset allFiles = (Depset) getMyInfoFromTarget(r).getValue("all_files");
     RuleContext ruleContext = getRuleContext(r);
     CcToolchainProvider toolchain =
-        CppHelper.getToolchain(ruleContext, ruleContext.getPrerequisite("$cc_toolchain"));
+        CppHelper.getToolchain(
+            ruleContext, ruleContext.getPrerequisite("$cc_toolchain", TransitionMode.TARGET));
     assertThat(allFiles.getSet(Artifact.class)).isEqualTo(toolchain.getAllFiles());
   }
 
@@ -191,7 +193,8 @@ public class StarlarkCcCommonTest extends BuildViewTestCase {
 
     RuleContext ruleContext = getRuleContext(r);
     CcToolchainProvider toolchain =
-        CppHelper.getToolchain(ruleContext, ruleContext.getPrerequisite("$cc_toolchain"));
+        CppHelper.getToolchain(
+            ruleContext, ruleContext.getPrerequisite("$cc_toolchain", TransitionMode.TARGET));
     assertThat(staticRuntimeLib.getSet(Artifact.class))
         .isEqualTo(toolchain.getStaticRuntimeLibForTesting());
     assertThat(dynamicRuntimeLib.getSet(Artifact.class))
@@ -231,7 +234,8 @@ public class StarlarkCcCommonTest extends BuildViewTestCase {
     String actionToolPath = (String) getMyInfoFromTarget(r).getValue("action_tool_path");
     RuleContext ruleContext = getRuleContext(r);
     CcToolchainProvider toolchain =
-        CppHelper.getToolchain(ruleContext, ruleContext.getPrerequisite("$cc_toolchain"));
+        CppHelper.getToolchain(
+            ruleContext, ruleContext.getPrerequisite("$cc_toolchain", TransitionMode.TARGET));
     FeatureConfiguration featureConfiguration =
         CcCommon.configureFeaturesOrThrowEvalException(
             ImmutableSet.of(),
@@ -398,7 +402,8 @@ public class StarlarkCcCommonTest extends BuildViewTestCase {
         (Sequence<String>) getMyInfoFromTarget(r).getValue("command_line");
     RuleContext ruleContext = getRuleContext(r);
     CcToolchainProvider toolchain =
-        CppHelper.getToolchain(ruleContext, ruleContext.getPrerequisite("$cc_toolchain"));
+        CppHelper.getToolchain(
+            ruleContext, ruleContext.getPrerequisite("$cc_toolchain", TransitionMode.TARGET));
     FeatureConfiguration featureConfiguration =
         CcCommon.configureFeaturesOrThrowEvalException(
             ImmutableSet.of(),
@@ -446,7 +451,8 @@ public class StarlarkCcCommonTest extends BuildViewTestCase {
         (Map<String, String>) getMyInfoFromTarget(r).getValue("environment_variables");
     RuleContext ruleContext = getRuleContext(r);
     CcToolchainProvider toolchain =
-        CppHelper.getToolchain(ruleContext, ruleContext.getPrerequisite("$cc_toolchain"));
+        CppHelper.getToolchain(
+            ruleContext, ruleContext.getPrerequisite("$cc_toolchain", TransitionMode.TARGET));
     FeatureConfiguration featureConfiguration =
         CcCommon.configureFeaturesOrThrowEvalException(
             ImmutableSet.of(),
@@ -1316,7 +1322,7 @@ public class StarlarkCcCommonTest extends BuildViewTestCase {
                     CppRuleClasses.PIC,
                     CppRuleClasses.SUPPORTS_PIC,
                     CppRuleClasses.SUPPORTS_DYNAMIC_LINKER));
-    this.setBuildLanguageOptions("--incompatible_depset_for_libraries_to_link_getter");
+    this.setStarlarkSemanticsOptions("--incompatible_depset_for_libraries_to_link_getter");
     setUpCcLinkingContextTest(false);
     ConfiguredTarget a = getConfiguredTarget("//a:a");
     StructImpl info = ((StructImpl) getMyInfoFromTarget(a).getValue("info"));
@@ -1362,7 +1368,8 @@ public class StarlarkCcCommonTest extends BuildViewTestCase {
     ConfiguredTarget a = getConfiguredTarget("//foo:a");
     RuleContext ruleContext = getRuleContext(a);
     CcToolchainProvider toolchain =
-        CppHelper.getToolchain(ruleContext, ruleContext.getPrerequisite("$cc_toolchain"));
+        CppHelper.getToolchain(
+            ruleContext, ruleContext.getPrerequisite("$cc_toolchain", TransitionMode.TARGET));
     StructImpl info = ((StructImpl) getMyInfoFromTarget(a).getValue("info"));
     Depset librariesToLink = info.getValue("libraries_to_link", Depset.class);
     assertThat(
@@ -1397,7 +1404,8 @@ public class StarlarkCcCommonTest extends BuildViewTestCase {
     ConfiguredTarget a = getConfiguredTarget("//foo:a");
     RuleContext ruleContext = getRuleContext(a);
     CcToolchainProvider toolchain =
-        CppHelper.getToolchain(ruleContext, ruleContext.getPrerequisite("$cc_toolchain"));
+        CppHelper.getToolchain(
+            ruleContext, ruleContext.getPrerequisite("$cc_toolchain", TransitionMode.TARGET));
     StructImpl info = ((StructImpl) getMyInfoFromTarget(a).getValue("info"));
     Depset librariesToLink = info.getValue("libraries_to_link", Depset.class);
     assertThat(
@@ -1430,7 +1438,7 @@ public class StarlarkCcCommonTest extends BuildViewTestCase {
       List<String> dynamicLibraryList)
       throws Exception {
     useConfiguration("--features=-supports_interface_shared_libraries");
-    this.setBuildLanguageOptions("--incompatible_depset_for_libraries_to_link_getter");
+    this.setStarlarkSemanticsOptions("--incompatible_depset_for_libraries_to_link_getter");
     setUpCcLinkingContextTest(false);
     ConfiguredTarget a = getConfiguredTarget("//a:a");
 
@@ -6364,7 +6372,7 @@ public class StarlarkCcCommonTest extends BuildViewTestCase {
   /** Fixes #10580 */
   @Test
   public void testMixedLinkerInputsWithOwnerAndWithout() throws Exception {
-    setBuildLanguageOptions("--noincompatible_require_linker_input_cc_api");
+    setStarlarkSemanticsOptions("--noincompatible_require_linker_input_cc_api");
     setUpCcLinkingContextTest(false);
     scratch.file("foo/BUILD", "load(':rule.bzl', 'crule')", "crule(name='a')");
     scratch.file(
@@ -6555,110 +6563,5 @@ public class StarlarkCcCommonTest extends BuildViewTestCase {
     checkError(
         "//b:import_objects_no_pic_lib",
         "If you pass 'pic_objects' you must also pass a 'pic_static_library'");
-  }
-
-  private void setupDebugPackageProviderTest(String fission) throws Exception {
-    getAnalysisMock()
-        .ccSupport()
-        .setupCcToolchainConfig(
-            mockToolsConfig,
-            CcToolchainConfig.builder().withFeatures(CppRuleClasses.PER_OBJECT_DEBUG_INFO));
-    useConfiguration(fission);
-    scratch.file(
-        "a/rule.bzl",
-        "def _impl(ctx):",
-        "    out = ctx.actions.declare_file(ctx.label.name)",
-        "    ctx.actions.run_shell(",
-        "        inputs = [ctx.executable.cc_binary],",
-        "        tools = [],",
-        "        outputs = [out],",
-        "        command = 'cp %s %s' % (ctx.executable.cc_binary.path, out.path),",
-        "    )",
-        "    wrapped_defaultinfo = ctx.attr.cc_binary[DefaultInfo]",
-        "    runfiles = ctx.runfiles(files = [out])",
-        "    wrapped_default_runfiles = wrapped_defaultinfo.default_runfiles.files.to_list()",
-        "    if ctx.executable.cc_binary in wrapped_default_runfiles:",
-        "        wrapped_default_runfiles.remove(ctx.executable.cc_binary)",
-        "    result = [",
-        "        DefaultInfo(",
-        "            executable = out,",
-        "            files = depset([out]),",
-        "            runfiles = runfiles.merge(ctx.runfiles(files = wrapped_default_runfiles)),",
-        "        ),",
-        "    ]",
-        "    if ctx.file.stripped_file:",
-        "        wrapped_dbginfo = ctx.attr.cc_binary[DebugPackageInfo]",
-        "        result.append(",
-        "            DebugPackageInfo(",
-        "                target_label = ctx.label,",
-        "                stripped_file = ctx.file.stripped_file \\",
-        "                                if wrapped_dbginfo.stripped_file else None,",
-        "                unstripped_file = out,",
-        "                dwp_file = ctx.file.dwp_file if wrapped_dbginfo.dwp_file else None,",
-        "            ),",
-        "        )",
-        "    return result",
-        "wrapped_binary = rule(",
-        "    _impl,",
-        "    attrs = {",
-        "        'cc_binary': attr.label(",
-        "            allow_single_file = True,",
-        "            mandatory = True,",
-        "            executable = True,",
-        "            cfg = 'target',",
-        "        ),",
-        "        'stripped_file': attr.label(",
-        "            allow_single_file = True,",
-        "            default = None,",
-        "        ),",
-        "        'dwp_file': attr.label(",
-        "            allow_single_file = True,",
-        "            default = None,",
-        "        )",
-        "    },",
-        "    executable = True,",
-        ")");
-    scratch.file(
-        "a/BUILD",
-        "load(':rule.bzl', 'wrapped_binary')",
-        "wrapped_binary(name = 'w',",
-        "    cc_binary = ':native_binary',",
-        "    stripped_file = ':w.stripped',",
-        "    dwp_file = ':w.dwp',",
-        ")",
-        "wrapped_binary(name = 'w.stripped',",
-        "    cc_binary = ':native_binary.stripped'",
-        ")",
-        "wrapped_binary(name = 'w.dwp',",
-        "    cc_binary = ':native_binary.dwp'",
-        ")",
-        "cc_binary(name = 'native_binary',",
-        "    srcs = ['main.cc']",
-        ")");
-    scratch.file("a/main.cc", "int main() {}");
-  }
-
-  @Test
-  public void testDebugPackageProviderFissionDisabled() throws Exception {
-    setupDebugPackageProviderTest("--fission=no");
-    ConfiguredTarget target = getConfiguredTarget("//a:w");
-    assertNoEvents();
-    assertThat(target).isNotNull();
-    DebugPackageProvider debugPackageProvider = target.get(DebugPackageProvider.PROVIDER);
-    assertThat(debugPackageProvider.getStrippedArtifact().getFilename()).isEqualTo("w.stripped");
-    assertThat(debugPackageProvider.getUnstrippedArtifact().getFilename()).isEqualTo("w");
-    assertThat(debugPackageProvider.getDwpArtifact()).isNull();
-  }
-
-  @Test
-  public void testDebugPackageProviderFissionEnabled() throws Exception {
-    setupDebugPackageProviderTest("--fission=yes");
-    ConfiguredTarget target = getConfiguredTarget("//a:w");
-    assertNoEvents();
-    assertThat(target).isNotNull();
-    DebugPackageProvider debugPackageProvider = target.get(DebugPackageProvider.PROVIDER);
-    assertThat(debugPackageProvider.getStrippedArtifact().getFilename()).isEqualTo("w.stripped");
-    assertThat(debugPackageProvider.getUnstrippedArtifact().getFilename()).isEqualTo("w");
-    assertThat(debugPackageProvider.getDwpArtifact().getFilename()).isEqualTo("w.dwp");
   }
 }

@@ -122,7 +122,7 @@ public final class EvaluationTest {
     try (Mutability mu = Mutability.create("test")) {
       StarlarkThread thread = new StarlarkThread(mu, StarlarkSemantics.DEFAULT);
       thread.setPrintHandler((_thread, msg) -> printEvents.add(msg));
-      Starlark.execFile(input, FileOptions.DEFAULT, module, thread);
+      EvalUtils.exec(input, FileOptions.DEFAULT, module, thread);
     } finally {
       // Reset interrupt bit in case the test failed to do so.
       Thread.interrupted();
@@ -139,7 +139,7 @@ public final class EvaluationTest {
       long run(int n) throws SyntaxError.Exception, EvalException, InterruptedException {
         Module module = Module.withPredeclared(StarlarkSemantics.DEFAULT, ImmutableMap.of("n", n));
         long steps0 = thread.getExecutedSteps();
-        Starlark.execFile(input, FileOptions.DEFAULT, module, thread);
+        EvalUtils.exec(input, FileOptions.DEFAULT, module, thread);
         return thread.getExecutedSteps() - steps0;
       }
     }
@@ -556,7 +556,7 @@ public final class EvaluationTest {
     FileOptions options = FileOptions.builder().recordScope(false).build();
     try (Mutability mu = Mutability.create("test")) {
       StarlarkThread thread = new StarlarkThread(mu, StarlarkSemantics.DEFAULT);
-      Starlark.execFile(input, options, Module.create(), thread);
+      EvalUtils.exec(input, options, Module.create(), thread);
     }
   }
 
@@ -636,7 +636,7 @@ public final class EvaluationTest {
   }
 
   @Test
-  public void testDictComprehension_manyClauses() throws Exception {
+  public void testDictComprehension_ManyClauses() throws Exception {
     ev.new Scenario()
         .testExpression(
             "{x : x * y for x in range(1, 10) if x % 2 == 0 for y in range(1, 10) if y == x}",
@@ -644,7 +644,7 @@ public final class EvaluationTest {
   }
 
   @Test
-  public void testDictComprehensions_multipleKey() throws Exception {
+  public void testDictComprehensions_MultipleKey() throws Exception {
     ev.new Scenario()
         .testExpression("{x : x for x in [1, 2, 1]}", ImmutableMap.of(1, 1, 2, 2))
         .testExpression(
@@ -908,7 +908,7 @@ public final class EvaluationTest {
     Module module = Module.create();
     try (Mutability mu = Mutability.create("test")) {
       StarlarkThread thread = new StarlarkThread(mu, StarlarkSemantics.DEFAULT);
-      Starlark.execFile(input, FileOptions.DEFAULT, module, thread);
+      EvalUtils.exec(input, FileOptions.DEFAULT, module, thread);
     }
     assertThat(module.getGlobal("x"))
         .isEqualTo(StarlarkList.of(/*mutability=*/ null, 1, 2, "foo", 4, 1, 2, "foo1"));

@@ -29,10 +29,18 @@ import com.google.devtools.build.lib.packages.Globber.BadGlobException;
 import com.google.devtools.build.lib.packages.PackageFactory.PackageContext;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.ThirdPartyLicenseExistencePolicy;
 import com.google.devtools.build.lib.packages.Type.ConversionException;
-import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
-import com.google.devtools.build.lib.server.FailureDetails.PackageLoading.Code;
 import com.google.devtools.build.lib.starlarkbuildapi.StarlarkNativeModuleApi;
-import com.google.devtools.build.lib.util.DetailedExitCode;
+import com.google.devtools.build.lib.syntax.Dict;
+import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.Location;
+import com.google.devtools.build.lib.syntax.Mutability;
+import com.google.devtools.build.lib.syntax.NoneType;
+import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.syntax.StarlarkList;
+import com.google.devtools.build.lib.syntax.StarlarkThread;
+import com.google.devtools.build.lib.syntax.StarlarkValue;
+import com.google.devtools.build.lib.syntax.Tuple;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -41,18 +49,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import javax.annotation.Nullable;
-import net.starlark.java.eval.Dict;
-import net.starlark.java.eval.EvalException;
-import net.starlark.java.eval.Mutability;
-import net.starlark.java.eval.NoneType;
-import net.starlark.java.eval.Sequence;
-import net.starlark.java.eval.Starlark;
-import net.starlark.java.eval.StarlarkInt;
-import net.starlark.java.eval.StarlarkList;
-import net.starlark.java.eval.StarlarkThread;
-import net.starlark.java.eval.StarlarkValue;
-import net.starlark.java.eval.Tuple;
-import net.starlark.java.syntax.Location;
 
 /** The Starlark native module. */
 // TODO(cparsons): Move the definition of native.package() to this class.
@@ -92,8 +88,7 @@ public class StarlarkNativeModule implements StarlarkNativeModuleApi {
     List<String> matches;
     boolean allowEmpty;
     if (allowEmptyArgument == Starlark.UNBOUND) {
-      allowEmpty =
-          !thread.getSemantics().getBool(BuildLanguageOptions.INCOMPATIBLE_DISALLOW_EMPTY_GLOB);
+      allowEmpty = !thread.getSemantics().incompatibleDisallowEmptyGlob();
     } else if (allowEmptyArgument instanceof Boolean) {
       allowEmpty = (Boolean) allowEmptyArgument;
     } else {
@@ -113,9 +108,8 @@ public class StarlarkNativeModule implements StarlarkNativeModuleApi {
               excludes.isEmpty() ? "" : " - [" + Joiner.on(", ").join(excludes) + "]",
               e.getMessage());
       Location loc = thread.getCallerLocation();
-      Event error = Package.error(loc, errorMessage, Code.GLOB_IO_EXCEPTION);
-      context.eventHandler.handle(error);
-      context.pkgBuilder.setIOException(e, errorMessage, error.getProperty(DetailedExitCode.class));
+      context.eventHandler.handle(Event.error(loc, errorMessage));
+      context.pkgBuilder.setIOExceptionAndMessage(e, errorMessage);
       matches = ImmutableList.of();
     } catch (BadGlobException e) {
       throw new EvalException(e);
@@ -240,10 +234,7 @@ public class StarlarkNativeModule implements StarlarkNativeModuleApi {
             == ThirdPartyLicenseExistencePolicy.NEVER_CHECK) {
           checkLicenses = false;
         } else {
-          checkLicenses =
-              !thread
-                  .getSemantics()
-                  .getBool(BuildLanguageOptions.INCOMPATIBLE_DISABLE_THIRD_PARTY_LICENSE_CHECKING);
+          checkLicenses = !thread.getSemantics().incompatibleDisableThirdPartyLicenseChecking();
         }
 
         if (checkLicenses
@@ -330,22 +321,27 @@ public class StarlarkNativeModule implements StarlarkNativeModuleApi {
   @Nullable
   private static Object starlarkifyValue(Mutability mu, Object val, Package pkg)
       throws NotRepresentableException {
-    // easy cases
-    if (val == null
-        || val instanceof Boolean
-        || val instanceof String
-        || val instanceof StarlarkInt) {
+    if (val == null) {
+      return null;
+    }
+    if (val instanceof Boolean) {
+      return val;
+    }
+    if (val instanceof Integer) {
+      return val;
+    }
+    if (val instanceof String) {
       return val;
     }
 
     if (val instanceof TriState) {
       switch ((TriState) val) {
         case AUTO:
-          return StarlarkInt.of(-1);
+          return -1;
         case YES:
-          return StarlarkInt.of(1);
+          return 1;
         case NO:
-          return StarlarkInt.of(0);
+          return 0;
       }
     }
 
