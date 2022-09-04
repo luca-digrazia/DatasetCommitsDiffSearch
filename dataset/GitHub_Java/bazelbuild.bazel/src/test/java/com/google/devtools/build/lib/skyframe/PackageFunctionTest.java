@@ -366,7 +366,7 @@ public class PackageFunctionTest extends BuildViewTestCase {
     Exception ex = evaluatePackageToException("@//foo");
     String msg = ex.getMessage();
     assertThat(msg).contains("Inconsistent filesystem operations");
-    assertThat(msg).contains("Encountered error '/workspace/foo/bar (Permission denied)'");
+    assertThat(msg).contains("Encountered error 'Directory is not readable'");
     assertDetailedExitCode(ex, PackageLoading.Code.TRANSIENT_INCONSISTENT_FILESYSTEM_ERROR);
   }
 
@@ -618,27 +618,6 @@ public class PackageFunctionTest extends BuildViewTestCase {
                 + "at /workspace/test/starlark/extension.bzl:1:6: "
                 + "cannot load '//test/starlark:bad_extension.bzl': no such file");
     assertDetailedExitCode(ex, PackageLoading.Code.IMPORT_STARLARK_FILE_ERROR);
-  }
-
-  @Test
-  public void testBuiltinsInjectionFailure() throws Exception {
-    setBuildLanguageOptions("--experimental_builtins_bzl_path=tools/builtins_staging");
-    scratch.file(
-        "tools/builtins_staging/exports.bzl",
-        "1 // 0  # <-- dynamic error",
-        "exported_toplevels = {}",
-        "exported_rules = {}",
-        "exported_to_java = {}");
-    scratch.file("pkg/BUILD");
-
-    Exception ex = evaluatePackageToException("@//pkg");
-    assertThat(ex)
-        .hasMessageThat()
-        .isEqualTo(
-            "error loading package 'pkg': Internal error while loading Starlark builtins: Failed"
-                + " to load builtins sources: initialization of module 'exports.bzl' (internal)"
-                + " failed");
-    assertDetailedExitCode(ex, PackageLoading.Code.BUILTINS_INJECTION_FAILURE);
   }
 
   @Test
@@ -1376,41 +1355,7 @@ public class PackageFunctionTest extends BuildViewTestCase {
     }
 
     @Test
-    public void testPreludeCanShadowUniversal() throws Exception {
-      scratch.file("tools/build_rules/BUILD");
-      scratch.file(
-          "tools/build_rules/test_prelude", //
-          "len = 'FOO'");
-      scratch.file(
-          "pkg/BUILD", //
-          "print(len)");
-
-      getConfiguredTarget("//pkg:BUILD");
-      assertContainsEvent("FOO");
-    }
-
-    @Test
     public void testPreludeCanShadowPredeclareds() throws Exception {
-      scratch.file("tools/build_rules/BUILD");
-      scratch.file(
-          "tools/build_rules/test_prelude", //
-          "cc_library = 'FOO'");
-      scratch.file(
-          "pkg/BUILD", //
-          "print(cc_library)");
-
-      getConfiguredTarget("//pkg:BUILD");
-      assertContainsEvent("FOO");
-    }
-
-    @Test
-    public void testPreludeCanShadowInjectedPredeclareds() throws Exception {
-      setBuildLanguageOptions("--experimental_builtins_bzl_path=tools/builtins_staging");
-      scratch.file(
-          "tools/builtins_staging/exports.bzl",
-          "exported_toplevels = {}",
-          "exported_rules = {'cc_library': 'BAR'}",
-          "exported_to_java = {}");
       scratch.file("tools/build_rules/BUILD");
       scratch.file(
           "tools/build_rules/test_prelude", //
