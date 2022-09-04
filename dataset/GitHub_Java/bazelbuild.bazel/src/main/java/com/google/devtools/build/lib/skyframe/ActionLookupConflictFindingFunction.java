@@ -38,7 +38,7 @@ public class ActionLookupConflictFindingFunction implements SkyFunction {
   public SkyValue compute(SkyKey skyKey, Environment env)
       throws SkyFunctionException, InterruptedException {
     ImmutableMap<ActionAnalysisMetadata, ConflictException> badActions =
-        SkyframeActionExecutor.BAD_ACTIONS.get(env);
+        PrecomputedValue.BAD_ACTIONS.get(env);
     ActionLookupValue alValue =
         (ActionLookupValue)
             env.getValue(((ActionLookupConflictFindingValue.Key) skyKey).argument());

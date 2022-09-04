@@ -14,17 +14,20 @@
 
 package com.google.devtools.build.lib.analysis;
 
+import static com.google.devtools.build.lib.syntax.EvalUtils.SKYLARK_COMPARATOR;
+
 import com.google.common.collect.ImmutableCollection;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.analysis.configuredtargets.MergedConfiguredTarget.DuplicateException;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkRuleConfiguredTargetUtil;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.BuiltinProvider;
 import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
@@ -32,7 +35,6 @@ import com.google.devtools.build.lib.skylarkbuildapi.OutputGroupInfoApi;
 import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Location;
 import com.google.devtools.build.lib.syntax.SkylarkIndexable;
 import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkIterable;
@@ -254,7 +256,7 @@ public final class OutputGroupInfo extends StructImpl
 
   @Override
   public Iterator<String> iterator() {
-    return ImmutableList.sortedCopyOf(outputGroups.keySet()).iterator();
+    return SKYLARK_COMPARATOR.sortedCopy(outputGroups.keySet()).iterator();
   }
 
   @Override
@@ -282,9 +284,10 @@ public final class OutputGroupInfo extends StructImpl
 
     @Override
     public OutputGroupInfoApi constructor(Dict<?, ?> kwargs) throws EvalException {
+      Map<String, Object> kwargsMap = kwargs.getContents(String.class, Object.class, "kwargs");
+
       ImmutableMap.Builder<String, NestedSet<Artifact>> builder = ImmutableMap.builder();
-      for (Map.Entry<String, Object> entry :
-          Dict.cast(kwargs, String.class, Object.class, "kwargs").entrySet()) {
+      for (Map.Entry<String, Object> entry : kwargsMap.entrySet()) {
         builder.put(
             entry.getKey(),
             SkylarkRuleConfiguredTargetUtil.convertToOutputGroupValue(

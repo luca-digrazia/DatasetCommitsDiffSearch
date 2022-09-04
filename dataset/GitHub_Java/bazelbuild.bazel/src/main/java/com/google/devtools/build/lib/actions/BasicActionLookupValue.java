@@ -17,46 +17,29 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.MoreObjects.ToStringHelper;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 
 /**
- * Basic implementation of {@link ActionLookupValue} where the value itself owns and maintains
- * the list of generating actions.
+ * Basic implementation of {@link ActionLookupValue} where the value itself owns and maintains the
+ * list of generating actions.
  */
-public class BasicActionLookupValue extends ActionLookupValue {
+public class BasicActionLookupValue implements ActionLookupValue {
   protected final ImmutableList<ActionAnalysisMetadata> actions;
-  @VisibleForSerialization protected final ImmutableMap<Artifact, Integer> generatingActionIndex;
 
-  protected BasicActionLookupValue(ActionAnalysisMetadata action) {
-    this(Actions.GeneratingActions.fromSingleAction(action));
-  }
-
-  protected BasicActionLookupValue(
-      ImmutableList<ActionAnalysisMetadata> actions,
-      ImmutableMap<Artifact, Integer> generatingActionIndex) {
+  protected BasicActionLookupValue(ImmutableList<ActionAnalysisMetadata> actions) {
     this.actions = actions;
-    this.generatingActionIndex = generatingActionIndex;
   }
 
   @VisibleForTesting
   public BasicActionLookupValue(Actions.GeneratingActions generatingActions) {
-    this(generatingActions.getActions(), generatingActions.getGeneratingActionIndex());
+    this(generatingActions.getActions());
   }
 
   @Override
-  protected ImmutableList<ActionAnalysisMetadata> getActions() {
+  public ImmutableList<ActionAnalysisMetadata> getActions() {
     return actions;
   }
 
-  @Override
-  protected ImmutableMap<Artifact, Integer> getGeneratingActionIndex() {
-    return generatingActionIndex;
-  }
-
   protected ToStringHelper getStringHelper() {
-    return MoreObjects.toStringHelper(this)
-        .add("actions", actions)
-        .add("generatingActionIndex", generatingActionIndex);
+    return MoreObjects.toStringHelper(this).add("actions", actions);
   }
 }

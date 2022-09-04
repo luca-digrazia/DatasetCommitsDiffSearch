@@ -24,11 +24,10 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.profiler.AutoProfiler;
-import com.google.devtools.build.lib.profiler.GoogleAutoProfilerUtils;
 import com.google.devtools.build.lib.skyframe.AspectValue;
 import com.google.devtools.build.lib.util.RegexFilter;
-import java.time.Duration;
 import java.util.Collection;
+import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
 /**
@@ -36,6 +35,8 @@ import javax.annotation.Nullable;
  * extra top-level artifacts into the build.
  */
 public final class TopLevelArtifactHelper {
+  private static Logger logger = Logger.getLogger(TopLevelArtifactHelper.class.getName());
+
   /** Set of {@link Artifact}s in an output group. */
   @Immutable
   public static final class ArtifactsInOutputGroup {
@@ -119,13 +120,11 @@ public final class TopLevelArtifactHelper {
     // Prevent instantiation.
   }
 
-  private static final Duration MIN_LOGGING = Duration.ofMillis(10);
-
   @VisibleForTesting
   public static ArtifactsToOwnerLabels makeTopLevelArtifactsToOwnerLabels(
       AnalysisResult analysisResult, Iterable<AspectValue> aspects) {
-    try (AutoProfiler ignored =
-        GoogleAutoProfilerUtils.logged("assigning owner labels", MIN_LOGGING)) {
+    try (AutoProfiler ignored = AutoProfiler.logged("assigning owner labels", logger, 10)) {
+
       ArtifactsToOwnerLabels.Builder artifactsToOwnerLabelsBuilder =
           analysisResult.getTopLevelArtifactsToOwnerLabels().toBuilder();
     TopLevelArtifactContext artifactContext = analysisResult.getTopLevelContext();
@@ -157,7 +156,7 @@ public final class TopLevelArtifactHelper {
     }
   }
 
-  public static void addArtifactsWithOwnerLabel(
+  static void addArtifactsWithOwnerLabel(
       NestedSet<? extends Artifact> artifacts,
       @Nullable RegexFilter filter,
       Label ownerLabel,
@@ -166,7 +165,7 @@ public final class TopLevelArtifactHelper {
         artifacts.toList(), filter, ownerLabel, artifactsToOwnerLabelsBuilder);
   }
 
-  public static void addArtifactsWithOwnerLabel(
+  static void addArtifactsWithOwnerLabel(
       Collection<? extends Artifact> artifacts,
       @Nullable RegexFilter filter,
       Label ownerLabel,
