@@ -49,7 +49,6 @@ import com.google.devtools.build.lib.packages.BuildSetting;
 import com.google.devtools.build.lib.packages.InfoInterface;
 import com.google.devtools.build.lib.packages.NativeProvider;
 import com.google.devtools.build.lib.packages.Provider;
-import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Type;
@@ -101,7 +100,7 @@ public final class RuleConfiguredTargetBuilder {
     if (ruleContext.getConfiguration().enforceConstraints()) {
       checkConstraints();
     }
-    if (ruleContext.hasErrors() && !allowAnalysisFailures) {
+    if (ruleContext.hasErrors()) {
       return null;
     }
 
@@ -223,17 +222,13 @@ public final class RuleConfiguredTargetBuilder {
     }
 
     AnalysisEnvironment analysisEnvironment = ruleContext.getAnalysisEnvironment();
-    GeneratingActions generatingActions =
-        Actions.assignOwnersAndFilterSharedActionsAndThrowActionConflict(
-            analysisEnvironment.getActionKeyContext(),
-            analysisEnvironment.getRegisteredActions(),
-            ruleContext.getOwner(),
-            ((Rule) ruleContext.getTarget()).getOutputFiles());
+    GeneratingActions generatingActions = Actions.filterSharedActionsAndThrowActionConflict(
+          analysisEnvironment.getActionKeyContext(), analysisEnvironment.getRegisteredActions());
     return new RuleConfiguredTarget(
         ruleContext,
         providers,
         generatingActions.getActions(),
-        generatingActions.getArtifactsByOutputLabel());
+        generatingActions.getGeneratingActionIndex());
   }
 
   private NestedSet<Label> transitiveLabels() {
