@@ -11,6 +11,7 @@ import butterknife.InjectView;
 import com.github.pedrovgs.DraggableView;
 import com.github.pedrovgs.effectiveandroidui.R;
 import com.github.pedrovgs.effectiveandroidui.domain.tvshow.ChapterCollection;
+import com.github.pedrovgs.effectiveandroidui.domain.tvshow.TvShow;
 import com.github.pedrovgs.effectiveandroidui.ui.presenter.TvShowPresenter;
 import com.github.pedrovgs.effectiveandroidui.ui.renderer.chapter.ChapterAdapteeCollection;
 import com.github.pedrovgs.effectiveandroidui.ui.renderer.chapter.ChapterRendererAdapter;
@@ -41,7 +42,7 @@ public class TvShowDraggableFragment extends BaseFragment implements TvShowPrese
   @InjectView(R.id.pb_loading) ProgressBar pb_loading;
   @InjectView(R.id.v_empty_case) View v_empty_case;
 
-  private TextView header_tv_show_chapters;
+  private TextView headr_tv_show_chapters;
 
   @Override public void onViewCreated(View view, Bundle savedInstanceState) {
     super.onViewCreated(view, savedInstanceState);
@@ -51,16 +52,16 @@ public class TvShowDraggableFragment extends BaseFragment implements TvShowPrese
   }
 
   private void initializeListView() {
-    header_tv_show_chapters = (TextView) LayoutInflater.from(getActivity())
+    headr_tv_show_chapters = (TextView) LayoutInflater.from(getActivity())
         .inflate(R.layout.header_tv_show_chapters, null);
-    lv_chapters.addHeaderView(header_tv_show_chapters);
+    lv_chapters.addHeaderView(headr_tv_show_chapters);
     adapter = (ChapterRendererAdapter) chapterRendererAdapterFactory.getChapterRendererAdapter(
         chapterAdapteeCollection);
     lv_chapters.setAdapter(adapter);
   }
 
-  public void showTvShow(final String tvShowId) {
-    tvShowPresenter.loadTvShow(tvShowId);
+  public void showTvShow(final TvShow tvShow) {
+    tvShowPresenter.loadTvShow(tvShow.getTitle());
   }
 
   @Override public void hideEmptyCase() {
@@ -78,7 +79,7 @@ public class TvShowDraggableFragment extends BaseFragment implements TvShowPrese
 
   @Override public void showTvShowTitle(final String tvShowTitle) {
     String tvShowHeaderTitle = getString(R.string.tv_show_title, tvShowTitle);
-    header_tv_show_chapters.setText(tvShowHeaderTitle);
+    headr_tv_show_chapters.setText(tvShowHeaderTitle);
   }
 
   @Override public void showChapters(ChapterCollection chapters) {
