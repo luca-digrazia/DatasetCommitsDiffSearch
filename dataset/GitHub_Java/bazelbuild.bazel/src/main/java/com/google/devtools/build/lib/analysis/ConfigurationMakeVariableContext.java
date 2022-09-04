@@ -121,7 +121,7 @@ public class ConfigurationMakeVariableContext implements TemplateContext {
     throw new ExpansionException(String.format("$(%s) not defined", name));
   }
 
-  public SkylarkDict<String, String> collectMakeVariables() throws ExpansionException {
+  public SkylarkDict<String, String> collectMakeVariables() {
     Map<String, String> map = new LinkedHashMap<>();
     // Collect variables in the reverse order as in lookupMakeVariable
     // because each update is overwriting.
