@@ -25,25 +25,25 @@ import com.github.joschi.jadconfig.JadConfig;
 import com.github.joschi.jadconfig.RepositoryException;
 import com.github.joschi.jadconfig.ValidationException;
 import com.github.joschi.jadconfig.repositories.PropertiesRepository;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.Writer;
 import org.apache.commons.io.IOUtils;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.graylog2.activities.Activity;
-import org.graylog2.alarms.transports.EmailTransport;
-import org.graylog2.alarms.transports.JabberTransport;
-import org.graylog2.filters.*;
+import org.graylog2.filters.BlacklistFilter;
+import org.graylog2.filters.CounterUpdateFilter;
+import org.graylog2.filters.RewriteFilter;
+import org.graylog2.filters.StreamMatcherFilter;
+import org.graylog2.filters.TokenizerFilter;
 import org.graylog2.initializers.*;
 import org.graylog2.inputs.amqp.AMQPInput;
 import org.graylog2.inputs.gelf.GELFTCPInput;
 import org.graylog2.inputs.gelf.GELFUDPInput;
-import org.graylog2.inputs.http.GELFHttpInput;
 import org.graylog2.inputs.syslog.SyslogTCPInput;
 import org.graylog2.inputs.syslog.SyslogUDPInput;
 import org.graylog2.outputs.ElasticSearchOutput;
-
-import java.io.File;
-import java.io.FileWriter;
-import java.io.Writer;
 
 /**
  * Main class of Graylog2.
@@ -131,29 +131,17 @@ public final class Main {
             configuration.setIsMaster(false);
         }
         
-        // Enable local mode?
         if (commandLineArguments.isLocal() || commandLineArguments.isDebug()) {
             // In local mode, systemstats are sent to localhost for example.
             LOG.info("Running in local mode");
             server.setLocalMode(true);
         }
 
-        // Are we in stats mode?
-        if (commandLineArguments.isStats()) {
-            LOG.info("Printing system utilization information.");
-            server.setStatsMode(true);
-        }
-        
-        // Register transports.
-        if (configuration.isTransportEmailEnabled()) { server.registerTransport(new EmailTransport()); }
-        if (configuration.isTransportJabberEnabled()) {  server.registerTransport(new JabberTransport()); }
-
         // Register initializers.
         server.registerInitializer(new ServerValueWriterInitializer(server, configuration));
         server.registerInitializer(new DroolsInitializer(server, configuration));
         server.registerInitializer(new HostCounterCacheWriterInitializer(server));
         server.registerInitializer(new MessageCounterInitializer(server));
-        server.registerInitializer(new AlarmScannerInitializer(server));
         if (configuration.isEnableGraphiteOutput())       { server.registerInitializer(new GraphiteInitializer(server)); }
         if (configuration.isEnableLibratoMetricsOutput()) { server.registerInitializer(new LibratoMetricsInitializer(server)); }
         server.registerInitializer(new DeflectorThreadsInitializer(server));
@@ -164,8 +152,6 @@ public final class Main {
         if (configuration.isAmqpEnabled()) {
             server.registerInitializer(new AMQPSyncInitializer(server));
         }
-        server.registerInitializer(new BufferWatermarkInitializer(server));
-        if (commandLineArguments.isStats()) { server.registerInitializer(new StatisticsPrinterInitializer(server)); }
         
         // Register inputs.
         if (configuration.isUseGELF()) {
@@ -177,9 +163,7 @@ public final class Main {
         if (configuration.isSyslogTcpEnabled()) { server.registerInput(new SyslogTCPInput()); }
 
         if (configuration.isAmqpEnabled()) { server.registerInput(new AMQPInput()); }
-
-        if (configuration.isHttpEnabled()) { server.registerInput(new GELFHttpInput()); }
-
+        
         // Register message filters.
         server.registerFilter(new RewriteFilter());
         server.registerFilter(new BlacklistFilter());
@@ -188,7 +172,7 @@ public final class Main {
         server.registerFilter(new CounterUpdateFilter());
 
         // Register outputs.
-        server.registerOutput(new ElasticSearchOutput());
+        server.registerOutput(ElasticSearchOutput.class);
         
         // Blocks until we shut down.
         server.run();

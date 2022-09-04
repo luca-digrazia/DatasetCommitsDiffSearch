@@ -25,7 +25,6 @@ import com.yammer.metrics.Metrics;
 import java.util.concurrent.TimeUnit;
 import org.apache.log4j.Logger;
 import org.graylog2.Core;
-import org.graylog2.activities.Activity;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
@@ -49,11 +48,9 @@ public class AMQPReconnector implements ShutdownListener {
         // Only try to re-connect if this queue is still in the configuration.
         if (AMQPQueueConfiguration.fetchAllIds(server).contains(queueConfig.getId())) {
             Metrics.newMeter(AMQPReconnector.class, "ReconnectionAttempts", "reconnections", TimeUnit.SECONDS).mark();
-            
-            String msg = "Looks like we lost connection to the AMQP broker. "
-                    + "Trying to reconnect to " + this.queueConfig + " in " + DELAY_SECONDS + " seconds";
-            LOG.error(msg);
-            server.getActivityWriter().write(new Activity(msg, AMQPReconnector.class));
+
+            LOG.error("Looks like we lost connection to the AMQP broker. "
+                    + "Trying to reconnect to " + this.queueConfig + " in " + DELAY_SECONDS + " seconds");
 
             try {
                Thread.sleep(DELAY_SECONDS*1000);
@@ -63,9 +60,7 @@ public class AMQPReconnector implements ShutdownListener {
             AMQPInput.getThreadPool().submit(consumer);
             AMQPInput.getConsumers().put(queueConfig.getId(), consumer);
         } else {
-            String msg = "Not trying to reconnect to queue " + queueConfig + ", which is not in the configuration anymore.";
-            LOG.info(msg);
-            server.getActivityWriter().write(new Activity(msg, AMQPReconnector.class));
+            LOG.info("Not trying to reconnect to queue " + queueConfig + ", which is not in the configuration anymore.");
         }
     }
     

@@ -22,7 +22,7 @@ package org.graylog2.inputs.amqp;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import org.apache.commons.lang3.concurrent.BasicThreadFactory;
 import org.elasticsearch.common.collect.Maps;
 import org.graylog2.Configuration;
 import org.graylog2.Core;
@@ -34,8 +34,8 @@ import org.graylog2.inputs.MessageInput;
 public class AMQPInput implements MessageInput {
 
     private static ExecutorService executor = Executors.newCachedThreadPool(
-            new ThreadFactoryBuilder()
-                .setNameFormat("amqp-input-%d")
+            new BasicThreadFactory.Builder()
+                .namingPattern("amqp-input-%d")
                 .build()
     );
     
