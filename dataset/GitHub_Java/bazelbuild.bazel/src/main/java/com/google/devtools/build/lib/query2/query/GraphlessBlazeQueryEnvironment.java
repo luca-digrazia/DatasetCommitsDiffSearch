@@ -373,7 +373,7 @@ public class GraphlessBlazeQueryEnvironment extends AbstractBlazeQueryEnvironmen
 
         List<Label> extensions = new ArrayList<>();
         if (loads) {
-          extensions.addAll(pkg.getStarlarkFileDependencies());
+          extensions.addAll(pkg.getSkylarkFileDependencies());
         }
 
         for (Label extension : extensions) {
