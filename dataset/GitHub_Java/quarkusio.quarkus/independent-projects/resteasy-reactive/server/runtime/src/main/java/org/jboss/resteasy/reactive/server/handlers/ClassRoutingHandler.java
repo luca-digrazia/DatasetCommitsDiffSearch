@@ -18,7 +18,7 @@ import javax.ws.rs.core.Response;
 import org.jboss.resteasy.reactive.common.headers.MediaTypeHeaderDelegate;
 import org.jboss.resteasy.reactive.common.util.MediaTypeHelper;
 import org.jboss.resteasy.reactive.server.core.ResteasyReactiveRequestContext;
-import org.jboss.resteasy.reactive.server.jaxrs.QuarkusRestServerResponseBuilder;
+import org.jboss.resteasy.reactive.server.jaxrs.ResponseBuilderImpl;
 import org.jboss.resteasy.reactive.server.mapping.RequestMapper;
 import org.jboss.resteasy.reactive.server.mapping.RuntimeResource;
 import org.jboss.resteasy.reactive.server.spi.ServerHttpRequest;
@@ -62,7 +62,7 @@ public class ClassRoutingHandler implements ServerRestHandler {
                 for (RequestMapper<RuntimeResource> existingMapper : mappers.values()) {
                     if (existingMapper.map(remaining) != null) {
                         throw new NotAllowedException(
-                                new QuarkusRestServerResponseBuilder().status(Response.Status.METHOD_NOT_ALLOWED).build());
+                                new ResponseBuilderImpl().status(Response.Status.METHOD_NOT_ALLOWED).build());
                     }
                 }
                 throwNotFound(requestContext);
@@ -90,7 +90,7 @@ public class ClassRoutingHandler implements ServerRestHandler {
                     }
                     if (entry.getValue().map(remaining) != null) {
                         throw new NotAllowedException(
-                                new QuarkusRestServerResponseBuilder().status(Response.Status.METHOD_NOT_ALLOWED).build());
+                                new ResponseBuilderImpl().status(Response.Status.METHOD_NOT_ALLOWED).build());
                     }
                 }
                 throwNotFound(requestContext);
@@ -118,10 +118,44 @@ public class ClassRoutingHandler implements ServerRestHandler {
         if (target.value.getProduces() != null) {
             String accepts = serverRequest.getRequestHeader(HttpHeaders.ACCEPT);
             if ((accepts != null) && !accepts.equals(MediaType.WILDCARD)) {
-                if (!accepts.contains(",") && target.value.getProduces().getSortedMediaTypes().length == 1) { // the point of this branch is to eliminate the list creation and sorting
+                int commaIndex = accepts.indexOf(',');
+                boolean multipleAcceptsValues = commaIndex >= 0;
+                MediaType[] producesMediaTypes = target.value.getProduces().getSortedOriginalMediaTypes();
+                if (!multipleAcceptsValues && (producesMediaTypes.length == 1)) {
+                    // the point of this branch is to eliminate any list creation or string indexing as none is needed
                     MediaType acceptsMediaType = MediaType.valueOf(accepts.trim());
-                    MediaType providedMediaType = target.value.getProduces().getSortedMediaTypes()[0];
+                    MediaType providedMediaType = producesMediaTypes[0];
                     if (!providedMediaType.isCompatible(acceptsMediaType)) {
+                        throw new NotAcceptableException();
+                    }
+                } else if (multipleAcceptsValues && (producesMediaTypes.length == 1)) {
+                    // this is fairly common case, so we want it to be as fast as possible
+                    // we do that by manually splitting the accepts header and immediately checking
+                    // if the value is compatible with the produces media type
+                    boolean compatible = false;
+                    int begin = 0;
+
+                    do {
+                        String acceptPart;
+                        if (commaIndex == -1) { // this is the case where we are checking the remainder of the string
+                            acceptPart = accepts.substring(begin);
+                        } else {
+                            acceptPart = accepts.substring(begin, commaIndex);
+                        }
+                        if (producesMediaTypes[0].isCompatible(toMediaType(acceptPart.trim()))) {
+                            compatible = true;
+                            break;
+                        } else if (commaIndex == -1) { // we have reached the end and not found any compatible media types
+                            break;
+                        }
+                        begin = commaIndex + 1; // the next part will start at the character after the comma
+                        if (begin >= (accepts.length() - 1)) { // if we have reached this point, then are no compatible media types
+                            break;
+                        }
+                        commaIndex = accepts.indexOf(',', begin);
+                    } while (true);
+
+                    if (!compatible) {
                         throw new NotAcceptableException();
                     }
                 } else {
@@ -137,7 +171,7 @@ public class ClassRoutingHandler implements ServerRestHandler {
                     } else {
                         acceptsMediaTypes = Collections.singletonList(toMediaType(accepts));
                     }
-                    if (MediaTypeHelper.getFirstMatch(Arrays.asList(target.value.getProduces().getSortedMediaTypes()),
+                    if (MediaTypeHelper.getFirstMatch(Arrays.asList(producesMediaTypes),
                             acceptsMediaTypes) == null) {
                         throw new NotAcceptableException();
                     }
