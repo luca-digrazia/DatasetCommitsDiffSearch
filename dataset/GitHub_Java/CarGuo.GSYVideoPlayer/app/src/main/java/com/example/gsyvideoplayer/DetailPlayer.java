@@ -11,11 +11,9 @@ import android.widget.RelativeLayout;
 
 import com.example.gsyvideoplayer.video.LandLayoutVideo;
 import com.google.android.exoplayer2.SeekParameters;
-import com.google.android.exoplayer2.upstream.RawResourceDataSource;
 import com.shuyu.gsyvideoplayer.GSYVideoManager;
 import com.shuyu.gsyvideoplayer.listener.GSYSampleCallBack;
 import com.shuyu.gsyvideoplayer.listener.GSYVideoProgressListener;
-import com.shuyu.gsyvideoplayer.model.VideoOptionModel;
 import com.shuyu.gsyvideoplayer.video.base.GSYVideoPlayer;
 
 import com.shuyu.gsyvideoplayer.builder.GSYVideoOptionBuilder;
@@ -24,15 +22,12 @@ import com.shuyu.gsyvideoplayer.utils.Debuger;
 import com.shuyu.gsyvideoplayer.utils.OrientationUtils;
 
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import butterknife.BindView;
 import butterknife.ButterKnife;
 import tv.danmaku.ijk.media.exo2.Exo2PlayerManager;
-import tv.danmaku.ijk.media.player.IjkMediaPlayer;
 
 
 public class DetailPlayer extends AppCompatActivity {
@@ -74,14 +69,6 @@ public class DetailPlayer extends AppCompatActivity {
         //GSYVideoManager.instance().setOptionModelList(list);
 
         //GSYVideoManager.instance().setTimeOut(4000, true);
-
-//        VideoOptionModel videoOptionModel =
-//                new VideoOptionModel(IjkMediaPlayer.OPT_CATEGORY_FORMAT, "dns_cache_clear", 1);
-//        List<VideoOptionModel> list = new ArrayList<>();
-//        list.add(videoOptionModel);
-//        VideoOptionModel videoOptionModel2 = new VideoOptionModel(IjkMediaPlayer.OPT_CATEGORY_FORMAT, "dns_cache_timeout", -1);
-//        list.add(videoOptionModel2);
-//        GSYVideoManager.instance().setOptionModelList(list);
 
         //增加封面
         ImageView imageView = new ImageView(this);
@@ -254,12 +241,9 @@ public class DetailPlayer extends AppCompatActivity {
 
     private String getUrl() {
 
-        //String url = "android.resource://" + getPackageName() + "/" + R.raw.test1;
+        //String url = "android.resource://" + getPackageName() + "/" + R.raw.test;
         //注意，用ijk模式播放raw视频，这个必须打开
         //GSYVideoManager.instance().enableRawPlay(getApplicationContext());
-
-        ///exo raw 支持
-        //String url =  RawResourceDataSource.buildRawResourceUri(R.raw.test).toString();
 
         //断网自动重新链接，url前接上ijkhttphook:
         //String url = "ijkhttphook:https://res.exexm.com/cw_145225549855002";
@@ -302,7 +286,6 @@ public class DetailPlayer extends AppCompatActivity {
         //String url = "http://hls.ciguang.tv/hdtv/video.m3u8";
         //String url = "https://res.exexm.com/cw_145225549855002";
         //String url = "http://storage.gzstv.net/uploads/media/huangmeiyan/jr05-09.mp4";//mepg
-        //String url = "https://zh-files.oss-cn-qingdao.aliyuncs.com/20170808223928mJ1P3n57.mp4";//90度
         return url;
     }
 }
