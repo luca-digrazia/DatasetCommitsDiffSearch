@@ -17,7 +17,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Ordering;
 import com.google.errorprone.annotations.CheckReturnValue;
 import com.google.errorprone.annotations.FormatMethod;
 import java.io.IOException;
@@ -157,10 +156,9 @@ public final class Starlark {
 
   /**
    * Converts a Java value {@code x} to a Starlark one, if x is not already a valid Starlark value.
-   * An Integer, Long, or BigInteger is converted to a Starlark int, a double is converted to a
-   * Starlark float, a Java List or Map is converted to a Starlark list or dict, respectively, and
-   * null becomes {@link #NONE}. Any other non-Starlark value causes the function to throw
-   * IllegalArgumentException.
+   * An Integer, Long, or BigInteger is converted to a Starlark int, a Java List or Map is converted
+   * to a Starlark list or dict, respectively, and null becomes {@link #NONE}. Any other
+   * non-Starlark value causes the function to throw IllegalArgumentException.
    *
    * <p>This function is applied to the results of StarlarkMethod-annotated Java methods.
    */
@@ -176,8 +174,6 @@ public final class Starlark {
         return StarlarkInt.of((Long) x);
       } else if (x instanceof BigInteger) {
         return StarlarkInt.of((BigInteger) x);
-      } else if (x instanceof Double) {
-        return StarlarkFloat.of((double) x);
       }
     } else if (x instanceof List) {
       return StarlarkList.copyOf(mutability, (List<?>) x);
@@ -290,8 +286,6 @@ public final class Starlark {
       return "int";
     } else if (c.equals(Boolean.class)) {
       return "bool";
-    } else if (c.equals(StarlarkFloat.class)) {
-      return "float";
     }
 
     // Shortcut for the most common types.
@@ -313,24 +307,19 @@ public final class Starlark {
       return "unbound";
     }
 
-    // Abstract types, often used as parameter types.
-    // Note == not isAssignableFrom: we don't want any
-    // concrete types to inherit these names.
-    if (c == StarlarkIterable.class) {
-      return "iterable";
-    } else if (c == Sequence.class) {
-      return "sequence";
-    } else if (c == StarlarkCallable.class) {
-      return "callable";
-    }
-
     StarlarkBuiltin module = StarlarkAnnotations.getStarlarkBuiltin(c);
     if (module != null) {
       return module.name();
-    }
 
-    if (c.equals(Object.class)) {
-      // "unknown" is another unfortunate choice.
+    } else if (StarlarkCallable.class.isAssignableFrom(c)) {
+      // All callable values have historically been lumped together as "function".
+      // TODO(adonovan): built-in types that don't use StarlarkModule should report
+      // their own type string, but this is a breaking change as users often
+      // use type(x)=="function" for Starlark and built-in functions.
+      return "function";
+
+    } else if (c.equals(Object.class)) {
+      // "Unknown" is another unfortunate choice.
       // Object.class does mean "unknown" when talking about the type parameter
       // of a collection (List<Object>), but it also means "any" when used
       // as an argument to Sequence.cast, and more generally it means "value".
@@ -353,74 +342,6 @@ public final class Starlark {
       String simpleName = c.getSimpleName();
       return simpleName.isEmpty() ? c.getName() : simpleName;
     }
-  }
-
-  /**
-   * The ordering relation over (some) Starlark values.
-   *
-   * <p>Starlark values are ordered as follows.
-   *
-   * <ul>
-   *   <li>{@code False < True}.
-   *   <li>int values are ordered according to mathematical tradition.
-   *   <li>float values are ordered according to IEEE 754, with the exception of NaN values: all NaN
-   *       values compare equal to each other and greater than +Inf. The zero values 0.0 and -0.0
-   *       compare equal.
-   *   <li>int and float values may be compared. The comparison is mathematically exact, even if
-   *       neither argument may be exactly converted to the type of the other. This is the only
-   *       permitted case of comparisons between values of different types. NaN values compare
-   *       greater than all integers.
-   *   <li>Strings are ordered lexicographically by their elements (chars). So too are lists and
-   *       tuples, though lists are not comparable with tuples.
-   *   <li>If x implements Comparable, its {@code compareTo(y)} method may be called to determine
-   *       the comparison if x and y have the same {@link #type}, though not necessary the same Java
-   *       class.
-   *   <li>Ordered comparison of any other values is an error (ClassCastException).
-   * </ul>
-   *
-   * <p>This method defines a strict weak ordering that is consistent with {@link Object#equals}.
-   */
-  public static final Ordering<Object> ORDERING =
-      new Ordering<Object>() {
-        @Override
-        public int compare(Object x, Object y) {
-          return compareUnchecked(x, y);
-        }
-      };
-
-  /**
-   * Defines the strict weak ordering of Starlark values used for sorting and the comparison
-   * operators. Throws ClassCastException on failure.
-   */
-  static int compareUnchecked(Object x, Object y) {
-    if (sameType(x, y)) {
-      // Ordered? e.g. string, int, bool, float.
-      if (x instanceof Comparable) {
-        @SuppressWarnings("unchecked")
-        Comparable<Object> xcomp = (Comparable<Object>) x;
-        return xcomp.compareTo(y);
-      }
-
-    } else {
-      // different types
-
-      if (x instanceof StarlarkFloat && y instanceof StarlarkInt) {
-        // float < int
-        double xf = ((StarlarkFloat) x).toDouble();
-        return Double.isNaN(xf) ? +1 : -StarlarkInt.compareIntAndDouble((StarlarkInt) y, xf);
-      } else if (x instanceof StarlarkInt && y instanceof StarlarkFloat) {
-        // int < float
-        double yf = ((StarlarkFloat) y).toDouble();
-        return Double.isNaN(yf) ? -1 : StarlarkInt.compareIntAndDouble((StarlarkInt) x, yf);
-      }
-    }
-
-    throw new ClassCastException(
-        String.format("unsupported comparison: %s <=> %s", Starlark.type(x), Starlark.type(y)));
-  }
-
-  private static boolean sameType(Object x, Object y) {
-    return x.getClass() == y.getClass() || Starlark.type(x).equals(Starlark.type(y));
   }
 
   /** Returns the string form of a value as if by the Starlark expression {@code str(x)}. */
@@ -593,7 +514,7 @@ public final class Starlark {
       if (desc == null) {
         throw errorf("'%s' object is not callable", type(fn));
       }
-      callable = new BuiltinFunction(fn, desc.getName(), desc);
+      callable = new BuiltinCallable(fn, desc.getName(), desc);
     }
 
     thread.push(callable);
@@ -677,7 +598,7 @@ public final class Starlark {
       if (method.isStructField()) {
         return method.callField(x, semantics, mu);
       } else {
-        return new BuiltinFunction(x, name, method);
+        return new BuiltinCallable(x, name, method);
       }
     }
 
@@ -800,7 +721,7 @@ public final class Starlark {
             String.format("addMethods(%s): method %s has structField=true", cls.getName(), name));
       }
 
-      // We use the 2-arg (desc=null) BuiltinFunction constructor instead of passing
+      // We use the 2-arg (desc=null) BuiltinCallable constructor instead of passing
       // the descriptor that CallUtils.getAnnotatedMethod would return,
       // because most calls to addMethods implicitly pass StarlarkSemantics.DEFAULT,
       // which is probably the wrong semantics for the later call.
@@ -809,7 +730,7 @@ public final class Starlark {
       // statically available in the environment, but the thread's semantics determine
       // the dynamic behavior of the method call; this includes a run-time check for
       // whether the method was disabled by the semantics.
-      env.put(name, new BuiltinFunction(v, name));
+      env.put(name, new BuiltinCallable(v, name));
     }
   }
 
@@ -852,7 +773,7 @@ public final class Starlark {
    */
   public static Object execFileProgram(Program prog, Module module, StarlarkThread thread)
       throws EvalException, InterruptedException {
-    Tuple defaultValues = Tuple.empty();
+    Tuple<Object> defaultValues = Tuple.empty();
     StarlarkFunction toplevel =
         new StarlarkFunction(prog.getResolvedFunction(), defaultValues, module);
     return Starlark.fastcall(thread, toplevel, NOARGS, NOARGS);
@@ -898,7 +819,7 @@ public final class Starlark {
       ParserInput input, FileOptions options, Module module) throws SyntaxError.Exception {
     Expression expr = Expression.parse(input, options);
     Program prog = Program.compileExpr(expr, module, options);
-    Tuple defaultValues = Tuple.empty();
+    Tuple<Object> defaultValues = Tuple.empty();
     return new StarlarkFunction(prog.getResolvedFunction(), defaultValues, module);
   }
 
