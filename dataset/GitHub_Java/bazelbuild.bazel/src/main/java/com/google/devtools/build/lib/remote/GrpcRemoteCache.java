@@ -66,7 +66,6 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import javax.annotation.Nullable;
 
 /** A RemoteActionCache implementation that uses gRPC calls to a remote cache server. */
 @ThreadSafe
@@ -255,9 +254,7 @@ public class GrpcRemoteCache extends AbstractRemoteActionCache {
     }
     resourceName += "blobs/" + digestUtil.toString(digest);
 
-    @Nullable
-    HashingOutputStream hashOut =
-        options.remoteVerifyDownloads ? digestUtil.newHashingOutputStream(out) : null;
+    HashingOutputStream hashOut = digestUtil.newHashingOutputStream(out);
     SettableFuture<Void> outerF = SettableFuture.create();
     bsAsyncStub()
         .read(
@@ -266,7 +263,7 @@ public class GrpcRemoteCache extends AbstractRemoteActionCache {
               @Override
               public void onNext(ReadResponse readResponse) {
                 try {
-                  readResponse.getData().writeTo(hashOut != null ? hashOut : out);
+                  readResponse.getData().writeTo(hashOut);
                 } catch (IOException e) {
                   outerF.setException(e);
                   // Cancel the call.
@@ -288,9 +285,7 @@ public class GrpcRemoteCache extends AbstractRemoteActionCache {
               @Override
               public void onCompleted() {
                 try {
-                  if (hashOut != null) {
-                    verifyContents(digest, hashOut);
-                  }
+                  verifyContents(digest, hashOut);
                   out.flush();
                   outerF.set(null);
                 } catch (IOException e) {
