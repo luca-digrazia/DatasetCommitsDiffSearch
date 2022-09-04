@@ -136,8 +136,8 @@ public class ServiceActionHandler extends BaseAnnotationHandler<EIntentServiceHo
 			JFieldVar paramVar = getStaticExtraField(holder, paramName);
 			JVar methodParam = method.param(parameterClass, paramName);
 
-			JInvocation putExtraInvocation = holder.getIntentBuilder().getSuperPutExtraInvocation(param.asType(), methodParam, paramVar);
-			body.add(putExtraInvocation);
+			JMethod putExtraMethod = holder.getIntentBuilder().getPutExtraMethod(param.asType(), paramName, paramVar, null);
+			body.invoke(putExtraMethod).arg(methodParam);
 		}
 		body._return(JExpr._this());
 	}
