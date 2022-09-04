@@ -217,7 +217,6 @@ public class StarlarkDefinedAspect implements StarlarkExportable, StarlarkAspect
     return aspectClass != null;
   }
 
-  @Override
   public Function<Rule, AspectParameters> getDefaultParametersExtractor() {
     return rule -> {
       AttributeMap ruleAttrs = RawAttributeMapper.of(rule);
