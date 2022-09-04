@@ -142,7 +142,6 @@ public abstract class AbstractPackageLoader implements PackageLoader {
     protected Reporter reporter = new Reporter(new EventBus());
     protected Map<SkyFunctionName, SkyFunction> extraSkyFunctions = new HashMap<>();
     List<PrecomputedValue.Injected> extraPrecomputedValues = new ArrayList<>();
-    String defaultsPackageContents = getDefaultDefaultPackageContents();
     int legacyGlobbingThreads = 1;
     int skyframeThreads = 1;
 
@@ -231,8 +230,6 @@ public abstract class AbstractPackageLoader implements PackageLoader {
     protected abstract PackageLoader buildImpl();
 
     protected abstract ConfiguredRuleClassProvider getDefaultRuleClassProvider();
-
-    protected abstract String getDefaultDefaultPackageContents();
   }
 
   AbstractPackageLoader(Builder builder) {
@@ -251,7 +248,6 @@ public abstract class AbstractPackageLoader implements PackageLoader {
         makePreinjectedDiff(
             skylarkSemantics,
             builder.pkgLocator,
-            builder.defaultsPackageContents,
             ImmutableList.copyOf(builder.extraPrecomputedValues));
     pkgFactory =
         new PackageFactory(
@@ -265,7 +261,6 @@ public abstract class AbstractPackageLoader implements PackageLoader {
   private static ImmutableDiff makePreinjectedDiff(
       SkylarkSemantics skylarkSemantics,
       PathPackageLocator pkgLocator,
-      String defaultsPackageContents,
       ImmutableList<PrecomputedValue.Injected> extraPrecomputedValues) {
     final Map<SkyKey, SkyValue> valuesToInject = new HashMap<>();
     Injectable injectable =
@@ -286,8 +281,6 @@ public abstract class AbstractPackageLoader implements PackageLoader {
     PrecomputedValue.PATH_PACKAGE_LOCATOR.set(injectable, pkgLocator);
     PrecomputedValue.DEFAULT_VISIBILITY.set(injectable, ConstantRuleVisibility.PRIVATE);
     PrecomputedValue.SKYLARK_SEMANTICS.set(injectable, skylarkSemantics);
-    PrecomputedValue.DEFAULTS_PACKAGE_CONTENTS.set(injectable, defaultsPackageContents);
-    PrecomputedValue.ENABLE_DEFAULTS_PACKAGE.set(injectable, true);
     return new ImmutableDiff(ImmutableList.of(), valuesToInject);
   }
 
