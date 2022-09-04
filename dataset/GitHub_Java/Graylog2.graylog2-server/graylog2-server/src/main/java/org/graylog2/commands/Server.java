@@ -28,10 +28,12 @@ import org.graylog2.bindings.AlarmCallbackBindings;
 import org.graylog2.bindings.InitializerBindings;
 import org.graylog2.bindings.MessageFilterBindings;
 import org.graylog2.bindings.MessageOutputBindings;
-import org.graylog2.bindings.PasswordAlgorithmBindings;
 import org.graylog2.bindings.PeriodicalBindings;
 import org.graylog2.bindings.PersistenceServicesBindings;
+import org.graylog2.bindings.RotationStrategyBindings;
 import org.graylog2.bindings.ServerBindings;
+import org.graylog2.bindings.ServerMessageInputBindings;
+import org.graylog2.bindings.ServerObjectMapperModule;
 import org.graylog2.bootstrap.Main;
 import org.graylog2.bootstrap.ServerBootstrap;
 import org.graylog2.cluster.NodeService;
@@ -39,15 +41,11 @@ import org.graylog2.configuration.ElasticsearchConfiguration;
 import org.graylog2.configuration.EmailConfiguration;
 import org.graylog2.configuration.MongoDbConfiguration;
 import org.graylog2.configuration.VersionCheckConfiguration;
-import org.graylog2.indexer.retention.RetentionStrategyBindings;
-import org.graylog2.indexer.rotation.RotationStrategyBindings;
 import org.graylog2.notifications.Notification;
 import org.graylog2.notifications.NotificationService;
 import org.graylog2.plugin.KafkaJournalConfiguration;
 import org.graylog2.plugin.ServerStatus;
-import org.graylog2.plugin.Tools;
 import org.graylog2.shared.UI;
-import org.graylog2.shared.bindings.ObjectMapperModule;
 import org.graylog2.shared.bindings.RestApiBindings;
 import org.graylog2.shared.system.activities.Activity;
 import org.graylog2.shared.system.activities.ActivityWriter;
@@ -104,16 +102,15 @@ public class Server extends ServerBootstrap {
         return Arrays.<Module>asList(
                 new ServerBindings(configuration),
                 new PersistenceServicesBindings(),
+                new ServerMessageInputBindings(),
                 new MessageFilterBindings(),
                 new AlarmCallbackBindings(),
                 new InitializerBindings(),
                 new MessageOutputBindings(configuration),
                 new RotationStrategyBindings(),
-                new RetentionStrategyBindings(),
                 new PeriodicalBindings(),
-                new ObjectMapperModule(),
-                new RestApiBindings(),
-                new PasswordAlgorithmBindings()
+                new ServerObjectMapperModule(),
+                new RestApiBindings()
         );
     }
 
@@ -133,10 +130,7 @@ public class Server extends ServerBootstrap {
         final NodeService nodeService = injector.getInstance(NodeService.class);
         final ServerStatus serverStatus = injector.getInstance(ServerStatus.class);
         final ActivityWriter activityWriter = injector.getInstance(ActivityWriter.class);
-        nodeService.registerServer(serverStatus.getNodeId().toString(),
-                configuration.isMaster(),
-                configuration.getRestTransportUri(),
-                Tools.getLocalCanonicalHostname());
+        nodeService.registerServer(serverStatus.getNodeId().toString(), configuration.isMaster(), configuration.getRestTransportUri());
         serverStatus.setLocalMode(isLocal());
         if (configuration.isMaster() && !nodeService.isOnlyMaster(serverStatus.getNodeId())) {
             LOG.warn("Detected another master in the cluster. Retrying in {} seconds to make sure it is not "
