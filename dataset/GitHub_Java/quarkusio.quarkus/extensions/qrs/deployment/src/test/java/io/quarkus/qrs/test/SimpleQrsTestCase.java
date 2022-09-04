@@ -1,15 +1,14 @@
 package io.quarkus.qrs.test;
 
-import java.util.function.Supplier;
-
+import io.quarkus.test.QuarkusUnitTest;
+import io.restassured.RestAssured;
 import org.hamcrest.Matchers;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-import io.quarkus.test.QuarkusUnitTest;
-import io.restassured.RestAssured;
+import java.util.function.Supplier;
 
 public class SimpleQrsTestCase {
 
@@ -19,7 +18,7 @@ public class SimpleQrsTestCase {
                 @Override
                 public JavaArchive get() {
                     return ShrinkWrap.create(JavaArchive.class)
-                            .addClasses(SimpleQrsResource.class, Person.class);
+                            .addClass(SimpleQrsResource.class);
                 }
             });
 
@@ -32,16 +31,5 @@ public class SimpleQrsTestCase {
 
         RestAssured.post("/simple")
                 .then().body(Matchers.equalTo("POST"));
-    }
-
-    @Test
-    public void testJson() {
-        RestAssured.get("/simple/person")
-                .then().body("first", Matchers.equalTo("Bob")).body("last", Matchers.equalTo("Builder"));
-    }
-    @Test
-    public void testBlocking() {
-        RestAssured.get("/simple/blocking")
-                .then().body(Matchers.equalTo("true"));
     }
 }
