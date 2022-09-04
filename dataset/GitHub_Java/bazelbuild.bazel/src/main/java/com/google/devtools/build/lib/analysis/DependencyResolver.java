@@ -129,7 +129,8 @@ public abstract class DependencyResolver {
 
       abstract Builder setPropagatingAspects(List<Aspect> propagatingAspects);
 
-      abstract Builder setToolchainContextKey(@Nullable ToolchainContextKey toolchainContextKey);
+      @Nullable
+      abstract Builder setToolchainContextKey(ToolchainContextKey toolchainContextKey);
 
       abstract PartiallyResolvedDependency build();
     }
