@@ -157,7 +157,19 @@ public class ConfigBuildStep {
             return false;
         }
         if (type.kind() == Kind.PRIMITIVE) {
-            return true;
+            switch (type.asPrimitiveType().primitive()) {
+                case BOOLEAN:
+                case DOUBLE:
+                case FLOAT:
+                case LONG:
+                case INT:
+                case SHORT:
+                case BYTE:
+                case CHAR:
+                    return true;
+                default:
+                    return false;
+            }
         }
         return DotNames.STRING.equals(type.name()) ||
                 DotNames.OPTIONAL.equals(type.name()) ||
