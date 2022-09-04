@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,11 +15,11 @@
  */
 package org.androidannotations.internal.core.helper;
 
-import static com.helger.jcodemodel.JExpr._new;
-import static com.helger.jcodemodel.JExpr.ref;
-import static com.helger.jcodemodel.JMod.PRIVATE;
-import static com.helger.jcodemodel.JMod.PUBLIC;
-import static com.helger.jcodemodel.JMod.STATIC;
+import static com.sun.codemodel.JExpr._new;
+import static com.sun.codemodel.JExpr.ref;
+import static com.sun.codemodel.JMod.PRIVATE;
+import static com.sun.codemodel.JMod.PUBLIC;
+import static com.sun.codemodel.JMod.STATIC;
 import static org.androidannotations.helper.ModelConstants.generationSuffix;
 
 import java.util.List;
@@ -34,18 +34,18 @@ import org.androidannotations.helper.AndroidManifest;
 import org.androidannotations.helper.CanonicalNameConstants;
 import org.androidannotations.holder.HasIntentBuilder;
 
-import com.helger.jcodemodel.AbstractJClass;
-import com.helger.jcodemodel.IJExpression;
-import com.helger.jcodemodel.JBlock;
-import com.helger.jcodemodel.JClassAlreadyExistsException;
-import com.helger.jcodemodel.JConditional;
-import com.helger.jcodemodel.JExpr;
-import com.helger.jcodemodel.JFieldRef;
-import com.helger.jcodemodel.JFieldVar;
-import com.helger.jcodemodel.JInvocation;
-import com.helger.jcodemodel.JMethod;
-import com.helger.jcodemodel.JMod;
-import com.helger.jcodemodel.JVar;
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JClassAlreadyExistsException;
+import com.sun.codemodel.JConditional;
+import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JExpression;
+import com.sun.codemodel.JFieldRef;
+import com.sun.codemodel.JFieldVar;
+import com.sun.codemodel.JInvocation;
+import com.sun.codemodel.JMethod;
+import com.sun.codemodel.JMod;
+import com.sun.codemodel.JVar;
 
 public class ActivityIntentBuilder extends IntentBuilder {
 
@@ -89,8 +89,8 @@ public class ActivityIntentBuilder extends IntentBuilder {
 	}
 
 	@Override
-	protected AbstractJClass getSuperClass() {
-		AbstractJClass superClass = environment.getJClass(org.androidannotations.api.builder.ActivityIntentBuilder.class);
+	protected JClass getSuperClass() {
+		JClass superClass = environment.getJClass(org.androidannotations.api.builder.ActivityIntentBuilder.class);
 		return superClass.narrow(builderClass);
 	}
 
@@ -103,9 +103,9 @@ public class ActivityIntentBuilder extends IntentBuilder {
 		}
 	}
 
-	private JFieldVar addFragmentConstructor(AbstractJClass fragmentClass, String fieldName) {
+	private JFieldVar addFragmentConstructor(JClass fragmentClass, String fieldName) {
 		JFieldVar fragmentField = holder.getIntentBuilderClass().field(PRIVATE, fragmentClass, fieldName);
-		IJExpression generatedClass = holder.getGeneratedClass().dotclass();
+		JExpression generatedClass = holder.getGeneratedClass().dotclass();
 
 		JMethod constructor = holder.getIntentBuilderClass().constructor(JMod.PUBLIC);
 		JVar constructorFragmentParam = constructor.param(fragmentClass, "fragment");
@@ -117,7 +117,7 @@ public class ActivityIntentBuilder extends IntentBuilder {
 	}
 
 	private void overrideStartForResultMethod() {
-		AbstractJClass postActivityStarterClass = environment.getJClass(PostActivityStarter.class);
+		JClass postActivityStarterClass = environment.getJClass(PostActivityStarter.class);
 
 		JMethod method = holder.getIntentBuilderClass().method(PUBLIC, postActivityStarterClass, "startForResult");
 		method.annotate(Override.class);
@@ -163,9 +163,8 @@ public class ActivityIntentBuilder extends IntentBuilder {
 		JBlock thenBlock = activityCondition._then();
 		JVar activityVar = thenBlock.decl(getClasses().ACTIVITY, "activity", JExpr.cast(getClasses().ACTIVITY, contextField));
 
-		AbstractJClass activityCompat = getActivityCompat();
-		if (activityCompat != null) {
-			thenBlock.staticInvoke(activityCompat, "startActivityForResult") //
+		if (hasActivityCompatInClasspath() && hasActivityOptionsInActivityCompat()) {
+			thenBlock.staticInvoke(getClasses().ACTIVITY_COMPAT, "startActivityForResult") //
 					.arg(activityVar).arg(intentField).arg(requestCode).arg(optionsField);
 		} else if (hasActivityOptionsInFragment()) {
 			JBlock startForResultInvocationBlock;
@@ -176,7 +175,7 @@ public class ActivityIntentBuilder extends IntentBuilder {
 			}
 
 			startForResultInvocationBlock.invoke(activityVar, "startActivityForResult") //
-					.arg(intentField).arg(requestCode).arg(optionsField);
+				.arg(intentField).arg(requestCode).arg(optionsField);
 		} else {
 			thenBlock.invoke(activityVar, "startActivityForResult").arg(intentField).arg(requestCode);
 		}
@@ -196,7 +195,7 @@ public class ActivityIntentBuilder extends IntentBuilder {
 		body._return(_new(postActivityStarterClass).arg(contextField));
 	}
 
-	private JBlock createCallWithIfGuard(JVar requestCode, JBlock thenBlock, IJExpression invocationTarget) {
+	private JBlock createCallWithIfGuard(JVar requestCode, JBlock thenBlock, JExpression invocationTarget) {
 		JConditional guardIf = thenBlock._if(getClasses().BUILD_VERSION.staticRef("SDK_INT").gte(getClasses().BUILD_VERSION_CODES.staticRef("JELLY_BEAN")));
 		JBlock startInvocationBlock = guardIf._then();
 		String methodName = requestCode != null ? "startActivityForResult" : "startActivity";
@@ -217,6 +216,10 @@ public class ActivityIntentBuilder extends IntentBuilder {
 		return elementUtils.getTypeElement(CanonicalNameConstants.SUPPORT_V4_FRAGMENT) != null;
 	}
 
+	protected boolean hasActivityCompatInClasspath() {
+		return elementUtils.getTypeElement(CanonicalNameConstants.ACTIVITY_COMPAT) != null;
+	}
+
 	protected boolean hasActivityOptionsInFragment() {
 		if (!hasFragmentInClasspath()) {
 			return false;
@@ -227,18 +230,10 @@ public class ActivityIntentBuilder extends IntentBuilder {
 		return hasActivityOptions(fragment, 1);
 	}
 
-	private AbstractJClass getActivityCompat() {
+	protected boolean hasActivityOptionsInActivityCompat() {
 		TypeElement activityCompat = elementUtils.getTypeElement(CanonicalNameConstants.ACTIVITY_COMPAT);
-		if (hasActivityOptions(activityCompat, 2)) {
-			return getClasses().ACTIVITY_COMPAT;
-		}
 
-		TypeElement androidxActivityCompat = elementUtils.getTypeElement(CanonicalNameConstants.ANDROIDX_ACTIVITY_COMPAT);
-		if (hasActivityOptions(androidxActivityCompat, 2)) {
-			return getClasses().ANDROIDX_ACTIVITY_COMPAT;
-		}
-
-		return null;
+		return hasActivityOptions(activityCompat, 2);
 	}
 
 	private boolean hasActivityOptions(TypeElement type, int optionsParamPosition) {
