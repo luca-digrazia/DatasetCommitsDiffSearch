@@ -19,33 +19,22 @@ package org.graylog2.rest.resources.system.inputs.responses;
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.auto.value.AutoValue;
-import org.joda.time.DateTime;
+import com.wordnik.swagger.annotations.ApiModelProperty;
 
-import javax.annotation.Nullable;
+import java.util.Set;
 
 /**
  * Created by dennis on 12/12/14.
  */
 @JsonAutoDetect
 @AutoValue
-public abstract class InputStateSummary {
+public abstract class InputsList {
     @JsonProperty
-    public abstract String id();
+    public abstract Set<InputStateSummary> inputs();
     @JsonProperty
-    public abstract String state();
-    @JsonProperty
-    public abstract DateTime startedAt();
-    @JsonProperty
-    @Nullable
-    public abstract String detailedMessage();
-    @JsonProperty
-    public abstract InputSummary messageInput();
+    public abstract int total();
 
-    public static InputStateSummary create(String id,
-                                           String state,
-                                           DateTime startedAt,
-                                           @Nullable String detailedMessage,
-                                           InputSummary messageInput) {
-        return new AutoValue_InputStateSummary(id, state, startedAt, detailedMessage, messageInput);
+    public static InputsList create(Set<InputStateSummary> inputs) {
+        return new AutoValue_InputsList(inputs, inputs.size());
     }
 }
