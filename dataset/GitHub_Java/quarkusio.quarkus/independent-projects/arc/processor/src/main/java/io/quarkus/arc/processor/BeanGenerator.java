@@ -84,48 +84,47 @@ public class BeanGenerator extends AbstractGenerator {
     protected final AnnotationLiteralProcessor annotationLiterals;
     protected final Predicate<DotName> applicationClassPredicate;
     protected final PrivateMembersCollector privateMembers;
-    protected final ReflectionRegistration reflectionRegistration;
-    protected final Set<String> existingClasses;
-    protected final Map<BeanInfo, String> beanToGeneratedName;
 
     public BeanGenerator(AnnotationLiteralProcessor annotationLiterals, Predicate<DotName> applicationClassPredicate,
-            PrivateMembersCollector privateMembers, boolean generateSources, ReflectionRegistration reflectionRegistration,
-            Set<String> existingClasses,
-            Map<BeanInfo, String> beanToGeneratedName) {
+            PrivateMembersCollector privateMembers, boolean generateSources) {
         super(generateSources);
         this.annotationLiterals = annotationLiterals;
         this.applicationClassPredicate = applicationClassPredicate;
         this.privateMembers = privateMembers;
-        this.reflectionRegistration = reflectionRegistration;
-        this.existingClasses = existingClasses;
-        this.beanToGeneratedName = beanToGeneratedName;
     }
 
     /**
      *
      * @param bean
+     * @param existingClasses
+     * @param beanToGeneratedName
      * @return a collection of resources
      */
-    Collection<Resource> generate(BeanInfo bean) {
+    Collection<Resource> generate(BeanInfo bean, ReflectionRegistration reflectionRegistration, Set<String> existingClasses,
+            Map<BeanInfo, String> beanToGeneratedName) {
         if (bean.getTarget().isPresent()) {
             AnnotationTarget target = bean.getTarget().get();
             switch (target.kind()) {
                 case CLASS:
-                    return generateClassBean(bean, target.asClass());
+                    return generateClassBean(bean, target.asClass(), reflectionRegistration, existingClasses,
+                            beanToGeneratedName);
                 case METHOD:
-                    return generateProducerMethodBean(bean, target.asMethod());
+                    return generateProducerMethodBean(bean, target.asMethod(), reflectionRegistration, existingClasses,
+                            beanToGeneratedName);
                 case FIELD:
-                    return generateProducerFieldBean(bean, target.asField());
+                    return generateProducerFieldBean(bean, target.asField(), reflectionRegistration, existingClasses,
+                            beanToGeneratedName);
                 default:
                     throw new IllegalArgumentException("Unsupported bean type");
             }
         } else {
             // Synthetic beans
-            return generateSyntheticBean(bean);
+            return generateSyntheticBean(bean, reflectionRegistration, existingClasses, beanToGeneratedName);
         }
     }
 
-    Collection<Resource> generateSyntheticBean(BeanInfo bean) {
+    Collection<Resource> generateSyntheticBean(BeanInfo bean, ReflectionRegistration reflectionRegistration,
+            Set<String> existingClasses, Map<BeanInfo, String> beanToGeneratedName) {
 
         StringBuilder baseNameBuilder = new StringBuilder();
         if (bean.getImplClazz().enclosingClass() != null) {
@@ -246,7 +245,8 @@ public class BeanGenerator extends AbstractGenerator {
         return classOutput.getResources();
     }
 
-    Collection<Resource> generateClassBean(BeanInfo bean, ClassInfo beanClass) {
+    Collection<Resource> generateClassBean(BeanInfo bean, ClassInfo beanClass, ReflectionRegistration reflectionRegistration,
+            Set<String> existingClasses, Map<BeanInfo, String> beanToGeneratedName) {
 
         String baseName;
         if (beanClass.enclosingClass() != null) {
@@ -330,7 +330,9 @@ public class BeanGenerator extends AbstractGenerator {
         return classOutput.getResources();
     }
 
-    Collection<Resource> generateProducerMethodBean(BeanInfo bean, MethodInfo producerMethod) {
+    Collection<Resource> generateProducerMethodBean(BeanInfo bean, MethodInfo producerMethod,
+            ReflectionRegistration reflectionRegistration, Set<String> existingClasses,
+            Map<BeanInfo, String> beanToGeneratedName) {
 
         ClassInfo declaringClass = producerMethod.declaringClass();
         String declaringClassBase;
@@ -428,7 +430,9 @@ public class BeanGenerator extends AbstractGenerator {
         return classOutput.getResources();
     }
 
-    Collection<Resource> generateProducerFieldBean(BeanInfo bean, FieldInfo producerField) {
+    Collection<Resource> generateProducerFieldBean(BeanInfo bean, FieldInfo producerField,
+            ReflectionRegistration reflectionRegistration, Set<String> existingClasses,
+            Map<BeanInfo, String> beanToGeneratedName) {
 
         ClassInfo declaringClass = producerField.declaringClass();
         String declaringClassBase;

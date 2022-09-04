@@ -54,25 +54,23 @@ public class ClientProxyGenerator extends AbstractGenerator {
 
     private final Predicate<DotName> applicationClassPredicate;
     private final boolean mockable;
-    private final ReflectionRegistration reflectionRegistration;
-    private final Set<String> existingClasses;
 
-    public ClientProxyGenerator(Predicate<DotName> applicationClassPredicate, boolean generateSources, boolean mockable,
-            ReflectionRegistration reflectionRegistration, Set<String> existingClasses) {
+    public ClientProxyGenerator(Predicate<DotName> applicationClassPredicate, boolean generateSources, boolean mockable) {
         super(generateSources);
         this.applicationClassPredicate = applicationClassPredicate;
         this.mockable = mockable;
-        this.reflectionRegistration = reflectionRegistration;
-        this.existingClasses = existingClasses;
     }
 
     /**
      *
      * @param bean
      * @param beanClassName Fully qualified class name
+     * @param reflectionRegistration
+     * @param existingClasses
      * @return a collection of resources
      */
-    Collection<Resource> generate(BeanInfo bean, String beanClassName) {
+    Collection<Resource> generate(BeanInfo bean, String beanClassName, ReflectionRegistration reflectionRegistration,
+            Set<String> existingClasses) {
 
         ResourceClassOutput classOutput = new ResourceClassOutput(applicationClassPredicate.test(bean.getBeanClass()),
                 generateSources);

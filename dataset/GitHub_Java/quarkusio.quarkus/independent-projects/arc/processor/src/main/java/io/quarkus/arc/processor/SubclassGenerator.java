@@ -71,8 +71,6 @@ public class SubclassGenerator extends AbstractGenerator {
             "bindings", Set.class);
 
     private final Predicate<DotName> applicationClassPredicate;
-    private final ReflectionRegistration reflectionRegistration;
-    private final Set<String> existingClasses;
 
     static String generatedName(DotName providerTypeName, String baseName) {
         return DotNames.packageName(providerTypeName).replace('.', '/') + "/" + baseName + SUBCLASS_SUFFIX;
@@ -80,14 +78,17 @@ public class SubclassGenerator extends AbstractGenerator {
 
     private final AnnotationLiteralProcessor annotationLiterals;
 
+    /**
+     *
+     * @param annotationLiterals
+     * @param applicationClassPredicate
+     * @param generateSources
+     */
     public SubclassGenerator(AnnotationLiteralProcessor annotationLiterals, Predicate<DotName> applicationClassPredicate,
-            boolean generateSources, ReflectionRegistration reflectionRegistration,
-            Set<String> existingClasses) {
+            boolean generateSources) {
         super(generateSources);
         this.applicationClassPredicate = applicationClassPredicate;
         this.annotationLiterals = annotationLiterals;
-        this.reflectionRegistration = reflectionRegistration;
-        this.existingClasses = existingClasses;
     }
 
     /**
@@ -97,7 +98,8 @@ public class SubclassGenerator extends AbstractGenerator {
      * @param existingClasses
      * @return a java file
      */
-    Collection<Resource> generate(BeanInfo bean, String beanClassName) {
+    Collection<Resource> generate(BeanInfo bean, String beanClassName, ReflectionRegistration reflectionRegistration,
+            Set<String> existingClasses) {
 
         ResourceClassOutput classOutput = new ResourceClassOutput(applicationClassPredicate.test(bean.getBeanClass()),
                 generateSources);
