@@ -324,16 +324,10 @@ final class Beans {
             return null;
         }
         final Set<ScopeInfo> stereotypeScopes = new HashSet<>();
-        final Set<ScopeInfo> additionalBDAScopes = new HashSet<>();
         for (StereotypeInfo stereotype : stereotypes) {
-            if (!stereotype.isAdditionalBeanDefiningAnnotation()) {
-                stereotypeScopes.add(stereotype.getDefaultScope());
-            } else {
-                additionalBDAScopes.add(stereotype.getDefaultScope());
-            }
+            stereotypeScopes.add(stereotype.getDefaultScope());
         }
-        // if the stereotypeScopes set is empty, operate on additional BDA stereotypes instead
-        return BeanDeployment.getValidScope(stereotypeScopes.isEmpty() ? additionalBDAScopes : stereotypeScopes, target);
+        return BeanDeployment.getValidScope(stereotypeScopes, target);
     }
 
     private static boolean initStereotypeAlternative(List<StereotypeInfo> stereotypes) {
