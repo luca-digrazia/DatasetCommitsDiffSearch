@@ -11,10 +11,8 @@ import org.aesh.command.invocation.CommandInvocation;
 import org.aesh.command.option.Option;
 import org.aesh.io.Resource;
 
-import io.quarkus.cli.commands.file.BuildFile;
-import io.quarkus.cli.commands.file.GradleBuildFile;
-import io.quarkus.cli.commands.file.MavenBuildFile;
 import io.quarkus.cli.commands.writer.FileProjectWriter;
+import io.quarkus.generators.BuildTool;
 
 /**
  * @author <a href="mailto:stalep@gmail.com">Ståle Pedersen</a>
@@ -42,19 +40,17 @@ public class ListExtensionsCommand implements Command<CommandInvocation> {
             commandInvocation.println(commandInvocation.getHelpInfo("quarkus list-extensions"));
         } else {
             try {
-                BuildFile buildFile = null;
+                BuildTool builtTool = BuildTool.MAVEN;
+                FileProjectWriter writer = null;
                 if (path != null) {
                     File projectDirectory = new File(path.getAbsolutePath());
-                    try (FileProjectWriter writer = new FileProjectWriter(projectDirectory)) {
-                        if (new File(projectDirectory, "build.gradle").exists()
-                                || new File(projectDirectory, "build.gradle.kts").exists()) {
-                            buildFile = new GradleBuildFile(writer);
-                        } else {
-                            buildFile = new MavenBuildFile(writer);
-                        }
+                    if (new File(projectDirectory, "build.gradle").exists()
+                            || new File(projectDirectory, "build.gradle.kts").exists()) {
+                        builtTool = BuildTool.GRADLE;
                     }
+                    writer = new FileProjectWriter(projectDirectory);
                 }
-                new ListExtensions(buildFile).listExtensions(all, format, searchPattern);
+                new ListExtensions(writer, builtTool).listExtensions(all, format, searchPattern);
             } catch (IOException e) {
                 throw new CommandException("Unable to list extensions", e);
             }
