@@ -16,6 +16,9 @@ package com.google.devtools.build.lib.analysis;
 
 import static com.google.common.truth.Truth.assertThat;
 
+import com.google.common.collect.ImmutableMap;
+import com.google.devtools.build.lib.analysis.LocationExpander.LocationFunction;
+import com.google.devtools.build.lib.packages.AbstractRuleErrorConsumer;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import java.util.ArrayList;
 import java.util.List;
@@ -26,7 +29,8 @@ import org.junit.runners.JUnit4;
 /** Unit tests for {@link LocationExpander}. */
 @RunWith(JUnit4.class)
 public class LocationExpanderTest {
-  private static final class Capture implements RuleErrorConsumer {
+  private static final class Capture extends AbstractRuleErrorConsumer
+      implements RuleErrorConsumer {
     private final List<String> warnsOrErrors = new ArrayList<>();
 
     @Override
@@ -48,13 +52,30 @@ public class LocationExpanderTest {
     public void attributeError(String attrName, String message) {
       warnsOrErrors.add("ERROR-" + attrName + ": " + message);
     }
+
+    @Override
+    public boolean hasErrors() {
+      return !warnsOrErrors.isEmpty();
+    }
   }
 
   private LocationExpander makeExpander(RuleErrorConsumer ruleErrorConsumer) throws Exception {
+
+    LocationFunction f1 = new LocationFunctionBuilder("//a", false)
+        .setExecPaths(false)
+        .add("//a", "/exec/src/a")
+        .build();
+
+    LocationFunction f2 = new LocationFunctionBuilder("//b", true)
+        .setExecPaths(false)
+        .add("//b", "/exec/src/b")
+        .build();
+
     return new LocationExpander(
         ruleErrorConsumer,
-        (String s) -> "one(" + s + ")",
-        (String s) -> "more(" + s + ")");
+        ImmutableMap.<String, LocationFunction>of(
+            "location", f1,
+            "locations", f2));
   }
 
   private String expand(String input) throws Exception {
@@ -68,14 +89,14 @@ public class LocationExpanderTest {
 
   @Test
   public void oneOrMore() throws Exception {
-    assertThat(expand("$(location a)")).isEqualTo("one(a)");
-    assertThat(expand("$(locations b)")).isEqualTo("more(b)");
-    assertThat(expand("---$(location a)---")).isEqualTo("---one(a)---");
+    assertThat(expand("$(location a)")).isEqualTo("src/a");
+    assertThat(expand("$(locations b)")).isEqualTo("src/b");
+    assertThat(expand("---$(location a)---")).isEqualTo("---src/a---");
   }
 
   @Test
   public void twoInOne() throws Exception {
-    assertThat(expand("$(location a) $(locations b)")).isEqualTo("one(a) more(b)");
+    assertThat(expand("$(location a) $(locations b)")).isEqualTo("src/a src/b");
   }
 
   @Test
