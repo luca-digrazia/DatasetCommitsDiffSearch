@@ -14,64 +14,112 @@
 
 package com.google.devtools.build.lib.vfs;
 
+import static com.google.common.base.Preconditions.checkArgument;
+
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hashing;
+import com.google.devtools.build.lib.vfs.DigestHashFunction.DigestLength.DigestLengthImpl;
 import com.google.devtools.common.options.Converter;
 import com.google.devtools.common.options.OptionsParsingException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.Collection;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map.Entry;
 
-/** Type of hash function to use for digesting files. */
+/**
+ * Type of hash function to use for digesting files.
+ *
+ * <p>This tracks parallel {@link java.security.MessageDigest} and {@link HashFunction} interfaces
+ * for each provided hash, as Bazel uses both - MessageDigest where performance is critical and
+ * HashFunctions where ease-of-use wins over.
+ */
 // The underlying HashFunctions are immutable and thread safe.
 public class DigestHashFunction {
   // This map must be declared first to make sure that calls to register() have it ready.
   private static final HashMap<String, DigestHashFunction> hashFunctionRegistry = new HashMap<>();
 
-  public static final DigestHashFunction MD5 = register(Hashing.md5(), "MD5");
+  /** Describes the length of a digest. */
+  public interface DigestLength {
+    /** Returns the length of a digest by inspecting its bytes. Used for variable-length digests. */
+    default int getDigestLength(byte[] bytes, int offset) {
+      return getDigestMaximumLength();
+    }
+
+    /** Returns the maximum length a digest can turn into. */
+    int getDigestMaximumLength();
+
+    /** Default implementation that simply returns a fixed length. */
+    class DigestLengthImpl implements DigestLength {
+      private final int length;
+
+      DigestLengthImpl(HashFunction hashFunction) {
+        this.length = hashFunction.bits() / 8;
+      }
+
+      @Override
+      public int getDigestMaximumLength() {
+        return length;
+      }
+    }
+  }
+
   public static final DigestHashFunction SHA1 = register(Hashing.sha1(), "SHA-1", "SHA1");
   public static final DigestHashFunction SHA256 = register(Hashing.sha256(), "SHA-256", "SHA256");
 
   private static DigestHashFunction defaultHash;
-  private static boolean defaultHasBeenSet = false;
 
-  private final HashFunction hash;
+  private final HashFunction hashFunction;
+  private final DigestLength digestLength;
   private final String name;
+  private final MessageDigest messageDigestPrototype;
+  private final boolean messageDigestPrototypeSupportsClone;
+  private final ImmutableList<String> names;
 
-  private DigestHashFunction(HashFunction hash, String name) {
-    this.hash = hash;
-    this.name = name;
+  private DigestHashFunction(
+      HashFunction hashFunction, DigestLength digestLength, ImmutableList<String> names) {
+    this.hashFunction = hashFunction;
+    this.digestLength = digestLength;
+    checkArgument(!names.isEmpty());
+    this.name = names.get(0);
+    this.names = names;
+    this.messageDigestPrototype = getMessageDigestInstance();
+    this.messageDigestPrototypeSupportsClone = supportsClone(messageDigestPrototype);
   }
 
-  public HashFunction getHash() {
-    return hash;
-  }
-
-  public boolean isValidDigest(byte[] digest) {
-    // TODO(b/109764197): Remove this check to accept variable-length hashes.
-    return digest != null && digest.length * 8 == hash.bits();
-  }
-
-  @Override
-  public String toString() {
-    return name;
+  public static DigestHashFunction register(
+      HashFunction hash, String hashName, String... altNames) {
+    return register(hash, new DigestLengthImpl(hash), hashName, altNames);
   }
 
   /**
    * Creates a new DigestHashFunction that is registered to be recognized by its name in {@link
    * DigestFunctionConverter}.
    *
-   * @param hashName the canonical name for this hash function.
+   * @param hashName the canonical name for this hash function - and the name that can be used to
+   *     uncover the MessageDigest.
    * @param altNames alternative names that will be mapped to this function by the converter but
    *     will not serve as the canonical name for the DigestHashFunction.
    * @param hash The {@link HashFunction} to register.
    * @throws IllegalArgumentException if the name is already registered.
    */
   public static DigestHashFunction register(
-      HashFunction hash, String hashName, String... altNames) {
-    DigestHashFunction hashFunction = new DigestHashFunction(hash, hashName);
-    List<String> names = ImmutableList.<String>builder().add(hashName).add(altNames).build();
+      HashFunction hash, DigestLength digestLength, String hashName, String... altNames) {
+    try {
+      MessageDigest.getInstance(hashName);
+    } catch (NoSuchAlgorithmException e) {
+      throw new IllegalArgumentException(
+          "The hash function name provided does not correspond to a valid MessageDigest: "
+              + hashName,
+          e);
+    }
+
+    ImmutableList<String> names =
+        ImmutableList.<String>builder().add(hashName).add(altNames).build();
+    DigestHashFunction hashFunction = new DigestHashFunction(hash, digestLength, names);
     synchronized (hashFunctionRegistry) {
       for (String name : names) {
         if (hashFunctionRegistry.containsKey(name)) {
@@ -90,19 +138,36 @@ public class DigestHashFunction {
    * {@link #setDefault(DigestHashFunction)}. Once this value is set, it's a constant, so to prevent
    * blocking calls, users should cache this value if needed.
    *
-   * @throws DefaultNotSetException if the default has not yet been set by a previous call to {@link
-   *     #setDefault}.
+   * @throws DefaultHashFunctionNotSetException if the default has not yet been set by a previous
+   *     call to {@link #setDefault}.
    */
-  public static synchronized DigestHashFunction getDefault() throws DefaultNotSetException {
-    if (!defaultHasBeenSet) {
-      throw new DefaultNotSetException("DigestHashFunction default has not been set");
+  public static synchronized DigestHashFunction getDefault()
+      throws DefaultHashFunctionNotSetException {
+    DigestHashFunction hash = defaultHash;
+    if (hash == null) {
+      throw new DefaultHashFunctionNotSetException("DigestHashFunction default has not been set");
     }
-    return defaultHash;
+    return hash;
   }
 
+  /**
+   * Returns the default DigestHashFunction, or the testing default if unset.
+   */
+  public static DigestHashFunction getDefaultUnchecked() {
+    try {
+      return getDefault();
+    } catch (DefaultHashFunctionNotSetException e) {
+      // Some tests use this class without calling GoogleUnixFileSystemModule.globalInit().
+      Preconditions.checkState(
+          System.getenv("TEST_TMPDIR") != null, "Default hash function has not been set");
+      return DigestHashFunction.SHA256;
+    }
+  }
+
+
   /** Indicates that the default has not been initialized. */
-  public static final class DefaultNotSetException extends Exception {
-    DefaultNotSetException(String message) {
+  public static final class DefaultHashFunctionNotSetException extends Exception {
+    DefaultHashFunctionNotSetException(String message) {
       super(message);
     }
   }
@@ -115,14 +180,16 @@ public class DigestHashFunction {
    */
   public static synchronized void setDefault(DigestHashFunction hash)
       throws DefaultAlreadySetException {
-    if (defaultHasBeenSet) {
-      throw new DefaultAlreadySetException(
-          String.format(
-              "setDefault(%s) failed. The default has already been set to %s, you cannot reset it.",
-              hash.name, defaultHash.name));
+    Preconditions.checkNotNull(hash);
+    // Permit redundant calls.  This is difficult to avoid with test suites.
+    if (defaultHash == null || defaultHash == hash) {
+      defaultHash = hash;
+      return;
     }
-    defaultHash = hash;
-    defaultHasBeenSet = true;
+    throw new DefaultAlreadySetException(
+        String.format(
+            "setDefault(%s) failed. The default has already been set to %s, you cannot change it.",
+            hash.name, defaultHash.name));
   }
 
   /** Failure to set the default if the default already being set. */
@@ -148,5 +215,59 @@ public class DigestHashFunction {
     public String getTypeDescription() {
       return "hash function";
     }
+  }
+
+  public HashFunction getHashFunction() {
+    return hashFunction;
+  }
+
+  public MessageDigest cloneOrCreateMessageDigest() {
+    if (messageDigestPrototypeSupportsClone) {
+      try {
+        return (MessageDigest) messageDigestPrototype.clone();
+      } catch (CloneNotSupportedException e) {
+        // We checked at initialization that this could be cloned, so this should never happen.
+        throw new IllegalStateException("Could not clone message digest", e);
+      }
+    } else {
+      return getMessageDigestInstance();
+    }
+  }
+
+  public DigestLength getDigestLength() {
+    return digestLength;
+  }
+
+  public ImmutableList<String> getNames() {
+    return names;
+  }
+
+  @Override
+  public String toString() {
+    return name;
+  }
+
+  private MessageDigest getMessageDigestInstance() {
+    try {
+      return MessageDigest.getInstance(name);
+    } catch (NoSuchAlgorithmException e) {
+      // We check when we register() this digest function that the message digest exists. This
+      // should never happen.
+      throw new IllegalStateException("message digest " + name + " not available", e);
+    }
+  }
+
+  private static boolean supportsClone(MessageDigest toCheck) {
+    try {
+      toCheck.clone();
+      return true;
+    } catch (CloneNotSupportedException e) {
+      return false;
+    }
+  }
+
+  @VisibleForTesting
+  static Collection<DigestHashFunction> getPossibleHashFunctions() {
+    return hashFunctionRegistry.values();
   }
 }

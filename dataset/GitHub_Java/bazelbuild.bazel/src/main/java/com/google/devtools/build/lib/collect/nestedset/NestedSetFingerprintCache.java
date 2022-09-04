@@ -59,8 +59,8 @@ public class NestedSetFingerprintCache {
 
   private <T> void addNestedSetToFingerprintSlow(
       MapFn<? super T> mapFn, Fingerprint fingerprint, NestedSet<T> nestedSet) {
-    for (T object : nestedSet.toList()) {
-      addToFingerprint(mapFn, fingerprint, object);
+    for (T object : nestedSet) {
+      mapFn.expandToCommandLine(object, fingerprint);
     }
   }
 
@@ -92,7 +92,7 @@ public class NestedSetFingerprintCache {
   @VisibleForTesting
   <T> void addToFingerprint(
       CommandLineItem.MapFn<? super T> mapFn, Fingerprint fingerprint, T object) {
-    mapFn.expandToCommandLine(object, fingerprint::addString);
+    mapFn.expandToCommandLine(object, fingerprint);
   }
 
   private static Map<CommandLineItem.MapFn<?>, DigestMap> createMap() {
