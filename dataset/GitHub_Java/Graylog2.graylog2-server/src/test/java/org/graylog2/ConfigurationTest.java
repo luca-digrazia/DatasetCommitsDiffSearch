@@ -26,9 +26,6 @@ public class ConfigurationTest {
         validProperties = new HashMap<String, String>();
 
         // Required properties
-        validProperties.put("elasticsearch_url", "http://localhost:9200/");
-        validProperties.put("elasticsearch_index_name", "graylog2");
-        validProperties.put("force_syslog_rdns", "false");
         validProperties.put("syslog_listen_port", "514");
         validProperties.put("syslog_protocol", "udp");
         validProperties.put("mongodb_useauth", "true");
@@ -66,42 +63,6 @@ public class ConfigurationTest {
 
         Configuration configuration = new Configuration();
         new JadConfig(new InMemoryRepository(validProperties), configuration).process();
-    }
-
-    @Test
-    public void testForceSyslogRdns() throws RepositoryException, ValidationException {
-        Configuration configuration = new Configuration();
-        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
-
-        Assert.assertEquals(false, configuration.getForceSyslogRdns());
-    }
-
-    @Test
-    public void testGetElasticSearchUrl() throws RepositoryException, ValidationException {
-
-        Configuration configuration = new Configuration();
-        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
-
-        Assert.assertEquals("http://localhost:9200/", configuration.getElasticSearchUrl());
-    }
-
-    @Test
-    public void testGetElasticSearchUrlAddsTrailingSlashIfOmittedInConfigFile() throws RepositoryException, ValidationException {
-
-        validProperties.put("elasticsearch_url", "https://example.org:80");
-        Configuration configuration = new Configuration();
-        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
-
-        Assert.assertEquals("https://example.org:80/", configuration.getElasticSearchUrl());
-    }
-
-    @Test
-    public void testGetElasticSearchIndexName() throws RepositoryException, ValidationException {
-
-        Configuration configuration = new Configuration();
-        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
-
-        Assert.assertEquals("graylog2", configuration.getElasticSearchIndexName());
     }
 
     @Test
@@ -220,7 +181,7 @@ public class ConfigurationTest {
 
     @Test
     public void testGetMongoDBReplicaSetServersUnknownHost() throws RepositoryException, ValidationException {
-        validProperties.put("mongodb_replica_set", "this-host-hopefully-does-not-exist.:27017");
+        validProperties.put("mongodb_replica_set", "this-host-hopefully-does-not-exist:27017");
         Configuration configuration = new Configuration();
         new JadConfig(new InMemoryRepository(validProperties), configuration).process();
 

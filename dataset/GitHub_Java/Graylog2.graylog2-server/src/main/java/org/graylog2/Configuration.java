@@ -53,23 +53,8 @@ public class Configuration {
     @Parameter(value = "syslog_protocol", required = true)
     private String syslogProtocol = "udp";
 
-    @Parameter(value = "syslog_listen_address")
-    private String syslogListenAddress = "0.0.0.0";
-
-    @Parameter(value = "force_syslog_rdns", required = true)
-    private boolean forceSyslogRdns = false;
-
     @Parameter(value = "mongodb_useauth", required = true)
     private boolean mongoUseAuth = false;
-
-    @Parameter(value = "allow_override_syslog_date", required = true)
-    private boolean allowOverrideSyslogDate = true;
-
-    @Parameter(value = "elasticsearch_url", required = true)
-    private String elasticsearchUrl = "http://localhost:9200/";
-
-    @Parameter(value = "elasticsearch_index_name", required = true)
-    private String elasticsearchIndexName = "graylog2";
 
     @Parameter(value = "mongodb_user")
     private String mongoUser;
@@ -98,23 +83,8 @@ public class Configuration {
     @Parameter(value = "messages_collection_size", required = true, validator = PositiveLongValidator.class)
     private long messagesCollectionSize = 50 * 1000 * 1000;
 
-    @Parameter(value = "mq_batch_size", required = true, validator = PositiveIntegerValidator.class)
-    private int mqBatchSize = 500;
-
-    @Parameter(value = "mq_poll_freq", required = true, validator = PositiveIntegerValidator.class)
-    private int mqPollFreq = 1;
-
-    @Parameter(value = "mq_max_size", required = false, validator = PositiveIntegerValidator.class)
-    private int mqMaxSize = 0;
-
-    @Parameter(value = "enable_realtime_collection", required = true)
-    private boolean enableRealtimeCollection = true;
-
     @Parameter(value = "use_gelf", required = true)
     private boolean useGELF = false;
-
-    @Parameter(value = "gelf_listen_address")
-    private String gelfListenAddress = "0.0.0.0";
 
     @Parameter(value = "gelf_listen_port", required = true, validator = InetPortValidator.class)
     private int gelfListenPort = 12201;
@@ -150,35 +120,8 @@ public class Configuration {
         return syslogListenPort;
     }
 
-    public String getSyslogListenAddress() {
-        return syslogListenAddress;
-    }
-
     public String getSyslogProtocol() {
         return syslogProtocol;
-    }
-
-    public boolean getForceSyslogRdns() {
-        return forceSyslogRdns;
-    }
-
-    public boolean getAllowOverrideSyslogDate() {
-        return allowOverrideSyslogDate;
-    }
-
-    public String getElasticSearchUrl() {
-        String ret = elasticsearchUrl;
-
-        // Possibly add the required trailing slash if omitted.
-        if (!elasticsearchUrl.endsWith("/")) {
-           ret = elasticsearchUrl + "/";
-        }
-
-        return ret;
-    }
-
-    public String getElasticSearchIndexName() {
-        return this.elasticsearchIndexName;
     }
 
     public boolean isMongoUseAuth() {
@@ -217,28 +160,8 @@ public class Configuration {
         return messagesCollectionSize;
     }
 
-    public int getMessageQueueBatchSize() {
-        return mqBatchSize;
-    }
-
-    public int getMessageQueuePollFrequency() {
-        return mqPollFreq;
-    }
-
-    public int getMessageQueueMaximumSize() {
-        return mqMaxSize;
-    }
-
-    public boolean enableRealtimeCollection() {
-        return enableRealtimeCollection;
-    }
-
     public boolean isUseGELF() {
         return useGELF;
-    }
-
-    public String getGelfListenAddress() {
-        return gelfListenAddress;
     }
 
     public int getGelfListenPort() {
