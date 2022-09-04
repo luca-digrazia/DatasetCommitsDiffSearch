@@ -28,7 +28,6 @@ import okhttp3.mockwebserver.MockWebServer;
 import okhttp3.mockwebserver.RecordedRequest;
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -81,7 +80,6 @@ public class OkHttpClientProviderTest {
     }
 
     @Test
-    @Ignore
     public void testSuccessfulProxyConnectionWithoutAuthentication() throws IOException, InterruptedException {
         server.enqueue(successfulMockResponse());
 
@@ -94,7 +92,7 @@ public class OkHttpClientProviderTest {
         assertThat(server.getRequestCount()).isEqualTo(1);
         final RecordedRequest recordedRequest = server.takeRequest();
         assertThat(recordedRequest.getMethod()).isEqualTo("GET");
-        assertThat(recordedRequest.getPath()).isEqualTo("/");
+        assertThat(recordedRequest.getPath()).isEqualTo("http://www.example.com/");
         assertThat(recordedRequest.getHeader(HttpHeaders.HOST)).isEqualTo("www.example.com");
     }
 
@@ -113,12 +111,12 @@ public class OkHttpClientProviderTest {
         assertThat(server.getRequestCount()).isEqualTo(2);
         final RecordedRequest unauthenticatedRequest = server.takeRequest();
         assertThat(unauthenticatedRequest.getMethod()).isEqualTo("GET");
-        assertThat(unauthenticatedRequest.getPath()).isEqualTo("/");
+        assertThat(unauthenticatedRequest.getPath()).isEqualTo("http://www.example.com/");
         assertThat(unauthenticatedRequest.getHeader(HttpHeaders.HOST)).isEqualTo("www.example.com");
         assertThat(unauthenticatedRequest.getHeader(HttpHeaders.PROXY_AUTHORIZATION)).isNull();
         final RecordedRequest authenticatedRequest = server.takeRequest();
         assertThat(authenticatedRequest.getMethod()).isEqualTo("GET");
-        assertThat(authenticatedRequest.getPath()).isEqualTo("/");
+        assertThat(authenticatedRequest.getPath()).isEqualTo("http://www.example.com/");
         assertThat(authenticatedRequest.getHeader(HttpHeaders.HOST)).isEqualTo("www.example.com");
         assertThat(authenticatedRequest.getHeader(HttpHeaders.PROXY_AUTHORIZATION)).isEqualTo(Credentials.basic("user", "password"));
     }
@@ -138,18 +136,17 @@ public class OkHttpClientProviderTest {
         assertThat(server.getRequestCount()).isEqualTo(2);
         final RecordedRequest unauthenticatedRequest = server.takeRequest();
         assertThat(unauthenticatedRequest.getMethod()).isEqualTo("GET");
-        assertThat(unauthenticatedRequest.getPath()).isEqualTo("/");
+        assertThat(unauthenticatedRequest.getPath()).isEqualTo("http://www.example.com/");
         assertThat(unauthenticatedRequest.getHeader(HttpHeaders.HOST)).isEqualTo("www.example.com");
         assertThat(unauthenticatedRequest.getHeader(HttpHeaders.PROXY_AUTHORIZATION)).isNull();
         final RecordedRequest authenticatedRequest = server.takeRequest();
         assertThat(authenticatedRequest.getMethod()).isEqualTo("GET");
-        assertThat(authenticatedRequest.getPath()).isEqualTo("/");
+        assertThat(authenticatedRequest.getPath()).isEqualTo("http://www.example.com/");
         assertThat(authenticatedRequest.getHeader(HttpHeaders.HOST)).isEqualTo("www.example.com");
         assertThat(authenticatedRequest.getHeader(HttpHeaders.PROXY_AUTHORIZATION)).isEqualTo(Credentials.basic("user", "password"));
     }
 
     @Test
-    @Ignore
     public void testFailingProxyConnectionWithoutAuthentication() throws IOException, InterruptedException {
         server.enqueue(failedMockResponse());
 
@@ -163,7 +160,7 @@ public class OkHttpClientProviderTest {
         assertThat(server.getRequestCount()).isEqualTo(1);
         final RecordedRequest recordedRequest = server.takeRequest();
         assertThat(recordedRequest.getMethod()).isEqualTo("GET");
-        assertThat(recordedRequest.getPath()).isEqualTo("/");
+        assertThat(recordedRequest.getPath()).isEqualTo("http://www.example.com/");
         assertThat(recordedRequest.getHeader(HttpHeaders.HOST)).isEqualTo("www.example.com");
     }
 
@@ -182,12 +179,12 @@ public class OkHttpClientProviderTest {
         assertThat(server.getRequestCount()).isEqualTo(2);
         final RecordedRequest unauthenticatedRequest = server.takeRequest();
         assertThat(unauthenticatedRequest.getMethod()).isEqualTo("GET");
-        assertThat(unauthenticatedRequest.getPath()).isEqualTo("/");
+        assertThat(unauthenticatedRequest.getPath()).isEqualTo("http://www.example.com/");
         assertThat(unauthenticatedRequest.getHeader(HttpHeaders.HOST)).isEqualTo("www.example.com");
         assertThat(unauthenticatedRequest.getHeader(HttpHeaders.PROXY_AUTHORIZATION)).isNull();
         final RecordedRequest authenticatedRequest = server.takeRequest();
         assertThat(authenticatedRequest.getMethod()).isEqualTo("GET");
-        assertThat(authenticatedRequest.getPath()).isEqualTo("/");
+        assertThat(authenticatedRequest.getPath()).isEqualTo("http://www.example.com/");
         assertThat(authenticatedRequest.getHeader(HttpHeaders.HOST)).isEqualTo("www.example.com");
         assertThat(authenticatedRequest.getHeader(HttpHeaders.PROXY_AUTHORIZATION)).isEqualTo(Credentials.basic("user", "password"));
     }
@@ -216,13 +213,13 @@ public class OkHttpClientProviderTest {
 
         final RecordedRequest unauthenticatedRequest = server.takeRequest();
         assertThat(unauthenticatedRequest.getMethod()).isEqualTo("GET");
-        assertThat(unauthenticatedRequest.getPath()).isEqualTo("/");
+        assertThat(unauthenticatedRequest.getPath()).isEqualTo("http://www.example.com/");
         assertThat(unauthenticatedRequest.getHeader(HttpHeaders.HOST)).isEqualTo("www.example.com");
         assertThat(unauthenticatedRequest.getHeader(HttpHeaders.PROXY_AUTHORIZATION)).isNull();
 
         final RecordedRequest authenticatedRequest = server.takeRequest();
         assertThat(authenticatedRequest.getMethod()).isEqualTo("GET");
-        assertThat(authenticatedRequest.getPath()).isEqualTo("/");
+        assertThat(authenticatedRequest.getPath()).isEqualTo("http://www.example.com/");
         assertThat(authenticatedRequest.getHeader(HttpHeaders.HOST)).isEqualTo("www.example.com");
         assertThat(authenticatedRequest.getHeader(HttpHeaders.PROXY_AUTHORIZATION)).isEqualTo(Credentials.basic("", "password"));
 
@@ -241,13 +238,13 @@ public class OkHttpClientProviderTest {
 
         final RecordedRequest unauthenticatedRequest = server.takeRequest();
         assertThat(unauthenticatedRequest.getMethod()).isEqualTo("GET");
-        assertThat(unauthenticatedRequest.getPath()).isEqualTo("/");
+        assertThat(unauthenticatedRequest.getPath()).isEqualTo("http://www.example.com/");
         assertThat(unauthenticatedRequest.getHeader(HttpHeaders.HOST)).isEqualTo("www.example.com");
         assertThat(unauthenticatedRequest.getHeader(HttpHeaders.PROXY_AUTHORIZATION)).isNull();
 
         final RecordedRequest authenticatedRequest = server.takeRequest();
         assertThat(authenticatedRequest.getMethod()).isEqualTo("GET");
-        assertThat(authenticatedRequest.getPath()).isEqualTo("/");
+        assertThat(authenticatedRequest.getPath()).isEqualTo("http://www.example.com/");
         assertThat(authenticatedRequest.getHeader(HttpHeaders.HOST)).isEqualTo("www.example.com");
         assertThat(authenticatedRequest.getHeader(HttpHeaders.PROXY_AUTHORIZATION)).isEqualTo(Credentials.basic("user", ""));
 
@@ -266,13 +263,13 @@ public class OkHttpClientProviderTest {
 
         final RecordedRequest unauthenticatedRequest = server.takeRequest();
         assertThat(unauthenticatedRequest.getMethod()).isEqualTo("GET");
-        assertThat(unauthenticatedRequest.getPath()).isEqualTo("/");
+        assertThat(unauthenticatedRequest.getPath()).isEqualTo("http://www.example.com/");
         assertThat(unauthenticatedRequest.getHeader(HttpHeaders.HOST)).isEqualTo("www.example.com");
         assertThat(unauthenticatedRequest.getHeader(HttpHeaders.PROXY_AUTHORIZATION)).isNull();
 
         final RecordedRequest authenticatedRequest = server.takeRequest();
         assertThat(authenticatedRequest.getMethod()).isEqualTo("GET");
-        assertThat(authenticatedRequest.getPath()).isEqualTo("/");
+        assertThat(authenticatedRequest.getPath()).isEqualTo("http://www.example.com/");
         assertThat(authenticatedRequest.getHeader(HttpHeaders.HOST)).isEqualTo("www.example.com");
         assertThat(authenticatedRequest.getHeader(HttpHeaders.PROXY_AUTHORIZATION)).isEqualTo(Credentials.basic("", ""));
 
@@ -304,8 +301,7 @@ public class OkHttpClientProviderTest {
                 Duration.milliseconds(100L),
                 Duration.milliseconds(100L),
                 Duration.milliseconds(100L),
-                proxyURI,
-                null);
+                proxyURI);
 
         return provider.get();
     }
