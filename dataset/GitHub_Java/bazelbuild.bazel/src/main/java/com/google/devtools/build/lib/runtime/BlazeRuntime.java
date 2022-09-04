@@ -31,6 +31,7 @@ import com.google.devtools.build.lib.analysis.BlazeVersionInfo;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ServerDirectories;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
+import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.test.CoverageReportActionFactory;
 import com.google.devtools.build.lib.bugreport.BugReport;
 import com.google.devtools.build.lib.bugreport.BugReporter;
@@ -148,6 +149,7 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
   private final Runnable abruptShutdownHandler;
 
   private final PackageFactory packageFactory;
+  private final ImmutableList<ConfigurationFragmentFactory> configurationFragmentFactories;
   private final ConfiguredRuleClassProvider ruleClassProvider;
   // For bazel info.
   private final ImmutableMap<String, InfoItem> infoItems;
@@ -171,7 +173,6 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
   private final ActionKeyContext actionKeyContext;
   private final ImmutableMap<String, AuthHeadersProvider> authHeadersProviderMap;
   private final RetainedHeapLimiter retainedHeapLimiter = new RetainedHeapLimiter();
-  @Nullable private final RepositoryRemoteExecutorFactory repositoryRemoteExecutorFactory;
 
   // Workspace state (currently exactly one workspace per server)
   private BlazeWorkspace workspace;
@@ -183,6 +184,7 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
       ImmutableList<OutputFormatter> queryOutputFormatters,
       PackageFactory pkgFactory,
       ConfiguredRuleClassProvider ruleClassProvider,
+      ImmutableList<ConfigurationFragmentFactory> configurationFragmentFactories,
       ImmutableMap<String, InfoItem> infoItems,
       ActionKeyContext actionKeyContext,
       Clock clock,
@@ -197,8 +199,7 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
       Iterable<BlazeCommand> commands,
       String productName,
       BuildEventArtifactUploaderFactoryMap buildEventArtifactUploaderFactoryMap,
-      ImmutableMap<String, AuthHeadersProvider> authHeadersProviderMap,
-      RepositoryRemoteExecutorFactory repositoryRemoteExecutorFactory) {
+      ImmutableMap<String, AuthHeadersProvider> authHeadersProviderMap) {
     // Server state
     this.fileSystem = fileSystem;
     this.blazeModules = blazeModules;
@@ -210,6 +211,7 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
     this.moduleInvocationPolicy = moduleInvocationPolicy;
 
     this.ruleClassProvider = ruleClassProvider;
+    this.configurationFragmentFactories = configurationFragmentFactories;
     this.infoItems = infoItems;
     this.actionKeyContext = actionKeyContext;
     this.clock = clock;
@@ -227,7 +229,6 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
     this.buildEventArtifactUploaderFactoryMap = buildEventArtifactUploaderFactoryMap;
     this.authHeadersProviderMap =
         Preconditions.checkNotNull(authHeadersProviderMap, "authHeadersProviderMap");
-    this.repositoryRemoteExecutorFactory = repositoryRemoteExecutorFactory;
   }
 
   public BlazeWorkspace initWorkspace(BlazeDirectories directories, BinTools binTools)
@@ -323,7 +324,7 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
           if (bepOptions.streamingLogFileUploads) {
             BuildEventArtifactUploader buildEventArtifactUploader =
                 newUploader(env, bepOptions.buildEventUploadStrategy);
-            streamingContext = buildEventArtifactUploader.startUpload(LocalFileType.LOG, null);
+            streamingContext = buildEventArtifactUploader.startUpload(LocalFileType.LOG);
             out = streamingContext.getOutputStream();
           } else {
             profilePath = workspace.getOutputBase().getRelative(profileName);
@@ -513,6 +514,10 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
       }
     }
     return null;
+  }
+
+  public ImmutableList<ConfigurationFragmentFactory> getConfigurationFragmentFactories() {
+    return configurationFragmentFactories;
   }
 
   /**
@@ -1446,10 +1451,6 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
     return authHeadersProviderMap;
   }
 
-  public RepositoryRemoteExecutorFactory getRepositoryRemoteExecutorFactory() {
-    return repositoryRemoteExecutorFactory;
-  }
-
   /**
    * A builder for {@link BlazeRuntime} objects. The only required fields are the {@link
    * BlazeDirectories}, and the {@link RuleClassProvider} (except for testing). All other fields
@@ -1574,6 +1575,7 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
           serverBuilder.getQueryOutputFormatters(),
           packageFactory,
           ruleClassProvider,
+          ruleClassProvider.getConfigurationFragments(),
           serverBuilder.getInfoItems(),
           actionKeyContext,
           clock,
@@ -1588,8 +1590,7 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
           serverBuilder.getCommands(),
           productName,
           serverBuilder.getBuildEventArtifactUploaderMap(),
-          serverBuilder.getAuthHeadersProvidersMap(),
-          serverBuilder.getRepositoryRemoteExecutorFactory());
+          serverBuilder.getAuthHeadersProvidersMap());
     }
 
     public Builder setProductName(String productName) {
