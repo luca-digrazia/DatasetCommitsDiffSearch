@@ -117,7 +117,6 @@ public class LoggingSetupRecorder {
             }
         }
 
-        InitialConfigurator.DELAYED_HANDLER.setAutoFlush(false);
         InitialConfigurator.DELAYED_HANDLER.setHandlers(handlers.toArray(EmbeddedConfigurator.NO_HANDLERS));
     }
 
@@ -126,7 +125,6 @@ public class LoggingSetupRecorder {
             final ConsoleHandler handler = new ConsoleHandler(new PatternFormatter(
                     "%d{HH:mm:ss,SSS} %-5p [%c{1.}] %s%e%n"));
             handler.setLevel(Level.INFO);
-            InitialConfigurator.DELAYED_HANDLER.setAutoFlush(false);
             InitialConfigurator.DELAYED_HANDLER.setHandlers(new Handler[] { handler });
         }
     }
