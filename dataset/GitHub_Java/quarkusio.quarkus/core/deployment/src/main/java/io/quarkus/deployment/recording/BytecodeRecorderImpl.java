@@ -77,7 +77,7 @@ import io.quarkus.runtime.StartupTask;
  * <p>
  * - primitives
  * - String
- * - Class
+ * - Class (see {@link #classProxy(String)} to handle classes that are not loadable at generation time)
  * - Objects with a no-arg constructor and getter/setters for all properties
  * - Any arbitrary object via the {@link #registerSubstitution(Class, Class, Class)} mechanism
  * - arrays, lists and maps of the above

@@ -5,10 +5,7 @@ import static io.quarkus.gizmo.MethodDescriptor.ofMethod;
 
 import java.io.File;
 import java.lang.reflect.Modifier;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -22,8 +19,6 @@ import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationValue;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
-import org.jboss.jandex.MethodInfo;
-import org.jboss.jandex.Type;
 import org.jboss.logging.Logger;
 import org.jboss.logmanager.handlers.DelayedHandler;
 
@@ -47,6 +42,7 @@ import io.quarkus.deployment.builditem.MainBytecodeRecorderBuildItem;
 import io.quarkus.deployment.builditem.MainClassBuildItem;
 import io.quarkus.deployment.builditem.ObjectSubstitutionBuildItem;
 import io.quarkus.deployment.builditem.QuarkusApplicationClassBuildItem;
+import io.quarkus.deployment.builditem.SslTrustStoreSystemPropertyBuildItem;
 import io.quarkus.deployment.builditem.StaticBytecodeRecorderBuildItem;
 import io.quarkus.deployment.builditem.SystemPropertyBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
@@ -79,15 +75,7 @@ class MainClassBuildStep {
     static final String STARTUP_CONTEXT = "STARTUP_CONTEXT";
     static final String LOG = "LOG";
     static final String JAVA_LIBRARY_PATH = "java.library.path";
-
-    private static final String JAVAX_NET_SSL_TRUST_STORE = "javax.net.ssl.trustStore";
-    private static final String JAVAX_NET_SSL_TRUST_STORE_TYPE = "javax.net.ssl.trustStoreType";
-    private static final String JAVAX_NET_SSL_TRUST_STORE_PROVIDER = "javax.net.ssl.trustStoreProvider";
-    private static final String JAVAX_NET_SSL_TRUST_STORE_PASSWORD = "javax.net.ssl.trustStorePassword";
-    private static final List<String> BUILD_TIME_TRUST_STORE_PROPERTIES = Collections.unmodifiableList(Arrays.asList(
-            JAVAX_NET_SSL_TRUST_STORE,
-            JAVAX_NET_SSL_TRUST_STORE_TYPE, JAVAX_NET_SSL_TRUST_STORE_PROVIDER,
-            JAVAX_NET_SSL_TRUST_STORE_PASSWORD));
+    static final String JAVAX_NET_SSL_TRUST_STORE = "javax.net.ssl.trustStore";
 
     private static final FieldDescriptor STARTUP_CONTEXT_FIELD = FieldDescriptor.of(Application.APP_CLASS_NAME, STARTUP_CONTEXT,
             StartupContext.class);
@@ -98,6 +86,7 @@ class MainClassBuildStep {
             List<MainBytecodeRecorderBuildItem> mainMethod,
             List<SystemPropertyBuildItem> properties,
             List<JavaLibraryPathAdditionalPathBuildItem> javaLibraryPathAdditionalPaths,
+            Optional<SslTrustStoreSystemPropertyBuildItem> sslTrustStoreSystemProperty,
             List<FeatureBuildItem> features,
             BuildProducer<ApplicationClassNameBuildItem> appClassNameProducer,
             List<BytecodeRecorderObjectLoaderBuildItem> loaders,
@@ -194,24 +183,19 @@ class MainClassBuildStep {
                     mv.invokeVirtualMethod(ofMethod(StringBuilder.class, "toString", String.class), javaLibraryPath));
         }
 
-        BytecodeCreator inGraalVMCode = mv
-                .ifNonZero(mv.invokeStaticMethod(ofMethod(ImageInfo.class, "inImageRuntimeCode", boolean.class)))
-                .trueBranch();
-
-        // GraalVM uses the build-time trustStore and bakes the backing classes of the TrustStore into the the native binary,
-        // so we need to warn users trying to set the trust store related system properties that it won't have an effect
-        for (String property : BUILD_TIME_TRUST_STORE_PROPERTIES) {
-            ResultHandle trustStoreSystemProp = inGraalVMCode.invokeStaticMethod(
+        if (sslTrustStoreSystemProperty.isPresent()) {
+            ResultHandle alreadySetTrustStore = mv.invokeStaticMethod(
                     ofMethod(System.class, "getProperty", String.class, String.class),
-                    mv.load(property));
+                    mv.load(JAVAX_NET_SSL_TRUST_STORE));
 
-            BytecodeCreator inGraalVMCodeAndTrustStoreSet = inGraalVMCode.ifNull(trustStoreSystemProp).falseBranch();
-            inGraalVMCodeAndTrustStoreSet.invokeVirtualMethod(
-                    ofMethod(Logger.class, "warn", void.class, Object.class),
-                    inGraalVMCodeAndTrustStoreSet.readStaticField(logField.getFieldDescriptor()),
-                    inGraalVMCodeAndTrustStoreSet.load(String.format(
-                            "Setting the '%s' system property will not have any effect at runtime. Make sure to set this property at build time (for example by setting 'quarkus.native.additional-build-args=-J-D%s=someValue').",
-                            property, property)));
+            BytecodeCreator inGraalVMCode = mv
+                    .ifNonZero(mv.invokeStaticMethod(ofMethod(ImageInfo.class, "inImageRuntimeCode", boolean.class)))
+                    .trueBranch();
+
+            inGraalVMCode.ifNull(alreadySetTrustStore).trueBranch().invokeStaticMethod(
+                    ofMethod(System.class, "setProperty", String.class, String.class, String.class),
+                    inGraalVMCode.load(JAVAX_NET_SSL_TRUST_STORE),
+                    inGraalVMCode.load(sslTrustStoreSystemProperty.get().getPath()));
         }
 
         mv.invokeStaticMethod(ofMethod(Timing.class, "mainStarted", void.class));
@@ -230,15 +214,10 @@ class MainClassBuildStep {
         }
 
         // Startup log messages
-        List<String> featureNames = new ArrayList<>();
-        for (FeatureBuildItem feature : features) {
-            if (featureNames.contains(feature.getName())) {
-                throw new IllegalStateException(
-                        "Multiple extensions registered a feature of the same name: " + feature.getName());
-            }
-            featureNames.add(feature.getName());
-        }
-        ResultHandle featuresHandle = tryBlock.load(featureNames.stream().sorted().collect(Collectors.joining(", ")));
+        ResultHandle featuresHandle = tryBlock.load(features.stream()
+                .map(f -> f.getInfo())
+                .sorted()
+                .collect(Collectors.joining(", ")));
         ResultHandle activeProfile = tryBlock
                 .invokeStaticMethod(ofMethod(ProfileManager.class, "getActiveProfile", String.class));
         tryBlock.invokeStaticMethod(
@@ -341,31 +320,17 @@ class MainClassBuildStep {
         } else {
             Collection<ClassInfo> impls = combinedIndexBuildItem.getIndex()
                     .getAllKnownImplementors(DotName.createSimple(QuarkusApplication.class.getName()));
-            ClassInfo classByName = combinedIndexBuildItem.getIndex().getClassByName(DotName.createSimple(mainClassName));
-            MethodInfo mainClassMethod = null;
-            if (classByName != null) {
-                mainClassMethod = classByName
-                        .method("main", Type.create(DotName.createSimple(String[].class.getName()), Type.Kind.ARRAY));
+            boolean found = false;
+            for (ClassInfo i : impls) {
+                if (i.name().toString().equals(mainClassName)) {
+                    found = true;
+                    break;
+                }
             }
-            if (mainClassMethod == null) {
-                boolean found = false;
-                for (ClassInfo i : impls) {
-                    if (i.name().toString().equals(mainClassName)) {
-                        found = true;
-                        break;
-                    }
-                }
-                if (found) {
-                    //this is QuarkusApplication, generate a real main to run it
-                    generateMainForQuarkusApplication(mainClassName, generatedClass);
-                    mainClassName = MAIN_CLASS;
-                } else {
-                    ClassInfo classInfo = combinedIndexBuildItem.getIndex().getClassByName(DotName.createSimple(mainClassName));
-                    if (classInfo == null) {
-                        throw new IllegalArgumentException("The supplied 'main-class' value of '" + mainClassName
-                                + "' does not correspond to either a fully qualified class name or a matching 'name' field of one of the '@QuarkusMain' annotations");
-                    }
-                }
+            if (found) {
+                //this is QuarkusApplication, generate a real main to run it
+                generateMainForQuarkusApplication(mainClassName, generatedClass);
+                mainClassName = MAIN_CLASS;
             }
         }
 

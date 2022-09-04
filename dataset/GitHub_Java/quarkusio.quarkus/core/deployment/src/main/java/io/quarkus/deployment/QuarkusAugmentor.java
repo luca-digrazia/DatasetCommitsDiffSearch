@@ -10,6 +10,8 @@ import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.eclipse.microprofile.config.spi.ConfigBuilder;
 import org.eclipse.microprofile.config.spi.ConfigProviderResolver;
@@ -36,7 +38,6 @@ import io.quarkus.deployment.pkg.builditem.BuildSystemTargetBuildItem;
 import io.quarkus.deployment.pkg.builditem.CurateOutcomeBuildItem;
 import io.quarkus.deployment.pkg.builditem.DeploymentResultBuildItem;
 import io.quarkus.runtime.LaunchMode;
-import io.quarkus.runtime.util.JavaVersionUtil;
 
 public class QuarkusAugmentor {
 
@@ -77,7 +78,9 @@ public class QuarkusAugmentor {
     }
 
     public BuildResult run() throws Exception {
-        if (!JavaVersionUtil.isJava11OrHigher()) {
+        Pattern pattern = Pattern.compile("(?:1\\.)?(\\d+)(?:\\..*)?");
+        Matcher matcher = pattern.matcher(System.getProperty("java.version", ""));
+        if (matcher.matches() && Integer.parseInt(matcher.group(1)) < 11) {
             log.warn("Using Java versions older than 11 to build"
                     + " Quarkus applications is deprecated and will be disallowed in a future release!");
         }

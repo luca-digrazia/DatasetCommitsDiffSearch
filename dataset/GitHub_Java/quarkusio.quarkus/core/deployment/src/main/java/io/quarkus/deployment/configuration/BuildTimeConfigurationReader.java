@@ -50,10 +50,10 @@ import io.quarkus.runtime.annotations.ConfigItem;
 import io.quarkus.runtime.annotations.ConfigPhase;
 import io.quarkus.runtime.annotations.ConfigRoot;
 import io.quarkus.runtime.configuration.ConfigUtils;
+import io.quarkus.runtime.configuration.ExpandingConfigSource;
 import io.quarkus.runtime.configuration.HyphenateEnumConverter;
 import io.quarkus.runtime.configuration.NameIterator;
 import io.smallrye.config.Converters;
-import io.smallrye.config.Expressions;
 import io.smallrye.config.SmallRyeConfig;
 
 /**
@@ -133,11 +133,6 @@ public final class BuildTimeConfigurationReader {
     private static void processClass(ClassDefinition.Builder builder, Class<?> clazz,
             final Map<Class<?>, GroupDefinition> groups) {
         builder.setConfigurationClass(clazz);
-        processClassFields(builder, clazz, groups);
-    }
-
-    private static void processClassFields(final ClassDefinition.Builder builder, final Class<?> clazz,
-            final Map<Class<?>, GroupDefinition> groups) {
         for (Field field : clazz.getDeclaredFields()) {
             int mods = field.getModifiers();
             if (Modifier.isStatic(mods)) {
@@ -153,10 +148,6 @@ public final class BuildTimeConfigurationReader {
                 field.setAccessible(true);
             }
             builder.addMember(processValue(field, field.getGenericType(), groups));
-        }
-        Class<?> superclass = clazz.getSuperclass();
-        if (superclass != null) {
-            processClassFields(builder, superclass, groups);
         }
     }
 
@@ -363,9 +354,13 @@ public final class BuildTimeConfigurationReader {
                     matched = runTimePatternMap.match(ni);
                     if (matched != null) {
                         // it's a specified run-time default (record for later)
-                        specifiedRunTimeDefaultValues.put(propertyName, Expressions.withoutExpansion(
-                                () -> config.getOptionalValue(propertyName, String.class).orElse("")));
-
+                        boolean old = ExpandingConfigSource.setExpanding(false);
+                        try {
+                            specifiedRunTimeDefaultValues.put(propertyName,
+                                    config.getOptionalValue(propertyName, String.class).orElse(""));
+                        } finally {
+                            ExpandingConfigSource.setExpanding(old);
+                        }
                         continue;
                     }
                     // also check for the bootstrap properties since those need to be added to specifiedRunTimeDefaultValues as well
@@ -374,13 +369,23 @@ public final class BuildTimeConfigurationReader {
                     matched = bootstrapPatternMap.match(ni);
                     if (matched != null) {
                         // it's a specified run-time default (record for later)
-                        specifiedRunTimeDefaultValues.put(propertyName, Expressions.withoutExpansion(
-                                () -> config.getOptionalValue(propertyName, String.class).orElse("")));
+                        boolean old = ExpandingConfigSource.setExpanding(false);
+                        try {
+                            specifiedRunTimeDefaultValues.put(propertyName,
+                                    config.getOptionalValue(propertyName, String.class).orElse(""));
+                        } finally {
+                            ExpandingConfigSource.setExpanding(old);
+                        }
                     }
                 } else {
                     // it's not managed by us; record it
-                    specifiedRunTimeDefaultValues.put(propertyName, Expressions.withoutExpansion(
-                            () -> config.getOptionalValue(propertyName, String.class).orElse("")));
+                    boolean old = ExpandingConfigSource.setExpanding(false);
+                    try {
+                        specifiedRunTimeDefaultValues.put(propertyName,
+                                config.getOptionalValue(propertyName, String.class).orElse(""));
+                    } finally {
+                        ExpandingConfigSource.setExpanding(old);
+                    }
                 }
             }
             return new ReadResult(objectsByRootClass, specifiedRunTimeDefaultValues, buildTimeRunTimeVisibleValues,

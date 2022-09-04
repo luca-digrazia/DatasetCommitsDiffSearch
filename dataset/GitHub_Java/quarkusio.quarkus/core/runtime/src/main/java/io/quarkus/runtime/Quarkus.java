@@ -1,6 +1,6 @@
 package io.quarkus.runtime;
 
-import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 import org.jboss.logging.Logger;
 import org.jboss.logmanager.LogManager;
@@ -46,11 +46,10 @@ public class Quarkus {
      * go into the QuarkusApplication.
      *
      * @param quarkusApplication The application to run, or null
-     * @param exitHandler The handler that is called with the exit code and any exception (if any) thrown when the application
-     *        has finished
+     * @param exitHandler The handler that is called with the exit code when the application has finished
      * @param args The command line parameters
      */
-    public static void run(Class<? extends QuarkusApplication> quarkusApplication, BiConsumer<Integer, Throwable> exitHandler,
+    public static void run(Class<? extends QuarkusApplication> quarkusApplication, Consumer<Integer> exitHandler,
             String... args) {
         try {
             System.setProperty("java.util.logging.manager", LogManager.class.getName());
@@ -64,11 +63,12 @@ public class Quarkus {
         } catch (ClassNotFoundException e) {
             //ignore, this happens when running in dev mode
         } catch (Exception e) {
+            //TODO: exception mappers
+            Logger.getLogger(Quarkus.class).error("Error running Quarkus", e);
             if (exitHandler != null) {
-                exitHandler.accept(1, e);
+                exitHandler.accept(1);
             } else {
-                Logger.getLogger(Quarkus.class).error("Error running Quarkus", e);
-                ApplicationLifecycleManager.getDefaultExitCodeHandler().accept(1, e);
+                ApplicationLifecycleManager.getDefaultExitCodeHandler().accept(1);
             }
             return;
         }
@@ -76,11 +76,12 @@ public class Quarkus {
         //dev mode path, i.e. launching from the IDE
         //this is not the quarkus:dev path as it will augment before
         //calling this method
-        launchFromIDE(quarkusApplication, args);
+        launchFromIDE(quarkusApplication, exitHandler, args);
 
     }
 
-    private static void launchFromIDE(Class<? extends QuarkusApplication> quarkusApplication, String... args) {
+    private static void launchFromIDE(Class<? extends QuarkusApplication> quarkusApplication, Consumer<Integer> exitHandler,
+            String... args) {
         //some trickery, get the class that has invoked us, and use this to figure out the
         //classes root
         StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();
@@ -89,7 +90,8 @@ public class Quarkus {
             pos++;
         }
         String callingClass = stackTrace[pos].getClassName();
-        QuarkusLauncher.launch(callingClass, quarkusApplication == null ? null : quarkusApplication.getName(), args);
+        QuarkusLauncher.launch(callingClass, quarkusApplication == null ? null : quarkusApplication.getName(), exitHandler,
+                args);
     }
 
     /**

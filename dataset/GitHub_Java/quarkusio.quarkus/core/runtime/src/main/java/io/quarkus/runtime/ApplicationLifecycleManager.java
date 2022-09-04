@@ -9,7 +9,6 @@ import java.util.function.Consumer;
 import javax.enterprise.context.spi.CreationalContext;
 import javax.enterprise.inject.Any;
 import javax.enterprise.inject.spi.Bean;
-import javax.enterprise.inject.spi.BeanManager;
 import javax.enterprise.inject.spi.CDI;
 
 import org.graalvm.nativeimage.ImageInfo;
@@ -63,11 +62,11 @@ public class ApplicationLifecycleManager {
     private static boolean hooksRegistered;
     private static boolean vmShuttingDown;
 
-    public static void run(Application application, String... args) {
+    public static final void run(Application application, String... args) {
         run(application, null, null, args);
     }
 
-    public static void run(Application application, Class<? extends QuarkusApplication> quarkusApplication,
+    public static final void run(Application application, Class<? extends QuarkusApplication> quarkusApplication,
             Consumer<Integer> exitCodeHandler, String... args) {
         stateLock.lock();
         //in tests we might pass this method an already started application
@@ -91,8 +90,7 @@ public class ApplicationLifecycleManager {
             application.start(args);
             //now we are started, we either run the main application or just wait to exit
             if (quarkusApplication != null) {
-                BeanManager beanManager = CDI.current().getBeanManager();
-                Set<Bean<?>> beans = beanManager.getBeans(quarkusApplication, Any.Literal.INSTANCE);
+                Set<Bean<?>> beans = CDI.current().getBeanManager().getBeans(quarkusApplication, new Any.Literal());
                 Bean<?> bean = null;
                 for (Bean<?> i : beans) {
                     if (i.getBeanClass() == quarkusApplication) {
@@ -104,8 +102,9 @@ public class ApplicationLifecycleManager {
                 if (bean == null) {
                     instance = quarkusApplication.newInstance();
                 } else {
-                    CreationalContext<?> ctx = beanManager.createCreationalContext(bean);
-                    instance = (QuarkusApplication) beanManager.getReference(bean, quarkusApplication, ctx);
+                    CreationalContext<?> ctx = CDI.current().getBeanManager().createCreationalContext(bean);
+                    instance = (QuarkusApplication) CDI.current().getBeanManager().getReference(bean,
+                            quarkusApplication, ctx);
                 }
                 int result = -1;
                 try {
@@ -223,7 +222,7 @@ public class ApplicationLifecycleManager {
      * By default this will just call System.exit, however this is not always
      * what is wanted.
      *
-     * @param defaultExitCodeHandler the new default exit handler
+     * @param defaultExitCodeHandler
      */
     public static void setDefaultExitCodeHandler(Consumer<Integer> defaultExitCodeHandler) {
         Objects.requireNonNull(defaultExitCodeHandler);

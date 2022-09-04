@@ -1,8 +1,5 @@
 package io.quarkus.deployment.steps;
 
-import java.lang.reflect.Modifier;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -13,13 +10,10 @@ import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
 
 import io.quarkus.deployment.GeneratedClassGizmoAdaptor;
-import io.quarkus.deployment.IsNormal;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
-import io.quarkus.deployment.builditem.AdditionalBootstrapConfigSourceProviderBuildItem;
-import io.quarkus.deployment.builditem.AdditionalStaticInitConfigSourceProviderBuildItem;
 import io.quarkus.deployment.builditem.ConfigurationBuildItem;
 import io.quarkus.deployment.builditem.ConfigurationTypeBuildItem;
 import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
@@ -31,12 +25,10 @@ import io.quarkus.deployment.configuration.RunTimeConfigurationGenerator;
 import io.quarkus.deployment.configuration.definition.ClassDefinition;
 import io.quarkus.deployment.configuration.definition.RootDefinition;
 import io.quarkus.deployment.logging.LoggingSetupBuildItem;
-import io.quarkus.gizmo.ClassCreator;
 import io.quarkus.gizmo.ClassOutput;
+import io.quarkus.runtime.ConfigChangeRecorder;
+import io.quarkus.runtime.LaunchMode;
 import io.quarkus.runtime.annotations.ConfigPhase;
-import io.quarkus.runtime.configuration.ConfigChangeRecorder;
-import io.quarkus.runtime.configuration.ConfigurationRuntimeConfig;
-import io.quarkus.runtime.configuration.RuntimeOverrideConfigSource;
 
 public class ConfigGenerationBuildStep {
 
@@ -48,9 +40,7 @@ public class ConfigGenerationBuildStep {
             List<ConfigurationTypeBuildItem> typeItems,
             LaunchModeBuildItem launchModeBuildItem,
             BuildProducer<GeneratedClassBuildItem> generatedClass,
-            LiveReloadBuildItem liveReloadBuildItem,
-            List<AdditionalStaticInitConfigSourceProviderBuildItem> additionalStaticInitConfigSourceProviders,
-            List<AdditionalBootstrapConfigSourceProviderBuildItem> additionalBootstrapConfigSourceProviders) {
+            LiveReloadBuildItem liveReloadBuildItem) {
         if (liveReloadBuildItem.isLiveReload()) {
             return;
         }
@@ -66,33 +56,7 @@ public class ConfigGenerationBuildStep {
 
         ClassOutput classOutput = new GeneratedClassGizmoAdaptor(generatedClass, false);
         RunTimeConfigurationGenerator.generate(readResult, classOutput,
-                launchModeBuildItem.getLaunchMode(), defaults, additionalConfigTypes,
-                getAdditionalStaticInitConfigSourceProviders(additionalStaticInitConfigSourceProviders),
-                getAdditionalBootstrapConfigSourceProviders(additionalBootstrapConfigSourceProviders));
-    }
-
-    private List<String> getAdditionalStaticInitConfigSourceProviders(
-            List<AdditionalStaticInitConfigSourceProviderBuildItem> additionalStaticInitConfigSourceProviders) {
-        if (additionalStaticInitConfigSourceProviders.isEmpty()) {
-            return Collections.emptyList();
-        }
-        List<String> result = new ArrayList<>(additionalStaticInitConfigSourceProviders.size());
-        for (AdditionalStaticInitConfigSourceProviderBuildItem provider : additionalStaticInitConfigSourceProviders) {
-            result.add(provider.getProviderClassName());
-        }
-        return result;
-    }
-
-    private List<String> getAdditionalBootstrapConfigSourceProviders(
-            List<AdditionalBootstrapConfigSourceProviderBuildItem> additionalBootstrapConfigSourceProviders) {
-        if (additionalBootstrapConfigSourceProviders.isEmpty()) {
-            return Collections.emptyList();
-        }
-        List<String> result = new ArrayList<>(additionalBootstrapConfigSourceProviders.size());
-        for (AdditionalBootstrapConfigSourceProviderBuildItem provider : additionalBootstrapConfigSourceProviders) {
-            result.add(provider.getProviderClassName());
-        }
-        return result;
+                launchModeBuildItem.getLaunchMode() == LaunchMode.DEVELOPMENT, defaults, additionalConfigTypes);
     }
 
     /**
@@ -101,8 +65,7 @@ public class ConfigGenerationBuildStep {
     @BuildStep
     @Record(ExecutionTime.RUNTIME_INIT)
     public void checkForBuildTimeConfigChange(
-            ConfigChangeRecorder recorder, ConfigurationBuildItem configItem, LoggingSetupBuildItem loggingSetupBuildItem,
-            ConfigurationRuntimeConfig configurationConfig) {
+            ConfigChangeRecorder recorder, ConfigurationBuildItem configItem, LoggingSetupBuildItem loggingSetupBuildItem) {
         BuildTimeConfigurationReader.ReadResult readResult = configItem.getReadResult();
         Config config = ConfigProvider.getConfig();
 
@@ -116,20 +79,7 @@ public class ConfigGenerationBuildStep {
             }
         }
         values.remove("quarkus.profile");
-        recorder.handleConfigChange(configurationConfig, values);
-    }
-
-    @BuildStep(onlyIfNot = { IsNormal.class })
-    public void setupConfigOverride(
-            BuildProducer<GeneratedClassBuildItem> generatedClassBuildItemBuildProducer) {
-
-        ClassOutput classOutput = new GeneratedClassGizmoAdaptor(generatedClassBuildItemBuildProducer, true);
-
-        try (ClassCreator clazz = ClassCreator.builder().classOutput(classOutput)
-                .className(RuntimeOverrideConfigSource.GENERATED_CLASS_NAME).build()) {
-            clazz.getFieldCreator(RuntimeOverrideConfigSource.FIELD_NAME, Map.class)
-                    .setModifiers(Modifier.STATIC | Modifier.PUBLIC | Modifier.VOLATILE);
-        }
+        recorder.handleConfigChange(values);
     }
 
     private void handleMembers(Config config, Map<String, String> values, Iterable<ClassDefinition.ClassMember> members,
