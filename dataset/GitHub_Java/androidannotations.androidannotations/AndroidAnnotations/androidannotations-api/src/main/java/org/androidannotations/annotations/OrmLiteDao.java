@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -26,10 +26,14 @@ import java.lang.annotation.Target;
  * with the provided mode and helper classes.
  * </p>
  * <p>
- * The helper paramter is mandatory and should hold the class of your database
- * helper which should extend
- * com.j256.ormlite.android.apptools.OrmLiteSqliteOpenHelper
+ * All parameters are mandatory:
  * </p>
+ * <ul>
+ * <li><i>helper</i>: should hold the class of your database helper which should
+ * extend com.j256.ormlite.android.apptools.OrmLiteSqliteOpenHelper</li>
+ * <li><i>model</i>: should point to the model class that the DAO relates to. It
+ * should match the type of the first generic parameter of your Dao.</li>
+ * </ul>
  * <p>
  * <b>Note:</b> The minimum version required of ORMLite is 4.21
  * </p>
@@ -49,10 +53,10 @@ import java.lang.annotation.Target;
  * public class MyActivity extends Activity {
  * 
  * 	// UserDao is a Dao&lt;User, Long&gt;
- * 	&#064;OrmLiteDao(helper = DatabaseHelper.class)
+ * 	&#064;OrmLiteDao(helper = DatabaseHelper.class, model = User.class)
  * 	UserDao userDao;
  * 
- * 	&#064;OrmLiteDao(helper = DatabaseHelper.class)
+ * 	&#064;OrmLiteDao(helper = DatabaseHelper.class, model = Car.class)
  * 	Dao&lt;Car, Long&gt; carDao;
  * }
  * </pre>
@@ -63,10 +67,9 @@ import java.lang.annotation.Target;
 @Target(ElementType.FIELD)
 public @interface OrmLiteDao {
 
-	/**
-	 * The class of the used database helper.
-	 * 
-	 * @return the helper class
-	 */
 	Class<?> helper();
+
+	@Deprecated
+	Class<?> model() default Void.class;
+
 }
