@@ -66,7 +66,6 @@ import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import javax.annotation.Nullable;
 
 /** A base implementation for the "android_local_test" rule. */
@@ -92,16 +91,17 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
     final ResourceApk resourceApk;
 
     if (AndroidResources.decoupleDataProcessing(ruleContext)) {
+      StampedAndroidManifest manifest =
+          AndroidManifest.from(ruleContext).mergeWithDeps(ruleContext);
+
+      AndroidAaptVersion aaptVersion = AndroidAaptVersion.chooseTargetAaptVersion(ruleContext);
       resourceApk =
-          buildResourceApk(
-              ruleContext,
-              AndroidManifest.fromAttributes(ruleContext),
-              AndroidResources.from(ruleContext, "resource_files"),
-              AndroidAssets.from(ruleContext),
-              ResourceDependencies.fromRuleDeps(ruleContext, /* neverlink = */ false),
-              AssetDependencies.fromRuleDeps(ruleContext, /* neverlink = */ false),
-              ApplicationManifest.getManifestValues(ruleContext),
-              AndroidAaptVersion.chooseTargetAaptVersion(ruleContext));
+          ProcessedAndroidData.processLocalTestDataFrom(
+                  ruleContext,
+                  manifest,
+                  ApplicationManifest.getManifestValues(ruleContext),
+                  aaptVersion)
+              .generateRClass(ruleContext, aaptVersion);
     } else {
       // Create the final merged manifest
       ResourceDependencies resourceDependencies =
@@ -536,33 +536,6 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
       }
     }
     return testClass;
-  }
-
-  static ResourceApk buildResourceApk(
-      RuleContext ruleContext,
-      AndroidManifest manifest,
-      AndroidResources resources,
-      AndroidAssets assets,
-      ResourceDependencies resourceDeps,
-      AssetDependencies assetDeps,
-      Map<String, String> manifestValues,
-      AndroidAaptVersion aaptVersion)
-      throws InterruptedException {
-
-    StampedAndroidManifest stamped =
-        manifest.mergeWithDeps(
-            ruleContext, resourceDeps, manifestValues, /* useLegacyMerger = */ false);
-
-    return ProcessedAndroidData.processLocalTestDataFrom(
-            ruleContext,
-            stamped,
-            manifestValues,
-            aaptVersion,
-            resources,
-            assets,
-            resourceDeps,
-            assetDeps)
-        .generateRClass(ruleContext, aaptVersion);
   }
 
   private static NestedSet<Artifact> getLibraryResourceJars(RuleContext ruleContext) {

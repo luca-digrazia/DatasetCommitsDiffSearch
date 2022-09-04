@@ -170,12 +170,7 @@ public class AndroidAssets {
   /** Convenience method to do all of asset processing - parsing and merging. */
   public MergedAndroidAssets process(RuleContext ruleContext, boolean neverlink)
       throws InterruptedException {
-    return process(ruleContext, AssetDependencies.fromRuleDeps(ruleContext, neverlink));
-  }
-
-  MergedAndroidAssets process(RuleContext ruleContext, AssetDependencies assetDeps)
-      throws InterruptedException {
-    return parse(ruleContext).merge(ruleContext, assetDeps);
+    return parse(ruleContext).merge(ruleContext, neverlink);
   }
 
   @Override

@@ -145,26 +145,26 @@ public class ProcessedAndroidData {
       RuleContext ruleContext,
       StampedAndroidManifest manifest,
       Map<String, String> manifestValues,
-      AndroidAaptVersion aaptVersion,
-      AndroidResources resources,
-      AndroidAssets assets,
-      ResourceDependencies resourceDeps,
-      AssetDependencies assetDeps)
-      throws InterruptedException {
+      AndroidAaptVersion aaptVersion)
+      throws RuleErrorException, InterruptedException {
 
     return builderForNonIncrementalTopLevelTarget(
             ruleContext, manifest, manifestValues, aaptVersion)
         .setUseCompiledResourcesForMerge(
-            aaptVersion == AndroidAaptVersion.AAPT2
+            AndroidAaptVersion.chooseTargetAaptVersion(ruleContext) == AndroidAaptVersion.AAPT2
                 && AndroidCommon.getAndroidConfig(ruleContext).skipParsingAction())
         .setManifestOut(
             ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_PROCESSED_MANIFEST))
         .setMergedResourcesOut(
             ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_ZIP))
         .setCrunchPng(false)
-        .withResourceDependencies(resourceDeps)
-        .withAssetDependencies(assetDeps)
-        .build(resources, assets, manifest);
+        .withResourceDependencies(
+            ResourceDependencies.fromRuleDeps(ruleContext, /* neverlink = */ false))
+        .withAssetDependencies(AssetDependencies.fromRuleDeps(ruleContext, /* neverlink = */ false))
+        .build(
+            AndroidResources.from(ruleContext, "resource_files"),
+            AndroidAssets.from(ruleContext),
+            manifest);
   }
 
   /** Processes Android data (assets, resources, and manifest) for android_test targets. */
