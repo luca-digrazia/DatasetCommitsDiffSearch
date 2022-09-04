@@ -61,7 +61,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
    * This file (found under the sysroot) may be unconditionally included in every C/C++ compilation.
    */
   private static final PathFragment BUILTIN_INCLUDE_FILE_SUFFIX =
-      PathFragment.create("include/stdc-predef.h");
+      new PathFragment("include/stdc-predef.h");
 
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
