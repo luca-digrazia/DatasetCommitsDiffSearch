@@ -118,7 +118,7 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable
     public Path getClassesDir() {
         //TODO: fix all these
         for (DevModeContext.ModuleInfo i : context.getAllModules()) {
-            return Paths.get(i.getResourcePath());
+            return Paths.get(i.getClassesPath());
         }
         return null;
     }
@@ -203,9 +203,7 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable
             //attempt to do an instrumentation based reload
             //if only code has changed and not the class structure, then we can do a reload
             //using the JDK instrumentation API (assuming we were started with the javaagent)
-            if (changedClassResults.deletedClasses.isEmpty()
-                    && changedClassResults.addedClasses.isEmpty()
-                    && !changedClassResults.changedClasses.isEmpty()) {
+            if (changedClassResults.deletedClasses.isEmpty() && !changedClassResults.changedClasses.isEmpty()) {
                 try {
                     Indexer indexer = new Indexer();
                     //attempt to use the instrumentation API
