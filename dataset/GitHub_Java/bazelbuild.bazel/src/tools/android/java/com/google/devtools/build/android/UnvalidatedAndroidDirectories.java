@@ -23,7 +23,9 @@ import java.nio.file.Path;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
-/** Android resource and asset directories that can be parsed. */
+/**
+ * Android resource and asset directories that can be parsed.
+ */
 public class UnvalidatedAndroidDirectories {
 
   private static final Pattern VALID_REGEX = Pattern.compile(".*:.*");
@@ -37,7 +39,8 @@ public class UnvalidatedAndroidDirectories {
   @VisibleForTesting
   static UnvalidatedAndroidDirectories valueOf(String text, FileSystem fileSystem) {
     if (!VALID_REGEX.matcher(text).find()) {
-      throw new IllegalArgumentException(text + " is not in the format '" + EXPECTED_FORMAT + "'");
+      throw new IllegalArgumentException(
+          text + " is not in the format '" + EXPECTED_FORMAT + "'");
     }
     String[] parts = text.split(":");
     return new UnvalidatedAndroidDirectories(

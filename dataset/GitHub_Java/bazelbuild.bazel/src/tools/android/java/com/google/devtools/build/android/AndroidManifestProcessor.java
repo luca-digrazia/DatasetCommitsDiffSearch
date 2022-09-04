@@ -129,10 +129,10 @@ public class AndroidManifestProcessor {
       Map<Path, String> mergeeManifests,
       MergeType mergeType,
       Map<String, String> values,
-      String customPackage,
       Path output,
-      Path logFile) throws ManifestProcessingException {
-    if (mergeeManifests.isEmpty() && values.isEmpty() && Strings.isNullOrEmpty(customPackage)) {
+      Path logFile)
+      throws ManifestProcessingException {
+    if (mergeeManifests.isEmpty() && values.isEmpty()) {
       return manifest;
     }
 
@@ -171,11 +171,6 @@ public class AndroidManifestProcessor {
     // it cannot be manually specified.
     placeholders.remove(PlaceholderHandler.PACKAGE_NAME);
     manifestMerger.setPlaceHolderValues(placeholders);
-
-    // Ignore custom package at the binary level.
-    if (!Strings.isNullOrEmpty(customPackage) && mergeType == MergeType.LIBRARY) {
-      manifestMerger.setOverride(SystemProperty.PACKAGE, customPackage);
-    }
 
     try {
       MergingReport mergingReport = manifestMerger.merge();

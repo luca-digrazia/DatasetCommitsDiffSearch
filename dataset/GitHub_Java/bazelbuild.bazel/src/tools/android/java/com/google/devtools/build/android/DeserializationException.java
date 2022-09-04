@@ -35,7 +35,7 @@ public class DeserializationException extends RuntimeException {
     this.isLegacy = false;
   }
 
-  public DeserializationException(String message, Throwable e) {
+  public DeserializationException(String message, IOException e) {
     super(message, e);
     this.isLegacy = false;
   }
