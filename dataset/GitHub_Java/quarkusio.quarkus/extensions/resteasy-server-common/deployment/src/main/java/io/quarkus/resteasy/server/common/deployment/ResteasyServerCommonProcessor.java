@@ -11,7 +11,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
@@ -61,7 +60,6 @@ import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveHierarchyBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.RuntimeInitializedClassBuildItem;
-import io.quarkus.gizmo.Gizmo;
 import io.quarkus.resteasy.common.deployment.JaxrsProvidersToRegisterBuildItem;
 import io.quarkus.resteasy.common.deployment.ResteasyCommonProcessor.ResteasyCommonConfig;
 import io.quarkus.resteasy.common.deployment.ResteasyDotNames;
@@ -163,8 +161,7 @@ public class ResteasyServerCommonProcessor {
             List<ResteasyDeploymentCustomizerBuildItem> deploymentCustomizers,
             JaxrsProvidersToRegisterBuildItem jaxrsProvidersToRegisterBuildItem,
             CombinedIndexBuildItem combinedIndexBuildItem,
-            BeanArchiveIndexBuildItem beanArchiveIndexBuildItem,
-            Optional<ResteasyServletMappingBuildItem> resteasyServletMappingBuildItem) throws Exception {
+            BeanArchiveIndexBuildItem beanArchiveIndexBuildItem) throws Exception {
         IndexView index = combinedIndexBuildItem.getIndex();
 
         resource.produce(new NativeImageResourceBuildItem("META-INF/services/javax.ws.rs.client.ClientBuilder"));
@@ -199,18 +196,8 @@ public class ResteasyServerCommonProcessor {
             path = applicationPath.value().asString();
             appClass = applicationPath.target().asClass().name().toString();
         } else {
-            if (resteasyServletMappingBuildItem.isPresent()) {
-                if (resteasyServletMappingBuildItem.get().getPath().endsWith("/*")) {
-                    path = resteasyServletMappingBuildItem.get().getPath().substring(0,
-                            resteasyServletMappingBuildItem.get().getPath().length() - 1);
-                } else {
-                    path = resteasyServletMappingBuildItem.get().getPath();
-                }
-                appClass = null;
-            } else {
-                path = resteasyConfig.path;
-                appClass = null;
-            }
+            path = resteasyConfig.path;
+            appClass = null;
         }
 
         Map<DotName, ClassInfo> scannedResources = new HashMap<>();
@@ -561,7 +548,7 @@ public class ResteasyServerCommonProcessor {
                     .produce(new BytecodeTransformerBuildItem(name, new BiFunction<String, ClassVisitor, ClassVisitor>() {
                         @Override
                         public ClassVisitor apply(String className, ClassVisitor classVisitor) {
-                            ClassVisitor cv = new ClassVisitor(Gizmo.ASM_API_VERSION, classVisitor) {
+                            ClassVisitor cv = new ClassVisitor(Opcodes.ASM7, classVisitor) {
 
                                 @Override
                                 public void visit(int version, int access, String name, String signature, String superName,
@@ -626,20 +613,20 @@ public class ResteasyServerCommonProcessor {
             BuildProducer<NativeImageProxyDefinitionBuildItem> proxyDefinition) {
         // @Context uses proxies for interface injection
         for (AnnotationInstance annotation : index.getAnnotations(ResteasyDotNames.CONTEXT)) {
-            Type annotatedType = null;
+            DotName typeName = null;
             if (annotation.target().kind() == AnnotationTarget.Kind.METHOD) {
                 MethodInfo method = annotation.target().asMethod();
                 if (method.parameters().size() == 1) {
-                    annotatedType = method.parameters().get(0);
+                    typeName = method.parameters().get(0).name();
                 }
             } else if (annotation.target().kind() == AnnotationTarget.Kind.FIELD) {
-                annotatedType = annotation.target().asField().type();
+                typeName = annotation.target().asField().type().name();
             } else if (annotation.target().kind() == AnnotationTarget.Kind.METHOD_PARAMETER) {
                 int pos = annotation.target().asMethodParameter().position();
-                annotatedType = annotation.target().asMethodParameter().method().parameters().get(pos);
+                typeName = annotation.target().asMethodParameter().method().parameters().get(pos).name();
             }
-            if (annotatedType != null && annotatedType.kind() != Type.Kind.PRIMITIVE) {
-                ClassInfo type = index.getClassByName(annotatedType.name());
+            if (typeName != null) {
+                ClassInfo type = index.getClassByName(typeName);
                 if (type != null) {
                     if (Modifier.isInterface(type.flags())) {
                         proxyDefinition.produce(new NativeImageProxyDefinitionBuildItem(type.toString()));
@@ -647,9 +634,9 @@ public class ResteasyServerCommonProcessor {
                 } else {
                     //might be a framework class, which should be loadable
                     try {
-                        Class<?> typeClass = Class.forName(annotatedType.name().toString());
+                        Class<?> typeClass = Class.forName(typeName.toString());
                         if (typeClass.isInterface()) {
-                            proxyDefinition.produce(new NativeImageProxyDefinitionBuildItem(annotatedType.name().toString()));
+                            proxyDefinition.produce(new NativeImageProxyDefinitionBuildItem(typeName.toString()));
                         }
                     } catch (Exception e) {
                         //ignore
