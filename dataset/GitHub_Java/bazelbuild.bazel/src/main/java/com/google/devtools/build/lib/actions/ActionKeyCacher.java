@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.actions;
 
-import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
 import com.google.devtools.build.lib.util.Fingerprint;
 import javax.annotation.Nullable;
 
@@ -26,46 +25,32 @@ public abstract class ActionKeyCacher implements ActionAnalysisMetadata {
   @Nullable private volatile String cachedKey = null;
 
   @Override
-  public final String getKey(
-      ActionKeyContext actionKeyContext, @Nullable ArtifactExpander artifactExpander)
-      throws InterruptedException {
-    // Only cache the key when it is given all necessary information to compute a correct key.
-    // Practically, most of the benefit of the cache comes from execution, which does provide the
-    // artifactExpander.
-    if (artifactExpander == null) {
-      return computeActionKey(actionKeyContext, null);
-    }
-
+  public final String getKey(ActionKeyContext actionKeyContext) {
     if (cachedKey == null) {
       synchronized (this) {
         if (cachedKey == null) {
-          cachedKey = computeActionKey(actionKeyContext, artifactExpander);
+          try {
+            Fingerprint fp = new Fingerprint();
+            computeKey(actionKeyContext, fp);
+
+            // Add a bool indicating whether the execution platform was set.
+            fp.addBoolean(getExecutionPlatform() != null);
+            if (getExecutionPlatform() != null) {
+              // Add the execution platform information.
+              getExecutionPlatform().addTo(fp);
+            }
+
+            fp.addStringMap(getExecProperties());
+
+            // Compute the actual key and store it.
+            cachedKey = fp.hexDigestAndReset();
+          } catch (CommandLineExpansionException e) {
+            cachedKey = KEY_ERROR;
+          }
         }
       }
     }
     return cachedKey;
-  }
-
-  private String computeActionKey(
-      ActionKeyContext actionKeyContext, @Nullable ArtifactExpander artifactExpander)
-      throws InterruptedException {
-    try {
-      Fingerprint fp = new Fingerprint();
-      computeKey(actionKeyContext, artifactExpander, fp);
-
-      // Add a bool indicating whether the execution platform was set.
-      fp.addBoolean(getExecutionPlatform() != null);
-      if (getExecutionPlatform() != null) {
-        // Add the execution platform information.
-        getExecutionPlatform().addTo(fp);
-      }
-
-      fp.addStringMap(getExecProperties());
-      // Compute the actual key and store it.
-      return fp.hexDigestAndReset();
-    } catch (CommandLineExpansionException e) {
-      return KEY_ERROR;
-    }
   }
 
   /**
@@ -76,9 +61,6 @@ public abstract class ActionKeyCacher implements ActionAnalysisMetadata {
    * the ActionAnalysisMetadata. Perhaps ActionKeyCacher should just mandate subclasses provide a
    * UUID and then add that UUID itself in getKey.
    */
-  protected abstract void computeKey(
-      ActionKeyContext actionKeyContext,
-      @Nullable ArtifactExpander artifactExpander,
-      Fingerprint fp)
-      throws CommandLineExpansionException, InterruptedException;
+  protected abstract void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp)
+      throws CommandLineExpansionException;
 }
