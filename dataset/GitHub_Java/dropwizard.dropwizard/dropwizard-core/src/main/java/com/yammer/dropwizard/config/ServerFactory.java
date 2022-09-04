@@ -26,6 +26,7 @@ import org.eclipse.jetty.util.resource.Resource;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
 import org.eclipse.jetty.util.thread.ThreadPool;
 
+import javax.servlet.ServletContextListener;
 import java.util.EnumSet;
 import java.util.EventListener;
 
@@ -159,7 +160,7 @@ public class ServerFactory {
     private Handler createHandler(Environment env) {
         final HandlerCollection collection = new HandlerCollection();
 
-        collection.addHandler(createExternalServlet(env.getServlets(), env.getFilters(), env.getServletListeners()));
+        collection.addHandler(createExternalServlet(env.getServlets(), env.getFilters(), env.getServletContextListeners()));
         collection.addHandler(createInternalServlet(env));
 
         if (requestLogHandlerFactory.isEnabled()) {
@@ -179,7 +180,7 @@ public class ServerFactory {
 
     private Handler createExternalServlet(ImmutableMap<String, ServletHolder> servlets,
                                           ImmutableMap<String, FilterHolder> filters,
-                                          ImmutableSet<EventListener> listeners) {
+                                          ImmutableSet<ServletContextListener> listeners) {
         final ServletContextHandler handler = new ServletContextHandler();
         handler.setBaseResource(Resource.newClassPathResource("."));
 
@@ -192,7 +193,8 @@ public class ServerFactory {
         }
 
         final EventListener[] eventListeners = new EventListener[listeners.size()];
-        handler.setEventListeners(listeners.toArray(eventListeners));
+        listeners.toArray(eventListeners);
+        handler.setEventListeners(eventListeners);
 
         handler.setConnectorNames(new String[]{"main"});
 
