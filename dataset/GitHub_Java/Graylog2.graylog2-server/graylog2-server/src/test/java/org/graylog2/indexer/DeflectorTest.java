@@ -122,19 +122,19 @@ public class DeflectorTest {
 
     @Test
     public void testIsDeflectorAlias() {
-        assertTrue(deflector.isDeflectorAlias("graylog_deflector"));
-        assertFalse(deflector.isDeflectorAlias("graylog_foobar"));
-        assertFalse(deflector.isDeflectorAlias("graylog_123"));
+        assertTrue(deflector.isDeflectorAlias("graylog2_deflector"));
+        assertFalse(deflector.isDeflectorAlias("graylog2_foobar"));
+        assertFalse(deflector.isDeflectorAlias("graylog2_123"));
         assertFalse(deflector.isDeflectorAlias("HAHA"));
     }
 
     @Test
-    public void testIsGraylogIndex() {
-        assertTrue(deflector.isGraylogIndex("graylog_1"));
-        assertTrue(deflector.isGraylogIndex("graylog_42"));
-        assertTrue(deflector.isGraylogIndex("graylog_100000000"));
-        assertFalse(deflector.isGraylogIndex("graylog_deflector"));
-        assertFalse(deflector.isGraylogIndex("graylog2beta_1"));
-        assertFalse(deflector.isGraylogIndex("HAHA"));
+    public void testIsGraylog2Index() {
+        assertTrue(deflector.isGraylog2Index("graylog2_1"));
+        assertTrue(deflector.isGraylog2Index("graylog2_42"));
+        assertTrue(deflector.isGraylog2Index("graylog2_100000000"));
+        assertFalse(deflector.isGraylog2Index("graylog2_deflector"));
+        assertFalse(deflector.isGraylog2Index("graylog2beta_1"));
+        assertFalse(deflector.isGraylog2Index("HAHA"));
     }
 }
