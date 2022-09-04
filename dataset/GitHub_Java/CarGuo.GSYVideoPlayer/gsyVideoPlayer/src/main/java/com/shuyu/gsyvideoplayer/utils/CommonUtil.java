@@ -5,17 +5,13 @@ import android.content.Context;
 import android.content.ContextWrapper;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
-import android.os.Build;
-import android.support.v4.app.FragmentActivity;
 import android.support.v7.app.ActionBar;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.internal.view.ContextThemeWrapper;
 import android.util.DisplayMetrics;
 import android.util.TypedValue;
-import android.view.View;
 import android.view.WindowManager;
 
-import java.io.File;
 import java.util.Formatter;
 import java.util.Locale;
 
@@ -102,74 +98,29 @@ public class CommonUtil {
 
     public static void hideSupportActionBar(Context context, boolean actionBar, boolean statusBar) {
         if (actionBar) {
-            AppCompatActivity appCompatActivity = CommonUtil.getAppCompActivity(context);
-            if (appCompatActivity != null) {
-                ActionBar ab = appCompatActivity.getSupportActionBar();
-                if (ab != null) {
-                    ab.setShowHideAnimationEnabled(false);
-                    ab.hide();
-                }
+            ActionBar ab = CommonUtil.getAppCompActivity(context).getSupportActionBar();
+            if (ab != null) {
+                ab.setShowHideAnimationEnabled(false);
+                ab.hide();
             }
         }
         if (statusBar) {
-            if (context instanceof FragmentActivity) {
-                FragmentActivity fragmentActivity = (FragmentActivity) context;
-                fragmentActivity.getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
-                        WindowManager.LayoutParams.FLAG_FULLSCREEN);
-            } else {
-                CommonUtil.getAppCompActivity(context).getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
-                        WindowManager.LayoutParams.FLAG_FULLSCREEN);
-            }
+            CommonUtil.getAppCompActivity(context).getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
+                    WindowManager.LayoutParams.FLAG_FULLSCREEN);
         }
     }
 
     public static void showSupportActionBar(Context context, boolean actionBar, boolean statusBar) {
         if (actionBar) {
-            AppCompatActivity appCompatActivity = CommonUtil.getAppCompActivity(context);
-            if (appCompatActivity != null) {
-                ActionBar ab = appCompatActivity.getSupportActionBar();
-                if (ab != null) {
-                    ab.setShowHideAnimationEnabled(false);
-                    ab.show();
-                }
+            ActionBar ab = CommonUtil.getAppCompActivity(context).getSupportActionBar();
+            if (ab != null) {
+                ab.setShowHideAnimationEnabled(false);
+                ab.show();
             }
         }
-
         if (statusBar) {
-            if (context instanceof FragmentActivity) {
-                FragmentActivity fragmentActivity = (FragmentActivity) context;
-                fragmentActivity.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
-            } else {
-                CommonUtil.getAppCompActivity(context).getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
-            }
+            CommonUtil.getAppCompActivity(context).getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
         }
-    }
-
-    public static void hideNavKey(Context context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-            //       设置屏幕始终在前面，不然点击鼠标，重新出现虚拟按键
-            ((Activity) context).getWindow().getDecorView().setSystemUiVisibility(
-                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                            | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION // hide nav
-                            // bar
-                            | View.SYSTEM_UI_FLAG_FULLSCREEN // hide status bar
-                            | View.SYSTEM_UI_FLAG_IMMERSIVE);
-        } else {
-            ((Activity) context).getWindow().getDecorView().setSystemUiVisibility(
-                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                            | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION // hide nav
-                            // bar
-                            | View.SYSTEM_UI_FLAG_FULLSCREEN // hide status bar
-            );
-        }
-    }
-
-    public static void showNavKey(Context context, int systemUiVisibility) {
-        ((Activity) context).getWindow().getDecorView().setSystemUiVisibility(systemUiVisibility);
     }
 
 
@@ -232,34 +183,5 @@ public class CommonUtil {
         return outMetrics.heightPixels;
     }
 
-    /**
-     * 下载速度文本
-     */
-    public static String getTextSpeed(long speed) {
-        String text = "";
-        if (speed >= 0 && speed < 1024) {
-            text = speed + " KB/s";
-        } else if (speed >= 1024 && speed < (1024 * 1024)) {
-            text = Long.toString(speed / 1024) + " KB/s";
-        } else if (speed >= (1024 * 1024) && speed < (1024 * 1024 * 1024)) {
-            text = Long.toString(speed / (1024 * 1024)) + " MB/s";
-        }
-        return text;
-    }
-
-    public static void deleteFile(String filePath) {
-        File file = new File(filePath);
-        if (file.exists()) {
-            if (file.isFile()) {
-                file.delete();
-            } else {
-                String[] filePaths = file.list();
-                for (String path : filePaths) {
-                    deleteFile(filePath + File.separator + path);
-                }
-                file.delete();
-            }
-        }
-    }
 
 }

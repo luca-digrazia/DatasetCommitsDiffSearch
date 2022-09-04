@@ -4,7 +4,9 @@ import android.app.Activity;
 import android.content.Context;
 import android.graphics.Color;
 import android.graphics.Point;
+import android.os.Build;
 import android.os.Handler;
+import android.transition.TransitionManager;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -12,21 +14,14 @@ import android.widget.FrameLayout;
 
 import com.shuyu.gsyvideoplayer.GSYVideoPlayer;
 import com.shuyu.gsyvideoplayer.R;
-import com.shuyu.gsyvideoplayer.listener.StandardVideoAllCallBack;
 import com.shuyu.gsyvideoplayer.video.GSYBaseVideoPlayer;
 import com.shuyu.gsyvideoplayer.video.StandardGSYVideoPlayer;
-import com.transitionseverywhere.TransitionManager;
-
-import java.io.File;
-import java.util.Map;
 
 import static com.shuyu.gsyvideoplayer.utils.CommonUtil.getActionBarHeight;
 import static com.shuyu.gsyvideoplayer.utils.CommonUtil.getStatusBarHeight;
 
 /**
  * Created by shuyu on 2016/11/12.
- * 列表工具类
- * 其中记得设置进来的fullViewContainer必须是在Activity布局下的最外层布局
  */
 
 public class ListVideoUtil {
@@ -37,38 +32,28 @@ public class ListVideoUtil {
     private ViewGroup listParent;//记录列表中item的父布局
     private ViewGroup.LayoutParams listParams;
     private OrientationUtils orientationUtils;
-    private StandardVideoAllCallBack videoAllCallBack;
-    private String url;
     private Context context;
-    private File cachePath;
-
-    private Object[] objects;
-
-    private Map<String, String> mapHeadData;
 
     private int playPosition = -1; // 播放的位置
-    private int speed = 1; // 播放速度，仅支持6.0
     private boolean isFull; //当前是否全屏
     private boolean isSmall; //当前是否小屏
+    private boolean autoRotation = true;//是否自动旋转
+    private boolean fullLandFrist = true; //是否全屏就马上横屏
     private boolean hideStatusBar; //是否隐藏有状态bar
     private boolean hideActionBar; //是否隐藏有状态ActionBar
-    private boolean isLoop;//循环
-
 
     private int[] listItemRect;//当前item框的屏幕位置
     private int[] listItemSize;//当前item的大小
 
-
-    private boolean fullLandFrist = true; //是否全屏就马上横屏
-    private boolean autoRotation = true;//是否自动旋转
-    private boolean showFullAnimation = true;//是否需要全屏动画
-
     private Handler handler = new Handler();
 
+    private boolean showFullAnimation = true;
 
     public ListVideoUtil(Context context) {
         gsyVideoPlayer = new StandardGSYVideoPlayer(context);
         this.context = context;
+        int smallVideoWidth = CommonUtil.getScreenWidth(context) / 2 - CommonUtil.dip2px(context, 20);
+        int smallVideoHeight = smallVideoWidth * 3 / 4;
     }
 
     /**
@@ -115,20 +100,9 @@ public class ListVideoUtil {
      * @param url 播放的URL
      */
     public void startPlay(String url) {
-
-        if (isSmall()) {
-            smallVideoToNormal();
-        }
-
-        this.url = url;
-
         gsyVideoPlayer.release();
 
-        gsyVideoPlayer.setLooping(isLoop);
-
-        gsyVideoPlayer.setSpeed(speed);
-
-        gsyVideoPlayer.setUp(url, true, cachePath, mapHeadData, objects);
+        gsyVideoPlayer.setUp(url, true, "");
 
         //增加title
         gsyVideoPlayer.getTitleTextView().setVisibility(View.GONE);
@@ -183,7 +157,7 @@ public class ListVideoUtil {
                 resolveMaterialToNormal(gsyVideoPlayer);
             }
         });
-        if (showFullAnimation) {
+        if (showFullAnimation && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             if (fullViewContainer instanceof FrameLayout) {
                 //目前只做了frameLoayout的判断
                 resolveMaterialAnimation();
@@ -264,11 +238,6 @@ public class ListVideoUtil {
                 listParent.addView(gsyVideoPlayer, listParams);
                 gsyVideoPlayer.getFullscreenButton().setImageResource(R.drawable.video_enlarge);
                 gsyVideoPlayer.getBackButton().setVisibility(View.GONE);
-                gsyVideoPlayer.setIfCurrentIsFullscreen(false);
-                if (videoAllCallBack != null) {
-                    Debuger.printfLog("onQuitFullscreen");
-                    videoAllCallBack.onQuitFullscreen(url);
-                }
             }
         }, delay);
     }
@@ -278,7 +247,7 @@ public class ListVideoUtil {
      * 动画回到正常效果
      */
     private void resolveMaterialToNormal(final GSYVideoPlayer gsyVideoPlayer) {
-        if (showFullAnimation && fullViewContainer instanceof FrameLayout) {
+        if (showFullAnimation && fullViewContainer instanceof FrameLayout && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             int delay = orientationUtils.backToProtVideo();
             handler.postDelayed(new Runnable() {
                 @Override
@@ -318,11 +287,6 @@ public class ListVideoUtil {
                     }
                 }
             }, time);
-        }
-        gsyVideoPlayer.setIfCurrentIsFullscreen(true);
-        if (videoAllCallBack != null) {
-            Debuger.printfLog("onEnterFullscreen");
-            videoAllCallBack.onEnterFullscreen(this.url);
         }
     }
 
@@ -376,8 +340,6 @@ public class ListVideoUtil {
             viewGroup.removeAllViews();
         playPosition = -1;
         TAG = "NULL";
-        if (orientationUtils != null)
-            orientationUtils.releaseListener();
 
     }
 
@@ -421,6 +383,10 @@ public class ListVideoUtil {
         return isFull;
     }
 
+    public boolean isAutoRotation() {
+        return autoRotation;
+    }
+
     /**
      * 是否自动旋转
      *
@@ -430,8 +396,8 @@ public class ListVideoUtil {
         this.autoRotation = autoRotation;
     }
 
-    public boolean isAutoRotation() {
-        return autoRotation;
+    public boolean isFullLandFrist() {
+        return fullLandFrist;
     }
 
     /**
@@ -442,24 +408,6 @@ public class ListVideoUtil {
     public void setFullLandFrist(boolean fullLandFrist) {
         this.fullLandFrist = fullLandFrist;
     }
-
-    public boolean isFullLandFrist() {
-        return fullLandFrist;
-    }
-
-    /**
-     * 全屏动画
-     *
-     * @param showFullAnimation 是否使用全屏动画效果
-     */
-    public void setShowFullAnimation(boolean showFullAnimation) {
-        this.showFullAnimation = showFullAnimation;
-    }
-
-    public boolean isShowFullAnimation() {
-        return showFullAnimation;
-    }
-
 
     public boolean isHideStatusBar() {
         return hideStatusBar;
@@ -487,14 +435,18 @@ public class ListVideoUtil {
         this.hideActionBar = hideActionBar;
     }
 
+
+    public boolean isShowFullAnimation() {
+        return showFullAnimation;
+    }
+
     /**
-     * 视频接口回调
+     * 全屏动画
      *
-     * @param videoAllCallBack 回调
+     * @param showFullAnimation 是否使用全屏动画效果
      */
-    public void setVideoAllCallBack(StandardVideoAllCallBack videoAllCallBack) {
-        this.videoAllCallBack = videoAllCallBack;
-        gsyVideoPlayer.setStandardVideoAllCallBack(videoAllCallBack);
+    public void setShowFullAnimation(boolean showFullAnimation) {
+        this.showFullAnimation = showFullAnimation;
     }
 
     public int getPlayPosition() {
@@ -508,78 +460,4 @@ public class ListVideoUtil {
     public boolean isSmall() {
         return isSmall;
     }
-
-
-    public boolean isLoop() {
-        return isLoop;
-    }
-
-    /**
-     * 循环
-     */
-    public void setLoop(boolean loop) {
-        isLoop = loop;
-    }
-
-    /**
-     * 获取当前总时长
-     */
-    public int getDuration() {
-        return gsyVideoPlayer.getDuration();
-    }
-
-
-    public int getSpeed() {
-        return speed;
-    }
-
-    /**
-     * 播放速度，仅支持6.0
-     */
-    public void setSpeed(int speed) {
-        this.speed = speed;
-    }
-
-
-    public File getCachePath() {
-        return cachePath;
-    }
-
-    /**
-     * 缓存的路径
-     */
-    public void setCachePath(File cachePath) {
-        this.cachePath = cachePath;
-    }
-
-    public Object[] getObjects() {
-        return objects;
-    }
-
-    public void setObjects(Object[] objects) {
-        this.objects = objects;
-    }
-
-    public Map<String, String> getMapHeadData() {
-        return mapHeadData;
-    }
-
-    public void setMapHeadData(Map<String, String> mapHeadData) {
-        this.mapHeadData = mapHeadData;
-    }
-
-    /**
-     * 获取当前播放进度
-     */
-    public int getCurrentPositionWhenPlaying() {
-        return gsyVideoPlayer.getCurrentPositionWhenPlaying();
-    }
-
-    /**
-     * 获取播放器,直接拿播放器，根据需要自定义配置
-     */
-    public StandardGSYVideoPlayer getGsyVideoPlayer() {
-        return gsyVideoPlayer;
-    }
-
 }

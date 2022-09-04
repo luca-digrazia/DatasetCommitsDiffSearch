@@ -11,12 +11,13 @@ import android.widget.FrameLayout;
 import android.widget.ListView;
 import android.widget.RelativeLayout;
 
+import com.example.gsyvideoplayer.adapter.ListNormalAdapter;
 import com.example.gsyvideoplayer.adapter.ListVideoAdapter;
-import com.example.gsyvideoplayer.listener.SampleListener;
-import com.shuyu.gsyvideoplayer.video.base.GSYVideoPlayer;
+import com.shuyu.gsyvideoplayer.GSYVideoManager;
+import com.shuyu.gsyvideoplayer.GSYVideoPlayer;
 import com.shuyu.gsyvideoplayer.utils.CommonUtil;
-import com.shuyu.gsyvideoplayer.utils.Debuger;
 import com.shuyu.gsyvideoplayer.utils.ListVideoUtil;
+import com.shuyu.gsyvideoplayer.video.StandardGSYVideoPlayer;
 
 import butterknife.BindView;
 import butterknife.ButterKnife;
@@ -32,8 +33,6 @@ public class ListVideo2Activity extends AppCompatActivity {
 
     ListVideoUtil listVideoUtil;
     ListVideoAdapter listVideoAdapter;
-    int lastVisibleItem;
-    int firstVisibleItem;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -50,16 +49,9 @@ public class ListVideo2Activity extends AppCompatActivity {
         listVideoUtil = new ListVideoUtil(this);
         listVideoUtil.setFullViewContainer(videoFullContainer);
         listVideoUtil.setHideStatusBar(true);
-        //listVideoUtil.setHideActionBar(true);
-        listVideoUtil.setNeedLockFull(true);
-
         listVideoAdapter = new ListVideoAdapter(this, listVideoUtil);
         listVideoAdapter.setRootView(activityListVideo);
         videoList.setAdapter(listVideoAdapter);
-
-        //listVideoUtil.setShowFullAnimation(true);
-        //listVideoUtil.setAutoRotation(true);
-        //listVideoUtil.setFullLandFrist(true);
 
 
         videoList.setOnScrollListener(new AbsListView.OnScrollListener() {
@@ -69,8 +61,7 @@ public class ListVideo2Activity extends AppCompatActivity {
 
             @Override
             public void onScroll(AbsListView view, int firstVisibleItem, int visibleItemCount, int totalItemCount) {
-                ListVideo2Activity.this.firstVisibleItem = firstVisibleItem;
-                lastVisibleItem = firstVisibleItem + visibleItemCount;
+                int lastVisibleItem = firstVisibleItem + visibleItemCount;
                 //大于0说明有播放,//对应的播放列表TAG
                 if (listVideoUtil.getPlayPosition() >= 0 && listVideoUtil.getPlayTAG().equals(ListVideoAdapter.TAG)) {
                     //当前播放的位置
@@ -91,32 +82,6 @@ public class ListVideo2Activity extends AppCompatActivity {
                 }
             }
 
-        });
-
-        //小窗口关闭被点击的时候回调处理回复页面
-        listVideoUtil.setVideoAllCallBack(new SampleListener(){
-            @Override
-            public void onPrepared(String url, Object... objects) {
-                super.onPrepared(url, objects);
-                Debuger.printfLog("Duration " + listVideoUtil.getDuration() + " CurrentPosition " + listVideoUtil.getCurrentPositionWhenPlaying());
-            }
-
-            @Override
-            public void onQuitSmallWidget(String url, Object... objects) {
-                super.onQuitSmallWidget(url, objects);
-                //大于0说明有播放,//对应的播放列表TAG
-                if (listVideoUtil.getPlayPosition() >= 0 && listVideoUtil.getPlayTAG().equals(ListVideoAdapter.TAG)) {
-                    //当前播放的位置
-                    int position = listVideoUtil.getPlayPosition();
-                    //不可视的是时候
-                    if ((position < firstVisibleItem || position > lastVisibleItem)) {
-                        //释放掉视频
-                        listVideoUtil.releaseVideoPlayer();
-                        listVideoAdapter.notifyDataSetChanged();
-                    }
-                }
-
-            }
         });
 
 
