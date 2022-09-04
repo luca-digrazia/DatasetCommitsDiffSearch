@@ -26,9 +26,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.URL;
-import java.net.UnknownHostException;
 
-import static com.google.common.base.Strings.emptyToNull;
 import static org.apache.commons.lang3.ObjectUtils.firstNonNull;
 
 public class MongoDbSeedRule implements MethodRule {
@@ -41,14 +39,7 @@ public class MongoDbSeedRule implements MethodRule {
         final MongoDbSeed annotation = firstNonNull(method.getAnnotation(MongoDbSeed.class),
                 method.getDeclaringClass().getAnnotation(MongoDbSeed.class));
         if (annotation != null) {
-            final String databaseName = firstNonNull(emptyToNull(annotation.database()), System.getProperty("mongodb.database", "graylog2"));
-            final MongodbSeed mongodbSeed;
-            try {
-                mongodbSeed = new MongodbSeed(databaseName);
-            } catch (UnknownHostException e) {
-                log.error("Unable to seed database: ", e);
-                return new IgnoreStatement("Unable to seed database: " + e.toString());
-            }
+            final MongodbSeed mongodbSeed = new MongodbSeed(annotation.database());
             final ServerHelper graylogController = new ServerHelper();
             final String nodeId = graylogController.getNodeId();
 
