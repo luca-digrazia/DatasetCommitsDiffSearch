@@ -248,36 +248,22 @@ public class CommandEnvironment {
     Path workspace = getWorkspace();
     Path workingDirectory;
     if (inWorkspace()) {
-      PathFragment clientCwd = commandOptions.clientCwd;
-      if (clientCwd.containsUplevelReferences()) {
+      if (commandOptions.clientCwd.containsUplevelReferences()) {
         throw new AbruptExitException(
             DetailedExitCode.of(
                 ExitCode.COMMAND_LINE_ERROR,
                 FailureDetail.newBuilder()
-                    .setMessage("Client cwd '" + clientCwd + "' contains uplevel references")
+                    .setMessage("Client cwd contains uplevel references")
                     .setClientEnvironment(
                         FailureDetails.ClientEnvironment.newBuilder()
                             .setCode(FailureDetails.ClientEnvironment.Code.CLIENT_CWD_MALFORMED)
                             .build())
                     .build()));
       }
-      if (clientCwd.isAbsolute() && !clientCwd.startsWith(workspace.asFragment())) {
-        throw new AbruptExitException(
-            DetailedExitCode.of(
-                ExitCode.COMMAND_LINE_ERROR,
-                FailureDetail.newBuilder()
-                    .setMessage(
-                        String.format(
-                            "Client cwd '%s' is not inside workspace '%s'", clientCwd, workspace))
-                    .setClientEnvironment(
-                        FailureDetails.ClientEnvironment.newBuilder()
-                            .setCode(FailureDetails.ClientEnvironment.Code.CLIENT_CWD_MALFORMED)
-                            .build())
-                    .build()));
-      }
-      workingDirectory = workspace.getRelative(clientCwd);
+      workingDirectory = workspace.getRelative(commandOptions.clientCwd);
     } else {
-      workingDirectory = FileSystemUtils.getWorkingDirectory(getRuntime().getFileSystem());
+      workspace = FileSystemUtils.getWorkingDirectory(getRuntime().getFileSystem());
+      workingDirectory = workspace;
     }
     return workingDirectory;
   }
@@ -579,13 +565,13 @@ public class CommandEnvironment {
   }
 
   /**
-   * Prevents any further interruption of this command by modules, and returns the final {@link
-   * DetailedExitCode} from modules, or null if no modules requested an abrupt exit.
+   * Prevents any further interruption of this command by modules, and returns the final exit code
+   * from modules, or null if no modules requested an abrupt exit.
    *
    * <p>Always returns the same value on subsequent calls.
    */
   @Nullable
-  private DetailedExitCode finalizeDetailedExitCode() {
+  private ExitCode finalizeExitCode() {
     // Set the pending exception so that further calls to exit(AbruptExitException) don't lead to
     // unwanted thread interrupts.
     if (pendingException.compareAndSet(null, Optional.empty())) {
@@ -598,32 +584,29 @@ public class CommandEnvironment {
       Thread.interrupted();
     }
     // Extract the exit code (it can be null if someone has already called finalizeExitCode()).
-    return getPendingDetailedExitCode();
+    return getPendingExitCode();
   }
 
   /**
-   * Hook method called by the BlazeCommandDispatcher right before the dispatch of each command ends
-   * (while its outcome can still be modified).
+   * Hook method called by the BlazeCommandDispatcher right before the dispatch
+   * of each command ends (while its outcome can still be modified).
    */
-  DetailedExitCode precompleteCommand(DetailedExitCode originalExit) {
-    // TODO(b/138456686): this event is deprecated but is used in several places. Instead of lifting
-    //  the ExitCode to a DetailedExitCode, see if it can be deleted.
-    eventBus.post(new CommandPrecompleteEvent(originalExit.getExitCode()));
-    return finalizeDetailedExitCode();
+  ExitCode precompleteCommand(ExitCode originalExit) {
+    eventBus.post(new CommandPrecompleteEvent(originalExit));
+    return finalizeExitCode();
   }
 
   /** Returns the current exit code requested by modules, or null if no exit has been requested. */
   @Nullable
-  private DetailedExitCode getPendingDetailedExitCode() {
+  private ExitCode getPendingExitCode() {
     AbruptExitException exception = getPendingException();
-    return exception == null ? null : exception.getDetailedExitCode();
+    return exception == null ? null : exception.getExitCode();
   }
 
   /**
    * Retrieves the exception currently queued by a Blaze module.
    *
-   * <p>Prefer {@link #getPendingDetailedExitCode} or {@link #throwPendingException} where
-   * appropriate.
+   * <p>Prefer getPendingExitCode or throwPendingException where appropriate.
    */
   @Nullable
   public AbruptExitException getPendingException() {
