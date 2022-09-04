@@ -18,7 +18,6 @@ import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.skyframe.trimming.TrimmedConfigurationCache;
-import com.google.devtools.build.skyframe.ErrorInfo;
 import com.google.devtools.build.skyframe.EvaluationProgressReceiver.EvaluationState;
 import com.google.devtools.build.skyframe.EvaluationProgressReceiver.EvaluationSuccessState;
 import com.google.devtools.build.skyframe.EvaluationProgressReceiver.InvalidationState;
@@ -117,8 +116,7 @@ public final class TrimmedConfigurationProgressReceiver extends NullEvaluationPr
   @Override
   public void evaluated(
       SkyKey key,
-      @Nullable SkyValue newValue,
-      @Nullable ErrorInfo newError,
+      @Nullable SkyValue value,
       Supplier<EvaluationSuccessState> evaluationSuccessState,
       EvaluationState state) {
     if (!enabled || !isKeyCacheable(key)) {
