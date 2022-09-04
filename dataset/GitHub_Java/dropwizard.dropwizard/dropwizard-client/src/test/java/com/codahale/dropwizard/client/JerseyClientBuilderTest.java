@@ -1,8 +1,8 @@
 package com.codahale.dropwizard.client;
 
-import com.codahale.dropwizard.config.Environment;
 import com.codahale.dropwizard.jersey.jackson.JacksonMessageBodyProvider;
-import com.codahale.dropwizard.setup.LifecycleEnvironment;
+import com.codahale.dropwizard.lifecycle.setup.LifecycleEnvironment;
+import com.codahale.dropwizard.setup.Environment;
 import com.codahale.metrics.MetricRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.jersey.api.client.Client;
@@ -24,12 +24,10 @@ import java.io.InputStream;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.TimeUnit;
 
 import static org.fest.assertions.api.Assertions.assertThat;
 import static org.fest.assertions.api.Assertions.failBecauseExceptionWasNotThrown;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 public class JerseyClientBuilderTest {
     @Provider
@@ -49,7 +47,7 @@ public class JerseyClientBuilderTest {
     private static final Annotation[] NO_ANNOTATIONS = new Annotation[0];
 
     private final JerseyClientBuilder builder = new JerseyClientBuilder(new MetricRegistry());
-    private final LifecycleEnvironment lifecycleEnvironment = mock(LifecycleEnvironment.class);
+    private final LifecycleEnvironment lifecycleEnvironment = spy(new LifecycleEnvironment());
     private final Environment environment = mock(Environment.class);
     private final ExecutorService executorService = mock(ExecutorService.class);
     private final ObjectMapper objectMapper = mock(ObjectMapper.class);
@@ -57,7 +55,7 @@ public class JerseyClientBuilderTest {
 
     @Before
     public void setUp() throws Exception {
-        when(environment.getLifecycleEnvironment()).thenReturn(lifecycleEnvironment);
+        when(environment.lifecycle()).thenReturn(lifecycleEnvironment);
         when(environment.getObjectMapper()).thenReturn(objectMapper);
         when(environment.getValidator()).thenReturn(validator);
     }
@@ -174,14 +172,6 @@ public class JerseyClientBuilderTest {
 
     @Test
     public void usesAnObjectMapperFromTheEnvironment() throws Exception {
-        final JerseyClientConfiguration configuration = new JerseyClientConfiguration();
-
-        when(lifecycleEnvironment.managedExecutorService("jersey-client-%d",
-                                                         configuration.getMinThreads(),
-                                                         configuration.getMaxThreads(),
-                                                         60,
-                                                         TimeUnit.SECONDS)).thenReturn(executorService);
-
         final Client client = builder.using(environment).build("test");
 
         final MessageBodyReader<Object> reader = client.getProviders()
@@ -202,16 +192,9 @@ public class JerseyClientBuilderTest {
         configuration.setMinThreads(7);
         configuration.setMaxThreads(532);
 
-        when(lifecycleEnvironment.managedExecutorService("jersey-client-%d",
-                                                         7,
-                                                         532,
-                                                         60,
-                                                         TimeUnit.SECONDS)).thenReturn(executorService);
+        builder.using(configuration)
+               .using(environment).build("test");
 
-        final ApacheHttpClient4 client = (ApacheHttpClient4) builder.using(configuration)
-                                                                    .using(environment).build("test");
-
-        assertThat(client.getExecutorService())
-                .isEqualTo(executorService);
+        verify(lifecycleEnvironment).executorService("jersey-client-test-%d");
     }
 }

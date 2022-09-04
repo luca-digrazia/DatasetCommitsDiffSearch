@@ -53,6 +53,7 @@ public class Environment {
         this.metricRegistry = metricRegistry;
         this.healthCheckRegistry = new HealthCheckRegistry();
         this.validator = validator;
+        final DropwizardResourceConfig jerseyConfig = new DropwizardResourceConfig(metricRegistry);
 
         this.servletContext = new ServletContextHandler();
         servletContext.setClassLoader(classLoader);
@@ -64,7 +65,6 @@ public class Environment {
 
         this.lifecycleEnvironment = new LifecycleEnvironment();
 
-        final DropwizardResourceConfig jerseyConfig = new DropwizardResourceConfig(metricRegistry);
         this.jerseyServletContainer = new JerseyContainerHolder(new ServletContainer(jerseyConfig));
         this.jerseyEnvironment = new JerseyEnvironment(jerseyServletContainer, jerseyConfig);
     }

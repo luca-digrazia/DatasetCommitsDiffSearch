@@ -2,8 +2,9 @@ package com.codahale.dropwizard.jdbi;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
-import com.codahale.dropwizard.db.DataSourceFactory;
+import com.codahale.dropwizard.db.DatabaseConfiguration;
 import com.codahale.dropwizard.db.ManagedDataSource;
+import com.codahale.dropwizard.db.ManagedDataSourceFactory;
 import com.codahale.dropwizard.jdbi.args.OptionalArgumentFactory;
 import com.codahale.dropwizard.jdbi.logging.LogbackLog;
 import com.codahale.dropwizard.setup.Environment;
@@ -37,21 +38,25 @@ public class DBIFactory {
         }
     }
 
+    private final ManagedDataSourceFactory dataSourceFactory = new ManagedDataSourceFactory();
+
     public DBI build(Environment environment,
-                     DataSourceFactory configuration,
+                     DatabaseConfiguration configuration,
                      String name) throws ClassNotFoundException {
-        final ManagedDataSource dataSource = configuration.build(environment.metrics(), name);
+        final ManagedDataSource dataSource = dataSourceFactory.build(environment.metrics(),
+                                                                     configuration,
+                                                                     name);
         return build(environment, configuration, dataSource, name);
     }
 
     public DBI build(Environment environment,
-                     DataSourceFactory configuration,
+                     DatabaseConfiguration configuration,
                      ManagedDataSource dataSource,
                      String name) {
         final String validationQuery = configuration.getValidationQuery();
         final DBI dbi = new DBI(dataSource);
         environment.lifecycle().manage(dataSource);
-        environment.healthChecks().register(name, new DBIHealthCheck(dbi, validationQuery));
+        environment.admin().addHealthCheck(name, new DBIHealthCheck(dbi, validationQuery));
         dbi.setSQLLog(new LogbackLog(LOGGER, Level.TRACE));
         dbi.setTimingCollector(new InstrumentedTimingCollector(environment.metrics(),
                                                                new SanerNamingStrategy()));

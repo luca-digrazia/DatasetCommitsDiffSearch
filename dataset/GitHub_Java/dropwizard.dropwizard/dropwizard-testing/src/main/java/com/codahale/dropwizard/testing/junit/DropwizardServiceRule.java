@@ -3,9 +3,9 @@ package com.codahale.dropwizard.testing.junit;
 import com.codahale.dropwizard.Configuration;
 import com.codahale.dropwizard.Service;
 import com.codahale.dropwizard.cli.ServerCommand;
+import com.codahale.dropwizard.lifecycle.ServerLifecycleListener;
 import com.codahale.dropwizard.setup.Bootstrap;
 import com.codahale.dropwizard.setup.Environment;
-import com.codahale.dropwizard.lifecycle.ServerLifecycleListener;
 import com.google.common.collect.ImmutableMap;
 import net.sourceforge.argparse4j.inf.Namespace;
 import org.eclipse.jetty.server.Server;
@@ -55,7 +55,7 @@ public class DropwizardServiceRule<C extends Configuration> implements TestRule 
             final Bootstrap<C> bootstrap = new Bootstrap<C>(service) {
                 @Override
                 public void runWithBundles(C configuration, Environment environment) throws Exception {
-                    environment.getLifecycleEnvironment().addServerLifecycleListener(new ServerLifecycleListener() {
+                    environment.lifecycle().addServerLifecycleListener(new ServerLifecycleListener() {
                                     @Override
                                     public void serverStarted(Server server) {
                                         jettyServer = server;

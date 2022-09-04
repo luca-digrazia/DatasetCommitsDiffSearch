@@ -1,7 +1,7 @@
 package com.codahale.dropwizard.client;
 
-import com.codahale.dropwizard.config.Environment;
 import com.codahale.dropwizard.jersey.jackson.JacksonMessageBodyProvider;
+import com.codahale.dropwizard.setup.Environment;
 import com.codahale.metrics.MetricRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Lists;
@@ -20,7 +20,6 @@ import javax.validation.Validator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.TimeUnit;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
@@ -171,7 +170,7 @@ public class JerseyClientBuilder {
      * @param executorService a thread pool
      * @param objectMapper    an object mapper
      * @return {@code this}
-     * @see #using(com.codahale.dropwizard.config.Environment)
+     * @see #using(com.codahale.dropwizard.setup.Environment)
      */
     public JerseyClientBuilder using(ExecutorService executorService, ObjectMapper objectMapper) {
         this.executorService = executorService;
@@ -194,12 +193,11 @@ public class JerseyClientBuilder {
             return build(executorService, objectMapper, validator, name);
         }
 
-        return build(environment.getLifecycleEnvironment()
-                                .managedExecutorService("jersey-client-%d",
-                                                        configuration.getMinThreads(),
-                                                        configuration.getMaxThreads(),
-                                                        60,
-                                                        TimeUnit.SECONDS),
+        return build(environment.lifecycle()
+                                .executorService("jersey-client-" + name + "-%d")
+                                .minThreads(configuration.getMinThreads())
+                                .maxThreads(configuration.getMaxThreads())
+                                .build(),
                      environment.getObjectMapper(),
                      environment.getValidator(),
                      name);
