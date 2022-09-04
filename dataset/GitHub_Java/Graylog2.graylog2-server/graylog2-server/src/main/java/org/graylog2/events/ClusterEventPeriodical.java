@@ -87,10 +87,8 @@ public class ClusterEventPeriodical extends Periodical {
         DBCollection coll = db.getCollection(COLLECTION_NAME);
 
         coll.createIndex(DBSort.asc("timestamp"));
-        coll.createIndex(DBSort
-                .asc("timestamp")
-                .asc("producer")
-                .asc("consumers"));
+        coll.createIndex(DBSort.asc("producer"));
+        coll.createIndex(DBSort.asc("consumers"));
 
         coll.setWriteConcern(WriteConcern.MAJORITY);
 
