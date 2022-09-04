@@ -27,31 +27,24 @@ import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.common.options.OptionsParser;
 import java.io.IOException;
 import java.util.List;
 
 /** Parses a WORKSPACE file with the given content. */
 class WorkspaceFactoryTestHelper {
-  private Package.Builder builder;
-  private Exception exception;
-  private ImmutableList<Event> events;
-  private SkylarkSemantics skylarkSemantics;
+  private final Package.Builder builder;
+  private final Exception exception;
+  private final ImmutableList<Event> events;
 
-  private final boolean allowOverride;
-
-  WorkspaceFactoryTestHelper() {
-    this(true);
+  WorkspaceFactoryTestHelper(String... args) {
+    this(true, args);
   }
 
-  WorkspaceFactoryTestHelper(boolean allowOverride) {
-    this.exception = null;
-    this.events = null;
-    this.allowOverride = allowOverride;
-    this.skylarkSemantics = SkylarkSemantics.DEFAULT_SEMANTICS;
+  WorkspaceFactoryTestHelper(boolean allowOverride, String... args) {
+    this(new Scratch("/"), allowOverride, args);
   }
 
-  void parse(Scratch scratch, String... args) {
+  WorkspaceFactoryTestHelper(Scratch scratch, boolean allowOverride, String... args) {
     Path root = null;
     Path workspaceFilePath = null;
     try {
@@ -72,15 +65,14 @@ class WorkspaceFactoryTestHelper {
             Mutability.create("test"),
             allowOverride,
             root,
-            root,
-            /* defaultSystemJavabaseDir= */ null);
+            root);
     Exception exception = null;
     try {
       byte[] bytes =
           FileSystemUtils.readWithKnownFileSize(workspaceFilePath, workspaceFilePath.getFileSize());
       factory.parse(
           ParserInputSource.create(bytes, workspaceFilePath.asFragment()),
-          skylarkSemantics,
+          SkylarkSemantics.DEFAULT_SEMANTICS,
           eventHandler);
     } catch (BuildFileContainsErrorsException e) {
       exception = e;
@@ -89,10 +81,6 @@ class WorkspaceFactoryTestHelper {
     }
     this.events = eventHandler.getEvents();
     this.exception = exception;
-  }
-
-  void parse(String... args) {
-    parse(new Scratch("/"), args);
   }
 
   public Package getPackage() throws InterruptedException, NoSuchPackageException {
@@ -114,16 +102,4 @@ class WorkspaceFactoryTestHelper {
     assertThat(events.size()).isGreaterThan(0);
     return events.get(0).getMessage();
   }
-
-  protected void setSkylarkSemantics(String... options) throws Exception {
-    skylarkSemantics = parseSkylarkSemanticsOptions(options);
-  }
-
-  private static SkylarkSemantics parseSkylarkSemanticsOptions(String... options)
-      throws Exception {
-    OptionsParser parser = OptionsParser.newOptionsParser(SkylarkSemanticsOptions.class);
-    parser.parse(options);
-    return parser.getOptions(SkylarkSemanticsOptions.class).toSkylarkSemantics();
-  }
-
 }
