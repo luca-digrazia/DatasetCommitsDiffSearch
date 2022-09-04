@@ -18,6 +18,7 @@ import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import com.google.common.cache.Cache;
+import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -30,6 +31,7 @@ import com.google.devtools.build.lib.actions.InconsistentFilesystemException;
 import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelConstants;
+import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -59,7 +61,8 @@ import com.google.devtools.build.lib.skyframe.SkylarkImportLookupValue.SkylarkIm
 import com.google.devtools.build.lib.syntax.BuildFileAST;
 import com.google.devtools.build.lib.syntax.Environment.Extension;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.ParserInput;
+import com.google.devtools.build.lib.syntax.ParserInputSource;
+import com.google.devtools.build.lib.syntax.SkylarkImport;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.syntax.Statement;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -547,27 +550,34 @@ public class PackageFunction implements SkyFunction {
   static SkylarkImportResult fetchImportsFromBuildFile(
       RootedPath buildFilePath,
       PackageIdentifier packageId,
-      ImmutableMap<RepositoryName, RepositoryName> repoMapping,
-      BuildFileAST file,
+      BuildFileAST buildFileAST,
       int workspaceChunk,
       Environment env,
       SkylarkImportLookupFunction skylarkImportLookupFunctionForInlining)
       throws NoSuchPackageException, InterruptedException {
     Preconditions.checkArgument(!packageId.getRepository().isDefault());
 
-    // Parse the labels in the file's load statements.
-    Map<String, Label> loadMap =
-        SkylarkImportLookupFunction.getLoadMap(env.getListener(), file, packageId, repoMapping);
-    if (loadMap == null) {
-      // malformed load statements
-      throw new BuildFileContainsErrorsException(packageId, "malformed load statements");
-    }
+    ImmutableList<SkylarkImport> imports = buildFileAST.getImports();
+    Map<String, Extension> importMap = Maps.newHashMapWithExpectedSize(imports.size());
+    ImmutableList.Builder<SkylarkFileDependency> fileDependencies = ImmutableList.builder();
 
-    // Load imported modules in parallel.
+    // Find the labels corresponding to the load statements.
+    Label labelForCurrBuildFile;
+    try {
+      labelForCurrBuildFile = Label.create(packageId, "BUILD");
+    } catch (LabelSyntaxException e) {
+      // Shouldn't happen; the Label is well-formed by construction.
+      throw new IllegalStateException(e);
+    }
+    ImmutableMap<String, Label> importPathMap =
+        SkylarkImportLookupFunction.getLabelsForLoadStatements(imports, labelForCurrBuildFile);
+
+    // Look up and load the imports.
+    ImmutableCollection<Label> importLabels = importPathMap.values();
     List<SkylarkImportLookupKey> importLookupKeys =
-        Lists.newArrayListWithExpectedSize(loadMap.size());
+        Lists.newArrayListWithExpectedSize(importLabels.size());
     boolean inWorkspace = buildFilePath.getRootRelativePath().getBaseName().endsWith("WORKSPACE");
-    for (Label importLabel : loadMap.values()) {
+    for (Label importLabel : importLabels) {
       int originalChunk =
           getOriginalWorkspaceChunk(env, buildFilePath, workspaceChunk, importLabel);
       if (inWorkspace) {
@@ -595,9 +605,7 @@ public class PackageFunction implements SkyFunction {
     }
 
     // Process the loaded imports.
-    Map<String, Extension> importMap = Maps.newHashMapWithExpectedSize(loadMap.size());
-    ImmutableList.Builder<SkylarkFileDependency> fileDependencies = ImmutableList.builder();
-    for (Map.Entry<String, Label> importEntry : loadMap.entrySet()) {
+    for (Map.Entry<String, Label> importEntry : importPathMap.entrySet()) {
       String importString = importEntry.getKey();
       Label importLabel = importEntry.getValue();
 
@@ -615,6 +623,7 @@ public class PackageFunction implements SkyFunction {
       importMap.put(importString, importLookupValue.getEnvironmentExtension());
       fileDependencies.add(importLookupValue.getDependency());
     }
+
     return new SkylarkImportResult(importMap, transitiveClosureOfLabels(fileDependencies.build()));
   }
 
@@ -1143,7 +1152,7 @@ public class PackageFunction implements SkyFunction {
         if (showLoadingProgress.get()) {
           env.getListener().handle(Event.progress("Loading package: " + packageId));
         }
-        ParserInput input;
+        ParserInputSource input;
         Preconditions.checkNotNull(buildFileValue, packageId);
         byte[] buildFileBytes = null;
         try {
@@ -1166,7 +1175,7 @@ public class PackageFunction implements SkyFunction {
           // See the javadoc for ActionOnIOExceptionReadingBuildFile.
         }
         input =
-            ParserInput.create(
+            ParserInputSource.create(
                 FileSystemUtils.convertFromLatin1(buildFileBytes), inputFile.asFragment());
         StoredEventHandler astParsingEventHandler = new StoredEventHandler();
         BuildFileAST ast =
@@ -1181,7 +1190,6 @@ public class PackageFunction implements SkyFunction {
             fetchImportsFromBuildFile(
                 buildFilePath,
                 packageId,
-                repositoryMapping,
                 astParseResult.ast,
                 /* workspaceChunk = */ -1,
                 env,
