@@ -1,8 +1,6 @@
 package io.quarkus.mutiny.runtime;
 
-import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.RejectedExecutionException;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
@@ -17,22 +15,10 @@ public class MutinyInfrastructure {
     public static final String VERTX_EVENT_LOOP_THREAD_PREFIX = "vert.x-eventloop-thread-";
 
     public void configureMutinyInfrastructure(ExecutorService exec) {
-        Infrastructure.setDefaultExecutor(new Executor() {
-            @Override
-            public void execute(Runnable command) {
-                try {
-                    exec.execute(command);
-                } catch (RejectedExecutionException e) {
-                    if (!exec.isShutdown() && !exec.isTerminated()) {
-                        throw e;
-                    }
-                    // Ignore the failure - the application has been shutdown.
-                }
-            }
-        });
+        Infrastructure.setDefaultExecutor(exec);
     }
 
-    public void configureDroppedExceptionHandler() {
+    public void configureDroppedExceptionHandlerAndThreadBlockingChecker() {
         Logger logger = Logger.getLogger(MutinyInfrastructure.class);
         Infrastructure.setDroppedExceptionHandler(new Consumer<Throwable>() {
             @Override
@@ -40,9 +26,7 @@ public class MutinyInfrastructure {
                 logger.error("Mutiny had to drop the following exception", throwable);
             }
         });
-    }
 
-    public void configureThreadBlockingChecker() {
         Infrastructure.setCanCallerThreadBeBlockedSupplier(new BooleanSupplier() {
             @Override
             public boolean getAsBoolean() {
@@ -55,24 +39,6 @@ public class MutinyInfrastructure {
                  */
                 String threadName = Thread.currentThread().getName();
                 return !threadName.startsWith(VERTX_EVENT_LOOP_THREAD_PREFIX);
-            }
-        });
-    }
-
-    public void configureOperatorLogger() {
-        Logger logger = Logger.getLogger(MutinyInfrastructure.class);
-        Infrastructure.setOperatorLogger(new Infrastructure.OperatorLogger() {
-            @Override
-            public void log(String identifier, String event, Object value, Throwable failure) {
-                String log = identifier + " | ";
-                if (failure != null) {
-                    log = log + event + "(" + failure.getClass() + "(" + failure.getMessage() + "))";
-                } else if (value != null) {
-                    log = log + event + "(" + value + ")";
-                } else {
-                    log = log + event + "()";
-                }
-                logger.info(log);
             }
         });
     }
