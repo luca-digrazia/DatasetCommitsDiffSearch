@@ -262,7 +262,9 @@ public class EnvironmentTest extends EvaluationTestCase {
     } catch (EvalExceptionWithStackTrace e) {
       assertThat(e)
           .hasMessageThat()
-          .contains("Variable 'global_var' is referenced before assignment.");
+          .contains(
+              "Variable 'global_var' is referenced before assignment. "
+                  + "The variable is defined in the global scope.");
     }
   }
 
