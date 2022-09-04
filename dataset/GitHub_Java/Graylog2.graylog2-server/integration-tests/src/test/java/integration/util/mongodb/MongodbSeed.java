@@ -16,45 +16,89 @@
  */
 package integration.util.mongodb;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.mongodb.MongoClient;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
+import org.apache.commons.io.FilenameUtils;
+import org.bson.BSONDecoder;
+import org.bson.BSONObject;
+import org.bson.BasicBSONDecoder;
 import org.bson.Document;
+import org.testng.TestException;
 
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 public class MongodbSeed {
-    private final MongoClient mongoClient;
-    private final String dbName;
+    public List<Document> readBsonFile(String filename){
+        Path filePath = Paths.get(filename);
+        List<Document> dataset = new ArrayList<>();
 
-    public MongodbSeed(String dbName) {
-        this.dbName = dbName;
-        mongoClient = new MongoClient(
-                URI.create(System.getProperty("gl2.baseuri", "http://localhost")).getHost(),
-                Integer.parseInt(System.getProperty("mongodb.port", "27017")));
-        mongoClient.dropDatabase(dbName);
-    }
+        try {
+            ByteArrayInputStream fileBytes = new ByteArrayInputStream(Files.readAllBytes(filePath));
+            BSONDecoder decoder = new BasicBSONDecoder();
+            BSONObject obj;
 
-    private Map<String, List<Document>> parseDatabaseDump(URL seedUrl) throws IOException {
-        final DumpReader dumpReader;
-        if (seedUrl.getPath().endsWith(".json")) {
-            dumpReader = new JsonReader(seedUrl);
-        } else {
-            dumpReader = new BsonReader(seedUrl);
+            while((obj = decoder.readObject(fileBytes)) != null) {
+                if(!obj.toString().trim().isEmpty()) {
+                    Document mongoDocument = new Document();
+                    mongoDocument.putAll(obj.toMap());
+                    dataset.add(mongoDocument);
+                }
+            }
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+            throw new TestException("Can not open BSON input file.", e);
+        } catch (JsonProcessingException e) {
+            e.printStackTrace();
+            throw new TestException("Can not parse BSON data.", e);
+        } catch (IOException e) {
+            //EOF
         }
-        return dumpReader.toMap();
+
+        return dataset;
     }
 
-    private Map<String, List<Document>> updateNodeIdFirstNode(Map<String, List<Document>> collections, String nodeId) {
-        final List<Document> nodes = collections.get("nodes");
+    public Map<String, List<Document>> parseDatabaseDump(String dbPath){
+        Map<String, List<Document>> collections = new HashMap<>();
 
-        if (nodes == null || nodes.isEmpty())
-            return collections;
+        URL seedUrl = Thread.currentThread().getContextClassLoader().getResource("integration/seeds/mongodb/" + dbPath);
+        File dir = new File(seedUrl.getPath());
+        File[] collectionListing = dir.listFiles();
+
+        if (collectionListing != null) {
+            for (File collection : collectionListing) {
+                if (collection.getName().endsWith(".bson") && !collection.getName().startsWith("system.indexes.")) {
+                    List<Document> collectionData = readBsonFile(collection.getAbsolutePath());
+                    collections.put(FilenameUtils.removeExtension(collection.getName()), collectionData);
+                }
+            }
+        }
+
+
+        return collections;
+    }
+
+    public Map<String, List<Document>> updateNodeIdFirstNode(Map<String, List<Document>> collections, String nodeId) {
+        List<Document> nodes = new ArrayList<>();
+
+        for (Map.Entry<String, List<Document>> collection : collections.entrySet()) {
+            if(collection.getKey().equals("nodes")) {
+                nodes = collection.getValue();
+            }
+        }
 
         Document firstNode = nodes.get(0);
         firstNode.put("node_id", nodeId);
@@ -66,15 +110,18 @@ public class MongodbSeed {
         return collections;
     }
 
-    private Map<String, List<Document>> updateNodeIdInputs(Map<String, List<Document>> collections, String nodeId) {
-        List<Document> inputs = collections.get("inputs");
+    public Map<String, List<Document>> updateNodeIdInputs(Map<String, List<Document>> collections, String nodeId) {
+        List<Document> inputs = new ArrayList<>();
 
-        if (inputs == null) {
-            return collections;
-        }
+        for (Map.Entry<String, List<Document>> collection : collections.entrySet()) {
+            if(collection.getKey().equals("inputs")) {
+                for (Document input : collection.getValue()){
+                    input.remove("node_id");
+                    input.put("node_id", nodeId);
+                    inputs.add(input);
+                }
 
-        for (Document input : inputs){
-            input.put("node_id", nodeId);
+            }
         }
 
         collections.remove("inputs");
@@ -83,19 +130,25 @@ public class MongodbSeed {
         return collections;
     }
 
-    public void loadDataset(URL dbPath, String nodeId) throws IOException {
+    public void loadDataset(String dbPath, String dbName, String nodeId){
         Map<String, List<Document>> collections = parseDatabaseDump(dbPath);
         collections = updateNodeIdFirstNode(collections, nodeId);
         collections = updateNodeIdInputs(collections, nodeId);
 
-        final MongoDatabase mongoDatabase = mongoClient.getDatabase(dbName);
+        MongoClient mongoClient = new MongoClient(
+                URI.create(System.getProperty("gl2.baseuri", "http://localhost")).getHost(),
+                Integer.parseInt(System.getProperty("mongodb.port", "27017")));
+
+        mongoClient.dropDatabase(dbName);
+        MongoDatabase mongoDatabase = mongoClient.getDatabase(dbName);
 
         for (Map.Entry<String, List<Document>> collection : collections.entrySet()) {
-            final String collectionName = collection.getKey();
+            String collectionName = collection.getKey();
             mongoDatabase.createCollection(collectionName);
-            final MongoCollection<Document> mongoCollection = mongoDatabase.getCollection(collection.getKey());
-
-            mongoCollection.insertMany(collection.getValue());
+            MongoCollection<Document> mongoCollection = mongoDatabase.getCollection(collection.getKey());
+            for (Document document : collection.getValue()) {
+                mongoCollection.insertOne(document);
+            }
         }
     }
 }
