@@ -82,12 +82,6 @@ public final class SourceManifestAction extends AbstractFileWriteAction {
      * Fulfills {@link com.google.devtools.build.lib.actions.AbstractAction#getRawProgressMessage()}
      */
     String getRawProgressMessage();
-
-    /**
-     * Fulfills {@link AbstractFileWriteAction#isRemotable()}.
-     * @return
-     */
-    boolean isRemotable();
   }
 
   /**
@@ -143,7 +137,8 @@ public final class SourceManifestAction extends AbstractFileWriteAction {
 
   @Override
   public boolean isRemotable() {
-    return manifestWriter.isRemotable();
+    // There is little gain to remoting these, since they include absolute path names inline.
+    return false;
   }
 
   /**
@@ -260,12 +255,6 @@ public final class SourceManifestAction extends AbstractFileWriteAction {
       public String getRawProgressMessage() {
         return "Creating source manifest";
       }
-
-      @Override
-      public boolean isRemotable() {
-        // There is little gain to remoting these, since they include absolute path names inline.
-        return false;
-      }
     },
 
     /**
@@ -294,12 +283,6 @@ public final class SourceManifestAction extends AbstractFileWriteAction {
       @Override
       public String getRawProgressMessage() {
         return "Creating file sources list";
-      }
-
-      @Override
-      public boolean isRemotable() {
-        // Source-only symlink manifest has root-relative paths and does not include absolute paths.
-        return true;
       }
     }
   }
