@@ -327,20 +327,19 @@ public class QuarkusTestExtension
         try {
             Constructor<?> testResourceClassEntryConstructor = Class
                     .forName(TestResourceManager.TestResourceClassEntry.class.getName(), true, classLoader)
-                    .getConstructor(Class.class, Map.class, boolean.class);
+                    .getConstructor(Class.class, Map.class);
 
             List<QuarkusTestProfile.TestResourceEntry> testResources = profileInstance.testResources();
             List<Object> result = new ArrayList<>(testResources.size());
             for (QuarkusTestProfile.TestResourceEntry testResource : testResources) {
                 Object instance = testResourceClassEntryConstructor.newInstance(
-                        Class.forName(testResource.getClazz().getName(), true, classLoader), testResource.getArgs(),
-                        testResource.isParallel());
+                        Class.forName(testResource.getClazz().getName(), true, classLoader), testResource.getArgs());
                 result.add(instance);
             }
 
             return result;
         } catch (Exception e) {
-            throw new IllegalStateException("Unable to handle profile " + profileInstance.getClass(), e);
+            throw new IllegalStateException("Unable to handle profile " + profileInstance.getClass());
         }
     }
 
@@ -648,10 +647,25 @@ public class QuarkusTestExtension
         T result;
         ClassLoader old = Thread.currentThread().getContextClassLoader();
         Class<?> requiredTestClass = extensionContext.getRequiredTestClass();
-        for (Object beforeClassCallback : beforeClassCallbacks) {
-            beforeClassCallback.getClass().getMethod("beforeClass", Class.class).invoke(beforeClassCallback,
-                    requiredTestClass);
+
+        if (runningQuarkusApplication != null) {
+            try {
+                Thread.currentThread().setContextClassLoader(runningQuarkusApplication.getClassLoader());
+                for (Object beforeClassCallback : beforeClassCallbacks) {
+                    beforeClassCallback.getClass().getMethod("beforeClass", Class.class).invoke(beforeClassCallback,
+                            runningQuarkusApplication.getClassLoader().loadClass(requiredTestClass.getName()));
+                }
+            } finally {
+                Thread.currentThread().setContextClassLoader(old);
+            }
+        } else {
+            // can this ever happen?
+            for (Object beforeClassCallback : beforeClassCallbacks) {
+                beforeClassCallback.getClass().getMethod("beforeClass", Class.class).invoke(beforeClassCallback,
+                        requiredTestClass);
+            }
         }
+
         try {
             Thread.currentThread().setContextClassLoader(requiredTestClass.getClassLoader());
             result = invocation.proceed();
