@@ -1,5 +1,6 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
+ * Copyright (C) 2016 the AndroidAnnotations project
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -97,6 +98,10 @@ public class ActivityWithServices extends Activity {
 	// @SystemService
 	// CaptioningManager captioningManager;
 
+	// TODO API 23
+	// @SystemService
+	// CarrierConfigManager carrierConfigManager;
+
 	@SystemService
 	android.content.ClipboardManager contentClipboardManager;
 
@@ -129,8 +134,13 @@ public class ActivityWithServices extends Activity {
 	// @SystemService
 	// EthernetManager ethernetManager; // hidden API
 
+	// TODO API 23
 	// @SystemService
-	// FingerprintManager fingerprintManager; // hidden API
+	// FingerprintManager fingerprintManager;
+
+	// TODO API 24
+	// @SystemService
+	// HardwarePropertiesManager hardwarePropertiesManager;
 
 	// @SystemService
 	// HdmiControlManager hdmiControlManager; // hidden API
@@ -169,6 +179,10 @@ public class ActivityWithServices extends Activity {
 	// TODO API 21
 	// @SystemService
 	// MediaSessionManager mediaSessionManager;
+
+	// TODO API 23
+	// @SystemService
+	// MidiManager midiManager;
 	
 	// @SystemService
 	// NetworkScoreManager networkScoreManager; // hidden API
@@ -179,8 +193,9 @@ public class ActivityWithServices extends Activity {
 	// @SystemService
 	// NetworkPolicyManager networkPolicyManager; // hidden API
 
+	// TODO API 23
 	// @SystemService
-	// NetworkStatsService networkStatsService; // hidden API
+	// NetworkStatsManager networkStatsManager;
 
 	@SystemService
 	NfcManager nfcManager;
@@ -217,6 +232,10 @@ public class ActivityWithServices extends Activity {
 	// @SystemService
 	// SipManager sipManager; // hidden API
 
+	// TODO API 25
+	// @SystemService
+	// ShortcutManager shortcutManager;
+
 	// @SystemService
 	// StatusBarManager statusBarManager; // hidden API
 
@@ -226,6 +245,10 @@ public class ActivityWithServices extends Activity {
 	// TODO API 22
 	// @SystemService
 	// SubscriptionManager subscriptionManager;
+
+	// TODO API 24
+	// @SystemService
+	// SystemHealthManager systemHealthManager;
 	
 	// TODO API 21
 	// @SystemService
@@ -239,6 +262,9 @@ public class ActivityWithServices extends Activity {
 
 	// @SystemService
 	// ThrottleManager throttleManager; // hidden API
+
+	// @SystemService
+	// TrustManager trustManager; // hidden API
 
 	// TODO API 21
 	// @SystemService
@@ -276,7 +302,34 @@ public class ActivityWithServices extends Activity {
 	@SystemService
 	WifiP2pManager wifiP2pManager;
 
+	// @SystemService
+	// RttManager rttManager; // hidden API
+
 	@SystemService
 	WindowManager windowManager;
 
+	AppWidgetManager methodInjectedAppWidgetManager;
+	ActivityManager serviceWithMethodAnnotation;
+	WindowManager serviceWithParameterAnnotation;
+	ActivityManager firstMultipleService;
+	WindowManager secondMultipleService;
+
+	@SystemService
+	void injectAppWidgetManager(AppWidgetManager methodInjectedAppWidgetManager) {
+		this.methodInjectedAppWidgetManager = methodInjectedAppWidgetManager;
+	}
+
+	@SystemService
+	void injectSingleServiceWithMethodAnnotation(ActivityManager serviceWithMethodAnnotation) {
+		this.serviceWithMethodAnnotation = serviceWithMethodAnnotation;
+	}
+
+	void injectSingleServiceWithParameterAnnotation(@SystemService WindowManager serviceWithParameterAnnotation) {
+		this.serviceWithParameterAnnotation = serviceWithParameterAnnotation;
+	}
+
+	void injectMultipleServices(@SystemService ActivityManager firstMultipleService, @SystemService WindowManager secondMultipleService) {
+		this.firstMultipleService = firstMultipleService;
+		this.secondMultipleService = secondMultipleService;
+	}
 }
