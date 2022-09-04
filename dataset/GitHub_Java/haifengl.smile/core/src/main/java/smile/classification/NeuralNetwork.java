@@ -153,8 +153,7 @@ public class NeuralNetwork implements OnlineClassifier<double[]>, SoftClassifier
     /**
      * A layer of a feed forward neural network.
      */
-    private class Layer implements Serializable {
-        private static final long serialVersionUID = 1L;
+    private class Layer {
 
         /**
          * number of units in this layer
