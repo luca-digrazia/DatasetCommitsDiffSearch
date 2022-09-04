@@ -42,16 +42,15 @@ public class MapBasedActionGraphTest {
   @Test
   public void testSmoke() throws Exception {
     MutableActionGraph actionGraph = new MapBasedActionGraph(actionKeyContext);
-    Path execRoot = fileSystem.getPath("/");
     Path root = fileSystem.getPath("/root");
     Path path = root.getRelative("foo");
-    Artifact output = new Artifact(path, Root.asDerivedRoot(execRoot, root));
+    Artifact output = new Artifact(path, Root.asDerivedRoot(root));
     Action action = new TestAction(TestAction.NO_EFFECT,
         ImmutableSet.<Artifact>of(), ImmutableSet.of(output));
     actionGraph.registerAction(action);
     actionGraph.unregisterAction(action);
     path = root.getRelative("bar");
-    output = new Artifact(path, Root.asDerivedRoot(execRoot, root));
+    output = new Artifact(path, Root.asDerivedRoot(root));
     Action action2 = new TestAction(TestAction.NO_EFFECT,
         ImmutableSet.<Artifact>of(), ImmutableSet.of(output));
     actionGraph.registerAction(action);
@@ -62,10 +61,9 @@ public class MapBasedActionGraphTest {
   @Test
   public void testNoActionConflictWhenUnregisteringSharedAction() throws Exception {
     MutableActionGraph actionGraph = new MapBasedActionGraph(actionKeyContext);
-    Path execRoot = fileSystem.getPath("/");
     Path root = fileSystem.getPath("/root");
     Path path = root.getRelative("/root/foo");
-    Artifact output = new Artifact(path, Root.asDerivedRoot(execRoot, root));
+    Artifact output = new Artifact(path, Root.asDerivedRoot(root));
     Action action = new TestAction(TestAction.NO_EFFECT,
         ImmutableSet.<Artifact>of(), ImmutableSet.of(output));
     actionGraph.registerAction(action);
@@ -91,10 +89,9 @@ public class MapBasedActionGraphTest {
           "action-graph-test",
           AbstractQueueVisitor.EXECUTOR_FACTORY,
           ErrorClassifier.DEFAULT);
-      Path execRoot = fileSystem.getPath("/");
       Path root = fileSystem.getPath("/root");
       Path path = root.getRelative("foo");
-      output = new Artifact(path, Root.asDerivedRoot(execRoot, root));
+      output = new Artifact(path, Root.asDerivedRoot(root));
       allActions.add(new TestAction(
           TestAction.NO_EFFECT, ImmutableSet.<Artifact>of(), ImmutableSet.of(output)));
     }
