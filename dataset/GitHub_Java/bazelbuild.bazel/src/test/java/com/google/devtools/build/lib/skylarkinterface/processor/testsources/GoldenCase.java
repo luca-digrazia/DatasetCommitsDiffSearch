@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.skylarkinterface.processor.testsources;
 
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkinterface.Param;
-import com.google.devtools.build.lib.skylarkinterface.ParamType;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
@@ -75,14 +74,10 @@ public class GoldenCase {
     parameters = {
       @Param(name = "one", type = String.class, named = true),
       @Param(name = "two", type = Integer.class, named = true),
-      @Param(name = "three",
-          allowedTypes = {
-              @ParamType(type = String.class),
-              @ParamType(type = Integer.class),
-          },
-          named = true, defaultValue = "None", noneable = true),
+      @Param(name = "three", type = String.class, named = true, defaultValue = "None",
+          noneable = true),
     })
-  public String threeArgMethodWithParams(String one, Integer two, Object three) {
+  public String threeArgMethodWithParams(String one, Integer two, String three) {
     return "baz";
   }
 
