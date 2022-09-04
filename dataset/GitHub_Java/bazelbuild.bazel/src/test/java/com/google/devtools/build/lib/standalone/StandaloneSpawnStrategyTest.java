@@ -32,7 +32,6 @@ import com.google.devtools.build.lib.actions.ResourceManager;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
-import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ServerDirectories;
@@ -60,7 +59,6 @@ import com.google.devtools.common.options.OptionsParser;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Set;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -169,10 +167,9 @@ public class StandaloneSpawnStrategyTest {
     assertThat(err()).isEmpty();
   }
 
-  private Set<SpawnResult> run(Spawn spawn) throws Exception {
-    return executor.getSpawnActionContext(spawn.getMnemonic()).exec(spawn, createContext());
+  private void run(Spawn spawn) throws Exception {
+    executor.getSpawnActionContext(spawn.getMnemonic()).exec(spawn, createContext());
   }
-
   private ActionExecutionContext createContext() {
     Path execRoot = executor.getExecRoot();
     return new ActionExecutionContext(
