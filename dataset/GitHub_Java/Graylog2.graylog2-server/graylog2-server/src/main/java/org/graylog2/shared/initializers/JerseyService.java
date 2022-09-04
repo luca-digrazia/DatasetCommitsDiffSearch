@@ -21,7 +21,7 @@ import com.codahale.metrics.MetricRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.jaxrs.json.JacksonJaxbJsonProvider;
 import com.google.common.base.Strings;
-import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableList;
 import com.google.common.net.HostAndPort;
 import com.google.common.util.concurrent.AbstractIdleService;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
@@ -32,6 +32,7 @@ import org.glassfish.grizzly.http.server.NetworkListener;
 import org.glassfish.grizzly.ssl.SSLContextConfigurator;
 import org.glassfish.grizzly.ssl.SSLEngineConfigurator;
 import org.glassfish.jersey.grizzly2.httpserver.GrizzlyHttpServerFactory;
+import org.glassfish.jersey.media.multipart.MultiPartFeature;
 import org.glassfish.jersey.server.ResourceConfig;
 import org.glassfish.jersey.server.ServerProperties;
 import org.glassfish.jersey.server.model.Resource;
@@ -41,7 +42,7 @@ import org.graylog2.audit.PluginAuditEventTypes;
 import org.graylog2.audit.jersey.AuditEventModelProcessor;
 import org.graylog2.configuration.HttpConfiguration;
 import org.graylog2.jersey.PrefixAddingModelProcessor;
-import org.graylog2.plugin.inject.Graylog2Module;
+import org.graylog2.plugin.inject.RestControllerPackage;
 import org.graylog2.plugin.rest.PluginRestResource;
 import org.graylog2.rest.filter.WebAppNotFoundResponseFilter;
 import org.graylog2.shared.rest.CORSFilter;
@@ -82,6 +83,8 @@ import java.security.InvalidKeyException;
 import java.security.KeyStore;
 import java.security.cert.CertificateException;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -101,8 +104,8 @@ public class JerseyService extends AbstractIdleService {
 
     private final HttpConfiguration configuration;
     private final Configuration graylogConfiguration;
-    private final Set<Class<?>> systemRestResources;
     private final Map<String, Set<Class<? extends PluginRestResource>>> pluginRestResources;
+    private final Set<RestControllerPackage> restControllerPackages;
 
     private final Set<Class<? extends DynamicFeature>> dynamicFeatures;
     private final Set<Class<? extends ContainerResponseFilter>> containerResponseFilters;
@@ -121,8 +124,8 @@ public class JerseyService extends AbstractIdleService {
                          Set<Class<? extends ContainerResponseFilter>> containerResponseFilters,
                          Set<Class<? extends ExceptionMapper>> exceptionMappers,
                          @Named("additionalJerseyComponents") final Set<Class> additionalComponents,
-                         @Named(Graylog2Module.SYSTEM_REST_RESOURCES) final Set<Class<?>> systemRestResources,
                          final Map<String, Set<Class<? extends PluginRestResource>>> pluginRestResources,
+                         final Set<RestControllerPackage> restControllerPackages,
                          Set<PluginAuditEventTypes> pluginAuditEventTypes,
                          ObjectMapper objectMapper,
                          MetricRegistry metricRegistry,
@@ -133,8 +136,8 @@ public class JerseyService extends AbstractIdleService {
         this.containerResponseFilters = requireNonNull(containerResponseFilters, "containerResponseFilters");
         this.exceptionMappers = requireNonNull(exceptionMappers, "exceptionMappers");
         this.additionalComponents = requireNonNull(additionalComponents, "additionalComponents");
-        this.systemRestResources = systemRestResources;
         this.pluginRestResources = requireNonNull(pluginRestResources, "pluginResources");
+        this.restControllerPackages = requireNonNull(restControllerPackages, "restControllerPackages");
         this.pluginAuditEventTypes = requireNonNull(pluginAuditEventTypes, "pluginAuditEventTypes");
         this.objectMapper = requireNonNull(objectMapper, "objectMapper");
         this.metricRegistry = requireNonNull(metricRegistry, "metricRegistry");
@@ -162,6 +165,13 @@ public class JerseyService extends AbstractIdleService {
     }
 
     private void startUpApi() throws Exception {
+        final List<String> resourcePackages = ImmutableList.<String>builder()
+                .addAll(restControllerPackages.stream()
+                        .map(RestControllerPackage::name)
+                        .collect(Collectors.toList()))
+                .add(RESOURCE_PACKAGE_WEB)
+                .build();
+
         final Set<Resource> pluginResources = prefixPluginResources(PLUGIN_PREFIX, pluginRestResources);
 
         final SSLEngineConfigurator sslEngineConfigurator = configuration.isHttpEnableTls() ?
@@ -190,7 +200,8 @@ public class JerseyService extends AbstractIdleService {
                 configuration.getHttpMaxHeaderSize(),
                 configuration.isHttpEnableGzip(),
                 configuration.isHttpEnableCors(),
-                pluginResources);
+                pluginResources,
+                resourcePackages.toArray(new String[0]));
 
         apiHttpServer.start();
 
@@ -224,16 +235,19 @@ public class JerseyService extends AbstractIdleService {
 
 
     private ResourceConfig buildResourceConfig(final boolean enableCors,
-                                               final Set<Resource> additionalResources) {
-        final Map<String, String> packagePrefixes = ImmutableMap.of(
-                RESOURCE_PACKAGE_WEB, HttpConfiguration.PATH_WEB,
-                "", HttpConfiguration.PATH_API
-        );
+                                               final Set<Resource> additionalResources,
+                                               final String[] controllerPackages) {
+        final Map<String, String> packagePrefixes = new HashMap<>();
+        for (String resourcePackage : controllerPackages) {
+            packagePrefixes.put(resourcePackage, HttpConfiguration.PATH_API);
+        }
+        packagePrefixes.put(RESOURCE_PACKAGE_WEB, HttpConfiguration.PATH_WEB);
+        packagePrefixes.put("", HttpConfiguration.PATH_API);
 
         final ResourceConfig rc = new ResourceConfig()
                 .property(ServerProperties.BV_SEND_ERROR_IN_RESPONSE, true)
                 .property(ServerProperties.WADL_FEATURE_DISABLE, true)
-                .register(new PrefixAddingModelProcessor(packagePrefixes))
+                .register(new PrefixAddingModelProcessor(packagePrefixes, graylogConfiguration))
                 .register(new AuditEventModelProcessor(pluginAuditEventTypes))
                 .registerClasses(
                         ShiroSecurityContextFilter.class,
@@ -260,7 +274,9 @@ public class JerseyService extends AbstractIdleService {
                     }
                 })
                 .register(new UserContextBinder())
-                .registerClasses(systemRestResources)
+                .register(MultiPartFeature.class)
+                .packages(true, controllerPackages)
+                .packages(true, RESOURCE_PACKAGE_WEB)
                 .registerResources(additionalResources);
 
         exceptionMappers.forEach(rc::registerClasses);
@@ -287,8 +303,15 @@ public class JerseyService extends AbstractIdleService {
                              int maxHeaderSize,
                              boolean enableGzip,
                              boolean enableCors,
-                             Set<Resource> additionalResources) {
-        final ResourceConfig resourceConfig = buildResourceConfig(enableCors, additionalResources);
+                             Set<Resource> additionalResources,
+                             String[] controllerPackages)
+            throws GeneralSecurityException, IOException {
+        final ResourceConfig resourceConfig = buildResourceConfig(
+                enableCors,
+                additionalResources,
+                controllerPackages
+        );
+
         final HttpServer httpServer = GrizzlyHttpServerFactory.createHttpServer(
                 listenUri,
                 resourceConfig,
@@ -312,7 +335,7 @@ public class JerseyService extends AbstractIdleService {
 
         listener.setDefaultErrorPageGenerator(errorPageGenerator);
 
-        if (enableGzip) {
+        if(enableGzip) {
             final CompressionConfig compressionConfig = listener.getCompressionConfig();
             compressionConfig.setCompressionMode(CompressionConfig.CompressionMode.ON);
             compressionConfig.setCompressionMinSize(512);
