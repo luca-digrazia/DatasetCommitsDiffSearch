@@ -1164,7 +1164,7 @@ public class SubsamplingScaleImageView extends View {
      * the base layer image - the whole source subsampled as necessary.
      */
     private synchronized void initialiseBaseLayer(Point maxTileDimensions) {
-        debug("initialiseBaseLayer maxTileDimensions=%dx%d", maxTileDimensions.x, maxTileDimensions.y);
+        debug("initialiseBaseLayer maxTimeDimensions=%dx%d", maxTileDimensions.x, maxTileDimensions.y);
 
         satTemp = new ScaleAndTranslate(0f, new PointF(0, 0));
         fitToBounds(true, satTemp);
@@ -1528,7 +1528,7 @@ public class SubsamplingScaleImageView extends View {
         this.sHeight = sHeight;
         this.sOrientation = sOrientation;
         checkReady();
-        if (!checkImageLoaded() && maxTileWidth > 0 && maxTileWidth != TILE_SIZE_AUTO && maxTileHeight > 0 && maxTileHeight != TILE_SIZE_AUTO && getWidth() > 0 && getHeight() > 0) {
+        if (!checkImageLoaded() && maxTileWidth > 0 && maxTileHeight > 0 && getWidth() > 0 && getHeight() > 0) {
             initialiseBaseLayer(new Point(maxTileWidth, maxTileHeight));
         }
         invalidate();
@@ -2957,6 +2957,14 @@ public class SubsamplingScaleImageView extends View {
         @Override public void onCenterChanged(PointF newCenter, int origin) { }
         @Override public void onScaleChanged(float newScale, int origin) { }
 
+    }
+
+		/**
+     * Check if the current instance of SubsamplingScaleImageView has an image set
+     * @return If an image is currently set
+     */
+    public boolean hasImageSet(){
+        return uri!=null || bitmap!=null;
     }
 
 }
