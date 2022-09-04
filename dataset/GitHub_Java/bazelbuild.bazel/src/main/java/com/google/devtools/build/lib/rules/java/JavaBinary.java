@@ -468,6 +468,8 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
       Artifact singleJar = JavaToolchainProvider.from(ruleContext).getSingleJar();
       coverageEnvironment.add(new Pair<>("SINGLE_JAR_TOOL", singleJar.getExecPathString()));
       coverageSupportFiles.add(singleJar);
+      runfilesBuilder.addArtifact(singleJar);
+      runfilesBuilder.addArtifact(runtimeClasspathArtifact);
     }
 
     common.addTransitiveInfoProviders(
@@ -620,7 +622,7 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
         .addOutput(jsa)
         .addInput(classlist)
         .addInput(merged)
-        .addTransitiveInputs(javaRuntime.javaBaseInputs());
+        .addTransitiveInputs(javaRuntime.javaBaseInputsMiddleman());
     if (configFile != null) {
       spawnAction.addInput(configFile);
     }

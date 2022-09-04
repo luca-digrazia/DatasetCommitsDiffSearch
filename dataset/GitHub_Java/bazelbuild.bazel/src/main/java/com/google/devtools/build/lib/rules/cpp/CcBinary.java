@@ -1179,6 +1179,10 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
             ccCompilationContext.getVirtualToOriginalHeaders(),
             /* additionalMetadata= */ additionalMetadata);
 
+    NestedSet<Artifact> headerTokens =
+        CcCompilationHelper.collectHeaderTokens(
+            ruleContext, cppConfiguration, ccCompilationOutputs, /* addSelfTokens= */ true);
+
     Map<String, NestedSet<Artifact>> outputGroups =
         CcCompilationHelper.buildOutputGroupsForEmittingCompileProviders(
             ccCompilationOutputs,
@@ -1187,6 +1191,8 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
             toolchain,
             featureConfiguration,
             ruleContext,
+            /* generateHeaderTokensGroup= */ false,
+            /* addSelfHeaderTokens= */ false,
             /* generateHiddenTopLevelGroup= */ false);
 
     builder
@@ -1199,7 +1205,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
                         collectTransitiveCcNativeLibraries(ruleContext, libraries)))
                 .build())
         .addNativeDeclaredProvider(instrumentedFilesProvider)
-        .addOutputGroup(OutputGroupInfo.VALIDATION, ccCompilationContext.getHeaderTokens())
+        .addOutputGroup(OutputGroupInfo.VALIDATION, headerTokens)
         .addOutputGroups(outputGroups);
 
     CppHelper.maybeAddStaticLinkMarkerProvider(builder, ruleContext);

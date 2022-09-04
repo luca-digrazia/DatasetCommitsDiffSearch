@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.rules.android;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaInfo;
-import com.google.devtools.build.lib.starlarkbuildapi.android.AndroidPlatformsTransitionApi;
 import com.google.devtools.build.lib.starlarkbuildapi.android.AndroidSplitTransitionApi;
 import com.google.devtools.build.lib.starlarkbuildapi.android.AndroidStarlarkCommonApi;
 
@@ -36,11 +35,6 @@ public class AndroidStarlarkCommon implements AndroidStarlarkCommonApi<Artifact,
   @Override
   public AndroidSplitTransitionApi getAndroidSplitTransition() {
     return AndroidRuleClasses.ANDROID_SPLIT_TRANSITION;
-  }
-
-  @Override
-  public AndroidPlatformsTransitionApi getAndroidPlatformsTransition() {
-    return new AndroidPlatformsTransition();
   }
 
   /**

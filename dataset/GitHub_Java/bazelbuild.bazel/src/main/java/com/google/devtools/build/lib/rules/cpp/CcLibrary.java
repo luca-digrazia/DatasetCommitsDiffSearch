@@ -485,6 +485,8 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
             ccToolchain,
             featureConfiguration,
             ruleContext,
+            /* generateHeaderTokensGroup= */ true,
+            /* addSelfHeaderTokens= */ true,
             /* generateHiddenTopLevelGroup= */ true);
     CcStarlarkApiProvider.maybeAdd(ruleContext, targetBuilder);
     targetBuilder
