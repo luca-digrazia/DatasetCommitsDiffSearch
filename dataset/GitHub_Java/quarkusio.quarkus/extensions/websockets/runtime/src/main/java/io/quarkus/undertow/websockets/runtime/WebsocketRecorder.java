@@ -17,6 +17,7 @@ import io.netty.channel.EventLoopGroup;
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.ManagedContext;
 import io.quarkus.arc.runtime.BeanContainer;
+import io.quarkus.runtime.ExecutorRecorder;
 import io.quarkus.runtime.annotations.Recorder;
 import io.undertow.websockets.UndertowContainerProvider;
 import io.undertow.websockets.WebSocketDeploymentInfo;
@@ -159,10 +160,15 @@ public class WebsocketRecorder {
                         };
                     }
                 }),
-                info.isDispatchToWorkerThread(),
+                false,
                 null,
                 null,
-                info.getExecutor(),
+                new Supplier<Executor>() {
+                    @Override
+                    public Executor get() {
+                        return ExecutorRecorder.getCurrent();
+                    }
+                },
                 Collections.emptyList(),
                 info.getMaxFrameSize());
         for (Class<?> i : info.getAnnotatedEndpoints()) {
