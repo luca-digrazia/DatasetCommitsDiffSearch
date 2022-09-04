@@ -24,7 +24,7 @@ import com.google.devtools.build.lib.packages.AttributeTransitionData;
 import javax.annotation.Nullable;
 
 /**
- * {@link TransitionFactory} implementation which creates a {@link PatchTransition} which will
+ * {@link Transitionfactory} implementation which creates a {@link PatchTransition} which will
  * transition to a configuration suitable for building dependencies for the execution platform of
  * the depending target.
  */
