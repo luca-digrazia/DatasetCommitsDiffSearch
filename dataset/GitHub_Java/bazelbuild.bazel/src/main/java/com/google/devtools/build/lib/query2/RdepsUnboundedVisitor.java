@@ -13,6 +13,8 @@
 // limitations under the License.
 package com.google.devtools.build.lib.query2;
 
+import static com.google.common.collect.ImmutableSet.toImmutableSet;
+
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ArrayListMultimap;
@@ -94,8 +96,7 @@ class RdepsUnboundedVisitor extends AbstractEdgeVisitor<DepAndRdep> {
         MultisetSemaphore<PackageIdentifier> packageSemaphore) {
       this.env = env;
       this.unfilteredUniverse = unfilteredUniverse;
-      this.depAndRdepUniquifier =
-          new UniquifierImpl<>(depAndRdep -> depAndRdep, env.getQueryEvaluationParallelismLevel());
+      this.depAndRdepUniquifier = new UniquifierImpl<>(depAndRdep -> depAndRdep);
       this.validRdepUniquifier = env.createSkyKeyUniquifier();
       this.callback = callback;
       this.packageSemaphore = packageSemaphore;
@@ -131,10 +132,13 @@ class RdepsUnboundedVisitor extends AbstractEdgeVisitor<DepAndRdep> {
     }
 
     Multimap<SkyKey, SkyKey> packageKeyToTargetKeyMap =
-        SkyQueryEnvironment.makePackageKeyToTargetKeyMap(
-            Iterables.concat(reverseDepMultimap.values()));
+        env.makePackageKeyToTargetKeyMap(Iterables.concat(reverseDepMultimap.values()));
     Set<PackageIdentifier> pkgIdsNeededForTargetification =
-        SkyQueryEnvironment.getPkgIdsNeededForTargetification(packageKeyToTargetKeyMap);
+        packageKeyToTargetKeyMap
+            .keySet()
+            .stream()
+            .map(SkyQueryEnvironment.PACKAGE_SKYKEY_TO_PACKAGE_IDENTIFIER)
+            .collect(toImmutableSet());
     packageSemaphore.acquireAll(pkgIdsNeededForTargetification);
 
     try {

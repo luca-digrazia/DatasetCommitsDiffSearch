@@ -127,7 +127,7 @@ public class ParallelSkyQueryUtils {
               () -> {
                 Callback<Target> visitorCallback =
                     ParallelVisitor.createParallelVisitorCallback(
-                        new UnfilteredSkyKeyTTVDTCVisitor.Factory(
+                        new UnfilteredTransitiveTraversalValueDTCVisitor.Factory(
                             env,
                             env.createSkyKeyUniquifier(),
                             processResultsBatchSize,
@@ -177,13 +177,14 @@ public class ParallelSkyQueryUtils {
       QueryExpressionContext<Target> context,
       Callback<Target> callback,
       MultisetSemaphore<PackageIdentifier> packageSemaphore,
-      boolean depsNeedFiltering) {
+      boolean depsNeedFiltering,
+      Callback<Target> errorReporter) {
     return env.eval(
         expression,
         context,
         ParallelVisitor.createParallelVisitorCallback(
             new DepsUnboundedVisitor.Factory(
-                env, callback, packageSemaphore, depsNeedFiltering, context)));
+                env, callback, packageSemaphore, depsNeedFiltering, errorReporter, context)));
   }
 
   static class DepAndRdep {

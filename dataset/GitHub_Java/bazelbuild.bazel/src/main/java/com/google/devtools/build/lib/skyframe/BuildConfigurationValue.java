@@ -26,10 +26,10 @@ import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.
 import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
-import com.google.devtools.common.options.OptionsParsingException;
 import java.io.Serializable;
 import java.util.Objects;
 import java.util.Set;
+import java.util.logging.Logger;
 
 /** A Skyframe value representing a {@link BuildConfiguration}. */
 // TODO(bazel-team): mark this immutable when BuildConfiguration is immutable.
@@ -37,6 +37,7 @@ import java.util.Set;
 @AutoCodec
 @ThreadSafe
 public class BuildConfigurationValue implements SkyValue {
+  private static final Logger logger = Logger.getLogger(BuildConfigurationValue.class.getName());
   private final BuildConfiguration configuration;
 
   BuildConfigurationValue(BuildConfiguration configuration) {
@@ -48,61 +49,14 @@ public class BuildConfigurationValue implements SkyValue {
   }
 
   /**
-   * Creates a new configuration key based on the given diff, after applying a platform mapping
-   * transformation.
-   *
-   * @param platformMappingValue sky value that can transform a configuration key based on a
-   *     platform mapping
-   * @param defaultBuildOptions set of native build options without modifications based on parsing
-   *     flags
-   * @param fragments set of options fragments this configuration should cover
-   * @param optionsDiff diff between the default options and the desired configuration
-   * @throws OptionsParsingException if the platform mapping cannot be parsed
-   */
-  public static Key keyWithPlatformMapping(
-      PlatformMappingValue platformMappingValue,
-      BuildOptions defaultBuildOptions,
-      FragmentClassSet fragments,
-      BuildOptions.OptionsDiffForReconstruction optionsDiff)
-      throws OptionsParsingException {
-    return platformMappingValue.map(
-        keyWithoutPlatformMapping(fragments, optionsDiff), defaultBuildOptions);
-  }
-
-  /**
-   * Creates a new configuration key based on the given diff, after applying a platform mapping
-   * transformation.
-   *
-   * @param platformMappingValue sky value that can transform a configuration key based on a
-   *     platform mapping
-   * @param defaultBuildOptions set of native build options without modifications based on parsing
-   *     flags
-   * @param fragments set of options fragments this configuration should cover
-   * @param optionsDiff diff between the default options and the desired configuration
-   * @throws OptionsParsingException if the platform mapping cannot be parsed
-   */
-  public static Key keyWithPlatformMapping(
-      PlatformMappingValue platformMappingValue,
-      BuildOptions defaultBuildOptions,
-      Set<Class<? extends BuildConfiguration.Fragment>> fragments,
-      BuildOptions.OptionsDiffForReconstruction optionsDiff)
-      throws OptionsParsingException {
-    return platformMappingValue.map(
-        keyWithoutPlatformMapping(fragments, optionsDiff), defaultBuildOptions);
-  }
-
-  /**
    * Returns the key for a requested configuration.
-   *
-   * <p>Callers are responsible for applying the platform mapping or ascertaining that a platform
-   * mapping is not required.
    *
    * @param fragments the fragments the configuration should contain
    * @param optionsDiff the {@link BuildOptions.OptionsDiffForReconstruction} object the {@link
    *     BuildOptions} should be rebuilt from
    */
   @ThreadSafe
-  static Key keyWithoutPlatformMapping(
+  public static Key key(
       Set<Class<? extends BuildConfiguration.Fragment>> fragments,
       BuildOptions.OptionsDiffForReconstruction optionsDiff) {
     return Key.create(
@@ -111,23 +65,13 @@ public class BuildConfigurationValue implements SkyValue {
         optionsDiff);
   }
 
-  private static Key keyWithoutPlatformMapping(
+  public static Key key(
       FragmentClassSet fragmentClassSet, BuildOptions.OptionsDiffForReconstruction optionsDiff) {
     return Key.create(fragmentClassSet, optionsDiff);
   }
 
-  /**
-   * Returns a configuration key for the given configuration.
-   *
-   * <p>Note that this key creation method does not apply a platform mapping, it is assumed that the
-   * passed configuration was created with one such and thus its key does not need to be mapped
-   * again.
-   *
-   * @param buildConfiguration configuration whose key is requested
-   */
   public static Key key(BuildConfiguration buildConfiguration) {
-    return keyWithoutPlatformMapping(
-        buildConfiguration.fragmentClasses(), buildConfiguration.getBuildOptionsDiff());
+    return key(buildConfiguration.fragmentClasses(), buildConfiguration.getBuildOptionsDiff());
   }
 
   /** {@link SkyKey} for {@link BuildConfigurationValue}. */
@@ -189,7 +133,6 @@ public class BuildConfigurationValue implements SkyValue {
 
     @Override
     public String toString() {
-      // This format is depended on by integration tests.
       return "BuildConfigurationValue.Key[" + optionsDiff.getChecksum() + "]";
     }
   }

@@ -1217,14 +1217,16 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
   public QueryTaskFuture<Void> getDepsUnboundedParallel(
       QueryExpression expression,
       QueryExpressionContext<Target> context,
-      Callback<Target> callback) {
+      Callback<Target> callback,
+      Callback<Target> errorReporter) {
     return ParallelSkyQueryUtils.getDepsUnboundedParallel(
         SkyQueryEnvironment.this,
         expression,
         context,
         callback,
         packageSemaphore,
-        /*depsNeedFiltering=*/ !dependencyFilter.equals(DependencyFilter.ALL_DEPS));
+        /*depsNeedFiltering=*/ !dependencyFilter.equals(DependencyFilter.ALL_DEPS),
+        errorReporter);
   }
 
   @ThreadSafe
