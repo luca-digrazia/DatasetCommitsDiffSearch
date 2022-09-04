@@ -86,7 +86,7 @@ public class CoreOptions extends FragmentOptions implements Cloneable {
   @Option(
       name = "define",
       converter = Converters.AssignmentConverter.class,
-      defaultValue = "null",
+      defaultValue = "",
       allowMultiple = true,
       documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
       effectTags = {OptionEffectTag.CHANGES_INPUTS, OptionEffectTag.AFFECTS_OUTPUTS},
@@ -320,7 +320,7 @@ public class CoreOptions extends FragmentOptions implements Cloneable {
       name = "test_env",
       converter = Converters.OptionalAssignmentConverter.class,
       allowMultiple = true,
-      defaultValue = "null",
+      defaultValue = "",
       documentationCategory = OptionDocumentationCategory.TESTING,
       effectTags = {OptionEffectTag.TEST_RUNNER},
       help =
@@ -338,7 +338,7 @@ public class CoreOptions extends FragmentOptions implements Cloneable {
       name = "action_env",
       converter = Converters.OptionalAssignmentConverter.class,
       allowMultiple = true,
-      defaultValue = "null",
+      defaultValue = "",
       documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
       effectTags = {OptionEffectTag.ACTION_COMMAND_LINES},
       help =
@@ -354,7 +354,7 @@ public class CoreOptions extends FragmentOptions implements Cloneable {
       name = "repo_env",
       converter = Converters.OptionalAssignmentConverter.class,
       allowMultiple = true,
-      defaultValue = "null",
+      defaultValue = "",
       documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
       effectTags = {OptionEffectTag.ACTION_COMMAND_LINES},
       help =
@@ -497,7 +497,7 @@ public class CoreOptions extends FragmentOptions implements Cloneable {
   @Option(
       name = "experimental_action_listener",
       allowMultiple = true,
-      defaultValue = "null",
+      defaultValue = "",
       converter = LabelListConverter.class,
       documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
       effectTags = {OptionEffectTag.EXECUTION},
@@ -575,7 +575,7 @@ public class CoreOptions extends FragmentOptions implements Cloneable {
   @Option(
       name = "features",
       allowMultiple = true,
-      defaultValue = "null",
+      defaultValue = "",
       documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
       effectTags = {OptionEffectTag.CHANGES_INPUTS, OptionEffectTag.AFFECTS_OUTPUTS},
       help =
@@ -590,7 +590,7 @@ public class CoreOptions extends FragmentOptions implements Cloneable {
       name = "target_environment",
       converter = LabelListConverter.class,
       allowMultiple = true,
-      defaultValue = "null",
+      defaultValue = "",
       documentationCategory = OptionDocumentationCategory.INPUT_STRICTNESS,
       effectTags = {OptionEffectTag.CHANGES_INPUTS},
       help =
@@ -826,15 +826,6 @@ public class CoreOptions extends FragmentOptions implements Cloneable {
       help = "Whether to make source manifest actions remotable")
   public boolean remotableSourceManifestActions;
 
-  @Option(
-      name = "experimental_enable_aggregating_middleman",
-      defaultValue = "true",
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
-      metadataTags = {OptionMetadataTag.EXPERIMENTAL},
-      help = "Whether to enable the use of AggregatingMiddleman in rules.")
-  public boolean enableAggregatingMiddleman;
-
   /** Ways configured targets may provide the {@link BuildConfiguration.Fragment}s they require. */
   public enum IncludeConfigFragmentsEnum {
     // Don't offer the provider at all. This is best for most builds, which don't use this
@@ -873,7 +864,6 @@ public class CoreOptions extends FragmentOptions implements Cloneable {
     host.cpu = hostCpu;
     host.inmemoryUnusedInputsList = inmemoryUnusedInputsList;
     host.includeRequiredConfigFragmentsProvider = includeRequiredConfigFragmentsProvider;
-    host.enableAggregatingMiddleman = enableAggregatingMiddleman;
 
     // === Runfiles ===
     host.buildRunfilesManifests = buildRunfilesManifests;
