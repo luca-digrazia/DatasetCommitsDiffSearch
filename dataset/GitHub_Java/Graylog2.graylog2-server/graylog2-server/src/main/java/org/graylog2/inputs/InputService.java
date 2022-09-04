@@ -18,8 +18,8 @@ package org.graylog2.inputs;
 
 import org.graylog2.cluster.Node;
 import org.graylog2.database.NotFoundException;
-import org.graylog2.plugin.database.PersistedService;
-import org.graylog2.plugin.database.ValidationException;
+import org.graylog2.database.PersistedService;
+import org.graylog2.database.ValidationException;
 import org.graylog2.plugin.inputs.Extractor;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.shared.inputs.NoSuchInputTypeException;
@@ -51,13 +51,9 @@ public interface InputService extends PersistedService {
 
     List<Extractor> getExtractors(Input input);
 
-    Extractor getExtractor(Input input, String extractorId) throws NotFoundException;
-
     void removeExtractor(Input input, String extractorId);
 
     void removeStaticField(Input input, String key);
 
     MessageInput getMessageInput(Input io) throws NoSuchInputTypeException;
-
-    List<Map.Entry<String, String>> getStaticFields(Input input);
 }
