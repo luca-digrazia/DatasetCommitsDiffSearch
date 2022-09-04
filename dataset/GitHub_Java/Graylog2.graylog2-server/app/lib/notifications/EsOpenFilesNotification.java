@@ -19,25 +19,35 @@
  */
 package lib.notifications;
 
-import com.google.common.collect.Maps;
-import models.SystemJob;
+import org.graylog2.restclient.models.Notification;
+import org.graylog2.restclient.models.SystemJob;
+import views.helpers.NotificationHelper;
 
+import java.util.Collections;
 import java.util.Map;
 
-/**
- * @author Lennart Koopmann <lennart@torch.sh>
- */
 public class EsOpenFilesNotification implements NotificationType {
+    private static final String TITLE = "Elasticsearch nodes with too low open file limit";
+    private static final String DESCRIPTION = "There are Elasticsearch nodes in the cluster that have a too low " +
+            "open file limit (current limit: <em>%d</em> on <em>%s</em>; should be at least 64000) This will " +
+            "be causing problems that can be hard to diagnose. " +
+            "Read how to raise the maximum number of open files in " +
+            NotificationHelper.linkToKnowledgeBase("setup/elasticsearch", "the Elasticsearch setup documentation.");
 
-    private static final String TITLE = "ElasticSearch nodes with too low open file limit";
-    private static final String DESCRIPTION = "There are ElasticSearch nodes in the cluster that have a too low " +
-                                              "open file limit. This will be causing problems that can be hard to diagnose. " +
-                                              "Read how to raise the maximum number of open files in " +
-                                              "<a href='http://support.torch.sh/help/kb/graylog2-server/how-to-raise-the-open-file-limit-for-elasticsearch' target='_blank'>the documentation</a>.";
+    private final Notification notification;
+
+    public EsOpenFilesNotification(Notification notification) {
+        this.notification = notification;
+    }
+
+    @Override
+    public Notification getNotification() {
+        return notification;
+    }
 
     @Override
     public Map<SystemJob.Type, String> options() {
-        return Maps.newHashMap();
+        return Collections.emptyMap();
     }
 
     @Override
@@ -47,12 +57,13 @@ public class EsOpenFilesNotification implements NotificationType {
 
     @Override
     public String getDescription() {
-        return DESCRIPTION;
+        return String.format(DESCRIPTION,
+                notification.getDetail("max_file_descriptors"),
+                notification.getDetail("hostname"));
     }
 
     @Override
     public boolean isCloseable() {
         return true;
     }
-
 }
