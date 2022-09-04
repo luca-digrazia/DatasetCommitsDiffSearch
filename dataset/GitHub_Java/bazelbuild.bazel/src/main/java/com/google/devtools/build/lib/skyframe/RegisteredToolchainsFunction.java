@@ -43,13 +43,7 @@ public class RegisteredToolchainsFunction implements SkyFunction {
   public SkyValue compute(SkyKey skyKey, Environment env)
       throws SkyFunctionException, InterruptedException {
 
-    BuildConfigurationValue buildConfigurationValue =
-        (BuildConfigurationValue)
-            env.getValue(((RegisteredToolchainsValue.Key) skyKey).getConfigurationKey());
-    if (env.valuesMissing()) {
-      return null;
-    }
-    BuildConfiguration configuration = buildConfigurationValue.getConfiguration();
+    BuildConfiguration configuration = (BuildConfiguration) skyKey.argument();
 
     ImmutableList.Builder<Label> registeredToolchainLabels = new ImmutableList.Builder<>();
 

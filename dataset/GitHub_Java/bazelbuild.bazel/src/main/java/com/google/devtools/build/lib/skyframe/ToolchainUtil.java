@@ -25,8 +25,6 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
 import com.google.devtools.build.lib.analysis.platform.PlatformProviderUtils;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.packages.NoSuchTargetException;
-import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetFunction.ConfiguredValueCreationException;
 import com.google.devtools.build.lib.skyframe.RegisteredToolchainsFunction.InvalidToolchainLabelException;
 import com.google.devtools.build.lib.skyframe.ToolchainResolutionFunction.NoToolchainFoundException;
@@ -112,9 +110,7 @@ public class ToolchainUtil {
    */
   @Nullable
   private static PlatformInfo findPlatformInfo(
-      ValueOrException<ConfiguredValueCreationException> valueOrException,
-      String platformType,
-      Environment env)
+      ValueOrException<ConfiguredValueCreationException> valueOrException, String platformType)
       throws ConfiguredValueCreationException, ToolchainContextException {
 
     ConfiguredTargetValue ctv = (ConfiguredTargetValue) valueOrException.get();
@@ -123,20 +119,10 @@ public class ToolchainUtil {
     }
 
     ConfiguredTarget configuredTarget = ctv.getConfiguredTarget();
-    Target target = null;
-    try {
-      target =
-          ((PackageValue)
-                  env.getValue(
-                      PackageValue.key(configuredTarget.getLabel().getPackageIdentifier())))
-              .getPackage()
-              .getTarget(configuredTarget.getLabel().getName());
-    } catch (NoSuchTargetException | InterruptedException e) {
-      throw new IllegalStateException("Unable to get Target when computing PlatformInfo.", e);
-    }
     PlatformInfo platformInfo = PlatformProviderUtils.platform(configuredTarget);
     if (platformInfo == null) {
-      throw new ToolchainContextException(new InvalidPlatformException(platformType, target));
+      throw new ToolchainContextException(
+          new InvalidPlatformException(platformType, configuredTarget));
     }
 
     return platformInfo;
@@ -164,9 +150,9 @@ public class ToolchainUtil {
     boolean valuesMissing = env.valuesMissing();
     try {
       PlatformInfo execPlatform =
-          findPlatformInfo(values.get(executionPlatformKey), "execution platform", env);
+          findPlatformInfo(values.get(executionPlatformKey), "execution platform");
       PlatformInfo targetPlatform =
-          findPlatformInfo(values.get(targetPlatformKey), "target platform", env);
+          findPlatformInfo(values.get(targetPlatformKey), "target platform");
 
       if (valuesMissing) {
         return null;
@@ -261,11 +247,11 @@ public class ToolchainUtil {
 
   /** Exception used when a platform label is not a valid platform. */
   public static final class InvalidPlatformException extends Exception {
-    public InvalidPlatformException(String platformType, Target target) {
+    public InvalidPlatformException(String platformType, ConfiguredTarget resolvedTarget) {
       super(
           String.format(
               "Target %s was found as the %s, but does not provide PlatformInfo",
-              target, platformType));
+              resolvedTarget.getTarget(), platformType));
     }
   }
 

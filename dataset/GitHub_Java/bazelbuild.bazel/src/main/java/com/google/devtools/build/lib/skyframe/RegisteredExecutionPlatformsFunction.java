@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.PlatformConfiguration;
@@ -49,9 +48,7 @@ public class RegisteredExecutionPlatformsFunction implements SkyFunction {
     // Get the execution platforms from the configuration.
     PlatformConfiguration platformConfiguration =
         configuration.getFragment(PlatformConfiguration.class);
-    if (platformConfiguration != null) {
-      registeredExecutionPlatformLabels.addAll(platformConfiguration.getExtraExecutionPlatforms());
-    }
+    registeredExecutionPlatformLabels.addAll(platformConfiguration.getExtraExecutionPlatforms());
 
     // Get the registered execution platforms from the WORKSPACE.
     List<Label> workspaceExecutionPlatforms = getWorkspaceExecutionPlatforms(env);
@@ -77,9 +74,7 @@ public class RegisteredExecutionPlatformsFunction implements SkyFunction {
    * @param env the environment to use for lookups
    */
   @Nullable
-  @VisibleForTesting
-  public static List<Label> getWorkspaceExecutionPlatforms(Environment env)
-      throws InterruptedException {
+  private List<Label> getWorkspaceExecutionPlatforms(Environment env) throws InterruptedException {
     PackageValue externalPackageValue =
         (PackageValue) env.getValue(PackageValue.key(Label.EXTERNAL_PACKAGE_IDENTIFIER));
     if (externalPackageValue == null) {
