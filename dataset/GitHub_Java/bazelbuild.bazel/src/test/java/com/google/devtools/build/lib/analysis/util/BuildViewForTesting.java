@@ -325,16 +325,15 @@ public class BuildViewForTesting {
     }
 
     DependencyResolver dependencyResolver = new SilentDependencyResolver();
-    BuildConfiguration configuration =
-        skyframeExecutor.getConfiguration(eventHandler, ct.getConfigurationKey());
-    TargetAndConfiguration ctgNode = new TargetAndConfiguration(target, configuration);
+    TargetAndConfiguration ctgNode =
+        new TargetAndConfiguration(
+            target, skyframeExecutor.getConfiguration(eventHandler, ct.getConfigurationKey()));
     return dependencyResolver.dependentNodeMap(
         ctgNode,
         configurations.getHostConfiguration(),
         /*aspect=*/ null,
         getConfigurableAttributeKeysForTesting(eventHandler, ctgNode),
         toolchainContexts,
-        DependencyResolver.shouldUseToolchainTransition(configuration, target),
         ruleClassProvider.getTrimmingTransitionFactory());
   }
 
