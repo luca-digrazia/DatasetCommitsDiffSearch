@@ -3,14 +3,8 @@ package io.quarkus.bootstrap;
 import io.quarkus.bootstrap.app.AdditionalDependency;
 import io.quarkus.bootstrap.app.CuratedApplication;
 import io.quarkus.bootstrap.app.QuarkusBootstrap;
-import io.quarkus.bootstrap.devmode.DependenciesFilter;
-import io.quarkus.bootstrap.model.AppArtifactKey;
-import io.quarkus.bootstrap.model.gradle.QuarkusModel;
-import io.quarkus.bootstrap.model.gradle.WorkspaceModule;
-import io.quarkus.bootstrap.resolver.maven.BootstrapMavenContext;
-import io.quarkus.bootstrap.resolver.maven.MavenArtifactResolver;
-import io.quarkus.bootstrap.resolver.maven.workspace.LocalProject;
-import io.quarkus.bootstrap.util.PathsUtils;
+import io.quarkus.bootstrap.resolver.model.QuarkusModel;
+import io.quarkus.bootstrap.resolver.model.WorkspaceModule;
 import io.quarkus.bootstrap.util.QuarkusModelHelper;
 import io.quarkus.bootstrap.utils.BuildToolHelper;
 import java.io.Closeable;
@@ -26,20 +20,19 @@ import java.util.Map;
  */
 public class IDELauncherImpl implements Closeable {
 
-    public static Closeable launch(Path classesDir, Map<String, Object> context) {
-        final Path projectDir = BuildToolHelper.getProjectDir(classesDir);
-        if (projectDir == null) {
-            throw new IllegalStateException("Failed to locate project dir for " + classesDir);
-        }
+    public static Closeable launch(Path projectRoot, Map<String, Object> context) {
         try {
             //todo : proper support for everything
             final QuarkusBootstrap.Builder builder = QuarkusBootstrap.builder()
+                    .setApplicationRoot(projectRoot)
                     .setBaseClassLoader(IDELauncherImpl.class.getClassLoader())
+                    .setProjectRoot(projectRoot)
                     .setIsolateDeployment(true)
                     .setMode(QuarkusBootstrap.Mode.DEV)
-                    .setTargetDirectory(classesDir.getParent());
-            if (BuildToolHelper.isGradleProject(classesDir)) {
-                final QuarkusModel quarkusModel = BuildToolHelper.enableGradleAppModelForDevMode(classesDir);
+                    .setTargetDirectory(projectRoot.getParent());
+
+            if (BuildToolHelper.isGradleProject(projectRoot)) {
+                final QuarkusModel quarkusModel = BuildToolHelper.enableGradleAppModelForDevMode(projectRoot);
                 context.put(QuarkusModelHelper.SERIALIZED_QUARKUS_MODEL,
                         QuarkusModelHelper.serializeQuarkusModel(quarkusModel));
 
@@ -53,29 +46,12 @@ public class IDELauncherImpl implements Closeable {
                 for (WorkspaceModule additionalModule : quarkusModel.getWorkspace().getAllModules()) {
                     if (!additionalModule.getArtifactCoords().equals(launchingModule.getArtifactCoords())) {
                         builder.addAdditionalApplicationArchive(new AdditionalDependency(
-                                PathsUtils.toPathsCollection(additionalModule.getSourceSet().getSourceDirectories()),
+                                QuarkusModelHelper.toPathsCollection(additionalModule.getSourceSet().getSourceDirectories()),
                                 true, false));
                         builder.addAdditionalApplicationArchive(new AdditionalDependency(
-                                PathsUtils.toPathsCollection(additionalModule.getSourceSet().getResourceDirectories()),
-                                true, false));
+                                additionalModule.getSourceSet().getResourceDirectory().toPath(), true, false));
                     }
                 }
-            } else {
-                builder.setApplicationRoot(classesDir)
-                        .setProjectRoot(projectDir);
-
-                final BootstrapMavenContext mvnCtx = new BootstrapMavenContext(
-                        BootstrapMavenContext.config().setCurrentProject(projectDir.toString()));
-
-                final LocalProject currentProject = mvnCtx.getCurrentProject();
-                context.put("app-project", currentProject);
-
-                final MavenArtifactResolver mvnResolver = new MavenArtifactResolver(mvnCtx);
-                builder.setMavenArtifactResolver(mvnResolver);
-
-                DependenciesFilter.filterNotReloadableDependencies(currentProject, mvnResolver)
-                        .forEach(p -> builder
-                                .addLocalArtifact(new AppArtifactKey(p.getGroupId(), p.getArtifactId(), null, "jar")));
             }
 
             final CuratedApplication curatedApp = builder.build().bootstrap();
