@@ -64,7 +64,6 @@ import org.hibernate.service.spi.ServiceContributor;
 import org.hibernate.tool.hbm2ddl.ImportSqlCommandExtractorInitiator;
 import org.hibernate.tool.schema.internal.SchemaManagementToolInitiator;
 
-import io.quarkus.hibernate.orm.runtime.boot.QuarkusEnvironment;
 import io.quarkus.hibernate.orm.runtime.service.DialectFactoryInitiator;
 import io.quarkus.hibernate.orm.runtime.service.DisabledJMXInitiator;
 import io.quarkus.hibernate.orm.runtime.service.QuarkusRegionFactoryInitiator;
@@ -90,7 +89,7 @@ public final class RecordableBootstrap extends StandardServiceRegistryBuilder {
     }
 
     public RecordableBootstrap(BootstrapServiceRegistry bootstrapServiceRegistry, LoadedConfig loadedConfigBaseline) {
-        this.settings = QuarkusEnvironment.getInitialProperties();
+        this.settings = Environment.getProperties();
         this.bootstrapServiceRegistry = bootstrapServiceRegistry;
         this.configLoader = new ConfigLoader(bootstrapServiceRegistry);
         this.aggregatedCfgXml = loadedConfigBaseline;
