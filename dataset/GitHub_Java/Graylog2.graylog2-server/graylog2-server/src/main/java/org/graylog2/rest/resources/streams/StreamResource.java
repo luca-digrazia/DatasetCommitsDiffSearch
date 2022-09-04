@@ -24,7 +24,6 @@ import com.codahale.metrics.annotation.Timed;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.google.common.collect.Maps;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
-import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.graylog2.Core;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.database.ValidationException;
@@ -34,7 +33,6 @@ import org.graylog2.plugin.streams.StreamRule;
 import org.graylog2.rest.documentation.annotations.*;
 import org.graylog2.rest.resources.RestResource;
 import org.graylog2.rest.resources.streams.requests.CreateRequest;
-import org.graylog2.security.RestPermissions;
 import org.graylog2.streams.StreamImpl;
 import org.graylog2.streams.StreamRouter;
 import org.graylog2.streams.StreamRuleImpl;
@@ -65,7 +63,6 @@ public class StreamResource extends RestResource {
 
     @POST @Timed
     @ApiOperation(value = "Create a stream")
-    @RequiresPermissions(RestPermissions.STREAMS_CREATE)
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     public Response create(@ApiParam(title = "JSON body", required = true) String body) {
@@ -126,9 +123,7 @@ public class StreamResource extends RestResource {
     public String get() {
         List<Map<String, Object>> streams = Lists.newArrayList();
         for (Stream stream : StreamImpl.loadAll(core)) {
-            if (isPermitted(RestPermissions.STREAMS_READ, stream.getId())) {
-               streams.add(((StreamImpl) stream).asMap());
-            }
+        	streams.add(((StreamImpl) stream).asMap());
         }
         
         Map<String, Object> result = Maps.newHashMap();
@@ -144,9 +139,7 @@ public class StreamResource extends RestResource {
     public String getEnabled() {
         List<Map<String, Object>> streams = Lists.newArrayList();
         for (Stream stream : StreamImpl.loadAllEnabled(core)) {
-            if (isPermitted(RestPermissions.STREAMS_READ, stream.getId())) {
-                streams.add(((StreamImpl) stream).asMap());
-            }
+            streams.add(((StreamImpl) stream).asMap());
         }
 
         Map<String, Object> result = Maps.newHashMap();
@@ -168,7 +161,6 @@ public class StreamResource extends RestResource {
         	LOG.error("Missing streamId. Returning HTTP 400.");
         	throw new WebApplicationException(400);
         }
-        checkPermission(RestPermissions.STREAMS_READ, streamId);
 
         StreamImpl stream;
         try {
@@ -191,7 +183,7 @@ public class StreamResource extends RestResource {
         	LOG.error("Missing streamId. Returning HTTP 400.");
         	throw new WebApplicationException(400);
         }
-        checkPermission(RestPermissions.STREAMS_EDIT, streamId);
+
         try {
         	StreamImpl stream = StreamImpl.load(loadObjectId(streamId), core);
         	stream.destroy();
@@ -213,7 +205,6 @@ public class StreamResource extends RestResource {
             LOG.error("Missing streamId. Returning HTTP 400.");
             throw new WebApplicationException(400);
         }
-        checkPermission(RestPermissions.STREAMS_CHANGESTATE, streamId);
 
         try {
             StreamImpl stream = StreamImpl.load(loadObjectId(streamId), core);
@@ -236,7 +227,6 @@ public class StreamResource extends RestResource {
             LOG.error("Missing streamId. Returning HTTP 400.");
             throw new WebApplicationException(400);
         }
-        checkPermission(RestPermissions.STREAMS_CHANGESTATE, streamId);
 
         try {
             StreamImpl stream = StreamImpl.load(loadObjectId(streamId), core);
@@ -259,7 +249,6 @@ public class StreamResource extends RestResource {
             LOG.error("Missing parameters. Returning HTTP 400.");
             throw new WebApplicationException(400);
         }
-        checkPermission(RestPermissions.STREAMS_READ, streamId);
 
         Map<String, Map<String, Object>> serialisedMessage;
         try {

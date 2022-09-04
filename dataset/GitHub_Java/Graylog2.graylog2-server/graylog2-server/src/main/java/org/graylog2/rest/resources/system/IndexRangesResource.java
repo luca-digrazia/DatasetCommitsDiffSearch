@@ -23,7 +23,6 @@ import com.codahale.metrics.annotation.Timed;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
-import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.graylog2.indexer.ranges.IndexRange;
 import org.graylog2.indexer.ranges.RebuildIndexRangesJob;
 import org.graylog2.plugin.Tools;
@@ -32,7 +31,6 @@ import org.graylog2.rest.documentation.annotations.ApiOperation;
 import org.graylog2.rest.documentation.annotations.ApiResponse;
 import org.graylog2.rest.documentation.annotations.ApiResponses;
 import org.graylog2.rest.resources.RestResource;
-import org.graylog2.security.RestPermissions;
 import org.graylog2.system.jobs.SystemJob;
 import org.graylog2.system.jobs.SystemJobConcurrencyException;
 import org.joda.time.DateTime;
@@ -63,9 +61,6 @@ public class IndexRangesResource extends RestResource {
         List<Map<String, Object>> ranges = Lists.newArrayList();
 
         for (IndexRange range : IndexRange.getFrom(core, 0)) {
-            if (!isPermitted(RestPermissions.INDEXRANGES_READ, range.getIndexName())) {
-                continue;
-            }
             Map<String, Object> rangeInfo = Maps.newHashMap();
 
             // Calculated at and the calculation time in ms are not always set, depending on how/why the entry was created.
@@ -93,7 +88,6 @@ public class IndexRangesResource extends RestResource {
 
     @POST @Timed
     @Path("/rebuild")
-    @RequiresPermissions(RestPermissions.INDEXRANGES_REBUILD)
     @ApiOperation(value = "Rebuild/sync index range information.",
                   notes = "This triggers a systemjob that scans every index and stores meta information " +
                           "about what indices contain messages in what timeranges. It atomically overwrites " +

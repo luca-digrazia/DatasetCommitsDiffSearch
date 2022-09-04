@@ -34,7 +34,6 @@ import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.rest.documentation.annotations.*;
 import org.graylog2.rest.resources.RestResource;
 import org.graylog2.rest.resources.system.inputs.requests.InputLaunchRequest;
-import org.graylog2.security.RestPermissions;
 import org.graylog2.system.activities.Activity;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
@@ -67,8 +66,6 @@ public class InputsResource extends RestResource {
             @ApiResponse(code = 404, message = "No such input on this node.")
     })
     public String single(@ApiParam(title = "inputId", required = true) @PathParam("inputId") String inputId) {
-        checkPermission(RestPermissions.INPUTS_READ, inputId);
-
         MessageInput input = core.inputs().getRunningInputs().get(inputId);
 
         if (input == null) {
@@ -87,7 +84,6 @@ public class InputsResource extends RestResource {
         List<Map<String, Object>> inputs = Lists.newArrayList();
 
         for (MessageInput input : core.inputs().getRunningInputs().values()) {
-            checkPermission(RestPermissions.INPUTS_READ, input.getId());
             inputs.add(input.asMap());
         }
 
@@ -108,8 +104,6 @@ public class InputsResource extends RestResource {
             @ApiResponse(code = 400, message = "Type is exclusive and already has input running")
     })
     public Response create(@ApiParam(title = "JSON body", required = true) String body) {
-        checkPermission(RestPermissions.INPUTS_CREATE);
-
         InputLaunchRequest lr;
         try {
             lr = objectMapper.readValue(body, InputLaunchRequest.class);
@@ -204,8 +198,6 @@ public class InputsResource extends RestResource {
             @ApiResponse(code = 404, message = "No such input on this node.")
     })
     public Response terminate(@ApiParam(title = "inputId", required = true) @PathParam("inputId") String inputId) {
-        checkPermission(RestPermissions.INPUTS_TERMINATE, inputId);
-
         MessageInput input = core.inputs().getRunningInputs().get(inputId);
 
         String msg = "Attempting to terminate input [" + input.getName()+ "]. Reason: REST request.";

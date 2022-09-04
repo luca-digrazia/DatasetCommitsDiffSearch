@@ -38,7 +38,6 @@ import org.elasticsearch.common.collect.UnmodifiableIterator;
 import org.graylog2.indexer.ranges.RebuildIndexRangesJob;
 import org.graylog2.rest.documentation.annotations.*;
 import org.graylog2.rest.resources.RestResource;
-import org.graylog2.security.RestPermissions;
 import org.graylog2.system.jobs.SystemJob;
 import org.graylog2.system.jobs.SystemJobConcurrencyException;
 import org.slf4j.Logger;
@@ -68,8 +67,6 @@ public class IndicesResource extends RestResource {
     @ApiOperation(value = "Get information of an index and its shards.")
     @Produces(MediaType.APPLICATION_JSON)
     public Response single(@ApiParam(title = "index") @PathParam("index") String index) {
-        checkPermission(RestPermissions.INDICES_READ, index);
-
         Map<String, Object> result = Maps.newHashMap();
 
         IndexStats indexStats;
@@ -124,9 +121,7 @@ public class IndicesResource extends RestResource {
                 if (!indexMeta.getIndex().startsWith(core.getConfiguration().getElasticSearchIndexPrefix())) {
                     continue;
                 }
-                if (!isPermitted(RestPermissions.INDICES_READ, indexMeta.getIndex())) {
-                    continue;
-                }
+
                 if(indexMeta.getState().equals(IndexMetaData.State.CLOSE)) {
                     closedIndices.add(indexMeta.getIndex());
                 }
@@ -147,8 +142,6 @@ public class IndicesResource extends RestResource {
     @ApiOperation(value = "Reopen a closed index. This will also trigger an index ranges rebuild job.")
     @Produces(MediaType.APPLICATION_JSON)
     public Response reopen(@ApiParam(title = "index") @PathParam("index") String index) {
-        checkPermission(RestPermissions.INDICES_CHANGESTATE, index);
-
         // Mark this index as re-opened. It will never be touched by retention.
         UpdateSettingsRequest settings = new UpdateSettingsRequest(index);
         settings.settings(new HashMap() {{
@@ -179,8 +172,6 @@ public class IndicesResource extends RestResource {
             @ApiResponse(code = 403, message = "You cannot close the current deflector target index.")
     })
     public Response close(@ApiParam(title = "index") @PathParam("index") String index) {
-        checkPermission(RestPermissions.INDICES_CHANGESTATE, index);
-
         if (core.getDeflector().getCurrentActualTargetIndex().equals(index)) {
             return Response.status(403).build();
         }
@@ -202,14 +193,12 @@ public class IndicesResource extends RestResource {
 
     @DELETE @Timed
     @Path("/{index}")
-    @ApiOperation(value = "Delete an index. This will also trigger an index ranges rebuild job.")
+    @ApiOperation(value = "Close an index. This will also trigger an index ranges rebuild job.")
     @Produces(MediaType.APPLICATION_JSON)
     @ApiResponses(value = {
             @ApiResponse(code = 403, message = "You cannot delete the current deflector target index.")
     })
     public Response delete(@ApiParam(title = "index") @PathParam("index") String index) {
-        checkPermission(RestPermissions.INDICES_DELETE, index);
-
         if (core.getDeflector().getCurrentActualTargetIndex().equals(index)) {
             return Response.status(403).build();
         }
