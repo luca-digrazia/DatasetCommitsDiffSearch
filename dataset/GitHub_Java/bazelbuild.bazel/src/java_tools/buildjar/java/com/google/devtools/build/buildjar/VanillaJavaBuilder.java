@@ -20,8 +20,6 @@ import static java.util.Locale.ENGLISH;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
-import com.google.common.io.MoreFiles;
-import com.google.common.io.RecursiveDeleteOption;
 import com.google.devtools.build.buildjar.jarhelper.JarCreator;
 import com.google.devtools.build.buildjar.javac.JavacOptions;
 import com.google.devtools.build.buildjar.proto.JavaCompilation.Manifest;
@@ -52,6 +50,7 @@ import javax.tools.DiagnosticCollector;
 import javax.tools.JavaCompiler;
 import javax.tools.JavaCompiler.CompilationTask;
 import javax.tools.JavaFileObject;
+import javax.tools.JavaFileObject.Kind;
 import javax.tools.SimpleJavaFileObject;
 import javax.tools.StandardJavaFileManager;
 import javax.tools.StandardLocation;
@@ -371,7 +370,24 @@ public class VanillaJavaBuilder implements Closeable {
   private static void createOutputDirectory(Path dir) throws IOException {
     if (Files.exists(dir)) {
       try {
-        MoreFiles.deleteRecursively(dir, RecursiveDeleteOption.ALLOW_INSECURE);
+        // TODO(b/27069912): handle symlinks
+        Files.walkFileTree(
+            dir,
+            new SimpleFileVisitor<Path>() {
+              @Override
+              public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
+                  throws IOException {
+                Files.delete(file);
+                return FileVisitResult.CONTINUE;
+              }
+
+              @Override
+              public FileVisitResult postVisitDirectory(Path dir, IOException exc)
+                  throws IOException {
+                Files.delete(dir);
+                return FileVisitResult.CONTINUE;
+              }
+            });
       } catch (IOException e) {
         throw new IOException("Cannot clean output directory '" + dir + "'", e);
       }
