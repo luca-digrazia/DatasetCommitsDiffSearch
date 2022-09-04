@@ -55,9 +55,6 @@ final class ActionExecutionState {
    *
    * <p>The reason for this roundabout approach is to avoid memory allocation if this is not a
    * shared action, and to release the memory once the action is done.
-   *
-   * <p>Skyframe will attempt to cancel this future if the evaluation is interrupted, which violates
-   * the concurrency assumptions this class makes. Beware!
    */
   @GuardedBy("this")
   @Nullable
@@ -68,7 +65,7 @@ final class ActionExecutionState {
     this.state = Preconditions.checkNotNull(state);
   }
 
-  ActionExecutionValue getResultOrDependOnFuture(
+  public ActionExecutionValue getResultOrDependOnFuture(
       SkyFunction.Environment env,
       ActionLookupData actionLookupData,
       Action action,
@@ -93,26 +90,9 @@ final class ActionExecutionState {
         // again after the future is completed.
         sharedActionCallback.actionStarted();
         env.dependOnFuture(completionFuture);
-        if (!env.valuesMissing()) {
-          Preconditions.checkState(
-              completionFuture.isCancelled(), "%s %s", this.actionLookupData, actionLookupData);
-          // The future is unexpectedly done. This must be because it was registered by another
-          // thread earlier and was canceled by Skyframe. We are about to be interrupted ourselves,
-          // but have to do something in the meantime. We can just register a dep with a new future,
-          // then complete it and return. If for some reason this argument is incorrect, we will be
-          // restarted immediately and hopefully have a more consistent result.
-          SettableFuture<Void> dummyFuture = SettableFuture.create();
-          env.dependOnFuture(dummyFuture);
-          dummyFuture.set(null);
-          return null;
-        }
-        // No other thread can modify completionFuture until we exit the synchronized block.
-        Preconditions.checkState(
-            !completionFuture.isDone(),
-            "Completion future modified? %s %s %s",
-            this.actionLookupData,
-            actionLookupData,
-            action);
+        // No other thread can access completionFuture until we exit the synchronized block.
+        Preconditions.checkState(!completionFuture.isDone(), state);
+        Preconditions.checkState(env.valuesMissing(), state);
         return null;
       }
       result = state.get();

@@ -17,7 +17,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -74,7 +73,6 @@ import com.google.devtools.build.lib.actions.ScanningActionEvent;
 import com.google.devtools.build.lib.actions.SpawnResult.MetadataLog;
 import com.google.devtools.build.lib.actions.StoppedScanningActionEvent;
 import com.google.devtools.build.lib.actions.TargetOutOfDateException;
-import com.google.devtools.build.lib.actions.UserExecException;
 import com.google.devtools.build.lib.actions.cache.MetadataHandler;
 import com.google.devtools.build.lib.buildtool.BuildRequestOptions;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -638,15 +636,9 @@ public final class SkyframeActionExecutor {
       MetadataHandler metadataHandler,
       long actionStartTime,
       Iterable<Artifact> resolvedCacheArtifacts,
-      Map<String, String> clientEnv)
-      throws ActionExecutionException {
+      Map<String, String> clientEnv) {
     Token token;
     try (SilentCloseable c = profiler.profile(ProfilerTask.ACTION_CHECK, action.describe())) {
-      RemoteOptions remoteOptions = this.options.getOptions(RemoteOptions.class);
-      SortedMap<String, String> remoteDefaultProperties =
-          remoteOptions != null
-              ? remoteOptions.getRemoteDefaultExecProperties()
-              : ImmutableSortedMap.of();
       token =
           actionCacheChecker.getTokenIfNeedToExecute(
               action,
@@ -655,10 +647,7 @@ public final class SkyframeActionExecutor {
               options.getOptions(BuildRequestOptions.class).explanationPath != null
                   ? reporter
                   : null,
-              metadataHandler,
-              remoteDefaultProperties);
-    } catch (UserExecException e) {
-      throw e.toActionExecutionException(action);
+              metadataHandler);
     }
     if (token == null) {
       boolean eventPosted = false;
@@ -705,25 +694,12 @@ public final class SkyframeActionExecutor {
   }
 
   void updateActionCache(
-      Action action, MetadataHandler metadataHandler, Token token, Map<String, String> clientEnv)
-      throws ActionExecutionException {
+      Action action, MetadataHandler metadataHandler, Token token, Map<String, String> clientEnv) {
     if (!actionCacheChecker.enabled()) {
       return;
     }
-    final SortedMap<String, String> remoteDefaultProperties;
     try {
-      RemoteOptions remoteOptions = this.options.getOptions(RemoteOptions.class);
-      remoteDefaultProperties =
-          remoteOptions != null
-              ? remoteOptions.getRemoteDefaultExecProperties()
-              : ImmutableSortedMap.of();
-    } catch (UserExecException e) {
-      throw e.toActionExecutionException(action);
-    }
-
-    try {
-      actionCacheChecker.updateActionCache(
-          action, token, metadataHandler, clientEnv, remoteDefaultProperties);
+      actionCacheChecker.updateActionCache(action, token, metadataHandler, clientEnv);
     } catch (IOException e) {
       // Skyframe has already done all the filesystem access needed for outputs and swallows
       // IOExceptions for inputs. So an IOException is impossible here.
@@ -844,7 +820,7 @@ public final class SkyframeActionExecutor {
         Action action,
         ActionMetadataHandler metadataHandler,
         Map<String, String> clientEnv)
-        throws InterruptedException, ActionExecutionException;
+        throws InterruptedException;
   }
 
   private static ActionContinuationOrResult begin(
@@ -1175,8 +1151,6 @@ public final class SkyframeActionExecutor {
           }
         } catch (InterruptedException e) {
           return ActionStepOrResult.of(e);
-        } catch (ActionExecutionException e) {
-          return ActionStepOrResult.of(e);
         }
         return ActionStepOrResult.of(value);
       }
@@ -1491,7 +1465,8 @@ public final class SkyframeActionExecutor {
       // output into memory; as the output of regular actions (as opposed to test runs) usually is
       // short, so this should not be a problem. If it does turn out to be a problem, we have to
       // pass the outErrbuffer instead.
-      reporter.handle(prefixEvent.withStdoutStderr(outErrBuffer));
+      reporter.handle(
+          prefixEvent.withStdoutStderr(outErrBuffer.outAsLatin1(), outErrBuffer.errAsLatin1()));
     } else {
       reporter.handle(prefixEvent);
     }
