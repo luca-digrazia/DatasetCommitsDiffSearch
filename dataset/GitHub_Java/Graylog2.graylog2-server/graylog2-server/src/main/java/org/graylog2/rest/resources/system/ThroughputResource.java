@@ -40,6 +40,8 @@ import java.util.Map;
 @Path("/system/throughput")
 public class ThroughputResource extends RestResource {
 
+    private static final Logger LOG = LoggerFactory.getLogger(ThroughputResource.class);
+
     @GET @Timed
     @ApiOperation(value = "Current throughput of this node in messages per second")
     @Produces(MediaType.APPLICATION_JSON)
