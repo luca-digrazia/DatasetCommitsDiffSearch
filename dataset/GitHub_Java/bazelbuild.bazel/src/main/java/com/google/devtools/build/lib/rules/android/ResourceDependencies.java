@@ -15,8 +15,8 @@ package com.google.devtools.build.lib.rules.android;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -57,8 +57,6 @@ public final class ResourceDependencies {
 
   private final NestedSet<Artifact> transitiveSymbolsBin;
 
-  private final NestedSet<Artifact> transitiveCompiledSymbols;
-
   private final NestedSet<Artifact> transitiveStaticLib;
 
   private final NestedSet<Artifact> transitiveRTxt;
@@ -77,7 +75,6 @@ public final class ResourceDependencies {
     NestedSetBuilder<Artifact> transitiveManifests = NestedSetBuilder.naiveLinkOrder();
     NestedSetBuilder<Artifact> transitiveAapt2RTxt = NestedSetBuilder.naiveLinkOrder();
     NestedSetBuilder<Artifact> transitiveSymbolsBin = NestedSetBuilder.naiveLinkOrder();
-    NestedSetBuilder<Artifact> transitiveCompiledSymbols = NestedSetBuilder.naiveLinkOrder();
     NestedSetBuilder<Artifact> transitiveStaticLib = NestedSetBuilder.naiveLinkOrder();
     NestedSetBuilder<Artifact> transitiveRTxt = NestedSetBuilder.naiveLinkOrder();
     extractFromAttributes(
@@ -89,7 +86,6 @@ public final class ResourceDependencies {
         transitiveManifests,
         transitiveAapt2RTxt,
         transitiveSymbolsBin,
-        transitiveCompiledSymbols,
         transitiveStaticLib,
         transitiveRTxt);
     return new ResourceDependencies(
@@ -100,7 +96,6 @@ public final class ResourceDependencies {
         transitiveManifests.build(),
         transitiveAapt2RTxt.build(),
         transitiveSymbolsBin.build(),
-        transitiveCompiledSymbols.build(),
         transitiveStaticLib.build(),
         transitiveRTxt.build());
   }
@@ -112,7 +107,6 @@ public final class ResourceDependencies {
     NestedSetBuilder<Artifact> transitiveManifests = NestedSetBuilder.naiveLinkOrder();
     NestedSetBuilder<Artifact> transitiveAapt2RTxt = NestedSetBuilder.naiveLinkOrder();
     NestedSetBuilder<Artifact> transitiveSymbolsBin = NestedSetBuilder.naiveLinkOrder();
-    NestedSetBuilder<Artifact> transitiveCompiledSymbols = NestedSetBuilder.naiveLinkOrder();
     NestedSetBuilder<Artifact> transitiveStaticLib = NestedSetBuilder.naiveLinkOrder();
     NestedSetBuilder<Artifact> transitiveRTxt = NestedSetBuilder.naiveLinkOrder();
     extractFromAttributes(
@@ -124,7 +118,6 @@ public final class ResourceDependencies {
         transitiveManifests,
         transitiveAapt2RTxt,
         transitiveSymbolsBin,
-        transitiveCompiledSymbols,
         transitiveStaticLib,
         transitiveRTxt);
     return new ResourceDependencies(
@@ -135,7 +128,6 @@ public final class ResourceDependencies {
         transitiveManifests.build(),
         transitiveAapt2RTxt.build(),
         transitiveSymbolsBin.build(),
-        transitiveCompiledSymbols.build(),
         transitiveStaticLib.build(),
         transitiveRTxt.build());
   }
@@ -148,7 +140,6 @@ public final class ResourceDependencies {
     NestedSetBuilder<Artifact> transitiveManifests = NestedSetBuilder.naiveLinkOrder();
     NestedSetBuilder<Artifact> transitiveAapt2RTxt = NestedSetBuilder.naiveLinkOrder();
     NestedSetBuilder<Artifact> transitiveSymbolsBin = NestedSetBuilder.naiveLinkOrder();
-    NestedSetBuilder<Artifact> transitiveCompiledSymbols = NestedSetBuilder.naiveLinkOrder();
     NestedSetBuilder<Artifact> transitiveStaticLib = NestedSetBuilder.naiveLinkOrder();
     NestedSetBuilder<Artifact> transitiveRTxt = NestedSetBuilder.naiveLinkOrder();
     if (hasResourceAttribute(ruleContext)) {
@@ -161,7 +152,6 @@ public final class ResourceDependencies {
           transitiveManifests,
           transitiveAapt2RTxt,
           transitiveSymbolsBin,
-          transitiveCompiledSymbols,
           transitiveStaticLib,
           transitiveRTxt);
     }
@@ -177,7 +167,6 @@ public final class ResourceDependencies {
           transitiveManifests,
           transitiveAapt2RTxt,
           transitiveSymbolsBin,
-          transitiveCompiledSymbols,
           transitiveStaticLib,
           transitiveRTxt);
     } else {
@@ -193,7 +182,6 @@ public final class ResourceDependencies {
           transitiveManifests,
           transitiveAapt2RTxt,
           transitiveSymbolsBin,
-          transitiveCompiledSymbols,
           transitiveStaticLib,
           transitiveRTxt);
     }
@@ -205,7 +193,6 @@ public final class ResourceDependencies {
         transitiveManifests.build(),
         transitiveAapt2RTxt.build(),
         transitiveSymbolsBin.build(),
-        transitiveCompiledSymbols.build(),
         transitiveStaticLib.build(),
         transitiveRTxt.build());
   }
@@ -219,7 +206,6 @@ public final class ResourceDependencies {
       NestedSetBuilder<Artifact> transitiveManifests,
       NestedSetBuilder<Artifact> transitiveAapt2RTxt,
       NestedSetBuilder<Artifact> transitiveSymbolsBin,
-      NestedSetBuilder<Artifact> transitiveCompiledSymbols,
       NestedSetBuilder<Artifact> transitiveStaticLib,
       NestedSetBuilder<Artifact> transitiveRTxt) {
     AttributeMap attributes = ruleContext.attributes();
@@ -235,7 +221,6 @@ public final class ResourceDependencies {
         transitiveManifests.addTransitive(resources.getTransitiveManifests());
         transitiveAapt2RTxt.addTransitive(resources.getTransitiveAapt2RTxt());
         transitiveSymbolsBin.addTransitive(resources.getTransitiveSymbolsBin());
-        transitiveCompiledSymbols.addTransitive(resources.getTransitiveCompiledSymbols());
         transitiveStaticLib.addTransitive(resources.getTransitiveStaticLib());
         transitiveRTxt.addTransitive(resources.getTransitiveRTxt());
       }
@@ -275,7 +260,6 @@ public final class ResourceDependencies {
         NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER),
         NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER),
         NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER),
-        NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER),
         NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER));
   }
 
@@ -287,7 +271,6 @@ public final class ResourceDependencies {
       NestedSet<Artifact> transitiveManifests,
       NestedSet<Artifact> transitiveAapt2RTxt,
       NestedSet<Artifact> transitiveSymbolsBin,
-      NestedSet<Artifact> transitiveCompiledSymbols,
       NestedSet<Artifact> transitiveStaticLib,
       NestedSet<Artifact> transitiveRTxt) {
     this.neverlink = neverlink;
@@ -297,7 +280,6 @@ public final class ResourceDependencies {
     this.transitiveManifests = transitiveManifests;
     this.transitiveAapt2RTxt = transitiveAapt2RTxt;
     this.transitiveSymbolsBin = transitiveSymbolsBin;
-    this.transitiveCompiledSymbols = transitiveCompiledSymbols;
     this.transitiveStaticLib = transitiveStaticLib;
     this.transitiveRTxt = transitiveRTxt;
   }
@@ -315,7 +297,6 @@ public final class ResourceDependencies {
         transitiveManifests,
         transitiveAapt2RTxt,
         transitiveSymbolsBin,
-        transitiveCompiledSymbols,
         transitiveStaticLib,
         transitiveRTxt);
   }
@@ -358,11 +339,6 @@ public final class ResourceDependencies {
     if (newDirectResource.getSymbols() != null) {
       transitiveSymbolsBin.add(newDirectResource.getSymbols());
     }
-    NestedSetBuilder<Artifact> transitiveCompiledSymbols = NestedSetBuilder.naiveLinkOrder();
-    transitiveCompiledSymbols.addTransitive(this.transitiveCompiledSymbols);
-    if (newDirectResource.getCompiledSymbols() != null) {
-      transitiveCompiledSymbols.add(newDirectResource.getCompiledSymbols());
-    }
     NestedSetBuilder<Artifact> transitiveStaticLib = NestedSetBuilder.naiveLinkOrder();
     transitiveStaticLib.addTransitive(this.transitiveStaticLib);
     if (newDirectResource.getStaticLibrary() != null) {
@@ -384,7 +360,6 @@ public final class ResourceDependencies {
         transitiveManifests.build(),
         transitiveAapt2RTxt.build(),
         transitiveSymbolsBin.build(),
-        transitiveCompiledSymbols.build(),
         transitiveStaticLib.build(),
         transitiveRTxt.build(),
         isResourcesOnly);
@@ -415,7 +390,6 @@ public final class ResourceDependencies {
         transitiveManifests,
         transitiveAapt2RTxt,
         transitiveSymbolsBin,
-        transitiveCompiledSymbols,
         transitiveStaticLib,
         transitiveRTxt,
         isResourcesOnly);
@@ -451,14 +425,6 @@ public final class ResourceDependencies {
 
   public NestedSet<Artifact> getTransitiveSymbolsBin() {
     return transitiveSymbolsBin;
-  }
-
-  /**
-   * @return The transitive closure of compiled symbols.
-   * Compiled symbols are zip files containing the compiled resource output of aapt2 compile
-   */
-  public NestedSet<Artifact> getTransitiveCompiledSymbols() {
-    return transitiveCompiledSymbols;
   }
 
   public NestedSet<Artifact> getTransitiveStaticLib() {
