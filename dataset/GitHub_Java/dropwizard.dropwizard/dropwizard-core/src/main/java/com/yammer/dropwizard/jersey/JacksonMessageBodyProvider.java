@@ -5,6 +5,7 @@ import com.yammer.dropwizard.json.Json;
 import com.yammer.dropwizard.logging.Log;
 import com.yammer.dropwizard.validation.InvalidEntityException;
 import com.yammer.dropwizard.validation.Validator;
+import org.codehaus.jackson.JsonProcessingException;
 import org.eclipse.jetty.io.EofException;
 
 import javax.validation.Valid;
@@ -13,6 +14,7 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.MultivaluedMap;
+import javax.ws.rs.core.Response;
 import javax.ws.rs.ext.MessageBodyReader;
 import javax.ws.rs.ext.MessageBodyWriter;
 import javax.ws.rs.ext.Provider;
@@ -74,7 +76,11 @@ public class JacksonMessageBodyProvider implements MessageBodyReader<Object>,
     }
 
     private Object parseEntity(Type genericType, InputStream entityStream) throws IOException {
-        return json.readValue(entityStream, genericType);
+        try {
+            return json.readValue(entityStream, genericType);
+        } catch (JsonProcessingException e) {
+            throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
+        }
     }
 
     @Override

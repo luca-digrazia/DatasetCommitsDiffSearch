@@ -2,6 +2,7 @@ package com.yammer.dropwizard.jersey;
 
 import com.yammer.dropwizard.jetty.UnbrandedErrorHandler;
 import com.yammer.dropwizard.logging.Log;
+import com.yammer.dropwizard.validation.InvalidEntityException;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.ws.rs.WebApplicationException;
@@ -35,13 +36,20 @@ public class LoggingExceptionMapper<E extends Throwable> implements ExceptionMap
 
         final StringWriter writer = new StringWriter(4096);
         try {
-            final long id = randomId();
-            logException(id, exception);
-            errorHandler.writeErrorPage(request,
-                                        writer,
-                                        500,
-                                        formatResponseEntity(id, exception),
-                                        false);
+
+            if (exception instanceof InvalidEntityException) {
+                errorHandler.writeValidationErrorPage(request,
+                                                      writer,
+                                                      (InvalidEntityException) exception);
+            } else {
+                final long id = randomId();
+                logException(id, exception);
+                errorHandler.writeErrorPage(request,
+                                            writer,
+                                            500,
+                                            formatResponseEntity(id, exception),
+                                            false);
+            }
         } catch (IOException e) {
             LOG.warn(e, "Unable to generate error page");
         }
@@ -56,7 +64,7 @@ public class LoggingExceptionMapper<E extends Throwable> implements ExceptionMap
         LOG.error(exception, formatLogMessage(id, exception));
     }
 
-    protected String formatResponseEntity(long id, Throwable exception) {
+    protected String formatResponseEntity(long id, E exception) {
         return String.format("There was an error processing your request. It has been logged (ID %016x).\n", id);
     }
 
