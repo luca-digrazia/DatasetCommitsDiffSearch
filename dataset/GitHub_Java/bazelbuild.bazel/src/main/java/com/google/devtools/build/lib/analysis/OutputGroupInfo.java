@@ -41,6 +41,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import javax.annotation.Nullable;
 
@@ -273,7 +274,7 @@ public final class OutputGroupInfo extends NativeInfo
       Map<String, Object> kwargs = (Map<String, Object>) args[0];
 
       ImmutableMap.Builder<String, NestedSet<Artifact>> builder = ImmutableMap.builder();
-      for (Map.Entry<String, Object> entry : kwargs.entrySet()) {
+      for (Entry<String, Object> entry : kwargs.entrySet()) {
         builder.put(
             entry.getKey(),
             SkylarkRuleConfiguredTargetUtil.convertToOutputGroupValue(

@@ -14,10 +14,12 @@
 package com.google.devtools.build.lib.rules.android;
 
 import com.google.common.collect.ImmutableList;
+import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.NativeInfo;
 import com.google.devtools.build.lib.packages.NativeProvider;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
 import com.google.devtools.build.lib.syntax.SkylarkType;
 
@@ -26,7 +28,8 @@ import com.google.devtools.build.lib.syntax.SkylarkType;
  * rule.
  */
 @SkylarkModule(name = "AndroidDex2OatInfo", doc = "", documented = false)
-public class AndroidDex2OatInfo extends NativeInfo {
+@Immutable
+public final class AndroidDex2OatInfo extends NativeInfo {
 
   private static final String SKYLARK_NAME = "AndroidDex2OatInfo";
   private static final FunctionSignature.WithValues<Object, SkylarkType> SIGNATURE =
@@ -43,7 +46,8 @@ public class AndroidDex2OatInfo extends NativeInfo {
   public static final NativeProvider<AndroidDex2OatInfo> PROVIDER =
       new NativeProvider<AndroidDex2OatInfo>(AndroidDex2OatInfo.class, SKYLARK_NAME, SIGNATURE) {
         @Override
-        protected AndroidDex2OatInfo createInstanceFromSkylark(Object[] args, Location loc) {
+        protected AndroidDex2OatInfo createInstanceFromSkylark(
+            Object[] args, Environment env, Location loc) {
           return new AndroidDex2OatInfo(/*dex2OatEnabled=*/ (Boolean) args[0]);
         }
       };

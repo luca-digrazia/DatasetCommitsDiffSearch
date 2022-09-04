@@ -18,7 +18,6 @@ import com.google.common.base.Throwables;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
-import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkSignature;
 import com.google.devtools.build.lib.syntax.Environment.LexicalFrame;
@@ -138,7 +137,8 @@ public class BuiltinFunction extends BaseFunction {
 
   @Override
   @Nullable
-  public Object call(Object[] args, @Nullable FuncallExpression ast, Environment env)
+  public Object call(Object[] args,
+      FuncallExpression ast, Environment env)
       throws EvalException, InterruptedException {
     Preconditions.checkNotNull(env);
 
@@ -166,9 +166,9 @@ public class BuiltinFunction extends BaseFunction {
       }
     }
 
+    Profiler.instance().startTask(ProfilerTask.SKYLARK_BUILTIN_FN, getName());
     // Last but not least, actually make an inner call to the function with the resolved arguments.
-    try (SilentCloseable c =
-        Profiler.instance().profile(ProfilerTask.SKYLARK_BUILTIN_FN, getName())) {
+    try {
       env.enterScope(this, SHARED_LEXICAL_FRAME_FOR_BUILTIN_FUNCTION_CALLS, ast, env.getGlobals());
       return invokeMethod.invoke(this, args);
     } catch (InvocationTargetException x) {
@@ -179,8 +179,10 @@ public class BuiltinFunction extends BaseFunction {
       } else if (e instanceof IllegalArgumentException) {
         throw new EvalException(loc, "illegal argument in call to " + getName(), e);
       }
-      Throwables.throwIfInstanceOf(e, InterruptedException.class);
-      Throwables.throwIfUnchecked(e);
+      // TODO(bazel-team): replace with Throwables.throwIfInstanceOf once Guava 20 is released.
+      Throwables.propagateIfInstanceOf(e, InterruptedException.class);
+      // TODO(bazel-team): replace with Throwables.throwIfUnchecked once Guava 20 is released.
+      Throwables.propagateIfPossible(e);
       throw badCallException(loc, e, args);
     } catch (IllegalArgumentException e) {
       // Either this was thrown by Java itself, or it's a bug
@@ -206,6 +208,7 @@ public class BuiltinFunction extends BaseFunction {
     } catch (IllegalAccessException e) {
       throw badCallException(loc, e, args);
     } finally {
+      Profiler.instance().completeTask(ProfilerTask.SKYLARK_BUILTIN_FN);
       env.exitScope();
     }
   }
@@ -225,7 +228,7 @@ public class BuiltinFunction extends BaseFunction {
         String.format(
             "%s%s (%s)\n"
                 + "while calling %s with args %s\n"
-                + "Java parameter types: %s\nStarlark type checks: %s",
+                + "Java parameter types: %s\nSkylark type checks: %s",
             (loc == null) ? "" : loc + ": ",
             Arrays.asList(args),
             e.getClass().getName(),
@@ -246,6 +249,26 @@ public class BuiltinFunction extends BaseFunction {
     super.configure(annotation);
   }
 
+  // finds the method and makes it accessible (which is needed to find it, and later to use it)
+  protected Method findMethod(final String name) {
+    Method found = null;
+    for (Method method : this.getClass().getDeclaredMethods()) {
+      method.setAccessible(true);
+      if (name.equals(method.getName())) {
+        if (found != null) {
+          throw new IllegalArgumentException(String.format(
+              "function %s has more than one method named %s", getName(), name));
+        }
+        found = method;
+      }
+    }
+    if (found == null) {
+      throw new NoSuchElementException(String.format(
+          "function %s doesn't have a method named %s", getName(), name));
+    }
+    return found;
+  }
+
   /** Configure the reflection mechanism */
   @Override
   protected void configure() {
@@ -259,7 +282,9 @@ public class BuiltinFunction extends BaseFunction {
       throw new IllegalStateException(
           String.format(
               "bad argument count for %s: method has %s arguments, type list has %s",
-              getName(), innerArgumentCount, parameterTypes.length));
+              getName(),
+              innerArgumentCount,
+              parameterTypes.length));
     }
 
     if (enforcedArgumentTypes != null) {
@@ -267,18 +292,14 @@ public class BuiltinFunction extends BaseFunction {
         SkylarkType enforcedType = enforcedArgumentTypes.get(i);
         if (enforcedType != null) {
           Class<?> parameterType = parameterTypes[i];
-          String msg =
-              String.format(
-                  "fun %s(%s), param %s, enforcedType: %s (%s); parameterType: %s",
-                  getName(),
-                  signature,
-                  signature.getSignature().getNames().get(i),
-                  enforcedType,
-                  enforcedType.getType(),
-                  parameterType);
+          String msg = String.format(
+              "fun %s(%s), param %s, enforcedType: %s (%s); parameterType: %s",
+              getName(), signature, signature.getSignature().getNames().get(i),
+              enforcedType, enforcedType.getType(), parameterType);
           if (enforcedType instanceof SkylarkType.Simple
               || enforcedType instanceof SkylarkFunctionType) {
-            Preconditions.checkArgument(enforcedType.getType() == parameterType, msg);
+            Preconditions.checkArgument(
+                enforcedType.getType() == parameterType, msg);
             // No need to enforce Simple types on the Skylark side, the JVM will do it for us.
             enforcedArgumentTypes.set(i, null);
           } else if (enforcedType instanceof SkylarkType.Combination) {
@@ -296,12 +317,9 @@ public class BuiltinFunction extends BaseFunction {
     if (returnType != null) {
       Class<?> type = returnType;
       Class<?> methodReturnType = invokeMethod.getReturnType();
-      Preconditions.checkArgument(
-          type == methodReturnType,
+      Preconditions.checkArgument(type == methodReturnType,
           "signature for function %s says it returns %s but its invoke method returns %s",
-          getName(),
-          returnType,
-          methodReturnType);
+          getName(), returnType, methodReturnType);
     }
   }
 
@@ -311,34 +329,14 @@ public class BuiltinFunction extends BaseFunction {
   public void configure(BuiltinFunction.Factory factory) {
     // this function must not be configured yet, but the factory must be
     Preconditions.checkState(!isConfigured());
-    Preconditions.checkState(
-        factory.isConfigured(), "function factory is not configured for %s", getName());
+    Preconditions.checkState(factory.isConfigured(),
+        "function factory is not configured for %s", getName());
 
     this.paramDoc = factory.getParamDoc();
     this.signature = factory.getSignature();
     this.extraArgs = factory.getExtraArgs();
     this.objectType = factory.getObjectType();
     configure();
-  }
-
-  // finds the method and makes it accessible (which is needed to find it, and later to use it)
-  protected Method findMethod(final String name) {
-    Method found = null;
-    for (Method method : this.getClass().getDeclaredMethods()) {
-      method.setAccessible(true);
-      if (name.equals(method.getName())) {
-        if (found != null) {
-          throw new IllegalArgumentException(
-              String.format("function %s has more than one method named %s", getName(), name));
-        }
-        found = method;
-      }
-    }
-    if (found == null) {
-      throw new NoSuchElementException(
-          String.format("function %s doesn't have a method named %s", getName(), name));
-    }
-    return found;
   }
 
   /**
