@@ -38,46 +38,66 @@ public class PaginationParameters {
     @ApiParam
     @QueryParam("query")
     @DefaultValue("")
-    private String query;
+    private String query = "";
 
     @ApiParam
     @QueryParam("page")
     @DefaultValue("1")
-    private int page;
+    private int page = 1;
 
     @ApiParam
     @QueryParam("per_page")
     @DefaultValue("50")
-    private int perPage;
+    private int perPage = 50;
 
     @ApiParam
     @QueryParam("sort")
     @DefaultValue("")
-    private String sortBy;
+    private String sortBy = "";
 
     @ApiParam
     @QueryParam("order")
     @DefaultValue("asc")
-    private String order;
+    private String order = "asc";
 
     public String getQuery() {
         return query;
+    }
+
+    public void setQuery(String query) {
+        this.query = query;
     }
 
     public int getPage() {
         return page;
     }
 
+    public void setPage(int page) {
+        this.page = page;
+    }
+
     public int getPerPage() {
         return perPage;
+    }
+
+    public void setPerPage(int perPage) {
+        this.perPage = perPage;
     }
 
     public String getSortBy() {
         return sortBy;
     }
 
+    public void setSortBy(String sortBy) {
+        this.sortBy = sortBy;
+    }
+
     public String getOrder() {
         return order;
+    }
+
+    public void setOrder(String order) {
+        this.order = order;
     }
 
     @Override
