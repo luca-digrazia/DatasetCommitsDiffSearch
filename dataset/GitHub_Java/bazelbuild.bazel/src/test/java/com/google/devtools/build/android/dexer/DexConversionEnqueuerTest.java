@@ -141,12 +141,11 @@ public class DexConversionEnqueuerTest {
     stuffer.call();
     Future<ZipEntryContent> f = stuffer.getFiles().remove();
     assertThat(f.isDone()).isTrue();
-    byte[] dexcode = f.get().getContent();
     assertThat(f.get().getEntry().getName()).isEqualTo(filename + ".dex");
     assertThat(f.get().getEntry().getTime()).isEqualTo(FILE_TIME);
-    assertThat(f.get().getEntry().getSize()).isEqualTo(dexcode.length);
-    assertThat(f.get().getEntry().getCompressedSize()).isEqualTo(dexcode.length);
-
+    assertThat(f.get().getEntry().getSize()).isEqualTo(-1);
+    assertThat(f.get().getEntry().getCompressedSize()).isEqualTo(-1);
+    byte[] dexcode = f.get().getContent();
     Dex dex = new Dex(dexcode);
     assertThat(dex.classDefs()).hasSize(1);
     assertThat(cache.getIfPresent(DexingKey.create(false, false, bytecode))).isSameAs(dexcode);

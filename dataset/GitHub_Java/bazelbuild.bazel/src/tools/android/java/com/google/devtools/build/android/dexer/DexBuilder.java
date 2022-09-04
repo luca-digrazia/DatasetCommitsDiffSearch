@@ -138,6 +138,8 @@ class DexBuilder {
         executor.shutdown();
       }
     }
+    // Use input's timestamp for output file so the output file is stable.
+    Files.setLastModifiedTime(options.outputZip, Files.getLastModifiedTime(options.inputJar));
   }
 
   /**
@@ -223,6 +225,8 @@ class DexBuilder {
           new Dexing(context, optionsParser.getOptions(DexingOptions.class)),
           dexCache);
     }
+    // Use input's timestamp for output file so the output file is stable.
+    Files.setLastModifiedTime(options.outputZip, Files.getLastModifiedTime(options.inputJar));
   }
 
   private static ZipOutputStream createZipOutputStream(Path path) throws IOException {
