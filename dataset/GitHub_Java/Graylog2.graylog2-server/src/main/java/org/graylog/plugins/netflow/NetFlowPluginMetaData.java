@@ -55,7 +55,8 @@ public class NetFlowPluginMetaData implements PluginMetaData {
 
     @Override
     public String getDescription() {
-        return "Provides NetFlow inputs";
+        // TODO Insert correct plugin description
+        return "NetFlow input";
     }
 
     @Override
