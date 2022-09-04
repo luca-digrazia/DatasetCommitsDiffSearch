@@ -326,7 +326,6 @@ public class ApkActionsBuilder {
                       .addExecPath(javaResourceZip)
                       .addExecPath(extractedJavaResourceZip)
                       .build())
-              .useDefaultShellEnvironment()
               .build(ruleContext));
 
       if (ruleContext.getFragment(AndroidConfiguration.class).compressJavaResources()) {

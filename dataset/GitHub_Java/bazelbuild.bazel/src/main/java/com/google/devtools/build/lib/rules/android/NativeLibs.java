@@ -186,7 +186,7 @@ public final class NativeLibs {
             inputManifest,
             outputManifest,
             false,
-            ruleContext.getConfiguration().getActionEnvironment(),
+            ruleContext.getConfiguration().getLocalShellEnvironment(),
             ruleContext.getConfiguration().runfilesEnabled()));
     return new ManifestAndRunfiles(outputManifest, sourceManifestAction.getGeneratedRunfiles());
   }
