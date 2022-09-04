@@ -15,23 +15,17 @@
  */
 package org.androidannotations.generation;
 
-import org.androidannotations.annotations.EIntentService;
-import org.androidannotations.annotations.ServiceAction;
-import org.androidannotations.api.support.app.AbstractIntentService;
+import org.androidannotations.annotations.EActivity;
+import org.androidannotations.annotations.Extra;
 
-@EIntentService
-public class ServiceWithServiceAction extends AbstractIntentService {
+import android.app.Activity;
 
-	public ServiceWithServiceAction() {
-		super(ServiceWithServiceAction.class.getSimpleName());
-	}
+@EActivity
+public class ActivityWithExtras extends Activity {
 
 	/**
 	 * this is a javadoc comment
-	 *
-	 * @param param this is a param
 	 */
-	@ServiceAction
-	void action(String param) {
-	}
+	@Extra
+	public String testExtra;
 }

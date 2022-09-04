@@ -15,23 +15,17 @@
  */
 package org.androidannotations.generation;
 
-import org.androidannotations.annotations.EIntentService;
-import org.androidannotations.annotations.ServiceAction;
-import org.androidannotations.api.support.app.AbstractIntentService;
+import org.androidannotations.annotations.EFragment;
+import org.androidannotations.annotations.FragmentArg;
 
-@EIntentService
-public class ServiceWithServiceAction extends AbstractIntentService {
+import android.app.Fragment;
 
-	public ServiceWithServiceAction() {
-		super(ServiceWithServiceAction.class.getSimpleName());
-	}
+@EFragment
+public class FragmentWithArg extends Fragment {
 
 	/**
 	 * this is a javadoc comment
-	 *
-	 * @param param this is a param
 	 */
-	@ServiceAction
-	void action(String param) {
-	}
+	@FragmentArg
+	public String testArg;
 }
