@@ -23,7 +23,6 @@ import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.elasticsearch.action.admin.indices.stats.IndexStats;
 import org.graylog2.indexer.Deflector;
 import org.graylog2.indexer.indices.Indices;
-import org.graylog2.indexer.indices.TooManyAliasesException;
 import org.graylog2.rest.models.system.deflector.responses.DeflectorSummary;
 import org.graylog2.rest.models.system.indexer.responses.IndexRangeSummary;
 import org.graylog2.rest.models.system.indexer.responses.IndexSizeSummary;
@@ -74,7 +73,7 @@ public class IndexerOverviewResource extends RestResource {
     @Timed
     @ApiOperation(value = "Get overview of current indexing state, including deflector config, cluster state, index ranges & message counts.")
     @Produces(MediaType.APPLICATION_JSON)
-    public IndexerOverview index() throws ClassNotFoundException, TooManyAliasesException {
+    public IndexerOverview index() throws ClassNotFoundException {
         final DeflectorSummary deflectorSummary = deflectorResource.deflector();
         final List<IndexRangeSummary> indexRanges = indexRangesResource.list().ranges();
         final Map<String, IndexStats> allDocCounts = indices.getAllDocCounts().entrySet().stream()
