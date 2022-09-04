@@ -242,11 +242,9 @@ public final class RunTimeConfigurationGenerator {
 
     public static void generate(BuildTimeConfigurationReader.ReadResult readResult, final ClassOutput classOutput,
             boolean devMode,
-            final Map<String, String> runTimeDefaults, List<Class<?>> additionalTypes,
-            List<String> additionalBootstrapConfigSourceProviders) {
+            final Map<String, String> runTimeDefaults, List<Class<?>> additionalTypes) {
         new GenerateOperation.Builder().setBuildTimeReadResult(readResult).setClassOutput(classOutput).setDevMode(devMode)
-                .setRunTimeDefaults(runTimeDefaults).setAdditionalTypes(additionalTypes)
-                .setAdditionalBootstrapConfigSourceProviders(additionalBootstrapConfigSourceProviders).build().run();
+                .setRunTimeDefaults(runTimeDefaults).setAdditionalTypes(additionalTypes).build().run();
     }
 
     static final class GenerateOperation implements AutoCloseable {
@@ -275,7 +273,6 @@ public final class RunTimeConfigurationGenerator {
         final ResultHandle clinitConfig;
         final Map<FieldDescriptor, Class<?>> convertersToRegister = new HashMap<>();
         final List<Class<?>> additionalTypes;
-        final List<String> additionalBootstrapConfigSourceProviders;
         /**
          * Regular converters organized by type. Each converter is stored in a separate field. Some are used
          * only at build time, some only at run time, and some at both times.
@@ -305,7 +302,6 @@ public final class RunTimeConfigurationGenerator {
             roots = Assert.checkNotNullParam("builder.roots", builder.getBuildTimeReadResult().getAllRoots());
             runTimeDefaults = Assert.checkNotNullParam("runTimeDefaults", builder.getRunTimeDefaults());
             additionalTypes = Assert.checkNotNullParam("additionalTypes", builder.getAdditionalTypes());
-            additionalBootstrapConfigSourceProviders = builder.additionalBootstrapConfigSourceProviders;
             cc = ClassCreator.builder().classOutput(classOutput).className(CONFIG_CLASS_NAME).setFinal(true).build();
             generateEmptyParsers(cc);
             // not instantiable
@@ -455,14 +451,9 @@ public final class RunTimeConfigurationGenerator {
                             buildTimeRunTimePatternMap, combinator), bootstrapPatternMap, combinator);
 
             final MethodDescriptor siParserBody = generateParserBody(buildTimeRunTimePatternMap, buildTimeRunTimeIgnored,
-                    new StringBuilder("siParseKey"), false, Type.BUILD_TIME);
+                    new StringBuilder("siParseKey"), false, false);
             final MethodDescriptor rtParserBody = generateParserBody(runTimePatternMap, runTimeIgnored,
-                    new StringBuilder("rtParseKey"), false, Type.RUNTIME);
-            MethodDescriptor bsParserBody = null;
-            if (bootstrapConfigSetupNeeded()) {
-                bsParserBody = generateParserBody(bootstrapPatternMap, null,
-                        new StringBuilder("bsParseKey"), false, Type.BOOTSTRAP);
-            }
+                    new StringBuilder("rtParseKey"), false, true);
 
             // create the bootstrap config if necessary
             ResultHandle bootstrapBuilder = null;
@@ -573,13 +564,6 @@ public final class RunTimeConfigurationGenerator {
             // put sources in the bootstrap builder
             if (bootstrapConfigSetupNeeded()) {
                 readBootstrapConfig.invokeVirtualMethod(SRCB_WITH_SOURCES, bootstrapBuilder, bootstrapConfigSourcesArray);
-
-                // add additional providers
-                for (String providerClass : additionalBootstrapConfigSourceProviders) {
-                    ResultHandle providerInstance = readBootstrapConfig
-                            .newInstance(MethodDescriptor.ofConstructor(providerClass));
-                    readBootstrapConfig.invokeStaticMethod(CU_ADD_SOURCE_PROVIDER, bootstrapBuilder, providerInstance);
-                }
             }
             // put sources in the builder
             readConfig.invokeVirtualMethod(SRCB_WITH_SOURCES, runTimeBuilder, runtimeConfigSourcesArray);
@@ -720,11 +704,6 @@ public final class RunTimeConfigurationGenerator {
             }
             // generate sweep for run time
             configSweepLoop(rtParserBody, readConfig, runTimeConfig);
-
-            if (bootstrapConfigSetupNeeded()) {
-                // generate sweep for bootstrap config
-                configSweepLoop(bsParserBody, readBootstrapConfig, bootstrapConfig);
-            }
 
             // generate ensure-initialized method
             // the point of this method is simply to initialize the Config class
@@ -1083,7 +1062,7 @@ public final class RunTimeConfigurationGenerator {
 
         private MethodDescriptor generateParserBody(final ConfigPatternMap<Container> keyMap,
                 final ConfigPatternMap<?> ignoredMap, final StringBuilder methodName, final boolean dynamic,
-                final Type type) {
+                final boolean isRunTime) {
             final Container matched = keyMap == null ? null : keyMap.getMatched();
             final Object ignoreMatched = ignoredMap == null ? null : ignoredMap.getMatched();
 
@@ -1106,7 +1085,7 @@ public final class RunTimeConfigurationGenerator {
                         }
                     }
                     if (!needsCode) {
-                        return (type == Type.BUILD_TIME) ? EMPTY_PARSER : RT_EMPTY_PARSER;
+                        return isRunTime ? RT_EMPTY_PARSER : EMPTY_PARSER;
                     }
                 }
             }
@@ -1133,7 +1112,7 @@ public final class RunTimeConfigurationGenerator {
                                     matchedBody.invokeVirtualMethod(NI_PREVIOUS, keyIter);
                                 }
                                 // we have to get or create all containing (and contained) groups of this member
-                                matchedBody.invokeStaticMethod(generateGetEnclosing(fieldContainer, type), keyIter,
+                                matchedBody.invokeStaticMethod(generateGetEnclosing(fieldContainer, isRunTime), keyIter,
                                         config);
                             }
                             // else ignore (already populated eagerly)
@@ -1144,7 +1123,7 @@ public final class RunTimeConfigurationGenerator {
                             final ResultHandle lastSeg = matchedBody.invokeVirtualMethod(NI_GET_PREVIOUS_SEGMENT, keyIter);
                             matchedBody.invokeVirtualMethod(NI_PREVIOUS, keyIter);
                             final ResultHandle mapHandle = matchedBody
-                                    .invokeStaticMethod(generateGetEnclosing(mapContainer, type), keyIter, config);
+                                    .invokeStaticMethod(generateGetEnclosing(mapContainer, isRunTime), keyIter, config);
                             // populate the map
                             final Field field = mapContainer.findField();
                             final FieldDescriptor fd = getOrCreateConverterInstance(field);
@@ -1155,7 +1134,7 @@ public final class RunTimeConfigurationGenerator {
                         }
                     } else if (ignoreMatched == null) {
                         // name is unknown
-                        matchedBody.invokeStaticMethod(type == Type.BUILD_TIME ? CD_UNKNOWN : CD_UNKNOWN_RT, keyIter);
+                        matchedBody.invokeStaticMethod(isRunTime ? CD_UNKNOWN_RT : CD_UNKNOWN, keyIter);
                     }
                     // return;
                     matchedBody.returnValue(null);
@@ -1182,7 +1161,7 @@ public final class RunTimeConfigurationGenerator {
                                 nameMatched.invokeStaticMethod(
                                         generateParserBody(keyMap.getChild(name),
                                                 ignoredMap == null ? null : ignoredMap.getChild(name), methodName, dynamic,
-                                                type),
+                                                isRunTime),
                                         config, keyIter);
                                 methodName.setLength(length);
                                 // return;
@@ -1215,7 +1194,7 @@ public final class RunTimeConfigurationGenerator {
                                 final int length = methodName.length();
                                 methodName.append(':').append(name);
                                 nameMatched.invokeStaticMethod(
-                                        generateParserBody(null, ignoredMap.getChild(name), methodName, false, type),
+                                        generateParserBody(null, ignoredMap.getChild(name), methodName, false, isRunTime),
                                         config, keyIter);
                                 methodName.setLength(length);
                                 // return;
@@ -1239,27 +1218,27 @@ public final class RunTimeConfigurationGenerator {
                                 generateParserBody(keyMap == null ? null : keyMap.getChild(ConfigPatternMap.WILD_CARD),
                                         ignoredMap == null ? null : ignoredMap.getChild(ConfigPatternMap.WILD_CARD),
                                         methodName,
-                                        true, type),
+                                        true, isRunTime),
                                 config, keyIter);
                         methodName.setLength(length);
                         // return;
                         matchedBody.returnValue(null);
                     }
                 }
-                body.invokeStaticMethod(type == Type.BUILD_TIME ? CD_UNKNOWN : CD_UNKNOWN_RT, keyIter);
+                body.invokeStaticMethod(isRunTime ? CD_UNKNOWN_RT : CD_UNKNOWN, keyIter);
                 body.returnValue(null);
                 return body.getMethodDescriptor();
             }
         }
 
-        private MethodDescriptor generateGetEnclosing(final FieldContainer matchNode, final Type type) {
+        private MethodDescriptor generateGetEnclosing(final FieldContainer matchNode, final boolean isRunTime) {
             // name iterator cursor is placed BEFORE the field name on entry
             MethodDescriptor md = enclosingMemberMethods.get(matchNode);
             if (md != null) {
                 return md;
             }
             md = MethodDescriptor.ofMethod(CONFIG_CLASS_NAME,
-                    type.methodPrefix + "GetEnclosing:" + matchNode.getCombinedName(), Object.class,
+                    (isRunTime ? "rt" : "si") + "GetEnclosing:" + matchNode.getCombinedName(), Object.class,
                     NameIterator.class, SmallRyeConfig.class);
             try (MethodCreator mc = cc.getMethodCreator(md)) {
                 mc.setModifiers(Opcodes.ACC_STATIC);
@@ -1281,7 +1260,7 @@ public final class RunTimeConfigurationGenerator {
                         // consume segment
                         mc.invokeVirtualMethod(NI_PREVIOUS, keyIter);
                     }
-                    final ResultHandle enclosing = mc.invokeStaticMethod(generateGetEnclosing(fieldContainer, type),
+                    final ResultHandle enclosing = mc.invokeStaticMethod(generateGetEnclosing(fieldContainer, isRunTime),
                             keyIter, config);
 
                     final ResultHandle fieldVal;
@@ -1340,7 +1319,7 @@ public final class RunTimeConfigurationGenerator {
                     final ResultHandle key = mc.invokeVirtualMethod(NI_GET_PREVIOUS_SEGMENT, keyIter);
                     // consume segment
                     mc.invokeVirtualMethod(NI_PREVIOUS, keyIter);
-                    final ResultHandle map = mc.invokeStaticMethod(generateGetEnclosing(mapContainer, type), keyIter,
+                    final ResultHandle map = mc.invokeStaticMethod(generateGetEnclosing(mapContainer, isRunTime), keyIter,
                             config);
                     // restore
                     mc.invokeVirtualMethod(NI_NEXT, keyIter);
@@ -1369,14 +1348,14 @@ public final class RunTimeConfigurationGenerator {
             return md;
         }
 
-        private MethodDescriptor generateGetEnclosing(final MapContainer matchNode, final Type type) {
+        private MethodDescriptor generateGetEnclosing(final MapContainer matchNode, final boolean isRunTime) {
             // name iterator cursor is placed BEFORE the map key on entry
             MethodDescriptor md = enclosingMemberMethods.get(matchNode);
             if (md != null) {
                 return md;
             }
             md = MethodDescriptor.ofMethod(CONFIG_CLASS_NAME,
-                    type.methodPrefix + "GetEnclosing:" + matchNode.getCombinedName(), Object.class,
+                    (isRunTime ? "rt" : "si") + "GetEnclosing:" + matchNode.getCombinedName(), Object.class,
                     NameIterator.class, SmallRyeConfig.class);
             try (MethodCreator mc = cc.getMethodCreator(md)) {
                 mc.setModifiers(Opcodes.ACC_STATIC);
@@ -1390,7 +1369,7 @@ public final class RunTimeConfigurationGenerator {
                         // consume segment
                         mc.invokeVirtualMethod(NI_PREVIOUS, keyIter);
                     }
-                    final ResultHandle enclosing = mc.invokeStaticMethod(generateGetEnclosing(fieldContainer, type),
+                    final ResultHandle enclosing = mc.invokeStaticMethod(generateGetEnclosing(fieldContainer, isRunTime),
                             keyIter, config);
                     if (!fieldContainer.getClassMember().getPropertyName().isEmpty()) {
                         // restore
@@ -1413,7 +1392,7 @@ public final class RunTimeConfigurationGenerator {
                     final ResultHandle key = mc.invokeVirtualMethod(NI_GET_PREVIOUS_SEGMENT, keyIter);
                     // consume enclosing map key
                     mc.invokeVirtualMethod(NI_PREVIOUS, keyIter);
-                    final ResultHandle map = mc.invokeStaticMethod(generateGetEnclosing(mapContainer, type), keyIter,
+                    final ResultHandle map = mc.invokeStaticMethod(generateGetEnclosing(mapContainer, isRunTime), keyIter,
                             config);
                     // restore
                     mc.invokeVirtualMethod(NI_NEXT, keyIter);
@@ -1568,7 +1547,6 @@ public final class RunTimeConfigurationGenerator {
             private BuildTimeConfigurationReader.ReadResult buildTimeReadResult;
             private Map<String, String> runTimeDefaults;
             private List<Class<?>> additionalTypes;
-            private List<String> additionalBootstrapConfigSourceProviders;
 
             Builder() {
             }
@@ -1618,11 +1596,6 @@ public final class RunTimeConfigurationGenerator {
                 return this;
             }
 
-            Builder setAdditionalBootstrapConfigSourceProviders(List<String> additionalBootstrapConfigSourceProviders) {
-                this.additionalBootstrapConfigSourceProviders = additionalBootstrapConfigSourceProviders;
-                return this;
-            }
-
             GenerateOperation build() {
                 return new GenerateOperation(this);
             }
@@ -1639,17 +1612,5 @@ public final class RunTimeConfigurationGenerator {
         return Modifier.isPublic(classMember.getField().getModifiers())
                 && Modifier.isPublic(classMember.getEnclosingDefinition().getConfigurationClass().getModifiers())
                 && Modifier.isPublic(classMember.getField().getType().getModifiers());
-    }
-
-    private enum Type {
-        BUILD_TIME("si"),
-        BOOTSTRAP("bs"),
-        RUNTIME("rt");
-
-        final String methodPrefix;
-
-        Type(String methodPrefix) {
-            this.methodPrefix = methodPrefix;
-        }
     }
 }

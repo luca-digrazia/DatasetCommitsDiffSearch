@@ -78,7 +78,6 @@ public class ExtensionAnnotationProcessor extends AbstractProcessor {
     private final ConfigDocItemScanner configDocItemScanner = new ConfigDocItemScanner();
     private final Set<String> generatedAccessors = new ConcurrentHashMap<String, Boolean>().keySet(Boolean.TRUE);
     private final Set<String> generatedJavaDocs = new ConcurrentHashMap<String, Boolean>().keySet(Boolean.TRUE);
-    private final boolean generateDocs = !Boolean.getBoolean("skipDocs");
 
     public ExtensionAnnotationProcessor() {
     }
@@ -237,7 +236,7 @@ public class ExtensionAnnotationProcessor extends AbstractProcessor {
         }
 
         try {
-            if (generateDocs) {
+            if (!Constants.SKIP_DOCS_GENERATION) {
                 final Set<ConfigDocGeneratedOutput> outputs = configDocItemScanner
                         .scanExtensionsConfigurationItems(javaDocProperties);
                 for (ConfigDocGeneratedOutput output : outputs) {
@@ -413,9 +412,7 @@ public class ExtensionAnnotationProcessor extends AbstractProcessor {
             if (groupClassNames.add(i.getQualifiedName().toString())) {
                 generateAccessor(i);
                 recordConfigJavadoc(i);
-                if (generateDocs) {
-                    configDocItemScanner.addConfigGroups(i);
-                }
+                configDocItemScanner.addConfigGroups(i);
             }
         }
     }
@@ -431,9 +428,7 @@ public class ExtensionAnnotationProcessor extends AbstractProcessor {
                 continue;
             }
 
-            if (generateDocs) {
-                configDocItemScanner.addConfigRoot(pkg, clazz);
-            }
+            configDocItemScanner.addConfigRoot(pkg, clazz);
 
             final String binaryName = processingEnv.getElementUtils().getBinaryName(clazz).toString();
             if (rootClassNames.add(binaryName)) {
