@@ -155,6 +155,10 @@ public final class AndroidRuleClasses {
       fromTemplates("%{name}_files/split_deploy_marker");
   public static final SafeImplicitOutputsFunction MOBILE_INSTALL_ARGS =
       fromTemplates("%{name}_files/mobile_install_args");
+  public static final SafeImplicitOutputsFunction APK_MANIFEST =
+      fromTemplates("%{name}_files/apk_manifest");
+  public static final SafeImplicitOutputsFunction APK_MANIFEST_TEXT =
+      fromTemplates("%{name}_files/apk_manifest_text");
   public static final SafeImplicitOutputsFunction DEPLOY_INFO =
       fromTemplates("%{name}_files/deploy_info.deployinfo.pb");
   public static final SafeImplicitOutputsFunction DEPLOY_INFO_INCREMENTAL =
@@ -513,8 +517,21 @@ public final class AndroidRuleClasses {
           // The javac annotation processor from Android's data binding library that turns
           // processed XML expressions into Java code.
           .add(attr(DataBinding.DATABINDING_ANNOTATION_PROCESSOR_ATTR, BuildType.LABEL)
-              .cfg(HOST)
-              .value(env.getToolsLabel("//tools/android:databinding_annotation_processor")))
+              // This has to be a computed default because the annotation processor is a
+              // java_plugin, which means it needs the Jvm configuration fragment. That conflicts
+              // with Android builds that use --experimental_disable_jvm.
+              // TODO(gregce): The Jvm dependency is only needed for the host configuration.
+              //   --experimental_disable_jvm is really intended for target configurations without
+              //   a JDK. So this case isn't conceptually a conflict. Clean this up so we can remove
+              //   this computed default.
+              .value(new Attribute.ComputedDefault("enable_data_binding") {
+                @Override
+                public Object getDefault(AttributeMap rule) {
+                  return rule.get("enable_data_binding", Type.BOOLEAN)
+                      ? env.getToolsLabel("//tools/android:databinding_annotation_processor")
+                      : null;
+                }
+              }))
 
           .build();
     }
@@ -693,11 +710,6 @@ public final class AndroidRuleClasses {
                   .cfg(HOST)
                   .exec()
                   .value(env.getToolsLabel("//tools/android:dexbuilder")))
-          .add(
-              attr("$dexsharder", LABEL)
-                  .cfg(HOST)
-                  .exec()
-                  .value(env.getToolsLabel("//tools/android:dexsharder")))
           .add(
               attr("$dexmerger", LABEL)
                   .cfg(HOST)
