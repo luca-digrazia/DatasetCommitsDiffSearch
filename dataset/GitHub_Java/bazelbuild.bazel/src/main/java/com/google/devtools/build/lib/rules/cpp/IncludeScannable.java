@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.rules.cpp;
 
+import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -96,5 +97,5 @@ public interface IncludeScannable {
   Artifact getGrepIncludes();
 
   /** Returns modules necessary for building and using the output of this action. */
-  NestedSet<Artifact> getDiscoveredModules();
+  ImmutableList<Artifact> getDiscoveredModules();
 }
