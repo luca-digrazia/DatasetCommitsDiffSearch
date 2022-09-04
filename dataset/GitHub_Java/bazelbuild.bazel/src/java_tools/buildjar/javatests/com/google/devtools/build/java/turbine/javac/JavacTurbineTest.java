@@ -14,62 +14,64 @@
 
 package com.google.devtools.build.java.turbine.javac;
 
+import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.truth.Truth.assertThat;
+import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.util.stream.Collectors.toSet;
 
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.io.ByteStreams;
-import com.google.devtools.build.java.turbine.TurbineOptions;
 import com.google.devtools.build.java.turbine.javac.JavacTurbine.Result;
 import com.google.devtools.build.lib.view.proto.Deps;
 import com.google.devtools.build.lib.view.proto.Deps.Dependency;
-
+import com.google.turbine.options.TurbineOptions;
+import com.google.turbine.options.TurbineOptions.ReducedClasspathMode;
+import com.sun.source.tree.LiteralTree;
 import com.sun.source.util.JavacTask;
+import com.sun.source.util.TaskEvent;
+import com.sun.source.util.TaskEvent.Kind;
+import com.sun.source.util.TaskListener;
+import com.sun.source.util.TreeScanner;
 import com.sun.tools.javac.api.ClientCodeWrapper.Trusted;
 import com.sun.tools.javac.api.JavacTool;
 import com.sun.tools.javac.file.JavacFileManager;
 import com.sun.tools.javac.util.Context;
-
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
-import org.objectweb.asm.ClassReader;
-import org.objectweb.asm.util.Textifier;
-import org.objectweb.asm.util.TraceClassVisitor;
-
 import java.io.BufferedInputStream;
+import java.io.BufferedWriter;
+import java.io.File;
 import java.io.IOError;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.ArrayList;
-import java.util.Arrays;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.jar.Attributes;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.jar.JarOutputStream;
-
+import java.util.jar.Manifest;
 import javax.annotation.processing.AbstractProcessor;
+import javax.annotation.processing.ProcessingEnvironment;
 import javax.annotation.processing.RoundEnvironment;
 import javax.annotation.processing.SupportedAnnotationTypes;
 import javax.lang.model.SourceVersion;
@@ -80,58 +82,20 @@ import javax.tools.JavaFileManager;
 import javax.tools.JavaFileObject;
 import javax.tools.SimpleJavaFileObject;
 import javax.tools.StandardLocation;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.util.Textifier;
+import org.objectweb.asm.util.TraceClassVisitor;
 
 /** Unit tests for {@link JavacTurbine}. */
 @RunWith(JUnit4.class)
-public class JavacTurbineTest {
+public class JavacTurbineTest extends AbstractJavacTurbineCompilationTest {
 
-  @Rule public TemporaryFolder temp = new TemporaryFolder();
-
-  Path sourcedir;
-  List<Path> sources;
-  Path tempdir;
-  Path output;
-  Path outputDeps;
-
-  TurbineOptions.Builder optionsBuilder = TurbineOptions.builder();
-
-  @Before
-  public void setUp() throws IOException {
-    sourcedir = temp.newFolder().toPath();
-    tempdir = temp.newFolder("_temp").toPath();
-    output = temp.newFile("out.jar").toPath();
-    outputDeps = temp.newFile("out.jdeps").toPath();
-
-    sources = new ArrayList<>();
-
-    optionsBuilder
-        .setOutput(output.toString())
-        .setTempDir(tempdir.toString())
-        .addBootClassPathEntries(
-            ImmutableList.copyOf(Splitter.on(':').split(System.getProperty("sun.boot.class.path"))))
-        .setOutputDeps(outputDeps.toString())
-        .setStrictJavaDeps("ERROR")
-        .addAllJavacOpts(Arrays.asList("-source", "7", "-target", "7"))
-        .setTargetLabel("//test")
-        .setRuleKind("java_library");
-  }
-
-  private void addSourceLines(String path, String... lines) throws IOException {
-    Path source = sourcedir.resolve(path);
-    sources.add(source);
-    Files.write(source, Arrays.asList(lines), StandardCharsets.UTF_8);
-  }
-
-  void compile() throws IOException {
-    optionsBuilder.addSources(ImmutableList.copyOf(Iterables.transform(sources, TO_STRING)));
-    try (JavacTurbine turbine = new JavacTurbine(optionsBuilder.build())) {
-      assertThat(turbine.compile()).isEqualTo(Result.OK_WITH_REDUCED_CLASSPATH);
-    }
-  }
-
-  private Map<String, byte[]> collectOutputs() throws IOException {
-    return collectFiles(output);
-  }
+  private static final ImmutableList<String> HOST_CLASSPATH =
+      ImmutableList.copyOf(
+          Splitter.on(File.pathSeparatorChar).split(System.getProperty("java.class.path")));
 
   @Test
   public void hello() throws Exception {
@@ -147,11 +111,11 @@ public class JavacTurbineTest {
 
     Map<String, byte[]> outputs = collectOutputs();
 
-    assertThat(outputs.keySet()).containsExactly("Hello.class");
+    assertThat(filterManifestEntries(outputs.keySet())).containsExactly("Hello.class");
 
     String text = textify(outputs.get("Hello.class"));
     String[] expected = {
-      "// class version 51.0 (51)",
+      "// class version 52.0 (52)",
       "// access flags 0x20",
       "class Hello {",
       "",
@@ -161,6 +125,7 @@ public class JavacTurbineTest {
       "",
       "  // access flags 0x9",
       "  public static main([Ljava/lang/String;)V",
+      "    // parameter  args",
       "}",
       ""
     };
@@ -177,11 +142,11 @@ public class JavacTurbineTest {
 
     Map<String, byte[]> outputs = collectOutputs();
 
-    assertThat(outputs.keySet()).containsExactly("Hello.class");
+    assertThat(filterManifestEntries(outputs.keySet())).containsExactly("Hello.class");
 
     String text = textify(outputs.get("Hello.class"));
     String[] expected = {
-      "// class version 51.0 (51)",
+      "// class version 52.0 (52)",
       "// access flags 0x20",
       "class Hello {",
       "",
@@ -230,7 +195,7 @@ public class JavacTurbineTest {
       try {
         JavaFileObject sourceFile = processingEnv.getFiler().createSourceFile("Generated", element);
         try (OutputStream os = sourceFile.openOutputStream()) {
-          os.write("class Generated {}".getBytes(StandardCharsets.UTF_8));
+          os.write("public class Generated {}".getBytes(UTF_8));
         }
       } catch (IOException e) {
         throw new IOError(e);
@@ -241,7 +206,7 @@ public class JavacTurbineTest {
                 .getFiler()
                 .createResource(StandardLocation.CLASS_OUTPUT, "com.foo", "hello.txt", element);
         try (OutputStream os = file.openOutputStream()) {
-          os.write("hello".getBytes(StandardCharsets.UTF_8));
+          os.write("hello".getBytes(UTF_8));
         }
       } catch (IOException e) {
         throw new IOError(e);
@@ -262,40 +227,41 @@ public class JavacTurbineTest {
         "  }",
         "}");
 
-    optionsBuilder.setProcessors(ImmutableList.of(MyProcessor.class.getName()));
-    optionsBuilder.addProcessorPathEntries(
-        ImmutableList.copyOf(Splitter.on(':').split(System.getProperty("java.class.path"))));
-    optionsBuilder.addClassPathEntries(
-        ImmutableList.copyOf(Splitter.on(':').split(System.getProperty("java.class.path"))));
+    Path gensrc = temp.newFile("gensrc.jar").toPath();
+
+    optionsBuilder.addProcessors(ImmutableList.of(MyProcessor.class.getName()));
+    optionsBuilder.addProcessorPathEntries(HOST_CLASSPATH);
+    optionsBuilder.addClassPathEntries(HOST_CLASSPATH);
+    optionsBuilder.setGensrcOutput(gensrc.toString());
 
     compile();
 
     Map<String, byte[]> outputs = collectOutputs();
-    assertThat(outputs.keySet())
+    assertThat(filterManifestEntries(outputs.keySet()))
         .containsExactly(
             "Generated.class", "MyAnnotation.class", "Hello.class", "com/foo/hello.txt");
 
     {
       String text = textify(outputs.get("Generated.class"));
       String[] expected = {
-        "// class version 51.0 (51)",
-        "// access flags 0x20",
-        "class Generated {",
+        "// class version 52.0 (52)",
+        "// access flags 0x21",
+        "public class Generated {",
         "",
         "",
-        "  // access flags 0x0",
-        "  <init>()V",
+        "  // access flags 0x1",
+        "  public <init>()V",
         "}",
         ""
       };
       assertThat(text).isEqualTo(Joiner.on('\n').join(expected));
     }
 
-    // sanity-check that annotation processing doesn't interfere with stripping
+    // Check that annotation processing doesn't interfere with stripping
     {
       String text = textify(outputs.get("Hello.class"));
       String[] expected = {
-        "// class version 51.0 (51)",
+        "// class version 52.0 (52)",
         "// access flags 0x20",
         "class Hello {",
         "",
@@ -307,11 +273,124 @@ public class JavacTurbineTest {
         "",
         "  // access flags 0x9",
         "  public static main([Ljava/lang/String;)V",
+        "    // parameter  args",
         "}",
         ""
       };
       assertThat(text).isEqualTo(Joiner.on('\n').join(expected));
     }
+
+    Map<String, byte[]> gensrcFiles = collectFiles(gensrc);
+    assertThat(gensrcFiles.keySet()).containsExactly("Generated.java");
+    assertThat(new String(gensrcFiles.get("Generated.java"), UTF_8))
+        .isEqualTo("public class Generated {}");
+  }
+
+  /**
+   * A sample annotation processor for testing.
+   *
+   * <p>Writes an output file containing a SJD violation.
+   */
+  @SupportedAnnotationTypes("MyAnnotation")
+  public static class SjdProcessor extends AbstractProcessor {
+
+    @Override
+    public SourceVersion getSupportedSourceVersion() {
+      return SourceVersion.latest();
+    }
+
+    boolean first = true;
+
+    @Override
+    public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
+      if (!first) {
+        return false;
+      }
+      if (roundEnv.getRootElements().isEmpty()) {
+        return false;
+      }
+      first = false;
+      Element element = roundEnv.getRootElements().iterator().next();
+      try {
+        JavaFileObject sourceFile = processingEnv.getFiler().createSourceFile("Generated", element);
+        try (OutputStream os = sourceFile.openOutputStream()) {
+          os.write(
+              ("public class Generated {\n"
+                      + "  public static final int CONST = A.CONST;"
+                      + "  public static B b;"
+                      + "}")
+                  .getBytes(UTF_8));
+        }
+      } catch (IOException e) {
+        throw new IOError(e);
+      }
+      return false;
+    }
+  }
+
+  @Test
+  public void processingStrict() throws Exception {
+
+    Path libD = temp.newFile("libd.jar").toPath();
+    compileLib(
+        libD,
+        ImmutableList.<Path>of(),
+        ImmutableList.of(
+            new StringJavaFileObject("D.java", "public class D { static final int CONST = 42; }")));
+
+    Path libC = temp.newFile("libc.jar").toPath();
+    compileLib(
+        libC,
+        Collections.singleton(libD),
+        ImmutableList.of(new StringJavaFileObject("C.java", "class C extends D {}")));
+
+    Path libB = temp.newFile("libb.jar").toPath();
+    compileLib(
+        libB,
+        ImmutableList.of(libC, libD),
+        ImmutableList.of(new StringJavaFileObject("B.java", "class B extends C {}")));
+
+    Path libA = temp.newFile("liba.jar").toPath();
+    compileLib(
+        libA,
+        ImmutableList.of(libB, libC, libD),
+        ImmutableList.of(new StringJavaFileObject("A.java", "class A extends B {}")));
+    Path depsA =
+        writedeps(
+            "liba.jdeps",
+            Deps.Dependencies.newBuilder()
+                .setSuccess(true)
+                .setRuleLabel("//lib:a")
+                .addDependency(
+                    Deps.Dependency.newBuilder()
+                        .setPath(libB.toString())
+                        .setKind(Deps.Dependency.Kind.EXPLICIT))
+                .build());
+
+    addSourceLines(
+        "MyAnnotation.java", //
+        "public @interface MyAnnotation {}");
+    addSourceLines(
+        "Hello.java", //
+        "@MyAnnotation",
+        "class Hello {}");
+
+    optionsBuilder.addSources(sources.stream().map(p -> p.toString()).collect(toImmutableList()));
+    optionsBuilder.addProcessors(ImmutableList.of(SjdProcessor.class.getName()));
+    optionsBuilder.addProcessorPathEntries(HOST_CLASSPATH);
+    optionsBuilder.addClassPathEntries(
+        ImmutableList.of(libA.toString(), libB.toString(), libC.toString(), libD.toString()));
+    optionsBuilder.addAllDepsArtifacts(ImmutableList.of(depsA.toString()));
+    optionsBuilder.addDirectJars(ImmutableList.of(libA.toString()));
+    optionsBuilder.setTargetLabel("//my:target");
+
+    StringWriter errOutput = new StringWriter();
+    Result result;
+    try (JavacTurbine turbine =
+        new JavacTurbine(new PrintWriter(errOutput, true), optionsBuilder.build())) {
+      result = turbine.compile();
+    }
+    assertThat(result).isEqualTo(Result.OK_WITH_FULL_CLASSPATH);
   }
 
   static Map<String, byte[]> collectFiles(Path jar) throws IOException {
@@ -342,31 +421,20 @@ public class JavacTurbineTest {
       };
 
   @Test
-  public void extractLanguageLevel() {
-    ImmutableList.Builder<String> output = ImmutableList.builder();
-    JavacTurbine.addLanguageLevel(
-        output,
-        Arrays.asList(
-            "-g", "-source", "6", "-target", "6", "-Xlint:all", "-source", "7", "-target", "7"));
-    assertThat(output.build())
-        .containsExactly("-source", "6", "-target", "6", "-source", "7", "-target", "7")
-        .inOrder();
-  }
-
-  @Test
   public void jdeps() throws Exception {
 
     Path libC = temp.newFile("libc.jar").toPath();
     compileLib(
         libC,
-        Collections.<Path>emptyList(),
-        Arrays.asList(new StringJavaFileObject("C.java", "interface C { String getString(); }")));
+        ImmutableList.<Path>of(),
+        ImmutableList.of(
+            new StringJavaFileObject("C.java", "interface C { String getString(); }")));
 
     Path libA = temp.newFile("liba.jar").toPath();
     compileLib(
         libA,
         Collections.singleton(libC),
-        Arrays.asList(new StringJavaFileObject("A.java", "interface A { C getC(); }")));
+        ImmutableList.of(new StringJavaFileObject("A.java", "interface A { C getC(); }")));
 
     Path depsA =
         writedeps(
@@ -383,15 +451,13 @@ public class JavacTurbineTest {
     Path libB = temp.newFile("libb.jar").toPath();
     compileLib(
         libB,
-        Collections.<Path>emptyList(),
-        Arrays.asList(new StringJavaFileObject("B.java", "interface B {}")));
+        ImmutableList.<Path>of(),
+        ImmutableList.of(new StringJavaFileObject("B.java", "interface B {}")));
 
     optionsBuilder.addClassPathEntries(
         ImmutableList.of(libA.toString(), libB.toString(), libC.toString()));
     optionsBuilder.addAllDepsArtifacts(ImmutableList.of(depsA.toString()));
-    optionsBuilder.addDirectJarToTarget(libA.toString(), "//lib:a");
-    optionsBuilder.addDirectJarToTarget(libB.toString(), "//lib:b");
-    optionsBuilder.addIndirectJarToTarget(libC.toString(), "//lib:c");
+    optionsBuilder.addDirectJars(ImmutableList.of(libA.toString(), libB.toString()));
     optionsBuilder.setTargetLabel("//my:target");
 
     addSourceLines(
@@ -409,13 +475,13 @@ public class JavacTurbineTest {
     Deps.Dependencies depsProto = getDeps();
 
     assertThat(depsProto.getSuccess()).isTrue();
+    assertThat(depsProto.getRequiresReducedClasspathFallback()).isFalse();
     assertThat(depsProto.getRuleLabel()).isEqualTo("//my:target");
     assertThat(getEntries(depsProto))
-        .containsExactlyEntriesIn(
-            ImmutableMap.of(
-                libA.toString(), Deps.Dependency.Kind.EXPLICIT,
-                libB.toString(), Deps.Dependency.Kind.IMPLICIT,
-                libC.toString(), Deps.Dependency.Kind.IMPLICIT));
+        .containsExactly(
+            libA.toString(), Deps.Dependency.Kind.EXPLICIT,
+            libB.toString(), Deps.Dependency.Kind.INCOMPLETE,
+            libC.toString(), Deps.Dependency.Kind.INCOMPLETE);
   }
 
   private Map<String, Deps.Dependency.Kind> getEntries(Deps.Dependencies deps) {
@@ -439,17 +505,23 @@ public class JavacTurbineTest {
   }
 
   private void compileLib(
-      Path jar, Iterable<Path> classpath, Iterable<? extends JavaFileObject> units)
+      Path jar, Collection<Path> classpath, Iterable<? extends JavaFileObject> units)
       throws IOException {
     final Path outdir = temp.newFolder().toPath();
-    JavacFileManager fm = new JavacFileManager(new Context(), false, StandardCharsets.UTF_8);
+    JavacFileManager fm = new JavacFileManager(new Context(), false, UTF_8);
     fm.setLocationFromPaths(StandardLocation.CLASS_OUTPUT, Collections.singleton(outdir));
     fm.setLocationFromPaths(StandardLocation.CLASS_PATH, classpath);
-    List<String> options = Arrays.asList("-d", outdir.toString());
+    List<String> options = ImmutableList.of("-d", outdir.toString());
     JavacTool tool = JavacTool.create();
 
     JavacTask task =
-        tool.getTask(new PrintWriter(System.err, true), fm, null, options, null, units);
+        tool.getTask(
+            new PrintWriter(new BufferedWriter(new OutputStreamWriter(System.err, UTF_8)), true),
+            fm,
+            null,
+            options,
+            null,
+            units);
     assertThat(task.call()).isTrue();
 
     try (JarOutputStream jos = new JarOutputStream(Files.newOutputStream(jar))) {
@@ -489,26 +561,26 @@ public class JavacTurbineTest {
     Path libD = temp.newFile("libd.jar").toPath();
     compileLib(
         libD,
-        Collections.<Path>emptyList(),
-        Arrays.asList(new StringJavaFileObject("D.java", "public class D {}")));
+        ImmutableList.<Path>of(),
+        ImmutableList.of(new StringJavaFileObject("D.java", "public class D {}")));
 
     Path libC = temp.newFile("libc.jar").toPath();
     compileLib(
         libC,
         Collections.singleton(libD),
-        Arrays.asList(new StringJavaFileObject("C.java", "class C { static D d; }")));
+        ImmutableList.of(new StringJavaFileObject("C.java", "class C { static D d; }")));
 
     Path libB = temp.newFile("libb.jar").toPath();
     compileLib(
         libB,
-        Arrays.asList(libC, libD),
-        Arrays.asList(new StringJavaFileObject("B.java", "class B { static C c; }")));
+        ImmutableList.of(libC, libD),
+        ImmutableList.of(new StringJavaFileObject("B.java", "class B { static C c; }")));
 
     Path libA = temp.newFile("liba.jar").toPath();
     compileLib(
         libA,
-        Arrays.asList(libB, libC, libD),
-        Arrays.asList(new StringJavaFileObject("A.java", "class A { static B b; }")));
+        ImmutableList.of(libB, libC, libD),
+        ImmutableList.of(new StringJavaFileObject("A.java", "class A { static B b; }")));
     Path depsA =
         writedeps(
             "liba.jdeps",
@@ -524,10 +596,7 @@ public class JavacTurbineTest {
     optionsBuilder.addClassPathEntries(
         ImmutableList.of(libA.toString(), libB.toString(), libC.toString(), libD.toString()));
     optionsBuilder.addAllDepsArtifacts(ImmutableList.of(depsA.toString()));
-    optionsBuilder.addDirectJarToTarget(libA.toString(), "//lib:a");
-    optionsBuilder.addIndirectJarToTarget(libB.toString(), "//lib:b");
-    optionsBuilder.addIndirectJarToTarget(libC.toString(), "//lib:c");
-    optionsBuilder.addIndirectJarToTarget(libD.toString(), "//lib:d");
+    optionsBuilder.addDirectJars(ImmutableList.of(libA.toString()));
     optionsBuilder.setTargetLabel("//my:target");
 
     addSourceLines(
@@ -544,24 +613,29 @@ public class JavacTurbineTest {
 
     optionsBuilder.addSources(ImmutableList.copyOf(Iterables.transform(sources, TO_STRING)));
 
-    try (JavacTurbine turbine = new JavacTurbine(optionsBuilder.build())) {
-      assertThat(turbine.compile()).isEqualTo(Result.OK_WITH_REDUCED_CLASSPATH);
+    try (JavacTurbine turbine =
+        new JavacTurbine(
+            new PrintWriter(new BufferedWriter(new OutputStreamWriter(System.err, UTF_8))),
+            optionsBuilder.build())) {
+      assertThat(turbine.compile())
+          .isAnyOf(Result.OK_WITH_FULL_CLASSPATH, Result.OK_WITH_REDUCED_CLASSPATH);
+
       Context context = turbine.context;
 
       JavacFileManager fm = (JavacFileManager) context.get(JavaFileManager.class);
-      assertThat(fm.getLocationAsPaths(StandardLocation.CLASS_PATH)).containsExactly(libA, libB);
+      assertThat(fm.getLocationAsPaths(StandardLocation.CLASS_PATH)).containsAtLeast(libA, libB);
 
       Deps.Dependencies depsProto = getDeps();
 
       assertThat(depsProto.getSuccess()).isTrue();
+      assertThat(depsProto.getRequiresReducedClasspathFallback()).isFalse();
       assertThat(depsProto.getRuleLabel()).isEqualTo("//my:target");
       assertThat(getEntries(depsProto))
-          .containsExactlyEntriesIn(
-              ImmutableMap.of(
-                  libA.toString(),
-                  Deps.Dependency.Kind.EXPLICIT,
-                  libB.toString(),
-                  Deps.Dependency.Kind.IMPLICIT));
+          .containsAtLeast(
+              libA.toString(),
+              Deps.Dependency.Kind.EXPLICIT,
+              libB.toString(),
+              Deps.Dependency.Kind.INCOMPLETE);
     }
   }
 
@@ -579,27 +653,27 @@ public class JavacTurbineTest {
     Path libD = temp.newFile("libd.jar").toPath();
     compileLib(
         libD,
-        Collections.<Path>emptyList(),
-        Arrays.asList(
+        ImmutableList.<Path>of(),
+        ImmutableList.of(
             new StringJavaFileObject("D.java", "public class D { static final int CONST = 42; }")));
 
     Path libC = temp.newFile("libc.jar").toPath();
     compileLib(
         libC,
         Collections.singleton(libD),
-        Arrays.asList(new StringJavaFileObject("C.java", "class C extends D {}")));
+        ImmutableList.of(new StringJavaFileObject("C.java", "class C extends D {}")));
 
     Path libB = temp.newFile("libb.jar").toPath();
     compileLib(
         libB,
-        Arrays.asList(libC, libD),
-        Arrays.asList(new StringJavaFileObject("B.java", "class B extends C {}")));
+        ImmutableList.of(libC, libD),
+        ImmutableList.of(new StringJavaFileObject("B.java", "class B extends C {}")));
 
     Path libA = temp.newFile("liba.jar").toPath();
     compileLib(
         libA,
-        Arrays.asList(libB, libC, libD),
-        Arrays.asList(new StringJavaFileObject("A.java", "class A extends B {}")));
+        ImmutableList.of(libB, libC, libD),
+        ImmutableList.of(new StringJavaFileObject("A.java", "class A extends B {}")));
     Path depsA =
         writedeps(
             "liba.jdeps",
@@ -615,10 +689,7 @@ public class JavacTurbineTest {
     optionsBuilder.addClassPathEntries(
         ImmutableList.of(libA.toString(), libB.toString(), libC.toString(), libD.toString()));
     optionsBuilder.addAllDepsArtifacts(ImmutableList.of(depsA.toString()));
-    optionsBuilder.addDirectJarToTarget(libA.toString(), "//lib:a");
-    optionsBuilder.addIndirectJarToTarget(libB.toString(), "//lib:b");
-    optionsBuilder.addIndirectJarToTarget(libC.toString(), "//lib:c");
-    optionsBuilder.addIndirectJarToTarget(libD.toString(), "//lib:d");
+    optionsBuilder.addDirectJars(ImmutableList.of(libA.toString()));
     optionsBuilder.setTargetLabel("//my:target");
 
     addSourceLines(
@@ -630,7 +701,10 @@ public class JavacTurbineTest {
 
     optionsBuilder.addSources(ImmutableList.copyOf(Iterables.transform(sources, TO_STRING)));
 
-    try (JavacTurbine turbine = new JavacTurbine(optionsBuilder.build())) {
+    try (JavacTurbine turbine =
+        new JavacTurbine(
+            new PrintWriter(new BufferedWriter(new OutputStreamWriter(System.err, UTF_8))),
+            optionsBuilder.build())) {
       assertThat(turbine.compile()).isEqualTo(Result.OK_WITH_FULL_CLASSPATH);
       Context context = turbine.context;
 
@@ -641,14 +715,14 @@ public class JavacTurbineTest {
       Deps.Dependencies depsProto = getDeps();
 
       assertThat(depsProto.getSuccess()).isTrue();
+      assertThat(depsProto.getRequiresReducedClasspathFallback()).isFalse();
       assertThat(depsProto.getRuleLabel()).isEqualTo("//my:target");
       assertThat(getEntries(depsProto))
-          .containsExactlyEntriesIn(
-              ImmutableMap.of(
-                  libA.toString(), Deps.Dependency.Kind.EXPLICIT,
-                  libB.toString(), Deps.Dependency.Kind.IMPLICIT,
-                  libC.toString(), Deps.Dependency.Kind.IMPLICIT,
-                  libD.toString(), Deps.Dependency.Kind.IMPLICIT));
+          .containsExactly(
+              libA.toString(), Deps.Dependency.Kind.EXPLICIT,
+              libB.toString(), Deps.Dependency.Kind.IMPLICIT,
+              libC.toString(), Deps.Dependency.Kind.IMPLICIT,
+              libD.toString(), Deps.Dependency.Kind.IMPLICIT);
     }
   }
 
@@ -670,11 +744,11 @@ public class JavacTurbineTest {
 
     Map<String, byte[]> outputs = collectOutputs();
 
-    assertThat(outputs.keySet()).containsExactly("Const.class");
+    assertThat(filterManifestEntries(outputs.keySet())).containsExactly("Const.class");
 
     String text = textify(outputs.get("Const.class"));
     String[] expected = {
-      "// class version 51.0 (51)",
+      "// class version 52.0 (52)",
       "// access flags 0x20",
       "class Const {",
       "",
@@ -711,8 +785,7 @@ public class JavacTurbineTest {
   @Test
   public void constantsEnum() throws Exception {
     addSourceLines(
-        "TheEnum.java",
-        // TODO(cushon): fix google-java-format's handling of lists of string literals
+        "TheEnum.java", //
         "public enum TheEnum {",
         "  ONE, TWO, THREE;",
         "}");
@@ -720,15 +793,15 @@ public class JavacTurbineTest {
     compile();
     Map<String, byte[]> outputs = collectOutputs();
     // just don't crash; enum constants need to be preserved
-    assertThat(outputs.keySet()).containsExactly("TheEnum.class");
+    assertThat(filterManifestEntries(outputs.keySet())).containsExactly("TheEnum.class");
 
     String text = textify(outputs.get("TheEnum.class"));
     String[] expected = {
-      "// class version 51.0 (51)",
+      "// class version 52.0 (52)",
       "// access flags 0x4031",
       "// signature Ljava/lang/Enum<LTheEnum;>;",
       "// declaration: TheEnum extends java.lang.Enum<TheEnum>",
-      "public final enum TheEnum extends java/lang/Enum  {",
+      "public final enum TheEnum extends java/lang/Enum {",
       "",
       "",
       "  // access flags 0x4019",
@@ -740,22 +813,12 @@ public class JavacTurbineTest {
       "  // access flags 0x4019",
       "  public final static enum LTheEnum; THREE",
       "",
-      "  // access flags 0x101A",
-      "  private final static synthetic [LTheEnum; $VALUES",
-      "",
       "  // access flags 0x9",
       "  public static values()[LTheEnum;",
       "",
       "  // access flags 0x9",
       "  public static valueOf(Ljava/lang/String;)LTheEnum;",
-      "",
-      "  // access flags 0x2",
-      "  // signature ()V",
-      "  // declaration: void <init>()",
-      "  private <init>(Ljava/lang/String;I)V",
-      "",
-      "  // access flags 0x8",
-      "  static <clinit>()V",
+      "    // parameter mandated  name",
       "}",
       ""
     };
@@ -790,10 +853,9 @@ public class JavacTurbineTest {
       try {
         JavaFileObject sourceFile = processingEnv.getFiler().createSourceFile("Generated", element);
         try (OutputStream os = sourceFile.openOutputStream()) {
-          os.write(
-              "class Generated { public static String x = \"".getBytes(StandardCharsets.UTF_8));
+          os.write("class Generated { public static String x = \"".getBytes(UTF_8));
           os.write(0xc2); // write an unpaired surrogate
-          os.write("\";}}".getBytes(StandardCharsets.UTF_8));
+          os.write("\";}}".getBytes(UTF_8));
         }
       } catch (IOException e) {
         throw new IOError(e);
@@ -814,11 +876,9 @@ public class JavacTurbineTest {
         "  }",
         "}");
 
-    optionsBuilder.setProcessors(ImmutableList.of(MyBadEncodingProcessor.class.getName()));
-    optionsBuilder.addProcessorPathEntries(
-        ImmutableList.copyOf(Splitter.on(':').split(System.getProperty("java.class.path"))));
-    optionsBuilder.addClassPathEntries(
-        ImmutableList.copyOf(Splitter.on(':').split(System.getProperty("java.class.path"))));
+    optionsBuilder.addProcessors(ImmutableList.of(MyBadEncodingProcessor.class.getName()));
+    optionsBuilder.addProcessorPathEntries(HOST_CLASSPATH);
+    optionsBuilder.addClassPathEntries(HOST_CLASSPATH);
 
     optionsBuilder.addSources(ImmutableList.copyOf(Iterables.transform(sources, TO_STRING)));
     try (StringWriter sw = new StringWriter();
@@ -826,7 +886,797 @@ public class JavacTurbineTest {
             new JavacTurbine(new PrintWriter(sw, true), optionsBuilder.build())) {
       Result result = turbine.compile();
       assertThat(result).isEqualTo(Result.ERROR);
-      assertThat(sw.toString()).contains("error reading");
+      assertThat(sw.toString()).contains("unmappable character");
+    }
+  }
+
+  @Test
+  public void requiredConstructor() throws Exception {
+    addSourceLines(
+        "Super.java", //
+        "class Super {",
+        "  public Super(int x) {}",
+        "}");
+    addSourceLines(
+        "Hello.java",
+        "class Hello extends Super {",
+        "  public Hello() {",
+        "    super(42);",
+        "  }",
+        "}");
+
+    compile();
+
+    Map<String, byte[]> outputs = collectOutputs();
+
+    assertThat(filterManifestEntries(outputs.keySet()))
+        .containsExactly("Super.class", "Hello.class");
+
+    String text = textify(outputs.get("Hello.class"));
+    String[] expected = {
+      "// class version 52.0 (52)",
+      "// access flags 0x20",
+      "class Hello extends Super {",
+      "",
+      "",
+      "  // access flags 0x1",
+      "  public <init>()V",
+      "}",
+      ""
+    };
+    assertThat(text).isEqualTo(Joiner.on('\n').join(expected));
+  }
+
+  @Test
+  public void annotationDeclaration() throws Exception {
+    addSourceLines(
+        "Anno.java",
+        "import java.lang.annotation.Retention;",
+        "import java.lang.annotation.RetentionPolicy;",
+        "@Retention(RetentionPolicy.RUNTIME)",
+        "@interface Anno {",
+        "  public int value() default CONST;",
+        "  int CONST = 42;",
+        "  int NONCONST = new Integer(42);",
+        "}");
+    addSourceLines("Hello.java", "@Anno(value=Anno.CONST)", "class Hello {", "}");
+
+    compile();
+
+    Map<String, byte[]> outputs = collectOutputs();
+
+    assertThat(filterManifestEntries(outputs.keySet()))
+        .containsExactly("Anno.class", "Hello.class");
+
+    String text = textify(outputs.get("Hello.class"));
+    String[] expected = {
+      "// class version 52.0 (52)",
+      "// access flags 0x20",
+      "class Hello {",
+      "",
+      "",
+      "  @LAnno;(value=42)",
+      "",
+      "  // access flags 0x0",
+      "  <init>()V",
+      "}",
+      ""
+    };
+    assertThat(text).isEqualTo(Joiner.on('\n').join(expected));
+  }
+
+  @Test
+  public void overlappingSourceJars() throws Exception {
+    Path sourceJar1 = temp.newFile("srcs1.jar").toPath();
+    try (OutputStream os = Files.newOutputStream(sourceJar1);
+        JarOutputStream jos = new JarOutputStream(os)) {
+      jos.putNextEntry(new JarEntry("Hello.java"));
+      jos.write("public class Hello {}".getBytes(UTF_8));
+    }
+
+    Path sourceJar2 = temp.newFile("srcs2.jar").toPath();
+    try (OutputStream os = Files.newOutputStream(sourceJar2);
+        JarOutputStream jos = new JarOutputStream(os)) {
+      jos.putNextEntry(new JarEntry("Hello.java"));
+      jos.write("public class Hello {}".getBytes(UTF_8));
+    }
+
+    optionsBuilder.setSourceJars(ImmutableList.of(sourceJar2.toString(), sourceJar1.toString()));
+
+    StringWriter errOutput = new StringWriter();
+    Result result;
+    try (JavacTurbine turbine =
+        new JavacTurbine(new PrintWriter(errOutput, true), optionsBuilder.build())) {
+      result = turbine.compile();
+    }
+    assertThat(result).isEqualTo(Result.ERROR);
+    assertThat(errOutput.toString()).contains("duplicate class: Hello");
+  }
+
+  @Test
+  public void privateMembers() throws Exception {
+    addSourceLines("Hello.java", "class Hello {", "  private void f() {}", "  private int x;", "}");
+
+    compile();
+
+    Map<String, byte[]> outputs = collectOutputs();
+
+    assertThat(filterManifestEntries(outputs.keySet())).containsExactly("Hello.class");
+
+    String text = textify(outputs.get("Hello.class"));
+    String[] expected = {
+      "// class version 52.0 (52)",
+      "// access flags 0x20",
+      "class Hello {",
+      "",
+      "",
+      "  // access flags 0x0",
+      "  <init>()V",
+      "}",
+      ""
+    };
+    assertThat(text).isEqualTo(Joiner.on('\n').join(expected));
+  }
+
+  @Test
+  public void invalidJavacopts() throws Exception {
+    addSourceLines("Hello.java", "class Hello {}");
+    optionsBuilder.addAllJavacOpts(ImmutableList.of("-NOT_AN_OPTION"));
+    optionsBuilder.addSources(ImmutableList.copyOf(Iterables.transform(sources, TO_STRING)));
+    StringWriter errOutput = new StringWriter();
+    try (JavacTurbine turbine =
+        new JavacTurbine(new PrintWriter(errOutput, true), optionsBuilder.build())) {
+      assertThat(turbine.compile()).isEqualTo(Result.ERROR);
+    }
+    assertThat(errOutput.toString()).contains("invalid flag: -NOT_AN_OPTION");
+  }
+
+  /** An annotation processor that reads a file that doesn't exist. */
+  @SupportedAnnotationTypes("*")
+  public static class NoSuchFileProcessor extends AbstractProcessor {
+
+    @Override
+    public SourceVersion getSupportedSourceVersion() {
+      return SourceVersion.latest();
+    }
+
+    @Override
+    public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
+      try {
+        processingEnv
+            .getFiler()
+            .getResource(StandardLocation.CLASS_OUTPUT, "", "NO_SUCH_FILE")
+            .openInputStream();
+      } catch (IOException e) {
+        throw new IOError(e);
+      }
+      return false;
+    }
+  }
+
+  @Test
+  public void processorReadsNonexistentFile() throws Exception {
+    addSourceLines("Hello.java", "@Deprecated class Hello {}");
+    optionsBuilder.addProcessors(ImmutableList.of(NoSuchFileProcessor.class.getName()));
+    optionsBuilder.addProcessorPathEntries(HOST_CLASSPATH);
+    optionsBuilder.addSources(ImmutableList.copyOf(Iterables.transform(sources, TO_STRING)));
+
+    StringWriter errOutput = new StringWriter();
+    try (JavacTurbine turbine =
+        new JavacTurbine(new PrintWriter(errOutput, true), optionsBuilder.build())) {
+      assertThat(turbine.compile()).isEqualTo(Result.ERROR);
+    }
+    assertThat(errOutput.toString()).contains("classes/NO_SUCH_FILE");
+  }
+
+  @Test
+  public void emptySources() throws Exception {
+    // don't set up any source files
+    compile();
+    Map<String, byte[]> outputs = collectOutputs();
+    assertThat(filterManifestEntries(outputs.keySet())).isEmpty();
+  }
+
+  /** An annotation processor that violates the contract. */
+  @SupportedAnnotationTypes("*")
+  public static class MisguidedAnnotationProcessor extends AbstractProcessor {
+
+    public final class Scanner extends TreeScanner<Void, Void> {
+      @Override
+      public Void visitLiteral(LiteralTree tree, Void unused) {
+        values.add(tree.getValue());
+        return null;
+      }
+    }
+
+    public final class Listener implements TaskListener {
+
+      public final ProcessingEnvironment processingEnv;
+
+      Listener(ProcessingEnvironment processingEnv) {
+        this.processingEnv = processingEnv;
+      }
+
+      @Override
+      public void started(TaskEvent e) {}
+
+      @Override
+      public void finished(TaskEvent e) {
+        if (e.getKind() == Kind.ANALYZE) {
+          e.getCompilationUnit().accept(new Scanner(), null);
+        } else if (e.getKind() == Kind.GENERATE) {
+          try {
+            FileObject file =
+                processingEnv
+                    .getFiler()
+                    .createResource(
+                        StandardLocation.CLASS_OUTPUT, "", "output.txt", e.getTypeElement());
+            try (OutputStream os = file.openOutputStream()) {
+              os.write(values.toString().getBytes(UTF_8));
+            }
+          } catch (IOException exception) {
+            throw new IOError(exception);
+          }
+        }
+      }
+    }
+
+    public final Set<Object> values = new LinkedHashSet<>();
+
+    @Override
+    public SourceVersion getSupportedSourceVersion() {
+      return SourceVersion.latest();
+    }
+
+    @Override
+    public synchronized void init(final ProcessingEnvironment processingEnv) {
+      JavacTask.instance(processingEnv).addTaskListener(new Listener(processingEnv));
+    }
+
+    @Override
+    public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
+      return false;
+    }
+  }
+
+  void setupMisguidedProcessor() throws Exception {
+    addSourceLines(
+        "Hello.java",
+        "@Deprecated class Hello {",
+        "  int x = 42;",
+        "  String s = \"hello\";",
+        "  double y = 42.1;",
+        "}");
+
+    Path processorJar =
+        createClassJar(
+            "libprocessor.jar",
+            MisguidedAnnotationProcessor.class,
+            MisguidedAnnotationProcessor.Listener.class,
+            MisguidedAnnotationProcessor.Scanner.class);
+
+    optionsBuilder.addProcessors(ImmutableList.of(MisguidedAnnotationProcessor.class.getName()));
+    optionsBuilder.addProcessorPathEntries(ImmutableList.of(processorJar.toString()));
+  }
+
+  public static class TransitiveDep {}
+
+  public static class DirectDep extends TransitiveDep {}
+
+  @Test
+  public void noNativeHeaderOutput() throws Exception {
+
+    // deliberately exclude TransitiveDep
+    Path deps =
+        createClassJar(
+            "libdeps.jar",
+            AbstractJavacTurbineCompilationTest.class,
+            JavacTurbineTest.class,
+            DirectDep.class);
+
+    // compilation will complete supertypes of DirectDep iff NATIVE_HEADER_OUTPUT is set
+    addSourceLines(
+        "Hello.java",
+        "import " + DirectDep.class.getCanonicalName() + ";",
+        "class Hello {",
+        "  public native DirectDep foo() /*-{",
+        "  }-*/;",
+        "}");
+
+    optionsBuilder.addClassPathEntries(Collections.singleton(deps.toString()));
+    optionsBuilder.addDirectJars(ImmutableList.of(deps.toString()));
+
+    compile();
+    Map<String, byte[]> outputs = collectOutputs();
+    assertThat(filterManifestEntries(outputs.keySet())).containsExactly("Hello.class");
+  }
+
+  public static class Lib {}
+
+  @Test
+  public void ignoreStrictDepsErrors() throws Exception {
+
+    Path lib =
+        createClassJar(
+            "deps.jar",
+            AbstractJavacTurbineCompilationTest.class,
+            JavacTurbineTest.class,
+            Lib.class);
+
+    addSourceLines(
+        "Hello.java", "import " + Lib.class.getCanonicalName() + ";", "class Hello extends Lib {}");
+
+    optionsBuilder.addClassPathEntries(ImmutableList.of(lib.toString()));
+
+    optionsBuilder.addSources(ImmutableList.copyOf(Iterables.transform(sources, TO_STRING)));
+
+    StringWriter errOutput = new StringWriter();
+    Result result;
+    try (JavacTurbine turbine =
+        new JavacTurbine(new PrintWriter(errOutput, true), optionsBuilder.build())) {
+      result = turbine.compile();
+    }
+    assertThat(result).isNotEqualTo(Result.OK_WITH_REDUCED_CLASSPATH);
+  }
+
+  @Test
+  public void ignoreStrictDepsErrorsForFailingCompilations() throws Exception {
+
+    Path lib =
+        createClassJar(
+            "deps.jar",
+            AbstractJavacTurbineCompilationTest.class,
+            JavacTurbineTest.class,
+            Lib.class);
+
+    addSourceLines(
+        "Hello.java",
+        "import " + Lib.class.getCanonicalName() + ";",
+        "class Hello extends Lib {",
+        "  no.such.Class f;",
+        "}");
+
+    optionsBuilder.addClassPathEntries(ImmutableList.of(lib.toString()));
+
+    optionsBuilder.addSources(ImmutableList.copyOf(Iterables.transform(sources, TO_STRING)));
+
+    StringWriter errOutput = new StringWriter();
+    Result result;
+    try (JavacTurbine turbine =
+        new JavacTurbine(new PrintWriter(errOutput, true), optionsBuilder.build())) {
+      result = turbine.compile();
+    }
+    assertThat(errOutput.toString()).doesNotContain("[strict]");
+    assertThat(errOutput.toString()).doesNotContain("** Please add the following dependencies:");
+    assertThat(result).isEqualTo(Result.ERROR);
+  }
+
+  @Test
+  public void clinit() throws Exception {
+    addSourceLines(
+        "Hello.java",
+        "class Hello {",
+        "  public static int x;",
+        "  static {",
+        "    x = 42;",
+        "  }",
+        "}");
+
+    compile();
+
+    Map<String, byte[]> outputs = collectOutputs();
+
+    assertThat(filterManifestEntries(outputs.keySet())).containsExactly("Hello.class");
+
+    String text = textify(outputs.get("Hello.class"));
+    String[] expected = {
+      "// class version 52.0 (52)",
+      "// access flags 0x20",
+      "class Hello {",
+      "",
+      "",
+      "  // access flags 0x9",
+      "  public static I x",
+      "",
+      "  // access flags 0x0",
+      "  <init>()V",
+      "}",
+      ""
+    };
+    assertThat(text).isEqualTo(Joiner.on('\n').join(expected));
+  }
+
+  @Test
+  public void bridge() throws Exception {
+    addSourceLines(
+        "Bridge.java",
+        "import java.util.concurrent.Callable;",
+        "class Bridge implements Callable<String> {",
+        "  public String call() { return \"\"; }",
+        "}");
+
+    compile();
+
+    Map<String, byte[]> outputs = collectOutputs();
+
+    assertThat(filterManifestEntries(outputs.keySet())).containsExactly("Bridge.class");
+
+    String text = textify(outputs.get("Bridge.class"));
+    String[] expected = {
+      "// class version 52.0 (52)",
+      "// access flags 0x20",
+      "// signature Ljava/lang/Object;Ljava/util/concurrent/Callable<Ljava/lang/String;>;",
+      "// declaration: Bridge implements java.util.concurrent.Callable<java.lang.String>",
+      "class Bridge implements java/util/concurrent/Callable {",
+      "",
+      "",
+      "  // access flags 0x0",
+      "  <init>()V",
+      "",
+      "  // access flags 0x1",
+      "  public call()Ljava/lang/String;",
+      "}",
+      ""
+    };
+    assertThat(text).isEqualTo(Joiner.on('\n').join(expected));
+  }
+
+  @Test
+  public void enumDecl() throws Exception {
+    addSourceLines(
+        "P.java",
+        "import java.util.function.Predicate;",
+        "enum P implements Predicate<String> {",
+        "  INSTANCE {",
+        "    @Override",
+        "    public boolean test(String s) {",
+        "      return NoSuch.method();",
+        "    }",
+        "  }",
+        "}");
+
+    compile();
+
+    Map<String, byte[]> outputs = collectOutputs();
+
+    String text = textify(outputs.get("P.class"));
+    String[] expected = {
+      "// class version 52.0 (52)",
+      "// access flags 0x4420",
+      "// signature Ljava/lang/Enum<LP;>;Ljava/util/function/Predicate<Ljava/lang/String;>;",
+      "// declaration: P extends java.lang.Enum<P>"
+          + " implements java.util.function.Predicate<java.lang.String>",
+      "abstract enum P extends java/lang/Enum implements java/util/function/Predicate {",
+      "",
+      "  // access flags 0x4010",
+      "  final enum INNERCLASS P$1 null null",
+      "",
+      "  // access flags 0x4019",
+      "  public final static enum LP; INSTANCE",
+      "",
+      "  // access flags 0x9",
+      "  public static values()[LP;",
+      "",
+      "  // access flags 0x9",
+      "  public static valueOf(Ljava/lang/String;)LP;",
+      "    // parameter mandated  name",
+      "}",
+      ""
+    };
+    assertThat(text).isEqualTo(Joiner.on('\n').join(expected));
+  }
+
+  @Test
+  public void lambdaBody() throws Exception {
+    addSourceLines(
+        "P.java",
+        "import java.util.function.Predicate;",
+        "enum P {",
+        "  INSTANCE(x -> {",
+        "    return false;",
+        "  });",
+        "  P(Predicate<String> p) {}",
+        "}");
+
+    compile();
+
+    Map<String, byte[]> outputs = collectOutputs();
+
+    String text = textify(outputs.get("P.class"));
+    String[] expected = {
+      "// class version 52.0 (52)",
+      "// access flags 0x4030",
+      "// signature Ljava/lang/Enum<LP;>;",
+      "// declaration: P extends java.lang.Enum<P>",
+      "final enum P extends java/lang/Enum {",
+      "",
+      "  // access flags 0x19",
+      "  public final static INNERCLASS java/lang/invoke/MethodHandles$Lookup"
+          + " java/lang/invoke/MethodHandles Lookup",
+      "",
+      "  // access flags 0x4019",
+      "  public final static enum LP; INSTANCE",
+      "",
+      "  // access flags 0x9",
+      "  public static values()[LP;",
+      "",
+      "  // access flags 0x9",
+      "  public static valueOf(Ljava/lang/String;)LP;",
+      "    // parameter mandated  name",
+      "}",
+      ""
+    };
+    assertThat(text).isEqualTo(Joiner.on('\n').join(expected));
+  }
+
+  @SupportedAnnotationTypes("*")
+  public static class SimpleProcessor extends AbstractProcessor {
+    @Override
+    public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
+      return false;
+    }
+  }
+
+  @Test
+  public void noWarningDiagnostics() throws Exception {
+    addSourceLines(
+        "A.java", //
+        "@Deprecated public class A {",
+        "}");
+    addSourceLines(
+        "B.java", //
+        "public class B {",
+        "  public static final A a;",
+        "}");
+
+    optionsBuilder.addProcessors(ImmutableList.of(SimpleProcessor.class.getName()));
+    optionsBuilder.addProcessorPathEntries(HOST_CLASSPATH);
+    optionsBuilder.addAllJavacOpts(ImmutableList.of("-Xlint:deprecation"));
+    optionsBuilder.addSources(ImmutableList.copyOf(Iterables.transform(sources, TO_STRING)));
+
+    StringWriter output = new StringWriter();
+    Result result;
+    try (JavacTurbine turbine =
+        new JavacTurbine(new PrintWriter(output, true), optionsBuilder.build())) {
+      result = turbine.compile();
+    }
+
+    assertThat(output.toString()).isEmpty();
+    assertThat(result).isAnyOf(Result.OK_WITH_FULL_CLASSPATH, Result.OK_WITH_REDUCED_CLASSPATH);
+  }
+
+  @Test
+  public void noDoclint() throws Exception {
+    addSourceLines(
+        "A.java", //
+        "/** {@link Invalid} **/",
+        "public class A {",
+        "}");
+
+    optionsBuilder.addAllJavacOpts(
+        ImmutableList.of("-source", "8", "-target", "8", "-Xdoclint:reference"));
+    optionsBuilder.addSources(ImmutableList.copyOf(Iterables.transform(sources, TO_STRING)));
+
+    StringWriter output = new StringWriter();
+    Result result;
+    try (JavacTurbine turbine =
+        new JavacTurbine(new PrintWriter(output, true), optionsBuilder.build())) {
+      result = turbine.compile();
+    }
+
+    assertThat(output.toString()).isEmpty();
+    assertThat(result).isAnyOf(Result.OK_WITH_FULL_CLASSPATH, Result.OK_WITH_REDUCED_CLASSPATH);
+  }
+
+  @Test
+  public void processJavacopts_useSourceByDefault() {
+    TurbineOptions options = TurbineOptions.builder().setOutput("/out").build();
+    ImmutableList<String> javacopts = JavacTurbine.processJavacopts(options);
+    assertThat(javacopts).contains("-source");
+    assertThat(javacopts).doesNotContain("--release");
+  }
+
+  @Test
+  public void processJavacopts_releaseDefault() {
+    TurbineOptions options =
+        TurbineOptions.builder()
+            .setOutput("/out")
+            .addAllJavacOpts(ImmutableList.of("--release", "9"))
+            .build();
+    ImmutableList<String> javacopts = JavacTurbine.processJavacopts(options);
+    assertThat(javacopts).doesNotContain("-source");
+  }
+
+  @Test
+  public void processJavacopts_normalizeRelease() {
+    TurbineOptions options =
+        TurbineOptions.builder()
+            .setOutput("/out")
+            .addAllJavacOpts(ImmutableList.of("-source", "8", "-target", "8", "--release", "9"))
+            .build();
+    ImmutableList<String> javacopts = JavacTurbine.processJavacopts(options);
+    assertThat(javacopts).contains("--release");
+    assertThat(javacopts).containsNoneOf("-source", "-target");
+  }
+
+  @Test
+  public void processJavacopts_filtersDoclint() {
+    TurbineOptions options =
+        TurbineOptions.builder()
+            .setOutput("/out")
+            .addAllJavacOpts(ImmutableList.of("-Xmyopt", "-Xdoclint:reference"))
+            .build();
+    ImmutableList<String> javacopts = JavacTurbine.processJavacopts(options);
+    assertThat(javacopts).contains("-Xmyopt");
+    assertThat(javacopts).doesNotContain("-Xdoclint:reference");
+  }
+
+  @Test
+  public void testManifestEntries() throws Exception {
+    optionsBuilder.setTargetLabel("//foo:foo");
+    optionsBuilder.setInjectingRuleKind("foo_library");
+    compile();
+    try (JarFile jarFile = new JarFile(output.toFile())) {
+      Manifest manifest = jarFile.getManifest();
+      Attributes attributes = manifest.getMainAttributes();
+      assertThat(attributes.getValue("Target-Label")).isEqualTo("//foo:foo");
+      assertThat(attributes.getValue("Injecting-Rule-Kind")).isEqualTo("foo_library");
+      assertThat(jarFile.getEntry(JarFile.MANIFEST_NAME).getLastModifiedTime().toInstant())
+          .isEqualTo(
+              LocalDateTime.of(2010, 1, 1, 0, 0, 0).atZone(ZoneId.systemDefault()).toInstant());
+    }
+  }
+
+  private static Set<String> filterManifestEntries(Set<String> entries) {
+    return entries.stream()
+        .filter(
+            name ->
+                !(name.startsWith(JavacTurbine.MANIFEST_DIR)
+                    || name.equals(JavacTurbine.MANIFEST_NAME)))
+        .collect(toSet());
+  }
+
+  @Test
+  public void diagnosticFormattingTest() throws Exception {
+    addSourceLines(
+        "A.java", //
+        "class A {",
+        "}}");
+
+    optionsBuilder.addSources(ImmutableList.copyOf(Iterables.transform(sources, TO_STRING)));
+
+    StringWriter output = new StringWriter();
+    Result result;
+    try (JavacTurbine turbine =
+        new JavacTurbine(new PrintWriter(output, true), optionsBuilder.build())) {
+      result = turbine.compile();
+    }
+
+    assertThat(result).isEqualTo(Result.ERROR);
+    assertThat(output.toString()).contains("A.java:2: error: class, interface, or enum expected");
+  }
+
+  @Test
+  public void bazelReducedSuccess() throws Exception {
+
+    Path libD = temp.newFile("libd.jar").toPath();
+    compileLib(
+        libD,
+        ImmutableList.<Path>of(),
+        ImmutableList.of(new StringJavaFileObject("D.java", "public class D {}")));
+
+    Path libC = temp.newFile("libc.jar").toPath();
+    compileLib(
+        libC,
+        Collections.singleton(libD),
+        ImmutableList.of(new StringJavaFileObject("C.java", "class C { static D d; }")));
+
+    Path libB = temp.newFile("libb.jar").toPath();
+    compileLib(
+        libB,
+        ImmutableList.of(libC, libD),
+        ImmutableList.of(new StringJavaFileObject("B.java", "class B { static C c; }")));
+
+    Path libA = temp.newFile("liba.jar").toPath();
+    compileLib(
+        libA,
+        ImmutableList.of(libB, libC, libD),
+        ImmutableList.of(new StringJavaFileObject("A.java", "class A { static B b; }")));
+
+    optionsBuilder.addClassPathEntries(ImmutableList.of(libA.toString(), libB.toString()));
+    optionsBuilder.setReducedClasspathMode(ReducedClasspathMode.BAZEL_REDUCED);
+    optionsBuilder.setTargetLabel("//my:target");
+
+    addSourceLines(
+        "Hello.java",
+        "class Hello {",
+        "  public static A a = new A();",
+        "  public static void main(String[] args) {",
+        "    A a = null;",
+        "    B b = null;",
+        "    C c = null;",
+        "    D d = null;",
+        "  }",
+        "}");
+
+    optionsBuilder.addSources(ImmutableList.copyOf(Iterables.transform(sources, TO_STRING)));
+
+    try (JavacTurbine turbine =
+        new JavacTurbine(
+            new PrintWriter(new BufferedWriter(new OutputStreamWriter(System.err, UTF_8)), true),
+            optionsBuilder.build())) {
+      assertThat(turbine.compile()).isEqualTo(Result.OK_WITH_REDUCED_CLASSPATH);
+      Context context = turbine.context;
+
+      JavacFileManager fm = (JavacFileManager) context.get(JavaFileManager.class);
+      assertThat(fm.getLocationAsPaths(StandardLocation.CLASS_PATH)).containsExactly(libA, libB);
+
+      Deps.Dependencies depsProto = getDeps();
+
+      assertThat(depsProto.getSuccess()).isTrue();
+      assertThat(depsProto.getRequiresReducedClasspathFallback()).isFalse();
+      assertThat(depsProto.getRuleLabel()).isEqualTo("//my:target");
+      assertThat(getEntries(depsProto))
+          .containsExactly(
+              libA.toString(),
+              Deps.Dependency.Kind.EXPLICIT,
+              libB.toString(),
+              Deps.Dependency.Kind.INCOMPLETE);
+    }
+  }
+
+  @Test
+  public void bazelReducedClasspath() throws Exception {
+
+    Path libD = temp.newFile("libd.jar").toPath();
+    compileLib(
+        libD,
+        ImmutableList.<Path>of(),
+        ImmutableList.of(
+            new StringJavaFileObject("D.java", "public class D { static final int CONST = 42; }")));
+
+    Path libC = temp.newFile("libc.jar").toPath();
+    compileLib(
+        libC,
+        Collections.singleton(libD),
+        ImmutableList.of(new StringJavaFileObject("C.java", "class C extends D {}")));
+
+    Path libB = temp.newFile("libb.jar").toPath();
+    compileLib(
+        libB,
+        ImmutableList.of(libC, libD),
+        ImmutableList.of(new StringJavaFileObject("B.java", "class B extends C {}")));
+
+    Path libA = temp.newFile("liba.jar").toPath();
+    compileLib(
+        libA,
+        ImmutableList.of(libB, libC, libD),
+        ImmutableList.of(new StringJavaFileObject("A.java", "class A extends B {}")));
+
+    optionsBuilder.addClassPathEntries(ImmutableList.of(libA.toString()));
+    optionsBuilder.setTargetLabel("//my:target");
+    optionsBuilder.setReducedClasspathMode(ReducedClasspathMode.BAZEL_REDUCED);
+
+    addSourceLines(
+        "Hello.java",
+        "class Hello {",
+        "  public static final int CONST = A.CONST;",
+        "  public static void main(String[] args) {}",
+        "}");
+
+    optionsBuilder.addSources(ImmutableList.copyOf(Iterables.transform(sources, TO_STRING)));
+
+    try (JavacTurbine turbine =
+        new JavacTurbine(
+            new PrintWriter(new BufferedWriter(new OutputStreamWriter(System.err, UTF_8))),
+            optionsBuilder.build())) {
+      assertThat(turbine.compile()).isEqualTo(Result.REQUIRES_FALLBACK);
+
+      Deps.Dependencies depsProto = getDeps();
+
+      assertThat(depsProto.getSuccess()).isFalse();
+      assertThat(depsProto.getRequiresReducedClasspathFallback()).isTrue();
+      assertThat(depsProto.getRuleLabel()).isEqualTo("//my:target");
     }
   }
 }

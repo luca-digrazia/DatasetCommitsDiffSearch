@@ -97,10 +97,6 @@ public final class BazelPackageLoaderTest extends AbstractPackageLoaderTest {
         tools.getRelative("tools/jdk/local_java_repository.bzl"),
         "def local_java_repository(**kwargs):",
         "  pass");
-    FileSystemUtils.writeIsoLatin1(
-        tools.getRelative("tools/jdk/remote_java_repository.bzl"),
-        "def remote_java_repository(**kwargs):",
-        "  pass");
   }
 
   private void fetchExternalRepo(RepositoryName externalRepo) {
@@ -124,7 +120,7 @@ public final class BazelPackageLoaderTest extends AbstractPackageLoaderTest {
 
   @Override
   protected ForkJoinPool extractLegacyGlobbingForkJoinPool(PackageLoader packageLoader) {
-    return ((BazelPackageLoader) packageLoader).forkJoinPoolForNonSkyframeGlobbing;
+    return ((BazelPackageLoader) packageLoader).forkJoinPoolForLegacyGlobbing;
   }
 
   @Test

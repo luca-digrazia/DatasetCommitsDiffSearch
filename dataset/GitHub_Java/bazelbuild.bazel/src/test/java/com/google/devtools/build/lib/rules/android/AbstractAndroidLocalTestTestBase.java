@@ -93,8 +93,7 @@ public abstract class AbstractAndroidLocalTestTestBase extends AndroidBuildViewT
   @Test
   public void testFeatureFlagsAttributeSetsSelectInDependency() throws Exception {
     useConfiguration(
-        // TODO(b/173547615): Re-enable this flag or delete.
-        // "--experimental_dynamic_configs=on",
+        "--experimental_dynamic_configs=on",
         "--enforce_transitive_configs_for_config_feature_flag");
     writeFile(
         "java/com/foo/BUILD",
@@ -151,8 +150,7 @@ public abstract class AbstractAndroidLocalTestTestBase extends AndroidBuildViewT
   @Test
   public void testFeatureFlagsAttributeSetsSelectInTest() throws Exception {
     useConfiguration(
-        // TODO(b/173547615): Re-enable this flag or delete.
-        // "--experimental_dynamic_configs=on",
+        "--experimental_dynamic_configs=on",
         "--enforce_transitive_configs_for_config_feature_flag");
     writeFile(
         "java/com/foo/BUILD",
@@ -205,8 +203,7 @@ public abstract class AbstractAndroidLocalTestTestBase extends AndroidBuildViewT
   public void testFeatureFlagsAttributeFailsAnalysisIfFlagValueIsInvalid() throws Exception {
     reporter.removeHandler(failFastHandler);
     useConfiguration(
-        // TODO(b/173547615): Re-enable this flag or delete.
-        // "--experimental_dynamic_configs=on",
+        "--experimental_dynamic_configs=on",
         "--enforce_transitive_configs_for_config_feature_flag");
     writeFile(
         "java/com/foo/BUILD",
@@ -249,10 +246,7 @@ public abstract class AbstractAndroidLocalTestTestBase extends AndroidBuildViewT
       throws Exception {
     reporter.removeHandler(failFastHandler);
     useConfiguration(
-        // TODO(b/173547615): Re-enable this flag or delete. (Unlike the other cases in this file,
-        // this test does not fail when this flag is uncommented. But should it be deleted anyway if
-        // it's not relevant to the test?)
-        // "--experimental_dynamic_configs=on",
+        "--experimental_dynamic_configs=on",
         "--enforce_transitive_configs_for_config_feature_flag");
     writeFile(
         "java/com/foo/BUILD",
@@ -283,8 +277,7 @@ public abstract class AbstractAndroidLocalTestTestBase extends AndroidBuildViewT
   @Test
   public void testFeatureFlagsAttributeSetsFeatureFlagProviderValues() throws Exception {
     useConfiguration(
-        // TODO(b/173547615): Re-enable this flag or delete.
-        // "--experimental_dynamic_configs=on",
+        "--experimental_dynamic_configs=on",
         "--enforce_transitive_configs_for_config_feature_flag");
     writeFile(
         "java/com/foo/reader.bzl",
@@ -342,8 +335,7 @@ public abstract class AbstractAndroidLocalTestTestBase extends AndroidBuildViewT
   public void testFeatureFlagsAttributeFailsAnalysisIfFlagIsAliased() throws Exception {
     reporter.removeHandler(failFastHandler);
     useConfiguration(
-        // TODO(b/173547615): Re-enable this flag or delete.
-        // "--experimental_dynamic_configs=on",
+        "--experimental_dynamic_configs=on",
         "--enforce_transitive_configs_for_config_feature_flag");
     writeFile(
         "java/com/foo/BUILD",

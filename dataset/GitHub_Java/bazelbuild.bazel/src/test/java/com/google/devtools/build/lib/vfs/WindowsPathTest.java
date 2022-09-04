@@ -14,9 +14,9 @@
 package com.google.devtools.build.lib.vfs;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertThrows;
 
 import com.google.common.testing.EqualsTester;
-import com.google.devtools.build.lib.testutil.MoreAsserts;
 import com.google.devtools.build.lib.vfs.WindowsOsPathPolicy.ShortPathResolver;
 import java.util.HashMap;
 import java.util.Map;
@@ -101,8 +101,7 @@ public class WindowsPathTest extends PathAbstractTest {
     assertThat(create("C:/foo").relativeTo(create("C:/")).getPathString()).isEqualTo("foo");
     // Case insensitivity test
     assertThat(create("C:/foo/bar").relativeTo(create("C:/FOO")).getPathString()).isEqualTo("bar");
-    MoreAsserts.assertThrows(
-        IllegalArgumentException.class, () -> create("D:/foo").relativeTo(create("C:/")));
+    assertThrows(IllegalArgumentException.class, () -> create("D:/foo").relativeTo(create("C:/")));
   }
 
   @Test
@@ -138,7 +137,7 @@ public class WindowsPathTest extends PathAbstractTest {
     assertThat(osPathPolicy.needsToNormalize("will~1.exi"))
         .isEqualTo(WindowsOsPathPolicy.NEEDS_SHORT_PATH_NORMALIZATION);
     assertThat(osPathPolicy.needsToNormalize("d:/no-normalization"))
-        .isEqualTo(WindowsOsPathPolicy.NORMALIZED); // Sanity check
+        .isEqualTo(WindowsOsPathPolicy.NORMALIZED);
   }
 
   private static String normalize(OsPathPolicy osPathPolicy, String str) {
