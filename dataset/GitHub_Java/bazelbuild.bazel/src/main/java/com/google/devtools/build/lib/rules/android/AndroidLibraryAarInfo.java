@@ -33,8 +33,7 @@ import javax.annotation.Nullable;
  * merged into the main aar manifest.
  */
 @Immutable
-public class AndroidLibraryAarInfo extends NativeInfo
-    implements AndroidLibraryAarInfoApi<Artifact> {
+public class AndroidLibraryAarInfo extends NativeInfo implements AndroidLibraryAarInfoApi {
   private static final String SKYLARK_NAME = "AndroidLibraryAarInfo";
   public static final NativeProvider<AndroidLibraryAarInfo> PROVIDER =
       new NativeProvider<AndroidLibraryAarInfo>(AndroidLibraryAarInfo.class, SKYLARK_NAME) {};
@@ -65,20 +64,10 @@ public class AndroidLibraryAarInfo extends NativeInfo
     return aar;
   }
 
-  @Nullable
-  @Override
-  public Artifact getAarArtifact() {
-    if (aar == null) {
-      return null;
-    }
-    return aar.getAar();
-  }
-
   public NestedSet<Aar> getTransitiveAars() {
     return transitiveAars;
   }
 
-  @Override
   public NestedSet<Artifact> getTransitiveAarArtifacts() {
     return transitiveAarArtifacts;
   }

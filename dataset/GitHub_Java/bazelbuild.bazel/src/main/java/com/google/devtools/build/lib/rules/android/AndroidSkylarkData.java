@@ -32,11 +32,8 @@ import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
 import com.google.devtools.build.lib.rules.android.AndroidLibraryAarInfo.Aar;
-import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaCompilationInfoProvider;
 import com.google.devtools.build.lib.rules.java.JavaInfo;
-import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
-import com.google.devtools.build.lib.rules.java.JavaSourceJarsProvider;
 import com.google.devtools.build.lib.rules.java.ProguardSpecProvider;
 import com.google.devtools.build.lib.skylarkbuildapi.android.AndroidBinaryDataSettingsApi;
 import com.google.devtools.build.lib.skylarkbuildapi.android.AndroidDataProcessingApi;
@@ -179,8 +176,7 @@ public abstract class AndroidSkylarkData
                       ctx.getAndroidConfig()),
                   aaptVersion);
 
-      JavaInfo javaInfo =
-          getJavaInfoForRClassJar(validated.getClassJar(), validated.getJavaSourceJar());
+      JavaInfo javaInfo = getJavaInfoForRClassJar(validated.getClassJar());
 
       return SkylarkDict.of(
           /* env = */ null,
@@ -667,30 +663,14 @@ public abstract class AndroidSkylarkData
 
     resourceApk.toManifestInfo().ifPresent(info -> builder.put(AndroidManifestInfo.PROVIDER, info));
 
-    builder.put(
-        JavaInfo.PROVIDER,
-        getJavaInfoForRClassJar(
-            resourceApk.getResourceJavaClassJar(), resourceApk.getResourceJavaSrcJar()));
+    builder.put(JavaInfo.PROVIDER, getJavaInfoForRClassJar(resourceApk.getResourceJavaClassJar()));
 
     return SkylarkDict.copyOf(/* env = */ null, builder.build());
   }
 
-  private static JavaInfo getJavaInfoForRClassJar(Artifact rClassJar, Artifact rClassSrcJar) {
+  private static JavaInfo getJavaInfoForRClassJar(Artifact rClassJar) {
     return JavaInfo.Builder.create()
         .setNeverlink(true)
-        .addProvider(
-            JavaSourceJarsProvider.class,
-            JavaSourceJarsProvider.builder().addSourceJar(rClassSrcJar).build())
-        .addProvider(
-            JavaRuleOutputJarsProvider.class,
-            JavaRuleOutputJarsProvider.builder()
-                .addOutputJar(rClassJar, null, null, ImmutableList.of(rClassSrcJar))
-                .build())
-        .addProvider(
-            JavaCompilationArgsProvider.class,
-            JavaCompilationArgsProvider.builder()
-                .addDirectCompileTimeJar(rClassJar, rClassJar)
-                .build())
         .addProvider(
             JavaCompilationInfoProvider.class,
             new JavaCompilationInfoProvider.Builder()
