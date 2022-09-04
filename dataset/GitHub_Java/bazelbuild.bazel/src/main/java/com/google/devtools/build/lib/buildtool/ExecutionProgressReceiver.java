@@ -15,19 +15,24 @@ package com.google.devtools.build.lib.buildtool;
 
 import com.google.common.base.Supplier;
 import com.google.common.collect.Sets;
+import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata.MiddlemanType;
 import com.google.devtools.build.lib.actions.ActionExecutionStatusReporter;
 import com.google.devtools.build.lib.actions.ActionLookupData;
+import com.google.devtools.build.lib.analysis.AspectCompleteEvent;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.clock.BlazeClock;
+import com.google.devtools.build.lib.analysis.TargetCompleteEvent;
+import com.google.devtools.build.lib.analysis.TopLevelArtifactContext;
+import com.google.devtools.build.lib.analysis.TopLevelArtifactHelper;
+import com.google.devtools.build.lib.analysis.TopLevelArtifactHelper.ArtifactsToBuild;
 import com.google.devtools.build.lib.skyframe.ActionExecutionInactivityWatchdog;
 import com.google.devtools.build.lib.skyframe.AspectCompletionValue;
-import com.google.devtools.build.lib.skyframe.AspectCompletionValue.AspectCompletionKey;
-import com.google.devtools.build.lib.skyframe.AspectValue.AspectKey;
+import com.google.devtools.build.lib.skyframe.AspectValue;
 import com.google.devtools.build.lib.skyframe.SkyFunctions;
 import com.google.devtools.build.lib.skyframe.SkyframeActionExecutor;
 import com.google.devtools.build.lib.skyframe.TargetCompletionValue;
+import com.google.devtools.build.lib.util.BlazeClock;
 import com.google.devtools.build.skyframe.EvaluationProgressReceiver;
 import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
@@ -50,7 +55,6 @@ public final class ExecutionProgressReceiver
 
   // Must be thread-safe!
   private final Set<ConfiguredTarget> builtTargets;
-  private final Set<AspectKey> builtAspects;
   private final Set<ActionLookupData> enqueuedActions = Sets.newConcurrentHashSet();
   private final Set<ActionLookupData> completedActions = Sets.newConcurrentHashSet();
   private final Set<ActionLookupData> ignoredActions = Sets.newConcurrentHashSet();
@@ -58,6 +62,9 @@ public final class ExecutionProgressReceiver
   private final Object activityIndicator = new Object();
   /** Number of exclusive tests. To be accounted for in progress messages. */
   private final int exclusiveTestsCount;
+  private final Set<ConfiguredTarget> testedTargets;
+  private final EventBus eventBus;
+  private final TopLevelArtifactContext topLevelArtifactContext;
 
   static {
     PROGRESS_MESSAGE_NUMBER_FORMATTER = NumberFormat.getIntegerInstance(Locale.ENGLISH);
@@ -69,10 +76,16 @@ public final class ExecutionProgressReceiver
    * permitted while this receiver is active.
    */
   ExecutionProgressReceiver(
-      Set<ConfiguredTarget> builtTargets, Set<AspectKey> builtAspects, int exclusiveTestsCount) {
+      Set<ConfiguredTarget> builtTargets,
+      int exclusiveTestsCount,
+      Set<ConfiguredTarget> testedTargets,
+      TopLevelArtifactContext topLevelArtifactContext,
+      EventBus eventBus) {
     this.builtTargets = Collections.synchronizedSet(builtTargets);
-    this.builtAspects = Collections.synchronizedSet(builtAspects);
     this.exclusiveTestsCount = exclusiveTestsCount;
+    this.testedTargets = testedTargets;
+    this.topLevelArtifactContext = topLevelArtifactContext;
+    this.eventBus = eventBus;
   }
 
   @Override
@@ -107,15 +120,23 @@ public final class ExecutionProgressReceiver
       if (value == null) {
         return;
       }
+
       ConfiguredTarget target = value.getConfiguredTarget();
       builtTargets.add(target);
+
+      if (testedTargets.contains(target)) {
+        postTestTargetComplete(target);
+      } else {
+        postBuildTargetComplete(target);
+      }
     } else if (type.equals(SkyFunctions.ASPECT_COMPLETION)) {
       AspectCompletionValue value = (AspectCompletionValue) skyValueSupplier.get();
-      if (value == null) {
-        return;
+      if (value != null) {
+        AspectValue aspectValue = value.getAspectValue();
+        ArtifactsToBuild artifacts =
+            TopLevelArtifactHelper.getAllArtifactsToBuild(aspectValue, topLevelArtifactContext);
+        eventBus.post(AspectCompleteEvent.createSuccessful(aspectValue, artifacts));
       }
-      AspectKey aspectKey = ((AspectCompletionKey) skyKey).aspectKey();
-      builtAspects.add(aspectKey);
     } else if (type.equals(SkyFunctions.ACTION_EXECUTION)) {
       // Remember all completed actions, even those in error, regardless of having been cached or
       // really executed.
@@ -213,5 +234,17 @@ public final class ExecutionProgressReceiver
         }
       }
     };
+  }
+
+  private void postTestTargetComplete(ConfiguredTarget target) {
+    eventBus.post(TargetCompleteEvent.createSuccessfulTestTarget(target));
+  }
+
+  private void postBuildTargetComplete(ConfiguredTarget target) {
+    ArtifactsToBuild artifactsToBuild =
+        TopLevelArtifactHelper.getAllArtifactsToBuild(target, topLevelArtifactContext);
+    eventBus.post(
+        TargetCompleteEvent.createSuccessfulTarget(
+            target, artifactsToBuild.getAllArtifactsByOutputGroup()));
   }
 }

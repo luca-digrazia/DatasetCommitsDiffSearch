@@ -18,7 +18,7 @@ import static java.util.stream.Collectors.joining;
 import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.collect.compacthashset.CompactHashSet;
+import com.google.devtools.build.lib.collect.CompactHashSet;
 import java.util.AbstractCollection;
 import java.util.Arrays;
 import java.util.Collection;
@@ -41,7 +41,7 @@ public final class NestedSet<E> implements Iterable<E> {
   private byte[] memo;
 
   private static final byte[] LEAF_MEMO = {};
-  static final Object[] EMPTY_CHILDREN = {};
+  private static final Object[] EMPTY_CHILDREN = {};
 
   /**
    * Construct an empty NestedSet.  Should only be called by Order's class initializer.
@@ -134,16 +134,6 @@ public final class NestedSet<E> implements Iterable<E> {
     }
   }
 
-  // Only used by deserialization
-  NestedSet(Order order, Object children) {
-    this.order = order;
-    this.children = children;
-    boolean hasChildren =
-        children instanceof Object[]
-            && (Arrays.stream((Object[]) children).anyMatch(child -> child instanceof Object[]));
-    this.memo = hasChildren ? null : LEAF_MEMO;
-  }
-
   /**
    * Returns the ordering of this nested set.
    */
@@ -166,8 +156,10 @@ public final class NestedSet<E> implements Iterable<E> {
     return children == EMPTY_CHILDREN;
   }
 
-  /** Returns true if the set has exactly one element. */
-  public boolean isSingleton() {
+  /**
+   * Returns true if the set has exactly one element.
+   */
+  private boolean isSingleton() {
     return !(children instanceof Object[]);
   }
 

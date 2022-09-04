@@ -16,8 +16,11 @@ package com.google.devtools.build.lib.query2;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Throwables;
+import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMultimap;
+import com.google.common.collect.Multimaps;
+import com.google.common.collect.SetMultimap;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.AbstractQueueVisitor;
 import com.google.devtools.build.lib.concurrent.ErrorClassifier;
@@ -32,6 +35,7 @@ import com.google.devtools.build.lib.packages.DependencyFilter;
 import com.google.devtools.build.lib.packages.InputFile;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.OutputFile;
+import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.PackageGroup;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
@@ -146,6 +150,8 @@ final class LabelVisitor {
    */
   private final TargetProvider targetProvider;
   private final DependencyFilter edgeFilter;
+  private final SetMultimap<Package, Target> visitedMap =
+      Multimaps.synchronizedSetMultimap(HashMultimap.<Package, Target>create());
   private final ConcurrentMap<Label, Integer> visitedTargets = new ConcurrentHashMap<>();
 
   private VisitationAttributes lastVisitation;
@@ -201,6 +207,7 @@ final class LabelVisitor {
       int maxDepth,
       TargetEdgeObserver... observers)
       throws InterruptedException {
+    visitedMap.clear();
     visitedTargets.clear();
 
     Visitor visitor = new Visitor(eventHandler, keepGoing, parallelThreads, maxDepth, observers);
@@ -393,6 +400,8 @@ final class LabelVisitor {
         observeEdge(from, attribute, target);
         visitAspectsIfRequired(from, attribute, target, depth, count);
       }
+
+      visitedMap.put(target.getPackage(), target);
       visitTargetNode(target, depth, count);
     }
 

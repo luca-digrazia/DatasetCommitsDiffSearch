@@ -14,33 +14,27 @@
 
 package com.google.devtools.build.lib.buildeventstream.transports;
 
-import com.google.common.util.concurrent.FutureCallback;
-import com.google.common.util.concurrent.Futures;
-import com.google.common.util.concurrent.MoreExecutors;
 import com.google.devtools.build.lib.buildeventstream.ArtifactGroupNamer;
 import com.google.devtools.build.lib.buildeventstream.BuildEvent;
-import com.google.devtools.build.lib.buildeventstream.BuildEventArtifactUploader;
-import com.google.devtools.build.lib.buildeventstream.BuildEventProtocolOptions;
-import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
+import com.google.devtools.build.lib.buildeventstream.BuildEventConverters;
 import com.google.devtools.build.lib.buildeventstream.BuildEventTransport;
-import com.google.devtools.build.lib.util.AbruptExitException;
+import com.google.devtools.build.lib.buildeventstream.PathConverter;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.util.JsonFormat;
 import java.io.IOException;
-import java.util.function.Consumer;
+import java.nio.charset.StandardCharsets;
 
 /**
  * A simple {@link BuildEventTransport} that writes the JSON representation of the protocol-buffer
  * representation of the events to a file.
  */
 public final class JsonFormatFileTransport extends FileTransport {
-  JsonFormatFileTransport(
-      String path,
-      BuildEventProtocolOptions options,
-      BuildEventArtifactUploader uploader,
-      Consumer<AbruptExitException> exitFunc)
-      throws IOException {
-    super(path, options, uploader, exitFunc);
+
+  private final PathConverter pathConverter;
+
+  JsonFormatFileTransport(String path, PathConverter pathConverter) throws IOException {
+    super(path);
+    this.pathConverter = pathConverter;
   }
 
   @Override
@@ -50,27 +44,31 @@ public final class JsonFormatFileTransport extends FileTransport {
 
   @Override
   public synchronized void sendBuildEvent(BuildEvent event, final ArtifactGroupNamer namer) {
-    Futures.addCallback(asStreamProto(event, namer),
-        new FutureCallback<BuildEventStreamProtos.BuildEvent>() {
+    BuildEventConverters converters =
+        new BuildEventConverters() {
           @Override
-          public void onSuccess(BuildEventStreamProtos.BuildEvent protoEvent) {
-            String protoJsonRepresentation;
-            try {
-              protoJsonRepresentation =
-                  JsonFormat.printer().omittingInsignificantWhitespace().print(protoEvent) + "\n";
-            } catch (InvalidProtocolBufferException e) {
-              // We don't expect any unknown Any fields in our protocol buffer. Nevertheless, handle
-              // the exception gracefully and, at least, return valid JSON with an id field.
-              protoJsonRepresentation =
-                  "{\"id\" : \"unknown\", \"exception\" : \"InvalidProtocolBufferException\"}\n";
-            }
-            write(protoJsonRepresentation);
+          public PathConverter pathConverter() {
+            return pathConverter;
           }
 
           @Override
-          public void onFailure(Throwable t) {
-            // Intentionally left empty. The error handling happens in FileTransport.
+          public ArtifactGroupNamer artifactGroupNamer() {
+            return namer;
           }
-        }, MoreExecutors.directExecutor());
+        };
+    String protoJsonRepresentation;
+    try {
+      protoJsonRepresentation =
+          JsonFormat.printer()
+                  .omittingInsignificantWhitespace()
+                  .print(event.asStreamProto(converters))
+              + "\n";
+    } catch (InvalidProtocolBufferException e) {
+      // We don't expect any unknown Any fields in our protocol buffer. Nevertheless, handle
+      // the exception gracefully and, at least, return valid JSON with an id field.
+      protoJsonRepresentation =
+          "{\"id\" : \"unknown\", \"exception\" : \"InvalidProtocolBufferException\"}\n";
+    }
+    writeData(protoJsonRepresentation.getBytes(StandardCharsets.UTF_8));
   }
 }

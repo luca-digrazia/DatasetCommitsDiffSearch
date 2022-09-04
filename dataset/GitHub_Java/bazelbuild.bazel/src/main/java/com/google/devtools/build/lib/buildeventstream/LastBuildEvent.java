@@ -35,12 +35,7 @@ public class LastBuildEvent implements BuildEvent {
   }
 
   @Override
-  public Collection<LocalFile> referencedLocalFiles() {
-    return event.referencedLocalFiles();
-  }
-
-  @Override
-  public BuildEventStreamProtos.BuildEvent asStreamProto(BuildEventContext converters) {
+  public BuildEventStreamProtos.BuildEvent asStreamProto(BuildEventConverters converters) {
     return BuildEventStreamProtos.BuildEvent.newBuilder(event.asStreamProto(converters))
         .setLastMessage(true)
         .build();

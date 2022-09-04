@@ -224,7 +224,7 @@ public abstract class InfoItem {
     public byte[] get(Supplier<BuildConfiguration> configurationSupplier, CommandEnvironment env)
         throws AbruptExitException {
       checkNotNull(configurationSupplier);
-      return print(configurationSupplier.get().getBinDirectory(RepositoryName.MAIN).getRoot());
+      return print(configurationSupplier.get().getBinDirectory(RepositoryName.MAIN).getPath());
     }
   }
 
@@ -245,7 +245,8 @@ public abstract class InfoItem {
     public byte[] get(Supplier<BuildConfiguration> configurationSupplier, CommandEnvironment env)
         throws AbruptExitException {
       checkNotNull(configurationSupplier);
-      return print(configurationSupplier.get().getGenfilesDirectory(RepositoryName.MAIN).getRoot());
+      return print(
+          configurationSupplier.get().getGenfilesDirectory(RepositoryName.MAIN).getPath());
     }
   }
 
@@ -266,7 +267,27 @@ public abstract class InfoItem {
     public byte[] get(Supplier<BuildConfiguration> configurationSupplier, CommandEnvironment env)
         throws AbruptExitException {
       checkNotNull(configurationSupplier);
-      return print(configurationSupplier.get().getTestLogsDirectory(RepositoryName.MAIN).getRoot());
+      return print(
+          configurationSupplier.get().getTestLogsDirectory(RepositoryName.MAIN).getPath());
+    }
+  }
+
+  /**
+   * Info item for the message log
+   */
+  public static final class MessageLogInfoItem extends InfoItem {
+    public MessageLogInfoItem() {
+      super("message_log" ,
+      "Location of a log containing machine readable message in LogMessage protobuf format.",
+      false);
+    }
+
+    @Override
+    public byte[] get(Supplier<BuildConfiguration> configurationSupplier, CommandEnvironment env)
+        throws AbruptExitException {
+      checkNotNull(configurationSupplier);
+      // NB: Duplicated in EventLogModule
+      return print(env.getRuntime().getWorkspace().getOutputBase().getRelative("message.log"));
     }
   }
 
@@ -477,7 +498,7 @@ public abstract class InfoItem {
         return print("unknown");
       }
       // Tunnel through a Path object in order to normalize the representation of the path.
-      Path javaHomePath = env.getRuntime().getFileSystem().getPath(javaHome);
+      Path javaHomePath = env.getDirectories().getFileSystem().getPath(javaHome);
       return print(javaHomePath.getPathString());
     }
   }

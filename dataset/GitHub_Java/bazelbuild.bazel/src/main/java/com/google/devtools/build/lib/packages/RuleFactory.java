@@ -38,8 +38,6 @@ import javax.annotation.Nullable;
  * performs a number of checks and associates the {@link Rule} and the owning {@link Package}
  * with each other.
  *
- * <p>This class is immutable, once created the set of managed {@link RuleClass}es will not change.
- *
  * <p>Note: the code that actually populates the RuleClass map has been moved to {@link
  * RuleClassProvider}.
  */
@@ -340,7 +338,7 @@ public class RuleFactory {
     FuncallExpression generator = topCall.first;
     BaseFunction function = topCall.second;
     String name = generator.getNameArg();
-
+    
     ImmutableMap.Builder<String, Object> builder = ImmutableMap.builder();
     for (Map.Entry<String, Object> attributeAccessor : args.getAttributeAccessors()) {
       String attributeName = args.getName(attributeAccessor);

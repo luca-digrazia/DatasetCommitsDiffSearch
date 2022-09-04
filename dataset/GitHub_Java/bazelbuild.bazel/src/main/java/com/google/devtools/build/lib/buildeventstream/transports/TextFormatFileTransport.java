@@ -14,19 +14,14 @@
 
 package com.google.devtools.build.lib.buildeventstream.transports;
 
-import com.google.common.util.concurrent.FutureCallback;
-import com.google.common.util.concurrent.Futures;
-import com.google.common.util.concurrent.MoreExecutors;
 import com.google.devtools.build.lib.buildeventstream.ArtifactGroupNamer;
 import com.google.devtools.build.lib.buildeventstream.BuildEvent;
-import com.google.devtools.build.lib.buildeventstream.BuildEventArtifactUploader;
-import com.google.devtools.build.lib.buildeventstream.BuildEventProtocolOptions;
-import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
+import com.google.devtools.build.lib.buildeventstream.BuildEventConverters;
 import com.google.devtools.build.lib.buildeventstream.BuildEventTransport;
-import com.google.devtools.build.lib.util.AbruptExitException;
+import com.google.devtools.build.lib.buildeventstream.PathConverter;
 import com.google.protobuf.TextFormat;
 import java.io.IOException;
-import java.util.function.Consumer;
+import java.nio.charset.StandardCharsets;
 
 /**
  * A simple {@link BuildEventTransport} that writes the text representation of the protocol-buffer
@@ -35,13 +30,12 @@ import java.util.function.Consumer;
  * <p>This class is used for debugging.
  */
 public final class TextFormatFileTransport extends FileTransport {
-  TextFormatFileTransport(
-      String path,
-      BuildEventProtocolOptions options,
-      BuildEventArtifactUploader uploader,
-      Consumer<AbruptExitException> exitFunc)
-      throws IOException {
-    super(path, options, uploader, exitFunc);
+
+  private final PathConverter pathConverter;
+
+  TextFormatFileTransport(String path, PathConverter pathConverter) throws IOException {
+    super(path);
+    this.pathConverter = pathConverter;
   }
 
   @Override
@@ -51,18 +45,20 @@ public final class TextFormatFileTransport extends FileTransport {
 
   @Override
   public synchronized void sendBuildEvent(BuildEvent event, final ArtifactGroupNamer namer) {
-    Futures.addCallback(asStreamProto(event, namer),
-        new FutureCallback<BuildEventStreamProtos.BuildEvent>() {
+    BuildEventConverters converters =
+        new BuildEventConverters() {
           @Override
-          public void onSuccess(BuildEventStreamProtos.BuildEvent protoEvent) {
-            String protoTextRepresentation = TextFormat.printToString(protoEvent);
-            write("event {\n" + protoTextRepresentation + "}\n\n");
+          public PathConverter pathConverter() {
+            return pathConverter;
           }
 
           @Override
-          public void onFailure(Throwable t) {
-            // Intentionally left empty. The error handling happens in FileTransport.
+          public ArtifactGroupNamer artifactGroupNamer() {
+            return namer;
           }
-        }, MoreExecutors.directExecutor());
+        };
+    String protoTextRepresentation = TextFormat.printToString(event.asStreamProto(converters));
+    String line = "event {\n" + protoTextRepresentation + "}\n\n";
+    writeData(line.getBytes(StandardCharsets.UTF_8));
   }
 }

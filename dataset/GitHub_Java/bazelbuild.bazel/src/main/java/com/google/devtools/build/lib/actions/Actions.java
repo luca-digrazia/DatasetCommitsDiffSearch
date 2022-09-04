@@ -14,8 +14,7 @@
 
 package com.google.devtools.build.lib.actions;
 
-import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.escape.Escaper;
@@ -23,9 +22,8 @@ import com.google.common.escape.Escapers;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import com.google.devtools.build.lib.vfs.OsPathPolicy;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -33,7 +31,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.SortedMap;
 import java.util.TreeMap;
-import java.util.function.Function;
 import javax.annotation.Nullable;
 
 /**
@@ -57,8 +54,7 @@ public final class Actions {
    * <p>This method implements an equivalence relationship across actions, based on the action
    * class, the key, and the list of inputs and outputs.
    */
-  public static boolean canBeShared(
-      ActionKeyContext actionKeyContext, ActionAnalysisMetadata a, ActionAnalysisMetadata b) {
+  public static boolean canBeShared(ActionAnalysisMetadata a, ActionAnalysisMetadata b) {
     if (!a.getMnemonic().equals(b.getMnemonic())) {
       return false;
     }
@@ -70,7 +66,7 @@ public final class Actions {
 
     Action actionA = (Action) a;
     Action actionB = (Action) b;
-    if (!actionA.getKey(actionKeyContext).equals(actionB.getKey(actionKeyContext))) {
+    if (!actionA.getKey().equals(actionB.getKey())) {
       return false;
     }
     // Don't bother to check input and output counts first; the expected result for these tests is
@@ -93,11 +89,10 @@ public final class Actions {
    *     of indirection.
    * @throws ActionConflictException iff there are two actions generate the same output
    */
-  public static GeneratingActions findAndThrowActionConflict(
-      ActionKeyContext actionKeyContext, List<ActionAnalysisMetadata> actions)
+  public static GeneratingActions findAndThrowActionConflict(List<ActionAnalysisMetadata> actions)
       throws ActionConflictException {
     return Actions.maybeFilterSharedActionsAndThrowIfConflict(
-        actionKeyContext, actions, /*allowSharedAction=*/ false);
+        actions, /*allowSharedAction=*/ false);
   }
 
   /**
@@ -111,16 +106,13 @@ public final class Actions {
    *     output
    */
   public static GeneratingActions filterSharedActionsAndThrowActionConflict(
-      ActionKeyContext actionKeyContext, List<? extends ActionAnalysisMetadata> actions)
-      throws ActionConflictException {
+      List<ActionAnalysisMetadata> actions) throws ActionConflictException {
     return Actions.maybeFilterSharedActionsAndThrowIfConflict(
-        actionKeyContext, actions, /*allowSharedAction=*/ true);
+        actions, /*allowSharedAction=*/ true);
   }
 
   private static GeneratingActions maybeFilterSharedActionsAndThrowIfConflict(
-      ActionKeyContext actionKeyContext,
-      List<? extends ActionAnalysisMetadata> actions,
-      boolean allowSharedAction)
+      List<ActionAnalysisMetadata> actions, boolean allowSharedAction)
       throws ActionConflictException {
     Map<Artifact, Integer> generatingActions = new HashMap<>();
     int actionIndex = 0;
@@ -128,10 +120,8 @@ public final class Actions {
       for (Artifact artifact : action.getOutputs()) {
         Integer previousIndex = generatingActions.put(artifact, actionIndex);
         if (previousIndex != null && previousIndex != actionIndex) {
-          if (!allowSharedAction
-              || !Actions.canBeShared(actionKeyContext, actions.get(previousIndex), action)) {
-            throw new ActionConflictException(
-                actionKeyContext, artifact, actions.get(previousIndex), action);
+          if (!allowSharedAction || !Actions.canBeShared(actions.get(previousIndex), action)) {
+            throw new ActionConflictException(artifact, actions.get(previousIndex), action);
           }
         }
       }
@@ -152,7 +142,7 @@ public final class Actions {
    */
   public static Map<ActionAnalysisMetadata, ArtifactPrefixConflictException>
       findArtifactPrefixConflicts(Map<Artifact, ActionAnalysisMetadata> generatingActions) {
-    TreeMap<PathFragment, Artifact> artifactPathMap = new TreeMap<>(comparatorForPrefixConflicts());
+    TreeMap<PathFragment, Artifact> artifactPathMap = new TreeMap();
     for (Artifact artifact : generatingActions.keySet()) {
       artifactPathMap.put(artifact.getExecPath(), artifact);
     }
@@ -162,63 +152,18 @@ public final class Actions {
   }
 
   /**
-   * Returns a comparator for use with {@link #findArtifactPrefixConflicts(ActionGraph, SortedMap)}.
-   */
-  public static Comparator<PathFragment> comparatorForPrefixConflicts() {
-    return PathFragmentPrefixComparator.INSTANCE;
-  }
-
-  private static class PathFragmentPrefixComparator implements Comparator<PathFragment> {
-    private static final PathFragmentPrefixComparator INSTANCE = new PathFragmentPrefixComparator();
-
-    @Override
-    public int compare(PathFragment lhs, PathFragment rhs) {
-      // We need to use the OS path policy in case the OS is case insensitive.
-      OsPathPolicy os = OsPathPolicy.getFilePathOs();
-      String str1 = lhs.getPathString();
-      String str2 = rhs.getPathString();
-      int len1 = str1.length();
-      int len2 = str2.length();
-      int n = Math.min(len1, len2);
-      for (int i = 0; i < n; ++i) {
-        char c1 = str1.charAt(i);
-        char c2 = str2.charAt(i);
-        int res = os.compare(c1, c2);
-        if (res != 0) {
-          if (c1 == PathFragment.SEPARATOR_CHAR) {
-            return -1;
-          } else if (c2 == PathFragment.SEPARATOR_CHAR) {
-            return 1;
-          }
-          return res;
-        }
-      }
-      return len1 - len2;
-    }
-  }
-
-  /**
    * Finds Artifact prefix conflicts between generated artifacts. An artifact prefix conflict
    * happens if one action generates an artifact whose path is a prefix of another artifact's path.
    * Those two artifacts cannot exist simultaneously in the output tree.
    *
    * @param actionGraph the {@link ActionGraph} to query for artifact conflicts
-   * @param artifactPathMap a map mapping generated artifacts to their exec paths. The map must be
-   *     sorted using the comparator from {@link #comparatorForPrefixConflicts()}.
+   * @param artifactPathMap a map mapping generated artifacts to their exec paths
    * @return A map between actions that generated the conflicting artifacts and their associated
    *     {@link ArtifactPrefixConflictException}.
    */
   public static Map<ActionAnalysisMetadata, ArtifactPrefixConflictException>
-      findArtifactPrefixConflicts(
-          ActionGraph actionGraph, SortedMap<PathFragment, Artifact> artifactPathMap) {
-    // You must construct the sorted map using this comparator for the algorithm to work.
-    // The algorithm requires subdirectories to immediately follow parent directories,
-    // before any files in that directory.
-    // Example: "foo", "foo.obj", foo/bar" must be sorted
-    // "foo", "foo/bar", foo.obj"
-    Preconditions.checkArgument(
-        artifactPathMap.comparator() instanceof PathFragmentPrefixComparator,
-        "artifactPathMap must be sorted with PathFragmentPrefixComparator");
+      findArtifactPrefixConflicts(ActionGraph actionGraph,
+      SortedMap<PathFragment, Artifact> artifactPathMap) {
     // No actions in graph -- currently happens only in tests. Special-cased because .next() call
     // below is unconditional.
     if (artifactPathMap.isEmpty()) {
@@ -310,35 +255,24 @@ public final class Actions {
   }
 
   /** Container class for actions and the artifacts they generate. */
+  @VisibleForTesting
   public static class GeneratingActions {
-    public static final GeneratingActions EMPTY =
-        new GeneratingActions(ImmutableList.of(), ImmutableMap.of());
-
-    private final List<? extends ActionAnalysisMetadata> actions;
+    private final List<ActionAnalysisMetadata> actions;
     private final ImmutableMap<Artifact, Integer> generatingActionIndex;
 
-    private GeneratingActions(
-        List<? extends ActionAnalysisMetadata> actions,
+    @VisibleForTesting
+    public GeneratingActions(
+        List<ActionAnalysisMetadata> actions,
         ImmutableMap<Artifact, Integer> generatingActionIndex) {
       this.actions = actions;
       this.generatingActionIndex = generatingActionIndex;
-    }
-
-    public static GeneratingActions fromSingleAction(ActionAnalysisMetadata action) {
-      return new GeneratingActions(
-          ImmutableList.of(action),
-          ImmutableMap.copyOf(
-              action
-                  .getOutputs()
-                  .stream()
-                  .collect(ImmutableMap.toImmutableMap(Function.identity(), (a) -> 0))));
     }
 
     public ImmutableMap<Artifact, Integer> getGeneratingActionIndex() {
       return generatingActionIndex;
     }
 
-    public List<? extends ActionAnalysisMetadata> getActions() {
+    public List<ActionAnalysisMetadata> getActions() {
       return actions;
     }
   }
