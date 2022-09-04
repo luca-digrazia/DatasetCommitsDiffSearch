@@ -68,7 +68,7 @@ public class TestSuiteModel {
   }
 
   // VisibleForTesting
-  public Description getTopLevelDescription() {
+  Description getTopLevelDescription() {
     return rootNode.getDescription();
   }
 
@@ -245,7 +245,7 @@ public class TestSuiteModel {
   }
 
   // VisibleForTesting
-  public void write(XmlWriter writer) throws IOException {
+  void write(XmlWriter writer) throws IOException {
     if (wroteXml.compareAndSet(false, true)) {
       xmlResultWriter.writeTestSuites(writer, rootNode.getResult());
     }
