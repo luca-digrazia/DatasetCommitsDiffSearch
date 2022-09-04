@@ -177,11 +177,6 @@ public class ValidatorHelper {
 		hasOneOfClassAnnotations(element, enclosingElement, validatedElements, validAnnotations, valid);
 	}
 
-	public void enclosingElementHasEFragment(Element element, AnnotationElements validatedElements, IsValid valid) {
-		Element enclosingElement = element.getEnclosingElement();
-		hasClassAnnotation(element, enclosingElement, validatedElements, EFragment.class, valid);
-	}
-
 	public void hasEActivity(Element element, AnnotationElements validatedElements, IsValid valid) {
 		hasClassAnnotation(element, element, validatedElements, EActivity.class, valid);
 	}
@@ -588,6 +583,11 @@ public class ValidatorHelper {
 	}
 
 	public void upperclassOfRegisteredApplication(Element element, AndroidManifest manifest, IsValid valid) {
+
+		if (manifest.isLibraryProject()) {
+			return;
+		}
+
 		String applicationClassName = manifest.getApplicationClassName();
 		if (applicationClassName != null) {
 			if (applicationClassName.endsWith(GENERATION_SUFFIX)) {
@@ -606,6 +606,10 @@ public class ValidatorHelper {
 	}
 
 	public void applicationRegistered(Element element, AndroidManifest manifest, IsValid valid) {
+
+		if (manifest.isLibraryProject()) {
+			return;
+		}
 
 		String applicationClassName = manifest.getApplicationClassName();
 		if (applicationClassName != null) {
@@ -1065,6 +1069,10 @@ public class ValidatorHelper {
 		TypeElement typeElement = (TypeElement) element;
 
 		if (typeElement.getModifiers().contains(Modifier.ABSTRACT)) {
+			return;
+		}
+
+		if (androidManifest.isLibraryProject()) {
 			return;
 		}
 
