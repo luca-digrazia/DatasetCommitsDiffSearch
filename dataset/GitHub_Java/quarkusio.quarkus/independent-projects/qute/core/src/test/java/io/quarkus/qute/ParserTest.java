@@ -38,29 +38,14 @@ public class ParserTest {
     }
 
     @Test
-    public void testIgnoreInvalidIdentifier() {
-        Engine engine = Engine.builder().addDefaults().build();
-        assertEquals("{\"foo\":\"bar\"} bar {'} baz ZX80",
-                engine.parse("{\"foo\":\"bar\"} {_foo} {'} {1foo} {čip}").data("_foo", "bar").data("1foo", "baz")
-                        .data("čip", "ZX80").render());
-    }
-
-    @Test
-    public void testEscapingDelimiters() {
-        Engine engine = Engine.builder().addDefaults().build();
-        assertEquals("{foo} bar \\ignored {čip}",
-                engine.parse("\\{foo\\} {foo} \\ignored \\{čip}").data("foo", "bar").render());
-    }
-
-    @Test
-    public void testTypeInfos() {
+    public void testTypeCheckInfos() {
         Engine engine = Engine.builder().addDefaultSectionHelpers()
                 .build();
         Template template = engine.parse("{@org.acme.Foo foo}"
                 + "{@java.util.List<org.acme.Label> labels}"
                 + "{foo.name}"
                 + "{#for item in foo.items}"
-                + "{item.name}{bar.name}"
+                + "{item.name}{bar}"
                 + "{/}"
                 + "{#each labels}"
                 + "{it.name}"
@@ -77,25 +62,24 @@ public class ParserTest {
                 + "{/}"
                 + "{#for foo in foos}"
                 + "{foo.baz}"
-                + "{/}"
-                + "{foo.call(labels,bar)}");
+                + "{/}");
         Set<Expression> expressions = template.getExpressions();
 
-        assertExpr(expressions, "foo.name", 2, "|org.acme.Foo|.name");
-        assertExpr(expressions, "foo.items", 2, "|org.acme.Foo|.items");
-        assertExpr(expressions, "item.name", 2, "|org.acme.Foo|.items<for-element>.name");
-        assertExpr(expressions, "bar.name", 2, null);
-        assertExpr(expressions, "labels", 1, "|java.util.List<org.acme.Label>|");
-        assertExpr(expressions, "it.name", 2, "|java.util.List<org.acme.Label>|<for-element>.name");
-        assertExpr(expressions, "inject:bean.name", 2, "bean.name");
-        assertExpr(expressions, "inject:bean.labels", 2, "bean.labels");
-        assertExpr(expressions, "it.value", 2, "bean.labels<for-element>.value");
-        assertExpr(expressions, "foo.bar", 2, "|org.acme.Foo|.bar");
-        assertExpr(expressions, "baz.name", 2, "|org.acme.Foo|.bar.name");
-        assertExpr(expressions, "foo.bravo", 2, "|org.acme.Foo|.bravo");
-        assertExpr(expressions, "delta.id", 2, "|org.acme.Foo|.bravo.id");
+        assertExpr(expressions, "foo.name", 2, "[org.acme.Foo].name");
+        assertExpr(expressions, "foo.items", 2, "[org.acme.Foo].items");
+        assertExpr(expressions, "item.name", 2, "[org.acme.Foo].items<for-element>.name");
+        assertExpr(expressions, "bar", 1, null);
+        assertExpr(expressions, "labels", 1, "[java.util.List<org.acme.Label>]");
+        assertExpr(expressions, "it.name", 2, "[java.util.List<org.acme.Label>]<for-element>.name");
+        assertExpr(expressions, "inject:bean.name", 2, "[" + Expressions.TYPECHECK_NAMESPACE_PLACEHOLDER + "].bean.name");
+        assertExpr(expressions, "inject:bean.labels", 2, "[" + Expressions.TYPECHECK_NAMESPACE_PLACEHOLDER + "].bean.labels");
+        assertExpr(expressions, "it.value", 2,
+                "[" + Expressions.TYPECHECK_NAMESPACE_PLACEHOLDER + "].bean.labels<for-element>.value");
+        assertExpr(expressions, "foo.bar", 2, "[org.acme.Foo].bar");
+        assertExpr(expressions, "baz.name", 2, "[org.acme.Foo].bar.name");
+        assertExpr(expressions, "foo.bravo", 2, "[org.acme.Foo].bravo");
+        assertExpr(expressions, "delta.id", 2, "[org.acme.Foo].bravo.id");
         assertExpr(expressions, "foo.baz", 2, null);
-        assertExpr(expressions, "foo.call(labels,bar)", 2, "|org.acme.Foo|.call(labels,bar)");
     }
 
     @Test
@@ -110,8 +94,8 @@ public class ParserTest {
                 + "{#for item in foo.items}\n\n"
                 + "{item.name}"
                 + "{/}");
-        assertEquals(6, find(template.getExpressions(), "foo.items").getOrigin().getLine());
-        assertEquals(8, find(template.getExpressions(), "item.name").getOrigin().getLine());
+        assertEquals(6, find(template.getExpressions(), "foo.items").origin.getLine());
+        assertEquals(8, find(template.getExpressions(), "item.name").origin.getLine());
     }
 
     @Test
@@ -119,7 +103,7 @@ public class ParserTest {
         Engine engine = Engine.builder().addDefaultSectionHelpers()
                 .build();
         Template template = engine.parse("12{foo}");
-        Origin origin = find(template.getExpressions(), "foo").getOrigin();
+        Origin origin = find(template.getExpressions(), "foo").origin;
         assertEquals(1, origin.getLine());
     }
 
@@ -163,13 +147,6 @@ public class ParserTest {
                 "Parser error on line 1: unterminated string literal or composite parameter detected for [#if (foo || bar]", 1);
     }
 
-    @Test
-    public void testWhitespace() {
-        Engine engine = Engine.builder().addDefaults().build();
-        assertEquals("Hello world", engine.parse("{#if true  }Hello {name }{/if  }").data("name", "world").render());
-        assertEquals("Hello world", engine.parse("Hello {name ?: 'world'  }").render());
-    }
-
     private void assertParserError(String template, String message, int line) {
         Engine engine = Engine.builder().addDefaultSectionHelpers().build();
         try {
@@ -183,11 +160,11 @@ public class ParserTest {
         }
     }
 
-    private void assertExpr(Set<Expression> expressions, String value, int parts, String typeInfo) {
+    private void assertExpr(Set<Expression> expressions, String value, int parts, String typeCheckInfo) {
         Expression expr = find(expressions, value);
-        assertEquals(parts, expr.getParts().size());
-        assertEquals(typeInfo,
-                expr.collectTypeInfo());
+        assertEquals(parts, expr.parts.size());
+        assertEquals(typeCheckInfo,
+                expr.typeCheckInfo);
     }
 
     private Expression find(Set<Expression> expressions, String val) {

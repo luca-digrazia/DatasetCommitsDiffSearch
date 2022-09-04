@@ -12,10 +12,10 @@ import java.util.Set;
 import java.util.function.Function;
 
 /**
- * Each section consists of one or more blocks. The main block is always present. Additional blocks start with a label
+ * Each section tag consists of one or more blocks. The main block is always present. Additional blocks start with a label
  * definition: <code>{#label param1}</code>.
  */
-public final class SectionBlock {
+public class SectionBlock {
 
     public final Origin origin;
 
@@ -37,7 +37,7 @@ public final class SectionBlock {
     /**
      * Section content.
      */
-    List<TemplateNode> nodes;
+    final List<TemplateNode> nodes;
 
     public SectionBlock(Origin origin, String id, String label, Map<String, String> parameters,
             Map<String, Expression> expressions,
@@ -48,10 +48,6 @@ public final class SectionBlock {
         this.parameters = parameters;
         this.expressions = expressions;
         this.nodes = ImmutableList.copyOf(nodes);
-    }
-
-    public boolean isEmpty() {
-        return nodes.isEmpty();
     }
 
     Set<Expression> getExpressions() {
@@ -69,54 +65,6 @@ public final class SectionBlock {
         builder.append("SectionBlock [origin=").append(origin).append(", id=").append(id).append(", label=").append(label)
                 .append("]");
         return builder.toString();
-    }
-
-    void optimizeNodes(Set<TemplateNode> nodesToRemove) {
-        List<TemplateNode> effectiveNodes = new ArrayList<>();
-        for (TemplateNode node : nodes) {
-            if (node instanceof SectionNode) {
-                effectiveNodes.add(node);
-                ((SectionNode) node).optimizeNodes(nodesToRemove);
-            } else if (node != Parser.COMMENT_NODE && !(node instanceof ParameterDeclarationNode)
-                    && (nodesToRemove.isEmpty() || !nodesToRemove.contains(node))) {
-                // Ignore comments, param declarations and nodes for removal
-                effectiveNodes.add(node);
-            }
-        }
-        // Collapse adjacent text and line separator nodes
-        List<TemplateNode> finalNodes = new ArrayList<>();
-        List<TextNode> group = null;
-        for (TemplateNode node : effectiveNodes) {
-            if (node instanceof TextNode) {
-                if (group == null) {
-                    group = new ArrayList<>();
-                }
-                group.add((TextNode) node);
-            } else {
-                if (group != null) {
-                    collapseGroup(group, finalNodes);
-                    group = null;
-                }
-                finalNodes.add(node);
-            }
-        }
-        if (group != null) {
-            collapseGroup(group, finalNodes);
-        }
-        nodes = ImmutableList.copyOf(finalNodes);
-    }
-
-    private void collapseGroup(List<TextNode> group, List<TemplateNode> finalNodes) {
-        if (group.size() > 1) {
-            // Collapse the group...
-            StringBuilder val = new StringBuilder();
-            for (TextNode textNode : group) {
-                val.append(textNode.getValue());
-            }
-            finalNodes.add(new TextNode(val.toString(), group.get(0).getOrigin()));
-        } else {
-            finalNodes.add(group.get(0));
-        }
     }
 
     static SectionBlock.Builder builder(String id, Function<String, Expression> expressionFunc,

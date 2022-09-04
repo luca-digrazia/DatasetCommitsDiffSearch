@@ -3,7 +3,6 @@ package io.quarkus.qute;
 import io.quarkus.qute.SectionHelper.SectionResolutionContext;
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -18,13 +17,13 @@ class SectionNode implements TemplateNode {
         return new Builder(helperName, origin);
     }
 
-    final String name;
     final List<SectionBlock> blocks;
+
     private final SectionHelper helper;
+
     private final Origin origin;
 
-    SectionNode(String name, List<SectionBlock> blocks, SectionHelper helper, Origin origin) {
-        this.name = name;
+    SectionNode(List<SectionBlock> blocks, SectionHelper helper, Origin origin) {
         this.blocks = ImmutableList.copyOf(blocks);
         this.helper = helper;
         this.origin = origin;
@@ -37,12 +36,6 @@ class SectionNode implements TemplateNode {
 
     public Origin getOrigin() {
         return origin;
-    }
-
-    void optimizeNodes(Set<TemplateNode> nodes) {
-        for (SectionBlock block : blocks) {
-            block.optimizeNodes(nodes);
-        }
     }
 
     @Override
@@ -91,7 +84,7 @@ class SectionNode implements TemplateNode {
         }
 
         SectionNode build() {
-            return new SectionNode(helperName, blocks,
+            return new SectionNode(blocks,
                     factory.initialize(new SectionInitContextImpl(engine, blocks, this::createParserError)), origin);
         }
 
@@ -127,34 +120,20 @@ class SectionNode implements TemplateNode {
             }
             CompletableFuture<ResultNode> result = new CompletableFuture<ResultNode>();
             @SuppressWarnings("unchecked")
-            CompletableFuture<ResultNode>[] allResults = new CompletableFuture[block.nodes.size()];
-            List<CompletableFuture<ResultNode>> asyncResults = new LinkedList<>();
+            CompletableFuture<ResultNode>[] results = new CompletableFuture[block.nodes.size()];
             int idx = 0;
             for (TemplateNode node : block.nodes) {
-                CompletableFuture<ResultNode> nodeResult = node.resolve(context).toCompletableFuture();
-                allResults[idx++] = nodeResult;
-                if (!node.isConstant()) {
-                    asyncResults.add(nodeResult);
-                }
+                results[idx++] = node.resolve(context).toCompletableFuture();
             }
-            if (asyncResults.isEmpty()) {
-                result.complete(new MultiResultNode(allResults));
-            } else {
-                CompletionStage<?> cs;
-                if (asyncResults.size() == 1) {
-                    cs = asyncResults.get(0);
-                } else {
-                    cs = CompletableFuture
-                            .allOf(asyncResults.toArray(Futures.EMPTY_RESULTS));
-                }
-                cs.whenComplete((v, t) -> {
-                    if (t != null) {
-                        result.completeExceptionally(t);
-                    } else {
-                        result.complete(new MultiResultNode(allResults));
-                    }
-                });
-            }
+            CompletableFuture
+                    .allOf(results)
+                    .whenComplete((v, t) -> {
+                        if (t != null) {
+                            result.completeExceptionally(t);
+                        } else {
+                            result.complete(new MultiResultNode(results));
+                        }
+                    });
             return result;
         }
 

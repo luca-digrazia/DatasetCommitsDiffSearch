@@ -9,8 +9,6 @@ import java.util.Map;
 
 /**
  * Factory to create a new {@link SectionHelper} based on the {@link SectionInitContextImpl}.
- * 
- * @see EngineBuilder#addSectionHelper(SectionHelperFactory)
  */
 public interface SectionHelperFactory<T extends SectionHelper> {
 
@@ -18,7 +16,7 @@ public interface SectionHelperFactory<T extends SectionHelper> {
 
     /**
      * 
-     * @return the list of default aliases used to match the helper
+     * @return the list of default aliases
      */
     default List<String> getDefaultAliases() {
         return Collections.emptyList();
@@ -34,6 +32,8 @@ public interface SectionHelperFactory<T extends SectionHelper> {
 
     /**
      * A nested section tag that matches a name of a block will be added as a block to the current section.
+     * <p>
+     * 
      * 
      * @return the list of block labels
      */
@@ -41,13 +41,6 @@ public interface SectionHelperFactory<T extends SectionHelper> {
         return Collections.emptyList();
     }
 
-    /**
-     * By default, all unknown nested sections are ignored, ie. sections with labels not present in the
-     * {@link #getBlockLabels()}. However, sometimes it might be useful to treat such sections as blocks. See
-     * {@link IncludeSectionHelper} for an example.
-     * 
-     * @return true if unknown sections should not be ignored
-     */
     default boolean treatUnknownSectionsAsBlocks() {
         return false;
     }

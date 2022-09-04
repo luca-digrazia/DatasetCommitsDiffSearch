@@ -33,9 +33,6 @@ class Parser implements Function<String, Expression> {
     private static final char START_DELIMITER = '{';
     private static final char END_DELIMITER = '}';
     private static final char COMMENT_DELIMITER = '!';
-    private static final char UNDERSCORE = '_';
-    private static final char ESCAPE_CHAR = '\\';
-
     // Linux, BDS, etc.
     private static final char LINE_SEPARATOR_LF = '\n';
     // Mac OS 9, ZX Spectrum :-), etc.
@@ -44,8 +41,6 @@ class Parser implements Function<String, Expression> {
 
     static final char START_COMPOSITE_PARAM = '(';
     static final char END_COMPOSITE_PARAM = ')';
-
-    static final String TYPE_CHECK_NAMESPACE = "[" + Expressions.TYPECHECK_NAMESPACE_PLACEHOLDER + "].";
 
     private StringBuilder buffer;
     private State state;
@@ -140,9 +135,6 @@ class Parser implements Function<String, Expression> {
             case TEXT:
                 text(character);
                 break;
-            case ESCAPE:
-                escape(character);
-                break;
             case TAG_INSIDE:
                 tag(character);
                 break;
@@ -158,20 +150,9 @@ class Parser implements Function<String, Expression> {
         lineCharacter++;
     }
 
-    private void escape(char character) {
-        if (character != START_DELIMITER && character != END_DELIMITER) {
-            // Invalid escape sequence is just ignored 
-            buffer.append(ESCAPE_CHAR);
-        }
-        buffer.append(character);
-        state = State.TEXT;
-    }
-
     private void text(char character) {
         if (character == START_DELIMITER) {
             state = State.TAG_CANDIDATE;
-        } else if (character == ESCAPE_CHAR) {
-            state = State.ESCAPE;
         } else {
             if (isLineSeparator(character)) {
                 line++;
@@ -200,27 +181,22 @@ class Parser implements Function<String, Expression> {
     }
 
     private void tagCandidate(char character) {
-        if (isValidIdentifierStart(character)) {
-            // Real tag start, flush text if any
-            flushText();
-            state = character == COMMENT_DELIMITER ? State.COMMENT : State.TAG_INSIDE;
-            buffer.append(character);
-        } else {
-            // Ignore expressions/tags starting with an invalid identifier
+        if (Character.isWhitespace(character)) {
             buffer.append(START_DELIMITER).append(character);
             if (isLineSeparator(character)) {
                 line++;
                 lineCharacter = 1;
             }
             state = State.TEXT;
+        } else if (character == START_DELIMITER) {
+            buffer.append(START_DELIMITER).append(START_DELIMITER);
+            state = State.TEXT;
+        } else {
+            // Real tag start, flush text if any
+            flushText();
+            state = character == COMMENT_DELIMITER ? State.COMMENT : State.TAG_INSIDE;
+            buffer.append(character);
         }
-    }
-
-    private boolean isValidIdentifierStart(char character) {
-        // A valid identifier must start with a digit, alphabet, underscore, comment delimiter or a tag command (e.g. # for sections)
-        return Tag.isCommand(character) || character == COMMENT_DELIMITER || character == UNDERSCORE
-                || Character.isDigit(character)
-                || Character.isAlphabetic(character);
     }
 
     private boolean isLineSeparator(char character) {
@@ -242,7 +218,7 @@ class Parser implements Function<String, Expression> {
         String content = buffer.toString();
         String tag = START_DELIMITER + content + END_DELIMITER;
 
-        if (content.charAt(0) == Tag.SECTION.command) {
+        if (content.charAt(0) == Tag.SECTION.getCommand()) {
 
             boolean isEmptySection = false;
             if (content.charAt(content.length() - 1) == Tag.SECTION_END.command) {
@@ -331,7 +307,7 @@ class Parser implements Function<String, Expression> {
                     sectionStack.addFirst(sectionNode);
                 }
             }
-        } else if (content.charAt(0) == Tag.SECTION_END.command) {
+        } else if (content.charAt(0) == Tag.SECTION_END.getCommand()) {
             SectionBlock.Builder block = sectionBlockStack.peek();
             SectionNode.Builder section = sectionStack.peek();
             String name = content.substring(1, content.length());
@@ -360,7 +336,7 @@ class Parser implements Function<String, Expression> {
             // Remove the last type info map from the stack
             typeInfoStack.pop();
 
-        } else if (content.charAt(0) == Tag.PARAM.command) {
+        } else if (content.charAt(0) == Tag.PARAM.getCommand()) {
 
             // {@org.acme.Foo foo}
             Map<String, String> typeInfos = typeInfoStack.peek();
@@ -536,22 +512,18 @@ class Parser implements Function<String, Expression> {
         EXPRESSION(null),
         SECTION('#'),
         SECTION_END('/'),
+        SECTION_BLOCK(':'),
         PARAM('@'),
         ;
 
-        final Character command;
+        private final Character command;
 
-        Tag(Character command) {
+        private Tag(Character command) {
             this.command = command;
         }
 
-        static boolean isCommand(char command) {
-            for (Tag tag : Tag.values()) {
-                if (tag.command != null && tag.command == command) {
-                    return true;
-                }
-            }
-            return false;
+        public Character getCommand() {
+            return command;
         }
 
     }
@@ -562,7 +534,6 @@ class Parser implements Function<String, Expression> {
         TAG_INSIDE,
         TAG_CANDIDATE,
         COMMENT,
-        ESCAPE,
 
     }
 
@@ -592,7 +563,9 @@ class Parser implements Function<String, Expression> {
         }
         if (literal == Result.NOT_FOUND) {
             if (namespace != null) {
-                typeCheckInfo = TYPE_CHECK_NAMESPACE + parts.stream().collect(Collectors.joining("."));
+                // TODO use constants!
+                typeCheckInfo = "[" + Expressions.TYPECHECK_NAMESPACE_PLACEHOLDER + "]";
+                typeCheckInfo += "." + parts.stream().collect(Collectors.joining("."));
             } else if (typeInfos.containsKey(parts.get(0))) {
                 typeCheckInfo = typeInfos.get(parts.get(0));
                 if (typeCheckInfo != null) {
