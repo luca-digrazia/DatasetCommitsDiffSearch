@@ -29,7 +29,6 @@ import org.productivity.java.syslog4j.server.SyslogServerIF;
 import org.productivity.java.syslog4j.server.SyslogServerSessionlessEventHandlerIF;
 
 import java.net.SocketAddress;
-import org.joda.time.DateTime;
 
 /**
  * SyslogEventHandler.java: May 17, 2010 8:58:18 PM
@@ -66,23 +65,16 @@ public class SyslogEventHandler implements SyslogServerSessionlessEventHandlerIF
         LOG.info("Facility: " + event.getFacility() + " (" + Tools.syslogFacilityToReadable(event.getFacility()) + ")");
         LOG.info("Level: " + event.getLevel() + " (" + Tools.syslogLevelToReadable(event.getLevel()) + ")");
         LOG.info("Raw: " + new String(event.getRaw()));
-
-        DateTime jt = new DateTime(event.getDate().getTime());
-        String unixTime = String.valueOf(event.getDate().getTime()/1000L);
-        String millis = String.valueOf(jt.getMillisOfSecond());
-        Float milliSecondTime = new Float(unixTime + "." + millis);
-
-        LOG.info(String.valueOf(new Float("1303317717.65384")));
-
+        
+        // Convert SyslogServerEventIF to GELFMessage and pass to SimpleGELFClientHandler
         gelf.setConvertedFromSyslog(true);
         gelf.setVersion("0");
         gelf.setShortMessage(event.getMessage());
-        gelf.setCreatedAt(milliSecondTime.floatValue());
         gelf.setHost(event.getHost());
         gelf.setFacility(Tools.syslogFacilityToReadable(event.getFacility()));
         gelf.setLevel(event.getLevel());
         gelf.setRaw(event.getRaw());
-
+        
         try {
             SimpleGELFClientHandler gelfHandler = new SimpleGELFClientHandler(gelf);
             gelfHandler.handle();
