@@ -22,6 +22,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.errorprone.annotations.CompileTimeConstant;
+import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -30,8 +31,6 @@ import javax.annotation.Nullable;
 /**
  * Factory for functions to convert a {@code T} to a commandline argument. Uses a certain convention
  * for commandline arguments (e.g., separators, and ordering of container elements).
- *
- * <p>Should only need to be created statically, and in limited quantity.
  */
 public class AndroidDataConverter<T> extends ParametrizedMapFn<T> {
 
@@ -77,17 +76,19 @@ public class AndroidDataConverter<T> extends ParametrizedMapFn<T> {
     this.joinerType = joinerType;
   }
 
-  // We must override equals and hashCode as per the contract of ParametrizedMapFn, but we
-  // statically create a very small number of these objects, so we know that reference equality is
-  // enough.
   @Override
   public boolean equals(Object obj) {
-    return this == obj;
+    if (!(obj instanceof AndroidDataConverter)) {
+      return false;
+    }
+
+    AndroidDataConverter<?> other = (AndroidDataConverter) obj;
+    return suppliers.equals(other.suppliers) && joinerType.equals(other.joinerType);
   }
 
   @Override
   public int hashCode() {
-    return System.identityHashCode(this);
+    return Objects.hash(suppliers, joinerType);
   }
 
   @Override
@@ -138,25 +139,54 @@ public class AndroidDataConverter<T> extends ParametrizedMapFn<T> {
     }
 
     Builder<T> withRoots(Function<T, ImmutableList<PathFragment>> rootsFunction) {
-      return with(t -> rootsToString(rootsFunction.apply(t)));
+      // Anonymous inner class for serialization.
+      return with(
+          new Function<T, String>() {
+            @Override
+            public String apply(T t) {
+              // Copied from rootsToString to get rid of internal Lambda.
+              return rootsFunction
+                  .apply(t)
+                  .stream()
+                  .map(PathFragment::toString)
+                  .collect(Collectors.joining("#"));
+            }
+          });
     }
 
     Builder<T> withArtifact(Function<T, Artifact> artifactFunction) {
-      return with(t -> artifactFunction.apply(t).getExecPathString());
+      // Anonymous inner class for serialization.
+      return with(
+          new Function<T, String>() {
+            @Override
+            public String apply(T t) {
+              return artifactFunction.apply(t).getExecPathString();
+            }
+          });
     }
 
     Builder<T> maybeWithArtifact(Function<T, Artifact> nullableArtifactFunction) {
+      // Anonymous inner class for serialization.
       return with(
-          t -> {
-            @Nullable Artifact artifact = nullableArtifactFunction.apply(t);
-            return artifact == null ? "" : artifact.getExecPathString();
+          new Function<T, String>() {
+            @Override
+            public String apply(T t) {
+              @Nullable Artifact artifact = nullableArtifactFunction.apply(t);
+              return artifact == null ? "" : artifact.getExecPathString();
+            }
           });
     }
 
     Builder<T> withLabel(Function<T, Label> labelFunction) {
       // Escape labels, since they are known to contain separating characters (specifically, ':').
       // Anonymous inner class for serialization.
-      return with(t -> joinerType.escape(labelFunction.apply(t).toString()));
+      return with(
+          new Function<T, String>() {
+            @Override
+            public String apply(T t) {
+              return joinerType.escape(labelFunction.apply(t).toString());
+            }
+          });
     }
 
     Builder<T> with(Function<T, String> stringFunction) {

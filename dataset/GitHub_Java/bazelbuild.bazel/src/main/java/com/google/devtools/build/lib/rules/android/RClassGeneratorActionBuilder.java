@@ -97,12 +97,16 @@ public class RClassGeneratorActionBuilder {
 
   private static Function<ValidatedAndroidData, String> chooseDepsToArg(
       final AndroidAaptVersion version) {
-    return container -> {
-      Artifact rTxt =
-          version == AndroidAaptVersion.AAPT2 ? container.getAapt2RTxt() : container.getRTxt();
-      return (rTxt != null ? rTxt.getExecPath() : "")
-          + ","
-          + (container.getManifest() != null ? container.getManifest().getExecPath() : "");
+    // Use an anonymous inner class for serialization.
+    return new Function<ValidatedAndroidData, String>() {
+      @Override
+      public String apply(ValidatedAndroidData container) {
+        Artifact rTxt =
+            version == AndroidAaptVersion.AAPT2 ? container.getAapt2RTxt() : container.getRTxt();
+        return (rTxt != null ? rTxt.getExecPath() : "")
+            + ","
+            + (container.getManifest() != null ? container.getManifest().getExecPath() : "");
+      }
     };
   }
 }

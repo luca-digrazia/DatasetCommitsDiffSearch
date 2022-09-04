@@ -18,7 +18,6 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
 import com.google.devtools.build.lib.rules.android.AndroidDataConverter.JoinerType;
-import com.google.devtools.build.lib.rules.android.DataBinding.DataBindingContext;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import java.util.Collections;
@@ -231,12 +230,9 @@ public class AndroidResourcesProcessorBuilder {
    *     information.
    */
   public ResourceApk buildWithoutLocalResources(
-      AndroidDataContext dataContext,
-      StampedAndroidManifest manifest,
-      DataBindingContext androidDataContext) {
+      AndroidDataContext dataContext, StampedAndroidManifest manifest) {
 
-    build(
-        dataContext, AndroidResources.empty(), AndroidAssets.empty(), manifest, androidDataContext);
+    build(dataContext, AndroidResources.empty(), AndroidAssets.empty(), manifest);
 
     return ResourceApk.fromTransitiveResources(
         resourceDependencies,
@@ -245,16 +241,12 @@ public class AndroidResourcesProcessorBuilder {
         rTxtOut);
   }
 
-  public ResourceContainer build(
-      AndroidDataContext dataContext,
-      ResourceContainer primary,
-      DataBindingContext dataBindingContext) {
+  public ResourceContainer build(AndroidDataContext dataContext, ResourceContainer primary) {
     build(
         dataContext,
         primary.getAndroidResources(),
         primary.getAndroidAssets(),
-        ProcessedAndroidManifest.from(primary),
-        dataBindingContext);
+        ProcessedAndroidManifest.from(primary));
 
     ResourceContainer.Builder builder =
         primary.toBuilder().setJavaSourceJar(sourceJarOut).setRTxt(rTxtOut).setSymbols(symbols);
@@ -280,8 +272,7 @@ public class AndroidResourcesProcessorBuilder {
       AndroidDataContext dataContext,
       AndroidResources primaryResources,
       AndroidAssets primaryAssets,
-      StampedAndroidManifest primaryManifest,
-      DataBindingContext dataBindingContext) {
+      StampedAndroidManifest primaryManifest) {
 
     if (aaptVersion == AndroidAaptVersion.AAPT2) {
       createAapt2ApkAction(dataContext, primaryResources, primaryAssets, primaryManifest);
@@ -303,8 +294,7 @@ public class AndroidResourcesProcessorBuilder {
             symbols,
             /* compiledSymbols = */ null,
             dataContext.getLabel(),
-            processedManifest,
-            dataBindingContext);
+            processedManifest);
 
     // Wrap the parsed and merged assets
     ParsedAndroidAssets parsedAssets =
