@@ -42,7 +42,6 @@ import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.packages.StructProvider;
-import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
@@ -54,6 +53,13 @@ import com.google.devtools.build.lib.runtime.ProcessWrapper;
 import com.google.devtools.build.lib.runtime.RepositoryRemoteExecutor;
 import com.google.devtools.build.lib.runtime.RepositoryRemoteExecutor.ExecutionResult;
 import com.google.devtools.build.lib.starlarkbuildapi.repository.StarlarkRepositoryContextApi;
+import com.google.devtools.build.lib.syntax.Dict;
+import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.Mutability;
+import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.syntax.StarlarkSemantics;
+import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.util.OsUtils;
 import com.google.devtools.build.lib.util.StringUtilities;
 import com.google.devtools.build.lib.util.io.OutErr;
@@ -74,9 +80,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
-import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -84,13 +88,6 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
-import net.starlark.java.eval.Dict;
-import net.starlark.java.eval.EvalException;
-import net.starlark.java.eval.Mutability;
-import net.starlark.java.eval.Sequence;
-import net.starlark.java.eval.Starlark;
-import net.starlark.java.eval.StarlarkSemantics;
-import net.starlark.java.eval.StarlarkThread;
 
 /** Starlark API for the repository_rule's context. */
 public class StarlarkRepositoryContext
@@ -420,8 +417,7 @@ public class StarlarkRepositoryContext
   }
 
   private boolean canExecuteRemote() {
-    boolean featureEnabled =
-        starlarkSemantics.getBool(BuildLanguageOptions.EXPERIMENTAL_REPO_REMOTE_EXEC);
+    boolean featureEnabled = starlarkSemantics.experimentalRepoRemoteExec();
     boolean remoteExecEnabled = remoteExecutor != null;
     return featureEnabled && isRemotable() && remoteExecEnabled;
   }
@@ -862,21 +858,14 @@ public class StarlarkRepositoryContext
             rule.getLabel().toString(),
             thread.getCallerLocation());
 
+    // Download to outputDirectory and delete it after extraction
     StarlarkPath outputPath = getPath("download_and_extract()", output);
     checkInOutputDirectory("write", outputPath);
     createDirectory(outputPath.getPath());
 
     Path downloadedPath;
-    Path downloadDirectory;
     try (SilentCloseable c =
         Profiler.instance().profile("fetching: " + rule.getLabel().toString())) {
-
-      // Download to temp directory inside the outputDirectory and delete it after extraction
-      java.nio.file.Path tempDirectory =
-          Files.createTempDirectory(Paths.get(outputPath.toString()), "temp");
-      downloadDirectory =
-          outputDirectory.getFileSystem().getPath(tempDirectory.toFile().getAbsolutePath());
-
       downloadedPath =
           downloadManager.download(
               urls,
@@ -884,7 +873,7 @@ public class StarlarkRepositoryContext
               checksum,
               canonicalId,
               Optional.of(type),
-              downloadDirectory,
+              outputPath.getPath(),
               env.getListener(),
               osObject.getEnvironmentVariables(),
               getName());
@@ -923,13 +912,13 @@ public class StarlarkRepositoryContext
 
     StructImpl downloadResult = calculateDownloadResult(checksum, downloadedPath);
     try {
-      if (downloadDirectory.exists()) {
-        downloadDirectory.deleteTree();
+      if (downloadedPath.exists()) {
+        downloadedPath.delete();
       }
     } catch (IOException e) {
       throw new RepositoryFunctionException(
           new IOException(
-              "Couldn't delete temporary directory (" + downloadDirectory.getPathString() + ")", e),
+              "Couldn't delete temporary file (" + downloadedPath.getPathString() + ")", e),
           Transience.TRANSIENT);
     }
     return downloadResult;
@@ -937,28 +926,16 @@ public class StarlarkRepositoryContext
 
   @Override
   public boolean flagEnabled(String flag, StarlarkThread starlarkThread) throws EvalException {
-    if (WHITELISTED_PATHS_FOR_FLAG_ENABLED.stream()
-        .noneMatch(x -> !starlarkThread.getCallerLocation().toString().endsWith(x))) {
-      throw Starlark.errorf(
-          "flag_enabled() is restricted to: '%s'.",
-          Joiner.on(", ").join(WHITELISTED_REPOS_FOR_FLAG_ENABLED));
-    }
-
-    // This function previously exposed the names of the StarlarkSemantics
-    // options, which have historically been *almost* the same as the corresponding
-    // flag names, but for minor accidental differences (e.g. case, plurals, underscores).
-    // But now that we have decoupled Bazel's Starlarksemantics features from the core
-    // interpreter, there is no reliable way to look up a semantics key by flag name.
-    // (For booleans, the key must encode its default value).
-    // So, for now, we'll special-case this to a single flag.
-    // Thank goodness (and laurentlb) it is access-restricted to a single .bzl file that we control.
-    // If this hack is really necessary, we could add logic to BuildLanguageOptions to extract
-    // values from StarlarkSemantics based on flag name.
-    switch (flag) {
-      case "incompatible_linkopts_to_linklibs":
-        return starlarkSemantics.getBool(BuildLanguageOptions.INCOMPATIBLE_LINKOPTS_TO_LINKLIBS);
-      default:
-        throw Starlark.errorf("flag_enabled: unsupported key: %s", flag);
+    try {
+      if (WHITELISTED_PATHS_FOR_FLAG_ENABLED.stream()
+          .noneMatch(x -> !starlarkThread.getCallerLocation().toString().endsWith(x))) {
+        throw Starlark.errorf(
+            "flag_enabled() is restricted to: '%s'.",
+            Joiner.on(", ").join(WHITELISTED_REPOS_FOR_FLAG_ENABLED));
+      }
+      return starlarkSemantics.flagValue(flag);
+    } catch (IllegalArgumentException e) {
+      throw Starlark.errorf("Can't query value of '%s'.\n%s", flag, e.getMessage());
     }
   }
 
