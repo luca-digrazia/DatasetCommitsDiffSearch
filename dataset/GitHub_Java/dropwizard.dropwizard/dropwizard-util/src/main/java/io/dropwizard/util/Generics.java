@@ -4,7 +4,7 @@ import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
 
-import static com.google.common.base.Preconditions.checkNotNull;
+import static java.util.Objects.requireNonNull;
 
 /**
  * Helper methods for class type parameters.
@@ -16,7 +16,7 @@ public class Generics {
     /**
      * Finds the type parameter for the given class.
      *
-     * @param klass    a parameterized class
+     * @param klass a parameterized class
      * @return the class's type parameter
      */
     public static Class<?> getTypeParameter(Class<?> klass) {
@@ -26,14 +26,14 @@ public class Generics {
     /**
      * Finds the type parameter for the given class which is assignable to the bound class.
      *
-     * @param klass    a parameterized class
-     * @param bound    the type bound
-     * @param <T>      the type bound
+     * @param klass a parameterized class
+     * @param bound the type bound
+     * @param <T>   the type bound
      * @return the class's type parameter
      */
     @SuppressWarnings("unchecked")
     public static <T> Class<T> getTypeParameter(Class<?> klass, Class<? super T> bound) {
-        Type t = checkNotNull(klass);
+        Type t = requireNonNull(klass);
         while (t instanceof Class<?>) {
             t = ((Class<?>) t).getGenericSuperclass();
         }
@@ -47,13 +47,24 @@ public class Generics {
             for (Type param : ((ParameterizedType) t).getActualTypeArguments()) {
                 if (param instanceof Class<?>) {
                     final Class<T> cls = determineClass(bound, param);
-                    if (cls != null) { return cls; }
-                }
-                else if (param instanceof TypeVariable) {
+                    if (cls != null) {
+                        return cls;
+                    }
+                } else if (param instanceof TypeVariable) {
                     for (Type paramBound : ((TypeVariable<?>) param).getBounds()) {
                         if (paramBound instanceof Class<?>) {
                             final Class<T> cls = determineClass(bound, paramBound);
-                            if (cls != null) { return cls; }
+                            if (cls != null) {
+                                return cls;
+                            }
+                        }
+                    }
+                } else if (param instanceof ParameterizedType) {
+                    final Type rawType = ((ParameterizedType) param).getRawType();
+                    if (rawType instanceof Class<?>) {
+                        final Class<T> cls = determineClass(bound, rawType);
+                        if (cls != null) {
+                            return cls;
                         }
                     }
                 }
