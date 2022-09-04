@@ -19,7 +19,6 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import java.util.Collection;
 
 /**
@@ -27,12 +26,11 @@ import java.util.Collection;
  * transitively.
  */
 @Immutable
-@AutoCodec
 public final class JavaExportsProvider implements TransitiveInfoProvider {
 
   private final NestedSet<Label> transitiveExports;
 
-  JavaExportsProvider(NestedSet<Label> transitiveExports) {
+  public JavaExportsProvider(NestedSet<Label> transitiveExports) {
     this.transitiveExports = transitiveExports;
   }
 
