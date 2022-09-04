@@ -28,7 +28,7 @@ import org.apache.log4j.PropertyConfigurator;
 import org.junit.Before;
 import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.*;
 
 public class DefaultRowUpdaterTest {
   private final static Log LOG = LogFactory.getLog(ServerSparseDoubleRowTest.class);
@@ -66,11 +66,10 @@ public class DefaultRowUpdaterTest {
   public void testUpdateIntDenseToIntDense() throws Exception {
     ServerDenseIntRow serverDenseIntRow = new ServerDenseIntRow(rowId, startCol, endCol);
     ByteBuf buf = Unpooled.buffer(16);
-    buf.writeInt(3);
     buf.writeInt(0);
     buf.writeInt(1);
     buf.writeInt(-1);
-    rowUpdater.updateIntDenseToIntDense(buf, serverDenseIntRow);
+    rowUpdater.updateIntDenseToIntDense(3, buf, serverDenseIntRow);
     assertEquals(serverDenseIntRow.getData().get(0), 0);
     assertEquals(serverDenseIntRow.getData().get(1), 1);
     assertEquals(serverDenseIntRow.getData().get(2), -1);
@@ -80,14 +79,13 @@ public class DefaultRowUpdaterTest {
   public void testUpdateIntSparseToIntDense() throws Exception {
     ServerDenseIntRow serverDenseIntRow = new ServerDenseIntRow(rowId, startCol, endCol);
     ByteBuf buf = Unpooled.buffer(16);
-    buf.writeInt(3);
     buf.writeInt(0);
     buf.writeInt(0);
     buf.writeInt(1);
     buf.writeInt(1);
     buf.writeInt(2);
     buf.writeInt(-1);
-    rowUpdater.updateIntSparseToIntDense(buf, serverDenseIntRow);
+    rowUpdater.updateIntSparseToIntDense(3, buf, serverDenseIntRow);
     assertEquals(serverDenseIntRow.getData().get(0), 0, 0.00);
     assertEquals(serverDenseIntRow.getData().get(1), 1, 0.00);
     assertEquals(serverDenseIntRow.getData().get(2), -1, 0.00);
@@ -95,13 +93,12 @@ public class DefaultRowUpdaterTest {
 
   @Test
   public void testUpdateIntDenseToIntSparse() throws Exception {
-    ServerSparseIntRow serverSparseIntRow = new ServerSparseIntRow(rowId, startCol, endCol, 0);
+    ServerSparseIntRow serverSparseIntRow = new ServerSparseIntRow(rowId, startCol, endCol);
     ByteBuf buf = Unpooled.buffer(16);
-    buf.writeInt(3);
     buf.writeInt(0);
     buf.writeInt(1);
     buf.writeInt(2);
-    rowUpdater.updateIntDenseToIntSparse(buf, serverSparseIntRow);
+    rowUpdater.updateIntDenseToIntSparse(3, buf, serverSparseIntRow);
     Int2IntOpenHashMap hashMap = new Int2IntOpenHashMap();
     hashMap.addTo(0, 0);
     hashMap.addTo(1, 1);
@@ -111,16 +108,15 @@ public class DefaultRowUpdaterTest {
 
   @Test
   public void testUpdateIntSparseToIntSparse() throws Exception {
-    ServerSparseIntRow serverSparseIntRow = new ServerSparseIntRow(rowId, startCol, endCol, 0);
+    ServerSparseIntRow serverSparseIntRow = new ServerSparseIntRow(rowId, startCol, endCol);
     ByteBuf buf = Unpooled.buffer(16);
-    buf.writeInt(3);
     buf.writeInt(0);
     buf.writeInt(0);
     buf.writeInt(1);
     buf.writeInt(1);
     buf.writeInt(2);
     buf.writeInt(2);
-    rowUpdater.updateIntSparseToIntSparse(buf, serverSparseIntRow);
+    rowUpdater.updateIntSparseToIntSparse(3, buf, serverSparseIntRow);
     Int2IntOpenHashMap hashMap = new Int2IntOpenHashMap();
     hashMap.addTo(0, 0);
     hashMap.addTo(1, 1);
@@ -132,11 +128,10 @@ public class DefaultRowUpdaterTest {
   public void testUpdateDoubleDenseToDoubleDense() throws Exception {
     ServerDenseDoubleRow serverDenseDoubleRow = new ServerDenseDoubleRow(rowId, startCol, endCol);
     ByteBuf buf = Unpooled.buffer(16);
-    buf.writeInt(3);
     buf.writeDouble(0.00);
     buf.writeDouble(1.00);
     buf.writeDouble(-1.00);
-    rowUpdater.updateDoubleDenseToDoubleDense(buf, serverDenseDoubleRow);
+    rowUpdater.updateDoubleDenseToDoubleDense(3, buf, serverDenseDoubleRow);
     assertEquals(serverDenseDoubleRow.getData().get(0), 0, 0.00);
     assertEquals(serverDenseDoubleRow.getData().get(1), 1, 0.00);
     assertEquals(serverDenseDoubleRow.getData().get(2), -1, 0.00);
@@ -146,14 +141,13 @@ public class DefaultRowUpdaterTest {
   public void testUpdateDoubleSparseToDoubleDense() throws Exception {
     ServerDenseDoubleRow serverDenseDoubleRow = new ServerDenseDoubleRow(rowId, startCol, endCol);
     ByteBuf buf = Unpooled.buffer(16);
-    buf.writeInt(3);
     buf.writeInt(0);
     buf.writeDouble(0.00);
     buf.writeInt(1);
     buf.writeDouble(1.00);
     buf.writeInt(2);
     buf.writeDouble(-1.00);
-    rowUpdater.updateDoubleSparseToDoubleDense(buf, serverDenseDoubleRow);
+    rowUpdater.updateDoubleSparseToDoubleDense(3, buf, serverDenseDoubleRow);
     assertEquals(serverDenseDoubleRow.getData().get(0), 0, 0.00);
     assertEquals(serverDenseDoubleRow.getData().get(1), 1, 0.00);
     assertEquals(serverDenseDoubleRow.getData().get(2), -1, 0.00);
@@ -162,13 +156,12 @@ public class DefaultRowUpdaterTest {
   @Test
   public void testUpdateDoubleDenseToDoubleSparse() throws Exception {
     ServerSparseDoubleRow serverSparseDoubleRow =
-        new ServerSparseDoubleRow(rowId, startCol, endCol, 0);
+        new ServerSparseDoubleRow(rowId, startCol, endCol);
     ByteBuf buf = Unpooled.buffer(16);
-    buf.writeInt(3);
     buf.writeDouble(0.00);
     buf.writeDouble(1.00);
     buf.writeDouble(2.00);
-    rowUpdater.updateDoubleDenseToDoubleSparse(buf, serverSparseDoubleRow);
+    rowUpdater.updateDoubleDenseToDoubleSparse(3, buf, serverSparseDoubleRow);
     Int2DoubleOpenHashMap hashMap = new Int2DoubleOpenHashMap();
     hashMap.addTo(0, 0.00);
     hashMap.addTo(1, 1.00);
@@ -179,16 +172,15 @@ public class DefaultRowUpdaterTest {
   @Test
   public void testUpdateDoubleSparseToDoubleSparse() throws Exception {
     ServerSparseDoubleRow serverSparseDoubleRow =
-        new ServerSparseDoubleRow(rowId, startCol, endCol, 0);
+        new ServerSparseDoubleRow(rowId, startCol, endCol);
     ByteBuf buf = Unpooled.buffer(16);
-    buf.writeInt(3);
     buf.writeInt(0);
     buf.writeDouble(0.00);
     buf.writeInt(1);
     buf.writeDouble(1.00);
     buf.writeInt(2);
     buf.writeDouble(2.00);
-    rowUpdater.updateDoubleSparseToDoubleSparse(buf, serverSparseDoubleRow);
+    rowUpdater.updateDoubleSparseToDoubleSparse(3, buf, serverSparseDoubleRow);
     Int2DoubleOpenHashMap hashMap = new Int2DoubleOpenHashMap();
     hashMap.addTo(0, 0.00);
     hashMap.addTo(1, 1.00);
@@ -200,11 +192,10 @@ public class DefaultRowUpdaterTest {
   public void testUpdateFloatDenseToFloatDense() throws Exception {
     ServerDenseFloatRow serverDenseFloatRow = new ServerDenseFloatRow(rowId, startCol, endCol);
     ByteBuf buf = Unpooled.buffer(16);
-    buf.writeInt(3);
     buf.writeFloat((float) 0.00);
     buf.writeFloat((float) 1.00);
     buf.writeFloat((float) -1.00);
-    rowUpdater.updateFloatDenseToFloatDense(buf, serverDenseFloatRow);
+    rowUpdater.updateFloatDenseToFloatDense(3, buf, serverDenseFloatRow);
     assertEquals(serverDenseFloatRow.getData().get(0), 0, 0.00);
     assertEquals(serverDenseFloatRow.getData().get(1), 1, 0.00);
     assertEquals(serverDenseFloatRow.getData().get(2), -1, 0.00);

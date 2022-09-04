@@ -23,8 +23,7 @@ import com.tencent.angel.conf.AngelConf;
 import com.tencent.angel.conf.MatrixConf;
 import com.tencent.angel.master.DummyTask;
 import com.tencent.angel.ml.matrix.MatrixContext;
-import com.tencent.angel.ml.matrix.RowType;
-import com.tencent.angel.model.output.format.ModelPartitionMeta;
+import com.tencent.angel.protobuf.generated.MLProtos;
 import com.tencent.angel.ps.PSAttemptId;
 import com.tencent.angel.ps.ParameterServerId;
 import com.tencent.angel.worker.WorkerAttemptId;
@@ -48,8 +47,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.*;
 
 
 public class ServerPartitionTest {
@@ -60,7 +58,7 @@ public class ServerPartitionTest {
   private int startCol;
   private int endRow;
   private int endCol;
-  private RowType rowType;
+  private MLProtos.RowType rowType;
   private PartitionKey partitionKey;
   private ServerPartition serverPartition;
   private static final String LOCAL_FS = LocalFileSystem.DEFAULT_FS;
@@ -87,10 +85,9 @@ public class ServerPartitionTest {
     startCol = 2;
     endRow = 8;
     endCol = 10;
-    rowType = RowType.T_DOUBLE_DENSE;
+    rowType = MLProtos.RowType.T_DOUBLE_DENSE;
     partitionKey = new PartitionKey(partitionId, matrixId, startRow, startCol, endRow, endCol);
-    serverPartition = new ServerPartition(partitionKey, rowType, 0.0);
-    serverPartition.init();
+    serverPartition = new ServerPartition(partitionKey, rowType);
   }
 
   @After
@@ -156,7 +153,7 @@ public class ServerPartitionTest {
     mMatrix.setColNum(100000);
     mMatrix.setMaxRowNumInBlock(1);
     mMatrix.setMaxColNumInBlock(50000);
-    mMatrix.setRowType(RowType.T_INT_DENSE);
+    mMatrix.setRowType(MLProtos.RowType.T_INT_DENSE);
     mMatrix.set(MatrixConf.MATRIX_OPLOG_ENABLEFILTER, "false");
     mMatrix.set(MatrixConf.MATRIX_HOGWILD, "true");
     mMatrix.set(MatrixConf.MATRIX_AVERAGE, "false");
@@ -175,9 +172,9 @@ public class ServerPartitionTest {
     psId = new ParameterServerId(0);
     psAttempt0Id = new PSAttemptId(psId, 0);
 
+    serverPartition.clock(3, 10);
     DataOutputStream out = new DataOutputStream(new FileOutputStream("data"));
-    ByteBuf buf = Unpooled.buffer(4 + 8 * 8);
-    buf.writeInt(8);
+    ByteBuf buf = Unpooled.buffer(16);
     buf.writeDouble(0.00);
     buf.writeDouble(1.00);
     buf.writeDouble(-1.00);
@@ -186,37 +183,41 @@ public class ServerPartitionTest {
     buf.writeDouble(-6.00);
     buf.writeDouble(-7.00);
     buf.writeDouble(-8.00);
-    serverPartition.getRow(6).update(RowType.T_DOUBLE_DENSE, buf);
-    serverPartition.save(out);
+    serverPartition.getRow(6).update(MLProtos.RowType.T_DOUBLE_DENSE, buf, 8);
+    serverPartition.writeTo(out);
     out.close();
     DataInputStream in = new DataInputStream(new FileInputStream("data"));
     PartitionKey partitionKeyNew = new PartitionKey(2, 1, 1, 2, 8, 10);
     ServerPartition serverPartitionNew =
-        new ServerPartition(partitionKeyNew, RowType.T_DOUBLE_DENSE, 0.0);
-    serverPartitionNew.init();
+        new ServerPartition(partitionKeyNew, MLProtos.RowType.T_DOUBLE_DENSE);
     assertNotEquals(((ServerDenseDoubleRow) serverPartition.getRow(6)).getData(),
         ((ServerDenseDoubleRow) serverPartitionNew.getRow(6)).getData());
-    serverPartitionNew.load(in);
+    serverPartitionNew.readFrom(in);
     in.close();
     assertEquals(((ServerDenseDoubleRow) serverPartition.getRow(6)).getData(),
         ((ServerDenseDoubleRow) serverPartitionNew.getRow(6)).getData());
     angelClient.stop();
   }
 
-  /*@Test
+  @Test
   public void testReset() throws Exception {
     ServerDenseDoubleRow serverDenseDoubleRowNew = (ServerDenseDoubleRow) serverPartition.getRow(6);
     assertEquals(serverDenseDoubleRowNew, serverPartition.getRow(6));
     serverPartition.reset();
     assertNotEquals(serverDenseDoubleRowNew, serverPartition.getRow(6));
-  }*/
+  }
 
   @Test
   public void testCommit() throws Exception {
     DataOutputStream out = new DataOutputStream(new FileOutputStream("data"));
-    serverPartition.save(out, new ModelPartitionMeta());
+    serverPartition.commit(out);
     out.close();
     DataInputStream in = new DataInputStream(new FileInputStream("data"));
+    assertEquals(partitionKey.getStartRow(), in.readInt());
+    assertEquals(partitionKey.getStartCol(), in.readLong());
+    assertEquals(partitionKey.getEndRow(), in.readInt());
+    assertEquals(partitionKey.getEndCol(), in.readLong());
+    assertEquals(rowType.toString(), in.readUTF());
     assertEquals(partitionKey.getEndRow() - partitionKey.getStartRow(), in.readInt());
     in.close();
   }
@@ -233,6 +234,7 @@ public class ServerPartitionTest {
     assertEquals(partitionKey.getEndCol(), buf.readLong());
 
     assertEquals(rowType.getNumber(), buf.readInt());
+    assertEquals(serverPartition.getClock(), buf.readInt());
     assertEquals(partitionKey.getEndRow() - partitionKey.getStartRow(), buf.readInt());
   }
 
@@ -242,17 +244,17 @@ public class ServerPartitionTest {
     serverPartition.serialize(buf);
     PartitionKey partitionKeyNew = new PartitionKey(2, 1, 1, 2, 8, 10);
     ServerPartition serverPartitionNew =
-        new ServerPartition(partitionKeyNew, RowType.T_DOUBLE_DENSE, 0.0);
-    assertNotEquals(serverPartition.getPartitionKey().getPartitionId(),
-        serverPartitionNew.getPartitionKey().getPartitionId());
+        new ServerPartition(partitionKeyNew, MLProtos.RowType.T_DOUBLE_DENSE);
+    assertNotEquals(serverPartition.partitionKey.getPartitionId(),
+        serverPartitionNew.partitionKey.getPartitionId());
     serverPartitionNew.deserialize(buf);
-    assertEquals(serverPartition.getPartitionKey().getPartitionId(),
-        serverPartitionNew.getPartitionKey().getPartitionId());
+    assertEquals(serverPartition.partitionKey.getPartitionId(),
+        serverPartitionNew.partitionKey.getPartitionId());
   }
 
   @Test
   public void testBufferLen() throws Exception {
-    assertEquals(serverPartition.bufferLen(), 592);
+    assertEquals(serverPartition.bufferLen(), 544);
   }
 
   @Test
