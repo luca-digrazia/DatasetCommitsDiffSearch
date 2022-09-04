@@ -1,5 +1,8 @@
 package org.jboss.shamrock.undertow.runtime;
 
+import java.io.Closeable;
+import java.io.IOException;
+
 import javax.servlet.Servlet;
 import javax.servlet.ServletException;
 
@@ -9,7 +12,6 @@ import org.jboss.shamrock.runtime.StartupContext;
 
 import io.undertow.Undertow;
 import io.undertow.server.HttpHandler;
-import io.undertow.server.HttpServerExchange;
 import io.undertow.server.handlers.resource.ClassPathResourceManager;
 import io.undertow.servlet.Servlets;
 import io.undertow.servlet.api.DeploymentInfo;
@@ -24,29 +26,19 @@ import io.undertow.servlet.api.ServletInfo;
  */
 public class UndertowDeploymentTemplate {
 
-    public static final HttpHandler ROOT_HANDLER = new HttpHandler() {
-        @Override
-        public void handleRequest(HttpServerExchange exchange) throws Exception {
-            currentRoot.handleRequest(exchange);
-        }
-    };
-
-    private static volatile Undertow undertow;
-    private static volatile HttpHandler currentRoot;
-
     @ContextObject("deploymentInfo")
     public DeploymentInfo createDeployment(String name) {
         DeploymentInfo d = new DeploymentInfo();
         d.setClassLoader(getClass().getClassLoader());
         d.setDeploymentName(name);
         d.setContextPath("/");
-        ClassLoader cl = Thread.currentThread().getContextClassLoader();
-        if (cl == null) {
-            cl = new ClassLoader() {
-            };
+        ClassLoader cl = UndertowDeploymentTemplate.class.getClassLoader();
+        if(cl == null) {
+            cl = new ClassLoader() {};
         }
         d.setClassLoader(cl);
-        d.setResourceManager(new ClassPathResourceManager(d.getClassLoader(), "META-INF/resources"));
+        //should be fixed in Graal RC5
+        //d.setResourceManager(new ClassPathResourceManager(d.getClassLoader(), "META-INF/resources"));
         return d;
     }
 
@@ -71,20 +63,17 @@ public class UndertowDeploymentTemplate {
     }
 
     public void startUndertow(StartupContext startupContext, @ContextObject("servletHandler") HttpHandler handler, String port) throws ServletException {
-        if (undertow == null) {
-            undertow = Undertow.builder()
-                    .addHttpListener(Integer.parseInt(port), "localhost")
-                    .setHandler(ROOT_HANDLER)
-                    .build();
-            undertow.start();
-        }
-        currentRoot = handler;
-//        startupContext.addCloseable(new Closeable() {
-//            @Override
-//            public void close() throws IOException {
-//                val.stop();
-//            }
-//        });
+        Undertow val = Undertow.builder()
+                .addHttpListener(Integer.parseInt(port), "localhost")
+                .setHandler(handler)
+                .build();
+        val.start();
+        startupContext.addCloseable(new Closeable() {
+            @Override
+            public void close() throws IOException {
+                val.stop();
+            }
+        });
     }
 
     @ContextObject("servletHandler")

@@ -1,6 +1,6 @@
 package org.jboss.shamrock.undertow;
 
-import java.util.Collection;
+import java.util.List;
 
 import javax.inject.Inject;
 import javax.servlet.Servlet;
@@ -9,7 +9,7 @@ import javax.servlet.annotation.WebServlet;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationValue;
 import org.jboss.jandex.DotName;
-import org.jboss.jandex.IndexView;
+import org.jboss.jandex.Index;
 import org.jboss.shamrock.deployment.ArchiveContext;
 import org.jboss.shamrock.deployment.ProcessorContext;
 import org.jboss.shamrock.deployment.ResourceProcessor;
@@ -35,15 +35,15 @@ public class ServletAnnotationProcessor implements ResourceProcessor {
     @Override
     public void process(ArchiveContext archiveContext, ProcessorContext processorContext) throws Exception {
 
-        processorContext.addReflectiveClass(false, false, DefaultServlet.class.getName());
-        processorContext.addReflectiveClass(false, false, "io.undertow.server.protocol.http.HttpRequestParser$$generated");
+        processorContext.addReflectiveClass(DefaultServlet.class.getName());
+        processorContext.addReflectiveClass("io.undertow.server.protocol.http.HttpRequestParser$$generated");
 
         try (BytecodeRecorder context = processorContext.addStaticInitTask(RuntimePriority.UNDERTOW_CREATE_DEPLOYMENT)) {
             UndertowDeploymentTemplate template = context.getRecordingProxy(UndertowDeploymentTemplate.class);
             template.createDeployment("test");
         }
-        final IndexView index = archiveContext.getIndex();
-        Collection<AnnotationInstance> annotations = index.getAnnotations(WEB_SERVLET);
+        final Index index = archiveContext.getIndex();
+        List<AnnotationInstance> annotations = index.getAnnotations(WEB_SERVLET);
         if (annotations != null && annotations.size() > 0) {
             try (BytecodeRecorder context = processorContext.addStaticInitTask(RuntimePriority.UNDERTOW_REGISTER_SERVLET)) {
                 UndertowDeploymentTemplate template = context.getRecordingProxy(UndertowDeploymentTemplate.class);
@@ -51,7 +51,7 @@ public class ServletAnnotationProcessor implements ResourceProcessor {
                     String name = annotation.value("name").asString();
                     AnnotationValue asyncSupported = annotation.value("asyncSupported");
                     String servletClass = annotation.target().asClass().toString();
-                    processorContext.addReflectiveClass(false, false, servletClass);
+                    processorContext.addReflectiveClass(servletClass);
                     InjectionInstance<? extends Servlet> injection = (InjectionInstance<? extends Servlet>) context.newInstanceFactory(servletClass);
                     InstanceFactory<? extends Servlet> factory = template.createInstanceFactory(injection);
                     template.registerServlet(null, name, context.classProxy(servletClass), asyncSupported != null && asyncSupported.asBoolean(), factory);
