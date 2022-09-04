@@ -55,11 +55,9 @@ import com.google.devtools.build.lib.actions.ArtifactPathResolver;
 import com.google.devtools.build.lib.actions.ArtifactPrefixConflictException;
 import com.google.devtools.build.lib.actions.CachedActionEvent;
 import com.google.devtools.build.lib.actions.EnvironmentalExecException;
-import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.FileArtifactValue;
 import com.google.devtools.build.lib.actions.FilesetOutputSymlink;
-import com.google.devtools.build.lib.actions.FutureSpawn;
 import com.google.devtools.build.lib.actions.LostInputsExecException.LostInputsActionExecutionException;
 import com.google.devtools.build.lib.actions.MapBasedActionGraph;
 import com.google.devtools.build.lib.actions.MetadataConsumer;
@@ -71,7 +69,6 @@ import com.google.devtools.build.lib.actions.NotifyOnActionCacheHit.ActionCached
 import com.google.devtools.build.lib.actions.PackageRootResolver;
 import com.google.devtools.build.lib.actions.TargetOutOfDateException;
 import com.google.devtools.build.lib.actions.cache.MetadataHandler;
-import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.buildtool.BuildRequestOptions;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ExecutorUtil;
@@ -182,7 +179,6 @@ public final class SkyframeActionExecutor {
   // findAndStoreArtifactConflicts, and is preserved across builds otherwise.
   private ImmutableMap<ActionAnalysisMetadata, ConflictException> badActionMap = ImmutableMap.of();
   private OptionsProvider options;
-  private boolean useAsyncExecution;
   private boolean hadExecutionError;
   private MetadataProvider perBuildFileCache;
   private ActionInputPrefetcher actionInputPrefetcher;
@@ -396,8 +392,7 @@ public final class SkyframeActionExecutor {
     this.actionCacheChecker = Preconditions.checkNotNull(actionCacheChecker);
     // Don't cache possibly stale data from the last build.
     this.options = options;
-    // Cache some option values for performance, since we consult them on every action.
-    this.useAsyncExecution = options.getOptions(BuildRequestOptions.class).useAsyncExecution;
+    // Cache the finalizeActions value for performance, since we consult it on every action.
     this.finalizeActions = options.getOptions(BuildRequestOptions.class).finalizeActions;
     this.outputService = outputService;
   }
@@ -1022,29 +1017,6 @@ public final class SkyframeActionExecutor {
           notifyActionCompletion(env.getListener(), /*postActionCompletionEvent=*/ true);
           return new ExceptionalActionStepOrResult(e);
         }
-
-        // This is the first iteration of the async action execution framework. It is currently only
-        // implemented for SpawnAction (and subclasses), and will need to be extended for all other
-        // action types.
-        if (useAsyncExecution
-            && (action instanceof SpawnAction)
-            && ((SpawnAction) action).mayExecuteAsync()) {
-          SpawnAction spawnAction = (SpawnAction) action;
-          try {
-            FutureSpawn futureSpawn;
-            try {
-              futureSpawn = spawnAction.execMaybeAsync(actionExecutionContext);
-            } catch (InterruptedException e) {
-              return new ExceptionalActionStepOrResult(e);
-            } catch (ActionExecutionException e) {
-              return new ExceptionalActionStepOrResult(e);
-            }
-            return new ActionCompletionStep(futureSpawn, spawnAction);
-          } catch (ExecException e) {
-            return new ExceptionalActionStepOrResult(e.toActionExecutionException(spawnAction));
-          }
-        }
-
         return completeAction(env.getListener(), () -> executeAction(env.getListener()));
       }
     }
@@ -1206,33 +1178,6 @@ public final class SkyframeActionExecutor {
               ? ((IncludeScannable) action).getDiscoveredModules()
               : null,
           ActionExecutionFunction.actionDependsOnBuildId(action));
-    }
-
-    /** A closure to complete an asynchronously running action. */
-    private class ActionCompletionStep implements ActionStepOrResult {
-      private final FutureSpawn futureSpawn;
-      private final SpawnAction spawnAction;
-
-      public ActionCompletionStep(FutureSpawn futureSpawn, SpawnAction spawnAction) {
-        this.futureSpawn = futureSpawn;
-        this.spawnAction = spawnAction;
-      }
-
-      @Override
-      public boolean isDone() {
-        return false;
-      }
-
-      @Override
-      public ActionStepOrResult run(Environment env) {
-        if (!futureSpawn.getFuture().isDone()) {
-          env.dependOnFuture(futureSpawn.getFuture());
-          return this;
-        }
-        return completeAction(
-            actionExecutionContext.getEventHandler(),
-            () -> spawnAction.finishSync(futureSpawn, actionExecutionContext.getVerboseFailures()));
-      }
     }
   }
 
