@@ -12,7 +12,6 @@ import java.io.InputStream;
 import java.io.ObjectOutputStream;
 import java.io.OutputStream;
 import java.io.UncheckedIOException;
-import java.net.URL;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.FileSystem;
 import java.nio.file.FileVisitOption;
@@ -141,7 +140,6 @@ public class JarResultBuildStep {
     public static final String APP = "app";
     public static final String QUARKUS = "quarkus";
     public static final String DEFAULT_FAST_JAR_DIRECTORY_NAME = "quarkus-app";
-    public static final String MP_CONFIG_FILE = "META-INF/microprofile-config.properties";
 
     @BuildStep
     OutputTargetBuildItem outputTarget(BuildSystemTargetBuildItem bst, PackageConfig packageConfig) {
@@ -538,7 +536,7 @@ public class JarResultBuildStep {
             } else {
                 copyDependency(curateOutcomeBuildItem, copiedArtifacts, mainLib, baseLib, jars, true, classPath, appDep);
             }
-            if (curateOutcomeBuildItem.getEffectiveModel().getRunnerParentFirstArtifacts()
+            if (curateOutcomeBuildItem.getEffectiveModel().getParentFirstArtifacts()
                     .contains(appDep.getArtifact().getKey())) {
                 bootJars.addAll(appDep.getArtifact().getPaths().toList());
             }
@@ -553,26 +551,9 @@ public class JarResultBuildStep {
                 jars.add(path);
             }
         }
-
-        /*
-         * There are some files like META-INF/microprofile-config.properties that usually don't exist in application
-         * and yet are always looked up (spec compliance...) and due to the location in the jar,
-         * the RunnerClassLoader needs to look into every jar to determine whether they exist or not.
-         * In keeping true to the original design of the RunnerClassLoader which indexes the directory structure,
-         * we just add a fail-fast path for files we know don't exist.
-         *
-         * TODO: if this gets more complex, we'll probably want a build item to carry this information instead of hard
-         * coding it here
-         */
-        List<String> nonExistentResources = new ArrayList<>(1);
-        Enumeration<URL> mpConfigURLs = Thread.currentThread().getContextClassLoader().getResources(MP_CONFIG_FILE);
-        if (!mpConfigURLs.hasMoreElements()) {
-            nonExistentResources.add(MP_CONFIG_FILE);
-        }
-
         Path appInfo = buildDir.resolve(QuarkusEntryPoint.QUARKUS_APPLICATION_DAT);
         try (OutputStream out = Files.newOutputStream(appInfo)) {
-            SerializedApplication.write(out, mainClassBuildItem.getClassName(), buildDir, jars, bootJars, nonExistentResources);
+            SerializedApplication.write(out, mainClassBuildItem.getClassName(), buildDir, jars, bootJars);
         }
 
         runnerJar.toFile().setReadable(true, false);
@@ -664,7 +645,7 @@ public class JarResultBuildStep {
         }
         for (Path resolvedDep : depArtifact.getPaths()) {
             if (!Files.isDirectory(resolvedDep)) {
-                if (allowParentFirst && curateOutcomeBuildItem.getEffectiveModel().getRunnerParentFirstArtifacts()
+                if (allowParentFirst && curateOutcomeBuildItem.getEffectiveModel().getParentFirstArtifacts()
                         .contains(depArtifact.getKey())) {
                     final String fileName = depArtifact.getGroupId() + "." + resolvedDep.getFileName();
                     final Path targetPath = baseLib.resolve(fileName);

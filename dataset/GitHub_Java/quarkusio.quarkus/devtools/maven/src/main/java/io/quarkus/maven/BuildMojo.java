@@ -52,10 +52,6 @@ public class BuildMojo extends QuarkusBootstrapMojo {
     @Parameter(defaultValue = "false", property = "quarkus.build.skip")
     private boolean skip = false;
 
-    @Deprecated
-    @Parameter(property = "skipOriginalJarRename")
-    boolean skipOriginalJarRename;
-
     @Override
     protected boolean beforeExecute() throws MojoExecutionException {
         if (skip) {
@@ -87,8 +83,7 @@ public class BuildMojo extends QuarkusBootstrapMojo {
                 Artifact original = mavenProject().getArtifact();
                 if (result.getJar() != null) {
 
-                    if (!skipOriginalJarRename && result.getJar().isUberJar()
-                            && result.getJar().getOriginalArtifact() != null) {
+                    if (result.getJar().isUberJar() && result.getJar().getOriginalArtifact() != null) {
                         final Path standardJar = result.getJar().getOriginalArtifact();
                         if (Files.exists(standardJar)) {
                             final Path renamedOriginal = standardJar.getParent().toAbsolutePath()
