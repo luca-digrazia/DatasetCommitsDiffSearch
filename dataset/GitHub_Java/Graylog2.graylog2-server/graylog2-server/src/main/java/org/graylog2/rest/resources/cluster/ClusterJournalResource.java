@@ -55,11 +55,16 @@ import static javax.ws.rs.core.Response.Status.BAD_GATEWAY;
 public class ClusterJournalResource extends ProxiedResource {
     private static final Logger LOG = LoggerFactory.getLogger(ClusterJournalResource.class);
 
+    private final NodeService nodeService;
+    private final RemoteInterfaceProvider remoteInterfaceProvider;
+
     @Inject
     public ClusterJournalResource(NodeService nodeService,
                                   RemoteInterfaceProvider remoteInterfaceProvider,
                                   @Context HttpHeaders httpHeaders) throws NodeNotFoundException {
-        super(httpHeaders, nodeService, remoteInterfaceProvider);
+        super(httpHeaders);
+        this.nodeService = nodeService;
+        this.remoteInterfaceProvider = remoteInterfaceProvider;
     }
 
     @GET
