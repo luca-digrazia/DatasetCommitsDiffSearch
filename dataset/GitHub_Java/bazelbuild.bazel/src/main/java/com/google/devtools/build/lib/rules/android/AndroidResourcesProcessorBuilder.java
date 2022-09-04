@@ -75,6 +75,7 @@ public class AndroidResourcesProcessorBuilder {
   private List<String> uncompressedExtensions = Collections.emptyList();
   private Artifact apkOut;
   private final AndroidSdkProvider sdk;
+  private List<String> assetsToIgnore = Collections.emptyList();
   private SpawnAction.Builder spawnActionBuilder;
   private String customJavaPackage;
   private final RuleContext ruleContext;
@@ -177,6 +178,11 @@ public class AndroidResourcesProcessorBuilder {
 
   public AndroidResourcesProcessorBuilder setSourceJarOut(Artifact sourceJarOut) {
     this.sourceJarOut = sourceJarOut;
+    return this;
+  }
+
+  public AndroidResourcesProcessorBuilder setAssetsToIgnore(List<String> assetsToIgnore) {
+    this.assetsToIgnore = assetsToIgnore;
     return this;
   }
 
@@ -460,6 +466,9 @@ public class AndroidResourcesProcessorBuilder {
     }
     if (!crunchPng) {
       builder.add("--useAaptCruncher=no");
+    }
+    if (!assetsToIgnore.isEmpty()) {
+      builder.addAll("--assetsToIgnore", VectorArg.join(",").each(assetsToIgnore));
     }
     if (debug) {
       builder.add("--debug");

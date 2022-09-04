@@ -54,7 +54,7 @@ public class ResourceFilterTest extends ResourceTestBase {
     assertThat(
             makeResourceFilter(
                     "en", "hdpi", FilterBehavior.FILTER_IN_ANALYSIS_WITH_DYNAMIC_CONFIGURATION)
-                .filterDependencyContainers(errorConsumer, resourceContainers))
+                .filterDependencies(errorConsumer, resourceContainers))
         .isSameAs(resourceContainers);
   }
 
