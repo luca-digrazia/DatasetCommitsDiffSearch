@@ -15,6 +15,7 @@
 package com.google.devtools.build.lib.rules.proto;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.CoreOptionConverters;
@@ -22,7 +23,6 @@ import com.google.devtools.build.lib.analysis.config.CoreOptionConverters.Strict
 import com.google.devtools.build.lib.analysis.config.Fragment;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
-import com.google.devtools.build.lib.analysis.config.RequiresOptions;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.starlarkbuildapi.ProtoConfigurationApi;
@@ -37,7 +37,6 @@ import java.util.List;
 @Immutable
 // This module needs to be exported to Starlark so it can be passed as a mandatory host/target
 // configuration fragment in aspect definitions.
-@RequiresOptions(options = {ProtoConfiguration.Options.class})
 public class ProtoConfiguration extends Fragment implements ProtoConfigurationApi {
   /** Command line options. */
   public static class Options extends FragmentOptions {
@@ -200,12 +199,17 @@ public class ProtoConfiguration extends Fragment implements ProtoConfigurationAp
     @Override
     public Fragment create(BuildOptions buildOptions)
         throws InvalidConfigurationException {
-      return new ProtoConfiguration(buildOptions);
+      return new ProtoConfiguration(buildOptions.get(Options.class));
     }
 
     @Override
     public Class<? extends Fragment> creates() {
       return ProtoConfiguration.class;
+    }
+
+    @Override
+    public ImmutableSet<Class<? extends FragmentOptions>> requiredOptions() {
+      return ImmutableSet.<Class<? extends FragmentOptions>>of(Options.class);
     }
   }
 
@@ -214,8 +218,7 @@ public class ProtoConfiguration extends Fragment implements ProtoConfigurationAp
   private final ImmutableList<String> ccProtoLibrarySourceSuffixes;
   private final Options options;
 
-  private ProtoConfiguration(BuildOptions buildOptions) {
-    Options options = buildOptions.get(Options.class);
+  private ProtoConfiguration(Options options) {
     this.protocOpts = ImmutableList.copyOf(options.protocOpts);
     this.ccProtoLibraryHeaderSuffixes = ImmutableList.copyOf(options.ccProtoLibraryHeaderSuffixes);
     this.ccProtoLibrarySourceSuffixes = ImmutableList.copyOf(options.ccProtoLibrarySourceSuffixes);
