@@ -425,7 +425,7 @@ public class SmallRyeOpenApiProcessor {
         if (!Files.exists(file)) {
             Files.createFile(file);
         }
-        Files.write(file, schemaDocument, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
+        Files.write(file, schemaDocument, StandardOpenOption.WRITE);
 
         log.info("OpenAPI " + format.toString() + " saved: " + file.toString());
     }
