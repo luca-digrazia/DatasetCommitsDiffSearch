@@ -1,14 +1,10 @@
 package org.jboss.shamrock.deployment;
 
 import java.io.IOException;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-import java.util.function.Consumer;
 import java.util.function.Function;
 
 import org.jboss.jandex.FieldInfo;
 import org.jboss.jandex.MethodInfo;
-import org.jboss.protean.gizmo.MethodCreator;
 import org.jboss.shamrock.deployment.codegen.BytecodeRecorder;
 import org.objectweb.asm.ClassVisitor;
 
@@ -53,11 +49,8 @@ public interface ProcessorContext {
 
     void addReflectiveField(FieldInfo fieldInfo);
 
-    void addReflectiveField(Field fieldInfo);
-
     void addReflectiveMethod(MethodInfo methodInfo);
 
-    void addReflectiveMethod(Method methodInfo);
     /**
      *
      * @param applicationClass If this class should be loaded by the application class loader when in runtime mode
@@ -91,28 +84,4 @@ public interface ProcessorContext {
      * @param name The resource path
      */
     void addResource(String name);
-
-    void addResourceBundle(String bundle);
-
-    /**
-     * Marks a class as being runtime initialized, which means that running the static
-     * initializer will happen at runtime
-     *
-     * @param classes The classes to lazily init
-     */
-    void addRuntimeInitializedClasses(String ... classes);
-
-    /**
-     * Adds a proxy definition to allow proxies to be created using {@link java.lang.reflect.Proxy}
-     *
-     * @param proxyClasses The interface names that this proxy will implement
-     */
-    void addProxyDefinition(String ... proxyClasses);
-
-    /**
-     *
-     * @param capability
-     * @return
-     */
-    boolean isCapabilityPresent(String capability);
 }
