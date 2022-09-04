@@ -27,6 +27,7 @@ import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -35,12 +36,13 @@ import io.quarkus.qrs.test.simple.PortProviderUtil;
 import io.quarkus.test.QuarkusUnitTest;
 
 @DisplayName("Media Type Negotiation Server Quality Test")
+@Disabled
 public class MediaTypeNegotiationServerQualityTest {
 
     @Produces({ "application/*;qs=0.7", "text/*;qs=0.9" })
     @DisplayName("Custom Message Body Writter")
     @Provider
-    public static class CustomMessageBodyWriter implements MessageBodyWriter<Object> {
+    public static class CustomMessageBodyWritter implements MessageBodyWriter<Object> {
 
         @Override
         public boolean isWriteable(Class<?> type, Type genericType, Annotation[] annotations, MediaType mediaType) {
@@ -79,13 +81,15 @@ public class MediaTypeNegotiationServerQualityTest {
 
     private static Client client;
 
+    private static final String DEP = "MediaTypeNegotiationServerQualityTest";
+
     @RegisterExtension
     static QuarkusUnitTest testExtension = new QuarkusUnitTest()
             .setArchiveProducer(new Supplier<JavaArchive>() {
                 @Override
                 public JavaArchive get() {
                     JavaArchive war = ShrinkWrap.create(JavaArchive.class);
-                    war.addClasses(PortProviderUtil.class, CustomMessageBodyWriter.class, FakeResource.class,
+                    war.addClasses(PortProviderUtil.class, CustomMessageBodyWritter.class, FakeResource.class,
                             NotFoundExceptionMapper.class);
                     return war;
                 }
@@ -113,8 +117,8 @@ public class MediaTypeNegotiationServerQualityTest {
         try {
             Assertions.assertEquals(Status.NOT_FOUND.getStatusCode(), response.getStatus());
             MediaType mediaType = response.getMediaType();
-            Assertions.assertEquals("text", mediaType.getType());
-            Assertions.assertEquals("y", mediaType.getSubtype());
+            Assertions.assertEquals(mediaType.getType(), "text");
+            Assertions.assertEquals(mediaType.getSubtype(), "y");
         } finally {
             response.close();
         }
