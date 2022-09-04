@@ -1947,9 +1947,7 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
 
   @Test
   public void testJavaInfoGetTransitiveExports() throws Exception {
-    setBuildLanguageOptions(
-        "--incompatible_enable_exports_provider",
-        "--experimental_builtins_injection_override=-java_library");
+    setBuildLanguageOptions("--incompatible_enable_exports_provider");
     scratch.file(
         "foo/extension.bzl",
         "result = provider()",
@@ -2014,7 +2012,8 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
     assertThat(
             nativeLibs.getSet(LibraryToLink.class).toList().stream()
                 .map(LibraryToLink::getLibraryIdentifier))
-        .containsExactly("foo/libmy_cc_lib_a.so", "foo/libmy_cc_lib_b.so", "foo/libmy_cc_lib_c.so");
+        .containsExactly("foo/libmy_cc_lib_a.so", "foo/libmy_cc_lib_b.so", "foo/libmy_cc_lib_c.so")
+        .inOrder();
   }
 
   /**
@@ -3115,36 +3114,21 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
         "  name = 'custom',",
         "  deps = [':exports_processor'],",
         "  plugins = [':processor'],",
-        ")",
-        "java_custom_library(",
-        "  srcs = ['custom.java'],",
-        "  name = 'custom_noproc',",
         ")");
 
-    ConfiguredTarget custom = getConfiguredTarget("//foo:custom");
-    ConfiguredTarget customNoproc = getConfiguredTarget("//foo:custom_noproc");
+    ConfiguredTarget target = getConfiguredTarget("//foo:custom");
     assertNoEvents();
 
     JavaCompileAction javacAction =
         (JavaCompileAction) getGeneratingActionForLabel("//foo:libcustom.jar");
-    assertThat(javacAction.getMnemonic()).isEqualTo("Javac");
     assertThat(getProcessorNames(javacAction)).isEmpty();
     assertThat(getProcessorPath(javacAction)).isNotEmpty();
     assertThat(artifactFilesNames(javacAction.getInputs())).contains("processor_data.txt");
 
-    JavaCompileAction turbineAction =
-        (JavaCompileAction) getGeneratingAction(getBinArtifact("libcustom-hjar.jar", custom));
-    assertThat(turbineAction.getMnemonic()).isEqualTo("JavacTurbine");
-    List<String> args = turbineAction.getArguments();
-    assertThat(args).doesNotContain("--processors");
-
-    // enable_annotation_processing=False shouldn't disable direct classpaths if there are no
-    // annotation processors that need to be disabled
-    SpawnAction turbineActionNoProc =
-        (SpawnAction)
-            getGeneratingAction(getBinArtifact("libcustom_noproc-hjar.jar", customNoproc));
-    assertThat(turbineActionNoProc.getMnemonic()).isEqualTo("Turbine");
-    assertThat(turbineActionNoProc.getArguments()).doesNotContain("--processors");
+    SpawnAction turbineAction =
+        (SpawnAction) getGeneratingAction(getBinArtifact("libcustom-hjar.jar", target));
+    assertThat(turbineAction.getMnemonic()).isEqualTo("Turbine");
+    assertThat(turbineAction.getArguments()).doesNotContain("--processors");
   }
 
   private InstrumentedFilesInfo getInstrumentedFilesProvider(String label) throws Exception {

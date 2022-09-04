@@ -224,7 +224,6 @@ public final class JavaConfiguration extends Fragment implements JavaConfigurati
     return inmemoryJdepsFiles;
   }
 
-  @Override
   public ImmutableList<String> getDefaultJvmFlags() {
     return defaultJvmFlags;
   }
