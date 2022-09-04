@@ -30,9 +30,19 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 /** Builder for the action that generates the R class for libraries. */
 public class LibraryRGeneratorActionBuilder {
   static final Function<ResourceContainer, Artifact> TO_SYMBOL_ARTIFACT =
-      ResourceContainer::getSymbols;
+      new Function<ResourceContainer, Artifact>() {
+        @Override
+        public Artifact apply(ResourceContainer input) {
+          return input.getSymbols();
+        }
+      };
   static final Function<ResourceContainer, String> TO_SYMBOL_PATH =
-      (ResourceContainer container) -> container.getSymbols().getExecPathString();
+      new Function<ResourceContainer, String>() {
+        @Override
+        public String apply(ResourceContainer container) {
+          return container.getSymbols().getExecPathString();
+        }
+      };
 
   private String javaPackage;
   private Iterable<ResourceContainer> deps = ImmutableList.<ResourceContainer>of();

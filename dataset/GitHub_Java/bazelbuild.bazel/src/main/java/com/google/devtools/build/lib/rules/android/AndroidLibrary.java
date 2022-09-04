@@ -97,9 +97,10 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
           ResourceDependencies.fromRuleDeps(ruleContext, JavaCommon.isNeverLink(ruleContext)),
           ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_R_TXT),
           ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_MERGED_SYMBOLS),
-          ResourceFilter.empty(ruleContext),
+          ResourceConfigurationFilter.empty(ruleContext),
           ImmutableList.<String>of(), /* uncompressedExtensions */
           false, /* crunchPng */
+          ImmutableList.<String>of(), /* densities */
           false, /* incremental */
           null, /* proguardCfgOut */
           null, /* mainDexProguardCfg */
@@ -195,7 +196,8 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
     RuleConfiguredTargetBuilder builder = new RuleConfiguredTargetBuilder(ruleContext);
     androidCommon.addTransitiveInfoProviders(builder, androidSemantics, aarOut,
         resourceApk, null, ImmutableList.<Artifact>of());
-    androidSemantics.addTransitiveInfoProviders(builder, ruleContext, javaCommon, androidCommon);
+    androidSemantics.addTransitiveInfoProviders(
+        builder, ruleContext, javaCommon, androidCommon, null);
 
     NestedSetBuilder<Artifact> transitiveResourcesJars = collectTransitiveResourceJars(ruleContext);
     if (androidCommon.getResourceClassJar() != null) {
