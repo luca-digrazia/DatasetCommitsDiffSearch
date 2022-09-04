@@ -56,14 +56,14 @@ public class MustacheViewRendererTest extends JerseyTest {
     public void rendersViewsWithAbsoluteTemplatePaths() throws Exception {
         final String response = client().resource(getBaseURI() + "test/absolute").get(String.class);
         assertThat(response)
-                .isEqualToIgnoringCase("Woop woop. yay\n");
+                .isEqualTo("Woop woop. yay\n");
     }
 
     @Test
     public void rendersViewsWithRelativeTemplatePaths() throws Exception {
         final String response = client().resource(getBaseURI() + "test/relative").get(String.class);
         assertThat(response)
-                .isEqualToIgnoringCase("Ok.\n");
+                .isEqualTo("Ok.\n");
     }
 
     @Test
@@ -75,7 +75,7 @@ public class MustacheViewRendererTest extends JerseyTest {
                     .isEqualTo(500);
 
             assertThat(e.getResponse().getEntity(String.class))
-                    .isEqualTo("<html><head><title>Missing Template</title></head><body><h1>Missing Template</h1><p>Template /woo-oo-ahh.txt.ftl not found.</p></body></html>");
+                    .isEqualTo("<html><head><title>Missing Template</title></head><body><h1>Missing Template</h1><p>Template /woo-oo-ahh.txt.mustache not found.</p></body></html>");
         }
     }
 }
