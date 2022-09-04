@@ -1,4 +1,6 @@
-/**
+/*
+ * Copyright 2012-2014 TORCH GmbH
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -14,6 +16,7 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
+
 package org.graylog2.filters;
 
 import com.google.common.cache.Cache;
@@ -36,7 +39,7 @@ import java.util.concurrent.TimeUnit;
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class RulesFilter implements MessageFilter {
-    private static final Logger LOG = LoggerFactory.getLogger(RulesFilter.class);
+    private static final Logger log = LoggerFactory.getLogger(RulesFilter.class);
 
     private final FilterService filterService;
     private final RulesEngine.RulesSession privateSession;
@@ -68,13 +71,13 @@ public class RulesFilter implements MessageFilter {
                             Sets.symmetricDifference(currentFilterSet, newFilters);
                     if (difference.isEmpty()) {
                         // there wasn't any change, simply return the current filter set
-                        LOG.debug("Filter sets are identical, not updating rules engine.");
+                        log.debug("Filter sets are identical, not updating rules engine.");
                         return currentFilterSet;
                     }
 
                     // something changed, we simply update everything, not trying to do the minimal changes yet
                     // should this become too expensive we need to do something smarter
-                    LOG.debug("Updating rules engine, filter sets differ: {}", difference);
+                    log.debug("Updating rules engine, filter sets differ: {}", difference);
                     // retract all current filter facts
                     for (FilterDescription filterDescription : currentFilterSet) {
                         privateSession.deleteFact(filterDescription);
