@@ -22,24 +22,23 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.auto.value.AutoValue;
 
 import java.util.List;
-import java.util.Map;
 
 @AutoValue
 @JsonAutoDetect
-public abstract class ModuleFiles {
-    @JsonProperty("chunks")
-    public abstract Map<String, ChunkDescription> chunks();
+public abstract class ChunkDescription {
+    @JsonProperty("size")
+    public abstract long size();
 
-    @JsonProperty("js")
-    public abstract List<String> jsFiles();
+    @JsonProperty("entry")
+    public abstract String entry();
 
     @JsonProperty("css")
-    public abstract List<String> cssFiles();
+    public abstract List<String> css();
 
     @JsonCreator
-    public static ModuleFiles create(@JsonProperty("chunks") Map<String, ChunkDescription> chunks,
-                                     @JsonProperty("js") List<String> jsFiles,
-                                     @JsonProperty("css") List<String> cssFiles) {
-        return new AutoValue_PackageFiles(chunks, jsFiles, cssFiles);
+    public static ChunkDescription create(@JsonProperty("size") long size,
+                                          @JsonProperty("entry") String entry,
+                                          @JsonProperty("css") List<String> css) {
+        return new AutoValue_ChunkDescription(size, entry, css);
     }
 }
