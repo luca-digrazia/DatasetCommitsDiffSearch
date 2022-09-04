@@ -104,7 +104,6 @@ public class RuleClassTest extends PackageLoadingTestCase {
         false,
         false,
         false,
-        false,
         ImplicitOutputsFunction.NONE,
         null,
         DUMMY_CONFIGURED_TARGET_FACTORY,
@@ -136,7 +135,6 @@ public class RuleClassTest extends PackageLoadingTestCase {
     attributes.add(attr("another-string-attr", STRING).mandatory().build());
     return newRuleClass(
         "ruleB",
-        false,
         false,
         false,
         false,
@@ -270,7 +268,6 @@ public class RuleClassTest extends PackageLoadingTestCase {
             false,
             false,
             false,
-            false,
             ImplicitOutputsFunction.NONE,
             null,
             DUMMY_CONFIGURED_TARGET_FACTORY,
@@ -312,7 +309,6 @@ public class RuleClassTest extends PackageLoadingTestCase {
     RuleClass ruleClass =
         newRuleClass(
             "ruleVis",
-            false,
             false,
             false,
             false,
@@ -417,7 +413,6 @@ public class RuleClassTest extends PackageLoadingTestCase {
             false,
             false,
             false,
-            false,
             ImplicitOutputsFunction.fromTemplates(
                 "foo-%{name}.bar", "lib%{name}-wazoo-%{name}.mumble", "stuff-%{outs}-bar"),
             null,
@@ -460,7 +455,6 @@ public class RuleClassTest extends PackageLoadingTestCase {
             false,
             false,
             false,
-            false,
             ImplicitOutputsFunction.fromTemplates("%{dirname}lib%{basename}.bar"),
             null,
             DUMMY_CONFIGURED_TARGET_FACTORY,
@@ -492,7 +486,6 @@ public class RuleClassTest extends PackageLoadingTestCase {
   private static RuleClass getRuleClassWithComputedDefault(Attribute computedDefault) {
     return newRuleClass(
         "ruleClass",
-        false,
         false,
         false,
         false,
@@ -661,7 +654,6 @@ public class RuleClassTest extends PackageLoadingTestCase {
             false,
             false,
             false,
-            false,
             ImplicitOutputsFunction.fromTemplates("first-%{name}", "second-%{name}", "out-%{outs}"),
             null,
             DUMMY_CONFIGURED_TARGET_FACTORY,
@@ -699,7 +691,6 @@ public class RuleClassTest extends PackageLoadingTestCase {
     RuleClass ruleClass =
         newRuleClass(
             "ruleA",
-            false,
             false,
             false,
             false,
@@ -856,7 +847,6 @@ public class RuleClassTest extends PackageLoadingTestCase {
       boolean binaryOutput,
       boolean workspaceOnly,
       boolean outputsDefaultExecutable,
-      boolean isAnalysisTest,
       ImplicitOutputsFunction implicitOutputsFunction,
       RuleTransitionFactory transitionFactory,
       ConfiguredTargetFactory<?, ?, ?> configuredTargetFactory,
@@ -885,7 +875,6 @@ public class RuleClassTest extends PackageLoadingTestCase {
         binaryOutput,
         workspaceOnly,
         outputsDefaultExecutable,
-        isAnalysisTest,
         /* hasFunctionTransitionWhitelist=*/ false,
         implicitOutputsFunction,
         /*isConfigMatcher=*/ false,
@@ -917,7 +906,6 @@ public class RuleClassTest extends PackageLoadingTestCase {
   private static RuleClass createParentRuleClass() {
     return newRuleClass(
         "parent_rule",
-        false,
         false,
         false,
         false,
