@@ -54,7 +54,9 @@ public class CreateProjectMojo extends AbstractMojo {
     public static final String VERSION_PROP = "shamrock-version";
     public static final String PLUGIN_VERSION_PROPERTY_NAME = "shamrock.version";
     public static final String PLUGIN_VERSION_PROPERTY = "${" + PLUGIN_VERSION_PROPERTY_NAME + "}";
-    public static final String PLUGIN_KEY = MavenConstants.PLUGIN_GROUPID + ":" + MavenConstants.PLUGIN_ARTIFACTID;
+    public static final String PLUGIN_GROUPID = "org.jboss.shamrock";
+    public static final String PLUGIN_ARTIFACTID = "shamrock-maven-plugin";
+    public static final String PLUGIN_KEY = PLUGIN_GROUPID + ":" + PLUGIN_ARTIFACTID;
 
     /**
      * The Maven project which will define and configure the shamrock-maven-plugin
@@ -79,6 +81,9 @@ public class CreateProjectMojo extends AbstractMojo {
 
     @Parameter(property = "className")
     private String className;
+
+    @Parameter(property = "root", defaultValue = "/app")
+    private String root;
 
     @Parameter(property = "extensions")
     private List<String> extensions;
@@ -118,7 +123,7 @@ public class CreateProjectMojo extends AbstractMojo {
         model = project.getOriginalModel().clone();
 
         createDirectories();
-        templates.generate(project, path, className, getLog());
+        templates.generate(project, root, path, className, getLog());
         Optional<Plugin> maybe = MojoUtils.hasPlugin(project, PLUGIN_KEY);
         if (maybe.isPresent()) {
             printUserInstructions(pomFile);
@@ -137,7 +142,7 @@ public class CreateProjectMojo extends AbstractMojo {
     private void addBom(Model model) {
         Dependency bom = new Dependency();
         bom.setArtifactId(MojoUtils.get("bom-artifactId"));
-        bom.setGroupId(MavenConstants.PLUGIN_GROUPID);
+        bom.setGroupId(PLUGIN_GROUPID);
         bom.setVersion("${shamrock.version}");
         bom.setType("pom");
         bom.setScope("import");
@@ -164,7 +169,7 @@ public class CreateProjectMojo extends AbstractMojo {
         Profile profile = new Profile();
         profile.setId("native");
         BuildBase buildBase = new BuildBase();
-        Plugin plg = plugin(MavenConstants.PLUGIN_GROUPID, MavenConstants.PLUGIN_ARTIFACTID, PLUGIN_VERSION_PROPERTY);
+        Plugin plg = plugin(PLUGIN_GROUPID, PLUGIN_ARTIFACTID, PLUGIN_VERSION_PROPERTY);
         PluginExecution exec = new PluginExecution();
         exec.addGoal("native-image");
         MojoUtils.Element element = new MojoUtils.Element("enableHttpUrlHandler", "true");
@@ -176,13 +181,13 @@ public class CreateProjectMojo extends AbstractMojo {
     }
 
     private void addMainPluginConfig(Model model) {
-        Plugin plugin = plugin(MavenConstants.PLUGIN_GROUPID, MavenConstants.PLUGIN_ARTIFACTID, PLUGIN_VERSION_PROPERTY);
+        Plugin plugin = plugin(PLUGIN_GROUPID, PLUGIN_ARTIFACTID, PLUGIN_VERSION_PROPERTY);
         if (isParentPom(model)) {
             addPluginManagementSection(model, plugin);
             //strip the shamrockVersion off
-            plugin = plugin(MavenConstants.PLUGIN_GROUPID, MavenConstants.PLUGIN_ARTIFACTID);
+            plugin = plugin(PLUGIN_GROUPID, PLUGIN_ARTIFACTID);
         } else {
-            plugin = plugin(MavenConstants.PLUGIN_GROUPID, MavenConstants.PLUGIN_ARTIFACTID, PLUGIN_VERSION_PROPERTY);
+            plugin = plugin(PLUGIN_GROUPID, PLUGIN_ARTIFACTID, PLUGIN_VERSION_PROPERTY);
         }
         PluginExecution pluginExec = new PluginExecution();
         pluginExec.addGoal("build");
@@ -253,6 +258,14 @@ public class CreateProjectMojo extends AbstractMojo {
                     }
                 }
 
+                if (root == null) {
+                    root = prompter.promptWithDefaultValue("Set the application root ",
+                            "/app");
+                    if (!root.startsWith("/")) {
+                        root = "/" + root;
+                    }
+                }
+
                 if (path == null) {
                     path = prompter.promptWithDefaultValue("Set the resource path ",
                             "/hello");
@@ -281,10 +294,10 @@ public class CreateProjectMojo extends AbstractMojo {
             context.put("mProjectArtifactId", projectArtifactId);
             context.put("mProjectVersion", projectVersion);
             context.put("shamrockVersion", shamrockVersion != null ? shamrockVersion : MojoUtils.get(VERSION_PROP));
-            context.put("restAssuredVersion", MojoUtils.get("restAssuredVersion"));
             context.put("docRoot", MojoUtils.get("doc-root"));
 
             context.put("className", className);
+            context.put("root", root);
             context.put("path", path);
 
             templates.createNewProjectPomFile(context, pomFile);
