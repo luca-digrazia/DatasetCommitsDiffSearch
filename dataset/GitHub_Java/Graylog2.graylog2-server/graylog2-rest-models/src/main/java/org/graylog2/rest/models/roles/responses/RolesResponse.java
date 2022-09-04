@@ -21,7 +21,6 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.auto.value.AutoValue;
 
-import javax.validation.constraints.NotNull;
 import java.util.Set;
 
 @AutoValue
@@ -29,7 +28,6 @@ import java.util.Set;
 public abstract class RolesResponse {
 
     @JsonProperty
-    @NotNull
     public abstract Set<RoleResponse> roles();
 
     @JsonProperty

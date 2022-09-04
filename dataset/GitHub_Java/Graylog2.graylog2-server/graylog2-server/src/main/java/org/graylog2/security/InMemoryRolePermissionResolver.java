@@ -19,6 +19,7 @@ package org.graylog2.security;
 import com.google.common.base.Function;
 import com.google.common.collect.Collections2;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import org.apache.shiro.authz.Permission;
 import org.apache.shiro.authz.permission.RolePermissionResolver;
@@ -31,16 +32,12 @@ import org.slf4j.LoggerFactory;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Named;
-import javax.inject.Singleton;
 import java.util.Collection;
-import java.util.Collections;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
-@Singleton
 public class InMemoryRolePermissionResolver implements RolePermissionResolver {
     private static final Logger log = LoggerFactory.getLogger(InMemoryRolePermissionResolver.class);
 
@@ -61,10 +58,18 @@ public class InMemoryRolePermissionResolver implements RolePermissionResolver {
     }
 
     @Override
-    public Collection<Permission> resolvePermissionsInRole(String roleId) {
-        final Set<String> permissions = resolveStringPermission(roleId);
+    public Collection<Permission> resolvePermissionsInRole(String roleString) {
+        final ImmutableMap<String, Role> index = idToRoleIndex.get();
+
+        if (!index.containsKey(roleString)) {
+            log.debug("Unknown role {}, cannot resolve permissions.", roleString);
+            return null;
+        }
+
+        final Set<String> permissions = index.get(roleString).getPermissions();
         if (permissions == null) {
-            return Collections.emptySet();
+            log.debug("Role {} has no permissions assigned, cannot resolve permissions.", roleString);
+            return null;
         }
 
         // copy to avoid reiterating all the time
@@ -77,30 +82,21 @@ public class InMemoryRolePermissionResolver implements RolePermissionResolver {
         }));
     }
 
-    @Nullable
-    public Set<String> resolveStringPermission(String roleId) {
-        final ImmutableMap<String, Role> index = idToRoleIndex.get();
-
-        if (!index.containsKey(roleId)) {
-            log.debug("Unknown role {}, cannot resolve permissions.", roleId);
-            return null;
-        }
-
-        final Set<String> permissions = index.get(roleId).getPermissions();
-        if (permissions == null) {
-            log.debug("Role {} has no permissions assigned, cannot resolve permissions.", roleId);
-            return null;
-        }
-        return permissions;
-    }
-
-
     private class RoleUpdater implements Runnable {
         @Override
         public void run() {
             try {
-                final Map<String, Role> index = roleService.loadAllIdMap();
-                InMemoryRolePermissionResolver.this.idToRoleIndex.set(ImmutableMap.copyOf(index));
+                final Set<Role> roles = roleService.loadAll();
+                final ImmutableMap<String, Role> index = Maps.uniqueIndex(
+                        roles,
+                        new Function<Role, String>() {
+                            @Nullable
+                            @Override
+                            public String apply(Role input) {
+                                return input.getId();
+                            }
+                        });
+                InMemoryRolePermissionResolver.this.idToRoleIndex.set(index);
             } catch (Exception e) {
                 log.error("Could not find roles collection, no user roles updated.", e);
             }

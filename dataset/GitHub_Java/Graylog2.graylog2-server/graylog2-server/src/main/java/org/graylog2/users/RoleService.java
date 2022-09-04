@@ -21,7 +21,6 @@ import org.graylog2.plugin.database.ValidationException;
 import org.graylog2.shared.users.Role;
 
 import javax.validation.ConstraintViolation;
-import java.util.Map;
 import java.util.Set;
 
 public interface RoleService {
@@ -31,16 +30,9 @@ public interface RoleService {
 
     Set<Role> loadAll() throws NotFoundException;
 
-    Map<String, Role> loadAllIdMap() throws NotFoundException;
-
     Role save(Role role) throws ValidationException;
 
     Set<ConstraintViolation<Role>> validate(Role role);
 
-    /**
-     * Deletes the (case insensitively) named role, unless it is read only.
-     * @param roleName role name to delete, case insensitive
-     * @return the number of deleted roles
-     */
     int delete(String roleName);
 }
