@@ -245,9 +245,7 @@ public final class Starlark {
   public static Object[] toArray(Object x) throws EvalException {
     // Specialize Sequence and Dict to avoid allocation and/or indirection.
     if (x instanceof Sequence) {
-      // The returned array type must be exactly Object[],
-      // not a subclass, so calling toArray() is not enough.
-      return ((Sequence<?>) x).toArray(EMPTY);
+      return ((Sequence<?>) x).toArray(new Object[((Sequence) x).size()]);
     } else if (x instanceof Dict) {
       return ((Dict<?, ?>) x).keySet().toArray();
     } else {
@@ -356,14 +354,6 @@ public final class Starlark {
       // Integer is not a legal Starlark value, but it does appear as
       // the return type for many built-in functions.
       return "int";
-
-    } else if (c == void.class) {
-      // Built-in void methods return None to Starlark.
-      return "NoneType";
-
-    } else if (c == boolean.class) {
-      // Built-in function may return boolean.
-      return "bool";
 
     } else {
       String simpleName = c.getSimpleName();
@@ -885,10 +875,10 @@ public final class Starlark {
     int[] globalIndex = module.getIndicesOfGlobals(rfn.getGlobals());
 
     StarlarkFunction toplevel = new StarlarkFunction(rfn, defaultValues, module, globalIndex);
-    return Starlark.fastcall(thread, toplevel, EMPTY, EMPTY);
+    return Starlark.fastcall(thread, toplevel, NOARGS, NOARGS);
   }
 
-  private static final Object[] EMPTY = {};
+  private static final Object[] NOARGS = {};
 
   /**
    * Parses the input as an expression, resolves it in the specified module environment, compiles
@@ -902,7 +892,7 @@ public final class Starlark {
       ParserInput input, FileOptions options, Module module, StarlarkThread thread)
       throws SyntaxError.Exception, EvalException, InterruptedException {
     StarlarkFunction fn = newExprFunction(input, options, module);
-    return Starlark.fastcall(thread, fn, EMPTY, EMPTY);
+    return Starlark.fastcall(thread, fn, NOARGS, NOARGS);
   }
 
   /** Variant of {@link #eval} that creates a module for the given predeclared environment. */
