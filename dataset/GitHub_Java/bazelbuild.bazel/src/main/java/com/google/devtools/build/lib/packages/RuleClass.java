@@ -40,7 +40,7 @@ import com.google.devtools.build.lib.packages.Attribute.SkylarkComputedDefaultTe
 import com.google.devtools.build.lib.packages.Attribute.Transition;
 import com.google.devtools.build.lib.packages.BuildType.SelectorList;
 import com.google.devtools.build.lib.packages.ConfigurationFragmentPolicy.MissingFragmentPolicy;
-import com.google.devtools.build.lib.packages.RuleFactory.AttributeValues;
+import com.google.devtools.build.lib.packages.RuleFactory.AttributeValuesMap;
 import com.google.devtools.build.lib.syntax.Argument;
 import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.Environment;
@@ -1462,10 +1462,10 @@ public class RuleClass {
    * {@link CannotPrecomputeDefaultsException}. All other errors are reported on {@code
    * eventHandler}.
    */
-  <T> Rule createRule(
+  Rule createRule(
       Package.Builder pkgBuilder,
       Label ruleLabel,
-      AttributeValues<T> attributeValues,
+      AttributeValuesMap attributeValues,
       EventHandler eventHandler,
       @Nullable FuncallExpression ast,
       Location location,
@@ -1491,14 +1491,14 @@ public class RuleClass {
    *
    * <p>Don't call this function unless you know what you're doing.
    */
-  <T> Rule createRuleUnchecked(
+  Rule createRuleUnchecked(
       Package.Builder pkgBuilder,
       Label ruleLabel,
-      AttributeValues<T> attributeValues,
+      AttributeValuesMap attributeValues,
       Location location,
       AttributeContainer attributeContainer,
       ImplicitOutputsFunction implicitOutputsFunction)
-      throws InterruptedException, CannotPrecomputeDefaultsException {
+      throws LabelSyntaxException, InterruptedException, CannotPrecomputeDefaultsException {
     Rule rule = pkgBuilder.createRule(
         ruleLabel,
         this,
@@ -1506,7 +1506,7 @@ public class RuleClass {
         attributeContainer,
         implicitOutputsFunction);
     populateRuleAttributeValues(rule, pkgBuilder, attributeValues, NullEventHandler.INSTANCE);
-    rule.populateOutputFilesUnchecked(NullEventHandler.INSTANCE, pkgBuilder);
+    rule.populateOutputFiles(NullEventHandler.INSTANCE, pkgBuilder);
     return rule;
   }
 
@@ -1517,10 +1517,10 @@ public class RuleClass {
    *
    * <p>Errors are reported on {@code eventHandler}.
    */
-  private <T> void populateRuleAttributeValues(
+  private void populateRuleAttributeValues(
       Rule rule,
       Package.Builder pkgBuilder,
-      AttributeValues<T> attributeValues,
+      AttributeValuesMap attributeValues,
       EventHandler eventHandler)
       throws InterruptedException, CannotPrecomputeDefaultsException {
     BitSet definedAttrIndices =
@@ -1541,12 +1541,11 @@ public class RuleClass {
    * value for the attribute with index {@code i} in this {@link RuleClass}. Errors are reported
    * on {@code eventHandler}.
    */
-  private <T> BitSet populateDefinedRuleAttributeValues(
-      Rule rule, AttributeValues<T> attributeValues, EventHandler eventHandler) {
+  private BitSet populateDefinedRuleAttributeValues(
+      Rule rule, AttributeValuesMap attributeValues, EventHandler eventHandler) {
     BitSet definedAttrIndices = new BitSet();
-    for (T attributeAccessor : attributeValues.getAttributeAccessors()) {
-      String attributeName = attributeValues.getName(attributeAccessor);
-      Object attributeValue = attributeValues.getValue(attributeAccessor);
+    for (String attributeName : attributeValues.getAttributeNames()) {
+      Object attributeValue = attributeValues.getAttributeValue(attributeName);
       // Ignore all None values.
       if (attributeValue == Runtime.NONE) {
         continue;
@@ -1576,7 +1575,7 @@ public class RuleClass {
         nativeAttributeValue = attributeValue;
       }
 
-      boolean explicit = attributeValues.isExplicitlySpecified(attributeAccessor);
+      boolean explicit = attributeValues.isAttributeExplicitlySpecified(attributeName);
       setRuleAttributeValue(rule, eventHandler, attr, nativeAttributeValue, explicit);
       definedAttrIndices.set(attrIndex);
     }
