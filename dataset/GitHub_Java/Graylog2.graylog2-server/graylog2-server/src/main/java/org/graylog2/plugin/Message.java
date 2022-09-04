@@ -35,7 +35,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
-import javax.annotation.concurrent.NotThreadSafe;
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -55,7 +54,6 @@ import static org.graylog2.plugin.Tools.ES_DATE_FORMAT_FORMATTER;
 import static org.graylog2.plugin.Tools.buildElasticSearchTimeFormat;
 import static org.joda.time.DateTimeZone.UTC;
 
-@NotThreadSafe
 public class Message implements Messages {
     private static final Logger LOG = LoggerFactory.getLogger(Message.class);
 
@@ -194,9 +192,6 @@ public class Message implements Messages {
 
         for (Map.Entry<String, Object> entry : fields.entrySet()) {
             final String key = entry.getKey();
-            if (key.equals(FIELD_ID)) {
-                continue;
-            }
 
             // Elasticsearch does not allow "." characters in keys since version 2.0.
             // See: https://www.elastic.co/guide/en/elasticsearch/reference/2.0/breaking_20_mapping_changes.html#_field_names_may_not_contain_dots

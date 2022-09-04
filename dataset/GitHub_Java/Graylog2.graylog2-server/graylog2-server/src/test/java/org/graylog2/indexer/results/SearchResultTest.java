@@ -18,6 +18,7 @@ package org.graylog2.indexer.results;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import org.elasticsearch.search.SearchHits;
 import org.graylog2.plugin.Message;
 import org.junit.Before;
 import org.junit.Test;
@@ -34,7 +35,9 @@ public class SearchResultTest {
 
     @Before
     public void setUp() throws Exception {
-        this.searchResult = new SearchResult(Collections.emptyList(), 0L, null, null, null, 0L);
+        final SearchHits searchHits = mock(SearchHits.class);
+        when(searchHits.iterator()).thenReturn(Collections.emptyIterator());
+        this.searchResult = new SearchResult(searchHits, null, null, null, null);
     }
 
     @Test
