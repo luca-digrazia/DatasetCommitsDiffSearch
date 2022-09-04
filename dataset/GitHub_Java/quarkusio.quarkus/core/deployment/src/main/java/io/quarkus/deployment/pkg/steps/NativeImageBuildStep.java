@@ -507,8 +507,8 @@ public class NativeImageBuildStep {
         final Path javaSourcesPath = outputTargetBuildItem.getOutputDirectory().resolve(
                 Paths.get("..", "src", "main", "java"));
 
-        try (Stream<Path> paths = Files.walk(javaSourcesPath)) {
-            paths.forEach(path -> {
+        try {
+            Files.walk(javaSourcesPath).forEach(path -> {
                 Path targetPath = Paths.get(targetSrc.toString(),
                         path.toString().substring(javaSourcesPath.toString().length()));
                 try {
