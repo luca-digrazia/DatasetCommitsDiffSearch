@@ -43,6 +43,7 @@ import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.Index;
 import org.jboss.jandex.Type;
+
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.BeanContainerListenerBuildItem;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
@@ -53,6 +54,7 @@ import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
 import io.quarkus.deployment.builditem.ApplicationIndexBuildItem;
+import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.HotDeploymentConfigFileBuildItem;
 import io.quarkus.deployment.builditem.SystemPropertyBuildItem;
 import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
@@ -69,12 +71,14 @@ class InfinispanClientProcessor {
 
     @BuildStep
     PropertiesBuildItem setup(ApplicationArchivesBuildItem applicationArchivesBuildItem,
-          BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
-          BuildProducer<HotDeploymentConfigFileBuildItem> hotDeployment,
-          BuildProducer<SystemPropertyBuildItem> systemProperties,
-          BuildProducer<AdditionalBeanBuildItem> additionalBeans,
-          ApplicationIndexBuildItem applicationIndexBuildItem) throws ClassNotFoundException, IOException {
+            BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
+            BuildProducer<HotDeploymentConfigFileBuildItem> hotDeployment,
+            BuildProducer<SystemPropertyBuildItem> systemProperties,
+            BuildProducer<FeatureBuildItem> feature,
+            BuildProducer<AdditionalBeanBuildItem> additionalBeans,
+            ApplicationIndexBuildItem applicationIndexBuildItem) throws ClassNotFoundException, IOException {
 
+        feature.produce(new FeatureBuildItem(FeatureBuildItem.INFINISPAN_CLIENT));
         additionalBeans.produce(new AdditionalBeanBuildItem(InfinispanClientProducer.class));
         systemProperties.produce(new SystemPropertyBuildItem("io.netty.noUnsafe", "true"));
         hotDeployment.produce(new HotDeploymentConfigFileBuildItem(HOTROD_CLIENT_PROPERTIES));
@@ -97,48 +101,50 @@ class InfinispanClientProcessor {
                 Util.close(stream);
             }
 
-            InfinispanClientProducer.replaceProperties(properties);
-
             // We use caffeine for bounded near cache - so register that reflection if we have a bounded near cache
             if (properties.containsKey(ConfigurationProperties.NEAR_CACHE_MAX_ENTRIES)) {
                 reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, "com.github.benmanes.caffeine.cache.SSMS"));
                 reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, "com.github.benmanes.caffeine.cache.PSMS"));
             }
+        }
 
-            // This is always non null
-            Object marshaller = properties.get(ConfigurationProperties.MARSHALLER);
+        InfinispanClientProducer.replaceProperties(properties);
 
-            if (marshaller instanceof ProtoStreamMarshaller) {
-               ApplicationArchive applicationArchive = applicationArchivesBuildItem.getRootArchive();
-               // If we have properties file we may have to care about
-               Path metaPath = applicationArchive.getChildPath(META_INF);
+        // This is always non null
+        Object marshaller = properties.get(ConfigurationProperties.MARSHALLER);
 
-               Iterator<Path> protoFiles = Files.list(metaPath)
-                     .filter(Files::isRegularFile)
-                     .filter(p -> p.toString().endsWith(PROTO_EXTENSION))
-                     .iterator();
-               // We monitor the entire meta inf directory if properties are available
-               if (protoFiles.hasNext()) {
-                  // Quarkus doesn't currently support hot deployment watching directories
-//                hotDeployment.produce(new HotDeploymentConfigFileBuildItem(META_INF));
-               }
+        if (marshaller instanceof ProtoStreamMarshaller) {
+            ApplicationArchive applicationArchive = applicationArchivesBuildItem.getRootArchive();
+            // If we have properties file we may have to care about
+            Path metaPath = applicationArchive.getChildPath(META_INF);
 
-               while (protoFiles.hasNext()) {
-                  Path path = protoFiles.next();
-                  byte[] bytes = Files.readAllBytes(path);
-                  // This uses the default file encoding - should we enforce UTF-8?
-                  properties.put(InfinispanClientProducer.PROTOBUF_FILE_PREFIX + path.getFileName().toString(),
-                        new String(bytes, StandardCharsets.UTF_8));
-               }
+            if (metaPath != null) {
+                Iterator<Path> protoFiles = Files.list(metaPath)
+                        .filter(Files::isRegularFile)
+                        .filter(p -> p.toString().endsWith(PROTO_EXTENSION))
+                        .iterator();
+                // We monitor the entire meta inf directory if properties are available
+                if (protoFiles.hasNext()) {
+                    // Quarkus doesn't currently support hot deployment watching directories
+                    //                hotDeployment.produce(new HotDeploymentConfigFileBuildItem(META_INF));
+                }
 
-               InfinispanClientProducer.handleProtoStreamRequirements(properties);
+                while (protoFiles.hasNext()) {
+                    Path path = protoFiles.next();
+                    byte[] bytes = Files.readAllBytes(path);
+                    // This uses the default file encoding - should we enforce UTF-8?
+                    properties.put(InfinispanClientProducer.PROTOBUF_FILE_PREFIX + path.getFileName().toString(),
+                            new String(bytes, StandardCharsets.UTF_8));
+                }
             }
+
+            InfinispanClientProducer.handleProtoStreamRequirements(properties);
         }
 
         // Add any user project listeners to allow reflection in native code
         Index index = applicationIndexBuildItem.getIndex();
         List<AnnotationInstance> listenerInstances = index.getAnnotations(
-              DotName.createSimple("org.infinispan.client.hotrod.annotation.ClientListener"));
+                DotName.createSimple("org.infinispan.client.hotrod.annotation.ClientListener"));
         for (AnnotationInstance instance : listenerInstances) {
             AnnotationTarget target = instance.target();
             if (target.kind() == AnnotationTarget.Kind.CLASS) {
@@ -149,11 +155,14 @@ class InfinispanClientProcessor {
         // This is required for netty to work properly
         reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, "io.netty.channel.socket.nio.NioSocketChannel"));
         // We use reflection to have continuous queries work
-        reflectiveClass.produce(new ReflectiveClassBuildItem(true, false, "org.infinispan.client.hotrod.event.ContinuousQueryImpl$ClientEntryListener"));
+        reflectiveClass.produce(new ReflectiveClassBuildItem(true, false,
+                "org.infinispan.client.hotrod.event.impl.ContinuousQueryImpl$ClientEntryListener"));
         // We use reflection to allow for near cache invalidations
-        reflectiveClass.produce(new ReflectiveClassBuildItem(true, false, "org.infinispan.client.hotrod.near.NearCacheService$InvalidatedNearCacheListener"));
+        reflectiveClass.produce(new ReflectiveClassBuildItem(true, false,
+                "org.infinispan.client.hotrod.near.NearCacheService$InvalidatedNearCacheListener"));
         // This is required when a cache is clustered to tell us topology
-        reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, "org.infinispan.client.hotrod.impl.consistenthash.SegmentConsistentHash"));
+        reflectiveClass.produce(new ReflectiveClassBuildItem(false, false,
+                "org.infinispan.client.hotrod.impl.consistenthash.SegmentConsistentHash"));
 
         return new PropertiesBuildItem(properties);
     }
@@ -167,7 +176,6 @@ class InfinispanClientProcessor {
         }
         return properties;
     }
-
 
     /**
      * The Infinispan client configuration, if set.
@@ -191,7 +199,7 @@ class InfinispanClientProcessor {
         // Only write the entries if is a valid number and it isn't already configured
         if (maxEntries > 0 && !properties.containsKey(ConfigurationProperties.NEAR_CACHE_MODE)) {
             // This is already empty so no need for putIfAbsent
-            properties.put(ConfigurationProperties.NEAR_CACHE_MODE, NearCacheMode.INVALIDATED);
+            properties.put(ConfigurationProperties.NEAR_CACHE_MODE, NearCacheMode.INVALIDATED.toString());
             properties.putIfAbsent(ConfigurationProperties.NEAR_CACHE_MAX_ENTRIES, maxEntries);
         }
 
@@ -199,22 +207,21 @@ class InfinispanClientProcessor {
     }
 
     private static final Set<DotName> UNREMOVABLE_BEANS = Collections.unmodifiableSet(
-          new HashSet<>(Arrays.asList(
-                DotName.createSimple("org.infinispan.protostream.MessageMarshaller"),
-                DotName.createSimple("org.infinispan.protostream.FileDescriptorSource")
-          )));
+            new HashSet<>(Arrays.asList(
+                    DotName.createSimple("org.infinispan.protostream.MessageMarshaller"),
+                    DotName.createSimple("org.infinispan.protostream.FileDescriptorSource"))));
 
     @BuildStep
     UnremovableBeanBuildItem ensureBeanLookupAvailable() {
         return new UnremovableBeanBuildItem(beanInfo -> {
-                Set<Type> types = beanInfo.getTypes();
-                for (Type t : types) {
-                    if (UNREMOVABLE_BEANS.contains(t.name())) {
-                        return true;
-                    }
+            Set<Type> types = beanInfo.getTypes();
+            for (Type t : types) {
+                if (UNREMOVABLE_BEANS.contains(t.name())) {
+                    return true;
                 }
+            }
 
-                return false;
+            return false;
         });
     }
 }
