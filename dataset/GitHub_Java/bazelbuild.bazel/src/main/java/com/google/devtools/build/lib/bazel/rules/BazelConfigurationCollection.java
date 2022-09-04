@@ -41,9 +41,7 @@ import java.util.Set;
 import javax.annotation.Nullable;
 
 /**
- * Configuration collection used by the rules Bazel knows for statically configured builds.
-  *
-  * <p>Dynamically configured builds should never touch this file.
+ * Configuration collection used by the rules Bazel knows.
  */
 public class BazelConfigurationCollection implements ConfigurationCollectionFactory {
   @Override
@@ -53,12 +51,11 @@ public class BazelConfigurationCollection implements ConfigurationCollectionFact
       Cache<String, BuildConfiguration> cache,
       PackageProviderForConfigurations packageProvider,
       BuildOptions buildOptions,
-      EventHandler eventHandler,
-      String mainRepositoryName)
+      EventHandler eventHandler)
       throws InvalidConfigurationException, InterruptedException {
     // Target configuration
     BuildConfiguration targetConfiguration = configurationFactory.getConfiguration(
-        packageProvider, buildOptions, cache, mainRepositoryName);
+        packageProvider, buildOptions, cache);
     if (targetConfiguration == null) {
       return null;
     }
@@ -69,7 +66,7 @@ public class BazelConfigurationCollection implements ConfigurationCollectionFact
     // Note that this passes in the dataConfiguration, not the target
     // configuration. This is intentional.
     BuildConfiguration hostConfiguration = getHostConfigurationFromRequest(configurationFactory,
-        packageProvider, dataConfiguration, buildOptions, cache, mainRepositoryName);
+        packageProvider, dataConfiguration, buildOptions, cache);
     if (hostConfiguration == null) {
       return null;
     }
@@ -79,7 +76,7 @@ public class BazelConfigurationCollection implements ConfigurationCollectionFact
     for (SplitTransition<BuildOptions> transition : buildOptions.getPotentialSplitTransitions()) {
       for (BuildOptions splitOptions : transition.split(buildOptions)) {
         BuildConfiguration splitConfig = configurationFactory.getConfiguration(
-            packageProvider, splitOptions, cache, mainRepositoryName);
+            packageProvider, splitOptions, cache);
         splitTransitionsTable.put(transition, splitConfig);
       }
     }
@@ -136,15 +133,14 @@ public class BazelConfigurationCollection implements ConfigurationCollectionFact
       PackageProviderForConfigurations loadedPackageProvider,
       BuildConfiguration requestConfig,
       BuildOptions buildOptions,
-      Cache<String, BuildConfiguration> cache,
-      String repositoryName)
+      Cache<String, BuildConfiguration> cache)
       throws InvalidConfigurationException, InterruptedException {
     BuildConfiguration.Options commonOptions = buildOptions.get(BuildConfiguration.Options.class);
     if (!commonOptions.useDistinctHostConfiguration) {
       return requestConfig;
     } else {
       BuildConfiguration hostConfig = configurationFactory.getConfiguration(
-          loadedPackageProvider, buildOptions.createHostOptions(false), cache, repositoryName);
+          loadedPackageProvider, buildOptions.createHostOptions(false), cache);
       if (hostConfig == null) {
         return null;
       }

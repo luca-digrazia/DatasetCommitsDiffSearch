@@ -13,11 +13,11 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import com.google.devtools.build.skyframe.SkyFunctionName;
+import com.google.devtools.build.lib.util.Preconditions;
+import com.google.devtools.build.skyframe.LegacySkyKey;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import java.io.Serializable;
@@ -51,10 +51,11 @@ public class BuildConfigurationValue implements SkyValue {
   @ThreadSafe
   public static SkyKey key(Set<Class<? extends BuildConfiguration.Fragment>> fragments,
       BuildOptions buildOptions) {
-    return new Key(fragments, buildOptions);
+    return LegacySkyKey.create(
+        SkyFunctions.BUILD_CONFIGURATION, new Key(fragments, buildOptions));
   }
 
-  static final class Key implements SkyKey, Serializable {
+  static final class Key implements Serializable {
     private final Set<Class<? extends BuildConfiguration.Fragment>> fragments;
     private final BuildOptions buildOptions;
     private final boolean enableActions;
@@ -75,11 +76,6 @@ public class BuildConfigurationValue implements SkyValue {
 
     BuildOptions getBuildOptions() {
       return buildOptions;
-    }
-
-    @Override
-    public SkyFunctionName functionName() {
-      return SkyFunctions.BUILD_CONFIGURATION;
     }
 
     @Override

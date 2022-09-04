@@ -13,12 +13,13 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis.config;
 
-import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.analysis.config.BuildOptions.OptionsDiff;
 import com.google.devtools.build.lib.rules.cpp.CppOptions;
 import com.google.devtools.common.options.OptionsParser;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -37,8 +38,8 @@ public class BuildOptionsTest {
     BuildOptions b = BuildOptions.of(TEST_OPTIONS, OptionsParser.newOptionsParser(TEST_OPTIONS));
     // The cache keys of the OptionSets must be equal even if these are
     // different objects, if they were created with the same options (no options in this case).
-    assertThat(b.toString()).isEqualTo(a.toString());
-    assertThat(b.computeCacheKey()).isEqualTo(a.computeCacheKey());
+    assertEquals(a.toString(), b.toString());
+    assertEquals(a.computeCacheKey(), b.computeCacheKey());
   }
 
   @Test
@@ -47,7 +48,7 @@ public class BuildOptionsTest {
     String[] options = new String[] { "--run_under=//run_under" };
     BuildOptions a = BuildOptions.of(TEST_OPTIONS, options);
     BuildOptions b = BuildOptions.of(TEST_OPTIONS, options);
-    assertThat(b.toString()).isEqualTo(a.toString());
+    assertEquals(a.toString(), b.toString());
   }
 
   @Test
@@ -55,50 +56,15 @@ public class BuildOptionsTest {
     String[] options1 = new String[] { "--compilation_mode=opt" };
     String[] options2 = new String[] { "--compilation_mode=dbg" };
     // Distinct instances with the same values are equal:
-    assertThat(BuildOptions.of(TEST_OPTIONS, options1))
-        .isEqualTo(BuildOptions.of(TEST_OPTIONS, options1));
+    assertEquals(BuildOptions.of(TEST_OPTIONS, options1), BuildOptions.of(TEST_OPTIONS, options1));
     // Same fragments, different values aren't equal:
-    assertThat(
-            BuildOptions.of(TEST_OPTIONS, options1).equals(BuildOptions.of(TEST_OPTIONS, options2)))
-        .isFalse();
+    assertFalse(BuildOptions.of(TEST_OPTIONS, options1).equals(
+        BuildOptions.of(TEST_OPTIONS, options2)));
     // Same values, different fragments aren't equal:
-    assertThat(
-            BuildOptions.of(TEST_OPTIONS, options1)
-                .equals(
-                    BuildOptions.of(
-                        ImmutableList.<Class<? extends FragmentOptions>>of(
-                            BuildConfiguration.Options.class, CppOptions.class),
-                        options1)))
-        .isFalse();
-  }
-
-  @Test
-  public void testOptionsDiff() throws Exception {
-    BuildOptions one = BuildOptions.of(TEST_OPTIONS, "--compilation_mode=opt", "cpu=k8");
-    BuildOptions two = BuildOptions.of(TEST_OPTIONS, "--compilation_mode=dbg", "cpu=k8");
-    BuildOptions three = BuildOptions.of(TEST_OPTIONS, "--compilation_mode=dbg", "cpu=k8");
-
-    OptionsDiff diffOneTwo = BuildOptions.diff(one, two);
-    OptionsDiff diffTwoThree = BuildOptions.diff(two, three);
-
-    assertThat(diffOneTwo.areSame()).isFalse();
-    assertThat(diffOneTwo.getFirst().keySet()).isEqualTo(diffOneTwo.getSecond().keySet());
-    assertThat(diffOneTwo.prettyPrint()).contains("opt");
-    assertThat(diffOneTwo.prettyPrint()).contains("dbg");
-
-    assertThat(diffTwoThree.areSame()).isTrue();
-  }
-
-  @Test
-  public void testOptionsDiff_differentFragments() throws Exception {
-    BuildOptions one =
-        BuildOptions.of(ImmutableList.<Class<? extends FragmentOptions>>of(CppOptions.class));
-    BuildOptions two = BuildOptions.of(TEST_OPTIONS);
-
-    OptionsDiff diff = BuildOptions.diff(one, two);
-
-    assertThat(diff.areSame()).isFalse();
-    assertThat(diff.getExtraFirstFragments()).containsExactly(CppOptions.class);
-    assertThat(diff.getExtraSecondFragments()).isEqualTo(TEST_OPTIONS);
+    assertFalse(BuildOptions.of(TEST_OPTIONS, options1).equals(
+        BuildOptions.of(
+            ImmutableList.<Class<? extends FragmentOptions>>of(
+                BuildConfiguration.Options.class, CppOptions.class),
+            options1)));
   }
 }
