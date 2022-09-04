@@ -1,6 +1,6 @@
 /**
  * The MIT License
- * Copyright (c) 2012 TORCH GmbH
+ * Copyright (c) 2012 Graylog, Inc.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -26,10 +26,10 @@ import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.MetricSet;
 import com.codahale.metrics.Timer;
-import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
+import com.google.common.util.concurrent.Callables;
 import org.graylog2.plugin.LocalMetricRegistry;
 import org.graylog2.plugin.MetricSets;
-import org.graylog2.plugin.collections.Pair;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
 import org.graylog2.plugin.inputs.MessageInput;
@@ -42,14 +42,28 @@ import org.jboss.netty.bootstrap.Bootstrap;
 import org.jboss.netty.bootstrap.ConnectionlessBootstrap;
 import org.jboss.netty.bootstrap.ServerBootstrap;
 import org.jboss.netty.buffer.ChannelBuffer;
-import org.jboss.netty.channel.*;
+import org.jboss.netty.channel.Channel;
+import org.jboss.netty.channel.ChannelHandler;
+import org.jboss.netty.channel.ChannelHandlerContext;
+import org.jboss.netty.channel.ChannelPipeline;
+import org.jboss.netty.channel.ChannelPipelineFactory;
+import org.jboss.netty.channel.Channels;
+import org.jboss.netty.channel.ExceptionEvent;
+import org.jboss.netty.channel.MessageEvent;
+import org.jboss.netty.channel.SimpleChannelHandler;
+import org.jboss.netty.channel.SimpleChannelUpstreamHandler;
 import org.jboss.netty.channel.socket.DatagramChannel;
+import org.jboss.netty.channel.socket.DefaultDatagramChannelConfig;
+import org.jboss.netty.channel.socket.ServerSocketChannelConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 import java.net.InetSocketAddress;
-import java.util.List;
+import java.net.SocketAddress;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.concurrent.Callable;
 
 import static org.jboss.netty.channel.Channels.fireMessageReceived;
 
@@ -60,7 +74,6 @@ public abstract class NettyTransport implements Transport {
 
     private static final Logger log = LoggerFactory.getLogger(NettyTransport.class);
 
-    public static final int DEFAULT_RECV_BUFFER_SIZE = 1024 * 1024;
     protected final MetricRegistry localRegistry;
 
     private final InetSocketAddress socketAddress;
@@ -81,26 +94,26 @@ public abstract class NettyTransport implements Transport {
         if (configuration.stringIsSet(CK_BIND_ADDRESS) && configuration.intIsSet(CK_PORT)) {
             this.socketAddress = new InetSocketAddress(
                     configuration.getString(CK_BIND_ADDRESS),
-                    (int) configuration.getInt(CK_PORT)
+                    configuration.getInt(CK_PORT)
             );
         } else {
             this.socketAddress = null;
         }
         this.recvBufferSize = configuration.intIsSet(CK_RECV_BUFFER_SIZE)
                 ? configuration.getInt(CK_RECV_BUFFER_SIZE)
-                : DEFAULT_RECV_BUFFER_SIZE;
+                : MessageInput.getDefaultRecvBufferSize();
 
         this.localRegistry = localRegistry;
         localRegistry.registerAll(MetricSets.of(throughputCounter.gauges()));
     }
 
-    private ChannelPipelineFactory getPipelineFactory(final List<Pair<String, ? extends ChannelHandler>> handlerList) {
+    private ChannelPipelineFactory getPipelineFactory(final LinkedHashMap<String, Callable<? extends ChannelHandler>> handlerList) {
         return new ChannelPipelineFactory() {
             @Override
             public ChannelPipeline getPipeline() throws Exception {
-                ChannelPipeline p = Channels.pipeline();
-                for (Pair<String, ? extends ChannelHandler> pair : handlerList) {
-                    p.addLast(pair.first(), pair.second());
+                final ChannelPipeline p = Channels.pipeline();
+                for (final Map.Entry<String, Callable<? extends ChannelHandler>> entry : handlerList.entrySet()) {
+                    p.addLast(entry.getKey(), entry.getValue().call());
                 }
                 return p;
             }
@@ -114,24 +127,35 @@ public abstract class NettyTransport implements Transport {
 
     @Override
     public void launch(final MessageInput input) throws MisfireException {
-        final List<Pair<String, ? extends ChannelHandler>> handlerList = getBaseChannelHandlers(input);
-        final List<Pair<String, ? extends ChannelHandler>> finalChannelHandlers = getFinalChannelHandlers(input);
+        final LinkedHashMap<String, Callable<? extends ChannelHandler>> handlerList = getBaseChannelHandlers(input);
+        final LinkedHashMap<String, Callable<? extends ChannelHandler>> finalHandlers = getFinalChannelHandlers(input);
 
-        handlerList.addAll(finalChannelHandlers);
+        handlerList.putAll(finalHandlers);
 
         try {
             bootstrap = getBootstrap();
-
             bootstrap.setPipelineFactory(getPipelineFactory(handlerList));
 
             // sigh, bindable bootstraps do not share a common interface
+            int receiveBufferSize;
             if (bootstrap instanceof ConnectionlessBootstrap) {
                 acceptChannel = ((ConnectionlessBootstrap) bootstrap).bind(socketAddress);
+
+                final DefaultDatagramChannelConfig channelConfig = (DefaultDatagramChannelConfig) acceptChannel.getConfig();
+                receiveBufferSize = channelConfig.getReceiveBufferSize();
             } else if (bootstrap instanceof ServerBootstrap) {
                 acceptChannel = ((ServerBootstrap) bootstrap).bind(socketAddress);
+
+                final ServerSocketChannelConfig channelConfig = (ServerSocketChannelConfig) acceptChannel.getConfig();
+                receiveBufferSize = channelConfig.getReceiveBufferSize();
             } else {
-                log.error("Unknown netty bootstrap class returned: {}. Cannot safely bind.", bootstrap);
+                log.error("Unknown Netty bootstrap class returned: {}. Cannot safely bind.", bootstrap);
                 throw new IllegalStateException("Unknown netty bootstrap class returned: " + bootstrap + ". Cannot safely bind.");
+            }
+
+            if (receiveBufferSize != getRecvBufferSize()) {
+                log.warn("receiveBufferSize (SO_RCVBUF) for input {} should be {} but is {}.",
+                        input, getRecvBufferSize(), receiveBufferSize);
             }
         } catch (Exception e) {
             throw new MisfireException(e);
@@ -146,17 +170,6 @@ public abstract class NettyTransport implements Transport {
         if (bootstrap != null) {
             bootstrap.shutdown();
         }
-    }
-
-    @Override
-    public ConfigurationRequest getRequestedConfiguration() {
-        final ConfigurationRequest r = new ConfigurationRequest();
-
-        r.addField(ConfigurationRequest.Templates.bindAddress(CK_BIND_ADDRESS));
-        r.addField(ConfigurationRequest.Templates.portNumber(CK_PORT, 5555));
-        r.addField(ConfigurationRequest.Templates.recvBufferSize(CK_RECV_BUFFER_SIZE, 1024 * 1024));
-
-        return r;
     }
 
     /**
@@ -174,14 +187,33 @@ public abstract class NettyTransport implements Transport {
      * <p/>
      * Some common use cases are to add SSL/TLS, connection counters or throttling traffic shapers.
      *
-     * @return the list of initial channelhandlers to add to the {@link org.jboss.netty.channel.ChannelPipelineFactory}
      * @param input
+     * @return the list of initial channelhandlers to add to the {@link org.jboss.netty.channel.ChannelPipelineFactory}
      */
-    protected List<Pair<String, ? extends ChannelHandler>> getBaseChannelHandlers(MessageInput input) {
-        List<Pair<String, ? extends ChannelHandler>> handlerList = Lists.newArrayList();
+    protected LinkedHashMap<String, Callable<? extends ChannelHandler>> getBaseChannelHandlers(final MessageInput input) {
+        LinkedHashMap<String, Callable<? extends ChannelHandler>> handlerList = Maps.newLinkedHashMap();
 
-        handlerList.add(Pair.of("packet-meta-dumper", new PacketInformationDumper(input)));
-        handlerList.add(Pair.of("traffic-counter", throughputCounter));
+        handlerList.put("exception-logger", new Callable<ChannelHandler>() {
+            @Override
+            public ChannelHandler call() throws Exception {
+                return new SimpleChannelUpstreamHandler() {
+                    @Override
+                    public void exceptionCaught(ChannelHandlerContext ctx, ExceptionEvent e) throws Exception {
+                        log.error("Error on Input [" + input.getName() + "/" + input.getId() + "] (channel "
+                                + e.getChannel().toString() + ")", e.getCause());
+                        super.exceptionCaught(ctx, e);
+                    }
+                };
+            }
+        });
+
+        handlerList.put("packet-meta-dumper", new Callable<ChannelHandler>() {
+            @Override
+            public ChannelHandler call() throws Exception {
+                return new PacketInformationDumper(input);
+            }
+        });
+        handlerList.put("traffic-counter", Callables.returning(throughputCounter));
 
         return handlerList;
     }
@@ -196,23 +228,46 @@ public abstract class NettyTransport implements Transport {
      * <p/>
      * One valid use case would be to insert debug handlers in the middle of the list, though.
      *
-     * @return the list of channel handlers at the end of the pipeline
      * @param input
+     * @return the list of channel handlers at the end of the pipeline
      */
-    protected List<Pair<String, ? extends ChannelHandler>> getFinalChannelHandlers(MessageInput input) {
-        List<Pair<String, ? extends ChannelHandler>> handlerList = Lists.newArrayList();
+    protected LinkedHashMap<String, Callable<? extends ChannelHandler>> getFinalChannelHandlers(final MessageInput input) {
+        LinkedHashMap<String, Callable<? extends ChannelHandler>> handlerList = Maps.newLinkedHashMap();
 
         if (aggregator != null) {
             log.debug("Adding codec aggregator {} to channel pipeline", aggregator);
-            handlerList.add(Pair.of("codec-aggregator", new MessageAggregationHandler(input, aggregator)));
+            handlerList.put("codec-aggregator", new Callable<ChannelHandler>() {
+                @Override
+                public ChannelHandler call() throws Exception {
+                    return new MessageAggregationHandler(aggregator);
+                }
+            });
         }
 
-        handlerList.add(Pair.of("rawmessage-handler", new RawMessageHandler(input)));
+        handlerList.put("rawmessage-handler", new Callable<ChannelHandler>() {
+            @Override
+            public ChannelHandler call() throws Exception {
+                return new RawMessageHandler(input);
+            }
+        });
         return handlerList;
     }
 
     protected long getRecvBufferSize() {
         return recvBufferSize;
+    }
+
+    /**
+     * Get the local socket address this transport is listening on after being launched.
+     *
+     * @return the listening address of this transport or {@code null} if the transport hasn't been launched yet.
+     */
+    public SocketAddress getLocalAddress() {
+        if (acceptChannel == null || !acceptChannel.isBound()) {
+            return null;
+        }
+
+        return acceptChannel.getLocalAddress();
     }
 
     @Override
@@ -221,13 +276,11 @@ public abstract class NettyTransport implements Transport {
     }
 
     private class MessageAggregationHandler extends SimpleChannelHandler {
-        private final MessageInput input;
         private final CodecAggregator aggregator;
         private final Timer aggregationTimer;
         private final Meter invalidChunksMeter;
 
-        public MessageAggregationHandler(MessageInput input, CodecAggregator aggregator) {
-            this.input = input;
+        public MessageAggregationHandler(CodecAggregator aggregator) {
             this.aggregator = aggregator;
             aggregationTimer = localRegistry.timer("aggregationTime");
             invalidChunksMeter = localRegistry.meter("invalidMessages");
@@ -247,7 +300,7 @@ public abstract class NettyTransport implements Transport {
                 if (completeMessage != null) {
                     log.debug("Message aggregation completion, forwarding {}", completeMessage);
                     fireMessageReceived(ctx, completeMessage);
-                } else if(result.isValid()) {
+                } else if (result.isValid()) {
                     log.debug("More chunks necessary to complete this message");
                 } else {
                     invalidChunksMeter.mark();
@@ -282,8 +335,7 @@ public abstract class NettyTransport implements Transport {
             final byte[] payload = new byte[buffer.readableBytes()];
             buffer.toByteBuffer().get(payload, buffer.readerIndex(), buffer.readableBytes());
 
-            final RawMessage raw = new RawMessage(input.getCodec().getName(), input.getId(),
-                                                  (InetSocketAddress) e.getRemoteAddress(), payload);
+            final RawMessage raw = new RawMessage(payload, (InetSocketAddress) e.getRemoteAddress());
             input.processRawMessage(raw);
         }
 
@@ -294,6 +346,19 @@ public abstract class NettyTransport implements Transport {
             if (ctx.getChannel() != null && !(ctx.getChannel() instanceof DatagramChannel)) {
                 ctx.getChannel().close();
             }
+        }
+    }
+
+    public static class Config implements Transport.Config {
+        @Override
+        public ConfigurationRequest getRequestedConfiguration() {
+            final ConfigurationRequest r = new ConfigurationRequest();
+
+            r.addField(ConfigurationRequest.Templates.bindAddress(CK_BIND_ADDRESS));
+            r.addField(ConfigurationRequest.Templates.portNumber(CK_PORT, 5555));
+            r.addField(ConfigurationRequest.Templates.recvBufferSize(CK_RECV_BUFFER_SIZE, 1024 * 1024));
+
+            return r;
         }
     }
 }
