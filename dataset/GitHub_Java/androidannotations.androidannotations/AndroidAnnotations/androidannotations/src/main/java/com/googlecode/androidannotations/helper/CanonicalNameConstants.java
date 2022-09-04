@@ -16,11 +16,7 @@
 package com.googlecode.androidannotations.helper;
 
 import java.net.URI;
-import java.sql.SQLException;
-import java.util.Collection;
 import java.util.Collections;
-import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 public final class CanonicalNameConstants {
@@ -28,16 +24,11 @@ public final class CanonicalNameConstants {
 	/*
 	 * Java
 	 */
-	public static final String OBJECT = Object.class.getCanonicalName();
 	public static final String URI = URI.class.getCanonicalName();
-	public static final String MAP = Map.class.getCanonicalName();
 	public static final String SET = Set.class.getCanonicalName();
-	public static final String LIST = List.class.getCanonicalName();
-	public static final String COLLECTION = Collection.class.getCanonicalName();
 	public static final String COLLECTIONS = Collections.class.getCanonicalName();
 	public static final String STRING = String.class.getCanonicalName();
 	public static final String CHAR_SEQUENCE = CharSequence.class.getCanonicalName();
-	public static final String SQL_EXCEPTION = SQLException.class.getCanonicalName();
 
 	/*
 	 * Android
@@ -50,6 +41,8 @@ public final class CanonicalNameConstants {
 	public static final String ACTIVITY = "android.app.Activity";
 	public static final String EDITABLE = "android.text.Editable";
 	public static final String TEXT_WATCHER = "android.text.TextWatcher";
+	public static final String SEEKBAR = "android.widget.SeekBar";
+	public static final String ON_SEEKBAR_CHANGE_LISTENER = "android.widget.SeekBar.OnSeekBarChangeListener";
 	public static final String TEXT_VIEW = "android.widget.TextView";
 	public static final String VIEW = "android.view.View";
 	public static final String VIEW_ON_CLICK_LISTENER = "android.view.View.OnClickListener";
@@ -84,7 +77,6 @@ public final class CanonicalNameConstants {
 	public static final String CONTENT_PROVIDER = "android.content.ContentProvider";
 	public static final String SQLITE_DATABASE = "android.database.sqlite.SQLiteDatabase";
 	public static final String KEY_STORE = "java.security.KeyStore";
-	public static final String SQLLITE_OPEN_HELPER = "android.database.sqlite.SQLiteOpenHelper";
 
 	/*
 	 * Sherlock
@@ -123,14 +115,6 @@ public final class CanonicalNameConstants {
 	public static final String ON_ACTIVITY_RESULT_EVENT = "roboguice.activity.event.OnActivityResultEvent";
 	public static final String ON_CONTENT_VIEW_AVAILABLE_EVENT = "roboguice.activity.event.OnContentViewAvailableEvent";
 	public static final String ON_CREATE_EVENT = "roboguice.activity.event.OnCreateEvent";
-
-	/*
-	 * ORMLite
-	 */
-	public static final String DAO = "com.j256.ormlite.dao.Dao";
-	public static final String DAO_MANAGER = "com.j256.ormlite.dao.DaoManager";
-	public static final String CONNECTION_SOURCE = "com.j256.ormlite.support.ConnectionSource";
-	public static final String OPEN_HELPER_MANAGER = "com.j256.ormlite.android.apptools.OpenHelperManager";
 
 	/*
 	 * HttpClient
