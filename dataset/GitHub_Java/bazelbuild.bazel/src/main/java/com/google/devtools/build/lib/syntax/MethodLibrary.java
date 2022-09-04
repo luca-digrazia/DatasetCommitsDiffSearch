@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkSignature;
-import com.google.devtools.build.lib.syntax.EvalUtils.ComparisonException;
 import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
 import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
 import com.google.devtools.build.lib.syntax.Type.ConversionException;
@@ -398,10 +397,10 @@ public class MethodLibrary {
   }
 
   @SkylarkSignature(name = "partition", objectType = StringModule.class,
-      returnType = Tuple.class,
+      returnType = MutableList.class,
       doc = "Splits the input string at the first occurrence of the separator "
           + "<code>sep</code> and returns the resulting partition as a three-element "
-          + "tuple of the form (substring_before, separator, substring_after).",
+          + "list of the form [substring_before, separator, substring_after].",
       parameters = {
         @Param(name = "self", type = String.class, doc = "This string."),
         @Param(name = "sep", type = String.class,
@@ -410,17 +409,17 @@ public class MethodLibrary {
       useLocation = true)
   private static final BuiltinFunction partition = new BuiltinFunction("partition") {
     @SuppressWarnings("unused")
-    public Tuple<String> invoke(String self, String sep, Location loc, Environment env)
+    public MutableList<String> invoke(String self, String sep, Location loc, Environment env)
         throws EvalException {
-      return partitionWrapper(self, sep, true, loc);
+      return partitionWrapper(self, sep, true, env, loc);
     }
   };
 
   @SkylarkSignature(name = "rpartition", objectType = StringModule.class,
-      returnType = Tuple.class,
+      returnType = MutableList.class,
       doc = "Splits the input string at the last occurrence of the separator "
           + "<code>sep</code> and returns the resulting partition as a three-element "
-          + "tuple of the form (substring_before, separator, substring_after).",
+          + "list of the form [substring_before, separator, substring_after].",
       parameters = {
         @Param(name = "self", type = String.class, doc = "This string."),
         @Param(name = "sep", type = String.class,
@@ -429,9 +428,9 @@ public class MethodLibrary {
       useLocation = true)
   private static final BuiltinFunction rpartition = new BuiltinFunction("rpartition") {
     @SuppressWarnings("unused")
-    public Tuple<String> invoke(String self, String sep, Location loc, Environment env)
+    public MutableList<String> invoke(String self, String sep, Location loc, Environment env)
         throws EvalException {
-      return partitionWrapper(self, sep, false, loc);
+      return partitionWrapper(self, sep, false, env, loc);
     }
   };
 
@@ -443,13 +442,15 @@ public class MethodLibrary {
    * @param separator The string to split on
    * @param forward A flag that controls whether the input string is split around
    *    the first ({@code true}) or last ({@code false}) occurrence of the separator.
+   * @param env The current environment
    * @param loc The location that is used for potential exceptions
    * @return A list with three elements
    */
-  private static Tuple<String> partitionWrapper(
-      String self, String separator, boolean forward, Location loc) throws EvalException {
+  private static MutableList<String> partitionWrapper(
+      String self, String separator, boolean forward,
+      Environment env, Location loc) throws EvalException {
     try {
-      return Tuple.copyOf(stringPartition(self, separator, forward));
+      return new MutableList(stringPartition(self, separator, forward), env);
     } catch (IllegalArgumentException ex) {
       throw new EvalException(loc, ex);
     }
@@ -991,20 +992,15 @@ public class MethodLibrary {
         "Returns the smallest one of all given arguments. "
             + "If only one argument is provided, it must be a non-empty iterable.",
     extraPositionals =
-        @Param(name = "args", type = SkylarkList.class, doc = "The elements to be checked."),
+      @Param(name = "args", type = SkylarkList.class, doc = "The elements to be checked."),
     useLocation = true
   )
-  private static final BuiltinFunction min =
-      new BuiltinFunction("min") {
-        @SuppressWarnings("unused") // Accessed via Reflection.
-        public Object invoke(SkylarkList<?> args, Location loc) throws EvalException {
-          try {
-            return findExtreme(args, EvalUtils.SKYLARK_COMPARATOR.reverse(), loc);
-          } catch (ComparisonException e) {
-            throw new EvalException(loc, e);
-          }
-        }
-      };
+  private static final BuiltinFunction min = new BuiltinFunction("min") {
+    @SuppressWarnings("unused") // Accessed via Reflection.
+    public Object invoke(SkylarkList<?> args, Location loc) throws EvalException {
+      return findExtreme(args, EvalUtils.SKYLARK_COMPARATOR.reverse(), loc);
+    }
+  };
 
   @SkylarkSignature(
     name = "max",
@@ -1013,20 +1009,15 @@ public class MethodLibrary {
         "Returns the largest one of all given arguments. "
             + "If only one argument is provided, it must be a non-empty iterable.",
     extraPositionals =
-        @Param(name = "args", type = SkylarkList.class, doc = "The elements to be checked."),
+      @Param(name = "args", type = SkylarkList.class, doc = "The elements to be checked."),
     useLocation = true
   )
-  private static final BuiltinFunction max =
-      new BuiltinFunction("max") {
-        @SuppressWarnings("unused") // Accessed via Reflection.
-        public Object invoke(SkylarkList<?> args, Location loc) throws EvalException {
-          try {
-            return findExtreme(args, EvalUtils.SKYLARK_COMPARATOR, loc);
-          } catch (ComparisonException e) {
-            throw new EvalException(loc, e);
-          }
-        }
-      };
+  private static final BuiltinFunction max = new BuiltinFunction("max") {
+    @SuppressWarnings("unused") // Accessed via Reflection.
+    public Object invoke(SkylarkList<?> args, Location loc) throws EvalException {
+      return findExtreme(args, EvalUtils.SKYLARK_COMPARATOR, loc);
+    }
+  };
 
   /**
    * Returns the maximum element from this list, as determined by maxOrdering.
@@ -1093,8 +1084,8 @@ public class MethodLibrary {
     name = "sorted",
     returnType = MutableList.class,
     doc =
-        "Sort a collection. Elements should all belong to the same orderable type, they are sorted "
-            + "by their value (in ascending order).",
+        "Sort a collection. Elements are sorted first by their type, "
+            + "then by their value (in ascending order).",
     parameters = {@Param(name = "self", type = Object.class, doc = "This collection.")},
     useLocation = true,
     useEnvironment = true

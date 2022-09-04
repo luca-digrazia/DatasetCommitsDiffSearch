@@ -13,10 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.docgen.skylark;
 
-import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.skylarkinterface.Param;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkSignature;
 import com.google.devtools.build.lib.syntax.EvalUtils;
@@ -25,8 +22,6 @@ import com.google.devtools.build.lib.syntax.Runtime.NoneType;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
 import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
-import com.google.devtools.build.lib.syntax.StringModule;
-import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.Map;
 
@@ -61,14 +56,12 @@ abstract class SkylarkDoc {
       return "<a class=\"anchor\" href=\"dict.html\">dict</a>";
     } else if (type.equals(Tuple.class)) {
       return "<a class=\"anchor\" href=\"list.html\">tuple</a>";
-    } else if (type.equals(MutableList.class) || type.equals(ImmutableList.class)) {
+    } else if (type.equals(MutableList.class)) {
       return "<a class=\"anchor\" href=\"list.html\">list</a>";
     } else if (type.equals(SkylarkList.class)) {
       return "<a class=\"anchor\" href=\"list.html\">sequence</a>";
     } else if (type.equals(Void.TYPE) || type.equals(NoneType.class)) {
       return "<a class=\"anchor\" href=\"" + TOP_LEVEL_ID + ".html#None\">None</a>";
-    } else if (type.equals(NestedSet.class)) {
-      return "<a class=\"anchor\" href=\"depset.html\">depset</a>";
     } else if (type.isAnnotationPresent(SkylarkModule.class)) {
       SkylarkModule module = type.getAnnotation(SkylarkModule.class);
       if (module.documented()) {
@@ -79,8 +72,8 @@ abstract class SkylarkDoc {
     return EvalUtils.getDataTypeNameFromClass(type);
   }
 
-  // Omit self parameter from parameters in class methods.
-  protected static Param[] withoutSelfParam(SkylarkSignature annotation) {
+  // Elide self parameter from parameters in class methods.
+  protected static Param[] adjustedParameters(SkylarkSignature annotation) {
     Param[] params = annotation.parameters();
     if (params.length > 0
         && !params[0].named()
@@ -88,17 +81,6 @@ abstract class SkylarkDoc {
         && params[0].positional()
         && annotation.objectType() != Object.class
         && !FuncallExpression.isNamespace(annotation.objectType())) {
-      // Skip the self parameter, which is the first mandatory positional parameter.
-      return Arrays.copyOfRange(params, 1, params.length);
-    } else {
-      return params;
-    }
-  }
-
-  // Omit self parameter from parameters in class methods.
-  protected static Param[] withoutSelfParam(SkylarkCallable annotation, Method method) {
-    Param[] params = annotation.parameters();
-    if (method.getDeclaringClass().equals(StringModule.class)) {
       // Skip the self parameter, which is the first mandatory positional parameter.
       return Arrays.copyOfRange(params, 1, params.length);
     } else {
