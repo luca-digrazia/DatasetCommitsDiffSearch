@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,24 +15,24 @@
  */
 package org.androidannotations.helper;
 
-import java.lang.annotation.Annotation;
 import java.util.List;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 
-import org.androidannotations.processing.EBeanHolder;
+import org.androidannotations.process.ProcessHolder;
 import org.androidannotations.rclass.IRClass;
 import org.androidannotations.rclass.IRClass.Res;
 import org.androidannotations.rclass.IRInnerClass;
+
 import com.sun.codemodel.JFieldRef;
 
 public class IdAnnotationHelper extends TargetAnnotationHelper {
 
 	private final IRClass rClass;
 
-	public IdAnnotationHelper(ProcessingEnvironment processingEnv, Class<? extends Annotation> target, IRClass rClass) {
-		super(processingEnv, target);
+	public IdAnnotationHelper(ProcessingEnvironment processingEnv, String annotationName, IRClass rClass) {
+		super(processingEnv, annotationName);
 		this.rClass = rClass;
 	}
 
@@ -50,19 +50,33 @@ public class IdAnnotationHelper extends TargetAnnotationHelper {
 		return super.extractAnnotationResources(element, getTarget(), rClass.get(res), useElementName);
 	}
 
-	public List<JFieldRef> extractAnnotationFieldRefs(EBeanHolder holder, Element element, Res res, boolean useElementName) {
-		return super.extractAnnotationFieldRefs(holder, element, getTarget(), rClass.get(res), useElementName);
+	public List<JFieldRef> extractAnnotationFieldRefs(ProcessHolder holder, Element element, Res res, boolean useElementName) {
+		return extractAnnotationFieldRefs(holder, element, res, useElementName, DEFAULT_FIELD_NAME_VALUE, DEFAULT_FIELD_NAME_RESNAME);
 	}
 
-	public JFieldRef extractOneAnnotationFieldRef(EBeanHolder holder, Element element, Res res, boolean useElementName) {
-		List<JFieldRef> jFieldRefs = extractAnnotationFieldRefs(holder, element, res, useElementName);
+	public List<JFieldRef> extractAnnotationFieldRefs(ProcessHolder holder, Element element, Res res, boolean useElementName, String idFieldName, String resFieldName) {
+		return super.extractAnnotationFieldRefs(holder, element, getTarget(), rClass.get(res), useElementName, idFieldName, resFieldName);
+	}
+
+	public JFieldRef extractOneAnnotationFieldRef(ProcessHolder holder, Element element, Res res, boolean useElementName) {
+		return extractOneAnnotationFieldRef(holder, element, getTarget(), res, useElementName);
+	}
+
+	public JFieldRef extractOneAnnotationFieldRef(ProcessHolder holder, Element element, String annotationName, Res res, boolean useElementName) {
+		return extractOneAnnotationFieldRef(holder, element, annotationName, res, useElementName, DEFAULT_FIELD_NAME_VALUE, DEFAULT_FIELD_NAME_RESNAME);
+	}
+
+	public JFieldRef extractOneAnnotationFieldRef(ProcessHolder holder, Element element, String annotationName, Res res, boolean useElementName, String idFieldName, String resFieldName) {
+		return extractOneAnnotationFieldRef(holder, element, annotationName, rClass.get(res), useElementName, idFieldName, resFieldName);
+	}
+
+	public JFieldRef extractOneAnnotationFieldRef(ProcessHolder holder, Element element, String annotationName, IRInnerClass rInnerClass, boolean useElementName, String idFieldName, String resFieldName) {
+		List<JFieldRef> jFieldRefs = extractAnnotationFieldRefs(holder, element, annotationName, rInnerClass, useElementName, idFieldName, resFieldName);
 
 		if (jFieldRefs.size() == 1) {
 			return jFieldRefs.get(0);
 		} else {
 			return null;
 		}
-
 	}
-
 }
