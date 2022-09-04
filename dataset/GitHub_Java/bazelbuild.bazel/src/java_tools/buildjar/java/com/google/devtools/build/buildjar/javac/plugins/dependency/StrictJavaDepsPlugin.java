@@ -17,9 +17,7 @@ package com.google.devtools.build.buildjar.javac.plugins.dependency;
 import static com.google.common.collect.Iterables.getOnlyElement;
 import static com.google.devtools.build.buildjar.javac.plugins.dependency.DependencyModule.StrictJavaDeps.ERROR;
 
-import com.google.auto.value.AutoValue;
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Ordering;
 import com.google.devtools.build.buildjar.JarOwner;
 import com.google.devtools.build.buildjar.javac.plugins.BlazeJavaCompilerPlugin;
@@ -39,21 +37,17 @@ import com.sun.tools.javac.tree.TreeScanner;
 import com.sun.tools.javac.util.Context;
 import com.sun.tools.javac.util.Log;
 import com.sun.tools.javac.util.Log.WriterKind;
-import com.sun.tools.javac.util.Name;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
 import java.nio.file.Path;
 import java.text.MessageFormat;
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import javax.lang.model.element.AnnotationValue;
-import javax.lang.model.util.SimpleAnnotationValueVisitor8;
+import javax.annotation.Generated;
 import javax.tools.JavaFileObject;
 
 /**
@@ -80,25 +74,11 @@ public final class StrictJavaDepsPlugin extends BlazeJavaCompilerPlugin {
   private final Set<JCTree> trees;
   /** Computed missing dependencies */
   private final Set<JarOwner> missingTargets;
-  /** Strict deps diagnostics. */
-  private final List<SjdDiagnostic> diagnostics;
 
   private static Properties targetMap;
 
+
   private PrintWriter errWriter;
-
-  @AutoValue
-  abstract static class SjdDiagnostic {
-    abstract int pos();
-
-    abstract String message();
-
-    abstract JavaFileObject source();
-
-    static SjdDiagnostic create(int pos, String message, JavaFileObject source) {
-      return new AutoValue_StrictJavaDepsPlugin_SjdDiagnostic(pos, message, source);
-    }
-  }
 
   /**
    * On top of javac, we keep Blaze-specific information in the form of two maps. Both map jars
@@ -116,7 +96,6 @@ public final class StrictJavaDepsPlugin extends BlazeJavaCompilerPlugin {
     trees = new HashSet<>();
     targetMap = new Properties();
     missingTargets = new HashSet<>();
-    diagnostics = new ArrayList<>();
   }
 
   @Override
@@ -132,7 +111,7 @@ public final class StrictJavaDepsPlugin extends BlazeJavaCompilerPlugin {
     if (checkingTreeScanner == null) {
       Set<Path> platformJars = dependencyModule.getPlatformJars();
       checkingTreeScanner =
-          new CheckingTreeScanner(dependencyModule, diagnostics, missingTargets, platformJars);
+          new CheckingTreeScanner(dependencyModule, log, missingTargets, platformJars);
       context.put(CheckingTreeScanner.class, checkingTreeScanner);
     }
     initTargetMap();
@@ -144,7 +123,7 @@ public final class StrictJavaDepsPlugin extends BlazeJavaCompilerPlugin {
         targetMap.load(is);
       }
     } catch (IOException ex) {
-      throw new AssertionError("Error loading Strict Java Deps mapping file: " + targetMapping, ex);
+      log.warning("Error loading Strict Java Deps mapping file: " + targetMapping, ex);
     }
   }
 
@@ -154,7 +133,11 @@ public final class StrictJavaDepsPlugin extends BlazeJavaCompilerPlugin {
    */
   @Override
   public void postAttribute(Env<AttrContext> env) {
-    JavaFileObject previousSource = checkingTreeScanner.source;
+    JavaFileObject previousSource =
+        log.useSource(
+            env.enclClass.sym.sourcefile != null
+                ? env.enclClass.sym.sourcefile
+                : env.toplevel.sourcefile);
     boolean previousExemption = checkingTreeScanner.isStrictDepsExempt;
     try {
       ProcessorDependencyMode mode = isAnnotationProcessorExempt(env.toplevel);
@@ -162,10 +145,6 @@ public final class StrictJavaDepsPlugin extends BlazeJavaCompilerPlugin {
         return;
       }
       checkingTreeScanner.isStrictDepsExempt |= mode == ProcessorDependencyMode.EXEMPT_RECORD;
-      checkingTreeScanner.source =
-          env.enclClass.sym.sourcefile != null
-              ? env.enclClass.sym.sourcefile
-              : env.toplevel.sourcefile;
       if (trees.add(env.tree)) {
         checkingTreeScanner.scan(env.tree);
       }
@@ -176,26 +155,13 @@ public final class StrictJavaDepsPlugin extends BlazeJavaCompilerPlugin {
       }
     } finally {
       checkingTreeScanner.isStrictDepsExempt = previousExemption;
-      checkingTreeScanner.source = previousSource;
+      log.useSource(previousSource);
     }
   }
 
   @Override
   public void finish() {
     implicitDependencyExtractor.accumulate(context, checkingTreeScanner.getSeenClasses());
-
-    for (SjdDiagnostic diagnostic : diagnostics) {
-      JavaFileObject prev = log.useSource(diagnostic.source());
-      try {
-        if (dependencyModule.getStrictJavaDeps() == ERROR) {
-          log.error(diagnostic.pos(), "proc.messager", diagnostic.message());
-        } else {
-          log.warning(diagnostic.pos(), "proc.messager", diagnostic.message());
-        }
-      } finally {
-        log.useSource(prev);
-      }
-    }
 
     if (!missingTargets.isEmpty()) {
       String canonicalizedLabel =
@@ -232,8 +198,8 @@ public final class StrictJavaDepsPlugin extends BlazeJavaCompilerPlugin {
     /** Lookup for jars coming from transitive dependencies */
     private final Map<Path, JarOwner> indirectJarsToTargets;
 
-    /** Strict deps diagnostics. */
-    private final List<SjdDiagnostic> diagnostics;
+    /** All error reporting is done through javac's log, */
+    private final Log log;
 
     /** The strict_java_deps mode */
     private final StrictJavaDeps strictJavaDepsMode;
@@ -255,17 +221,14 @@ public final class StrictJavaDepsPlugin extends BlazeJavaCompilerPlugin {
     /** Was the node being visited generated by an exempt annotation processor? */
     private boolean isStrictDepsExempt = false;
 
-    /** The current source, for diagnostics. */
-    private JavaFileObject source = null;
-
     public CheckingTreeScanner(
         DependencyModule dependencyModule,
-        List<SjdDiagnostic> diagnostics,
+        Log log,
         Set<JarOwner> missingTargets,
         Set<Path> platformJars) {
       this.indirectJarsToTargets = dependencyModule.getIndirectMapping();
       this.strictJavaDepsMode = dependencyModule.getStrictJavaDeps();
-      this.diagnostics = diagnostics;
+      this.log = log;
       this.missingTargets = missingTargets;
       this.directDependenciesMap = dependencyModule.getExplicitDependenciesMap();
       this.platformJars = platformJars;
@@ -312,7 +275,11 @@ public final class StrictJavaDepsPlugin extends BlazeJavaCompilerPlugin {
                   ? "package " + sym.getEnclosingElement()
                   : "type " + sym;
           String message = MessageFormat.format(TRANSITIVE_DEP_MESSAGE, used, toolInfo);
-          diagnostics.add(SjdDiagnostic.create(node.pos, message, source));
+          if (strictJavaDepsMode == ERROR) {
+            log.error(node.pos, "proc.messager", message);
+          } else {
+            log.warning(node.pos, "proc.messager", message);
+          }
         }
       }
 
@@ -398,7 +365,11 @@ public final class StrictJavaDepsPlugin extends BlazeJavaCompilerPlugin {
     if (sym == null) {
       return ProcessorDependencyMode.DEFAULT;
     }
-    for (String value : getGeneratedBy(sym)) {
+    Generated generated = sym.getAnnotation(Generated.class);
+    if (generated == null) {
+      return ProcessorDependencyMode.DEFAULT;
+    }
+    for (String value : generated.value()) {
       // Relax strict deps for dagger-generated code (b/17979436).
       if (value.startsWith(DAGGER_PROCESSOR_PREFIX)) {
         return ProcessorDependencyMode.EXEMPT_NORECORD;
@@ -408,44 +379,6 @@ public final class StrictJavaDepsPlugin extends BlazeJavaCompilerPlugin {
       }
     }
     return ProcessorDependencyMode.DEFAULT;
-  }
-
-  private static ImmutableSet<String> getGeneratedBy(Symbol symbol) {
-    ImmutableSet.Builder<String> suppressions = ImmutableSet.builder();
-    symbol
-        .getRawAttributes()
-        .stream()
-        .filter(
-            a -> {
-              Name name = a.type.tsym.getQualifiedName();
-              return name.contentEquals("javax.annotation.Generated")
-                  || name.contentEquals("javax.annotation.processing.Generated");
-            })
-        .flatMap(
-            a ->
-                a.getElementValues()
-                    .entrySet()
-                    .stream()
-                    .filter(e -> e.getKey().getSimpleName().contentEquals("value"))
-                    .map(e -> e.getValue()))
-        .forEachOrdered(
-            a ->
-                a.accept(
-                    new SimpleAnnotationValueVisitor8<Void, Void>() {
-                      @Override
-                      public Void visitString(String s, Void aVoid) {
-                        suppressions.add(s);
-                        return super.visitString(s, aVoid);
-                      }
-
-                      @Override
-                      public Void visitArray(List<? extends AnnotationValue> vals, Void aVoid) {
-                        vals.stream().forEachOrdered(v -> v.accept(this, null));
-                        return super.visitArray(vals, aVoid);
-                      }
-                    },
-                    null));
-    return suppressions.build();
   }
 
   /** Replace the given target with a configured replacement. Package private for testing. */
