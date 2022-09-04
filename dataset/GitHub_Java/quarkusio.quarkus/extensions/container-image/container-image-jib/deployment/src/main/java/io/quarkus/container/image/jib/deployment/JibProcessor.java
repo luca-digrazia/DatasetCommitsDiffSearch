@@ -176,8 +176,7 @@ public class JibProcessor {
     private ImageReference getImageReference(ContainerImageConfig containerImageConfig,
             ApplicationInfoBuildItem applicationInfo) {
         return ImageReference.of(containerImageConfig.registry.orElse(null),
-                (containerImageConfig.group.map(s -> s + "/").orElse(""))
-                        + containerImageConfig.name.orElse(applicationInfo.getName()),
+                containerImageConfig.group + "/" + containerImageConfig.name.orElse(applicationInfo.getName()),
                 containerImageConfig.tag.orElse(applicationInfo.getVersion()));
     }
 
