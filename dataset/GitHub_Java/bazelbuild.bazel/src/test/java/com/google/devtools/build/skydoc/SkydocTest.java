@@ -20,18 +20,14 @@ import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.skylark.util.SkylarkTestCase;
 import com.google.devtools.build.lib.syntax.ParserInputSource;
-import com.google.devtools.build.lib.syntax.SkylarkSemantics;
-import com.google.devtools.build.lib.syntax.UserDefinedFunction;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.skydoc.rendering.AttributeInfo;
+import com.google.devtools.build.skydoc.fakebuildapi.FakeDescriptor.Type;
 import com.google.devtools.build.skydoc.rendering.RuleInfo;
-import com.google.devtools.build.skydoc.rendering.UserDefinedFunctionInfo;
-import com.google.devtools.build.skydoc.rendering.UserDefinedFunctionInfo.DocstringParseException;
 import java.io.IOException;
+import java.nio.file.Paths;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.stream.Collectors;
@@ -50,23 +46,15 @@ public final class SkydocTest extends SkylarkTestCase {
 
   @Before
   public void setUp() {
-    skydocMain =
-        new SkydocMain(
-            new SkylarkFileAccessor() {
+    skydocMain = new SkydocMain(new SkylarkFileAccessor() {
 
-              @Override
-              public ParserInputSource inputSource(String pathString) throws IOException {
-                Path path = fileSystem.getPath("/" + pathString);
-                byte[] bytes = FileSystemUtils.asByteSource(path).read();
-                return ParserInputSource.create(bytes, path.asFragment());
-              }
-
-              @Override
-              public boolean fileExists(String pathString) {
-                return fileSystem.exists(fileSystem.getPath("/" + pathString));
-              }
-            },
-            ImmutableList.of("/other_root", "."));
+      @Override
+      public ParserInputSource inputSource(String pathString) throws IOException {
+        Path path = fileSystem.getPath("/" + pathString);
+        byte[] bytes = FileSystemUtils.asByteSource(path).read();
+        return ParserInputSource.create(bytes, path.asFragment());
+      }
+    });
   }
 
   @Test
@@ -91,12 +79,9 @@ public final class SkydocTest extends SkylarkTestCase {
     ImmutableList.Builder<RuleInfo> unexportedRuleInfos = ImmutableList.builder();
 
     skydocMain.eval(
-        SkylarkSemantics.DEFAULT_SEMANTICS,
-        Label.parseAbsoluteUnchecked("//test:test.bzl"),
+        Paths.get("/test/test.bzl"),
         ruleInfoMap,
-        unexportedRuleInfos,
-        ImmutableMap.builder(),
-        ImmutableMap.builder());
+        unexportedRuleInfos);
     Map<String, RuleInfo> ruleInfos = ruleInfoMap.build();
     assertThat(ruleInfos).hasSize(1);
 
@@ -106,11 +91,11 @@ public final class SkydocTest extends SkylarkTestCase {
     assertThat(getAttrNames(ruleInfo.getValue())).containsExactly(
         "name", "a", "b", "c", "d").inOrder();
     assertThat(getAttrTypes(ruleInfo.getValue())).containsExactly(
-        AttributeInfo.Type.NAME,
-        AttributeInfo.Type.LABEL,
-        AttributeInfo.Type.STRING_DICT,
-        AttributeInfo.Type.OUTPUT,
-        AttributeInfo.Type.BOOLEAN).inOrder();
+        Type.STRING.getDescription(),
+        Type.LABEL.getDescription(),
+        Type.STRING_DICT.getDescription(),
+        Type.LABEL.getDescription(),
+        Type.BOOLEAN.getDescription()).inOrder();
     assertThat(unexportedRuleInfos.build()).isEmpty();
   }
 
@@ -119,8 +104,8 @@ public final class SkydocTest extends SkylarkTestCase {
         .collect(Collectors.toList());
   }
 
-  private static Iterable<AttributeInfo.Type> getAttrTypes(RuleInfo ruleInfo) {
-    return ruleInfo.getAttributes().stream().map(attr -> attr.getType())
+  private static Iterable<String> getAttrTypes(RuleInfo ruleInfo) {
+    return ruleInfo.getAttributes().stream().map(attr -> attr.getTypeString())
         .collect(Collectors.toList());
   }
 
@@ -155,12 +140,9 @@ public final class SkydocTest extends SkylarkTestCase {
     ImmutableList.Builder<RuleInfo> unexportedRuleInfos = ImmutableList.builder();
 
     skydocMain.eval(
-        SkylarkSemantics.DEFAULT_SEMANTICS,
-        Label.parseAbsoluteUnchecked("//test:test.bzl"),
+        Paths.get("/test/test.bzl"),
         ruleInfoMap,
-        unexportedRuleInfos,
-        ImmutableMap.builder(),
-        ImmutableMap.builder());
+        unexportedRuleInfos);
 
     assertThat(ruleInfoMap.build().keySet()).containsExactly("rule_one", "rule_two");
 
@@ -177,63 +159,13 @@ public final class SkydocTest extends SkylarkTestCase {
         "def rule_impl(ctx):",
         "  return struct()");
 
-    scratch.file("/other_root/deps/foo/other_root.bzl", "doc_string = 'Dep rule'");
-
-    scratch.file(
-        "/deps/foo/dep_rule.bzl",
-        "load('//lib:rule_impl.bzl', 'rule_impl')",
-        "load(':other_root.bzl', 'doc_string')",
-        "",
-        "_hidden_rule = rule(",
-        "    doc = doc_string,",
-        "    implementation = rule_impl,",
-        ")",
-        "",
-        "dep_rule = rule(",
-        "    doc = doc_string,",
-        "    implementation = rule_impl,",
-        ")");
-
-    scratch.file(
-        "/test/main.bzl",
-        "load('//lib:rule_impl.bzl', 'rule_impl')",
-        "load('//deps/foo:dep_rule.bzl', 'dep_rule')",
-        "",
-        "main_rule = rule(",
-        "    doc = 'Main rule',",
-        "    implementation = rule_impl,",
-        ")");
-
-    ImmutableMap.Builder<String, RuleInfo> ruleInfoMapBuilder = ImmutableMap.builder();
-
-    skydocMain.eval(
-        SkylarkSemantics.DEFAULT_SEMANTICS,
-        Label.parseAbsoluteUnchecked("//test:main.bzl"),
-        ruleInfoMapBuilder,
-        ImmutableList.builder(),
-        ImmutableMap.builder(),
-        ImmutableMap.builder());
-
-    Map<String, RuleInfo> ruleInfoMap = ruleInfoMapBuilder.build();
-
-    assertThat(ruleInfoMap.keySet()).containsExactly("main_rule");
-    assertThat(ruleInfoMap.get("main_rule").getDocString()).isEqualTo("Main rule");
-  }
-
-  @Test
-  public void testRulesAcrossRepository() throws Exception {
-    scratch.file(
-        "/external/dep_repo/lib/rule_impl.bzl",
-        "def rule_impl(ctx):",
-        "  return struct()");
-
     scratch.file(
         "/deps/foo/docstring.bzl",
         "doc_string = 'Dep rule'");
 
     scratch.file(
         "/deps/foo/dep_rule.bzl",
-        "load('@dep_repo//lib:rule_impl.bzl', 'rule_impl')",
+        "load('//lib:rule_impl.bzl', 'rule_impl')",
         "load(':docstring.bzl', 'doc_string')",
         "",
         "_hidden_rule = rule(",
@@ -248,7 +180,7 @@ public final class SkydocTest extends SkylarkTestCase {
 
     scratch.file(
         "/test/main.bzl",
-        "load('@dep_repo//lib:rule_impl.bzl', 'rule_impl')",
+        "load('//lib:rule_impl.bzl', 'rule_impl')",
         "load('//deps/foo:dep_rule.bzl', 'dep_rule')",
         "",
         "main_rule = rule(",
@@ -259,17 +191,17 @@ public final class SkydocTest extends SkylarkTestCase {
     ImmutableMap.Builder<String, RuleInfo> ruleInfoMapBuilder = ImmutableMap.builder();
 
     skydocMain.eval(
-        SkylarkSemantics.DEFAULT_SEMANTICS,
-        Label.parseAbsoluteUnchecked("//test:main.bzl"),
+        Paths.get("/test/main.bzl"),
         ruleInfoMapBuilder,
-        ImmutableList.builder(),
-        ImmutableMap.builder(),
-        ImmutableMap.builder());
+        ImmutableList.builder());
 
     Map<String, RuleInfo> ruleInfoMap = ruleInfoMapBuilder.build();
 
-    assertThat(ruleInfoMap.keySet()).containsExactly("main_rule");
+    // dep_rule is available here, even though it was not defined in main.bzl, because it is
+    // imported in main.bzl. Thus, it's a top-level symbol in main.bzl.
+    assertThat(ruleInfoMap.keySet()).containsExactly("main_rule", "dep_rule");
     assertThat(ruleInfoMap.get("main_rule").getDocString()).isEqualTo("Main rule");
+    assertThat(ruleInfoMap.get("dep_rule").getDocString()).isEqualTo("Dep rule");
   }
 
   @Test
@@ -294,64 +226,12 @@ public final class SkydocTest extends SkylarkTestCase {
     ImmutableMap.Builder<String, RuleInfo> ruleInfoMapBuilder = ImmutableMap.builder();
 
     IllegalStateException expected =
-        assertThrows(
-            IllegalStateException.class,
-            () ->
-                skydocMain.eval(
-                    SkylarkSemantics.DEFAULT_SEMANTICS,
-                    Label.parseAbsoluteUnchecked("//test:main.bzl"),
-                    ruleInfoMapBuilder,
-                    ImmutableList.builder(),
-                    ImmutableMap.builder(),
-                    ImmutableMap.builder()));
+        assertThrows(IllegalStateException.class,
+            () -> skydocMain.eval(
+                Paths.get("/test/main.bzl"),
+                ruleInfoMapBuilder,
+                ImmutableList.builder()));
 
     assertThat(expected).hasMessageThat().contains("cycle with test/main.bzl");
-  }
-
-  @Test
-  public void testMalformedFunctionDocstring() throws Exception {
-    scratch.file(
-        "/test/main.bzl",
-        "def check_sources(name,",
-        "                  required_param,",
-        "                  bool_param = True,",
-        "                  srcs = []):",
-        "    \"\"\"Runs some checks on the given source files.",
-        "",
-        "    This rule runs checks on a given set of source files.",
-        "    Use `bazel build` to run the check.",
-        "",
-        "    Args:",
-        "        name: A unique name for this rule.",
-        "        required_param:",
-        "        bool_param: ..oh hey I forgot to document required_param!",
-        "    \"\"\"",
-        "    pass");
-
-    ImmutableMap.Builder<String, UserDefinedFunction> functionInfoBuilder = ImmutableMap.builder();
-
-    skydocMain.eval(
-        SkylarkSemantics.DEFAULT_SEMANTICS,
-        Label.parseAbsoluteUnchecked("//test:main.bzl"),
-        ImmutableMap.builder(),
-        ImmutableList.builder(),
-        ImmutableMap.builder(),
-        functionInfoBuilder);
-
-    UserDefinedFunction checkSourcesFn = functionInfoBuilder.build().get("check_sources");
-    DocstringParseException expected =
-        assertThrows(
-            DocstringParseException.class,
-            () -> UserDefinedFunctionInfo.fromNameAndFunction("check_sources", checkSourcesFn));
-    assertThat(expected)
-        .hasMessageThat()
-        .contains(
-            "Unable to generate documentation for function check_sources "
-                + "(defined at /test/main.bzl:1:5) due to malformed docstring. Parse errors:");
-    assertThat(expected)
-        .hasMessageThat()
-        .contains(
-            "/test/main.bzl:1:5 line 8: invalid parameter documentation "
-                + "(expected format: \"parameter_name: documentation\").");
   }
 }
