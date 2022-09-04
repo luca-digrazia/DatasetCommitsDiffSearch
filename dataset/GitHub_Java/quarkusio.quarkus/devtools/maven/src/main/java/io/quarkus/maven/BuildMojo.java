@@ -117,12 +117,6 @@ public class BuildMojo extends AbstractMojo {
     @Parameter(defaultValue = "${project.build.directory}/wiring-classes")
     private File wiringClassesDirectory;
 
-    /**
-     * The directory for generated source files.
-     */
-    @Parameter(defaultValue = "${project.build.directory}/generated-sources")
-    private File generatedSourcesDirectory;
-
     @Parameter(defaultValue = "${project.build.directory}")
     private File buildDir;
 
@@ -169,16 +163,9 @@ public class BuildMojo extends AbstractMojo {
 
     @Override
     public void execute() throws MojoExecutionException {
-
-        if (project.getPackaging().equals("pom")) {
-            getLog().info("Type of the artifact is POM, skipping build goal");
-            return;
-        }
-
         final Artifact projectArtifact = project.getArtifact();
         final AppArtifact appArtifact = new AppArtifact(projectArtifact.getGroupId(), projectArtifact.getArtifactId(),
-                projectArtifact.getClassifier(), projectArtifact.getArtifactHandler().getExtension(),
-                projectArtifact.getVersion());
+                projectArtifact.getClassifier(), projectArtifact.getType(), projectArtifact.getVersion());
         final AppModel appModel;
         final BootstrapAppModelResolver modelResolver;
         try {
@@ -198,8 +185,7 @@ public class BuildMojo extends AbstractMojo {
                         .setAppClassesDir(outputDirectory.toPath())
                         .setConfigDir(outputDirectory.toPath())
                         .setTransformedClassesDir(transformedClassesDirectory.toPath())
-                        .setWiringClassesDir(wiringClassesDirectory.toPath())
-                        .setGeneratedSourcesDir(generatedSourcesDirectory.toPath()))
+                        .setWiringClassesDir(wiringClassesDirectory.toPath()))
                 .addPhase(new RunnerJarPhase()
                         .setLibDir(libDir.toPath())
                         .setFinalName(finalName)
