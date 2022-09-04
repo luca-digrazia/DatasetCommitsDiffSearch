@@ -6,13 +6,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 
-import org.hibernate.search.backend.elasticsearch.index.IndexLifecycleStrategyName;
-import org.hibernate.search.backend.elasticsearch.index.IndexStatus;
-import org.hibernate.search.mapper.orm.automaticindexing.AutomaticIndexingSynchronizationStrategyName;
+import org.hibernate.search.backend.elasticsearch.cfg.ElasticsearchIndexLifecycleStrategyName;
+import org.hibernate.search.backend.elasticsearch.cfg.ElasticsearchIndexStatus;
+import org.hibernate.search.mapper.orm.cfg.HibernateOrmAutomaticIndexingSynchronizationStrategyName;
 import org.hibernate.search.mapper.orm.search.loading.EntityLoadingCacheLookupStrategy;
 
-import io.quarkus.runtime.annotations.ConfigDocMapKey;
-import io.quarkus.runtime.annotations.ConfigDocSection;
 import io.quarkus.runtime.annotations.ConfigGroup;
 import io.quarkus.runtime.annotations.ConfigItem;
 import io.quarkus.runtime.annotations.ConfigPhase;
@@ -28,11 +26,9 @@ public class HibernateSearchElasticsearchRuntimeConfig {
     ElasticsearchBackendRuntimeConfig defaultBackend;
 
     /**
-     * Additional backends
+     * Configuration of optional additional backends.
      */
     @ConfigItem(name = "backends")
-    @ConfigDocSection
-    @ConfigDocMapKey("backend-name")
     Map<String, ElasticsearchBackendRuntimeConfig> additionalBackends;
 
     /**
@@ -139,10 +135,18 @@ public class HibernateSearchElasticsearchRuntimeConfig {
     public static class AutomaticIndexingConfig {
 
         /**
-         * Configuration for synchronization with the index when indexing automatically.
+         * The synchronization strategy to use when indexing automatically.
+         * <p>
+         * Defines the status for which you wait before considering the operation completed by Hibernate Search.
+         * <p>
+         * Can be either one of "queued", "committed" or "searchable".
+         * <p>
+         * Using "searchable" is recommended in unit tests.
+         * <p>
+         * Defaults to "committed".
          */
         @ConfigItem
-        AutomaticIndexingSynchronizationConfig synchronization;
+        Optional<HibernateOrmAutomaticIndexingSynchronizationStrategyName> synchronizationStrategy;
 
         /**
          * Whether to check if dirty properties are relevant to indexing before actually reindexing an entity.
@@ -155,41 +159,7 @@ public class HibernateSearchElasticsearchRuntimeConfig {
     }
 
     @ConfigGroup
-    public static class AutomaticIndexingSynchronizationConfig {
-
-        /**
-         * The synchronization strategy to use when indexing automatically.
-         * <p>
-         * Defines the status for which you wait before considering the operation completed by Hibernate Search.
-         * <p>
-         * Can be either one of "queued", "committed" or "searchable".
-         * <p>
-         * Using "searchable" is recommended in unit tests.
-         * <p>
-         * Defaults to "committed".
-         */
-        @ConfigItem
-        Optional<AutomaticIndexingSynchronizationStrategyName> strategy;
-    }
-
-    @ConfigGroup
     public static class SearchQueryLoadingConfig {
-
-        /**
-         * Configuration for cache lookup when loading entities during the execution of a search query.
-         */
-        @ConfigItem
-        SearchQueryLoadingCacheLookupConfig cacheLookup;
-
-        /**
-         * The fetch size to use when loading entities during the execution of a search query.
-         */
-        @ConfigItem(defaultValue = "100")
-        int fetchSize;
-    }
-
-    @ConfigGroup
-    public static class SearchQueryLoadingCacheLookupConfig {
 
         /**
          * The strategy to use when loading entities during the execution of a search query.
@@ -199,7 +169,13 @@ public class HibernateSearchElasticsearchRuntimeConfig {
          * Defaults to "skip".
          */
         @ConfigItem
-        Optional<EntityLoadingCacheLookupStrategy> strategy;
+        Optional<EntityLoadingCacheLookupStrategy> cacheLookupStrategy;
+
+        /**
+         * The fetch size to use when loading entities during the execution of a search query.
+         */
+        @ConfigItem(defaultValue = "100")
+        int fetchSize;
     }
 
     @ConfigGroup
@@ -211,7 +187,7 @@ public class HibernateSearchElasticsearchRuntimeConfig {
          * Must be one of: none, validate, update, create, drop-and-create or drop-and-create-and-drop.
          */
         @ConfigItem
-        Optional<IndexLifecycleStrategyName> strategy;
+        Optional<ElasticsearchIndexLifecycleStrategyName> strategy;
 
         /**
          * The minimal cluster status required.
@@ -219,7 +195,7 @@ public class HibernateSearchElasticsearchRuntimeConfig {
          * Must be one of: green, yellow, red.
          */
         @ConfigItem
-        Optional<IndexStatus> requiredStatus;
+        Optional<ElasticsearchIndexStatus> requiredStatus;
 
         /**
          * How long we should wait for the status before failing the bootstrap.
