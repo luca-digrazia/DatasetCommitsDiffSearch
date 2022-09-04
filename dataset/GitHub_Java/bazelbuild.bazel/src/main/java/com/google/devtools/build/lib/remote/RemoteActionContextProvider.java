@@ -46,7 +46,7 @@ final class RemoteActionContextProvider extends ActionContextProvider {
   private final CommandEnvironment env;
   private final RemoteCache cache;
   @Nullable private final GrpcRemoteExecutor executor;
-  @Nullable private final ListeningScheduledExecutorService retryScheduler;
+  private final ListeningScheduledExecutorService retryScheduler;
   private final DigestUtil digestUtil;
   @Nullable private final Path logDir;
   private final AtomicReference<SpawnRunner> fallbackRunner = new AtomicReference<>();
