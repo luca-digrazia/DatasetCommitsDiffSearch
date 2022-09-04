@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 TORCH GmbH
+ * Copyright 2013 TORCH UG
  *
  * This file is part of Graylog2.
  *
@@ -17,82 +17,205 @@
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+import com.google.common.collect.Lists;
+import com.google.inject.AbstractModule;
+import com.google.inject.Guice;
+import com.google.inject.Injector;
+import com.google.inject.Module;
+import com.google.inject.name.Names;
+import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
+import lib.ApiClient;
+import lib.ServerNodesRefreshService;
+import lib.Tools;
+import lib.security.PlayAuthenticationListener;
+import lib.security.RedirectAuthenticator;
+import lib.security.RethrowingFirstSuccessfulStrategy;
+import lib.security.ServerRestInterfaceRealm;
+import models.LocalAdminUser;
+import models.ModelFactoryModule;
+import models.UserService;
+import org.apache.shiro.SecurityUtils;
+import org.apache.shiro.authc.AuthenticationListener;
+import org.apache.shiro.authc.Authenticator;
+import org.apache.shiro.authc.pam.ModularRealmAuthenticator;
+import org.apache.shiro.mgt.DefaultSecurityManager;
+import org.apache.shiro.mgt.DefaultSessionStorageEvaluator;
+import org.apache.shiro.mgt.DefaultSubjectDAO;
+import org.apache.shiro.realm.Realm;
+import org.apache.shiro.realm.SimpleAccountRealm;
+import org.graylog2.logback.appender.AccessLog;
+import org.joda.time.DateTimeZone;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import play.Application;
 import play.Configuration;
 import play.GlobalSettings;
 import play.api.mvc.EssentialFilter;
-import play.api.mvc.Handler;
-import play.libs.F;
-import play.mvc.Action;
-import play.mvc.Http;
-import play.mvc.SimpleResult;
 
 import java.io.File;
-import java.lang.reflect.Method;
+import java.net.URI;
+import java.util.List;
 
 /**
- * This class is simply delegating to the real class {@see lib.Global},
- * to avoid having to configure the exact name in the application.conf
- * which is lost when a user overrides the config file location with -Dconfig.file etc.
+ *
  */
 @SuppressWarnings("unused")
 public class Global extends GlobalSettings {
-    private final lib.Global global = new lib.Global();
-
+	private static final Logger log = LoggerFactory.getLogger(Global.class);
+    private Injector injector;
 
     @Override
-    public void onStart(Application app) {
-        global.onStart(app);
+	public void onStart(Application app) {
+        final String appSecret = app.configuration().getString("application.secret");
+        if (appSecret == null || appSecret.isEmpty()) {
+            log.error("Please configure application.secret in your conf/graylog2-web-interface.conf");
+            throw new IllegalStateException("No application.secret configured.");
+        }
+        if (appSecret.length() < 16) {
+            log.error("Please configure application.secret in your conf/graylog2-web-interface.conf to be longer than 16 characters. Suggested is using pwgen -s 96 or similar");
+            throw new IllegalStateException("application.secret is too short, use at least 16 characters! Suggested is to use pwgen -s 96 or similar");
+        }
+
+        final String graylog2ServerUris = app.configuration().getString("graylog2-server.uris", "");
+        if (graylog2ServerUris.isEmpty()) {
+            log.error("graylog2-server.uris is not set!");
+            throw new IllegalStateException("graylog2-server.uris is empty");
+        }
+        final String[] uris = graylog2ServerUris.split(",");
+        if (uris.length == 0) {
+            log.error("graylog2-server.uris is empty!");
+            throw new IllegalStateException("graylog2-server.uris is empty");
+        }
+        final URI[] initialNodes = new URI[uris.length];
+        int i = 0;
+        for (String uri : uris) {
+            initialNodes[i++] = URI.create(uri);
+        }
+        final String timezone = app.configuration().getString("timezone", "");
+        if (!timezone.isEmpty()) {
+            try {
+                Tools.setApplicationTimeZone(DateTimeZone.forID(timezone));
+            } catch (IllegalArgumentException e) {
+                log.error("Invalid timezone {} specified!", timezone);
+                throw new IllegalStateException(e);
+            }
+        }
+        log.info("Using application default timezone {}", Tools.getApplicationTimeZone());
+
+        List<Module> modules = Lists.newArrayList();
+        modules.add(new AbstractModule() {
+            @Override
+            protected void configure() {
+                bind(URI[].class).annotatedWith(Names.named("Initial Nodes")).toInstance(initialNodes);
+            }
+        });
+        modules.add(new ModelFactoryModule());
+        injector = Guice.createInjector(modules);
+
+        // start the services that need starting
+        final ApiClient api = injector.getInstance(ApiClient.class);
+        api.start();
+        injector.getInstance(ServerNodesRefreshService.class).start();
+        // TODO replace with custom AuthenticatedAction filter
+        RedirectAuthenticator.userService = injector.getInstance(UserService.class);
+
+        // temporarily disabled for preview to prevent confusion.
+//        LocalAdminUserRealm localAdminRealm = new LocalAdminUserRealm("local-accounts");
+//        localAdminRealm.setCredentialsMatcher(new HashedCredentialsMatcher("SHA2"));
+//        setupLocalUser(api, localAdminRealm, app);
+
+        Realm serverRestInterfaceRealm = injector.getInstance(ServerRestInterfaceRealm.class);
+        final DefaultSecurityManager securityManager =
+                new DefaultSecurityManager(
+                        Lists.newArrayList(serverRestInterfaceRealm)
+                );
+        // disable storing sessions (TODO we might want to write a session store bridge to play's session cookie)
+        final DefaultSessionStorageEvaluator sessionStorageEvaluator = new DefaultSessionStorageEvaluator();
+        sessionStorageEvaluator.setSessionStorageEnabled(false);
+        final DefaultSubjectDAO subjectDAO = new DefaultSubjectDAO();
+        subjectDAO.setSessionStorageEvaluator(sessionStorageEvaluator);
+        securityManager.setSubjectDAO(subjectDAO);
+
+        final Authenticator authenticator = securityManager.getAuthenticator();
+        if (authenticator instanceof ModularRealmAuthenticator) {
+            ModularRealmAuthenticator a = (ModularRealmAuthenticator) authenticator;
+            a.setAuthenticationStrategy(new RethrowingFirstSuccessfulStrategy());
+            a.setAuthenticationListeners(
+                    Lists.<AuthenticationListener>newArrayList(new PlayAuthenticationListener())
+            );
+        }
+        SecurityUtils.setSecurityManager(securityManager);
+
     }
 
     @Override
     public void onStop(Application app) {
-        global.onStop(app);
-    }
-
-    @Override
-    public Configuration onLoadConfig(Configuration configuration, File file, ClassLoader classLoader) {
-        return global.onLoadConfig(configuration, file, classLoader);
-    }
-
-    @Override
-    public <A> A getControllerInstance(Class<A> controllerClass) throws Exception {
-        return global.getControllerInstance(controllerClass);
-    }
-
-    @Override
-    public Handler onRouteRequest(Http.RequestHeader request) {
-        return global.onRouteRequest(request);
-    }
-
-    @Override
-    public Action onRequest(Http.Request request, Method actionMethod) {
-        return global.onRequest(request, actionMethod);
-    }
-
-    @Override
-    public F.Promise<SimpleResult> onHandlerNotFound(Http.RequestHeader request) {
-        return global.onHandlerNotFound(request);
-    }
-
-    @Override
-    public F.Promise<SimpleResult> onError(Http.RequestHeader request, Throwable t) {
-        return global.onError(request, t);
-    }
-
-    @Override
-    public F.Promise<SimpleResult> onBadRequest(Http.RequestHeader request, String error) {
-        return global.onBadRequest(request, error);
-    }
-
-    @Override
-    public void beforeStart(Application app) {
-        global.beforeStart(app);
+        injector.getInstance(ApiClient.class).stop();
+        injector.getInstance(ServerNodesRefreshService.class).stop();
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public <T extends EssentialFilter> Class<T>[] filters() {
-        return global.filters();
+        return new Class[] {AccessLog.class};
     }
+
+    @Override
+    public <A> A getControllerInstance(Class<A> controllerClass) throws Exception {
+        return injector.getInstance(controllerClass);
+    }
+
+    @Override
+    public Configuration onLoadConfig(Configuration configuration, File file, ClassLoader classLoader) {
+        boolean isTest = false;
+        if (System.getProperty("skip.config.check", "false").equals("true")) {
+            log.info("In test mode, not performing config file checks.");
+            isTest = true;
+        }
+        final File configFile = new File(file, "conf/graylog2-web-interface.conf");
+        if (! isTest) {
+            if (!configFile.exists()) {
+                log.error("Your configuration should be at {} but does not exist, cannot continue without it.", configFile.getAbsoluteFile());
+                throw new IllegalStateException("Missing configuration file " + configFile.getAbsolutePath());
+            } else if (!configFile.canRead()) {
+                log.error("Your configuration at {} is not readable, cannot continue without it.", configFile.getAbsoluteFile());
+                throw new IllegalStateException("Unreadable configuration file " + configFile.getAbsolutePath());
+            }
+        }
+        final Config config = ConfigFactory.parseFileAnySyntax(configFile);
+        if (config.isEmpty() && !isTest) {
+            log.error("Your configuration file at {} is empty, cannot continue without content.", configFile.getAbsoluteFile());
+            throw new IllegalStateException("Empty configuration file " + configFile.getAbsolutePath());
+        /*
+         *
+         * This is merging the standard bundled application.conf with our graylog2-web-interface.conf.
+         * The application.conf must always be empty when packaged so there is nothing hidden from the user.
+         * We are merging, because the Configuration object already contains some information the web-interface needs.
+         *
+         */
+        }
+        return new Configuration(
+                config.withFallback(configuration.getWrappedConfiguration().underlying())
+        );
+    }
+
+    private void setupLocalUser(ApiClient api, SimpleAccountRealm realm, Application app) {
+		final Configuration config = app.configuration();
+        final String username = config.getString("local-user.name", "localadmin");
+        final String passwordHash = config.getString("local-user.password-sha2");
+        if (passwordHash == null) {
+			log.warn("No password hash for local user {} set. " +
+					"If you lose connection to the graylog2-server at {}, you will be unable to log in!",
+                    username, config.getString("graylog2-server"));
+			return;
+		}
+		realm.addAccount(
+                username,
+                passwordHash,
+				"local-admin"
+		);
+        LocalAdminUser.createSharedInstance(api, username, passwordHash);
+    }
+
 }
