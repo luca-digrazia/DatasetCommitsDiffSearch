@@ -303,7 +303,8 @@ public class LASSO {
             }
 
             // preconditioned conjugate gradient
-            BiconjugateGradient bfgs = new BiconjugateGradient(pcgtol, 1, pcgmaxi, pcg);
+            BiconjugateGradient bfgs = new BiconjugateGradient(pcgtol, 1, pcgmaxi);
+            bfgs.setPreconditioner(pcg);
             double error = bfgs.solve(pcg, grad, dxu);
             if (error > pcgtol) {
                 pitr = pcgmaxi;
