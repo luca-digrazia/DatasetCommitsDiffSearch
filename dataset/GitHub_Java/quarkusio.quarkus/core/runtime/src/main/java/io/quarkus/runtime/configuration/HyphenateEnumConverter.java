@@ -10,34 +10,34 @@ import org.eclipse.microprofile.config.spi.Converter;
 /**
  * A converter for hyphenated enums
  */
-final public class HyphenateEnumConverter<E extends Enum<E>> implements Converter<E> {
+final public class HyphenateEnumConverter implements Converter<Enum<?>> {
     private static final String HYPHEN = "-";
     private static final Pattern PATTERN = Pattern.compile("([-_]+)");
 
-    private final Class<E> enumType;
-    private final Map<String, E> values = new HashMap<>();
+    private final Class<? extends Enum<?>> enumType;
+    private final Map<String, Enum<?>> HYPHENATED_ENUM = new HashMap<>();
 
-    public HyphenateEnumConverter(Class<E> enumType) {
+    public HyphenateEnumConverter(Class<? extends Enum<?>> enumType) {
         this.enumType = enumType;
 
-        for (E enumValue : this.enumType.getEnumConstants()) {
+        for (Enum enumValue : this.enumType.getEnumConstants()) {
             final String name = enumValue.name();
             final String canonicalEquivalent = hyphenate(name);
-            values.put(canonicalEquivalent, enumValue);
+            this.HYPHENATED_ENUM.put(canonicalEquivalent, enumValue);
         }
     }
 
     @Override
-    public E convert(String value) {
+    public Enum<?> convert(String value) {
         if (value == null || value.trim().isEmpty()) {
             return null;
         }
 
         final String hyphenatedValue = hyphenate(value);
-        final Enum<?> enumValue = values.get(hyphenatedValue);
+        final Enum<?> enumValue = HYPHENATED_ENUM.get(hyphenatedValue);
 
         if (enumValue != null) {
-            return enumType.cast(enumValue);
+            return enumValue;
         }
 
         throw new IllegalArgumentException(String.format("Cannot convert %s to enum %s", value, enumType));

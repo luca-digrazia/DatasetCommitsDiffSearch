@@ -1,6 +1,5 @@
 package io.quarkus.runtime.configuration;
 
-import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -19,7 +18,7 @@ import io.smallrye.config.StringUtil;
  *
  */
 public final class ConfigUtils {
-    private static final Map<ConverterClassHolder, Converter<?>> EXPLICIT_RUNTIME_CONVERTERS_CACHE = new HashMap<>();
+    private static final Map<Class, Converter<?>> converters = new HashMap<>();
 
     private ConfigUtils() {
     }
@@ -71,7 +70,7 @@ public final class ConfigUtils {
             return config.getValue(configName, objectType);
         }
 
-        final Converter<T> converter = getConverterOfType(objectType, converterClass);
+        final Converter<T> converter = getConverterOfType(objectType, (Class) converterClass);
         final String rawValue = config.getValue(configName, String.class);
         return converter.convert(rawValue);
     }
@@ -92,7 +91,7 @@ public final class ConfigUtils {
             return config.getOptionalValue(configName, objectType);
         }
 
-        final Converter<T> converter = getConverterOfType(objectType, converterClass);
+        final Converter<T> converter = getConverterOfType(objectType, (Class) converterClass);
         final String rawValue = config.getValue(configName, String.class);
         return Optional.ofNullable(converter.convert(rawValue));
     }
@@ -151,16 +150,13 @@ public final class ConfigUtils {
     }
 
     public static <T> Converter<T> newConverterInstance(Class<T> type, Class<? extends Converter<T>> converterClass) {
-        // todo: this gets cleaned up with the SmallRye Config update
         if (HyphenateEnumConverter.class.equals(converterClass)) {
-            @SuppressWarnings("unchecked")
-            final Converter<T> converter = new HyphenateEnumConverter(type);
-            return converter;
+            return (Converter<T>) new HyphenateEnumConverter((Class<Enum<?>>) type);
         }
 
         try {
-            return converterClass.getConstructor().newInstance();
-        } catch (InstantiationException | IllegalAccessException | NoSuchMethodException | InvocationTargetException e) {
+            return (Converter<T>) converterClass.newInstance();
+        } catch (InstantiationException | IllegalAccessException e) {
             throw new IllegalArgumentException(e);
         }
     }
