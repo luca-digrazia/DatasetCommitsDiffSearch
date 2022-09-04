@@ -16,6 +16,7 @@ import javax.validation.constraints.Min;
 import javax.validation.constraints.NotEmpty;
 import javax.validation.constraints.NotNull;
 import javax.validation.groups.Default;
+import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.MultivaluedHashMap;
 import java.io.ByteArrayInputStream;
@@ -26,13 +27,14 @@ import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.Assertions.failBecauseExceptionWasNotThrown;
 import static org.assertj.core.api.Assumptions.assumeThat;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
@@ -91,12 +93,12 @@ public class JacksonMessageBodyProviderTest {
     }
 
     @JsonIgnoreType
-    public interface Ignorable {
+    public static interface Ignorable {
 
     }
 
     @JsonIgnoreType(false)
-    public interface NonIgnorable extends Ignorable {
+    public static interface NonIgnorable extends Ignorable {
 
     }
 
@@ -110,43 +112,43 @@ public class JacksonMessageBodyProviderTest {
     }
 
     @Test
-    public void readsDeserializableTypes() {
+    public void readsDeserializableTypes() throws Exception {
         assertThat(provider.isReadable(Example.class, null, null, null))
                 .isTrue();
     }
 
     @Test
-    public void writesSerializableTypes() {
+    public void writesSerializableTypes() throws Exception {
         assertThat(provider.isWriteable(Example.class, null, null, null))
                 .isTrue();
     }
 
     @Test
-    public void doesNotWriteIgnoredTypes() {
+    public void doesNotWriteIgnoredTypes() throws Exception {
         assertThat(provider.isWriteable(Ignorable.class, null, null, null))
                 .isFalse();
     }
 
     @Test
-    public void writesUnIgnoredTypes() {
+    public void writesUnIgnoredTypes() throws Exception {
         assertThat(provider.isWriteable(NonIgnorable.class, null, null, null))
                 .isTrue();
     }
 
     @Test
-    public void doesNotReadIgnoredTypes() {
+    public void doesNotReadIgnoredTypes() throws Exception {
         assertThat(provider.isReadable(Ignorable.class, null, null, null))
                 .isFalse();
     }
 
     @Test
-    public void readsUnIgnoredTypes() {
+    public void readsUnIgnoredTypes() throws Exception {
         assertThat(provider.isReadable(NonIgnorable.class, null, null, null))
                 .isTrue();
     }
 
     @Test
-    public void isChunked() {
+    public void isChunked() throws Exception {
         assertThat(provider.getSize(null, null, null, null, null))
                 .isEqualTo(-1);
     }
@@ -217,19 +219,23 @@ public class JacksonMessageBodyProviderTest {
     }
 
     @Test
-    public void throwsAJsonProcessingExceptionForMalformedRequestEntities() {
+    public void throwsAJsonProcessingExceptionForMalformedRequestEntities() throws Exception {
         final ByteArrayInputStream entity = new ByteArrayInputStream("{\"id\":-1d".getBytes(StandardCharsets.UTF_8));
-        final Class<?> klass = Example.class;
 
-        assertThatExceptionOfType(JsonProcessingException.class)
-            .isThrownBy(() -> provider.readFrom((Class<Object>) klass,
+        try {
+            final Class<?> klass = Example.class;
+            provider.readFrom((Class<Object>) klass,
                               Example.class,
                               NONE,
                               MediaType.APPLICATION_JSON_TYPE,
                               new MultivaluedHashMap<>(),
-                              entity))
-            .withMessageStartingWith("Unexpected character ('d' (code 100)): " +
+                              entity);
+            failBecauseExceptionWasNotThrown(WebApplicationException.class);
+        } catch (JsonProcessingException e) {
+            assertThat(e.getMessage())
+                    .startsWith("Unexpected character ('d' (code 100)): " +
                                         "was expecting comma to separate Object entries\n");
+        }
     }
 
     @Test

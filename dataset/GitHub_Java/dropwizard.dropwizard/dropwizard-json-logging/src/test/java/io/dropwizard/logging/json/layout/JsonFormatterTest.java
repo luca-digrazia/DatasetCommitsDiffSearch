@@ -21,7 +21,7 @@ public class JsonFormatterTest {
     private final ObjectMapper objectMapper = Jackson.newObjectMapper();
 
     @Test
-    void testNoPrettyPrintNoLineSeparator() throws IOException {
+    public void testNoPrettyPrintNoLineSeparator() throws IOException {
         JsonFormatter formatter = new JsonFormatter(objectMapper, false, false);
 
         final JsonNode actual = objectMapper.readTree(formatter.toJson(map));
@@ -31,7 +31,7 @@ public class JsonFormatterTest {
 
 
     @Test
-    void testNoPrettyPrintWithLineSeparator() throws IOException {
+    public void testNoPrettyPrintWithLineSeparator() throws IOException {
         JsonFormatter formatter = new JsonFormatter(objectMapper, false, true);
 
         final String content = formatter.toJson(map);
@@ -42,7 +42,7 @@ public class JsonFormatterTest {
     }
 
     @Test
-    void testPrettyPrintWithLineSeparator() {
+    public void testPrettyPrintWithLineSeparator() {
         JsonFormatter formatter = new JsonFormatter(objectMapper, true, true);
         assertThat(formatter.toJson(map)).isEqualTo(String.format("{%n" +
                 "  \"hobbies\" : [ \"Reading\", \"Biking\", \"Snorkeling\" ],%n" +
@@ -51,7 +51,7 @@ public class JsonFormatterTest {
     }
 
     @Test
-    void testPrettyPrintNoLineSeparator() {
+    public void testPrettyPrintNoLineSeparator() {
         JsonFormatter formatter = new JsonFormatter(objectMapper, true, false);
         assertThat(formatter.toJson(map)).isEqualTo(String.format("{%n" +
                 "  \"hobbies\" : [ \"Reading\", \"Biking\", \"Snorkeling\" ],%n" +
