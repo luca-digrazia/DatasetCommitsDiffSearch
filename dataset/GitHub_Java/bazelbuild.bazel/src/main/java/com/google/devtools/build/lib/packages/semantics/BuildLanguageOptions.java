@@ -45,8 +45,9 @@ import net.starlark.java.eval.StarlarkSemantics;
  *       #toStarlarkSemantics}.
  *   <li>Define a new {@code StarlarkSemantics.Key} or {@code StarlarkSemantics} boolean flag
  *       identifier.
- *   <li>Add a line to set the new field in both {@link ConsistencyTest#buildRandomOptions} and
- *       {@link ConsistencyTest#buildRandomSemantics}.
+ *   <li>Add a line to set the new field in both {@link
+ *       StarlarkSemanticsConsistencyTest#buildRandomOptions} and {@link
+ *       StarlarkSemanticsConsistencyTest#buildRandomSemantics}.
  *   <li>Update manual documentation in site/docs/skylark/backward-compatibility.md. Also remember
  *       to update this when flipping a flag's default value.
  *   <li>Boolean semantic flags can toggle StarlarkMethod-annotated Java methods (or their
@@ -73,7 +74,8 @@ public class BuildLanguageOptions extends OptionsBase implements Serializable {
               + "ctx.build_setting_value.")
   public boolean experimentalBuildSettingApi;
 
-  // TODO(#11437): Delete the special empty string value so that it's on unconditionally.
+  // TODO(#11437): Implement the flag values listed in the below help string; delete the special
+  // empty string value so that it's on unconditionally.
   @Option(
       name = "experimental_builtins_bzl_path",
       defaultValue = "",
@@ -86,22 +88,12 @@ public class BuildLanguageOptions extends OptionsBase implements Serializable {
               + "intended for Bazel developers, to help when writing @_builtins .bzl code. "
               + "Ordinarily this value is set to \"%install_base%\", which means to use the "
               + "builtins_bzl/ directory located in the install base. However, it can be set to "
-              + "the path (relative to the root of the current workspace) of an alternate "
-              + "builtins_bzl/ directory, such as one in a Bazel source tree workspace. A literal "
-              + "value of \"%workspace%\" is equivalent to the relative package path of "
-              + "builtins_bzl/ within a Bazel source tree; this should only be used when running "
-              + "Bazel within its own source tree. Finally, a value of the empty string disables "
-              + "the builtins injection mechanism entirely.")
+              + "the path to the root of a Bazel source tree workspace, in which case the bzl "
+              + "sources underneath that workspace are used. If the value is literally "
+              + "\"%workspace%\", the root of the current workspace is used; this should only be "
+              + "set when running Bazel within its own source tree. Finally, a value of the empty "
+              + "string (\"\") disables the builtins injection mechanism entirely.")
   public String experimentalBuiltinsBzlPath;
-
-  @Option(
-      name = "experimental_builtins_dummy",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
-      metadataTags = {OptionMetadataTag.EXPERIMENTAL},
-      help = "Enables an internal dummy symbol used to test builtins injection.")
-  public boolean experimentalBuiltinsDummy;
 
   @Option(
       name = "experimental_cc_skylark_api_enabled_packages",
@@ -180,7 +172,7 @@ public class BuildLanguageOptions extends OptionsBase implements Serializable {
 
   @Option(
       name = "incompatible_require_linker_input_cc_api",
-      defaultValue = "true",
+      defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
       effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS, OptionEffectTag.LOADING_AND_ANALYSIS},
       metadataTags = {
@@ -469,7 +461,7 @@ public class BuildLanguageOptions extends OptionsBase implements Serializable {
 
   @Option(
       name = "incompatible_run_shell_command_string",
-      defaultValue = "true",
+      defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
       effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
       metadataTags = {
@@ -533,7 +525,7 @@ public class BuildLanguageOptions extends OptionsBase implements Serializable {
 
   @Option(
       name = "incompatible_restrict_string_escapes",
-      defaultValue = "true",
+      defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
       effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
       metadataTags = {
@@ -545,7 +537,7 @@ public class BuildLanguageOptions extends OptionsBase implements Serializable {
 
   @Option(
       name = "incompatible_linkopts_to_linklibs",
-      defaultValue = "true",
+      defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
       effectTags = {OptionEffectTag.ACTION_COMMAND_LINES},
       metadataTags = {
@@ -556,6 +548,18 @@ public class BuildLanguageOptions extends OptionsBase implements Serializable {
           "If set to true the default linkopts in the default toolchain are passed as linklibs "
               + "instead of linkopts to cc_toolchain_config")
   public boolean incompatibleLinkoptsToLinklibs;
+
+  @Option(
+      name = "incompatible_objc_provider_remove_compile_info",
+      defaultValue = "true",
+      documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
+      effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
+      metadataTags = {
+        OptionMetadataTag.INCOMPATIBLE_CHANGE,
+        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
+      },
+      help = "If set to true, the ObjcProvider's APIs for compile info/merge_zip will be removed.")
+  public boolean incompatibleObjcProviderRemoveCompileInfo;
 
   @Option(
       name = "incompatible_java_common_parameters",
@@ -597,7 +601,6 @@ public class BuildLanguageOptions extends OptionsBase implements Serializable {
             // <== Add new options here in alphabetic order ==>
             .setBool(EXPERIMENTAL_ALLOW_TAGS_PROPAGATION, experimentalAllowTagsPropagation)
             .set(EXPERIMENTAL_BUILTINS_BZL_PATH, experimentalBuiltinsBzlPath)
-            .setBool(EXPERIMENTAL_BUILTINS_DUMMY, experimentalBuiltinsDummy)
             .set(
                 EXPERIMENTAL_CC_STARLARK_API_ENABLED_PACKAGES,
                 ImmutableList.copyOf(experimentalCcStarlarkApiEnabledPackages))
@@ -648,6 +651,9 @@ public class BuildLanguageOptions extends OptionsBase implements Serializable {
             .setBool(INCOMPATIBLE_REQUIRE_LINKER_INPUT_CC_API, incompatibleRequireLinkerInputCcApi)
             .setBool(INCOMPATIBLE_RESTRICT_STRING_ESCAPES, incompatibleRestrictStringEscapes)
             .setBool(INCOMPATIBLE_LINKOPTS_TO_LINKLIBS, incompatibleLinkoptsToLinklibs)
+            .setBool(
+                INCOMPATIBLE_OBJC_PROVIDER_REMOVE_COMPILE_INFO,
+                incompatibleObjcProviderRemoveCompileInfo)
             .set(MAX_COMPUTATION_STEPS, maxComputationSteps)
             .build();
     return INTERNER.intern(semantics);
@@ -664,7 +670,6 @@ public class BuildLanguageOptions extends OptionsBase implements Serializable {
   // booleans: the +/- prefix indicates the default value (true/false).
   public static final String EXPERIMENTAL_ALLOW_TAGS_PROPAGATION =
       "-experimental_allow_tags_propagation";
-  public static final String EXPERIMENTAL_BUILTINS_DUMMY = "-experimental_builtins_dummy";
   public static final String EXPERIMENTAL_CC_SHARED_LIBRARY = "-experimental_cc_shared_library";
   public static final String EXPERIMENTAL_DISABLE_EXTERNAL_PACKAGE =
       "-experimental_disable_external_package";
@@ -700,19 +705,21 @@ public class BuildLanguageOptions extends OptionsBase implements Serializable {
   public static final String INCOMPATIBLE_JAVA_COMMON_PARAMETERS =
       "-incompatible_java_common_parameters";
   public static final String INCOMPATIBLE_LINKOPTS_TO_LINKLIBS =
-      "+incompatible_linkopts_to_linklibs";
+      "-incompatible_linkopts_to_linklibs";
   public static final String INCOMPATIBLE_NEW_ACTIONS_API = "+incompatible_new_actions_api";
   public static final String INCOMPATIBLE_NO_ATTR_LICENSE = "+incompatible_no_attr_license";
   public static final String INCOMPATIBLE_NO_IMPLICIT_FILE_EXPORT =
       "-incompatible_no_implicit_file_export";
   public static final String INCOMPATIBLE_NO_RULE_OUTPUTS_PARAM =
       "-incompatible_no_rule_outputs_param";
+  public static final String INCOMPATIBLE_OBJC_PROVIDER_REMOVE_COMPILE_INFO =
+      "+incompatible_objc_provider_remove_compile_info";
   public static final String INCOMPATIBLE_REQUIRE_LINKER_INPUT_CC_API =
-      "+incompatible_require_linker_input_cc_api";
+      "-incompatible_require_linker_input_cc_api";
   public static final String INCOMPATIBLE_RESTRICT_STRING_ESCAPES =
-      "+incompatible_restrict_string_escapes";
+      "-incompatible_restrict_string_escapes";
   public static final String INCOMPATIBLE_RUN_SHELL_COMMAND_STRING =
-      "+incompatible_run_shell_command_string";
+      "-incompatible_run_shell_command_string";
   public static final String INCOMPATIBLE_STRUCT_HAS_NO_METHODS =
       "-incompatible_struct_has_no_methods";
   public static final String INCOMPATIBLE_USE_CC_CONFIGURE_FROM_RULES_CC =
