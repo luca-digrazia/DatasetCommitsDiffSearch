@@ -14,6 +14,8 @@
 
 package com.google.devtools.build.skydoc.fakebuildapi.java;
 
+import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
 import com.google.devtools.build.lib.skylarkbuildapi.java.JavaAnnotationProcessingApi;
@@ -21,10 +23,10 @@ import com.google.devtools.build.lib.skylarkbuildapi.java.JavaCompilationInfoPro
 import com.google.devtools.build.lib.skylarkbuildapi.java.JavaInfoApi;
 import com.google.devtools.build.lib.skylarkbuildapi.java.JavaRuleOutputJarsProviderApi;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
+import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
-import com.google.devtools.build.lib.syntax.StarlarkThread;
 
 /**
  * Fake implementation of {@link JavaInfoApi}.
@@ -32,7 +34,7 @@ import com.google.devtools.build.lib.syntax.StarlarkThread;
 public class FakeJavaInfo implements JavaInfoApi<FileApi> {
 
   @Override
-  public SkylarkNestedSet /*<File>*/ getTransitiveRuntimeJars() {
+  public SkylarkNestedSet getTransitiveRuntimeJars() {
     return null;
   }
 
@@ -77,22 +79,22 @@ public class FakeJavaInfo implements JavaInfoApi<FileApi> {
   }
 
   @Override
-  public SkylarkNestedSet /*<File>*/ getTransitiveDeps() {
+  public NestedSet<FileApi> getTransitiveDeps() {
     return null;
   }
 
   @Override
-  public SkylarkNestedSet /*<File>*/ getTransitiveRuntimeDeps() {
+  public NestedSet<FileApi> getTransitiveRuntimeDeps() {
     return null;
   }
 
   @Override
-  public SkylarkNestedSet /*<File>*/ getTransitiveSourceJars() {
+  public NestedSet<FileApi> getTransitiveSourceJars() {
     return null;
   }
 
   @Override
-  public SkylarkNestedSet /*<Label>*/ getTransitiveExports() {
+  public NestedSet<Label> getTransitiveExports() {
     return null;
   }
 
@@ -125,7 +127,7 @@ public class FakeJavaInfo implements JavaInfoApi<FileApi> {
         SkylarkList<?> exports,
         Object jdepsApi,
         Location loc,
-        StarlarkThread thread)
+        Environment env)
         throws EvalException {
       return new FakeJavaInfo();
     }

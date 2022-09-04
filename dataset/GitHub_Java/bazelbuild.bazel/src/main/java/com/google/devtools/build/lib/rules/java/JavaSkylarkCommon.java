@@ -26,11 +26,11 @@ import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.skylarkbuildapi.ProviderApi;
 import com.google.devtools.build.lib.skylarkbuildapi.java.JavaCommonApi;
 import com.google.devtools.build.lib.skylarkbuildapi.java.JavaToolchainSkylarkApiProviderApi;
+import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
-import com.google.devtools.build.lib.syntax.StarlarkThread;
 
 /** A module that contains Skylark utilities for Java support. */
 public class JavaSkylarkCommon
@@ -55,52 +55,50 @@ public class JavaSkylarkCommon
   @Override
   public JavaInfo createJavaCompileAction(
       SkylarkRuleContext skylarkRuleContext,
-      SkylarkList<?> sourceJars, // <Artifact> expected
-      SkylarkList<?> sourceFiles, // <Artifact> expected
+      SkylarkList<Artifact> sourceJars,
+      SkylarkList<Artifact> sourceFiles,
       Artifact outputJar,
       Object outputSourceJar,
-      SkylarkList<?> javacOpts, // <String> expected
-      SkylarkList<?> deps, // <JavaInfo> expected
-      SkylarkList<?> exports, // <JavaInfo> expected
-      SkylarkList<?> plugins, // <JavaInfo> expected
-      SkylarkList<?> exportedPlugins, // <JavaInfo> expected
-      SkylarkList<?> annotationProcessorAdditionalInputs, // <Artifact> expected
-      SkylarkList<?> annotationProcessorAdditionalOutputs, // <Artifact> expected
+      SkylarkList<String> javacOpts,
+      SkylarkList<JavaInfo> deps,
+      SkylarkList<JavaInfo> exports,
+      SkylarkList<JavaInfo> plugins,
+      SkylarkList<JavaInfo> exportedPlugins,
+      SkylarkList<Artifact> annotationProcessorAdditionalInputs,
+      SkylarkList<Artifact> annotationProcessorAdditionalOutputs,
       String strictDepsMode,
       JavaToolchainProvider javaToolchain,
       JavaRuntimeInfo hostJavabase,
-      SkylarkList<?> sourcepathEntries, // <Artifact> expected
-      SkylarkList<?> resources, // <Artifact> expected
+      SkylarkList<Artifact> sourcepathEntries,
+      SkylarkList<Artifact> resources,
       Boolean neverlink,
       Location location,
-      StarlarkThread thread)
+      Environment environment)
       throws EvalException, InterruptedException {
 
     return JavaInfoBuildHelper.getInstance()
         .createJavaCompileAction(
             skylarkRuleContext,
-            sourceJars.getContents(Artifact.class, "source_jars"),
-            sourceFiles.getContents(Artifact.class, "source_files"),
+            sourceJars,
+            sourceFiles,
             outputJar,
             outputSourceJar == Runtime.NONE ? null : (Artifact) outputSourceJar,
-            javacOpts.getContents(String.class, "javac_opts"),
-            deps.getContents(JavaInfo.class, "deps"),
-            exports.getContents(JavaInfo.class, "exports"),
-            plugins.getContents(JavaInfo.class, "plugins"),
-            exportedPlugins.getContents(JavaInfo.class, "exported_plugins"),
-            annotationProcessorAdditionalInputs.getContents(
-                Artifact.class, "annotation_processor_additional_inputs"),
-            annotationProcessorAdditionalOutputs.getContents(
-                Artifact.class, "annotation_processor_additional_outputs"),
+            javacOpts,
+            deps,
+            exports,
+            plugins,
+            exportedPlugins,
+            annotationProcessorAdditionalInputs,
+            annotationProcessorAdditionalOutputs,
             strictDepsMode,
             javaToolchain,
             hostJavabase,
-            sourcepathEntries.getContents(Artifact.class, "sourcepath"),
-            resources.getContents(Artifact.class, "resources"),
+            sourcepathEntries,
+            resources,
             neverlink,
             javaSemantics,
             location,
-            thread);
+            environment);
   }
 
   @Override
@@ -138,8 +136,8 @@ public class JavaSkylarkCommon
   public Artifact packSources(
       SkylarkActionFactory actions,
       Artifact outputJar,
-      SkylarkList<?> sourceFiles, // <Artifact> expected.
-      SkylarkList<?> sourceJars, // <Artifact> expected.
+      SkylarkList<Artifact> sourceFiles,
+      SkylarkList<Artifact> sourceJars,
       JavaToolchainProvider javaToolchain,
       JavaRuntimeInfo hostJavabase,
       Location location,
@@ -150,8 +148,8 @@ public class JavaSkylarkCommon
             actions,
             outputJar,
             /* outputSourceJar= */ null,
-            sourceFiles.getContents(Artifact.class, "sources"),
-            sourceJars.getContents(Artifact.class, "source_jars"),
+            sourceFiles,
+            sourceJars,
             javaToolchain,
             hostJavabase,
             location);
@@ -167,9 +165,8 @@ public class JavaSkylarkCommon
   }
 
   @Override
-  public JavaInfo mergeJavaProviders(SkylarkList<?> providers /* <JavaInfo> expected. */)
-      throws EvalException {
-    return JavaInfo.merge(providers.getContents(JavaInfo.class, "providers"));
+  public JavaInfo mergeJavaProviders(SkylarkList<JavaInfo> providers) {
+    return JavaInfo.merge(providers);
   }
 
   // TODO(b/65113771): Remove this method because it's incorrect.
@@ -212,8 +209,7 @@ public class JavaSkylarkCommon
   }
 
   @Override
-  public JavaInfo addConstraints(JavaInfo javaInfo, SkylarkList<?> constraints)
-      throws EvalException {
+  public JavaInfo addConstraints(JavaInfo javaInfo, SkylarkList<String> constraints) {
     // No implementation in Bazel. This method not callable in Starlark except through
     // (discouraged) use of --experimental_google_legacy_api.
     return null;
@@ -235,7 +231,7 @@ public class JavaSkylarkCommon
 
   @Override
   public JavaInfo addCompileTimeJavaDependencyArtifacts(
-      JavaInfo javaInfo, SkylarkList<?> compileTimeJavaDependencyArtifacts) throws EvalException {
+      JavaInfo javaInfo, SkylarkList<Artifact> compileTimeJavaDependencyArtifacts) {
     // No implementation in Bazel. This method not callable in Starlark except through
     // (discouraged) use of --experimental_google_legacy_api.
     return null;

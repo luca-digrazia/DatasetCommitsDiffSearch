@@ -26,11 +26,11 @@ import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.ParamType;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics.FlagIdentifier;
-import com.google.devtools.build.lib.syntax.StarlarkThread;
 
 /** Utilities for Java compilation support in Skylark. */
 @SkylarkModule(name = "java_common", doc = "Utilities for Java compilation support in Starlark.")
@@ -200,28 +200,28 @@ public interface JavaCommonApi<
             defaultValue = "False")
       },
       useLocation = true,
-      useStarlarkThread = true)
+      useEnvironment = true)
   public JavaInfoT createJavaCompileAction(
       SkylarkRuleContextT skylarkRuleContext,
-      SkylarkList<?> sourceJars, // <FileT> expected.
-      SkylarkList<?> sourceFiles, // <FileT> expected.
+      SkylarkList<FileT> sourceJars,
+      SkylarkList<FileT> sourceFiles,
       FileT outputJar,
       Object outputSourceJar,
-      SkylarkList<?> javacOpts, // <String> expected.
-      SkylarkList<?> deps, // <JavaInfoT> expected.
-      SkylarkList<?> exports, // <JavaInfoT> expected.
-      SkylarkList<?> plugins, // <JavaInfoT> expected.
-      SkylarkList<?> exportedPlugins, // <JavaInfoT> expected.
-      SkylarkList<?> annotationProcessorAdditionalInputs, // <FileT> expected.
-      SkylarkList<?> annotationProcessorAdditionalOutputs, // <FileT> expected.
+      SkylarkList<String> javacOpts,
+      SkylarkList<JavaInfoT> deps,
+      SkylarkList<JavaInfoT> exports,
+      SkylarkList<JavaInfoT> plugins,
+      SkylarkList<JavaInfoT> exportedPlugins,
+      SkylarkList<FileT> annotationProcessorAdditionalInputs,
+      SkylarkList<FileT> annotationProcessorAdditionalOutputs,
       String strictDepsMode,
       JavaToolchainT javaToolchain,
       JavaRuntimeT hostJavabase,
-      SkylarkList<?> sourcepathEntries, // <FileT> expected.
-      SkylarkList<?> resources, // <FileT> expected.
+      SkylarkList<FileT> sourcepathEntries,
+      SkylarkList<FileT> resources,
       Boolean neverlink,
       Location loc,
-      StarlarkThread thread)
+      Environment environment)
       throws EvalException, InterruptedException;
 
   @SkylarkCallable(
@@ -380,8 +380,8 @@ public interface JavaCommonApi<
   public FileApi packSources(
       SkylarkActionFactoryT actions,
       FileT outputJar,
-      SkylarkList<?> sourceFiles, // <FileT> expected.
-      SkylarkList<?> sourceJars, // <FileT> expected.
+      SkylarkList<FileT> sourceFiles,
+      SkylarkList<FileT> sourceJars,
       JavaToolchainT javaToolchain,
       JavaRuntimeT hostJavabase,
       Location location,
@@ -421,8 +421,7 @@ public interface JavaCommonApi<
             generic1 = JavaInfoApi.class,
             doc = "The list of providers to merge."),
       })
-  public JavaInfoT mergeJavaProviders(SkylarkList<?> providers /* <JavaInfoT> expected. */)
-      throws EvalException;
+  public JavaInfoT mergeJavaProviders(SkylarkList<JavaInfoT> providers);
 
   @SkylarkCallable(
       name = "make_non_strict",
@@ -496,8 +495,7 @@ public interface JavaCommonApi<
             doc = "Constraints to add")
       },
       enableOnlyWithFlag = FlagIdentifier.EXPERIMENTAL_GOOGLE_LEGACY_API)
-  public JavaInfoT addConstraints(
-      JavaInfoT javaInfo, SkylarkList<?> constraints /* <String> expected. */) throws EvalException;
+  public JavaInfoT addConstraints(JavaInfoT javaInfo, SkylarkList<String> constraints);
 
   @SkylarkCallable(
       name = "experimental_disable_annotation_processing",
@@ -552,8 +550,7 @@ public interface JavaCommonApi<
       },
       enableOnlyWithFlag = FlagIdentifier.EXPERIMENTAL_GOOGLE_LEGACY_API)
   public JavaInfoT addCompileTimeJavaDependencyArtifacts(
-      JavaInfoT javaInfo, SkylarkList<?> compileTimeJavaDependencyArtifacts /* <FileT> expected. */)
-      throws EvalException;
+      JavaInfoT javaInfo, SkylarkList<FileT> compileTimeJavaDependencyArtifacts);
 
   @SkylarkCallable(
       name = "java_toolchain_label",

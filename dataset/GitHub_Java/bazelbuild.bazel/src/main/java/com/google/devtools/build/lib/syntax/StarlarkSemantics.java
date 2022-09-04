@@ -60,7 +60,7 @@ public abstract class StarlarkSemantics {
     INCOMPATIBLE_OBJC_FRAMEWORK_CLEANUP(StarlarkSemantics::incompatibleObjcFrameworkCleanup),
     INCOMPATIBLE_DISALLOW_RULE_EXECUTION_PLATFORM_CONSTRAINTS_ALLOWED(
         StarlarkSemantics::incompatibleDisallowRuleExecutionPlatformConstraintsAllowed),
-    INCOMPATIBLE_ALLOW_TAGS_PROPAGATION(StarlarkSemantics::experimentalAllowTagsPropagation),
+    INCOMPATIBLE_ALLOW_TAGS_PROPAGATION(StarlarkSemantics::incompatibleAllowTagsPropagation),
     NONE(null);
 
     // Using a Function here makes the enum definitions far cleaner, and, since this is
@@ -205,7 +205,7 @@ public abstract class StarlarkSemantics {
 
   public abstract boolean incompatibleDisallowDictLookupUnhashableKeys();
 
-  public abstract boolean experimentalAllowTagsPropagation();
+  public abstract boolean incompatibleAllowTagsPropagation();
 
   public abstract boolean incompatibleDisallowHashingFrozenMutables();
 
@@ -242,7 +242,6 @@ public abstract class StarlarkSemantics {
   public static final StarlarkSemantics DEFAULT_SEMANTICS =
       builder()
           // <== Add new options here in alphabetic order ==>
-          .experimentalAllowTagsPropagation(false)
           .experimentalBuildSettingApi(true)
           .experimentalCcSkylarkApiEnabledPackages(ImmutableList.of())
           .experimentalAllowIncrementalRepositoryUpdates(true)
@@ -284,7 +283,8 @@ public abstract class StarlarkSemantics {
           .incompatibleDepsetForLibrariesToLinkGetter(true)
           .incompatibleRestrictStringEscapes(false)
           .incompatibleDisallowDictLookupUnhashableKeys(false)
-          .incompatibleDisallowHashingFrozenMutables(true)
+          .incompatibleAllowTagsPropagation(false)
+          .incompatibleDisallowHashingFrozenMutables(false)
           .build();
 
   /** Builder for {@link StarlarkSemantics}. All fields are mandatory. */
@@ -308,7 +308,7 @@ public abstract class StarlarkSemantics {
 
     public abstract Builder experimentalStarlarkUnusedInputsList(boolean value);
 
-    public abstract Builder experimentalAllowTagsPropagation(boolean value);
+    public abstract Builder incompatibleAllowTagsPropagation(boolean value);
 
     public abstract Builder incompatibleBzlDisallowLoadAfterStatement(boolean value);
 
