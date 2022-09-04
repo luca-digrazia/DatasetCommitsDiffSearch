@@ -14,7 +14,8 @@
 
 package com.google.devtools.build.lib.syntax;
 
-import static com.google.devtools.build.lib.syntax.Parser.Dialect.SKYLARK;
+import static com.google.devtools.build.lib.syntax.Parser.ParsingMode.BUILD;
+import static com.google.devtools.build.lib.syntax.Parser.ParsingMode.SKYLARK;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Supplier;
@@ -72,21 +73,14 @@ public class Parser {
     }
   }
 
-  /** Used to select whether the parser rejects features that are prohibited for BUILD files. */
-  // TODO(brandjon): Instead of using an enum to control what features are allowed, factor these
-  // restrictions into a separate visitor that can be outside the core Skylark parser. This will
-  // reduce parser complexity and help keep Bazel-specific knowledge out of the interpreter.
-  public enum Dialect {
-    /** Used for BUILD files. */
+  /**
+   * ParsingMode is used to select which features the parser should accept.
+   */
+  public enum ParsingMode {
+    /** Used for parsing BUILD files */
     BUILD,
-    /** Used for .bzl and other Skylark files. This allows all language features. */
+    /** Used for parsing .bzl files */
     SKYLARK,
-  }
-
-  /** Used to select what constructs are allowed based on whether we're at the top level. */
-  public enum ParsingLevel {
-    TOP_LEVEL,
-    LOCAL_LEVEL
   }
 
   private static final EnumSet<TokenKind> STATEMENT_TERMINATOR_SET =
@@ -147,7 +141,7 @@ public class Parser {
   private final Lexer lexer;
   private final EventHandler eventHandler;
   private final List<Comment> comments;
-  private final Dialect dialect;
+  private final ParsingMode parsingMode;
 
   private static final Map<TokenKind, Operator> binaryOperators =
       new ImmutableMap.Builder<TokenKind, Operator>()
@@ -198,10 +192,10 @@ public class Parser {
   private int errorsCount;
   private boolean recoveryMode;  // stop reporting errors until next statement
 
-  private Parser(Lexer lexer, EventHandler eventHandler, Dialect dialect) {
+  private Parser(Lexer lexer, EventHandler eventHandler, ParsingMode parsingMode) {
     this.lexer = lexer;
     this.eventHandler = eventHandler;
-    this.dialect = dialect;
+    this.parsingMode = parsingMode;
     this.tokens = lexer.getTokens().iterator();
     this.comments = new ArrayList<>();
     nextToken();
@@ -218,18 +212,17 @@ public class Parser {
   }
 
   /**
-   * Main entry point for parsing a file.
+   * Entry-point for parsing a file with comments.
    *
    * @param input the input to parse
    * @param eventHandler a reporter for parsing errors
-   * @param dialect may restrict the parser to Build-language features
-   * @see BuildFileAST#parseBuildString
-   * @see BuildFileAST#parseSkylarkString
+   * @param parsingMode if set to {@link ParsingMode#BUILD}, restricts the parser to just the
+   *     features present in the Build language
    */
   public static ParseResult parseFile(
-      ParserInputSource input, EventHandler eventHandler, Dialect dialect) {
+      ParserInputSource input, EventHandler eventHandler, ParsingMode parsingMode) {
     Lexer lexer = new Lexer(input, eventHandler);
-    Parser parser = new Parser(lexer, eventHandler, dialect);
+    Parser parser = new Parser(lexer, eventHandler, parsingMode);
     List<Statement> statements = parser.parseFileInput();
     return new ParseResult(
         statements,
@@ -238,50 +231,49 @@ public class Parser {
         parser.errorsCount > 0 || lexer.containsErrors());
   }
 
-  /**
-   * Parses a sequence of statements, possibly followed by newline tokens.
-   *
-   * <p>{@code load()} statements are not permitted. Use {@code parsingLevel} to control whether
-   * function definitions, for statements, etc., are allowed.
-   */
-  public static List<Statement> parseStatements(
-      ParserInputSource input, EventHandler eventHandler,
-      ParsingLevel parsingLevel, Dialect dialect) {
-    Lexer lexer = new Lexer(input, eventHandler);
-    Parser parser = new Parser(lexer, eventHandler, dialect);
-    List<Statement> result = new ArrayList<>();
-    parser.parseStatement(result, parsingLevel);
-    while (parser.token.kind == TokenKind.NEWLINE) {
-      parser.nextToken();
-    }
-    parser.expect(TokenKind.EOF);
-    return result;
+  /** Convenience method for {@code parseFile} with the Build language. */
+  public static ParseResult parseFile(ParserInputSource input, EventHandler eventHandler) {
+    return parseFile(input, eventHandler, BUILD);
+  }
+
+  /** Convenience method for {@code parseFile} with Skylark. */
+  public static ParseResult parseFileForSkylark(
+      ParserInputSource input, EventHandler eventHandler) {
+    return parseFile(input, eventHandler, SKYLARK);
   }
 
   /**
-   * Convenience wrapper for {@link #parseStatements} where exactly one statement is expected.
+   * Entry-point for parsing an expression. The expression may be followed by newline tokens.
    *
-   * @throws IllegalArgumentException if the number of parsed statements was not exactly one
+   * @param input the input to parse
+   * @param eventHandler a reporter for parsing errors
+   * @param parsingMode if set to {@link ParsingMode#BUILD}, restricts the parser to just the
+   *     features present in the Build language
    */
-  public static Statement parseStatement(
-      ParserInputSource input, EventHandler eventHandler,
-      ParsingLevel parsingLevel, Dialect dialect) {
-    List<Statement> stmts = parseStatements(
-        input, eventHandler, parsingLevel, dialect);
-    return Iterables.getOnlyElement(stmts);
-  }
-
-  /** Parses an expression, possibly followed by newline tokens. */
+  @VisibleForTesting
   public static Expression parseExpression(
-      ParserInputSource input, EventHandler eventHandler, Dialect dialect) {
+      ParserInputSource input, EventHandler eventHandler, ParsingMode parsingMode) {
     Lexer lexer = new Lexer(input, eventHandler);
-    Parser parser = new Parser(lexer, eventHandler, dialect);
+    Parser parser = new Parser(lexer, eventHandler, parsingMode);
     Expression result = parser.parseExpression();
     while (parser.token.kind == TokenKind.NEWLINE) {
       parser.nextToken();
     }
     parser.expect(TokenKind.EOF);
     return result;
+  }
+
+  /** Convenience method for {@code parseExpression} with the Build language. */
+  @VisibleForTesting
+  public static Expression parseExpression(ParserInputSource input, EventHandler eventHandler) {
+    return parseExpression(input, eventHandler, BUILD);
+  }
+
+  /** Convenience method for {@code parseExpression} with Skylark. */
+  @VisibleForTesting
+  public static Expression parseExpressionForSkylark(
+      ParserInputSource input, EventHandler eventHandler) {
+    return parseExpression(input, eventHandler, SKYLARK);
   }
 
   private void reportError(Location location, String message) {
@@ -460,7 +452,7 @@ public class Parser {
     final int start = token.left;
     // parse **expr
     if (token.kind == TokenKind.STAR_STAR) {
-      if (dialect != SKYLARK) {
+      if (parsingMode != SKYLARK) {
         reportError(
             lexer.createLocation(token.left, token.right),
             "**kwargs arguments are not allowed in BUILD files");
@@ -471,7 +463,7 @@ public class Parser {
     }
     // parse *expr
     if (token.kind == TokenKind.STAR) {
-      if (dialect != SKYLARK) {
+      if (parsingMode != SKYLARK) {
         reportError(
             lexer.createLocation(token.left, token.right),
             "*args arguments are not allowed in BUILD files");
@@ -705,9 +697,10 @@ public class Parser {
       case MINUS:
         {
           nextToken();
+          List<Argument.Passed> args = new ArrayList<>();
           Expression expr = parsePrimaryWithSuffix();
-          UnaryOperatorExpression minus = new UnaryOperatorExpression(UnaryOperator.MINUS, expr);
-          return setLocation(minus, start, expr);
+          args.add(setLocation(new Argument.Positional(expr), start, expr));
+          return makeFuncallExpression(null, new Identifier("-"), args, start, token.right);
         }
       default:
         {
@@ -1068,8 +1061,7 @@ public class Parser {
     int start = token.left;
     expect(TokenKind.NOT);
     Expression expression = parseNonTupleExpression(prec + 1);
-    UnaryOperatorExpression notExpression =
-        new UnaryOperatorExpression(UnaryOperator.NOT, expression);
+    NotExpression notExpression = new NotExpression(expression);
     return setLocation(notExpression, start, token.right);
   }
 
@@ -1184,7 +1176,7 @@ public class Parser {
       }
       pushToken(identToken); // push the ident back to parse it as a statement
     }
-    parseStatement(list, ParsingLevel.TOP_LEVEL);
+    parseStatement(list, true);
   }
 
   // small_stmt | 'pass'
@@ -1396,7 +1388,7 @@ public class Parser {
       }
       expect(TokenKind.INDENT);
       while (token.kind != TokenKind.OUTDENT && token.kind != TokenKind.EOF) {
-        parseStatement(list, ParsingLevel.LOCAL_LEVEL);
+        parseStatement(list, false);
       }
       expectAndRecover(TokenKind.OUTDENT);
     } else {
@@ -1442,17 +1434,17 @@ public class Parser {
 
   // stmt ::= simple_stmt
   //        | compound_stmt
-  private void parseStatement(List<Statement> list, ParsingLevel parsingLevel) {
-    if (token.kind == TokenKind.DEF && dialect == SKYLARK) {
-      if (parsingLevel == ParsingLevel.LOCAL_LEVEL) {
+  private void parseStatement(List<Statement> list, boolean isTopLevel) {
+    if (token.kind == TokenKind.DEF && parsingMode == SKYLARK) {
+      if (!isTopLevel) {
         reportError(lexer.createLocation(token.left, token.right),
             "nested functions are not allowed. Move the function to top-level");
       }
       parseFunctionDefStatement(list);
-    } else if (token.kind == TokenKind.IF && dialect == SKYLARK) {
+    } else if (token.kind == TokenKind.IF && parsingMode == SKYLARK) {
       list.add(parseIfStatement());
-    } else if (token.kind == TokenKind.FOR && dialect == SKYLARK) {
-      if (parsingLevel == ParsingLevel.TOP_LEVEL) {
+    } else if (token.kind == TokenKind.FOR && parsingMode == SKYLARK) {
+      if (isTopLevel) {
         reportError(
             lexer.createLocation(token.left, token.right),
             "for loops are not allowed on top-level. Put it into a function");
