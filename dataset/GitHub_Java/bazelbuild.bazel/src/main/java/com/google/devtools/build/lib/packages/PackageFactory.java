@@ -31,7 +31,6 @@ import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.events.ExtendedEventHandler.Postable;
 import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.packages.Globber.BadGlobException;
-import com.google.devtools.build.lib.packages.Package.Builder.PackageSettings;
 import com.google.devtools.build.lib.packages.PackageValidator.InvalidPackageException;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.packages.RuleFactory.BuildLangTypedAttributeValuesMap;
@@ -129,7 +128,7 @@ public final class PackageFactory {
   private final ImmutableMap<String, Object> nativeModuleBindingsForBuild;
   private final ImmutableMap<String, Object> nativeModuleBindingsForWorkspace;
 
-  private final PackageSettings packageSettings;
+  private final Package.Builder.Helper packageBuilderHelper;
   private final PackageValidator packageValidator;
   private final PackageLoadingListener packageLoadingListener;
 
@@ -161,8 +160,8 @@ public final class PackageFactory {
   }
 
   @VisibleForTesting
-  public PackageSettings getPackageSettingsForTesting() {
-    return packageSettings;
+  public Package.Builder.Helper getPackageBuilderHelperForTesting() {
+    return packageBuilderHelper;
   }
 
   /**
@@ -181,7 +180,7 @@ public final class PackageFactory {
       RuleClassProvider ruleClassProvider,
       Iterable<EnvironmentExtension> environmentExtensions,
       String version,
-      PackageSettings packageSettings,
+      Package.Builder.Helper packageBuilderHelper,
       PackageValidator packageValidator,
       PackageLoadingListener packageLoadingListener) {
     this.ruleFactory = new RuleFactory(ruleClassProvider);
@@ -195,7 +194,7 @@ public final class PackageFactory {
             ruleFunctions, packageArguments, this.environmentExtensions);
     this.nativeModuleBindingsForWorkspace =
         createNativeModuleBindingsForWorkspace(ruleClassProvider, version);
-    this.packageSettings = packageSettings;
+    this.packageBuilderHelper = packageBuilderHelper;
     this.packageValidator = packageValidator;
     this.packageLoadingListener = packageLoadingListener;
   }
@@ -463,14 +462,14 @@ public final class PackageFactory {
   public Package.Builder newExternalPackageBuilder(
       RootedPath workspacePath, String runfilesPrefix, StarlarkSemantics starlarkSemantics) {
     return Package.newExternalPackageBuilder(
-        packageSettings, workspacePath, runfilesPrefix, starlarkSemantics);
+        packageBuilderHelper, workspacePath, runfilesPrefix, starlarkSemantics);
   }
 
   @VisibleForTesting
   public Package.Builder newPackageBuilder(
       PackageIdentifier packageId, String runfilesPrefix, StarlarkSemantics starlarkSemantics) {
     return new Package.Builder(
-        packageSettings,
+        packageBuilderHelper,
         packageId,
         runfilesPrefix,
         starlarkSemantics.incompatibleNoImplicitFileExport(),
@@ -724,7 +723,7 @@ public final class PackageFactory {
       throws InterruptedException {
     Package.Builder pkgBuilder =
         new Package.Builder(
-                packageSettings,
+                packageBuilderHelper,
                 packageId,
                 ruleClassProvider.getRunfilesPrefix(),
                 semantics.incompatibleNoImplicitFileExport(),

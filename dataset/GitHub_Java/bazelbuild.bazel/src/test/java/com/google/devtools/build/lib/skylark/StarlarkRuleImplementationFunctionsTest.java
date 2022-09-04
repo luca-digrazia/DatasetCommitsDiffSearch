@@ -29,7 +29,6 @@ import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpanderImpl;
-import com.google.devtools.build.lib.actions.ArtifactPathResolver;
 import com.google.devtools.build.lib.actions.CommandLine;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.actions.CompositeRunfilesSupplier;
@@ -46,8 +45,8 @@ import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.actions.Substitution;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
-import com.google.devtools.build.lib.analysis.skylark.Args;
-import com.google.devtools.build.lib.analysis.skylark.StarlarkRuleContext;
+import com.google.devtools.build.lib.analysis.starlark.Args;
+import com.google.devtools.build.lib.analysis.starlark.StarlarkRuleContext;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.Depset;
@@ -56,9 +55,6 @@ import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.packages.StarlarkProvider;
 import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.skylark.util.BazelEvaluationTestCase;
-import com.google.devtools.build.lib.skylarkinterface.Param;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkGlobalLibrary;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.Sequence;
@@ -76,6 +72,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
+import net.starlark.java.annot.Param;
+import net.starlark.java.annot.StarlarkGlobalLibrary;
+import net.starlark.java.annot.StarlarkMethod;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -85,7 +84,7 @@ import org.junit.runners.JUnit4;
 
 /** Tests for Starlark functions relating to rule implementation. */
 @RunWith(JUnit4.class)
-@SkylarkGlobalLibrary // needed for CallUtils.getBuiltinCallable, sadly
+@StarlarkGlobalLibrary // needed for CallUtils.getBuiltinCallable, sadly
 public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
 
   private final EvaluationTestCase ev = new BazelEvaluationTestCase();
@@ -98,7 +97,7 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
   @Rule public ExpectedException thrown = ExpectedException.none();
 
   // def mock(mandatory, optional=None, *, mandatory_key, optional_key='x')
-  @SkylarkCallable(
+  @StarlarkMethod(
       name = "mock",
       documented = false,
       parameters = {
@@ -382,6 +381,30 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
     assertThat(action.getIncompleteEnvironmentForTesting()).containsExactly("a", "b");
     // We expect "timeout" to be filtered by TargetUtils.
     assertThat(action.getExecutionInfo()).containsExactly("block-network", "foo");
+  }
+
+  @Test
+  public void testCreateSpawnActionEnvAndExecInfo_withWorkerKeyMnemonic() throws Exception {
+    StarlarkRuleContext ruleContext = createRuleContext("//foo:foo");
+    setRuleContext(ruleContext);
+    ev.exec(
+        "ruleContext.actions.run_shell(",
+        "  inputs = ruleContext.files.srcs,",
+        "  outputs = ruleContext.files.srcs,",
+        "  env = {'a' : 'b'},",
+        "  execution_requirements = {",
+        "    'supports-workers': '1',",
+        "    'worker-key-mnemonic': 'MyMnemonic',",
+        "  },",
+        "  mnemonic = 'DummyMnemonic',",
+        "  command = 'dummy_command',",
+        "  progress_message = 'dummy_message')");
+    SpawnAction action =
+        (SpawnAction)
+            Iterables.getOnlyElement(
+                ruleContext.getRuleContext().getAnalysisEnvironment().getRegisteredActions());
+    assertThat(action.getExecutionInfo())
+        .containsExactly("supports-workers", "1", "worker-key-mnemonic", "MyMnemonic");
   }
 
   @Test
@@ -686,7 +709,7 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
     RunfilesSupplier runfilesSupplier =
         CompositeRunfilesSupplier.fromSuppliers(
             (List<RunfilesSupplier>) ev.lookup("input_manifests"));
-    assertThat(runfilesSupplier.getMappings(ArtifactPathResolver.IDENTITY)).hasSize(1);
+    assertThat(runfilesSupplier.getMappings()).hasSize(1);
   }
 
   @Test
@@ -762,7 +785,7 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
     RunfilesSupplier runfilesSupplier =
         CompositeRunfilesSupplier.fromSuppliers(
             (List<RunfilesSupplier>) ev.lookup("input_manifests"));
-    assertThat(runfilesSupplier.getMappings(ArtifactPathResolver.IDENTITY)).hasSize(1);
+    assertThat(runfilesSupplier.getMappings()).hasSize(1);
 
     SpawnAction action =
         (SpawnAction)
@@ -813,10 +836,9 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
    * usually write those files using UTF-8 encoding. Currently, the string-valued 'substitutions'
    * parameter of the template_action function contains a hack that assumes its input is a UTF-8
    * encoded string which has been ingested as Latin 1. The hack converts the string to its
-   * "correct" UTF-8 value. Once {@link
-   * com.google.devtools.build.lib.syntax.ParserInput#create(byte[],
-   * com.google.devtools.build.lib.vfs.PathFragment)} parses files using UTF-8 and the hack for the
-   * substituations parameter is removed, this test will fail.
+   * "correct" UTF-8 value. Once Blaze starts calling {@link
+   * com.google.devtools.build.lib.syntax.ParserInput#fromUTF8} instead of {@code fromLatin1} and
+   * the hack for the substituations parameter is removed, this test will fail.
    */
   @Test
   public void testCreateTemplateActionWithWrongEncoding() throws Exception {
@@ -946,7 +968,7 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
             "  symlinks = {'sym1': ruleContext.files.srcs[1]})");
     Runfiles runfiles = (Runfiles) result;
     reporter.removeHandler(failFastHandler); // So it doesn't throw an exception.
-    runfiles.getRunfilesInputs(reporter, null, ArtifactPathResolver.IDENTITY);
+    runfiles.getRunfilesInputs(reporter, null);
     assertContainsEvent("ERROR <no location>: overwrote runfile");
   }
 
@@ -1886,7 +1908,7 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
     }
   }
 
-  @SkylarkCallable(name = "throw1", documented = false)
+  @StarlarkMethod(name = "throw1", documented = false)
   public Object throw1() throws Exception {
     class ThereIsNoMessageException extends EvalException {
       ThereIsNoMessageException() {
@@ -1908,7 +1930,7 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
         "There Is No Message: StarlarkRuleImplementationFunctionsTest", "throw1()");
   }
 
-  @SkylarkCallable(name = "throw2", documented = false)
+  @StarlarkMethod(name = "throw2", documented = false)
   public Object throw2() throws Exception {
     throw new InterruptedException();
   }
@@ -1924,7 +1946,7 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
     scratch.file(
         "test/glob.bzl",
         "def _impl(ctx):",
-        "  ctx.empty_action(",
+        "  ctx.actions.do_nothing(",
         "    inputs = [],",
         "  )",
         "def _foo():",
@@ -2515,9 +2537,9 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
   @Test
   public void testConfigurationField_StarlarkSplitTransitionProhibited() throws Exception {
     scratch.file(
-        "tools/whitelists/function_transition_whitelist/BUILD",
+        "tools/allowlists/function_transition_allowlist/BUILD",
         "package_group(",
-        "    name = 'function_transition_whitelist',",
+        "    name = 'function_transition_allowlist',",
         "    packages = [",
         "        '//...',",
         "    ],",
@@ -2535,8 +2557,8 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
         "foo = rule(",
         "  implementation = _foo_impl,",
         "  attrs = {",
-        "    '_whitelist_function_transition': attr.label(",
-        "        default = '//tools/whitelists/function_transition_whitelist'),",
+        "    '_allowlist_function_transition': attr.label(",
+        "        default = '//tools/allowlists/function_transition_allowlist'),",
         "    '_attr': attr.label(",
         "        cfg = foo_transition,",
         "        default = configuration_field(fragment='cpp', name = 'cc_toolchain'))})");
@@ -2960,5 +2982,28 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
     ActionAnalysisMetadata action =
         ctx.getRuleContext().getAnalysisEnvironment().getLocalGeneratingAction(params);
     assertThat(action.getInputs().toList()).contains(directory);
+  }
+
+  @Test
+  public void testDirectoryExpansionInArgs() throws Exception {
+    setRuleContext(createRuleContext("//foo:foo"));
+    ev.exec(
+        "args = ruleContext.actions.args()",
+        "directory = ruleContext.actions.declare_directory('dir')",
+        "file3 = ruleContext.actions.declare_file('file3')",
+        "def _expand_dirs(artifact, dir_expander):",
+        "  return [f.short_path for f in dir_expander.expand(artifact)]",
+        "args.add_all([directory, file3], map_each=_expand_dirs)");
+    Args args = (Args) ev.eval("args");
+    Artifact directory = (Artifact) ev.eval("directory");
+    CommandLine commandLine = args.build();
+
+    Artifact file1 = getBinArtifactWithNoOwner("foo/dir/file1");
+    Artifact file2 = getBinArtifactWithNoOwner("foo/dir/file2");
+    ArtifactExpanderImpl artifactExpander =
+        new ArtifactExpanderImpl(
+            ImmutableMap.of(directory, ImmutableList.of(file1, file2)), ImmutableMap.of());
+    assertThat(commandLine.arguments(artifactExpander))
+        .containsExactly("foo/dir/file1", "foo/dir/file2", "foo/file3");
   }
 }

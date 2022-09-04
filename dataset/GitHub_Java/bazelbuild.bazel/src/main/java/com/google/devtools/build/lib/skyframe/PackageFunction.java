@@ -691,16 +691,15 @@ public class PackageFunction implements SkyFunction {
     }
 
     // Process the loaded modules.
-    Map<String, Module> loadedModules = Maps.newLinkedHashMapWithExpectedSize(loads.size());
+    Map<String, Module> loadedModules = Maps.newHashMapWithExpectedSize(loads.size());
     ImmutableList.Builder<StarlarkFileDependency> fileDependencies = ImmutableList.builder();
     for (int i = 0; i < loads.size(); i++) {
       String loadString = loads.get(i).first;
       BzlLoadValue v = bzlLoads.get(i);
-      loadedModules.put(loadString, v.getModule()); // dups ok
+      loadedModules.put(loadString, v.getModule());
       fileDependencies.add(v.getDependency());
     }
-    return new BzlLoadResult(
-        ImmutableMap.copyOf(loadedModules), transitiveClosureOfLabels(fileDependencies.build()));
+    return new BzlLoadResult(loadedModules, transitiveClosureOfLabels(fileDependencies.build()));
   }
 
   /**
@@ -1507,14 +1506,12 @@ public class PackageFunction implements SkyFunction {
   }
 
   /** A simple value class to store the result of the Starlark loads. */
-  // TODO(adonovan): make private. Provide accessor for sole use in WorkspaceFileFunction.
-  // Then eliminate once fileDependencies is gone.
   static final class BzlLoadResult {
-    final ImmutableMap<String, Module> loadedModules;
+    final Map<String, Module> loadedModules;
     final ImmutableList<Label> fileDependencies;
 
     private BzlLoadResult(
-        ImmutableMap<String, Module> loadedModules, ImmutableList<Label> fileDependencies) {
+        Map<String, Module> loadedModules, ImmutableList<Label> fileDependencies) {
       this.loadedModules = loadedModules;
       this.fileDependencies = fileDependencies;
     }

@@ -14,6 +14,7 @@
 package net.starlark.java.cmd;
 
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.FileOptions;
 import com.google.devtools.build.lib.syntax.Module;
 import com.google.devtools.build.lib.syntax.Mutability;
@@ -31,11 +32,10 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.Duration;
 
-// TODO(adonovan): rename class to "starlark" so we can import Starlark.
-
 /**
- * Starlark is a standalone starlark interpreter. The environment doesn't contain Bazel-specific
- * functions and variables. Load statements are forbidden for the moment.
+ * Starlark is a standalone starlark intepreter. The environment doesn't
+ * contain Bazel-specific functions and variables. Load statements are
+ * forbidden for the moment.
  */
 class Starlark {
   private static final String START_PROMPT = ">> ";
@@ -94,8 +94,7 @@ class Starlark {
     while ((line = prompt()) != null) {
       ParserInput input = ParserInput.fromString(line, "<stdin>");
       try {
-        Object result =
-            com.google.devtools.build.lib.syntax.Starlark.execFile(input, options, module, thread);
+        Object result = EvalUtils.exec(input, options, module, thread);
         if (result != com.google.devtools.build.lib.syntax.Starlark.NONE) {
           System.out.println(com.google.devtools.build.lib.syntax.Starlark.repr(result));
         }
@@ -104,9 +103,7 @@ class Starlark {
           System.err.println(error);
         }
       } catch (EvalException ex) {
-        // TODO(adonovan): provide a SourceReader. Requires that we buffer the
-        // entire history so that line numbers don't reset in each chunk.
-        System.err.println(ex.getMessageWithStack());
+        System.err.println(ex.print());
       } catch (InterruptedException ex) {
         System.err.println("Interrupted");
       }
@@ -128,8 +125,7 @@ class Starlark {
   /** Execute a Starlark file. */
   private int execute(String filename, String content) {
     try {
-      com.google.devtools.build.lib.syntax.Starlark.execFile(
-          ParserInput.fromString(content, filename), options, module, thread);
+      EvalUtils.exec(ParserInput.fromString(content, filename), options, module, thread);
       return 0;
     } catch (SyntaxError.Exception ex) {
       for (SyntaxError error : ex.errors()) {
@@ -137,7 +133,7 @@ class Starlark {
       }
       return 1;
     } catch (EvalException ex) {
-      System.err.println(ex.getMessageWithStack());
+      System.err.println(ex.print());
       return 1;
     } catch (Exception e) {
       e.printStackTrace(System.err);

@@ -22,6 +22,9 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase; // a bad dependency!
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.syntax.ParserInput;
+import com.google.devtools.build.lib.syntax.StarlarkFunction;
+import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.skydoc.SkydocMain.StarlarkEvaluationException;
@@ -37,9 +40,6 @@ import com.google.devtools.build.skydoc.rendering.proto.StardocOutputProtos.Star
 import java.io.IOException;
 import java.util.Map;
 import java.util.stream.Collectors;
-import net.starlark.java.eval.StarlarkFunction;
-import net.starlark.java.eval.StarlarkSemantics;
-import net.starlark.java.syntax.ParserInput;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -75,28 +75,30 @@ public final class SkydocTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testStarlarkEvaluationError() throws Exception {
+  public void testStarlarkEvaluationException() throws Exception {
     scratch.file(
-        "/test/a.bzl", //
-        "def f(): 1//0",
-        "f()");
-    StarlarkEvaluationException ex =
+        "/test/test.bzl",
+        "def rule_impl(ctx):",
+        "  return []",
+        "",
+        "my_rule = rule(",
+        "    invalid_param = 3,",
+        ")");
+
+    StarlarkEvaluationException expected =
         assertThrows(
             StarlarkEvaluationException.class,
             () ->
                 skydocMain.eval(
                     StarlarkSemantics.DEFAULT,
-                    Label.parseAbsoluteUnchecked("//test:a.bzl"),
+                    Label.parseAbsoluteUnchecked("//test:test.bzl"),
                     ImmutableMap.builder(),
                     ImmutableMap.builder(),
                     ImmutableMap.builder(),
                     ImmutableMap.builder(),
                     ImmutableMap.builder()));
-    String msg = ex.getMessage();
-    assertThat(msg).contains("Traceback");
-    assertThat(msg).contains("line 2, column 2, in <toplevel>");
-    assertThat(msg).contains("line 1, column 11, in f");
-    assertThat(msg).contains("Error: integer division by zero");
+
+    assertThat(expected).hasMessageThat().contains("Starlark evaluation error");
   }
 
   @Test

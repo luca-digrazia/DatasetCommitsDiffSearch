@@ -24,6 +24,7 @@ import com.google.devtools.build.lib.packages.RuleFunction;
 import com.google.devtools.build.lib.profiler.memory.AllocationTracker.RuleBytes;
 import com.google.devtools.build.lib.syntax.Debug;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.FileOptions;
 import com.google.devtools.build.lib.syntax.HasBinary;
 import com.google.devtools.build.lib.syntax.Module;
@@ -199,7 +200,7 @@ public final class AllocationTrackerTest {
                 "myrule", new MyRuleFunction()));
     try (Mutability mu = Mutability.create("test")) {
       StarlarkThread thread = new StarlarkThread(mu, StarlarkSemantics.DEFAULT);
-      Starlark.execFile(input, FileOptions.DEFAULT, module, thread);
+      EvalUtils.exec(input, FileOptions.DEFAULT, module, thread);
     }
   }
 

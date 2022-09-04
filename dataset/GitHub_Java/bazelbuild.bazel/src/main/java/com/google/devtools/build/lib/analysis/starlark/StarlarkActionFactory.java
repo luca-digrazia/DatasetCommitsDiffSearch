@@ -20,7 +20,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
-import com.google.devtools.build.lib.actions.ActionLookupKey;
+import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.actions.ActionRegistry;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
@@ -50,8 +50,8 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.starlarkbuildapi.FileApi;
-import com.google.devtools.build.lib.starlarkbuildapi.StarlarkActionFactoryApi;
+import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
+import com.google.devtools.build.lib.skylarkbuildapi.StarlarkActionFactoryApi;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Printer;
@@ -105,7 +105,7 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
       }
 
       @Override
-      public ActionLookupKey getOwner() {
+      public ActionLookupValue.ActionLookupKey getOwner() {
         return starlarkActionFactory
             .getActionConstructionContext()
             .getAnalysisEnvironment()
@@ -629,11 +629,7 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
     }
 
     String mnemonic = getMnemonic(mnemonicUnchecked);
-    try {
-      builder.setMnemonic(mnemonic);
-    } catch (IllegalArgumentException e) {
-      throw Starlark.errorf("%s", e.getMessage());
-    }
+    builder.setMnemonic(mnemonic);
     if (envUnchecked != Starlark.NONE) {
       builder.setEnvironment(
           ImmutableMap.copyOf(Dict.cast(envUnchecked, String.class, String.class, "env")));

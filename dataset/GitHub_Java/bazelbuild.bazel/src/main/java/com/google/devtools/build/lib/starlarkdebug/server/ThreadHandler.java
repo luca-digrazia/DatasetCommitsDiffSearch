@@ -74,9 +74,9 @@ final class ThreadHandler {
    */
   private static class SteppingThreadState {
     /** Determines when execution should next be paused. */
-    final Debug.ReadyToPause readyToPause;
+    final StarlarkThread.ReadyToPause readyToPause;
 
-    SteppingThreadState(Debug.ReadyToPause readyToPause) {
+    SteppingThreadState(StarlarkThread.ReadyToPause readyToPause) {
       this.readyToPause = readyToPause;
     }
   }
@@ -197,8 +197,8 @@ final class ThreadHandler {
   private void resumePausedThread(
       PausedThreadState thread, StarlarkDebuggingProtos.Stepping stepping) {
     pausedThreads.remove(thread.id);
-    Debug.ReadyToPause readyToPause =
-        Debug.stepControl(thread.thread, DebugEventHelper.convertSteppingEnum(stepping));
+    StarlarkThread.ReadyToPause readyToPause =
+        thread.thread.stepControl(DebugEventHelper.convertSteppingEnum(stepping));
     if (readyToPause != null) {
       steppingThreads.put(thread.id, new SteppingThreadState(readyToPause));
     }
