@@ -56,6 +56,7 @@ import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TargetUtils;
+import com.google.devtools.build.lib.pkgcache.LoadingResult;
 import com.google.devtools.build.lib.pkgcache.PackageManager.PackageManagerStatistics;
 import com.google.devtools.build.lib.skyframe.AspectValue;
 import com.google.devtools.build.lib.skyframe.AspectValue.AspectKey;
@@ -65,7 +66,6 @@ import com.google.devtools.build.lib.skyframe.CoverageReportValue;
 import com.google.devtools.build.lib.skyframe.SkyframeAnalysisResult;
 import com.google.devtools.build.lib.skyframe.SkyframeBuildView;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
-import com.google.devtools.build.lib.skyframe.TargetPatternPhaseValue;
 import com.google.devtools.build.lib.syntax.SkylarkImport;
 import com.google.devtools.build.lib.syntax.SkylarkImports;
 import com.google.devtools.build.lib.syntax.SkylarkImports.SkylarkImportSyntaxException;
@@ -174,7 +174,9 @@ public class BuildView {
   /** Returns the collection of configured targets corresponding to any of the provided targets. */
   @VisibleForTesting
   static LinkedHashSet<ConfiguredTarget> filterTestsByTargets(
-      Collection<ConfiguredTarget> targets, Set<Label> allowedTargetLabels) {
+      Collection<ConfiguredTarget> targets, Collection<Target> allowedTargets) {
+    Set<Label> allowedTargetLabels =
+        allowedTargets.stream().map(Target::getLabel).collect(Collectors.toSet());
     return targets
         .stream()
         .filter(ct -> allowedTargetLabels.contains(ct.getLabel()))
@@ -183,7 +185,7 @@ public class BuildView {
 
   @ThreadCompatible
   public AnalysisResult update(
-      TargetPatternPhaseValue loadingResult,
+      LoadingResult loadingResult,
       BuildConfigurationCollection configurations,
       List<String> aspects,
       AnalysisOptions viewOptions,
@@ -199,9 +201,7 @@ public class BuildView {
     skyframeBuildView.resetEvaluatedConfiguredTargetKeysSet();
     skyframeBuildView.resetEvaluationActionCount();
 
-    // TODO(ulfjack): Expensive. Maybe we don't actually need the targets, only the labels?
-    Collection<Target> targets =
-        loadingResult.getTargets(eventHandler, skyframeExecutor.getPackageManager());
+    Collection<Target> targets = loadingResult.getTargets();
     eventBus.post(new AnalysisPhaseStartedEvent(targets));
 
     skyframeBuildView.setConfigurations(eventHandler, configurations);
@@ -358,7 +358,7 @@ public class BuildView {
 
   private AnalysisResult createResult(
       ExtendedEventHandler eventHandler,
-      TargetPatternPhaseValue loadingResult,
+      LoadingResult loadingResult,
       BuildConfigurationCollection configurations,
       TopLevelArtifactContext topLevelOptions,
       AnalysisOptions viewOptions,
@@ -366,7 +366,7 @@ public class BuildView {
       Set<ConfiguredTarget> targetsToSkip,
       List<TargetAndConfiguration> topLevelTargetsWithConfigs)
       throws InterruptedException {
-    Set<Label> testsToRun = loadingResult.getTestsToRunLabels();
+    Collection<Target> testsToRun = loadingResult.getTestsToRun();
     Set<ConfiguredTarget> configuredTargets =
         Sets.newLinkedHashSet(skyframeAnalysisResult.getConfiguredTargets());
     ImmutableSet<AspectValue> aspects = ImmutableSet.copyOf(skyframeAnalysisResult.getAspects());
@@ -469,11 +469,10 @@ public class BuildView {
 
   @Nullable
   public static String createErrorMessage(
-      TargetPatternPhaseValue loadingResult,
-      @Nullable SkyframeAnalysisResult skyframeAnalysisResult) {
-    return loadingResult.hasError()
+      LoadingResult loadingResult, @Nullable SkyframeAnalysisResult skyframeAnalysisResult) {
+    return loadingResult.hasTargetPatternError()
         ? "command succeeded, but there were errors parsing the target pattern"
-        : loadingResult.hasPostExpansionError()
+        : loadingResult.hasLoadingError()
                 || (skyframeAnalysisResult != null && skyframeAnalysisResult.hasLoadingError())
             ? "command succeeded, but there were loading phase errors"
             : (skyframeAnalysisResult != null && skyframeAnalysisResult.hasAnalysisError())

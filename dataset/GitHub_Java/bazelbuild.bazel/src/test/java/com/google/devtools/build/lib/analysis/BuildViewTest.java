@@ -133,8 +133,7 @@ public class BuildViewTest extends BuildViewTestBase {
     targets =
         Lists.<ConfiguredTarget>newArrayList(
             BuildView.filterTestsByTargets(
-                targets,
-                Sets.newHashSet(test1.getTarget().getLabel(), suite.getTarget().getLabel())));
+                targets, Sets.newHashSet(test1.getTarget(), suite.getTarget())));
     assertThat(targets).containsExactlyElementsIn(Sets.newHashSet(test1CT, suiteCT));
   }
 
@@ -1271,7 +1270,7 @@ public class BuildViewTest extends BuildViewTestBase {
     AnalysisResult analysisResult = update("//x:a");
 
     List<String> owners = new ArrayList<>();
-    for (Artifact artifact : analysisResult.getTopLevelArtifactsToOwnerLabels().getArtifacts()) {
+    for (Artifact artifact : analysisResult.getTopLevelArtifactsToOwnerLabels().keySet()) {
       if ("xa".equals(artifact.getExtension())) {
         owners.add(artifact.getOwnerLabel().toString());
       }

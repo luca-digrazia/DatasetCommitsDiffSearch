@@ -16,9 +16,12 @@ package com.google.devtools.build.lib.analysis;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.SetMultimap;
 import com.google.devtools.build.lib.actions.ActionGraph;
+import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.PackageRoots;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
+import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.skyframe.AspectValue;
 import java.util.Collection;
 import java.util.List;
@@ -34,7 +37,7 @@ public final class AnalysisResult {
   private final ImmutableSet<ConfiguredTarget> targetsToSkip;
   @Nullable private final String error;
   private final ActionGraph actionGraph;
-  private final ArtifactsToOwnerLabels topLevelArtifactsToOwnerLabels;
+  private final SetMultimap<Artifact, Label> topLevelArtifactsToOwnerLabels;
   private final ImmutableSet<ConfiguredTarget> parallelTests;
   private final ImmutableSet<ConfiguredTarget> exclusiveTests;
   @Nullable private final TopLevelArtifactContext topLevelContext;
@@ -51,7 +54,7 @@ public final class AnalysisResult {
       Collection<ConfiguredTarget> targetsToSkip,
       @Nullable String error,
       ActionGraph actionGraph,
-      ArtifactsToOwnerLabels topLevelArtifactsToOwnerLabels,
+      SetMultimap<Artifact, Label> topLevelArtifactsToOwnerLabels,
       Collection<ConfiguredTarget> parallelTests,
       Collection<ConfiguredTarget> exclusiveTests,
       TopLevelArtifactContext topLevelContext,
@@ -119,7 +122,7 @@ public final class AnalysisResult {
     return targetsToSkip;
   }
 
-  public ArtifactsToOwnerLabels getTopLevelArtifactsToOwnerLabels() {
+  public SetMultimap<Artifact, Label> getTopLevelArtifactsToOwnerLabels() {
     return topLevelArtifactsToOwnerLabels;
   }
 

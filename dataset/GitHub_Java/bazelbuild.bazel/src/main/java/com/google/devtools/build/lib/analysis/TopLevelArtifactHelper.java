@@ -17,16 +17,16 @@ package com.google.devtools.build.lib.analysis;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.HashMultimap;
+import com.google.common.collect.SetMultimap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.test.TestProvider;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.profiler.AutoProfiler;
 import com.google.devtools.build.lib.skyframe.AspectValue;
 import com.google.devtools.build.lib.util.RegexFilter;
-import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
 /**
@@ -34,7 +34,6 @@ import javax.annotation.Nullable;
  * extra top-level artifacts into the build.
  */
 public final class TopLevelArtifactHelper {
-  private static Logger logger = Logger.getLogger(TopLevelArtifactHelper.class.getName());
 
   /** Set of {@link Artifact}s in an output group. */
   @Immutable
@@ -68,7 +67,7 @@ public final class TopLevelArtifactHelper {
    * The set of artifacts to build.
    *
    * <p>There are two kinds: the ones that the user cares about (e.g. files to build) and the ones
-   * they don't (e.g. baseline coverage artifacts). The latter type doesn't get reported on various
+   * she doesn't (e.g. baseline coverage artifacts). The latter type doesn't get reported on various
    * outputs, e.g. on the console output listing the output artifacts of targets on the command
    * line.
    */
@@ -120,49 +119,46 @@ public final class TopLevelArtifactHelper {
   }
 
   @VisibleForTesting
-  public static ArtifactsToOwnerLabels makeTopLevelArtifactsToOwnerLabels(
+  public static SetMultimap<Artifact, Label> makeTopLevelArtifactsToOwnerLabels(
       AnalysisResult analysisResult, Iterable<AspectValue> aspects) {
-    try (AutoProfiler ignored = AutoProfiler.logged("assigning owner labels", logger, 10)) {
-
-      ArtifactsToOwnerLabels.Builder artifactsToOwnerLabelsBuilder =
-          analysisResult.getTopLevelArtifactsToOwnerLabels().toBuilder();
+    SetMultimap<Artifact, Label> topLevelArtifactsToOwnerLabels =
+        HashMultimap.create(analysisResult.getTopLevelArtifactsToOwnerLabels());
     TopLevelArtifactContext artifactContext = analysisResult.getTopLevelContext();
     for (ConfiguredTarget target : analysisResult.getTargetsToBuild()) {
-        addArtifactsWithOwnerLabel(
-            getAllArtifactsToBuild(target, artifactContext).getAllArtifacts(),
-            null,
-            target.getLabel(),
-            artifactsToOwnerLabelsBuilder);
+      addArtifactsWithOwnerLabel(
+          getAllArtifactsToBuild(target, artifactContext).getAllArtifacts(),
+          null,
+          target.getLabel(),
+          topLevelArtifactsToOwnerLabels);
     }
     for (AspectValue aspect : aspects) {
-        addArtifactsWithOwnerLabel(
-            getAllArtifactsToBuild(aspect, artifactContext).getAllArtifacts(),
-            null,
-            aspect.getLabel(),
-            artifactsToOwnerLabelsBuilder);
+      addArtifactsWithOwnerLabel(
+          getAllArtifactsToBuild(aspect, artifactContext).getAllArtifacts(),
+          null,
+          aspect.getLabel(),
+          topLevelArtifactsToOwnerLabels);
     }
     if (analysisResult.getTargetsToTest() != null) {
       for (ConfiguredTarget target : analysisResult.getTargetsToTest()) {
-          addArtifactsWithOwnerLabel(
-              TestProvider.getTestStatusArtifacts(target),
-              null,
-              target.getLabel(),
-              artifactsToOwnerLabelsBuilder);
+        addArtifactsWithOwnerLabel(
+            TestProvider.getTestStatusArtifacts(target),
+            null,
+            target.getLabel(),
+            topLevelArtifactsToOwnerLabels);
       }
     }
-      // TODO(dslomov): Artifacts to test from aspects?
-      return artifactsToOwnerLabelsBuilder.build();
-    }
+    // TODO(dslomov): Artifacts to test from aspects?
+    return topLevelArtifactsToOwnerLabels;
   }
 
-  static void addArtifactsWithOwnerLabel(
+  public static void addArtifactsWithOwnerLabel(
       Iterable<Artifact> artifacts,
       @Nullable RegexFilter filter,
       Label ownerLabel,
-      ArtifactsToOwnerLabels.Builder artifactsToOwnerLabelsBuilder) {
+      SetMultimap<Artifact, Label> artifactToTopLevelLabels) {
     for (Artifact artifact : artifacts) {
       if (filter == null || filter.isIncluded(artifact.getOwnerLabel().toString())) {
-        artifactsToOwnerLabelsBuilder.addArtifact(artifact, ownerLabel);
+        artifactToTopLevelLabels.put(artifact, ownerLabel);
       }
     }
   }
