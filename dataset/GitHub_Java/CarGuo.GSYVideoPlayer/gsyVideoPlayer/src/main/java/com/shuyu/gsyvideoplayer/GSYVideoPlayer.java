@@ -15,7 +15,6 @@ import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
-import android.view.Window;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
@@ -29,16 +28,12 @@ import com.shuyu.gsyvideoplayer.listener.GSYMediaPlayerListener;
 import com.shuyu.gsyvideoplayer.listener.VideoAllCallBack;
 import com.shuyu.gsyvideoplayer.utils.CommonUtil;
 
-import java.lang.reflect.Constructor;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
 
 import tv.danmaku.ijk.media.player.IMediaPlayer;
-
-import static com.shuyu.gsyvideoplayer.utils.CommonUtil.hideSupportActionBar;
-import static com.shuyu.gsyvideoplayer.utils.CommonUtil.showSupportActionBar;
 
 /**
  * Created by shuyu on 2016/11/11.
@@ -47,8 +42,6 @@ import static com.shuyu.gsyvideoplayer.utils.CommonUtil.showSupportActionBar;
 public abstract class GSYVideoPlayer extends FrameLayout implements View.OnClickListener, View.OnTouchListener, SeekBar.OnSeekBarChangeListener, GSYMediaPlayerListener, TextureView.SurfaceTextureListener {
 
     public static final String TAG = "GSYVideoPlayer";
-
-    public static final int FULLSCREEN_ID = 83797;
 
     protected static final int CURRENT_STATE_NORMAL = 0;
     protected static final int CURRENT_STATE_PREPAREING = 1;
@@ -84,7 +77,6 @@ public abstract class GSYVideoPlayer extends FrameLayout implements View.OnClick
     protected GSYTextureView textureView;
     protected Surface mSurface;
     protected Activity activity;
-    protected ImageView backButton;
 
     protected String mUrl;
     protected Object[] mObjects;
@@ -116,16 +108,10 @@ public abstract class GSYVideoPlayer extends FrameLayout implements View.OnClick
     protected boolean mBrightness = false;
     protected boolean firstTouch = false;
     protected boolean mLooping = false;
-    protected boolean mCache = false;
-
-    protected boolean actionBar;
-    protected boolean statusBar;
 
     protected int mSeekTimePosition;
 
     public abstract int getLayoutId();
-
-    public abstract void startPlayLogic();
 
     public GSYVideoPlayer(Context context) {
         super(context);
@@ -140,7 +126,6 @@ public abstract class GSYVideoPlayer extends FrameLayout implements View.OnClick
     protected void init(Context context) {
         View.inflate(context, getLayoutId(), this);
         startButton = (ImageView) findViewById(R.id.start);
-        backButton = (ImageView) findViewById(R.id.back);
         fullscreenButton = (ImageView) findViewById(R.id.fullscreen);
         progressBar = (SeekBar) findViewById(R.id.progress);
         currentTimeTextView = (TextView) findViewById(R.id.current);
@@ -172,7 +157,6 @@ public abstract class GSYVideoPlayer extends FrameLayout implements View.OnClick
     }
 
     public boolean setUp(String url, boolean cacheWithPlay, Object... objects) {
-        mCache = cacheWithPlay;
         if (isCurrentMediaListener() &&
                 (System.currentTimeMillis() - CLICK_QUIT_FULLSCREEN_TIME) < FULL_SCREEN_NORMAL_DELAY)
             return false;
@@ -391,8 +375,6 @@ public abstract class GSYVideoPlayer extends FrameLayout implements View.OnClick
 
     @Override
     public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
-        GSYVideoManager.instance().setDisplay(null);
-        //// TODO: 2016/11/12 在此处是判断是否列表播放的要暂停或者销毁了
         surface.release();
         return true;
     }
@@ -674,7 +656,9 @@ public abstract class GSYVideoPlayer extends FrameLayout implements View.OnClick
 
     @Override
     public void onBackFullscreen() {
-
+        mCurrentState = GSYVideoManager.instance().getLastState();
+        setStateAndUi(mCurrentState);
+        addTextureView();
     }
 
     protected void startProgressTimer() {
@@ -782,78 +766,6 @@ public abstract class GSYVideoPlayer extends FrameLayout implements View.OnClick
                 && GSYVideoManager.instance().listener() == this;
     }
 
-    public void startWindowFullscreen(final Context context, final boolean actionBar, final boolean statusBar) {
-        this.actionBar = actionBar;
-        this.statusBar = statusBar;
-        hideSupportActionBar(context, actionBar, statusBar);
-
-        ViewGroup vp = (ViewGroup) (CommonUtil.scanForActivity(getContext())).findViewById(Window.ID_ANDROID_CONTENT);
-        View old = vp.findViewById(FULLSCREEN_ID);
-        if (old != null) {
-            vp.removeView(old);
-        }
-
-        if (textureViewContainer.getChildCount() > 0) {
-            textureViewContainer.removeAllViews();
-        }
-        try {
-            Constructor<GSYVideoPlayer> constructor = (Constructor<GSYVideoPlayer>) GSYVideoPlayer.this.getClass().getConstructor(Context.class);
-            GSYVideoPlayer gsyVideoPlayer = constructor.newInstance(getContext());
-            gsyVideoPlayer.setId(FULLSCREEN_ID);
-            WindowManager wm = (WindowManager) getContext().getSystemService(Context.WINDOW_SERVICE);
-            int w = wm.getDefaultDisplay().getWidth();
-            int h = wm.getDefaultDisplay().getHeight();
-            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(h, w);
-            lp.setMargins((w - h) / 2, -(w - h) / 2, 0, 0);
-            vp.addView(gsyVideoPlayer, lp);
-            gsyVideoPlayer.setUp(mUrl, mCache, mObjects);
-            gsyVideoPlayer.setStateAndUi(mCurrentState);
-            gsyVideoPlayer.addTextureView();
-            gsyVideoPlayer.setRotation(90);
-            gsyVideoPlayer.getFullscreenButton().setImageResource(R.drawable.video_shrink);
-            gsyVideoPlayer.getFullscreenButton().setOnClickListener(new OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    clearFullscreenLayout(context, actionBar, statusBar);
-                }
-            });
-            gsyVideoPlayer.getBackButton().setVisibility(VISIBLE);
-            gsyVideoPlayer.getBackButton().setOnClickListener(new OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    clearFullscreenLayout(context, actionBar, statusBar);
-                }
-            });
-            GSYVideoManager.instance().setLastListener(this);
-            GSYVideoManager.instance().setListener(gsyVideoPlayer);
-        } catch (InstantiationException e) {
-            e.printStackTrace();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    public void clearFullscreenLayout(Context context, boolean actionBar, boolean statusBar) {
-
-        showSupportActionBar(context, actionBar, statusBar);
-        ViewGroup vp = (ViewGroup) (CommonUtil.scanForActivity(getContext())).findViewById(Window.ID_ANDROID_CONTENT);
-        View oldF = vp.findViewById(FULLSCREEN_ID);
-        GSYVideoPlayer gsyVideoPlayer = null;
-        if (oldF != null) {
-            gsyVideoPlayer = (GSYVideoPlayer) oldF;
-            vp.removeView(oldF);
-        }
-        mCurrentState = GSYVideoManager.instance().getLastState();
-        if (gsyVideoPlayer != null) {
-            mCurrentState = gsyVideoPlayer.getCurrentState();
-        }
-        GSYVideoManager.instance().setListener(GSYVideoManager.instance().lastListener());
-        GSYVideoManager.instance().setLastListener(null);
-        setStateAndUi(mCurrentState);
-        addTextureView();
-        CLICK_QUIT_FULLSCREEN_TIME = System.currentTimeMillis();
-    }
-
     /**
      * 滑动改变亮度
      *
@@ -893,13 +805,5 @@ public abstract class GSYVideoPlayer extends FrameLayout implements View.OnClick
 
     public ImageView getFullscreenButton() {
         return fullscreenButton;
-    }
-
-    public ImageView getBackButton() {
-        return backButton;
-    }
-
-    public int getCurrentState() {
-        return mCurrentState;
     }
 }

@@ -54,7 +54,7 @@ public class OrientationUtils {
                         if (mIsLand > 0) {
                             screenType = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT;
                             activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
-                            gsyVideoPlayer.getmFullscreenButton().setImageResource(R.drawable.video_enlarge);
+                            gsyVideoPlayer.getFullscreenButton().setImageResource(R.drawable.video_enlarge);
                             mIsLand = 0;
                             mClick = false;
                         }
@@ -74,7 +74,7 @@ public class OrientationUtils {
                         if (!(mIsLand == 1)) {
                             screenType = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE;
                             activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
-                            gsyVideoPlayer.getmFullscreenButton().setImageResource(R.drawable.video_shrink);
+                            gsyVideoPlayer.getFullscreenButton().setImageResource(R.drawable.video_shrink);
                             mIsLand = 1;
                             mClick = false;
                         }
@@ -93,7 +93,7 @@ public class OrientationUtils {
                     } else if (!(mIsLand == 2)) {
                         screenType = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE;
                         activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE);
-                        gsyVideoPlayer.getmFullscreenButton().setImageResource(R.drawable.video_shrink);
+                        gsyVideoPlayer.getFullscreenButton().setImageResource(R.drawable.video_shrink);
                         mIsLand = 2;
                         mClick = false;
                     }
@@ -108,33 +108,18 @@ public class OrientationUtils {
         if (mIsLand == 0) {
             screenType = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE;
             activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
-            gsyVideoPlayer.getmFullscreenButton().setImageResource(R.drawable.video_shrink);
+            gsyVideoPlayer.getFullscreenButton().setImageResource(R.drawable.video_shrink);
             mIsLand = 1;
             mClickLand = false;
         } else {
             screenType = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT;
             activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
-            gsyVideoPlayer.getmFullscreenButton().setImageResource(R.drawable.video_enlarge);
+            gsyVideoPlayer.getFullscreenButton().setImageResource(R.drawable.video_enlarge);
             mIsLand = 0;
             mClickPort = false;
         }
 
     }
-
-    /**
-     * 列表返回的样式判断。因为立即旋转会导致界面跳动的问题
-     */
-    public int backToProtVideo() {
-        if (mIsLand > 0) {
-            mClick = true;
-            activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
-            mIsLand = 0;
-            mClickPort = false;
-            return 500;
-        }
-        return 0;
-    }
-
 
     public boolean isEnable() {
         return mEnable;
