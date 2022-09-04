@@ -79,7 +79,7 @@ public final class SimpleBlobStoreActionCache implements RemoteActionCache {
   }
 
   public void downloadTree(Digest rootDigest, Path rootLocation)
-      throws IOException, InterruptedException {
+      throws IOException, CacheNotFoundException, InterruptedException {
     Directory directory = Directory.parseFrom(downloadBlob(rootDigest));
     for (FileNode file : directory.getFilesList()) {
       downloadFileContents(
@@ -110,7 +110,7 @@ public final class SimpleBlobStoreActionCache implements RemoteActionCache {
 
   @Override
   public void download(ActionResult result, Path execRoot, FileOutErr outErr)
-      throws IOException, InterruptedException {
+      throws IOException, CacheNotFoundException, InterruptedException {
     for (OutputFile file : result.getOutputFilesList()) {
       if (!file.getContent().isEmpty()) {
         createFile(
@@ -129,7 +129,7 @@ public final class SimpleBlobStoreActionCache implements RemoteActionCache {
   }
 
   private void downloadOutErr(ActionResult result, FileOutErr outErr)
-          throws IOException, InterruptedException {
+          throws IOException, CacheNotFoundException, InterruptedException {
     if (!result.getStdoutRaw().isEmpty()) {
       result.getStdoutRaw().writeTo(outErr.getOutputStream());
       outErr.getOutputStream().flush();
@@ -202,7 +202,7 @@ public final class SimpleBlobStoreActionCache implements RemoteActionCache {
   }
 
   private void downloadFileContents(Digest digest, Path dest, boolean executable)
-      throws IOException, InterruptedException {
+      throws IOException, CacheNotFoundException, InterruptedException {
     FileSystemUtils.createDirectoryAndParents(dest.getParentDirectory());
     try (OutputStream out = dest.getOutputStream()) {
       downloadBlob(digest, out);
@@ -248,7 +248,7 @@ public final class SimpleBlobStoreActionCache implements RemoteActionCache {
   }
 
   public void downloadBlob(Digest digest, OutputStream out)
-      throws IOException, InterruptedException {
+      throws IOException, CacheNotFoundException, InterruptedException {
     if (digest.getSizeBytes() == 0) {
       return;
     }
@@ -259,7 +259,7 @@ public final class SimpleBlobStoreActionCache implements RemoteActionCache {
   }
 
   public byte[] downloadBlob(Digest digest)
-      throws IOException, InterruptedException {
+      throws IOException, CacheNotFoundException, InterruptedException {
     if (digest.getSizeBytes() == 0) {
       return new byte[0];
     }

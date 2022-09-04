@@ -179,9 +179,7 @@ final class ByteStreamServer extends ByteStreamImplBase {
 
       @Override
       public void onError(Throwable t) {
-        if (io.grpc.Status.fromThrowable(t).getCode() != io.grpc.Status.Code.CANCELLED) {
-          logger.log(WARNING, "Write request failed remotely.", t);
-        }
+        logger.log(WARNING, "Write request failed remotely.", t);
         closed = true;
         try {
           temp.delete();
