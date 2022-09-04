@@ -15,46 +15,104 @@
 package com.google.devtools.build.lib.bazel.repository.downloader;
 
 import com.google.common.base.Strings;
-
 import java.io.IOException;
 import java.net.Authenticator;
 import java.net.InetSocketAddress;
 import java.net.PasswordAuthentication;
 import java.net.Proxy;
+import java.net.URL;
 import java.net.URLDecoder;
 import java.util.Map;
+import java.util.Objects;
+import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
+import javax.annotation.Nullable;
 
 /**
  * Helper class for setting up a proxy server for network communication
- *
  */
 public class ProxyHelper {
 
+  private final Map<String, String> env;
+
   /**
-   * This method takes a String for the resource being requested and sets up a proxy to make
-   * the request if HTTP_PROXY and/or HTTPS_PROXY environment variables are set.
-   * @param requestedUrl The url for the remote resource that may need to be retrieved through a
-   *   proxy
-   * @param env The client environment to check for proxy settings.
-   * @return Proxy
-   * @throws IOException
+   * Creates new instance.
+   *
+   * @param env client environment to check for proxy settings
    */
-  public static Proxy createProxyIfNeeded(String requestedUrl, Map<String, String> env)
-      throws IOException {
-    String lcUrl = requestedUrl.toLowerCase();
+  public ProxyHelper(Map<String, String> env) {
+    this.env = env;
+  }
+
+  /**
+   * This method takes a String for the resource being requested and sets up a proxy to make the
+   * request if HTTP_PROXY and/or HTTPS_PROXY environment variables are set, or if the standard
+   * `https_proxy` and `http_proxy` system properties are set.
+   *
+   * @param requestedUrl remote resource that may need to be retrieved through a proxy
+   */
+  public Proxy createProxyIfNeeded(URL requestedUrl) throws IOException {
     String proxyAddress = null;
-    if (lcUrl.startsWith("https")) {
-      proxyAddress = env.get("https_proxy");
-      if (Strings.isNullOrEmpty(proxyAddress)) {
-        proxyAddress = env.get("HTTPS_PROXY");
+    String noProxyUrl = env.get("no_proxy");
+    if (Strings.isNullOrEmpty(noProxyUrl)) {
+      noProxyUrl = env.get("NO_PROXY");
+    }
+    if (!Strings.isNullOrEmpty(noProxyUrl)) {
+      String[] noProxyUrlArray = noProxyUrl.split("\\s*,\\s*");
+      String requestedHost = requestedUrl.getHost();
+      for (int i = 0; i < noProxyUrlArray.length; i++) {
+        if (noProxyUrlArray[i].startsWith(".")) {
+          // This entry applies to sub-domains only.
+          if (requestedHost.endsWith(noProxyUrlArray[i])) {
+            return Proxy.NO_PROXY;
+          }
+        } else {
+          // This entry applies to the literal hostname and sub-domains.
+          if (requestedHost.equals(noProxyUrlArray[i])
+              || requestedHost.endsWith("." + noProxyUrlArray[i])) {
+            return Proxy.NO_PROXY;
+          }
+        }
       }
-    } else if (lcUrl.startsWith("http")) {
-      proxyAddress = env.get("http_proxy");
-      if (Strings.isNullOrEmpty(proxyAddress)) {
-        proxyAddress = env.get("HTTP_PROXY");
-      }
+    }
+    if (HttpUtils.isProtocol(requestedUrl, "https")) {
+      proxyAddress =
+          Stream.of(
+                  (Supplier<String>) () -> env.get("https_proxy"),
+                  () -> env.get("HTTPS_PROXY"),
+                  () -> {
+                    String host = System.getProperty("https.proxyHost");
+                    if (host == null) {
+                      return null;
+                    }
+                    String port = System.getProperty("https.proxyPort");
+
+                    return String.format("%s%s", host, port == null ? "" : ":" + port);
+                  })
+              .map(Supplier::get)
+              .filter(Objects::nonNull)
+              .findFirst()
+              .orElse(null);
+    } else if (HttpUtils.isProtocol(requestedUrl, "http")) {
+      proxyAddress =
+          Stream.of(
+                  (Supplier<String>) () -> env.get("http_proxy"),
+                  () -> env.get("HTTP_PROXY"),
+                  () -> {
+                    String host = System.getProperty("http.proxyHost");
+                    if (host == null) {
+                      return null;
+                    }
+                    String port = System.getProperty("http.proxyPort");
+
+                    return String.format("%s%s", host, port == null ? "" : ":" + port);
+                  })
+              .map(Supplier::get)
+              .filter(Objects::nonNull)
+              .findFirst()
+              .orElse(null);
     }
     return createProxy(proxyAddress);
   }
@@ -68,14 +126,14 @@ public class ProxyHelper {
    * @return Proxy
    * @throws IOException
    */
-  public static Proxy createProxy(String proxyAddress) throws IOException {
+  public static Proxy createProxy(@Nullable String proxyAddress) throws IOException {
     if (Strings.isNullOrEmpty(proxyAddress)) {
       return Proxy.NO_PROXY;
     }
 
     // Here there be dragons.
     Pattern urlPattern =
-        Pattern.compile("^(https?)://(([^:@]+?)(?::([^@]+?))?@)?([^:]+)(?::(\\d+))?$");
+        Pattern.compile("^(https?)://(([^:@]+?)(?::([^@]+?))?@)?([^:]+)(?::(\\d+))?/?$");
     Matcher matcher = urlPattern.matcher(proxyAddress);
     if (!matcher.matches()) {
       throw new IOException("Proxy address " + proxyAddress + " is not a valid URL");
@@ -112,15 +170,9 @@ public class ProxyHelper {
       try {
         port = Integer.parseInt(portRaw);
       } catch (NumberFormatException e) {
-        throw new IOException("Error parsing proxy port: " + cleanProxyAddress);
+        throw new IOException("Error parsing proxy port: " + cleanProxyAddress, e);
       }
     }
-
-    // We need to set both of these because jgit uses whichever the resource dictates
-    System.setProperty("https.proxyHost", hostname);
-    System.setProperty("https.proxyPort", Integer.toString(port));
-    System.setProperty("http.proxyHost", hostname);
-    System.setProperty("http.proxyPort", Integer.toString(port));
 
     if (username != null) {
       if (password == null) {
@@ -130,11 +182,6 @@ public class ProxyHelper {
       // We need to make sure the proxy password is not url encoded; some special characters in
       // proxy passwords require url encoding for shells and other tools to properly consume.
       final String decodedPassword = URLDecoder.decode(password, "UTF-8");
-      System.setProperty("http.proxyUser", username);
-      System.setProperty("http.proxyPassword", decodedPassword);
-      System.setProperty("https.proxyUser", username);
-      System.setProperty("https.proxyPassword", decodedPassword);
-
       Authenticator.setDefault(
           new Authenticator() {
             @Override
