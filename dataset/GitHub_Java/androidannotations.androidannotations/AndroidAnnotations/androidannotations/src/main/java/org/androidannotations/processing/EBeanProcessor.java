@@ -23,7 +23,6 @@ import static com.sun.codemodel.JMod.PUBLIC;
 import static com.sun.codemodel.JMod.STATIC;
 import static org.androidannotations.helper.ModelConstants.GENERATION_SUFFIX;
 
-import java.lang.annotation.Annotation;
 import java.util.List;
 
 import javax.lang.model.element.Element;
@@ -49,8 +48,8 @@ public class EBeanProcessor implements GeneratingElementProcessor {
 	public static final String GET_INSTANCE_METHOD_NAME = "getInstance" + GENERATION_SUFFIX;
 
 	@Override
-	public Class<? extends Annotation> getTarget() {
-		return EBean.class;
+	public String getTarget() {
+		return EBean.class.getName();
 	}
 
 	@Override
@@ -64,7 +63,7 @@ public class EBeanProcessor implements GeneratingElementProcessor {
 
 		JDefinedClass generatedClass = codeModel._class(PUBLIC | FINAL, generatedBeanQualifiedName, ClassType.CLASS);
 
-		EBeanHolder holder = eBeansHolder.create(element, getTarget(), generatedClass);
+		EBeanHolder holder = eBeansHolder.create(element, EBean.class, generatedClass);
 
 		JClass eBeanClass = codeModel.directClass(eBeanQualifiedName);
 
@@ -95,6 +94,10 @@ public class EBeanProcessor implements GeneratingElementProcessor {
 			holder.initActivityRef = helper.castContextToActivity(holder, holder.initIfActivityBody);
 		}
 
+		EBean eBeanAnnotation = element.getAnnotation(EBean.class);
+		EBean.Scope eBeanScope = eBeanAnnotation.scope();
+		boolean hasSingletonScope = eBeanScope == EBean.Scope.Singleton;
+
 		{
 			// Constructor
 
@@ -114,12 +117,10 @@ public class EBeanProcessor implements GeneratingElementProcessor {
 
 			constructorBody.assign(contextField, constructorContextParam);
 
-			constructorBody.invoke(init);
+			if (!hasSingletonScope) {
+				constructorBody.invoke(init);
+			}
 		}
-
-		EBean eBeanAnnotation = element.getAnnotation(EBean.class);
-		EBean.Scope eBeanScope = eBeanAnnotation.scope();
-		boolean hasSingletonScope = eBeanScope == EBean.Scope.Singleton;
 
 		{
 			// Factory method
@@ -142,6 +143,7 @@ public class EBeanProcessor implements GeneratingElementProcessor {
 						._then();
 				JVar previousNotifier = holder.replacePreviousNotifierWithNull(creationBlock);
 				creationBlock.assign(instanceField, _new(holder.generatedClass).arg(factoryMethodContextParam.invoke("getApplicationContext")));
+				creationBlock.invoke(instanceField, init);
 				holder.resetPreviousNotifier(creationBlock, previousNotifier);
 
 				factoryMethodBody._return(instanceField);
