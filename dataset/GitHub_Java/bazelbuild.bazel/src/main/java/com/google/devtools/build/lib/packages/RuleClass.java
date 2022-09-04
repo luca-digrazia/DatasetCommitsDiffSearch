@@ -124,7 +124,6 @@ import javax.annotation.concurrent.Immutable;
 @Immutable
 @AutoCodec
 public class RuleClass {
-
   @AutoCodec
   static final Function<? super Rule, Map<String, Label>> NO_EXTERNAL_BINDINGS =
       Functions.<Map<String, Label>>constant(ImmutableMap.<String, Label>of());
@@ -134,7 +133,6 @@ public class RuleClass {
       Functions.<Set<String>>constant(ImmutableSet.<String>of());
 
   public static final PathFragment THIRD_PARTY_PREFIX = PathFragment.create("third_party");
-  public static final String EXEC_COMPATIBLE_WITH_ATTR = "exec_compatible_with";
 
   /**
    * A constraint for the package name of the Rule instances.
@@ -762,12 +760,6 @@ public class RuleClass {
 
         for (Attribute attribute : parent.getAttributes()) {
           String attrName = attribute.getName();
-          // TODO(https://github.com/bazelbuild/bazel/issues/8134): Define the attribute on a
-          // standard base class and remove this check entirely.
-          if (attrName.equals(RuleClass.EXEC_COMPATIBLE_WITH_ATTR)) {
-            // Don't inherit: this will be re-created
-            continue;
-          }
           Preconditions.checkArgument(
               !attributes.containsKey(attrName) || attributes.get(attrName).equals(attribute),
               "Attribute %s is inherited multiple times in %s ruleclass",
@@ -826,9 +818,9 @@ public class RuleClass {
         Preconditions.checkNotNull(ruleDefinitionEnvironmentHashCode, this.name);
       }
       if (executionPlatformConstraintsAllowed == ExecutionPlatformConstraintsAllowed.PER_TARGET
-          && !this.contains(EXEC_COMPATIBLE_WITH_ATTR)) {
+          && !this.contains("exec_compatible_with")) {
         this.add(
-            attr(EXEC_COMPATIBLE_WITH_ATTR, BuildType.LABEL_LIST)
+            attr("exec_compatible_with", BuildType.LABEL_LIST)
                 .allowedFileTypes()
                 .nonconfigurable("Used in toolchain resolution")
                 .value(ImmutableList.of()));
