@@ -1,6 +1,5 @@
 package io.quarkus.arc.processor;
 
-import static io.quarkus.arc.processor.IndexClassLookupUtils.getClassByName;
 import static org.objectweb.asm.Opcodes.ACC_FINAL;
 import static org.objectweb.asm.Opcodes.ACC_PRIVATE;
 
@@ -61,7 +60,7 @@ public class ClientProxyGenerator extends AbstractGenerator {
         ResourceClassOutput classOutput = new ResourceClassOutput(applicationClassPredicate.test(bean.getBeanClass()));
 
         Type providerType = bean.getProviderType();
-        ClassInfo providerClass = getClassByName(bean.getDeployment().getIndex(), providerType.name());
+        ClassInfo providerClass = bean.getDeployment().getIndex().getClassByName(providerType.name());
         String providerTypeName = providerClass.name().toString();
         String baseName = getBaseName(bean, beanClassName);
         String targetPackage = getPackageName(bean);
@@ -231,11 +230,11 @@ public class ClientProxyGenerator extends AbstractGenerator {
                     methods);
         } else if (bean.isProducerMethod()) {
             MethodInfo producerMethod = bean.getTarget().get().asMethod();
-            ClassInfo returnTypeClass = getClassByName(bean.getDeployment().getIndex(), producerMethod.returnType().name());
+            ClassInfo returnTypeClass = bean.getDeployment().getIndex().getClassByName(producerMethod.returnType().name());
             Methods.addDelegatingMethods(bean.getDeployment().getIndex(), returnTypeClass, methods);
         } else if (bean.isProducerField()) {
             FieldInfo producerField = bean.getTarget().get().asField();
-            ClassInfo fieldClass = getClassByName(bean.getDeployment().getIndex(), producerField.type().name());
+            ClassInfo fieldClass = bean.getDeployment().getIndex().getClassByName(producerField.type().name());
             Methods.addDelegatingMethods(bean.getDeployment().getIndex(), fieldClass, methods);
         } else if (bean.isSynthetic()) {
             Methods.addDelegatingMethods(bean.getDeployment().getIndex(), bean.getImplClazz(), methods);

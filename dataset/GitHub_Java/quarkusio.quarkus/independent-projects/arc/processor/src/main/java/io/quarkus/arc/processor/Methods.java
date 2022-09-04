@@ -1,7 +1,5 @@
 package io.quarkus.arc.processor;
 
-import static io.quarkus.arc.processor.IndexClassLookupUtils.getClassByName;
-
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -72,13 +70,13 @@ final class Methods {
             }
             // Interfaces
             for (Type interfaceType : classInfo.interfaceTypes()) {
-                ClassInfo interfaceClassInfo = getClassByName(index, interfaceType.name());
+                ClassInfo interfaceClassInfo = index.getClassByName(interfaceType.name());
                 if (interfaceClassInfo != null) {
                     addDelegatingMethods(index, interfaceClassInfo, methods);
                 }
             }
             if (classInfo.superClassType() != null) {
-                ClassInfo superClassInfo = getClassByName(index, classInfo.superName());
+                ClassInfo superClassInfo = index.getClassByName(classInfo.superName());
                 if (superClassInfo != null) {
                     addDelegatingMethods(index, superClassInfo, methods);
                 }
@@ -147,7 +145,7 @@ final class Methods {
             }
         }
         if (classInfo.superClassType() != null) {
-            ClassInfo superClassInfo = getClassByName(beanDeployment.getIndex(), classInfo.superName());
+            ClassInfo superClassInfo = beanDeployment.getIndex().getClassByName(classInfo.superName());
             if (superClassInfo != null) {
                 addInterceptedMethodCandidates(beanDeployment, superClassInfo, candidates, classLevelBindings);
             }
