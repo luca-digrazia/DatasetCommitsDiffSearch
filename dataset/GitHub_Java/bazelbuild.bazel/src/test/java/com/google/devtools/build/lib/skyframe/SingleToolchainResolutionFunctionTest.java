@@ -30,14 +30,14 @@ import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.packages.BuiltinProvider;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.Info;
+import com.google.devtools.build.lib.packages.NativeProvider;
 import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.rules.platform.ToolchainTestCase;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.util.SkyframeExecutorTestUtils;
 import com.google.devtools.build.lib.syntax.Printer;
-import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.SkyKey;
 import javax.annotation.Nullable;
@@ -245,7 +245,7 @@ public class SingleToolchainResolutionFunctionTest extends ToolchainTestCase {
 
     @SuppressWarnings("unchecked")
     @Override
-    public <T extends Info> T get(BuiltinProvider<T> provider) {
+    public <T extends Info> T get(NativeProvider<T> provider) {
       if (PlatformInfo.PROVIDER.equals(provider)) {
         return (T) this.platform;
       }
@@ -263,12 +263,12 @@ public class SingleToolchainResolutionFunctionTest extends ToolchainTestCase {
     public void repr(Printer printer) {}
 
     @Override
-    public Object getIndex(StarlarkSemantics semantics, Object key) {
+    public Object getIndex(Object key, Location loc) {
       return null;
     }
 
     @Override
-    public boolean containsKey(StarlarkSemantics semantics, Object key) {
+    public boolean containsKey(Object key, Location loc) {
       return false;
     }
   }

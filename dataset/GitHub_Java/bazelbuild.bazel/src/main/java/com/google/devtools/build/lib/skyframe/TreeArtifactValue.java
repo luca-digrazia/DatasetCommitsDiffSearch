@@ -69,15 +69,14 @@ public class TreeArtifactValue implements HasDigest, SkyValue {
    * Returns a TreeArtifactValue out of the given Artifact-relative path fragments and their
    * corresponding FileArtifactValues.
    */
-  static TreeArtifactValue create(
-      Map<TreeFileArtifact, ? extends FileArtifactValue> childFileValues) {
+  static TreeArtifactValue create(Map<TreeFileArtifact, FileArtifactValue> childFileValues) {
     if (childFileValues.isEmpty()) {
       return EMPTY;
     }
     Map<String, FileArtifactValue> digestBuilder =
         Maps.newHashMapWithExpectedSize(childFileValues.size());
     boolean remote = true;
-    for (Map.Entry<TreeFileArtifact, ? extends FileArtifactValue> e : childFileValues.entrySet()) {
+    for (Map.Entry<TreeFileArtifact, FileArtifactValue> e : childFileValues.entrySet()) {
       FileArtifactValue value = e.getValue();
       // TODO(buchgr): Enforce that all children in a tree artifact are either remote or local
       // once b/70354083 is fixed.
@@ -110,7 +109,7 @@ public class TreeArtifactValue implements HasDigest, SkyValue {
     return digest.clone();
   }
 
-  public ImmutableSet<TreeFileArtifact> getChildren() {
+  public Iterable<TreeFileArtifact> getChildren() {
     return childData.keySet();
   }
 
@@ -166,7 +165,7 @@ public class TreeArtifactValue implements HasDigest, SkyValue {
         }
 
         @Override
-        public ImmutableSet<TreeFileArtifact> getChildren() {
+        public Iterable<TreeFileArtifact> getChildren() {
           throw new UnsupportedOperationException();
         }
 

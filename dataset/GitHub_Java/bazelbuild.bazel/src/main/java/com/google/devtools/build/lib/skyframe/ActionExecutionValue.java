@@ -119,37 +119,12 @@ public class ActionExecutionValue implements SkyValue {
   }
 
   /**
-   * Create {@link FileArtifactValue} for artifact that must be non-middleman non-tree derived
-   * artifact.
-   */
-  static FileArtifactValue createSimpleFileArtifactValue(
-      Artifact.DerivedArtifact artifact, ActionExecutionValue actionValue) {
-    Preconditions.checkState(!artifact.isMiddlemanArtifact(), "%s %s", artifact, actionValue);
-    Preconditions.checkState(!artifact.isTreeArtifact(), "%s %s", artifact, actionValue);
-    return Preconditions.checkNotNull(
-        actionValue.getArtifactValue(artifact),
-        "%s %s %s",
-        artifact,
-        artifact.getGeneratingActionKey(),
-        actionValue);
-  }
-
-  /**
    * @return The data for each non-middleman output of this action, in the form of the {@link
    *     FileValue} that would be created for the file if it were to be read from disk.
    */
   @Nullable
   public FileArtifactValue getArtifactValue(Artifact artifact) {
-    FileArtifactValue result = artifactData.get(artifact);
-    if (result != null || !artifact.hasParent()) {
-      return result;
-    }
-    // In some cases, TreeFileArtifact metadata may not have been injected directly, and is only
-    // available via the parent. However, if this ActionExecutionValue corresponds to a templated
-    // action, as opposed to an action that created a tree artifact itself, the TreeFileArtifact
-    // metadata will be in artifactData, since this value will have no treeArtifactData.
-    TreeArtifactValue treeArtifactValue = treeArtifactData.get(artifact.getParent());
-    return treeArtifactValue == null ? null : treeArtifactValue.getChildValues().get(artifact);
+    return artifactData.get(artifact);
   }
 
   TreeArtifactValue getTreeArtifactValue(Artifact artifact) {

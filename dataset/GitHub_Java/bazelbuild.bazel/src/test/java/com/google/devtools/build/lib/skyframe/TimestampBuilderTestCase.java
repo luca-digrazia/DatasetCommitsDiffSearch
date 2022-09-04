@@ -64,7 +64,6 @@ import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.clock.Clock;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetExpander;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.events.StoredEventHandler;
@@ -220,12 +219,11 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
             actionKeyContext,
             new AtomicReference<>(statusReporter),
             /*sourceRootSupplier=*/ () -> ImmutableList.of(),
-            /*sourceArtifactFactory=*/ unused -> null,
-            NestedSetExpander.DEFAULT);
+            /*sourceArtifactFactory=*/ unused -> null);
 
     Path actionOutputBase = scratch.dir("/usr/local/google/_blaze_jrluser/FAKEMD5/action_out/");
     skyframeActionExecutor.setActionLogBufferPathGenerator(
-        new ActionLogBufferPathGenerator(actionOutputBase, actionOutputBase));
+        new ActionLogBufferPathGenerator(actionOutputBase));
 
     MetadataProvider cache =
         new SingleBuildFileCache(rootDirectory.getPathString(), scratch.getFileSystem());
@@ -491,7 +489,8 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
       ActionResult actionResult = super.execute(actionExecutionContext);
       try {
         FileSystemUtils.copyFile(
-            getInputs().getSingleton().getPath(), Iterables.getOnlyElement(getOutputs()).getPath());
+            Iterables.getOnlyElement(getInputs()).getPath(),
+            Iterables.getOnlyElement(getOutputs()).getPath());
       } catch (IOException e) {
         throw new IllegalStateException(e);
       }

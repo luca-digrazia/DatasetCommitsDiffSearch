@@ -90,13 +90,12 @@ public abstract class FileStateValue implements HasDigest, SkyValue {
         return new SymlinkFileStateValue(path.readSymbolicLinkUnchecked());
       case FILE:
       case UNKNOWN:
-        FileStatus stat = syscallCache.statIfFound(path, Symlinks.NOFOLLOW);
-        Preconditions.checkNotNull(stat, "File %s found in directory, but stat failed", rootedPath);
-        return createWithStatNoFollow(
-            rootedPath,
-            FileStatusWithDigestAdapter.adapt(stat),
-            /*digestWillBeInjected=*/ false,
-            tsgm);
+        {
+          FileStatus stat = syscallCache.statIfFound(path, Symlinks.NOFOLLOW);
+          Preconditions.checkNotNull(
+              stat, "File %s found in directory, but stat failed", rootedPath);
+          return createWithStatNoFollow(rootedPath, FileStatusWithDigestAdapter.adapt(stat), tsgm);
+        }
       default:
         throw new IllegalStateException(type.toString());
     }
@@ -112,21 +111,19 @@ public abstract class FileStateValue implements HasDigest, SkyValue {
     if (stat == null) {
       return NONEXISTENT_FILE_STATE_NODE;
     }
-    return createWithStatNoFollow(
-        rootedPath, FileStatusWithDigestAdapter.adapt(stat), /*digestWillBeInjected=*/ false, tsgm);
+    return createWithStatNoFollow(rootedPath, FileStatusWithDigestAdapter.adapt(stat), tsgm);
   }
 
   public static FileStateValue createWithStatNoFollow(
       RootedPath rootedPath,
       FileStatusWithDigest statNoFollow,
-      boolean digestWillBeInjected,
       @Nullable TimestampGranularityMonitor tsgm)
       throws InconsistentFilesystemException, IOException {
     Path path = rootedPath.asPath();
     if (statNoFollow.isFile()) {
       return statNoFollow.isSpecialFile()
           ? SpecialFileStateValue.fromStat(path.asFragment(), statNoFollow, tsgm)
-          : RegularFileStateValue.fromPath(path, statNoFollow, digestWillBeInjected, tsgm);
+          : RegularFileStateValue.fromPath(path, statNoFollow, tsgm);
     } else if (statNoFollow.isDirectory()) {
       return DIRECTORY_FILE_STATE_NODE;
     } else if (statNoFollow.isSymbolicLink()) {
@@ -215,23 +212,16 @@ public abstract class FileStateValue implements HasDigest, SkyValue {
     }
 
     /**
-     * Creates a FileFileStateValue instance corresponding to the given existing file.
-     *
+     * Create a FileFileStateValue instance corresponding to the given existing file.
      * @param stat must be of type "File". (Not a symlink).
      */
-    private static RegularFileStateValue fromPath(
-        Path path,
-        FileStatusWithDigest stat,
-        boolean digestWillBeInjected,
-        @Nullable TimestampGranularityMonitor tsgm)
+    private static RegularFileStateValue fromPath(Path path, FileStatusWithDigest stat,
+                                        @Nullable TimestampGranularityMonitor tsgm)
         throws InconsistentFilesystemException {
       Preconditions.checkState(stat.isFile(), path);
 
       try {
-        // If the digest will be injected, we can skip calling getFastDigest, but we need to store a
-        // contents proxy because if the digest is injected but is not available from the
-        // filesystem, we will need the proxy to determine whether the file was modified.
-        byte[] digest = digestWillBeInjected ? null : tryGetDigest(path, stat);
+        byte[] digest = tryGetDigest(path, stat);
         if (digest == null) {
           // Note that TimestampGranularityMonitor#notifyDependenceOnFileTime is a thread-safe
           // method.

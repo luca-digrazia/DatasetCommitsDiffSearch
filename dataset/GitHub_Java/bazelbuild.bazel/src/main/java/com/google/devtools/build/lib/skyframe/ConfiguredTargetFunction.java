@@ -925,7 +925,9 @@ public final class ConfiguredTargetFunction implements SkyFunction {
               .collect(Collectors.toList()));
       throw new ConfiguredTargetFunctionException(
           new ConfiguredValueCreationException(
-              "Analysis of target '" + target.getLabel() + "' failed", configuration, rootCauses));
+              "Analysis of target '" + target.getLabel() + "' failed; build aborted",
+              configuration,
+              rootCauses));
     }
     Preconditions.checkState(!analysisEnvironment.hasErrors(),
         "Analysis environment hasError() but no errors reported");

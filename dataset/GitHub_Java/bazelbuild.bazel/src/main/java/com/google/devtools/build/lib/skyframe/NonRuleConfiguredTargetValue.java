@@ -15,32 +15,29 @@ package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.Actions.GeneratingActions;
-import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.actions.Artifact.SourceArtifact;
 import com.google.devtools.build.lib.actions.BasicActionLookupValue;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
-import com.google.devtools.build.skyframe.SkyKey;
-import java.util.ArrayList;
 import javax.annotation.Nullable;
 
-/**
- * A configured target in the context of a Skyframe graph.
- */
+/** A non-rule configured target in the context of a Skyframe graph. */
 @Immutable
 @ThreadSafe
-@AutoCodec
+// Reached via OutputFileConfiguredTarget.
+@AutoCodec(explicitlyAllowClass = RuleConfiguredTarget.class)
 @VisibleForTesting
-public final class NonRuleConfiguredTargetValue
-    extends BasicActionLookupValue implements ConfiguredTargetValue {
+public final class NonRuleConfiguredTargetValue extends BasicActionLookupValue
+    implements ConfiguredTargetValue {
 
   // These variables are only non-final because they may be clear()ed to save memory.
   // configuredTarget is null only after it is cleared.
@@ -52,10 +49,9 @@ public final class NonRuleConfiguredTargetValue
   @AutoCodec.Instantiator
   @VisibleForSerialization
   NonRuleConfiguredTargetValue(
-      ArrayList<ActionAnalysisMetadata> actions,
-      ImmutableMap<Artifact, Integer> generatingActionIndex,
+      ImmutableList<ActionAnalysisMetadata> actions,
       ConfiguredTarget configuredTarget) {
-    super(actions, generatingActionIndex, /*removeActionsAfterEvaluation=*/ false);
+    super(actions);
     this.configuredTarget = configuredTarget;
     // Transitive packages are not serialized.
     this.transitivePackagesForPackageRootResolution = null;
@@ -64,9 +60,8 @@ public final class NonRuleConfiguredTargetValue
   NonRuleConfiguredTargetValue(
       ConfiguredTarget configuredTarget,
       GeneratingActions generatingActions,
-      @Nullable NestedSet<Package> transitivePackagesForPackageRootResolution,
-      boolean removeActionsAfterEvaluation) {
-    super(generatingActions, removeActionsAfterEvaluation);
+      @Nullable NestedSet<Package> transitivePackagesForPackageRootResolution) {
+    super(generatingActions);
     this.configuredTarget = Preconditions.checkNotNull(configuredTarget, generatingActions);
     this.transitivePackagesForPackageRootResolution = transitivePackagesForPackageRootResolution;
   }
@@ -80,7 +75,7 @@ public final class NonRuleConfiguredTargetValue
 
   @VisibleForTesting
   @Override
-  public ArrayList<ActionAnalysisMetadata> getActions() {
+  public ImmutableList<ActionAnalysisMetadata> getActions() {
     Preconditions.checkNotNull(configuredTarget, this);
     return actions;
   }
@@ -93,25 +88,19 @@ public final class NonRuleConfiguredTargetValue
   @Override
   public void clear(boolean clearEverything) {
     Preconditions.checkNotNull(configuredTarget);
-    Preconditions.checkNotNull(transitivePackagesForPackageRootResolution);
     if (clearEverything) {
       configuredTarget = null;
     }
     transitivePackagesForPackageRootResolution = null;
   }
 
-  /**
-   * Returns a label of NonRuleConfiguredTargetValue.
-   */
-  @ThreadSafe
-  static Label extractLabel(SkyKey value) {
-    Object valueName = value.argument();
-    Preconditions.checkState(valueName instanceof ConfiguredTargetKey, valueName);
-    return ((ConfiguredTargetKey) valueName).getLabel();
-  }
-
   @Override
   public String toString() {
     return getStringHelper().add("configuredTarget", configuredTarget).toString();
+  }
+
+  @Override
+  public SourceArtifact getSourceArtifact() {
+    return configuredTarget == null ? null : configuredTarget.getSourceArtifact();
   }
 }

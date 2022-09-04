@@ -289,9 +289,6 @@ public class ArtifactFunctionTest extends ArtifactFunctionTestCase {
             true);
     new SerializationTester(actionExecutionValue)
         .addDependency(FileSystem.class, root.getFileSystem())
-        .addDependency(
-            Root.RootCodecDependencies.class,
-            new Root.RootCodecDependencies(Root.absoluteRoot(root.getFileSystem())))
         .runTests();
   }
 
