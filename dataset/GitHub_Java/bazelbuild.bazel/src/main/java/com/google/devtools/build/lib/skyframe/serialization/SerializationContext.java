@@ -22,10 +22,9 @@ import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
-import com.google.devtools.build.lib.bugreport.BugReport;
 import com.google.devtools.build.lib.skyframe.serialization.Memoizer.Serializer;
-import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec.MemoizationStrategy;
 import com.google.devtools.build.lib.skyframe.serialization.SerializationException.NoCodecException;
+import com.google.devtools.build.lib.util.BazelCrashUtils;
 import com.google.protobuf.CodedOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -78,20 +77,6 @@ public class SerializationContext {
   // TODO(shahan): consider making codedOut a member of this class.
   public void serialize(Object object, CodedOutputStream codedOut)
       throws IOException, SerializationException {
-    serializeInternal(object, /*customMemoizationStrategy=*/ null, codedOut);
-  }
-
-  public void serializeWithAdHocMemoizationStrategy(
-      Object object, MemoizationStrategy memoizationStrategy, CodedOutputStream codedOut)
-      throws IOException, SerializationException {
-    serializeInternal(object, memoizationStrategy, codedOut);
-  }
-
-  private void serializeInternal(
-      Object object,
-      @Nullable MemoizationStrategy customMemoizationStrategy,
-      CodedOutputStream codedOut)
-      throws IOException, SerializationException {
     ObjectCodecRegistry.CodecDescriptor descriptor =
         recordAndGetDescriptorIfNotConstantMemoizedOrNull(object, codedOut);
     if (descriptor != null) {
@@ -100,9 +85,7 @@ public class SerializationContext {
       } else {
         @SuppressWarnings("unchecked")
         ObjectCodec<Object> castCodec = (ObjectCodec<Object>) descriptor.getCodec();
-        MemoizationStrategy memoizationStrategy =
-            customMemoizationStrategy != null ? customMemoizationStrategy : castCodec.getStrategy();
-        serializer.serialize(this, object, castCodec, codedOut, memoizationStrategy);
+        serializer.serialize(this, object, castCodec, codedOut);
       }
     }
   }
@@ -181,7 +164,7 @@ public class SerializationContext {
 
         @Override
         public void onFailure(Throwable t) {
-          BugReport.handleCrash(t);
+          throw BazelCrashUtils.halt(t);
         }
       };
 

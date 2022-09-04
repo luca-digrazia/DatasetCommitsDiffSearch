@@ -32,7 +32,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 
 /** Tests for {@link SerializationContext}. */
@@ -52,7 +51,7 @@ public class SerializationContextTest {
   @Test
   public void constantSerialize() throws IOException, SerializationException {
     ObjectCodecRegistry registry = Mockito.mock(ObjectCodecRegistry.class);
-    when(registry.maybeGetTagForConstant(ArgumentMatchers.any())).thenReturn(1);
+    when(registry.maybeGetTagForConstant(Mockito.anyObject())).thenReturn(1);
     CodedOutputStream codedOutputStream = Mockito.mock(CodedOutputStream.class);
     SerializationContext serializationContext =
         new SerializationContext(registry, ImmutableMap.of());
@@ -68,7 +67,7 @@ public class SerializationContextTest {
         Mockito.mock(ObjectCodecRegistry.CodecDescriptor.class);
     when(codecDescriptor.getTag()).thenReturn(1);
     ObjectCodecRegistry registry = Mockito.mock(ObjectCodecRegistry.class);
-    when(registry.maybeGetTagForConstant(ArgumentMatchers.any())).thenReturn(null);
+    when(registry.maybeGetTagForConstant(Mockito.anyObject())).thenReturn(null);
     when(registry.getCodecDescriptorForObject("string")).thenReturn(codecDescriptor);
     CodedOutputStream codedOutputStream = Mockito.mock(CodedOutputStream.class);
     SerializationContext underTest = new SerializationContext(registry, ImmutableMap.of());
@@ -94,7 +93,7 @@ public class SerializationContextTest {
   @Test
   public void memoizingSerialize_constant() throws IOException, SerializationException {
     ObjectCodecRegistry registry = Mockito.mock(ObjectCodecRegistry.class);
-    when(registry.maybeGetTagForConstant(ArgumentMatchers.any())).thenReturn(1);
+    when(registry.maybeGetTagForConstant(Mockito.anyObject())).thenReturn(1);
     CodedOutputStream codedOutputStream = Mockito.mock(CodedOutputStream.class);
     SerializationContext serializationContext =
         new SerializationContext(registry, ImmutableMap.of());
@@ -114,7 +113,7 @@ public class SerializationContextTest {
     when(codecDescriptor.getTag()).thenReturn(1);
     doReturn(codec).when(codecDescriptor).getCodec();
     ObjectCodecRegistry registry = Mockito.mock(ObjectCodecRegistry.class);
-    when(registry.maybeGetTagForConstant(ArgumentMatchers.any())).thenReturn(null);
+    when(registry.maybeGetTagForConstant(Mockito.anyObject())).thenReturn(null);
     when(registry.getCodecDescriptorForObject("string")).thenReturn(codecDescriptor);
     CodedOutputStream codedOutputStream = Mockito.mock(CodedOutputStream.class);
     SerializationContext underTest =
