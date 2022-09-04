@@ -17,6 +17,7 @@ package com.google.devtools.build.lib.rules.objc;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
+import com.google.devtools.build.lib.packages.ClassObjectConstructor;
 import com.google.devtools.build.lib.packages.NativeClassObjectConstructor;
 import com.google.devtools.build.lib.packages.SkylarkClassObject;
 
@@ -36,11 +37,9 @@ public final class AppleExecutableBinaryProvider extends SkylarkClassObject
   /** Skylark name for the AppleExecutableBinaryProvider. */
   public static final String SKYLARK_NAME = "AppleExecutableBinary";
 
-  /** Skylark constructor and identifier for AppleExecutableBinaryProvider. */
-  public static final NativeClassObjectConstructor<AppleExecutableBinaryProvider>
-      SKYLARK_CONSTRUCTOR =
-          new NativeClassObjectConstructor<AppleExecutableBinaryProvider>(
-              AppleExecutableBinaryProvider.class, SKYLARK_NAME) {};
+ /** Skylark constructor and identifier for AppleExecutableBinaryProvider. */
+  public static final ClassObjectConstructor SKYLARK_CONSTRUCTOR =
+     new NativeClassObjectConstructor(SKYLARK_NAME) { };
 
   private final Artifact appleExecutableBinary;
   private final ObjcProvider depsObjcProvider;

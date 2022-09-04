@@ -79,7 +79,6 @@ import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.rules.AliasProvider;
 import com.google.devtools.build.lib.rules.fileset.FilesetProvider;
 import com.google.devtools.build.lib.shell.ShellUtils;
-import com.google.devtools.build.lib.syntax.ClassObject;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.syntax.Type.LabelClass;
@@ -253,7 +252,7 @@ public final class RuleContext extends TargetContext
    * Returns the workspace name for the rule.
    */
   public String getWorkspaceName() {
-    return rule.getRepository().strippedName();
+    return rule.getPackage().getWorkspaceName();
   }
 
   /**
@@ -648,14 +647,6 @@ public final class RuleContext extends TargetContext
         "Output artifact '%s' not under package directory '%s' for target '%s'",
         rootRelativePath, getPackageDirectory(), getLabel());
     return getAnalysisEnvironment().getTreeArtifact(rootRelativePath, root);
-  }
-
-  /**
-   * Creates a tree artifact in a directory that is unique to the package that contains the rule,
-   * thus guaranteeing that it never clashes with artifacts created by rules in other packages.
-   */
-  public Artifact getPackageRelativeTreeArtifact(PathFragment relative, Root root) {
-    return getTreeArtifact(getPackageDirectory().getRelative(relative), root);
   }
 
   /**
@@ -1827,11 +1818,7 @@ public final class RuleContext extends TargetContext
       for (ImmutableSet<SkylarkProviderIdentifier> providers : mandatoryProvidersList) {
         List<String> missing = new ArrayList<>();
         for (SkylarkProviderIdentifier provider : providers) {
-          // A rule may require a built-in provider that is always implicitly provided, e.g. "files"
-          ImmutableSet<String> availableKeys =
-              ImmutableSet.copyOf(((ClassObject) prerequisite).getKeys());
-          if ((prerequisite.get(provider) == null)
-              && !(provider.isLegacy() && availableKeys.contains(provider.getLegacyId()))) {
+          if (prerequisite.get(provider) == null) {
             missing.add(provider.toString());
           }
         }

@@ -27,9 +27,11 @@ import java.util.Map;
  */
 public final class ActionsProvider {
 
-  /** The Actions provider type itself. */
-  public static final NativeClassObjectConstructor<SkylarkClassObject> SKYLARK_CONSTRUCTOR =
-      new NativeClassObjectConstructor<SkylarkClassObject>(SkylarkClassObject.class, "Actions") {};
+  /**
+   * The Actions provider type itself. 
+   */
+  public static final NativeClassObjectConstructor SKYLARK_CONSTRUCTOR =
+      new NativeClassObjectConstructor("Actions") { };
 
   /**
    * Factory method for creating instances of the Actions provider.

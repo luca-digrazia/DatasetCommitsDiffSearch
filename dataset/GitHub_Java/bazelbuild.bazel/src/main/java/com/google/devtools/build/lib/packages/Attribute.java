@@ -14,8 +14,6 @@
 
 package com.google.devtools.build.lib.packages;
 
-import static com.google.common.collect.Sets.newEnumSet;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.base.Predicate;
@@ -329,19 +327,11 @@ public final class Attribute implements Comparable<Attribute> {
       };
 
   /**
-   * Using this callback function, rules can change the configuration of their dependencies during
-   * the analysis phase.
-   *
-   * <p>If dynamic configurations are enabled, the returned transition must be a
-   * {@link com.google.devtools.build.lib.analysis.config.PatchTransition}.
-   *
-   * @deprecated this is only needed for statically configured builds. Dynamically configured builds
-   *     should just use {@link Attribute.Builder#cfg(Transition)}} with a directly provided
-   *     {@link com.google.devtools.build.lib.analysis.config.PatchTransition}.
+   * Using this callback function, rules can set the configuration of their dependencies during the
+   * analysis phase.
    */
-  @Deprecated
-  public interface Configurator<TBuildOptions> {
-    Transition apply(TBuildOptions fromOptions);
+  public interface Configurator<TConfig, TRule> {
+    TConfig apply(TRule fromRule, TConfig fromConfiguration, Attribute attribute, Target toTarget);
   }
 
   /**
@@ -443,7 +433,7 @@ public final class Attribute implements Comparable<Attribute> {
     private Transition configTransition = ConfigurationTransition.NONE;
     private Predicate<RuleClass> allowedRuleClassesForLabels = Predicates.alwaysTrue();
     private Predicate<RuleClass> allowedRuleClassesForLabelsWarning = Predicates.alwaysFalse();
-    private Configurator<?> configurator;
+    private Configurator<?, ?> configurator;
     private SplitTransitionProvider splitTransitionProvider;
     private FileTypeSet allowedFileTypesForLabels;
     private ValidityPredicate validityPredicate = ANY_EDGE;
@@ -596,13 +586,7 @@ public final class Attribute implements Comparable<Attribute> {
       }
     }
 
-    /**
-     * @deprecated Use {@link #cfg(Transition)}} with a
-     * {@link com.google.devtools.build.lib.analysis.config.PatchTransition} instead. This method
-     * only provides legacy support for statically configured builds.
-     */
-    @Deprecated
-    public Builder<TYPE> cfg(Configurator<?> configurator) {
+    public Builder<TYPE> cfg(Configurator<?, ?> configurator) {
       this.configurator = configurator;
       return this;
     }
@@ -1710,7 +1694,7 @@ public final class Attribute implements Comparable<Attribute> {
 
   private final Transition configTransition;
 
-  private final Configurator<?> configurator;
+  private final Configurator<?, ?> configurator;
   private final SplitTransitionProvider splitTransitionProvider;
 
   /**
@@ -1771,7 +1755,7 @@ public final class Attribute implements Comparable<Attribute> {
       Set<PropertyFlag> propertyFlags,
       Object defaultValue,
       Transition configTransition,
-      Configurator<?> configurator,
+      Configurator<?, ?> configurator,
       SplitTransitionProvider splitTransitionProvider,
       Predicate<RuleClass> allowedRuleClassesForLabels,
       Predicate<RuleClass> allowedRuleClassesForLabelsWarning,
@@ -1911,7 +1895,7 @@ public final class Attribute implements Comparable<Attribute> {
    * Returns the configurator instance for this attribute for label or label list attributes.
    * For other attributes it will always return {@code null}.
    */
-  public Configurator<?> getConfigurator() {
+  public Configurator<?, ?> getConfigurator() {
     return configurator;
   }
 
@@ -2187,7 +2171,8 @@ public final class Attribute implements Comparable<Attribute> {
     builder.condition = condition;
     builder.configTransition = configTransition;
     builder.splitTransitionProvider = splitTransitionProvider;
-    builder.propertyFlags = newEnumSet(propertyFlags, PropertyFlag.class);
+    builder.propertyFlags = propertyFlags.isEmpty() ?
+        EnumSet.noneOf(PropertyFlag.class) : EnumSet.copyOf(propertyFlags);
     builder.value = defaultValue;
     builder.valueSet = false;
     builder.allowedValues = allowedValues;

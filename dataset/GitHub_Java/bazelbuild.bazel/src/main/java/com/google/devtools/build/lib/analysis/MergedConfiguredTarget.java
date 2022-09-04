@@ -13,13 +13,14 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis;
 
-import com.google.common.collect.ImmutableCollection;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
+import com.google.devtools.build.lib.packages.ClassObjectConstructor;
+import com.google.devtools.build.lib.packages.SkylarkClassObject;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import javax.annotation.Nullable;
 
 /**
  * A single dependency with its configured target and aspects merged together.
@@ -54,6 +55,12 @@ public final class MergedConfiguredTarget extends AbstractConfiguredTarget {
     return getProvider(SkylarkProviders.class).getValue(providerKey);
   }
 
+  @Nullable
+  @Override
+  public SkylarkClassObject get(ClassObjectConstructor.Key providerKey) {
+    return getProvider(SkylarkProviders.class).getDeclaredProvider(providerKey);
+  }
+
   @Override
   public <P extends TransitiveInfoProvider> P getProvider(Class<P> providerClass) {
     AnalysisUtils.checkProvider(providerClass);
@@ -65,15 +72,6 @@ public final class MergedConfiguredTarget extends AbstractConfiguredTarget {
 
     return provider;
   }
-
-  @Override
-  public ImmutableCollection<String> getKeys() {
-    return ImmutableList.<String>builder()
-        .addAll(super.getKeys())
-        .addAll(getProvider(SkylarkProviders.class).getKeys())
-        .build();
-  }
-
 
   /** Creates an instance based on a configured target and a set of aspects. */
   public static ConfiguredTarget of(ConfiguredTarget base, Iterable<ConfiguredAspect> aspects)

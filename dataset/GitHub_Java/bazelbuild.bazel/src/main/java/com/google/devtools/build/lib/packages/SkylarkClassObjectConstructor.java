@@ -25,12 +25,13 @@ import java.util.Objects;
 import javax.annotation.Nullable;
 
 /**
- * Declared provider defined in Skylark.
+ *  Declared provider defined in Skylark.
  *
- * <p>This is a result of calling {@code provider()} function from Skylark ({@link
- * com.google.devtools.build.lib.rules.SkylarkRuleClassFunctions#provider}).
+ *  This is a result of calling {@code provider()} function from Skylark
+ *  ({@link com.google.devtools.build.lib.rules.SkylarkRuleClassFunctions#provider}).
  */
-public class SkylarkClassObjectConstructor extends ClassObjectConstructor
+public final class SkylarkClassObjectConstructor
+    extends ClassObjectConstructor
     implements SkylarkExportable {
 
   private static final FunctionSignature.WithValues<Object, SkylarkType> SIGNATURE =
@@ -49,12 +50,7 @@ public class SkylarkClassObjectConstructor extends ClassObjectConstructor
    * Needs to be exported later.
    */
   public SkylarkClassObjectConstructor(String name, Location location) {
-    this(name, SIGNATURE, location);
-  }
-
-  public SkylarkClassObjectConstructor(
-      String name, FunctionSignature.WithValues<Object, SkylarkType> signature, Location location) {
-    super(name, signature, location);
+    super(name, SIGNATURE, location);
     this.errorMessageFormatForInstances = DEFAULT_ERROR_MESSAFE;
   }
 

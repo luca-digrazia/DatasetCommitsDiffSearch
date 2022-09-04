@@ -33,10 +33,10 @@ import java.util.Map.Entry;
  * Artifact, output_type: Artifact, ... } }
  *
  * <p>Where {@code arch} is any Apple architecture such as "arm64" or "armv7", {@code output_type}
- * can currently be "bitcode_symbols" or "dsym_binary", and the artifact is an instance of the
- * {@link Artifact} class.
+ * is currently "bitcode_symbols", and the artifact is an instance of the {@link
+ * Artifact} class.
  *
- * <p>Example: { "arm64": { "bitcode_symbols": Artifact, "dsym_binary": Artifact } }
+ * <p>Example: { "arm64": { "bitcode_symbols": Artifact } }
  */
 @Immutable
 public final class AppleDebugOutputsProvider extends SkylarkClassObject
@@ -45,11 +45,10 @@ public final class AppleDebugOutputsProvider extends SkylarkClassObject
   /** Expected types of debug outputs. */
   enum OutputType {
 
-    /** A Bitcode symbol map, per architecture. */
-    BITCODE_SYMBOLS,
+    // TODO(b/33839914): Add DWARF binaries for dSYM outputs.
 
-    /** A single-architecture DWARF binary with debug symbols. */
-    DSYM_BINARY;
+    /** A Bitcode symbol map, per architecture. */
+    BITCODE_SYMBOLS;
 
     @Override
     public String toString() {

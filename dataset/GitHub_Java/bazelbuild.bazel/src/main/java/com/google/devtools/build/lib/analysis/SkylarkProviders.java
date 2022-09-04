@@ -60,11 +60,6 @@ public final class SkylarkProviders implements TransitiveInfoProvider {
     return skylarkProviders.keySet();
   }
 
-  /** Returns the keys for the declared providers. */
-  public ImmutableCollection<ClassObjectConstructor.Key> getDeclaredProviderKeys() {
-    return declaredProviders.keySet();
-  }
-
   /**
    * Returns a Skylark provider; "key" must be one from {@link #getKeys()}.
    */

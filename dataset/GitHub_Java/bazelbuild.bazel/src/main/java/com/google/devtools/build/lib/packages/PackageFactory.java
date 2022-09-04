@@ -1341,15 +1341,8 @@ public final class PackageFactory {
     try {
       // At this point the package is guaranteed to exist.  It may have parse or
       // evaluation errors, resulting in a diminished number of rules.
-      prefetchGlobs(
-          packageId,
-          astAfterPreprocessing.ast,
-          astAfterPreprocessing.preprocessed,
-          buildFile,
-          globber,
-          defaultVisibility,
-          makeEnv,
-          imports);
+      prefetchGlobs(packageId, astAfterPreprocessing.ast, astAfterPreprocessing.preprocessed,
+          buildFile, globber, defaultVisibility, makeEnv);
       return evaluateBuildFile(
           workspaceName,
           packageId,
@@ -1614,23 +1607,7 @@ public final class PackageFactory {
         builder.build(), "no native function or rule '%s'");
   }
 
-  /** A function that does nothing and ignores the arguments. */
-  private final BaseFunction noopFunction =
-      new BaseFunction("noop", FunctionSignature.KWARGS) {
-        @Override
-        public Object call(Object[] arguments, FuncallExpression ast, Environment env)
-            throws EvalException {
-          return Runtime.NONE;
-        }
-      };
-
-  /** @param fakeEnv specify if we declare no-op functions, or real functions. */
-  private void buildPkgEnv(
-      Environment pkgEnv,
-      PackageContext context,
-      RuleFactory ruleFactory,
-      PackageIdentifier packageId,
-      boolean fakeEnv) {
+  private void buildPkgEnv(Environment pkgEnv, PackageContext context, RuleFactory ruleFactory) {
     // TODO(bazel-team): remove the naked functions that are redundant with the nativeModule,
     // or if not possible, at least make them straight copies from the native module variant.
     // or better, use a common Environment.Frame for these common bindings
@@ -1648,20 +1625,12 @@ public final class PackageFactory {
 
     for (String ruleClass : ruleFactory.getRuleClassNames()) {
       BaseFunction ruleFunction = newRuleFunction(ruleFactory, ruleClass);
-      if (fakeEnv) {
-        pkgEnv.setup(ruleClass, ruleFunction);
-      } else {
-        pkgEnv.setup(ruleClass, noopFunction);
-      }
+      pkgEnv.setup(ruleClass, ruleFunction);
     }
 
     for (EnvironmentExtension extension : environmentExtensions) {
       extension.update(pkgEnv);
     }
-
-    pkgEnv.setupDynamic(PKG_CONTEXT, context);
-    pkgEnv.setupDynamic(Runtime.PKG_NAME, packageId.getPackageFragment().getPathString());
-    pkgEnv.setupDynamic(Runtime.REPOSITORY_NAME, packageId.getRepository().toString());
   }
 
   /**
@@ -1733,7 +1702,10 @@ public final class PackageFactory {
       PackageContext context =
           new PackageContext(
               pkgBuilder, globber, eventHandler, ruleFactory.getAttributeContainerFactory());
-      buildPkgEnv(pkgEnv, context, ruleFactory, packageId, true);
+      buildPkgEnv(pkgEnv, context, ruleFactory);
+      pkgEnv.setupDynamic(PKG_CONTEXT, context);
+      pkgEnv.setupDynamic(Runtime.PKG_NAME, packageId.getPackageFragment().getPathString());
+      pkgEnv.setupDynamic(Runtime.REPOSITORY_NAME, packageId.getRepository().toString());
 
       if (containsError) {
         pkgBuilder.setContainsErrors();
@@ -1764,16 +1736,12 @@ public final class PackageFactory {
     return pkgBuilder;
   }
 
-  /** Visit all targets and expand the globs in parallel. */
-  private void prefetchGlobs(
-      PackageIdentifier packageId,
-      BuildFileAST buildFileAST,
-      boolean wasPreprocessed,
-      Path buildFilePath,
-      Globber globber,
-      RuleVisibility defaultVisibility,
-      MakeEnvironment.Builder pkgMakeEnv,
-      Map<String, Extension> imports)
+  /**
+   * Visit all targets and expand the globs in parallel.
+   */
+  private void prefetchGlobs(PackageIdentifier packageId, BuildFileAST buildFileAST,
+      boolean wasPreprocessed, Path buildFilePath, Globber globber,
+      RuleVisibility defaultVisibility, MakeEnvironment.Builder pkgMakeEnv)
       throws InterruptedException {
     if (wasPreprocessed && preprocessorFactory.considersGlobs()) {
       // All the globs have either already been evaluated and they aren't in the ast anymore, or
@@ -1791,7 +1759,6 @@ public final class PackageFactory {
           Environment.builder(mutability)
               .setGlobals(BazelLibrary.GLOBALS)
               .setEventHandler(NullEventHandler.INSTANCE)
-              .setImportedExtensions(imports)
               .setPhase(Phase.LOADING)
               .build();
       SkylarkUtils.setToolsRepository(pkgEnv, ruleClassProvider.getToolsRepository());
@@ -1813,14 +1780,12 @@ public final class PackageFactory {
               globber,
               NullEventHandler.INSTANCE,
               ruleFactory.getAttributeContainerFactory());
-      buildPkgEnv(pkgEnv, context, ruleFactory, packageId, false);
-
+      buildPkgEnv(pkgEnv, context, ruleFactory);
       try {
         pkgEnv.update("glob", newGlobFunction.apply(context, /*async=*/true));
         // The Fileset function is heavyweight in that it can run glob(). Avoid this during the
         // preloading phase.
-        pkgEnv.update("FilesetEntry", noopFunction);
-        pkgEnv.update("vardef", noopFunction);
+        pkgEnv.update("FilesetEntry", Runtime.NONE);
       } catch (EvalException e) {
         throw new AssertionError(e);
       }

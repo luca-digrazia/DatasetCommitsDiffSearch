@@ -19,8 +19,10 @@ import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
 import com.google.devtools.build.lib.analysis.config.RunUnder;
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.packages.ClassObjectConstructor;
 import com.google.devtools.build.lib.packages.OutputFile;
 import com.google.devtools.build.lib.packages.Rule;
+import com.google.devtools.build.lib.packages.SkylarkClassObject;
 import com.google.devtools.build.lib.util.Preconditions;
 import javax.annotation.Nullable;
 
@@ -107,6 +109,15 @@ public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
   public Object get(String providerKey) {
     return getProvider(SkylarkProviders.class).getValue(providerKey);
   }
+
+  /**
+   * Returns a declared provider provided by this target. Only meant to use from Skylark.
+   */
+  @Override
+  public SkylarkClassObject get(ClassObjectConstructor.Key providerKey) {
+    return getProvider(SkylarkProviders.class).getDeclaredProvider(providerKey);
+  }
+
 
   @Override
   public final Rule getTarget() {
