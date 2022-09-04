@@ -201,8 +201,7 @@ public final class JavaInfo extends NativeInfo {
 
   @SkylarkCallable(
       name = "transitive_compile_time_jars",
-      doc = "Depset of compile time jars recusrively required by this target. See `compile_jars` "
-          + "for more details.",
+      doc = "Depset of compile time jars recusrively required by this target",
       structField = true
   )
   public SkylarkNestedSet getTransitiveCompileTimeJars() {
@@ -214,13 +213,7 @@ public final class JavaInfo extends NativeInfo {
 
   @SkylarkCallable(
       name = "compile_jars",
-      doc = "Returns the compile time jars required by this target directly. They can be: <ul>"
-          + "<li> interface jars (ijars), if an ijar tool was used, either by calling "
-          + "java_common.create_provider(use_ijar=True, ...) or by passing --use_ijars on the "
-          + "command line for native Java rules and `java_common.compile`</li>"
-          + "<li> normal full jars, if no ijar action was requested</li>"
-          + "<li> both ijars and normal full jars, if this provider was created by merging two or "
-          + "more providers created with different ijar requests </li> </ul>",
+      doc = "Depset of compile time jars required by this target directly",
       structField = true
   )
   public SkylarkNestedSet getCompileTimeJars() {
@@ -228,23 +221,6 @@ public final class JavaInfo extends NativeInfo {
         Artifact.class,
         providers.getProvider(JavaCompilationArgsProvider.class)
             .getJavaCompilationArgs().getCompileTimeJars());
-  }
-
-  @SkylarkCallable(
-      name = "full_compile_jars",
-      doc = "Returns the full compile time jars required by this target directly. They can be <ul>"
-          + "<li> the corresponding normal full jars of the ijars returned by `compile_jars`<li>"
-          + "<li> the normal full jars returned by `compile_jars`<li><ul>"
-          + "Note: `compile_jars` can return a mix of ijars and normal full jars. In that case, "
-          + "`full_compile_jars` returns the corresponding full jars of the ijars and the remaining"
-          + "normal full jars in `compile_jars`.",
-      structField = true
-  )
-  public SkylarkNestedSet getFullCompileTimeJars() {
-    return SkylarkNestedSet.of(
-        Artifact.class,
-        providers.getProvider(JavaCompilationArgsProvider.class)
-            .getJavaCompilationArgs().getFullCompileTimeJars());
   }
 
   @SkylarkCallable(
@@ -257,16 +233,6 @@ public final class JavaInfo extends NativeInfo {
   public SkylarkList<Artifact> getSourceJars() {
     return SkylarkList.createImmutable(
         providers.getProvider(JavaSourceJarsProvider.class).getSourceJars());
-  }
-
-  @SkylarkCallable(
-    name = "outputs",
-    doc = "Returns information about outputs of this Java target.",
-    structField = true,
-    allowReturnNones = true
-  )
-  public JavaRuleOutputJarsProvider getOutputJars() {
-    return getProvider(JavaRuleOutputJarsProvider.class);
   }
 
   @Override
