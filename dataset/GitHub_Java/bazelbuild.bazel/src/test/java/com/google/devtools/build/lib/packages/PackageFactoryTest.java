@@ -356,8 +356,7 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
       fail();
     } catch (NoSuchTargetException e) {
       assertThat(e)
-          .hasMessageThat()
-          .isEqualTo(
+          .hasMessage(
               "no such target '//foo:A': "
                   + "target 'A' not declared in package 'foo' defined by /foo/BUILD");
     }
@@ -520,8 +519,7 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
       fail();
     } catch (NoSuchTargetException e) {
       assertThat(e)
-          .hasMessageThat()
-          .isEqualTo(
+          .hasMessage(
               "no such target '//x:y.cc': "
                   + "target 'y.cc' not declared in package 'x'; "
                   + "however, a source file of this name exists.  "
@@ -534,8 +532,7 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
       fail();
     } catch (NoSuchTargetException e) {
       assertThat(e)
-          .hasMessageThat()
-          .isEqualTo(
+          .hasMessage(
               "no such target '//x:z.cc': "
                   + "target 'z.cc' not declared in package 'x' (did you mean 'x.cc'?) "
                   + "defined by /x/BUILD");
@@ -546,8 +543,7 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
       fail();
     } catch (NoSuchTargetException e) {
       assertThat(e)
-          .hasMessageThat()
-          .isEqualTo(
+          .hasMessage(
               "no such target '//x:dir': target 'dir' not declared in package 'x'; "
                   + "however, a source directory of this name exists.  "
                   + "(Perhaps add 'exports_files([\"dir\"])' to x/BUILD, "
@@ -755,9 +751,7 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
           /* excludeDirs= */ true);
       fail();
     } catch (IllegalArgumentException e) {
-      assertThat(e)
-          .hasMessageThat()
-          .isEqualTo("ERROR /globs/BUILD:2:73: name 'this_will_fail' is not defined");
+      assertThat(e).hasMessage("ERROR /globs/BUILD:2:73: name 'this_will_fail' is not defined");
     }
   }
 
