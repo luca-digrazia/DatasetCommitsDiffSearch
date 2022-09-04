@@ -728,6 +728,21 @@ public class CppOptions extends FragmentOptions {
   public boolean disableExpandIfAllAvailableInFlagSet;
 
   @Option(
+      name = "incompatible_linkopts_in_user_link_flags",
+      oldName = "experimental_linkopts_in_user_link_flags",
+      defaultValue = "true",
+      documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
+      effectTags = {OptionEffectTag.ACTION_COMMAND_LINES, OptionEffectTag.LOADING_AND_ANALYSIS},
+      metadataTags = {
+        OptionMetadataTag.INCOMPATIBLE_CHANGE,
+        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
+      },
+      help =
+          "If true, flags coming from --linkopt Bazel option will appear in user_link_flags "
+              + "crosstool variable, not in legacy_link_flags.")
+  public boolean enableLinkoptsInUserLinkFlags;
+
+  @Option(
       name = "incompatible_dont_emit_static_libgcc",
       oldName = "experimental_dont_emit_static_libgcc",
       defaultValue = "true",
@@ -741,6 +756,21 @@ public class CppOptions extends FragmentOptions {
           "If true, bazel will not add --static-libgcc to the linking command line, it will be "
               + "the responsibility of the C++ toolchain to append this flag.")
   public boolean disableEmittingStaticLibgcc;
+
+  @Option(
+      name = "incompatible_disable_runtimes_filegroups",
+      defaultValue = "false",
+      documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
+      effectTags = {OptionEffectTag.ACTION_COMMAND_LINES, OptionEffectTag.LOADING_AND_ANALYSIS},
+      metadataTags = {
+        OptionMetadataTag.INCOMPATIBLE_CHANGE,
+        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
+      },
+      help =
+          "If true, cc_toolchain.static_runtime_libs and cc_toolchain.dynamic_runtime_libs are "
+              + "replaced by cc_toolchain.static_runtime_lib and cc_toolchain.dynamic_runtime_lib "
+              + "(see https://github.com/bazelbuild/bazel/issues/6942)")
+  public boolean disableRuntimesFilegroups;
 
   @Option(
       name = "incompatible_disable_crosstool_file",
@@ -879,6 +909,7 @@ public class CppOptions extends FragmentOptions {
     host.disableGenruleCcToolchainDependency = disableGenruleCcToolchainDependency;
     host.disableEmittingStaticLibgcc = disableEmittingStaticLibgcc;
     host.disableDepsetInUserFlags = disableDepsetInUserFlags;
+    host.disableRuntimesFilegroups = disableRuntimesFilegroups;
     host.disableExpandIfAllAvailableInFlagSet = disableExpandIfAllAvailableInFlagSet;
     host.disableLegacyCcProvider = disableLegacyCcProvider;
     host.removeCpuCompilerCcToolchainAttributes = removeCpuCompilerCcToolchainAttributes;

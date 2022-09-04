@@ -202,13 +202,12 @@ public class CcToolchainProviderHelper {
             "fdo",
             prefetchHintsFile.getAbsolutePath().getBaseName(),
             ruleContext.getBinOrGenfilesDirectory());
-    ruleContext.registerAction(
-        SymlinkAction.toAbsolutePath(
-            ruleContext.getActionOwner(),
-            PathFragment.create(prefetchHintsFile.getAbsolutePath().getPathString()),
-            prefetchHintsArtifact,
-            "Symlinking LLVM Cache Prefetch Hints Profile "
-                + prefetchHintsFile.getAbsolutePath().getPathString()));
+    ruleContext.registerAction(SymlinkAction.toAbsolutePath(
+        ruleContext.getActionOwner(),
+        PathFragment.create(prefetchHintsFile.getAbsolutePath().getPathString()),
+        prefetchHintsArtifact,
+        "Symlinking LLVM Cache Prefetch Hints Profile "
+            + prefetchHintsFile.getAbsolutePath().getPathString()));
     return prefetchHintsArtifact;
   }
 
@@ -395,10 +394,12 @@ public class CcToolchainProviderHelper {
       return null;
     }
 
+
     if (fdoInputs != null) {
       fdoInputFile = fdoInputs.getFirst();
       protoProfileArtifact = fdoInputs.getSecond();
     }
+
 
     CcSkyframeSupportValue ccSkyframeSupportValue = null;
     SkyKey ccSupportKey = null;
@@ -511,16 +512,28 @@ public class CcToolchainProviderHelper {
         configuration.getBinFragment().getRelative(runtimeSolibDirBase);
 
     // Static runtime inputs.
-    TransitiveInfoCollection staticRuntimeLib = attributes.getStaticRuntimeLib();
+    if (cppConfiguration.disableRuntimesFilegroups()
+        && !attributes.getStaticRuntimesLibs().isEmpty()) {
+      ruleContext.ruleError(
+          "cc_toolchain.static_runtime_libs attribute is removed, please use "
+              + "cc_toolchain.static_runtime_lib (singular) instead. See "
+              + "https://github.com/bazelbuild/bazel/issues/6942 for details.");
+    }
+    TransitiveInfoCollection staticRuntimeLibDep =
+        attributes.getStaticRuntimeLib() != null
+            ? attributes.getStaticRuntimeLib()
+            : selectDep(
+                attributes.getStaticRuntimesLibs(), toolchainInfo.getStaticRuntimeLibsLabel());
     final NestedSet<Artifact> staticRuntimeLinkInputs;
     final Artifact staticRuntimeLinkMiddleman;
 
-    if (staticRuntimeLib != null) {
-      staticRuntimeLinkInputs = staticRuntimeLib.getProvider(FileProvider.class).getFilesToBuild();
+    if (staticRuntimeLibDep != null) {
+      staticRuntimeLinkInputs =
+          staticRuntimeLibDep.getProvider(FileProvider.class).getFilesToBuild();
       if (!staticRuntimeLinkInputs.isEmpty()) {
         NestedSet<Artifact> staticRuntimeLinkMiddlemanSet =
             CompilationHelper.getAggregatingMiddleman(
-                ruleContext, purposePrefix + "static_runtime_link", staticRuntimeLib);
+                ruleContext, purposePrefix + "static_runtime_link", staticRuntimeLibDep);
         staticRuntimeLinkMiddleman =
             staticRuntimeLinkMiddlemanSet.isEmpty()
                 ? null
@@ -536,14 +549,25 @@ public class CcToolchainProviderHelper {
     }
 
     // Dynamic runtime inputs.
-    TransitiveInfoCollection dynamicRuntimeLib = attributes.getDynamicRuntimeLib();
+    if (cppConfiguration.disableRuntimesFilegroups()
+        && !attributes.getDynamicRuntimesLibs().isEmpty()) {
+      ruleContext.ruleError(
+          "cc_toolchain.dynamic_runtime_libs attribute is removed, please use "
+              + "cc_toolchain.dynamic_runtime_lib (singular) instead. See "
+              + "https://github.com/bazelbuild/bazel/issues/6942 for details.");
+    }
+    TransitiveInfoCollection dynamicRuntimeLibDep =
+        attributes.getDynamicRuntimeLib() != null
+            ? attributes.getDynamicRuntimeLib()
+            : selectDep(
+                attributes.getDynamicRuntimesLibs(), toolchainInfo.getDynamicRuntimeLibsLabel());
     NestedSet<Artifact> dynamicRuntimeLinkSymlinks;
     List<Artifact> dynamicRuntimeLinkInputs = new ArrayList<>();
     Artifact dynamicRuntimeLinkMiddleman;
-    if (dynamicRuntimeLib != null) {
+    if (dynamicRuntimeLibDep != null) {
       NestedSetBuilder<Artifact> dynamicRuntimeLinkSymlinksBuilder = NestedSetBuilder.stableOrder();
       for (Artifact artifact :
-          dynamicRuntimeLib.getProvider(FileProvider.class).getFilesToBuild()) {
+          dynamicRuntimeLibDep.getProvider(FileProvider.class).getFilesToBuild()) {
         if (CppHelper.SHARED_LIBRARY_FILETYPES.matches(artifact.getFilename())) {
           dynamicRuntimeLinkInputs.add(artifact);
           dynamicRuntimeLinkSymlinksBuilder.add(

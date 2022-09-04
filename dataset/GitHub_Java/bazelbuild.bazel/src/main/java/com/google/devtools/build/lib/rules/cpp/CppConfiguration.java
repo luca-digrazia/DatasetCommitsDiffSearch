@@ -556,6 +556,10 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
         + "migration instructions).";
   }
 
+  public boolean enableLinkoptsInUserLinkFlags() {
+    return cppOptions.enableLinkoptsInUserLinkFlags;
+  }
+
   public boolean disableEmittingStaticLibgcc() {
     return cppOptions.disableEmittingStaticLibgcc;
   }
@@ -577,6 +581,10 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
           "The built-in sysroot '" + builtInSysroot + "' is not normalized.");
     }
     return PathFragment.create(builtInSysroot);
+  }
+
+  boolean disableRuntimesFilegroups() {
+    return cppOptions.disableRuntimesFilegroups;
   }
 
   /**

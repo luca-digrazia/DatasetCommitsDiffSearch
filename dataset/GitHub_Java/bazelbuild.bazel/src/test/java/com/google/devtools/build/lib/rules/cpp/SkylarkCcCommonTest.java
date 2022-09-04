@@ -61,7 +61,9 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-/** Unit tests for the {@code cc_common} Skylark module. */
+/**
+ * Unit tests for the {@code cc_common} Skylark module.
+ */
 @RunWith(JUnit4.class)
 public class SkylarkCcCommonTest extends BuildViewTestCase {
 
@@ -69,36 +71,6 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
   public void setSkylarkSemanticsOptions() throws Exception {
     setSkylarkSemanticsOptions(SkylarkCcCommonTestHelper.CC_SKYLARK_WHITELIST_FLAG);
     invalidatePackages();
-  }
-
-  @Test
-  public void testAllFiles() throws Exception {
-    scratch.file(
-        "a/BUILD",
-        "load(':rule.bzl', 'crule')",
-        "cc_toolchain_alias(name='alias')",
-        "crule(name='r')");
-
-    scratch.file(
-        "a/rule.bzl",
-        "def _impl(ctx):",
-        "  toolchain = ctx.attr._cc_toolchain[cc_common.CcToolchainInfo]",
-        "  return struct(all_files = toolchain.all_files)",
-        "crule = rule(",
-        "  _impl,",
-        "  attrs = { ",
-        "    '_cc_toolchain': attr.label(default=Label('//a:alias'))",
-        "  },",
-        ");");
-
-    ConfiguredTarget r = getConfiguredTarget("//a:r");
-    @SuppressWarnings("unchecked")
-    SkylarkNestedSet allFiles = (SkylarkNestedSet) r.get("all_files");
-    RuleContext ruleContext = getRuleContext(r);
-    CcToolchainProvider toolchain =
-        CppHelper.getToolchain(
-            ruleContext, ruleContext.getPrerequisite("$cc_toolchain", Mode.TARGET));
-    assertThat(allFiles.getSet(Artifact.class)).isEqualTo(toolchain.getAllFiles());
   }
 
   @Test
@@ -466,7 +438,7 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
     AnalysisMock.get()
         .ccSupport()
         .setupCrosstool(mockToolsConfig, "compiler_flag: '-foo'", "cxx_flag: '-foo_for_cxx_only'");
-    useConfiguration("--noincompatible_disable_legacy_crosstool_fields");
+    useConfiguration();
     SkylarkList<String> commandLine =
         commandLineForVariables(
             CppActionNames.CPP_COMPILE,
@@ -483,7 +455,7 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
     AnalysisMock.get()
         .ccSupport()
         .setupCrosstool(mockToolsConfig, "compiler_flag: '-foo'", "cxx_flag: '-foo_for_cxx_only'");
-    useConfiguration("--noincompatible_disable_legacy_crosstool_fields");
+    useConfiguration();
     assertThat(
             commandLineForVariables(
                 CppActionNames.CPP_COMPILE,
@@ -552,11 +524,6 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
 
   @Test
   public void testCompileBuildVariablesForPic() throws Exception {
-    getAnalysisMock()
-        .ccSupport()
-        .setupCrosstool(
-            mockToolsConfig, MockCcSupport.SUPPORTS_PIC_FEATURE, MockCcSupport.PIC_FEATURE);
-    useConfiguration();
     assertThat(
             commandLineForVariables(
                 CppActionNames.CPP_COMPILE,
@@ -628,7 +595,20 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
   public void testEmptyLinkVariablesContainSysroot() throws Exception {
     AnalysisMock.get()
         .ccSupport()
-        .setupCrosstool(mockToolsConfig, "builtin_sysroot: '/foo/bar/sysroot'");
+        .setupCrosstool(
+            mockToolsConfig,
+            "builtin_sysroot: '/foo/bar/sysroot'",
+            "feature {",
+            "  name: 'sysroot'",
+            "  enabled: true",
+            "  flag_set {",
+            "    action: 'c++-link-executable'",
+            "    flag_group {",
+            "      expand_if_all_available: 'sysroot'",
+            "      flag: '--yolo_sysroot_flag=%{sysroot}'",
+            "    }",
+            "  }",
+            "}");
     useConfiguration();
     assertThat(
             commandLineForVariables(
@@ -637,7 +617,7 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
                 "feature_configuration = feature_configuration,",
                 "cc_toolchain = toolchain,",
                 ")"))
-        .contains("--sysroot=/foo/bar/sysroot");
+        .contains("--yolo_sysroot_flag=/foo/bar/sysroot");
   }
 
   @Test
@@ -926,7 +906,7 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
     AnalysisMock.get()
         .ccSupport()
         .setupCrosstool(mockToolsConfig, "test_only_linker_flag: '-im_only_testing_flag'");
-    useConfiguration("--noincompatible_disable_legacy_crosstool_fields");
+    useConfiguration();
     assertThat(
             commandLineForVariables(
                 CppActionNames.CPP_LINK_EXECUTABLE,
@@ -963,7 +943,7 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
             "  mode: DYNAMIC",
             "  linker_flag: '-dynamic_linking_mode_flag'",
             "}");
-    useConfiguration("--noincompatible_disable_legacy_crosstool_fields");
+    useConfiguration();
     SkylarkList<String> staticLinkingModeFlags =
         commandLineForVariables(
             CppActionNames.CPP_LINK_EXECUTABLE,
@@ -1200,7 +1180,8 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
             mockToolsConfig,
             MockCcSupport.COPY_DYNAMIC_LIBRARIES_TO_BINARY_CONFIGURATION,
             MockCcSupport.TARGETS_WINDOWS_CONFIGURATION,
-            MockCcSupport.SUPPORTS_DYNAMIC_LINKER_FEATURE);
+            "supports_interface_shared_objects: false",
+            "needsPic: false");
     doTestCcLinkingContext(
         ImmutableList.of("a.a", "libdep2.a", "b.a", "c.a", "d.a", "libdep1.a"),
         ImmutableList.of("a.pic.a", "b.pic.a", "c.pic.a", "e.pic.a"),
@@ -1214,8 +1195,8 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
         .setupCrosstool(
             mockToolsConfig,
             MockCcSupport.PIC_FEATURE,
-            MockCcSupport.SUPPORTS_PIC_FEATURE,
-            MockCcSupport.SUPPORTS_DYNAMIC_LINKER_FEATURE);
+            "supports_interface_shared_objects: false",
+            "needsPic: true");
     doTestCcLinkingContext(
         ImmutableList.of("a.a", "b.a", "c.a", "d.a"),
         ImmutableList.of("a.pic.a", "libdep2.a", "b.pic.a", "c.pic.a", "e.pic.a", "libdep1.a"),
@@ -1227,7 +1208,7 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
       List<String> picStaticLibraryList,
       List<String> dynamicLibraryList)
       throws Exception {
-    useConfiguration("--features=-supports_interface_shared_libraries");
+    useConfiguration();
     setUpCcLinkingContextTest();
     ConfiguredTarget a = getConfiguredTarget("//a:a");
 
@@ -1238,8 +1219,8 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
     assertThat(userLinkFlags.getImmutableList())
         .containsExactly("-la", "-lc2", "-DEP2_LINKOPT", "-lc1", "-lc2", "-DEP1_LINKOPT");
     @SuppressWarnings("unchecked")
-    SkylarkList<LibraryToLink> librariesToLink =
-        (SkylarkList<LibraryToLink>) info.getValue("libraries_to_link", SkylarkList.class);
+    SkylarkList<LibraryToLinkWrapper> librariesToLink =
+        (SkylarkList<LibraryToLinkWrapper>) info.getValue("libraries_to_link", SkylarkList.class);
     assertThat(
             librariesToLink.stream()
                 .filter(x -> x.getStaticLibrary() != null)
@@ -1418,7 +1399,8 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
     ConfiguredTarget target = getConfiguredTarget("//foo:skylark_lib");
     assertThat(target).isNotNull();
     @SuppressWarnings("unchecked")
-    SkylarkList<LibraryToLink> libraries = (SkylarkList<LibraryToLink>) target.get("libraries");
+    SkylarkList<LibraryToLinkWrapper> libraries =
+        (SkylarkList<LibraryToLinkWrapper>) target.get("libraries");
     assertThat(
             libraries.stream()
                 .map(x -> x.getResolvedSymlinkDynamicLibrary().getFilename())
@@ -1445,7 +1427,8 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
     assertThat(getConfiguredTarget("//foo:skylark_lib")).isNotNull();
     ConfiguredTarget target = getConfiguredTarget("//foo:skylark_lib");
     @SuppressWarnings("unchecked")
-    SkylarkList<LibraryToLink> libraries = (SkylarkList<LibraryToLink>) target.get("libraries");
+    SkylarkList<LibraryToLinkWrapper> libraries =
+        (SkylarkList<LibraryToLinkWrapper>) target.get("libraries");
     assertThat(
             libraries.stream()
                 .map(x -> x.getResolvedSymlinkDynamicLibrary().getFilename())
