@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,14 +14,17 @@
 
 package com.google.devtools.build.lib.analysis;
 
-import com.google.common.base.Preconditions;
-import com.google.common.collect.UnmodifiableIterator;
+import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.events.Event;
+import com.google.devtools.build.lib.packages.Info;
 import com.google.devtools.build.lib.packages.PackageGroup;
 import com.google.devtools.build.lib.packages.PackageSpecification;
-import com.google.devtools.build.lib.syntax.Label;
+import com.google.devtools.build.lib.packages.Provider;
+import com.google.devtools.build.lib.util.Preconditions;
 
 /**
  * Dummy ConfiguredTarget for package groups. Contains no functionality, since
@@ -29,6 +32,9 @@ import com.google.devtools.build.lib.syntax.Label;
  */
 public final class PackageGroupConfiguredTarget extends AbstractConfiguredTarget
     implements PackageSpecificationProvider {
+  private static final FileProvider NO_FILES = new FileProvider(
+      NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER));
+
   private final NestedSet<PackageSpecification> packageSpecifications;
 
   PackageGroupConfiguredTarget(TargetContext targetContext, PackageGroup packageGroup) {
@@ -38,10 +44,10 @@ public final class PackageGroupConfiguredTarget extends AbstractConfiguredTarget
     NestedSetBuilder<PackageSpecification> builder =
         NestedSetBuilder.stableOrder();
     for (Label label : packageGroup.getIncludes()) {
-      TransitiveInfoCollection include = targetContext.findDirectPrerequisite(
+      TransitiveInfoCollection include = targetContext.maybeFindDirectPrerequisite(
           label, targetContext.getConfiguration());
-      PackageSpecificationProvider provider = include == null ? null :
-          include.getProvider(PackageSpecificationProvider.class);
+      PackageSpecificationProvider provider = include == null ? null
+          : include.getProvider(PackageSpecificationProvider.class);
       if (provider == null) {
         targetContext.getAnalysisEnvironment().getEventHandler().handle(Event.error(getTarget().getLocation(),
             String.format("label '%s' does not refer to a package group", label)));
@@ -66,12 +72,21 @@ public final class PackageGroupConfiguredTarget extends AbstractConfiguredTarget
   }
 
   @Override
-  public Object get(String providerKey) {
-    throw new UnsupportedOperationException();
+  public <P extends TransitiveInfoProvider> P getProvider(Class<P> provider) {
+    if (provider == FileProvider.class) {
+      return (P) NO_FILES;
+    } else {
+      return super.getProvider(provider);
+    }
   }
 
   @Override
-  public UnmodifiableIterator<TransitiveInfoProvider> iterator() {
-    throw new IllegalStateException();
+  protected Info rawGetSkylarkProvider(Provider.Key providerKey) {
+    return null;
+  }
+
+  @Override
+  protected Object rawGetSkylarkProvider(String providerKey) {
+    return null;
   }
 }

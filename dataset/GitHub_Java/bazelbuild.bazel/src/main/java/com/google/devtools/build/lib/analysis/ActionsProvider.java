@@ -16,10 +16,8 @@ package com.google.devtools.build.lib.analysis;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.Info;
 import com.google.devtools.build.lib.packages.NativeProvider;
-import com.google.devtools.build.lib.packages.SkylarkInfo;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -46,6 +44,6 @@ public final class ActionsProvider {
       }
     }
     ImmutableMap<String, Object> fields = ImmutableMap.<String, Object>of("by_file", map);
-    return new SkylarkInfo(SKYLARK_CONSTRUCTOR, fields, Location.BUILTIN);
+    return new Info(SKYLARK_CONSTRUCTOR, fields);
   }
 }

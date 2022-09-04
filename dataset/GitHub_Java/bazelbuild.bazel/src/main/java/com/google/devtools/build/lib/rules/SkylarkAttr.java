@@ -27,7 +27,7 @@ import com.google.devtools.build.lib.packages.Attribute.SkylarkComputedDefaultTe
 import com.google.devtools.build.lib.packages.Attribute.SplitTransition;
 import com.google.devtools.build.lib.packages.AttributeValueSource;
 import com.google.devtools.build.lib.packages.BuildType;
-import com.google.devtools.build.lib.packages.Provider;
+import com.google.devtools.build.lib.packages.ClassObjectConstructor;
 import com.google.devtools.build.lib.packages.SkylarkAspect;
 import com.google.devtools.build.lib.packages.SkylarkProviderIdentifier;
 import com.google.devtools.build.lib.skylarkinterface.Param;
@@ -276,7 +276,11 @@ public final class SkylarkAttr implements SkylarkValue {
       SkylarkType.checkType(obj, SkylarkList.class, PROVIDERS_ARG);
       ImmutableList<ImmutableSet<SkylarkProviderIdentifier>> providersList = buildProviderPredicate(
           (SkylarkList<?>) obj, PROVIDERS_ARG, ast.getLocation());
-      builder.mandatoryProvidersList(providersList);
+
+      // If there is at least one empty set, there is no restriction.
+      if (providersList.stream().noneMatch(ImmutableSet::isEmpty)) {
+        builder.mandatoryProvidersList(providersList);
+      }
     }
 
     if (containsNonNoneKey(arguments, CONFIGURATION_ARG)) {
@@ -343,7 +347,7 @@ public final class SkylarkAttr implements SkylarkValue {
    * a legacy provider name.
    */
   static boolean isProvider(Object o) {
-    return o instanceof String || o instanceof Provider;
+    return o instanceof String || o instanceof ClassObjectConstructor;
   }
 
   /**
@@ -357,8 +361,8 @@ public final class SkylarkAttr implements SkylarkValue {
     for (Object obj : list) {
       if (obj instanceof String) {
         result.add(SkylarkProviderIdentifier.forLegacy((String) obj));
-      } else if (obj instanceof Provider) {
-        Provider constructor = (Provider) obj;
+      } else if (obj instanceof ClassObjectConstructor) {
+        ClassObjectConstructor constructor = (ClassObjectConstructor) obj;
         if (!constructor.isExported()) {
           throw new EvalException(location,
               "Providers should be top-level values in extension files that define them.");

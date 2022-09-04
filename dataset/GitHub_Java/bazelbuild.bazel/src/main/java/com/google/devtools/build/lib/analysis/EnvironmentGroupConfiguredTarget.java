@@ -15,6 +15,8 @@
 package com.google.devtools.build.lib.analysis;
 
 import com.google.devtools.build.lib.packages.EnvironmentGroup;
+import com.google.devtools.build.lib.packages.Info;
+import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.util.Preconditions;
 
 /**
@@ -33,8 +35,12 @@ public final class EnvironmentGroupConfiguredTarget extends AbstractConfiguredTa
   }
 
   @Override
-  public Object get(String providerKey) {
-    // No providers.
+  protected Info rawGetSkylarkProvider(Provider.Key providerKey) {
+    return null;
+  }
+
+  @Override
+  protected Object rawGetSkylarkProvider(String providerKey) {
     return null;
   }
 }

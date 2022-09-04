@@ -33,9 +33,9 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.packages.AttributeContainer;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
-import com.google.devtools.build.lib.packages.Info;
-import com.google.devtools.build.lib.packages.Provider;
-import com.google.devtools.build.lib.packages.SkylarkProvider;
+import com.google.devtools.build.lib.packages.ClassObjectConstructor;
+import com.google.devtools.build.lib.packages.SkylarkClassObject;
+import com.google.devtools.build.lib.packages.SkylarkClassObjectConstructor;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.skyframe.PackageFunction;
 import com.google.devtools.build.lib.skyframe.SkyFunctions;
@@ -932,7 +932,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
     ConfiguredTarget target = getConfiguredTarget("//test/skylark:cr");
     assertThat(target.get("o1")).isEqualTo(Runtime.NONE);
-    assertThat(target.get("o2")).isEqualTo(MutableList.empty());
+    assertThat(target.get("o2")).isEqualTo(MutableList.EMPTY);
   }
 
   @Test
@@ -1009,13 +1009,12 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
     );
 
     ConfiguredTarget configuredTarget = getConfiguredTarget("//test:r");
-    Provider.Key key =
-        new SkylarkProvider.SkylarkKey(
-            Label.create(configuredTarget.getLabel().getPackageIdentifier(), "extension.bzl"),
-            "my_provider");
-    Info declaredProvider = configuredTarget.get(key);
+    ClassObjectConstructor.Key key = new SkylarkClassObjectConstructor.SkylarkKey(
+        Label.create(configuredTarget.getLabel().getPackageIdentifier(), "extension.bzl"),
+        "my_provider");
+    SkylarkClassObject declaredProvider = configuredTarget.get(key);
     assertThat(declaredProvider).isNotNull();
-    assertThat(declaredProvider.getProvider().getKey()).isEqualTo(key);
+    assertThat(declaredProvider.getConstructor().getKey()).isEqualTo(key);
     assertThat(declaredProvider.getValue("x")).isEqualTo(1);
   }
 
@@ -1035,13 +1034,12 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
     );
 
     ConfiguredTarget configuredTarget  = getConfiguredTarget("//test:r");
-    Provider.Key key =
-        new SkylarkProvider.SkylarkKey(
-            Label.create(configuredTarget.getLabel().getPackageIdentifier(), "extension.bzl"),
-            "my_provider");
-    Info declaredProvider = configuredTarget.get(key);
+    ClassObjectConstructor.Key key = new SkylarkClassObjectConstructor.SkylarkKey(
+        Label.create(configuredTarget.getLabel().getPackageIdentifier(), "extension.bzl"),
+        "my_provider");
+    SkylarkClassObject declaredProvider = configuredTarget.get(key);
     assertThat(declaredProvider).isNotNull();
-    assertThat(declaredProvider.getProvider().getKey()).isEqualTo(key);
+    assertThat(declaredProvider.getConstructor().getKey()).isEqualTo(key);
     assertThat(declaredProvider.getValue("x")).isEqualTo(1);
   }
 
