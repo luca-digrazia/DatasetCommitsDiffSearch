@@ -17,7 +17,6 @@
 package org.graylog2.migrations;
 
 import org.graylog2.migrations.V20180214093600_AdjustDashboardPositionToNewResolution.Migration;
-import org.graylog2.migrations.V20200803120800_GrantsMigrations.GrantsMetaMigration;
 import org.graylog2.plugin.PluginModule;
 
 public class MigrationsModule extends PluginModule {
@@ -48,6 +47,5 @@ public class MigrationsModule extends PluginModule {
         addMigration(V20200102140000_UnifyEventSeriesId.class);
         addMigration(V20200226181600_EncryptAccessTokensMigration.class);
         addMigration(V20200722110800_AddBuiltinRoles.class);
-        addMigration(GrantsMetaMigration.class);
     }
 }
