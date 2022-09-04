@@ -14,6 +14,7 @@ import org.jboss.logging.Logger;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectReader;
+import com.fasterxml.jackson.databind.ObjectWriter;
 
 import io.quarkus.runtime.Application;
 import io.quarkus.runtime.ShutdownContext;
@@ -73,11 +74,8 @@ public abstract class AbstractLambdaPollLoop {
                                     }
                                 } else {
                                     Object input = null;
-                                    if (running.get()) {
-                                        LambdaInputReader inputReader = getInputReader();
-                                        if (inputReader != null) {
-                                            input = inputReader.readValue(requestConnection.getInputStream());
-                                        }
+                                    if (running.get() && getInputReader() != null) {
+                                        input = getInputReader().readValue(requestConnection.getInputStream());
                                         Object output = processRequest(input, createContext(requestConnection));
                                         postResponse(url, output);
                                     }
@@ -146,9 +144,9 @@ public abstract class AbstractLambdaPollLoop {
     protected abstract void processRequest(InputStream input, OutputStream output, AmazonLambdaContext context)
             throws Exception;
 
-    protected abstract LambdaInputReader getInputReader();
+    protected abstract ObjectReader getInputReader();
 
-    protected abstract LambdaOutputWriter getOutputWriter();
+    protected abstract ObjectWriter getOutputWriter();
 
     protected AmazonLambdaContext createContext(HttpURLConnection requestConnection) throws IOException {
         return new AmazonLambdaContext(requestConnection, cognitoIdReader, clientCtxReader);
