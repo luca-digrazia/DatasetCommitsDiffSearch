@@ -116,7 +116,7 @@ public final class AspectFunction implements SkyFunction {
         return null;
       }
 
-      Object skylarkValue = skylarkImportLookupValue.getEnvironmentExtension().getBindings()
+      Object skylarkValue = skylarkImportLookupValue.getEnvironmentExtension()
           .get(skylarkValueName);
       if (!(skylarkValue instanceof SkylarkAspect)) {
         throw new ConversionException(
