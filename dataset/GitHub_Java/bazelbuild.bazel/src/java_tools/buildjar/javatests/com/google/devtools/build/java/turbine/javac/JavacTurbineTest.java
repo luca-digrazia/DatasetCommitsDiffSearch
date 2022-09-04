@@ -825,7 +825,7 @@ public class JavacTurbineTest {
             new JavacTurbine(new PrintWriter(sw, true), optionsBuilder.build())) {
       Result result = turbine.compile();
       assertThat(result).isEqualTo(Result.ERROR);
-      assertThat(sw.toString()).contains("unmappable character");
+      assertThat(sw.toString()).contains("error reading");
     }
   }
 
@@ -1080,7 +1080,7 @@ public class JavacTurbineTest {
         new JavacTurbine(new PrintWriter(errOutput, true), optionsBuilder.build())) {
       assertThat(turbine.compile()).isEqualTo(Result.ERROR);
     }
-    assertThat(errOutput.toString()).contains("NoSuchFileException: /classes/NO_SUCH_FILE");
+    assertThat(errOutput.toString()).contains("FileNotFoundException: /NO_SUCH_FILE");
   }
 
   @Test
@@ -1420,12 +1420,3 @@ public class JavacTurbineTest {
     assertThat(result).isEqualTo(Result.OK_WITH_REDUCED_CLASSPATH);
   }
 }
-
-
-
-
-
-
-
-
-
