@@ -195,7 +195,6 @@ public class CcModule
         convertFromNoneable(sourceFile, /* defaultValue= */ null),
         convertFromNoneable(outputFile, /* defaultValue= */ null),
         /* gcnoFile= */ null,
-        /* isUsingFission= */ false,
         /* dwoFile= */ null,
         /* ltoIndexingFile= */ null,
         /* includes= */ ImmutableList.of(),
@@ -1297,8 +1296,7 @@ public class CcModule
       withFeatureSetBuilder.add(withFeatureSetFromSkylark(withFeatureSetStruct));
     }
 
-    return new FlagSet(
-        actions, ImmutableSet.of(), withFeatureSetBuilder.build(), flagGroupsBuilder.build());
+    return new FlagSet(actions, withFeatureSetBuilder.build(), flagGroupsBuilder.build());
   }
 
   /**

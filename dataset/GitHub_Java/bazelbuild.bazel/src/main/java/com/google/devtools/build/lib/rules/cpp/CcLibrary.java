@@ -114,11 +114,6 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
       boolean addDynamicRuntimeInputArtifactsToRunfiles)
       throws RuleErrorException, InterruptedException {
 
-    semantics.validateDeps(ruleContext);
-    if (ruleContext.hasErrors()) {
-      return;
-    }
-
     final CcCommon common = new CcCommon(ruleContext);
 
     CcToolchainProvider ccToolchain = common.getToolchain();

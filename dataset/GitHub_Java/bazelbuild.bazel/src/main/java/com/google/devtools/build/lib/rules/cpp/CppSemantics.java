@@ -62,8 +62,6 @@ public interface CppSemantics {
 
   void validateAttributes(RuleContext ruleContext);
 
-  default void validateDeps(RuleContext ruleContext) {}
-
   /** Returns true iff this build requires include validation. */
   boolean needsIncludeValidation();
 }

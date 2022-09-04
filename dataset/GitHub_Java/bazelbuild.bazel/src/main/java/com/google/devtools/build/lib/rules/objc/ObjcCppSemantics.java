@@ -124,7 +124,11 @@ public class ObjcCppSemantics implements CppSemantics {
 
   @Override
   public List<PathFragment> getQuoteIncludes(RuleContext ruleContext) {
-    return ImmutableList.of();
+    ImmutableList.Builder<PathFragment> quoteIncludes = ImmutableList.builder();
+    // The genfiles root of each child configuration must be added to the compile action so that
+    // generated headers can be resolved.
+    return ImmutableList.copyOf(
+        ObjcCommon.userHeaderSearchPaths(objcProvider, ruleContext.getConfiguration()));
   }
 
   @Override
