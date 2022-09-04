@@ -1,18 +1,18 @@
-/*
- * Copyright (C) 2020 Graylog, Inc.
+/**
+ * This file is part of Graylog.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the Server Side Public License, version 1,
- * as published by MongoDB, Inc.
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * Server Side Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the Server Side Public License
- * along with this program. If not, see
- * <http://www.mongodb.com/licensing/server-side-public-license>.
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.shared.buffers.processors;
 
@@ -115,25 +115,13 @@ public class ProcessBufferProcessor implements WorkHandler<MessageEvent> {
         currentMessage = msg;
         incomingMessages.mark();
 
-        if (LOG.isTraceEnabled()) {
-            LOG.trace("Starting to process message <{}>.", msg.getId());
-        }
+        LOG.debug("Starting to process message <{}>.", msg.getId());
 
         try (final Timer.Context ignored = processTime.time()) {
             handleMessage(msg);
-            if (LOG.isTraceEnabled()) {
-                LOG.trace("Finished processing message <{}>. Writing to output buffer.", msg.getId());
-            }
+            LOG.debug("Finished processing message <{}>. Writing to output buffer.", msg.getId());
         } catch (Exception e) {
-            if (LOG.isDebugEnabled()) {
-                // Log warning including the stacktrace
-                LOG.warn("Unable to process message <{}>:", msg.getId(), e);
-                // Log full message content to aid debugging
-                LOG.debug("Failed message <{}>: {}", msg.getId(), msg.toDumpString());
-            } else {
-                // Only logs a single line warning without stacktrace
-                LOG.warn("Unable to process message <{}>: {}", msg.getId(), e);
-            }
+            LOG.warn("Unable to process message <{}>: {}", msg.getId(), e);
         } finally {
             currentMessage = null;
             outgoingMessages.mark();
