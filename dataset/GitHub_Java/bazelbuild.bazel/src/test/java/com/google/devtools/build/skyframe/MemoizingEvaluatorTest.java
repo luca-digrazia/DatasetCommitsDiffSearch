@@ -15,7 +15,9 @@ package com.google.devtools.build.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
-import static com.google.devtools.build.lib.testutil.EventIterableSubjectFactory.assertThatEvents;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertContainsEvent;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertEventCount;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertNoEvents;
 import static com.google.devtools.build.skyframe.ErrorInfoSubjectFactory.assertThatErrorInfo;
 import static com.google.devtools.build.skyframe.EvaluationResultSubjectFactory.assertThatEvaluationResult;
 import static com.google.devtools.build.skyframe.GraphTester.CONCATENATE;
@@ -148,14 +150,16 @@ public class MemoizingEvaluatorTest {
     tester.set("x", new StringValue("y")).setWarning("fizzlepop");
     StringValue value = (StringValue) tester.evalAndGet("x");
     assertThat(value.getValue()).isEqualTo("y");
-    assertThatEvents(eventCollector).containsExactly("fizzlepop");
+    assertContainsEvent(eventCollector, "fizzlepop");
+    assertEventCount(1, eventCollector);
 
     initializeReporter();
     tester.invalidate();
     value = (StringValue) tester.evalAndGet("x");
     assertThat(value.getValue()).isEqualTo("y");
     if (eventsStored()) {
-      assertThatEvents(eventCollector).containsExactly("fizzlepop");
+      assertContainsEvent(eventCollector, "fizzlepop");
+      assertEventCount(1, eventCollector);
     }
   }
 
@@ -439,7 +443,9 @@ public class MemoizingEvaluatorTest {
       initializeReporter();
       tester.evalAndGet("top");
       if (i == 0 || eventsStored()) {
-        assertThatEvents(eventCollector).containsExactly("warn-d1", "warn-d2");
+        assertContainsEvent(eventCollector, "warn-d1");
+        assertContainsEvent(eventCollector, "warn-d2");
+        assertEventCount(2, eventCollector);
       }
     }
   }
@@ -461,7 +467,8 @@ public class MemoizingEvaluatorTest {
           .isEqualTo(topKey.toString());
       assertThat(result.getError(topKey).getException()).isInstanceOf(SomeErrorException.class);
       if (i == 0 || eventsStored()) {
-        assertThatEvents(eventCollector).containsExactly("warn-dep");
+        assertContainsEvent(eventCollector, "warn-dep");
+        assertEventCount(1, eventCollector);
       }
     }
   }
@@ -482,7 +489,8 @@ public class MemoizingEvaluatorTest {
           .isEqualTo(topKey.toString());
       assertThat(result.getError(topKey).getException()).isInstanceOf(SomeErrorException.class);
       if (i == 0 || eventsStored()) {
-        assertThatEvents(eventCollector).containsExactly("warning msg");
+        assertContainsEvent(eventCollector, "warning msg");
+        assertEventCount(1, eventCollector);
       }
     }
   }
@@ -503,7 +511,8 @@ public class MemoizingEvaluatorTest {
           .isEqualTo(topKey.toString());
       assertThat(result.getError(topKey).getException()).isInstanceOf(SomeErrorException.class);
       if (i == 0 || eventsStored()) {
-        assertThatEvents(eventCollector).containsExactly("warning msg");
+        assertContainsEvent(eventCollector, "warning msg");
+        assertEventCount(1, eventCollector);
       }
     }
   }
@@ -518,7 +527,8 @@ public class MemoizingEvaluatorTest {
       initializeReporter();
       tester.eval(/*keepGoing=*/false, "t1", "t2");
       if (i == 0 || eventsStored()) {
-        assertThatEvents(eventCollector).containsExactly("look both ways before crossing");
+        assertContainsEvent(eventCollector, "look both ways before crossing");
+        assertEventCount(1, eventCollector);
       }
     }
   }
@@ -533,14 +543,16 @@ public class MemoizingEvaluatorTest {
       initializeReporter();
       tester.evalAndGetError("error-value");
       if (i == 0 || eventsStored()) {
-        assertThatEvents(eventCollector).containsExactly("don't chew with your mouth open");
+        assertContainsEvent(eventCollector, "don't chew with your mouth open");
+        assertEventCount(1, eventCollector);
       }
     }
 
     initializeReporter();
     tester.evalAndGet("warning-value");
     if (eventsStored()) {
-      assertThatEvents(eventCollector).containsExactly("don't chew with your mouth open");
+      assertContainsEvent(eventCollector, "don't chew with your mouth open");
+      assertEventCount(1, eventCollector);
     }
   }
 
@@ -554,14 +566,17 @@ public class MemoizingEvaluatorTest {
 
     StringValue value = (StringValue) tester.evalAndGet("x");
     assertThat(value.getValue()).isEqualTo("y");
-    assertThatEvents(eventCollector).containsExactly("fizzlepop", "just letting you know");
+    assertContainsEvent(eventCollector, "fizzlepop");
+    assertContainsEvent(eventCollector, "just letting you know");
+    assertEventCount(2, eventCollector);
 
     if (eventsStored()) {
       // On the rebuild, we only replay warning messages.
       initializeReporter();
       value = (StringValue) tester.evalAndGet("x");
       assertThat(value.getValue()).isEqualTo("y");
-      assertThatEvents(eventCollector).containsExactly("fizzlepop");
+      assertContainsEvent(eventCollector, "fizzlepop");
+      assertEventCount(1, eventCollector);
     }
   }
 
@@ -607,7 +622,8 @@ public class MemoizingEvaluatorTest {
         "just letting you know");
 
     tester.evalAndGetError("error-value");
-    assertThatEvents(eventCollector).containsExactly("just letting you know");
+    assertContainsEvent(eventCollector, "just letting you know");
+    assertEventCount(1, eventCollector);
 
     // Change the progress message.
     tester.getOrCreate("error-value").setHasTransientError(true).setProgress(
@@ -617,14 +633,15 @@ public class MemoizingEvaluatorTest {
     for (int i = 0; i < 2; i++) {
       initializeReporter();
       tester.evalAndGetError("error-value");
-      assertThatEvents(eventCollector).isEmpty();
+      assertNoEvents(eventCollector);
     }
 
     // When invalidating errors, we should show the new progress message.
     initializeReporter();
     tester.invalidateTransientErrors();
     tester.evalAndGetError("error-value");
-    assertThatEvents(eventCollector).containsExactly("letting you know more");
+    assertContainsEvent(eventCollector, "letting you know more");
+    assertEventCount(1, eventCollector);
   }
 
   @Test
@@ -1912,12 +1929,14 @@ public class MemoizingEvaluatorTest {
     tester.set("x", new StringValue("y")).setWarning("fizzlepop");
     StringValue value = (StringValue) tester.evalAndGet("x");
     assertThat(value.getValue()).isEqualTo("y");
-    assertThatEvents(eventCollector).containsExactly("fizzlepop");
+    assertContainsEvent(eventCollector, "fizzlepop");
+    assertEventCount(1, eventCollector);
 
     tester.invalidate();
     value = (StringValue) tester.evalAndGet("x");
     assertThat(value.getValue()).isEqualTo("y");
     // No new events emitted.
+    assertEventCount(1, eventCollector);
   }
 
   /**
@@ -2037,7 +2056,7 @@ public class MemoizingEvaluatorTest {
           .that(numTopInvocations.get())
           .isEqualTo(3);
     }
-    assertThatEvents(eventCollector).containsExactly(warningText);
+    assertContainsEvent(eventCollector, warningText);
     assertThat(topSignaled.getCount()).isEqualTo(0);
     assertThat(topRestartedBuild.getCount()).isEqualTo(0);
   }
@@ -3492,11 +3511,10 @@ public class MemoizingEvaluatorTest {
     assertStringValue(val, tester.evalAndGet( /*keepGoing=*/false, parent));
     assertThat(parentEvaluated.get()).isEqualTo(1);
     if (hasEvent) {
-      assertThatEvents(eventCollector).containsExactly("shmoop");
+      assertContainsEvent(eventCollector, "shmoop");
     } else {
-      assertThatEvents(eventCollector).isEmpty();
+      assertEventCount(0, eventCollector);
     }
-    eventCollector.clear();
 
     tester.resetPlayedEvents();
     tester.getOrCreate(child, /*markAsModified=*/true);
@@ -3504,9 +3522,9 @@ public class MemoizingEvaluatorTest {
     assertStringValue(val, tester.evalAndGet( /*keepGoing=*/false, parent));
     assertThat(parentEvaluated.get()).isEqualTo(2);
     if (hasEvent) {
-      assertThatEvents(eventCollector).containsExactly("shmoop");
+      assertContainsEvent(eventCollector, "shmoop");
     } else {
-      assertThatEvents(eventCollector).isEmpty();
+      assertEventCount(0, eventCollector);
     }
   }
 
@@ -3530,13 +3548,12 @@ public class MemoizingEvaluatorTest {
                 parentEvaluated, null, null, false, parentVal, ImmutableList.of(child)));
     assertThat(tester.evalAndGet( /*keepGoing=*/false, parent)).isEqualTo(parentVal);
     assertThat(parentEvaluated.getCount()).isEqualTo(1);
-    assertThatEvents(eventCollector).containsExactly("bloop");
-    eventCollector.clear();
+    assertContainsEvent(eventCollector, "bloop");
     tester.resetPlayedEvents();
     tester.getOrCreate(child, /*markAsModified=*/ true);
     tester.invalidate();
     assertThat(tester.evalAndGet( /*keepGoing=*/false, parent)).isEqualTo(parentVal);
-    assertThatEvents(eventCollector).containsExactly("bloop");
+    assertContainsEvent(eventCollector, "bloop");
     assertThat(parentEvaluated.getCount()).isEqualTo(1);
   }
 

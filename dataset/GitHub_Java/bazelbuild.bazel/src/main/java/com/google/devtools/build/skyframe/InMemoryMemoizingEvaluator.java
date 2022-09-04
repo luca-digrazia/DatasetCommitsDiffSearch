@@ -281,8 +281,7 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
   }
 
   @Override
-  @Nullable
-  public SkyValue getExistingValue(SkyKey key) {
+  @Nullable public SkyValue getExistingValueForTesting(SkyKey key) {
     NodeEntry entry = getExistingEntryForTesting(key);
     try {
       return isDone(entry) ? entry.getValue() : null;
@@ -369,6 +368,11 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
         public boolean apply(Event event) {
           switch (event.getKind()) {
             case INFO:
+              throw new UnsupportedOperationException(
+                  "SkyFunctions should not display INFO messages: "
+                      + event.getLocation()
+                      + ": "
+                      + event.getMessage());
             case PROGRESS:
               return false;
             default:
