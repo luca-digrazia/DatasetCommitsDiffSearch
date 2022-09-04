@@ -16,7 +16,6 @@
  */
 package org.graylog2.security.realm;
 
-import com.google.common.base.Strings;
 import org.apache.directory.api.ldap.model.cursor.CursorException;
 import org.apache.directory.api.ldap.model.exception.LdapException;
 import org.apache.directory.ldap.client.api.LdapConnectionConfig;
@@ -80,10 +79,6 @@ public class LdapUserAuthenticator extends AuthenticatingRealm {
         config.setCredentials(ldapSettings.getSystemPassword());
 
         final String principal = (String) token.getPrincipal();
-        if (Strings.isNullOrEmpty(principal) || token.getPassword() == null) {
-            // do not try to look a token up in LDAP if there is no principal or password
-            return null;
-        }
         LdapNetworkConnection connection = null;
         try {
             connection = ldapConnector.connect(config);
