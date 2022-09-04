@@ -99,6 +99,7 @@ import com.google.devtools.common.options.Converter;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionsBase;
+import com.google.devtools.common.options.OptionsParser.OptionUsageRestrictions;
 import com.google.devtools.common.options.OptionsParsingException;
 import com.google.devtools.common.options.proto.OptionFilters.OptionEffectTag;
 import java.util.ArrayList;
@@ -240,7 +241,8 @@ public class BuildView {
     @Option(
       name = "version_window_for_dirty_node_gc",
       defaultValue = "0",
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+      optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
       effectTags = {OptionEffectTag.UNKNOWN},
       help =
           "Nodes that have been dirty for more than this many versions will be deleted"
@@ -611,8 +613,10 @@ public class BuildView {
     Collection<ConfiguredTarget> allTargetsToTest = null;
     if (testsToRun != null) {
       // Determine the subset of configured targets that are meant to be run as tests.
+      // Do not remove <ConfiguredTarget>: workaround for Java 7 type inference.
       allTargetsToTest =
-          Lists.newArrayList(filterTestsByTargets(configuredTargets, Sets.newHashSet(testsToRun)));
+          Lists.<ConfiguredTarget>newArrayList(
+              filterTestsByTargets(configuredTargets, Sets.newHashSet(testsToRun)));
     }
 
     Set<Artifact> artifactsToBuild = new HashSet<>();

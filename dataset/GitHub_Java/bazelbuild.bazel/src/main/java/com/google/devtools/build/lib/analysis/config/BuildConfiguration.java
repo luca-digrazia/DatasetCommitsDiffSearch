@@ -763,13 +763,14 @@ public final class BuildConfiguration implements BuildEvent {
       documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
       effectTags = {OptionEffectTag.UNKNOWN},
       help =
-          "If set to 'auto', Bazel reruns a test if and only if: "
-              + "(1) Bazel detects changes in the test or its dependencies, "
-              + "(2) the test is marked as external, "
-              + "(3) multiple test runs were requested with --runs_per_test, or"
-              + "(4) the test previously failed. "
-              + "If set to 'yes', Bazel caches all test results except for tests marked as "
-              + "external. If set to 'no', Bazel does not cache any test results."
+          "If 'auto', Bazel will only rerun a test if any of the following conditions apply: "
+              + "(1) Bazel detects changes in the test or its dependencies "
+              + "(2) the test is marked as external "
+              + "(3) multiple test runs were requested with --runs_per_test "
+              + "(4) the test failed "
+              + "If 'yes', the caching behavior will be the same as 'auto' except that "
+              + "it may cache test failures and test runs with --runs_per_test. "
+              + "If 'no', all tests will be always executed."
     )
     public TriState cacheTestResults;
 
@@ -1614,6 +1615,7 @@ public final class BuildConfiguration implements BuildEvent {
             options,
             mainRepositoryName.strippedName(),
             dynamicTransitionMapper);
+    newConfig.setConfigurationTransitions(this.transitions);
     return newConfig;
   }
 
@@ -1710,11 +1712,8 @@ public final class BuildConfiguration implements BuildEvent {
   }
 
   /**
-   * For static configurations, returns all configurations that can be reached from this one through
-   * any kind of configuration transition.
-   *
-   * <p>For dynamic configurations, returns the current configuration (since configurations aren't
-   * reached through other configurations).
+   * Returns all configurations that can be reached from this configuration through any kind of
+   * configuration transition.
    */
   public synchronized Collection<BuildConfiguration> getAllReachableConfigurations() {
     if (allReachableConfigurations == null) {
@@ -1725,10 +1724,11 @@ public final class BuildConfiguration implements BuildEvent {
     return allReachableConfigurations;
   }
 
+  /**
+   * Returns all configurations that can be reached from this configuration through any kind of
+   * configuration transition.
+   */
   private Set<BuildConfiguration> computeAllReachableConfigurations() {
-    if (useDynamicConfigurations()) {
-      return ImmutableSet.of(this);
-    }
     Set<BuildConfiguration> result = new LinkedHashSet<>();
     Queue<BuildConfiguration> queue = new LinkedList<>();
     queue.add(this);

@@ -74,9 +74,7 @@ public final class DynamicTransitionMapper {
    * {@link IllegalArgumentException}.
    */
   public Transition map(Transition fromTransition) {
-    if (fromTransition instanceof PatchTransition
-        || fromTransition instanceof Attribute.SplitTransition<?>
-        || fromTransition == null) {
+    if (fromTransition instanceof PatchTransition || fromTransition == null) {
       return fromTransition;
     }
     Transition toTransition = map.get(fromTransition);
