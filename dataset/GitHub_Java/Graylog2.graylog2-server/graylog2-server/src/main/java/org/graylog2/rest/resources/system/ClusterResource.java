@@ -23,7 +23,6 @@ import com.codahale.metrics.annotation.Timed;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import org.graylog2.cluster.Node;
-import org.graylog2.cluster.NodeNotFoundException;
 import org.graylog2.plugin.Tools;
 import org.graylog2.rest.documentation.annotations.*;
 import org.graylog2.rest.resources.RestResource;
@@ -39,15 +38,14 @@ import java.util.Map;
  * @author Lennart Koopmann <lennart@torch.sh>
  */
 @Api(value = "System/Cluster", description = "Node discovery")
-@Path("/system/cluster")
-@Produces(MediaType.APPLICATION_JSON)
+@Path("/system/cluster/nodes")
 public class ClusterResource extends RestResource {
 
     private static final Logger LOG = LoggerFactory.getLogger(ClusterResource.class);
 
     @GET @Timed
-    @Path("/nodes")
     @ApiOperation(value = "List all active nodes in this cluster.")
+    @Produces(MediaType.APPLICATION_JSON)
     public String nodes() {
         List<Map<String, Object>> nodeList = Lists.newArrayList();
         Map<String, Node> nodes = Node.allActive(core);
@@ -63,26 +61,13 @@ public class ClusterResource extends RestResource {
         return json(result);
     }
 
-    @GET @Timed
-    @Path("/node")
-    @ApiOperation(value = "Information about this node.",
-            notes = "This is returning information of this node in context to its state in the cluster. " +
-                    "Use the system API of the node itself to get system information.")
-    public String node() {
-        try {
-            return json(nodeSummary(Node.thisNode(core)));
-        } catch (NodeNotFoundException e) {
-            // this exception should never happen, if it does we have made it worksn't.(tm)
-            throw new WebApplicationException(500);
-        }
-    }
-
     @GET
     @Timed
-    @Path("/nodes/{nodeId}")
+    @Path("/{nodeId}")
     @ApiOperation(value = "Information about a node.",
             notes = "This is returning information of a node in context to its state in the cluster. " +
                     "Use the system API of the node itself to get system information.")
+    @Produces(MediaType.APPLICATION_JSON)
     @ApiResponses(value = {
             @ApiResponse(code = 404, message = "Node not found.")
     })
