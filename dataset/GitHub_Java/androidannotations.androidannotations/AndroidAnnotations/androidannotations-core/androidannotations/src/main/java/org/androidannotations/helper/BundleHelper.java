@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -217,7 +216,11 @@ public class BundleHelper {
 	}
 
 	public IJExpression getExpressionToRestoreFromIntentOrBundle(AbstractJClass variableClass, IJExpression intent, IJExpression extras, IJExpression extraKey, JMethod method) {
-		return getExpressionToRestoreFromBundle(variableClass, extras, extraKey, method);
+		if ("byte[]".equals(element.toString())) {
+			return intent.invoke("getByteArrayExtra").arg(extraKey);
+		} else {
+			return getExpressionToRestoreFromBundle(variableClass, extras, extraKey, method);
+		}
 	}
 
 	public IJExpression getExpressionToRestoreFromBundle(AbstractJClass variableClass, IJExpression bundle, IJExpression extraKey, JMethod method) {
