@@ -6763,8 +6763,7 @@ public class StarlarkCcCommonTest extends BuildViewTestCase {
             "toolchain.solib_dir()",
             "toolchain.dynamic_runtime_solib_dir()",
             "toolchain.linker_files()",
-            "toolchain.coverage_files()",
-            "toolchain.strip_files()");
+            "toolchain.coverage_files()");
     scratch.file(
         "a/BUILD",
         "load(':rule.bzl', 'crule')",
