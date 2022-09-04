@@ -131,7 +131,7 @@ public class GrowingNeuralGas implements Clustering<double[]> {
          */
         Node(double[] w) {
             this.w = w;
-            edges = new LinkedList<>();
+            edges = new LinkedList<Edge>();
             id = m++;
         }
 
@@ -182,7 +182,7 @@ public class GrowingNeuralGas implements Clustering<double[]> {
     /**
      * Neurons in the neural network.
      */
-    private LinkedList<Node> nodes = new LinkedList<>();
+    private LinkedList<Node> nodes = new LinkedList<Node>();
     /**
      * Cluster labels of neurons.
      */
@@ -223,7 +223,7 @@ public class GrowingNeuralGas implements Clustering<double[]> {
      * @return the neurons in the network. 
      */
     public Neuron[] neurons() {
-        HashMap<Integer, Neuron> hash = new HashMap<>();
+        HashMap<Integer, Neuron> hash = new HashMap<Integer, Neuron>();
         Neuron[] neurons = new Neuron[nodes.size()];
         
         int i = 0;
@@ -262,7 +262,7 @@ public class GrowingNeuralGas implements Clustering<double[]> {
 
         // Find the nearest (s1) and second nearest (s2) neuron to x.
         Node[] top2 = new Node[2];
-        HeapSelect<Node> heap = new HeapSelect<>(top2);
+        HeapSelect<Node> heap = new HeapSelect<Node>(top2);
         for (Node neuron : nodes) {
             neuron.dist = Math.squaredDistance(neuron.w, x);
             heap.add(neuron);

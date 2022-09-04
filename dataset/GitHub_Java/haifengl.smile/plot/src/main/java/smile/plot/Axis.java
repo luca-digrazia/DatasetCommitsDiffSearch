@@ -321,7 +321,7 @@ public class Axis {
      */
     public Axis addLabel(String label, double location) {
         if (labels == null) {
-            labels = new HashMap<>();
+            labels = new HashMap<String, Double>();
         }
 
         labels.put(label, location);
@@ -340,7 +340,7 @@ public class Axis {
         }
 
         if (labels == null) {
-            labels = new HashMap<>();
+            labels = new HashMap<String, Double>();
         }
 
         for (int i = 0; i < label.length; i++) {

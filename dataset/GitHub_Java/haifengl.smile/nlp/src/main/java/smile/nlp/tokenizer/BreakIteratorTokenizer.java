@@ -49,7 +49,7 @@ public class BreakIteratorTokenizer implements Tokenizer {
     @Override
     public String[] split(String text) {
         boundary.setText(text);
-        ArrayList<String> words = new ArrayList<>();
+        ArrayList<String> words = new ArrayList<String>();
         int start = boundary.first();
         int end = boundary.next();
 

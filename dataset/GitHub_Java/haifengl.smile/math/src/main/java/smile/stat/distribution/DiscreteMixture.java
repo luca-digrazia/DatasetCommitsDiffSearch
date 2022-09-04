@@ -47,7 +47,7 @@ public class DiscreteMixture extends DiscreteDistribution {
      * Constructor.
      */
     DiscreteMixture() {
-        components = new ArrayList<>();
+        components = new ArrayList<Component>();
     }
 
     /**
@@ -55,7 +55,7 @@ public class DiscreteMixture extends DiscreteDistribution {
      * @param mixture a list of discrete distributions.
      */
     public DiscreteMixture(List<Component> mixture) {
-        components = new ArrayList<>();
+        components = new ArrayList<Component>();
         components.addAll(mixture);
 
         double sum = 0.0;

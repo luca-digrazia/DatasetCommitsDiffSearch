@@ -484,21 +484,22 @@ public class FontChooser extends JComponent {
 
         @Override
         public void keyPressed(KeyEvent e) {
+            int i = targetList.getSelectedIndex();
             switch (e.getKeyCode()) {
                 case KeyEvent.VK_UP:
-                    int up = targetList.getSelectedIndex() - 1;
-                    if (up < 0) {
-                        up = 0;
+                    i = targetList.getSelectedIndex() - 1;
+                    if (i < 0) {
+                        i = 0;
                     }
-                    targetList.setSelectedIndex(up);
+                    targetList.setSelectedIndex(i);
                     break;
                 case KeyEvent.VK_DOWN:
                     int listSize = targetList.getModel().getSize();
-                    int down = targetList.getSelectedIndex() + 1;
-                    if (down >= listSize) {
-                        down = listSize - 1;
+                    i = targetList.getSelectedIndex() + 1;
+                    if (i >= listSize) {
+                        i = listSize - 1;
                     }
-                    targetList.setSelectedIndex(down);
+                    targetList.setSelectedIndex(i);
                     break;
                 default:
                     break;
@@ -538,7 +539,7 @@ public class FontChooser extends JComponent {
                 logger.error("update(DocumentEvent) exception", ex);
             }
 
-            if (newValue.length() > 0) {
+            if (!newValue.isEmpty()) {
                 int index = targetList.getNextMatch(newValue, 0, Position.Bias.Forward);
                 if (index < 0) {
                     index = 0;
