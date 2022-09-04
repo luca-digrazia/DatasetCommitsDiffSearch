@@ -15,21 +15,18 @@
  */
 package com.googlecode.androidannotations.helper;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 
 import javax.lang.model.element.Element;
-import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
-import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.Elements;
 
-import com.googlecode.androidannotations.annotations.EActivity;
+import com.googlecode.androidannotations.annotations.Enhance;
 import com.googlecode.androidannotations.model.AndroidSystemServices;
 import com.googlecode.androidannotations.model.AnnotationElements;
 import com.googlecode.androidannotations.validation.IsValid;
@@ -43,8 +40,6 @@ public class ValidatorHelper {
 	private static final String ANDROID_SQLITE_DB_QUALIFIED_NAME = "android.database.sqlite.SQLiteDatabase";
 	private static final String GUICE_INJECTOR_QUALIFIED_NAME = "com.google.inject.Injector";
 	private static final String ROBOGUICE_INJECTOR_PROVIDER_QUALIFIED_NAME = "roboguice.inject.InjectorProvider";
-
-	private static final List<String> validPrefReturnTypes = Arrays.asList("int", "boolean", "float", "long", "java.lang.String");
 
 	protected final TargetAnnotationHelper annotationHelper;
 
@@ -73,13 +68,6 @@ public class ValidatorHelper {
 		}
 	}
 
-	public void isInterface(TypeElement element, IsValid valid) {
-		if (!annotationHelper.isInterface(element)) {
-			valid.invalidate();
-			annotationHelper.printAnnotationError(element, "%s can only be used on an interface");
-		}
-	}
-
 	public void isNotPrivate(Element element, IsValid valid) {
 		if (annotationHelper.isPrivate(element)) {
 			valid.invalidate();
@@ -87,23 +75,23 @@ public class ValidatorHelper {
 		}
 	}
 
-	public void enclosingElementHasEActivity(Element element, AnnotationElements validatedElements, IsValid valid) {
+	public void enclosingElementHasEnhance(Element element, AnnotationElements validatedElements, IsValid valid) {
 		Element enclosingElement = element.getEnclosingElement();
-		hasEActivity(element, enclosingElement, validatedElements, valid);
+		hasEnhance(element, enclosingElement, validatedElements, valid);
 	}
 
-	public void hasEActivity(Element element, AnnotationElements validatedElements, IsValid valid) {
-		hasEActivity(element, element, validatedElements, valid);
+	public void hasEnhance(Element element, AnnotationElements validatedElements, IsValid valid) {
+		hasEnhance(element, element, validatedElements, valid);
 	}
 
-	public void hasEActivity(Element reportElement, Element element, AnnotationElements validatedElements, IsValid valid) {
+	public void hasEnhance(Element reportElement, Element element, AnnotationElements validatedElements, IsValid valid) {
 
-		Set<? extends Element> layoutAnnotatedElements = validatedElements.getAnnotatedElements(EActivity.class);
+		Set<? extends Element> layoutAnnotatedElements = validatedElements.getAnnotatedElements(Enhance.class);
 
 		if (!layoutAnnotatedElements.contains(element)) {
 			valid.invalidate();
-			if (element.getAnnotation(EActivity.class) == null) {
-				annotationHelper.printAnnotationError(reportElement, "%s can only be used in a class annotated with " + TargetAnnotationHelper.annotationName(EActivity.class));
+			if (element.getAnnotation(Enhance.class) == null) {
+				annotationHelper.printAnnotationError(reportElement, "%s can only be used in a class annotated with " + TargetAnnotationHelper.annotationName(Enhance.class));
 			}
 		}
 	}
@@ -292,22 +280,6 @@ public class ValidatorHelper {
 		if (!(uiFieldTypeMirror instanceof DeclaredType)) {
 			valid.invalidate();
 			annotationHelper.printAnnotationError(element, "%s can only be used on a field which is a declared type");
-		}
-	}
-
-	public void isPrefMethod(Element element) {
-		if (!element.getKind().equals(ElementKind.METHOD)) {
-			annotationHelper.printError(element, "Only methods are allowed in an " + annotationHelper.annotationName() + " annotated interface");
-		} else {
-			ExecutableElement executableElement = (ExecutableElement) element;
-			if (executableElement.getParameters().size() > 0) {
-				annotationHelper.printError(element, "Methods should have no parameters in an " + annotationHelper.annotationName() + " annotated interface");
-			} else {
-				String returnType = executableElement.getReturnType().toString();
-				if (!validPrefReturnTypes.contains(returnType)) {
-					annotationHelper.printError(element, "Methods should only return preference simple types in an " + annotationHelper.annotationName() + " annotated interface");
-				}
-			}
 		}
 	}
 

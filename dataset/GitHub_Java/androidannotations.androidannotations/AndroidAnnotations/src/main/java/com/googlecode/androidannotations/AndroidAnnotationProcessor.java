@@ -30,7 +30,7 @@ import javax.lang.model.element.TypeElement;
 import javax.tools.Diagnostic;
 
 import com.googlecode.androidannotations.annotations.Background;
-import com.googlecode.androidannotations.annotations.BeforeViews;
+import com.googlecode.androidannotations.annotations.BeforeCreate;
 import com.googlecode.androidannotations.annotations.Click;
 import com.googlecode.androidannotations.annotations.EActivity;
 import com.googlecode.androidannotations.annotations.Extra;
@@ -113,7 +113,7 @@ import com.googlecode.androidannotations.validation.ViewByIdValidator;
 import com.sun.codemodel.JCodeModel;
 
 @SupportedAnnotationClasses({ EActivity.class, //
-		BeforeViews.class, //
+		BeforeCreate.class, //
 		RoboGuice.class, //
 		ViewById.class, //
 		Click.class, //
@@ -271,7 +271,7 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 		}
 		modelProcessor.register(new UiThreadProcessor());
 		modelProcessor.register(new UiThreadDelayedProcessor());
-		modelProcessor.register(new BackgroundProcessor());
+		modelProcessor.register(new BackgroundProcessor(androidManifest));
 		modelProcessor.register(new TransactionalProcessor());
 		modelProcessor.register(new ExtraProcessor());
 		modelProcessor.register(new SystemServiceProcessor(androidSystemServices));
