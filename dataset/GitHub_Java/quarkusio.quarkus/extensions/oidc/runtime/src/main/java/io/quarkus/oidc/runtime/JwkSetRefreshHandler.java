@@ -11,7 +11,7 @@ public class JwkSetRefreshHandler implements Handler<String> {
     private static final Logger LOG = Logger.getLogger(JwkSetRefreshHandler.class);
     private OAuth2Auth auth;
     private volatile long lastForcedRefreshTime;
-    private volatile long forcedJwksRefreshIntervalMilliSecs;
+    private long forcedJwksRefreshIntervalMilliSecs;
 
     public JwkSetRefreshHandler(OAuth2Auth auth, Duration forcedJwksRefreshInterval) {
         this.auth = auth;

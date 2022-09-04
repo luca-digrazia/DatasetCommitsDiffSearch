@@ -38,7 +38,7 @@ public class BearerTokenAuthorizationTest {
     @Test
     public void testResolveTenantIdentifierWebApp() throws IOException {
         try (final WebClient webClient = createWebClient()) {
-            HtmlPage page = webClient.getPage("http://localhost:8081/tenant/tenant-web-app/api/user/webapp");
+            HtmlPage page = webClient.getPage("http://localhost:8081/tenant/tenant-web-app/api/user");
             // State cookie is available but there must be no saved path parameter
             // as the tenant-web-app configuration does not set a redirect-path property
             assertNull(getStateCookieSavedPath(webClient, "tenant-web-app"));
@@ -55,7 +55,7 @@ public class BearerTokenAuthorizationTest {
     @Test
     public void testResolveTenantIdentifierWebApp2() throws IOException {
         try (final WebClient webClient = createWebClient()) {
-            HtmlPage page = webClient.getPage("http://localhost:8081/tenant/tenant-web-app2/api/user/webapp2");
+            HtmlPage page = webClient.getPage("http://localhost:8081/tenant/tenant-web-app2/api/user");
             // State cookie is available but there must be no saved path parameter
             // as the tenant-web-app configuration does not set a redirect-path property
             assertNull(getStateCookieSavedPath(webClient, "tenant-web-app2"));
@@ -73,7 +73,7 @@ public class BearerTokenAuthorizationTest {
     public void testReAuthenticateWhenSwitchingTenants() throws IOException {
         try (final WebClient webClient = createWebClient()) {
             // tenant-web-app
-            HtmlPage page = webClient.getPage("http://localhost:8081/tenant/tenant-web-app/api/user/webapp");
+            HtmlPage page = webClient.getPage("http://localhost:8081/tenant/tenant-web-app/api/user");
             assertNull(getStateCookieSavedPath(webClient, "tenant-web-app"));
             assertEquals("Log in to quarkus-webapp", page.getTitleText());
             HtmlForm loginForm = page.getForms().get(0);
@@ -82,7 +82,7 @@ public class BearerTokenAuthorizationTest {
             page = loginForm.getInputByName("login").click();
             assertEquals("tenant-web-app:alice", page.getBody().asText());
             // tenant-web-app2
-            page = webClient.getPage("http://localhost:8081/tenant/tenant-web-app2/api/user/webapp2");
+            page = webClient.getPage("http://localhost:8081/tenant/tenant-web-app2/api/user");
             assertNull(getStateCookieSavedPath(webClient, "tenant-web-app2"));
             assertEquals("Log in to quarkus-webapp2", page.getTitleText());
             loginForm = page.getForms().get(0);
@@ -137,7 +137,6 @@ public class BearerTokenAuthorizationTest {
 
     @Test
     public void testSimpleOidcJwtWithJwkRefresh() {
-        RestAssured.when().post("/oidc/jwk-endpoint-call-count").then().body(equalTo("0"));
         RestAssured.when().get("/oidc/introspection-status").then().body(equalTo("false"));
         RestAssured.when().get("/oidc/rotate-status").then().body(equalTo("false"));
         // Quarkus OIDC is initialized with JWK set with kid '1' as part of the discovery process
@@ -190,21 +189,6 @@ public class BearerTokenAuthorizationTest {
         // and once during the 1st request with a token kid '2', follow up requests must've been blocked due to the interval
         // restrictions
         RestAssured.when().get("/oidc/jwk-endpoint-call-count").then().body(equalTo("2"));
-    }
-
-    @Test
-    public void testSimpleOidcNoDiscovery() {
-        RestAssured.when().post("/oidc/jwk-endpoint-call-count").then().body(equalTo("0"));
-        RestAssured.when().get("/oidc/introspection-status").then().body(equalTo("false"));
-        RestAssured.when().get("/oidc/rotate-status").then().body(equalTo("false"));
-
-        // Quarkus OIDC is initialized with JWK set with kid '1' as part of the initialization process
-        RestAssured.given().auth().oauth2(getAccessTokenFromSimpleOidc("1"))
-                .when().get("/tenant/tenant-oidc-no-discovery/api/user")
-                .then()
-                .statusCode(200)
-                .body(equalTo("tenant-oidc-no-discovery:alice"));
-        RestAssured.when().get("/oidc/jwk-endpoint-call-count").then().body(equalTo("1"));
     }
 
     private String getAccessToken(String userName, String clientId) {
