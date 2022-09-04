@@ -96,7 +96,6 @@ import com.google.devtools.build.lib.skyframe.RecursivePackageProviderBackedTarg
 import com.google.devtools.build.lib.skyframe.TargetPatternValue;
 import com.google.devtools.build.lib.skyframe.TargetPatternValue.TargetPatternKey;
 import com.google.devtools.build.lib.skyframe.TransitiveTraversalValue;
-import com.google.devtools.build.lib.skyframe.TraversalInfoRootPackageExtractor;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.RootedPath;
@@ -255,8 +254,7 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
       graph = result.getWalkableGraph();
       blacklistPatternsSupplier = InterruptibleSupplier.Memoize.of(new BlacklistSupplier(graph));
       graphBackedRecursivePackageProvider =
-          new GraphBackedRecursivePackageProvider(
-              graph, universeTargetPatternKeys, pkgPath, new TraversalInfoRootPackageExtractor());
+          new GraphBackedRecursivePackageProvider(graph, universeTargetPatternKeys, pkgPath);
     }
 
     if (executor == null) {
