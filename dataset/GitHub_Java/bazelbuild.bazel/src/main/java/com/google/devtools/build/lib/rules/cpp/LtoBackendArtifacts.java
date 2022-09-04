@@ -133,8 +133,7 @@ public final class LtoBackendArtifacts {
     PathFragment compiler = cppConfiguration.getCppExecutable();
 
     builder.setExecutable(compiler);
-    Variables.Builder buildVariablesBuilder =
-        new Variables.Builder(ccToolchain.getBuildVariables());
+    Variables.Builder buildVariablesBuilder = new Variables.Builder();
     buildVariablesBuilder.addStringVariable("thinlto_index", index.getExecPath().toString());
     // The output from the LTO backend step is a native object file.
     buildVariablesBuilder.addStringVariable(
