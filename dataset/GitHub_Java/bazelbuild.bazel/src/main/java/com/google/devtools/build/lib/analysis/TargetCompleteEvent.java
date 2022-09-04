@@ -21,7 +21,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.ArtifactPathResolver;
 import com.google.devtools.build.lib.actions.EventReportingArtifacts;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactHelper.ArtifactsInOutputGroup;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
@@ -102,7 +101,6 @@ public final class TargetCompleteEvent
   private final ConfiguredTargetKey configuredTargetKey;
   private final NestedSet<Cause> rootCauses;
   private final ImmutableList<BuildEventId> postedAfter;
-  private final ArtifactPathResolver pathResolver;
   private final NestedSet<ArtifactsInOutputGroup> outputs;
   private final NestedSet<Artifact> baselineCoverageArtifacts;
   private final Label aliasLabel;
@@ -117,7 +115,6 @@ public final class TargetCompleteEvent
   private TargetCompleteEvent(
       ConfiguredTargetAndData targetAndData,
       NestedSet<Cause> rootCauses,
-      ArtifactPathResolver pathResolver,
       NestedSet<ArtifactsInOutputGroup> outputs,
       boolean isTest) {
     this.rootCauses =
@@ -139,7 +136,6 @@ public final class TargetCompleteEvent
       postedAfterBuilder.add(BuildEventId.fromCause(cause));
     }
     this.postedAfter = postedAfterBuilder.build();
-    this.pathResolver = pathResolver;
     this.outputs = outputs;
     this.isTest = isTest;
     this.testTimeoutSeconds = isTest ? getTestTimeoutSeconds(targetAndData) : null;
@@ -179,18 +175,14 @@ public final class TargetCompleteEvent
 
   /** Construct a successful target completion event. */
   public static TargetCompleteEvent successfulBuild(
-      ConfiguredTargetAndData ct,
-      ArtifactPathResolver pathResolver,
-      NestedSet<ArtifactsInOutputGroup> outputs) {
-    return new TargetCompleteEvent(ct, null, pathResolver, outputs, false);
+      ConfiguredTargetAndData ct, NestedSet<ArtifactsInOutputGroup> outputs) {
+    return new TargetCompleteEvent(ct, null, outputs, false);
   }
 
   /** Construct a successful target completion event for a target that will be tested. */
   public static TargetCompleteEvent successfulBuildSchedulingTest(
-      ConfiguredTargetAndData ct,
-      ArtifactPathResolver pathResolver,
-      NestedSet<ArtifactsInOutputGroup> outputs) {
-    return new TargetCompleteEvent(ct, null, pathResolver, outputs, true);
+      ConfiguredTargetAndData ct, NestedSet<ArtifactsInOutputGroup> outputs) {
+    return new TargetCompleteEvent(ct, null, outputs, true);
   }
 
   /**
@@ -200,11 +192,7 @@ public final class TargetCompleteEvent
       ConfiguredTargetAndData ct, NestedSet<Cause> rootCauses) {
     Preconditions.checkArgument(!Iterables.isEmpty(rootCauses));
     return new TargetCompleteEvent(
-        ct,
-        rootCauses,
-        ArtifactPathResolver.IDENTITY,
-        NestedSetBuilder.emptySet(Order.STABLE_ORDER),
-        false);
+        ct, rootCauses, NestedSetBuilder.emptySet(Order.STABLE_ORDER), false);
   }
 
   /** Returns the label of the target associated with the event. */
@@ -272,23 +260,20 @@ public final class TargetCompleteEvent
   // TODO(aehlig): remove as soon as we managed to get rid of the deprecated "important_output"
   // field.
   private static void addImportantOutputs(
-      ArtifactPathResolver pathResolver,
       BuildEventStreamProtos.TargetComplete.Builder builder,
       BuildEventContext converters,
       Iterable<Artifact> artifacts) {
-    addImportantOutputs(
-        pathResolver, builder, Artifact::getRootRelativePathString, converters, artifacts);
+    addImportantOutputs(builder, Artifact::getRootRelativePathString, converters, artifacts);
   }
 
   private static void addImportantOutputs(
-      ArtifactPathResolver pathResolver,
       BuildEventStreamProtos.TargetComplete.Builder builder,
       Function<Artifact, String> artifactNameFunction,
       BuildEventContext converters,
       Iterable<Artifact> artifacts) {
     for (Artifact artifact : artifacts) {
       String name = artifactNameFunction.apply(artifact);
-      String uri = converters.pathConverter().apply(pathResolver.toPath(artifact));
+      String uri = converters.pathConverter().apply(artifact.getPath());
       if (uri != null) {
         builder.addImportantOutput(File.newBuilder().setName(name).setUri(uri).build());
       }
@@ -303,17 +288,9 @@ public final class TargetCompleteEvent
         for (Artifact artifact : group.getArtifacts()) {
           builder.add(
               new LocalFile(
-                  pathResolver.toPath(artifact),
+                  artifact.getPath(),
                   artifact.isSourceArtifact() ? LocalFileType.SOURCE : LocalFileType.OUTPUT));
         }
-      }
-    }
-    if (baselineCoverageArtifacts != null) {
-      for (Artifact artifact : baselineCoverageArtifacts) {
-        builder.add(
-            new LocalFile(
-                pathResolver.toPath(artifact),
-                artifact.isSourceArtifact() ? LocalFileType.SOURCE : LocalFileType.OUTPUT));
       }
     }
     return builder.build();
@@ -335,14 +312,10 @@ public final class TargetCompleteEvent
     // TODO(aehlig): remove direct reporting of artifacts as soon as clients no longer
     // need it.
     if (converters.getOptions().legacyImportantOutputs) {
-      addImportantOutputs(pathResolver, builder, converters, getLegacyFilteredImportantArtifacts());
+      addImportantOutputs(builder, converters, getLegacyFilteredImportantArtifacts());
       if (baselineCoverageArtifacts != null) {
         addImportantOutputs(
-            pathResolver,
-            builder,
-            (artifact -> BASELINE_COVERAGE),
-            converters,
-            baselineCoverageArtifacts);
+            builder, (artifact -> BASELINE_COVERAGE), converters, baselineCoverageArtifacts);
       }
     }
 
@@ -356,15 +329,16 @@ public final class TargetCompleteEvent
   }
 
   @Override
-  public ReportedArtifacts reportedArtifacts() {
-    ImmutableSet.Builder<NestedSet<Artifact>> builder = ImmutableSet.builder();
+  public Collection<NestedSet<Artifact>> reportedArtifacts() {
+    ImmutableSet.Builder<NestedSet<Artifact>> builder =
+        new ImmutableSet.Builder<NestedSet<Artifact>>();
     for (ArtifactsInOutputGroup artifactsInGroup : outputs) {
       builder.add(artifactsInGroup.getArtifacts());
     }
     if (baselineCoverageArtifacts != null) {
       builder.add(baselineCoverageArtifacts);
     }
-    return new ReportedArtifacts(builder.build(), pathResolver);
+    return builder.build();
   }
 
   @Override

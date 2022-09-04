@@ -41,7 +41,6 @@ public class ActionExecutedEvent implements BuildEventWithConfiguration, Progres
 
   private final Action action;
   private final ActionExecutionException exception;
-  private final Path primaryOutput;
   private final Path stdout;
   private final Path stderr;
   private final ErrorTiming timing;
@@ -49,13 +48,11 @@ public class ActionExecutedEvent implements BuildEventWithConfiguration, Progres
   public ActionExecutedEvent(
       Action action,
       ActionExecutionException exception,
-      Path primaryOutput,
       Path stdout,
       Path stderr,
       ErrorTiming timing) {
     this.action = action;
     this.exception = exception;
-    this.primaryOutput = primaryOutput;
     this.stdout = stdout;
     this.stderr = stderr;
     this.timing = timing;
@@ -93,10 +90,10 @@ public class ActionExecutedEvent implements BuildEventWithConfiguration, Progres
   @Override
   public BuildEventId getEventId() {
     if (action.getOwner() == null) {
-      return BuildEventId.actionCompleted(primaryOutput);
+      return BuildEventId.actionCompleted(action.getPrimaryOutput().getPath());
     } else {
       return BuildEventId.actionCompleted(
-          primaryOutput,
+          action.getPrimaryOutput().getPath(),
           action.getOwner().getLabel(),
           action.getOwner().getConfigurationChecksum());
     }
@@ -130,7 +127,7 @@ public class ActionExecutedEvent implements BuildEventWithConfiguration, Progres
       localFiles.add(new LocalFile(stderr, LocalFileType.STDERR));
     }
     if (exception == null) {
-      localFiles.add(new LocalFile(primaryOutput, LocalFileType.OUTPUT));
+      localFiles.add(new LocalFile(action.getPrimaryOutput().getPath(), LocalFileType.OUTPUT));
     }
     return localFiles.build();
   }
@@ -171,7 +168,7 @@ public class ActionExecutedEvent implements BuildEventWithConfiguration, Progres
       actionBuilder.setConfiguration(configuration.getEventId().asStreamProto().getConfiguration());
     }
     if (exception == null) {
-      String uri = pathConverter.apply(primaryOutput);
+      String uri = pathConverter.apply(action.getPrimaryOutput().getPath());
       if (uri != null) {
         actionBuilder.setPrimaryOutput(
             BuildEventStreamProtos.File.newBuilder().setUri(uri).build());
