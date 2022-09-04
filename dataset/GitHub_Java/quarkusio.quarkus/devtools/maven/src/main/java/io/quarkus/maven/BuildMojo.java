@@ -84,13 +84,11 @@ public class BuildMojo extends QuarkusBootstrapMojo {
                 if (result.getJar() != null) {
 
                     if (result.getJar().isUberJar() && result.getJar().getOriginalArtifact() != null) {
-                        final Path standardJar = result.getJar().getOriginalArtifact();
+                        final Path standardJar = curatedApplication.getAppModel().getAppArtifact().getPaths().getSinglePath();
                         if (Files.exists(standardJar)) {
-                            final Path renamedOriginal = standardJar.getParent().toAbsolutePath()
-                                    .resolve(standardJar.getFileName() + ".original");
                             try {
-                                IoUtils.recursiveDelete(renamedOriginal);
-                                Files.move(standardJar, renamedOriginal);
+                                IoUtils.recursiveDelete(result.getJar().getOriginalArtifact());
+                                Files.move(standardJar, result.getJar().getOriginalArtifact());
                             } catch (IOException e) {
                                 throw new UncheckedIOException(e);
                             }
