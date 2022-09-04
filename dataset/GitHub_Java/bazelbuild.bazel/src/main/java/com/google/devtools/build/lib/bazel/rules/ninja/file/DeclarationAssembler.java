@@ -53,12 +53,12 @@ public class DeclarationAssembler {
    */
   public void wrapUp(List<ByteFragmentAtOffset> fragments)
       throws GenericParsingException, IOException {
-    fragments.sort(Comparator.comparingLong(ByteFragmentAtOffset::getFragmentOffset));
+    fragments.sort(Comparator.comparingInt(ByteFragmentAtOffset::getFragmentOffset));
 
     List<ByteFragmentAtOffset> list = Lists.newArrayList();
-    long previous = -1;
+    int previous = -1;
     for (ByteFragmentAtOffset edge : fragments) {
-      long start = edge.getFragmentOffset();
+      int start = edge.getFragmentOffset();
       ByteBufferFragment fragment = edge.getFragment();
       if (previous >= 0 && previous != start) {
         sendMerged(list);
@@ -91,7 +91,7 @@ public class DeclarationAssembler {
     // 4. Later we will check only interestingRanges for separators, and create corresponding
     // fragments; the underlying common ByteBuffer will be reused, so we are not performing
     // extensive copying.
-    long firstOffset = first.getBufferOffset();
+    int firstOffset = first.getBufferOffset();
     List<ByteBufferFragment> fragments = new ArrayList<>();
     List<Range<Integer>> interestingRanges = Lists.newArrayList();
     int fragmentShift = 0;
@@ -114,7 +114,7 @@ public class DeclarationAssembler {
 
     ByteBufferFragment merged = ByteBufferFragment.merge(fragments);
 
-    long newOffset;
+    int newOffset;
     if (Iterables.getLast(list).getBufferOffset() == firstOffset) {
       // If all fragment offsets were the same (which is the case if all their originating buffers
       // were the same), then the merged fragment has the start index of the first originating
