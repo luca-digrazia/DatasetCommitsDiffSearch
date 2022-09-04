@@ -64,7 +64,6 @@ import com.google.devtools.build.lib.remote.RemoteRetrier.ExponentialBackoff;
 import com.google.devtools.build.lib.remote.Retrier.Backoff;
 import com.google.devtools.build.lib.remote.common.RemoteActionExecutionContext;
 import com.google.devtools.build.lib.remote.common.RemoteCacheClient.ActionKey;
-import com.google.devtools.build.lib.remote.grpc.ChannelConnectionFactory;
 import com.google.devtools.build.lib.remote.merkletree.MerkleTree;
 import com.google.devtools.build.lib.remote.options.RemoteOptions;
 import com.google.devtools.build.lib.remote.util.DigestUtil;
@@ -86,7 +85,6 @@ import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
 import io.grpc.ClientInterceptor;
-import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Server;
@@ -99,7 +97,6 @@ import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.stub.StreamObserver;
 import io.grpc.util.MutableHandlerRegistry;
-import io.reactivex.rxjava3.core.Single;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -156,8 +153,7 @@ public class GrpcCacheClientTest {
     FileSystemUtils.createDirectoryAndParents(stderr.getParentDirectory());
     outErr = new FileOutErr(stdout, stderr);
     RequestMetadata metadata =
-        TracingMetadataUtils.buildMetadata(
-            "none", "none", Digest.getDefaultInstance().getHash(), null);
+        TracingMetadataUtils.buildMetadata("none", "none", Digest.getDefaultInstance().getHash());
     context = RemoteActionExecutionContext.create(metadata);
     retryService = MoreExecutors.listeningDecorator(Executors.newScheduledThreadPool(1));
   }
@@ -224,23 +220,11 @@ public class GrpcCacheClientTest {
             backoffSupplier, RemoteRetrier.RETRIABLE_GRPC_ERRORS, retryService);
     ReferenceCountedChannel channel =
         new ReferenceCountedChannel(
-            new ChannelConnectionFactory() {
-              @Override
-              public Single<? extends ChannelConnection> create() {
-                ManagedChannel ch =
-                    InProcessChannelBuilder.forName(fakeServerName)
-                        .directExecutor()
-                        .intercept(new CallCredentialsInterceptor(creds))
-                        .intercept(TracingMetadataUtils.newCacheHeadersInterceptor(remoteOptions))
-                        .build();
-                return Single.just(new ChannelConnection(ch));
-              }
-
-              @Override
-              public int maxConcurrency() {
-                return 100;
-              }
-            });
+            InProcessChannelBuilder.forName(fakeServerName)
+                .directExecutor()
+                .intercept(new CallCredentialsInterceptor(creds))
+                .intercept(TracingMetadataUtils.newCacheHeadersInterceptor(remoteOptions))
+                .build());
     ByteStreamUploader uploader =
         new ByteStreamUploader(
             remoteOptions.remoteInstanceName,

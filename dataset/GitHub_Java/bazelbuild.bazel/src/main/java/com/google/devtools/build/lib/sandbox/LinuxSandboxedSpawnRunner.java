@@ -305,19 +305,15 @@ final class LinuxSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
   }
 
   /**
-   * This method does the following things:
-   *
-   * <ul>
-   *   <li>If mount source does not exist on the host system, throw an error message
-   *   <li>If mount target exists, check whether the source and target are of the same type
-   *   <li>If mount target does not exist on the host system, throw an error message
-   * </ul>
+   * This method does the following things: - If mount source does not exist on the host system,
+   * throw an error message - If mount target exists, check whether the source and target are of the
+   * same type - If mount target does not exist on the host system, throw an error message
    *
    * @param bindMounts the bind mounts map with target as key and source as value
-   * @throws UserExecException if any of the mount points are not valid
+   * @throws UserExecException
    */
   private void validateBindMounts(SortedMap<Path, Path> bindMounts) throws UserExecException {
-    for (Map.Entry<Path, Path> bindMount : bindMounts.entrySet()) {
+    for (SortedMap.Entry<Path, Path> bindMount : bindMounts.entrySet()) {
       final Path source = bindMount.getValue();
       final Path target = bindMount.getKey();
       // Mount source should exist in the file system
@@ -338,12 +334,8 @@ final class LinuxSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
           throw new UserExecException(
               createFailureDetail(
                   String.format(
-                      "Mount target '%s' is a %s but mount source '%s' is a %s, they must be the"
-                          + " same type.",
-                      target,
-                      (isTargetFile ? "file" : "directory"),
-                      source,
-                      (isSourceFile ? "file" : "directory")),
+                      "Mount target '%s' is not of the same type as mount source '%s'.",
+                      target, source),
                   Code.MOUNT_SOURCE_TARGET_TYPE_MISMATCH));
         }
       } else {

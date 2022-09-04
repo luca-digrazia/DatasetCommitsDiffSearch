@@ -70,8 +70,6 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.exec.util.FakeOwner;
 import com.google.devtools.build.lib.remote.RemoteRetrier.ExponentialBackoff;
-import com.google.devtools.build.lib.remote.common.RemotePathResolver;
-import com.google.devtools.build.lib.remote.grpc.ChannelConnectionFactory;
 import com.google.devtools.build.lib.remote.options.RemoteOptions;
 import com.google.devtools.build.lib.remote.util.DigestUtil;
 import com.google.devtools.build.lib.remote.util.FakeSpawnExecutionContext;
@@ -92,7 +90,6 @@ import com.google.rpc.Code;
 import com.google.rpc.PreconditionFailure;
 import com.google.rpc.PreconditionFailure.Violation;
 import io.grpc.BindableService;
-import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.Server;
 import io.grpc.ServerCall;
@@ -104,7 +101,6 @@ import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.stub.StreamObserver;
 import io.grpc.util.MutableHandlerRegistry;
-import io.reactivex.rxjava3.core.Single;
 import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -257,23 +253,10 @@ public class RemoteSpawnRunnerWithGrpcRemoteExecutorTest {
             retryService);
     ReferenceCountedChannel channel =
         new ReferenceCountedChannel(
-            new ChannelConnectionFactory() {
-              @Override
-              public Single<? extends ChannelConnection> create() {
-                ManagedChannel ch =
-                    InProcessChannelBuilder.forName(fakeServerName)
-                        .intercept(TracingMetadataUtils.newExecHeadersInterceptor(remoteOptions))
-                        .directExecutor()
-                        .build();
-
-                return Single.just(new ChannelConnection(ch));
-              }
-
-              @Override
-              public int maxConcurrency() {
-                return 100;
-              }
-            });
+            InProcessChannelBuilder.forName(fakeServerName)
+                .intercept(TracingMetadataUtils.newExecHeadersInterceptor(remoteOptions))
+                .directExecutor()
+                .build());
     GrpcRemoteExecutor executor =
         new GrpcRemoteExecutor(channel.retain(), CallCredentialsProvider.NO_CREDENTIALS, retrier);
     CallCredentialsProvider callCredentialsProvider =
@@ -296,17 +279,6 @@ public class RemoteSpawnRunnerWithGrpcRemoteExecutorTest {
             uploader);
     RemoteExecutionCache remoteCache =
         new RemoteExecutionCache(cacheProtocol, remoteOptions, DIGEST_UTIL);
-    RemoteExecutionService remoteExecutionService =
-        new RemoteExecutionService(
-            execRoot,
-            RemotePathResolver.createDefault(execRoot),
-            "build-req-id",
-            "command-id",
-            DIGEST_UTIL,
-            remoteOptions,
-            remoteCache,
-            executor,
-            /* filesToDownload= */ ImmutableSet.of());
     client =
         new RemoteSpawnRunner(
             execRoot,
@@ -314,9 +286,14 @@ public class RemoteSpawnRunnerWithGrpcRemoteExecutorTest {
             Options.getDefaults(ExecutionOptions.class),
             /* verboseFailures= */ true,
             /*cmdlineReporter=*/ null,
+            "build-req-id",
+            "command-id",
+            remoteCache,
+            executor,
             retryService,
+            DIGEST_UTIL,
             logDir,
-            remoteExecutionService);
+            /* filesToDownload= */ ImmutableSet.of());
 
     inputDigest =
         fakeFileCache.createScratchInput(simpleSpawn.getInputFiles().getSingleton(), "xyz");
@@ -328,7 +305,8 @@ public class RemoteSpawnRunnerWithGrpcRemoteExecutorTest {
                     .setName("VARIABLE")
                     .setValue("value")
                     .build())
-            .addAllOutputFiles(ImmutableList.of("bar", "foo"))
+            .addAllOutputFiles(ImmutableList.of("main/bar", "main/foo"))
+            .setWorkingDirectory("main")
             .build();
     cmdDigest = DIGEST_UTIL.compute(command);
     channel.release();

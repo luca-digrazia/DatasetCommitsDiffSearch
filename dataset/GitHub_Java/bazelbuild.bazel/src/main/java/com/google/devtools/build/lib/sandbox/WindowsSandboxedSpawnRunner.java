@@ -18,9 +18,7 @@ import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.ActionInput;
-import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.Spawn;
-import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.exec.local.LocalEnvProvider;
 import com.google.devtools.build.lib.exec.local.WindowsLocalEnvProvider;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
@@ -33,6 +31,7 @@ import java.time.Duration;
 /** Spawn runner that uses BuildXL Sandbox APIs to execute a local subprocess. */
 final class WindowsSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
 
+  private final SandboxHelpers helpers;
   private final Path execRoot;
   private final PathFragment windowsSandbox;
   private final LocalEnvProvider localEnvProvider;
@@ -41,13 +40,18 @@ final class WindowsSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
   /**
    * Creates a sandboxed spawn runner that uses the {@code windows-sandbox} tool.
    *
+   * @param helpers common tools and state across all spawns during sandboxed execution
    * @param cmdEnv the command environment to use
    * @param timeoutKillDelay an additional grace period before killing timing out commands
    * @param windowsSandboxPath path to windows-sandbox binary
    */
   WindowsSandboxedSpawnRunner(
-      CommandEnvironment cmdEnv, Duration timeoutKillDelay, PathFragment windowsSandboxPath) {
+      SandboxHelpers helpers,
+      CommandEnvironment cmdEnv,
+      Duration timeoutKillDelay,
+      PathFragment windowsSandboxPath) {
     super(cmdEnv);
+    this.helpers = helpers;
     this.execRoot = cmdEnv.getExecRoot();
     this.windowsSandbox = windowsSandboxPath;
     this.timeoutKillDelay = timeoutKillDelay;
@@ -55,22 +59,23 @@ final class WindowsSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
   }
 
   @Override
-  protected SpawnResult actuallyExec(Spawn spawn, SpawnExecutionContext context)
-      throws IOException, ExecException, InterruptedException {
+  protected SandboxedSpawn prepareSpawn(Spawn spawn, SpawnExecutionContext context)
+      throws IOException, InterruptedException {
     Path tmpDir = createActionTemp(execRoot);
     Path commandTmpDir = tmpDir.getRelative("work");
     commandTmpDir.createDirectory();
     ImmutableMap<String, String> environment =
-        ImmutableMap.copyOf(
-            localEnvProvider.rewriteLocalEnv(
-                spawn.getEnvironment(), binTools, commandTmpDir.getPathString()));
+        localEnvProvider.rewriteLocalEnv(
+            spawn.getEnvironment(), binTools, commandTmpDir.getPathString());
 
     SandboxInputs readablePaths =
-        SandboxHelpers.processInputFiles(
+        helpers.processInputFiles(
+            context.getInputMapping(PathFragment.EMPTY_FRAGMENT),
             spawn,
-            context,
-            execRoot,
-            getSandboxOptions().symlinkedSandboxExpandsTreeArtifactsInRunfilesTree);
+            context.getArtifactExpander(),
+            execRoot);
+
+    readablePaths.materializeVirtualInputs(execRoot);
 
     ImmutableSet.Builder<Path> writablePaths = ImmutableSet.builder();
     writablePaths.addAll(getWritableDirs(execRoot, environment));
@@ -99,12 +104,7 @@ final class WindowsSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
       commandLineBuilder.setTimeout(timeout);
     }
 
-    Path statisticsPath = null;
-
-    SandboxedSpawn sandbox =
-        new WindowsSandboxedSpawn(execRoot, environment, commandLineBuilder.build());
-
-    return runSpawn(spawn, sandbox, context, execRoot, timeout, statisticsPath);
+    return new WindowsSandboxedSpawn(execRoot, environment, commandLineBuilder.build());
   }
 
   private static Path createActionTemp(Path execRoot) throws IOException {

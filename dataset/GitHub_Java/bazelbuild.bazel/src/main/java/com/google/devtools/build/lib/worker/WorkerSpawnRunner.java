@@ -483,7 +483,7 @@ final class WorkerSpawnRunner implements SpawnRunner {
       try {
         Stopwatch processOutputsStopwatch = Stopwatch.createStarted();
         context.lockOutputFiles();
-        worker.finishExecution(execRoot, outputs);
+        worker.finishExecution(execRoot);
         spawnMetrics.setProcessOutputsTime(processOutputsStopwatch.elapsed());
       } catch (IOException e) {
         restoreInterrupt(e);
