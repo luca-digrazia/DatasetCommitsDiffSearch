@@ -125,10 +125,6 @@ public class TvShowViewModel {
     return chapterViewModels;
   }
 
-  /**
-   * Interface created to work as ViewModel listener. Every change in the view model will be
-   * notified to Listener implementation.
-   */
   public interface Listener {
 
     void onFanArtLoaded(final String fanArt);
