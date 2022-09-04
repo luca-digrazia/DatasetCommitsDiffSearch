@@ -59,7 +59,7 @@ public class RemoteActionFileSystemTest {
     MockitoAnnotations.initMocks(this);
     fs = new InMemoryFileSystem(new JavaClock(), HASH_FUNCTION);
     execRoot = fs.getPath("/exec");
-    outputRoot = ArtifactRoot.asDerivedRoot(execRoot, "out");
+    outputRoot = ArtifactRoot.asDerivedRoot(execRoot, execRoot.getRelative("out"));
     outputRoot.getRoot().asPath().createDirectoryAndParents();
   }
 
@@ -124,35 +124,6 @@ public class RemoteActionFileSystemTest {
         FileSystemUtils.readContent(symlinkActionFs, StandardCharsets.UTF_8);
     assertThat(symlinkTargetContents).isEqualTo("remote contents");
     verifyNoMoreInteractions(inputFetcher);
-  }
-
-  @Test
-  public void testDeleteRemoteFile() throws Exception {
-    // arrange
-    ActionInputMap inputs = new ActionInputMap(1);
-    Artifact remoteArtifact = createRemoteArtifact("remote-file", "remote contents", inputs);
-    FileSystem actionFs = newRemoteActionFileSystem(inputs);
-
-    // act
-    boolean success = actionFs.delete(actionFs.getPath(remoteArtifact.getPath().getPathString()));
-
-    // assert
-    assertThat(success).isTrue();
-  }
-
-  @Test
-  public void testDeleteLocalFile() throws Exception {
-    // arrange
-    ActionInputMap inputs = new ActionInputMap(0);
-    FileSystem actionFs = newRemoteActionFileSystem(inputs);
-    Path filePath = actionFs.getPath(execRoot.getPathString()).getChild("local-file");
-    FileSystemUtils.writeContent(filePath, StandardCharsets.UTF_8, "local contents");
-
-    // act
-    boolean success = actionFs.delete(actionFs.getPath(filePath.getPathString()));
-
-    // assert
-    assertThat(success).isTrue();
   }
 
   private FileSystem newRemoteActionFileSystem(ActionInputMap inputs) {

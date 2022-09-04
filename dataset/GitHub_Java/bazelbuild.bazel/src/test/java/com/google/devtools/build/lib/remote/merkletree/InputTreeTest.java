@@ -21,6 +21,7 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.FileArtifactValue;
 import com.google.devtools.build.lib.actions.cache.VirtualActionInput;
+import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.clock.JavaClock;
 import com.google.devtools.build.lib.remote.merkletree.InputTree.DirectoryNode;
 import com.google.devtools.build.lib.remote.merkletree.InputTree.FileNode;
@@ -139,17 +140,17 @@ public class InputTreeTest {
     Path barPath = dirPath.getRelative("bar.cc");
     FileSystemUtils.writeContentAsLatin1(barPath, "bar");
     ActionInput bar = ActionInputHelper.fromPath(barPath.relativeTo(execRoot));
-    metadata.put(bar, FileArtifactValue.createShareable(barPath));
+    metadata.put(bar, FileArtifactValue.createForTesting(barPath));
 
     dirPath.getRelative("fizz").createDirectoryAndParents();
     Path buzzPath = dirPath.getRelative("fizz/buzz.cc");
     FileSystemUtils.writeContentAsLatin1(dirPath.getRelative("fizz/buzz.cc"), "buzz");
     ActionInput buzz = ActionInputHelper.fromPath(buzzPath.relativeTo(execRoot));
-    metadata.put(buzz, FileArtifactValue.createShareable(buzzPath));
+    metadata.put(buzz, FileArtifactValue.createForTesting(buzzPath));
 
-    Artifact dir = new Artifact(dirPath, artifactRoot);
+    Artifact dir = ActionsTestUtil.createArtifact(artifactRoot, dirPath);
     sortedInputs.put(dirPath.relativeTo(execRoot), dir);
-    metadata.put(dir, FileArtifactValue.createShareable(dirPath));
+    metadata.put(dir, FileArtifactValue.createForTesting(dirPath));
 
     InputTree tree =
         InputTree.build(sortedInputs, new StaticMetadataProvider(metadata), execRoot, digestUtil);
@@ -169,6 +170,30 @@ public class InputTreeTest {
     assertThat(fileNodesAtDepth(tree, 3)).containsExactly(expectedBuzzNode);
   }
 
+  @Test
+  public void testLexicographicalOrder() throws Exception {
+    // Regression test for https://github.com/bazelbuild/bazel/pull/8008
+    //
+    // The issue was that before #8008 we wrongly assumed that a sorted full list of inputs would
+    // also lead to sorted tree nodes. Thereby not taking into account that the path separator '/'
+    // influences the sorting of the full list but not that of the tree nodes as its stripped there.
+    // For example, the below full list is lexicographically sorted
+    //  srcs/system-root/bar.txt
+    //  srcs/system/foo.txt
+    //
+    // However, the tree node [system-root, system] is not (note the missing / suffix).
+
+    SortedMap<PathFragment, ActionInput> sortedInputs = new TreeMap<>();
+    Map<ActionInput, FileArtifactValue> metadata = new HashMap<>();
+
+    addFile("srcs/system/foo.txt", "foo", sortedInputs, metadata);
+    addFile("srcs/system-root/bar.txt", "bar", sortedInputs, metadata);
+
+    InputTree tree =
+        InputTree.build(sortedInputs, new StaticMetadataProvider(metadata), execRoot, digestUtil);
+    assertLexicographicalOrder(tree);
+  }
+
   private Artifact addFile(
       String path,
       String content,
@@ -178,10 +203,10 @@ public class InputTreeTest {
     Path p = execRoot.getRelative(path);
     p.getParentDirectory().createDirectoryAndParents();
     FileSystemUtils.writeContentAsLatin1(p, content);
-    Artifact a = new Artifact(p, artifactRoot);
+    Artifact a = ActionsTestUtil.createArtifact(artifactRoot, p);
 
     sortedInputs.put(PathFragment.create(path), a);
-    metadata.put(a, FileArtifactValue.create(a));
+    metadata.put(a, FileArtifactValue.createForTesting(a));
     return a;
   }
 
@@ -193,26 +218,16 @@ public class InputTreeTest {
   }
 
   private static void assertLexicographicalOrder(InputTree tree) {
-    int depth = 0;
-    while (true) {
-      // String::compareTo implements lexicographical order
-      List<String> files = filesAtDepth(depth, tree);
-      assertThat(files).isStrictlyOrdered();
-      List<String> directories = directoriesAtDepth(depth, tree);
-      assertThat(directories).isStrictlyOrdered();
-      if (directories.isEmpty()) {
-        break;
-      }
-      depth++;
-    }
+    // Assert the lexicographical order as defined by the remote execution protocol
+    tree.visit(
+        (PathFragment dirname, List<FileNode> files, List<DirectoryNode> dirs) -> {
+          assertThat(files).isStrictlyOrdered();
+          assertThat(dirs).isStrictlyOrdered();
+        });
   }
 
   private static List<String> directoriesAtDepth(int depth, InputTree tree) {
     return asPathSegments(directoryNodesAtDepth(tree, depth));
-  }
-
-  private static List<String> filesAtDepth(int depth, InputTree tree) {
-    return asPathSegments(fileNodesAtDepth(tree, depth));
   }
 
   private static List<String> asPathSegments(List<? extends Node> nodes) {
