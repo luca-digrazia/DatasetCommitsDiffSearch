@@ -27,7 +27,10 @@ public enum DocsHelper {
     PAGE_SENDING_JSONPATH("sending_data.html#json-path-from-http-api-input"),
     PAGE_ES_CONFIGURATION("configuring_es.html");
 
-    private static final String DOCS_URL = "http://docs.graylog.org/en/";
+    public static String DOCS_URL = "http://docs.graylog.org/en/";
+    public static final String HELP_DOCS = "http://docs.graylog.org/";
+    public static final String HELP_COMMUNITY = "https://www.graylog.org/community-support/";
+    public static final String HELP_COMMERCIAL = "https://www.graylog.com/support/";
 
     private final String path;
 
@@ -39,10 +42,21 @@ public enum DocsHelper {
     public String toString() {
         final String version = Version.CURRENT_CLASSPATH.major + "." + Version.CURRENT_CLASSPATH.minor;
 
-        return DOCS_URL + version + "/pages/" + path;
+        final StringBuffer sb = new StringBuffer(DOCS_URL)
+                .append(version)
+                .append("/pages/")
+                .append(path);
+
+        return sb.toString();
     }
 
     public String toLink(String title) {
-        return "<a href=\"" + toString() + "\" target=\"_blank\">" + title + "</a>";
+        final StringBuffer sb = new StringBuffer("<a href=\"")
+                .append(toString())
+                .append("\" target=\"_blank\">")
+                .append(title)
+                .append("</a>");
+
+        return sb.toString();
     }
 }
