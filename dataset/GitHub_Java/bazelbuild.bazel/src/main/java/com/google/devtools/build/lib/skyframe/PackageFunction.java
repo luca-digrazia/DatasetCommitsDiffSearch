@@ -66,9 +66,9 @@ import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
-import com.google.devtools.build.skyframe.ValueOrException;
 import com.google.devtools.build.skyframe.ValueOrException2;
 import com.google.devtools.build.skyframe.ValueOrException3;
+import com.google.devtools.build.skyframe.ValueOrException4;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -296,17 +296,18 @@ public class PackageFunction implements SkyFunction {
     Preconditions.checkState(
         Iterables.all(depKeys, SkyFunctions.isSkyFunction(SkyFunctions.FILE)), depKeys);
     boolean packageShouldBeInError = packageWasInError;
-    for (Map.Entry<SkyKey, ValueOrException<IOException>> entry :
-        env.getValuesOrThrow(depKeys, IOException.class).entrySet()) {
+    for (Map.Entry<SkyKey, ValueOrException3<IOException, FileSymlinkException,
+        InconsistentFilesystemException>> entry : env.getValuesOrThrow(depKeys, IOException.class,
+            FileSymlinkException.class, InconsistentFilesystemException.class).entrySet()) {
       try {
         entry.getValue().get();
-      } catch (InconsistentFilesystemException e) {
-        throw new InternalInconsistentFilesystemException(packageIdentifier, e);
+      } catch (IOException e) {
+        maybeThrowFilesystemInconsistency(packageIdentifier, e, packageWasInError);
       } catch (FileSymlinkException e) {
         // Legacy doesn't detect symlink cycles.
         packageShouldBeInError = true;
-      } catch (IOException e) {
-        maybeThrowFilesystemInconsistency(packageIdentifier, e, packageWasInError);
+      } catch (InconsistentFilesystemException e) {
+        throw new InternalInconsistentFilesystemException(packageIdentifier, e);
       }
     }
     return packageShouldBeInError;
@@ -325,18 +326,19 @@ public class PackageFunction implements SkyFunction {
     Preconditions.checkState(
         Iterables.all(depKeys, SkyFunctions.isSkyFunction(SkyFunctions.GLOB)), depKeys);
     boolean packageShouldBeInError = packageWasInError;
-    for (Map.Entry<SkyKey, ValueOrException2<IOException, BuildFileNotFoundException>> entry :
-        env.getValuesOrThrow(
-            depKeys, IOException.class, BuildFileNotFoundException.class).entrySet()) {
+    for (Map.Entry<SkyKey, ValueOrException4<IOException, BuildFileNotFoundException,
+        FileSymlinkException, InconsistentFilesystemException>> entry :
+        env.getValuesOrThrow(depKeys, IOException.class, BuildFileNotFoundException.class,
+            FileSymlinkException.class, InconsistentFilesystemException.class).entrySet()) {
       try {
         entry.getValue().get();
-      } catch (InconsistentFilesystemException e) {
-        throw new InternalInconsistentFilesystemException(packageIdentifier, e);
+      } catch (IOException | BuildFileNotFoundException e) {
+        maybeThrowFilesystemInconsistency(packageIdentifier, e, packageWasInError);
       } catch (FileSymlinkException e) {
         // Legacy doesn't detect symlink cycles.
         packageShouldBeInError = true;
-      } catch (IOException | BuildFileNotFoundException e) {
-        maybeThrowFilesystemInconsistency(packageIdentifier, e, packageWasInError);
+      } catch (InconsistentFilesystemException e) {
+        throw new InternalInconsistentFilesystemException(packageIdentifier, e);
       }
     }
     return packageShouldBeInError;
@@ -451,9 +453,12 @@ public class PackageFunction implements SkyFunction {
               env.getValueOrThrow(
                   workspaceKey,
                   IOException.class,
+                  FileSymlinkException.class,
+                  InconsistentFilesystemException.class,
                   EvalException.class,
                   SkylarkImportFailedException.class);
-    } catch (IOException | EvalException | SkylarkImportFailedException e) {
+    } catch (IOException | FileSymlinkException | InconsistentFilesystemException
+          | EvalException | SkylarkImportFailedException e) {
       throw new PackageFunctionException(
           new NoSuchPackageException(
               Label.EXTERNAL_PACKAGE_IDENTIFIER,
@@ -649,9 +654,10 @@ public class PackageFunction implements SkyFunction {
       throws InterruptedException {
     FileValue buildFileValue;
     try {
-      buildFileValue =
-          (FileValue) env.getValueOrThrow(FileValue.key(buildFileRootedPath), IOException.class);
-    } catch (IOException e) {
+      buildFileValue = (FileValue) env.getValueOrThrow(FileValue.key(buildFileRootedPath),
+          IOException.class, FileSymlinkException.class,
+          InconsistentFilesystemException.class);
+    } catch (IOException | FileSymlinkException | InconsistentFilesystemException e) {
       throw new IllegalStateException("Package lookup succeeded but encountered error when "
           + "getting FileValue for BUILD file directly.", e);
     }
@@ -1045,10 +1051,10 @@ public class PackageFunction implements SkyFunction {
       }
       globDepsRequested.addAll(globKeys);
 
-      Map<SkyKey, ValueOrException3<IOException, BuildFileNotFoundException,
-          FileSymlinkCycleException>> globValueMap =
+      Map<SkyKey, ValueOrException4<IOException, BuildFileNotFoundException,
+          FileSymlinkCycleException, InconsistentFilesystemException>> globValueMap =
           env.getValuesOrThrow(globKeys, IOException.class, BuildFileNotFoundException.class,
-              FileSymlinkCycleException.class);
+              FileSymlinkCycleException.class, InconsistentFilesystemException.class);
 
       // For each missing glob, evaluate it asychronously via the delegate.
       //
@@ -1081,12 +1087,12 @@ public class PackageFunction implements SkyFunction {
     }
 
     private Collection<SkyKey> getMissingKeys(Collection<SkyKey> globKeys,
-        Map<SkyKey, ValueOrException3<IOException, BuildFileNotFoundException,
-            FileSymlinkCycleException>> globValueMap) {
+        Map<SkyKey, ValueOrException4<IOException, BuildFileNotFoundException,
+            FileSymlinkCycleException, InconsistentFilesystemException>> globValueMap) {
       List<SkyKey> missingKeys = new ArrayList<>(globKeys.size());
       for (SkyKey globKey : globKeys) {
-        ValueOrException3<IOException, BuildFileNotFoundException, FileSymlinkCycleException>
-            valueOrException = globValueMap.get(globKey);
+        ValueOrException4<IOException, BuildFileNotFoundException, FileSymlinkCycleException,
+            InconsistentFilesystemException> valueOrException = globValueMap.get(globKey);
         if (valueOrException == null) {
           missingKeys.add(globKey);
         }
@@ -1094,7 +1100,8 @@ public class PackageFunction implements SkyFunction {
           if (valueOrException.get() == null) {
             missingKeys.add(globKey);
           }
-        } catch (IOException | BuildFileNotFoundException doesntMatter) {
+        } catch (IOException | BuildFileNotFoundException | FileSymlinkCycleException
+            | InconsistentFilesystemException doesntMatter) {
           continue;
         }
       }
@@ -1149,8 +1156,8 @@ public class PackageFunction implements SkyFunction {
      */
     private static class HybridToken extends Globber.Token {
       // The result of the Skyframe lookup for all the needed glob patterns.
-      private final Map<SkyKey, ValueOrException3<IOException, BuildFileNotFoundException,
-          FileSymlinkCycleException>> globValueMap;
+      private final Map<SkyKey, ValueOrException4<IOException, BuildFileNotFoundException,
+          FileSymlinkCycleException, InconsistentFilesystemException>> globValueMap;
       // The skyframe keys corresponding to the 'includes' patterns fetched from Skyframe
       // (this is includes_sky above).
       private final Iterable<SkyKey> includesGlobKeys;
@@ -1162,8 +1169,8 @@ public class PackageFunction implements SkyFunction {
       // A token for computing excludes_leg.
       private final Token legacyExcludesToken;
 
-      private HybridToken(Map<SkyKey, ValueOrException3<IOException, BuildFileNotFoundException,
-          FileSymlinkCycleException>> globValueMap,
+      private HybridToken(Map<SkyKey, ValueOrException4<IOException, BuildFileNotFoundException,
+          FileSymlinkCycleException, InconsistentFilesystemException>> globValueMap,
           Iterable<SkyKey> includesGlobKeys, Iterable<SkyKey> excludesGlobKeys,
           Token delegateIncludesToken, Token delegateExcludesToken) {
         this.globValueMap = globValueMap;
@@ -1201,18 +1208,20 @@ public class PackageFunction implements SkyFunction {
           SkyKey globKey,
           Map<
                   SkyKey,
-                  ValueOrException3<
-                      IOException, BuildFileNotFoundException, FileSymlinkCycleException>>
+                  ValueOrException4<
+                      IOException, BuildFileNotFoundException, FileSymlinkCycleException,
+                      InconsistentFilesystemException>>
               globValueMap)
           throws IOException {
-        ValueOrException3<IOException, BuildFileNotFoundException, FileSymlinkCycleException>
-            valueOrException =
+        ValueOrException4<IOException, BuildFileNotFoundException, FileSymlinkCycleException,
+            InconsistentFilesystemException> valueOrException =
                 Preconditions.checkNotNull(globValueMap.get(globKey), "%s should not be missing",
                     globKey);
         try {
           return Preconditions.checkNotNull((GlobValue) valueOrException.get(),
               "%s should not be missing", globKey).getMatches();
-        } catch (BuildFileNotFoundException e) {
+        } catch (BuildFileNotFoundException | FileSymlinkCycleException
+            | InconsistentFilesystemException e) {
           // Legacy package loading is only able to handle an IOException, so a rethrow here is the
           // best we can do. But after legacy package loading, PackageFunction will go through all
           // the skyframe deps and properly handle InconsistentFilesystemExceptions.

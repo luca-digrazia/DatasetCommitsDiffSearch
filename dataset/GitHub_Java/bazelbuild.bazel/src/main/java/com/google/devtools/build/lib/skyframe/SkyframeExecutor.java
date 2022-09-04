@@ -72,9 +72,7 @@ import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactor
 import com.google.devtools.build.lib.analysis.config.ConfigurationResolver;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
-import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransitionProxy;
-import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
-import com.google.devtools.build.lib.analysis.config.transitions.Transition;
+import com.google.devtools.build.lib.analysis.config.PatchTransition;
 import com.google.devtools.build.lib.analysis.configuredtargets.MergedConfiguredTarget;
 import com.google.devtools.build.lib.analysis.configuredtargets.MergedConfiguredTarget.DuplicateException;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -89,11 +87,14 @@ import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.packages.AstParseResult;
+import com.google.devtools.build.lib.packages.Attribute;
+import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
 import com.google.devtools.build.lib.packages.BuildFileName;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.Package;
+import com.google.devtools.build.lib.packages.Package.Builder;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.packages.RuleVisibility;
@@ -752,21 +753,20 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       // TODO(janakr): don't invalidate here, just use different keys for different configs. Can't
       // be done right now because of lack of configuration trimming and fact that everything
       // depends on workspace status action.
-      invalidate(WorkspaceStatusValue.BUILD_INFO_KEY::equals);
+      invalidate(WorkspaceStatusValue.SKY_KEY::equals);
     }
   }
 
   private WorkspaceStatusAction makeWorkspaceStatusAction(String workspaceName) {
     return workspaceStatusActionFactory.createWorkspaceStatusAction(
-        artifactFactory.get(), WorkspaceStatusValue.BUILD_INFO_KEY, buildId, workspaceName);
+        artifactFactory.get(), WorkspaceStatusValue.ARTIFACT_OWNER, buildId, workspaceName);
   }
 
   @VisibleForTesting
   @Nullable
   public WorkspaceStatusAction getLastWorkspaceStatusAction() throws InterruptedException {
     WorkspaceStatusValue workspaceStatusValue =
-        (WorkspaceStatusValue)
-            memoizingEvaluator.getExistingValue(WorkspaceStatusValue.BUILD_INFO_KEY);
+        (WorkspaceStatusValue) memoizingEvaluator.getExistingValue(WorkspaceStatusValue.SKY_KEY);
     return workspaceStatusValue == null
         ? null
         : (WorkspaceStatusAction) workspaceStatusValue.getAction(0);
@@ -819,14 +819,11 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   public Collection<Artifact> getWorkspaceStatusArtifacts(ExtendedEventHandler eventHandler)
       throws InterruptedException {
     // Should already be present, unless the user didn't request any targets for analysis.
-    EvaluationResult<WorkspaceStatusValue> result =
-        buildDriver.evaluate(
-            ImmutableList.of(WorkspaceStatusValue.BUILD_INFO_KEY),
-            /*keepGoing=*/ true,
-            /*numThreads=*/ 1,
-            eventHandler);
+    EvaluationResult<WorkspaceStatusValue> result = buildDriver.evaluate(
+        ImmutableList.of(WorkspaceStatusValue.SKY_KEY), /*keepGoing=*/true, /*numThreads=*/1,
+        eventHandler);
     WorkspaceStatusValue value =
-        Preconditions.checkNotNull(result.get(WorkspaceStatusValue.BUILD_INFO_KEY));
+        Preconditions.checkNotNull(result.get(WorkspaceStatusValue.SKY_KEY));
     return ImmutableList.of(value.getStableArtifact(), value.getVolatileArtifact());
   }
 
@@ -1123,11 +1120,11 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     // The host configuration inherits the data, not target options. This is so host tools don't
     // apply LIPO.
     BuildConfiguration firstTargetConfig = topLevelTargetConfigs.get(0);
-    Transition dataTransition =
+    Attribute.Transition dataTransition =
         ((ConfiguredRuleClassProvider) ruleClassProvider)
             .getDynamicTransitionMapper()
-            .map(ConfigurationTransitionProxy.DATA);
-    BuildOptions dataOptions = dataTransition != ConfigurationTransitionProxy.NONE
+            .map(Attribute.ConfigurationTransition.DATA);
+    BuildOptions dataOptions = dataTransition != Attribute.ConfigurationTransition.NONE
         ? ((PatchTransition) dataTransition).apply(firstTargetConfig.getOptions())
         : firstTargetConfig.getOptions();
 
@@ -1317,8 +1314,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       for (BuildConfiguration depConfig : configs.get(key)) {
         skyKeys.add(ConfiguredTargetValue.key(key.getLabel(), depConfig));
         for (AspectDescriptor aspectDescriptor : key.getAspects().getAllAspects()) {
-          skyKeys.add(
-              AspectValue.createAspectKey(key.getLabel(), depConfig, aspectDescriptor, depConfig));
+          skyKeys.add(ActionLookupValue.key(AspectValue.createAspectKey(key.getLabel(), depConfig,
+              aspectDescriptor, depConfig)));
         }
       }
     }
@@ -1350,8 +1347,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
         List<ConfiguredAspect> configuredAspects = new ArrayList<>();
 
         for (AspectDescriptor aspectDescriptor : key.getAspects().getAllAspects()) {
-          SkyKey aspectKey =
-              AspectValue.createAspectKey(key.getLabel(), depConfig, aspectDescriptor, depConfig);
+          SkyKey aspectKey = ActionLookupValue.key(AspectValue.createAspectKey(key.getLabel(),
+              depConfig, aspectDescriptor, depConfig));
           if (result.get(aspectKey) == null) {
             continue DependentNodeLoop;
           }
@@ -1595,7 +1592,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   public ConfiguredTarget getConfiguredTargetForTesting(
       ExtendedEventHandler eventHandler, Label label, BuildConfiguration configuration) {
     return getConfiguredTargetForTesting(
-        eventHandler, label, configuration, ConfigurationTransitionProxy.NONE);
+        eventHandler, label, configuration, ConfigurationTransition.NONE);
   }
 
   /**
@@ -1607,7 +1604,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       ExtendedEventHandler eventHandler,
       Label label,
       BuildConfiguration configuration,
-      Transition transition) {
+      Attribute.Transition transition) {
     return Iterables.getFirst(
         getConfiguredTargets(
             eventHandler,
@@ -1646,7 +1643,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
 
     List<SkyKey> keys = new ArrayList<>(ConfiguredTargetValue.keys(values));
     for (AspectValueKey aspectKey : aspectKeys) {
-      keys.add(aspectKey);
+      keys.add(aspectKey.getSkyKey());
     }
     EvaluationResult<ActionLookupValue> result =
         buildDriver.evaluate(keys, keepGoing, numThreads, eventHandler);
@@ -1750,7 +1747,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     ArtifactOwner artifactOwner = artifact.getArtifactOwner();
     Preconditions.checkState(artifactOwner instanceof ActionLookupValue.ActionLookupKey,
         "%s %s", artifact, artifactOwner);
-    SkyKey actionLookupKey = (ActionLookupValue.ActionLookupKey) artifactOwner;
+    SkyKey actionLookupKey =
+        ActionLookupValue.key((ActionLookupValue.ActionLookupKey) artifactOwner);
 
     synchronized (valueLookupLock) {
       // Note that this will crash (attempting to run a configured target value builder after
