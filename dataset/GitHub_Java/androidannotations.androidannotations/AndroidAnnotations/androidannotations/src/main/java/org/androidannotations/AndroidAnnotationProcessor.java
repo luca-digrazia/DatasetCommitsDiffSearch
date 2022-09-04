@@ -26,7 +26,6 @@ import java.io.IOException;
 import java.net.URL;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -652,16 +651,8 @@ public class AndroidAnnotationProcessor extends AbstractProcessor {
 		 * eclipse.
 		 */
 
-		Iterator<? extends TypeElement> iterator = annotations.iterator();
-		if (iterator.hasNext()) {
-			Element element = roundEnv.getElementsAnnotatedWith(iterator.next()).iterator().next();
-			messager.printMessage(Diagnostic.Kind.ERROR, errorMessage, element);
-		} else {
-			// Sometime this is a total mess and javac could not even find one
-			// element on which we could print the error. So we should just
-			// throw an exception and let it go.
-			throw new RuntimeException("An error occured and couldn't be printed on an element: " + errorMessage);
-		}
+		Element element = roundEnv.getElementsAnnotatedWith(annotations.iterator().next()).iterator().next();
+		messager.printMessage(Diagnostic.Kind.ERROR, errorMessage, element);
 	}
 
 	@Override
