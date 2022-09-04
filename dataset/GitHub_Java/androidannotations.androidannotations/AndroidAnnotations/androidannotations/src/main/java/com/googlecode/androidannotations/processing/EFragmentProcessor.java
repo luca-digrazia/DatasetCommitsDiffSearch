@@ -181,7 +181,7 @@ public class EFragmentProcessor implements GeneratingElementProcessor {
 
 			{
 				// create()
-				JMethod method = holder.eBean.method(STATIC | PUBLIC, holder.fragmentBuilderClass, "builder");
+				JMethod method = holder.eBean.method(STATIC | PUBLIC, holder.fragmentBuilderClass, "create");
 				method.body()._return(_new(holder.fragmentBuilderClass));
 			}
 		}

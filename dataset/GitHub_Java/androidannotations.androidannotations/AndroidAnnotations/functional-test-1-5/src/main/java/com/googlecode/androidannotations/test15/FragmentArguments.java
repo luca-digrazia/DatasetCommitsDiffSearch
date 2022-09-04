@@ -5,9 +5,8 @@ import java.util.ArrayList;
 import android.app.Fragment;
 import android.os.Bundle;
 
-import com.googlecode.androidannotations.annotations.AfterInject;
+import com.googlecode.androidannotations.annotations.Arg;
 import com.googlecode.androidannotations.annotations.EFragment;
-import com.googlecode.androidannotations.annotations.FragmentArg;
 import com.googlecode.androidannotations.test15.instancestate.MyGenericParcelableBean;
 import com.googlecode.androidannotations.test15.instancestate.MyGenericSerializableBean;
 import com.googlecode.androidannotations.test15.instancestate.MyParcelableBean;
@@ -16,154 +15,149 @@ import com.googlecode.androidannotations.test15.instancestate.MySerializableBean
 @EFragment
 public class FragmentArguments extends Fragment {
 
-	@FragmentArg("test")
+	@Arg("test")
 	Long nullWrappedLong = 42l;
 
-	@FragmentArg
+	@Arg
 	boolean myBoolean;
 
-	@FragmentArg
+	@Arg
 	boolean[] myBooleanArray;
 
-	@FragmentArg
+	@Arg
 	Boolean myBooleanObject;
 
-	@FragmentArg
+	@Arg
 	Boolean[] myBooleanObjectArray;
 
-	@FragmentArg
+	@Arg
 	byte myByte;
 
-	@FragmentArg
+	@Arg
 	byte[] myByteArray;
 
-	@FragmentArg
+	@Arg
 	Byte myByteObject;
 
-	@FragmentArg
+	@Arg
 	Byte[] myByteObjectArray;
 
-	@FragmentArg
+	@Arg
 	char myChar;
 
-	@FragmentArg
+	@Arg
 	char[] myCharacterArray;
 
-	@FragmentArg
+	@Arg
 	Character myCharacterObject;
 
-	@FragmentArg
+	@Arg
 	Character[] myCharacterObjectArray;
 
-	@FragmentArg
+	@Arg
 	CharSequence myCharSequence;
 
-	@FragmentArg
+	@Arg
 	double myDouble;
 
-	@FragmentArg
+	@Arg
 	double[] myDoubleArray;
 
-	@FragmentArg
+	@Arg
 	Double myDoubleObject;
 
-	@FragmentArg
+	@Arg
 	Double[] myDoubleObjectArray;
 
-	@FragmentArg
+	@Arg
 	float myFloat;
 
-	@FragmentArg
+	@Arg
 	float[] myFloatArray;
 
-	@FragmentArg
+	@Arg
 	Float myFloatObject;
 
-	@FragmentArg
+	@Arg
 	Float[] myFloatObjectArray;
 
-	@FragmentArg
+	@Arg
 	int myInt;
 
-	@FragmentArg
+	@Arg
 	int[] myIntegerArray;
 
-	@FragmentArg
+	@Arg
 	Integer myIntegerObject;
 
-	@FragmentArg
+	@Arg
 	Integer[] myIntegerObjectArray;
 
-	@FragmentArg
+	@Arg
 	ArrayList<Integer> myIntegerArrayList;
 
-	@FragmentArg
+	@Arg
 	long myLong;
 
-	@FragmentArg
+	@Arg
 	long[] myLongArray;
 
-	@FragmentArg
+	@Arg
 	Long myLongObject;
 
-	@FragmentArg
+	@Arg
 	Long[] myLongObjectArray;
 
-	@FragmentArg
+	@Arg
 	short myShort;
 
-	@FragmentArg
+	@Arg
 	short[] myShortArray;
 
-	@FragmentArg
+	@Arg
 	Short myShortObject;
 
-	@FragmentArg
+	@Arg
 	Short[] myShortObjectArray;
 
-	@FragmentArg
+	@Arg
 	String myString;
 
-	@FragmentArg
+	@Arg
 	String[] myStringArray;
 
-	@FragmentArg
+	@Arg
 	ArrayList<String> myStringList;
 
-	@FragmentArg
+	@Arg
 	MySerializableBean mySerializableBean;
 
-	@FragmentArg
+	@Arg
 	MySerializableBean[] mySerializableBeanArray;
 
-	@FragmentArg
+	@Arg
 	MyParcelableBean myParcelableBean;
 
-	@FragmentArg
+	@Arg
 	MyParcelableBean[] myParcelableBeanArray;
 
-	@FragmentArg
+	@Arg
 	Bundle myBundle;
 
-	@FragmentArg
+	@Arg
 	MyGenericSerializableBean<Integer> myGenericSerializableBean;
 
-	@FragmentArg
+	@Arg
 	MyGenericSerializableBean<Integer>[] myGenericSerializableBeanArray;
 
-	@FragmentArg
+	@Arg
 	MyGenericParcelableBean<String> myGenericParcelableBean;
 
-	@FragmentArg
+	@Arg
 	MyGenericParcelableBean<Integer>[] myGenericParcelableBeanArray;
-	
-	@AfterInject
-	void afterInject(){
-		
-	}
 
 	static {
-		FragmentArguments_.builder().myBundle(null).myCharSequence(null).build();
+		FragmentArguments_.create().myBundle(null).myCharSequence(null).build();
 	}
 
 }
