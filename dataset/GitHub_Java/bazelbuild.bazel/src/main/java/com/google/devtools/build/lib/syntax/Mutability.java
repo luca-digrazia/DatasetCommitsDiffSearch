@@ -13,39 +13,38 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
-import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.events.Location;
 import java.util.ArrayList;
+import java.util.Formattable;
 import java.util.IdentityHashMap;
 import java.util.List;
 
 /**
- * An object that manages the capability to mutate Skylark objects and their {@link
- * StarlarkThread}s. Collectively, the managed objects are called {@link Freezable}s.
+ * An object that manages the capability to mutate Skylark objects and their {@link Environment}s.
+ * Collectively, the managed objects are called {@link Freezable}s.
  *
- * <p>Each {@code StarlarkThread}, and each of the mutable Skylark values (i.e., {@link
- * StarlarkMutable}s) that are created in that {@code StarlarkThread}, holds a pointer to the same
- * {@code Mutability} instance. Once the {@code StarlarkThread} is done evaluating, its {@code
+ * <p>Each {@code Environment}, and each of the mutable Skylark values (i.e., {@link
+ * StarlarkMutable}s) that are created in that {@code Environment}, holds a pointer to the same
+ * {@code Mutability} instance. Once the {@code Environment} is done evaluating, its {@code
  * Mutability} is irreversibly closed ("frozen"). At that point, it is no longer possible to change
- * either the bindings in that {@code StarlarkThread} or the state of its objects. This protects
- * each {@code StarlarkThread} from unintentional and unsafe modification.
+ * either the bindings in that {@code Environment} or the state of its objects. This protects each
+ * {@code Environment} from unintentional and unsafe modification.
  *
- * <p>{@code Mutability}s enforce isolation between {@code StarlarkThread}s; it is illegal for an
- * evaluation in one {@code StarlarkThread} to affect the bindings or values of another. In
- * particular, the {@code StarlarkThread} for any Skylark module is frozen before its symbols can be
- * imported for use by another module. Each individual {@code StarlarkThread}'s evaluation is
- * single-threaded, so this isolation also translates to thread safety. Any number of threads may
- * simultaneously access frozen data. (The {@code Mutability} itself is also thread-safe if and only
- * if it is frozen.}
+ * <p>{@code Mutability}s enforce isolation between {@code Environment}s; it is illegal for an
+ * evaluation in one {@code Environment} to affect the bindings or values of another. In particular,
+ * the {@code Environment} for any Skylark module is frozen before its symbols can be imported for
+ * use by another module. Each individual {@code Environment}'s evaluation is single-threaded, so
+ * this isolation also translates to thread safety. Any number of threads may simultaneously access
+ * frozen data. (The {@code Mutability} itself is also thread-safe if and only if it is frozen.}
  *
  * <p>Although the mutability pointer of a {@code Freezable} contains some debugging information
  * about its context, this should not affect the {@code Freezable}'s semantics. From a behavioral
  * point of view, the only thing that matters is whether the {@code Mutability} is frozen, not what
  * particular {@code Mutability} object is pointed to.
  *
- * <p>A {@code Mutability} also tracks which {@code Freezable} objects in its {@code StarlarkThread}
+ * <p>A {@code Mutability} also tracks which {@code Freezable} objects in its {@code Environment}
  * are temporarily locked from mutation. This is used to prevent modification of iterables during
  * loops. A {@code Freezable} may be locked multiple times (e.g., nested loops over the same
  * iterable). Locking an object does not prohibit mutating its deeply contained values, such as in
@@ -69,21 +68,21 @@ import java.util.List;
  * <p>Second, {@code Mutability}s are created using the try-with-resource style:
  *
  * <pre>{@code
- * try (Mutability mutability = Mutability.create(name, ...)) { ... }
+ * try (Mutability mutability = Mutability.create(fmt, ...)) { ... }
  * }</pre>
  *
- * The general pattern is to create a {@code Mutability}, build an {@code StarlarkThread}, mutate
- * that {@code StarlarkThread} and its objects, and possibly return the result from within the
- * {@code try} block, relying on the try-with-resource construct to ensure that everything gets
- * frozen before the result is used. The only code that should create a {@code Mutability} without
- * using try-with-resource is test code that is not part of the Bazel jar.
+ * The general pattern is to create a {@code Mutability}, build an {@code Environment}, mutate that
+ * {@code Environment} and its objects, and possibly return the result from within the {@code try}
+ * block, relying on the try-with-resource construct to ensure that everything gets frozen before
+ * the result is used. The only code that should create a {@code Mutability} without using
+ * try-with-resource is test code that is not part of the Bazel jar.
  *
  * <p>We keep some (unchecked) invariants regarding where {@code Mutability} objects may appear
  * within a compound value.
  *
  * <ol>
  *   <li>A compound value can never contain an unfrozen {@code Mutability} for any {@code
- *       StarlarkThread} except the one currently being evaluated.
+ *       Environment} except the one currently being evaluated.
  *   <li>If a value has the special {@link #IMMUTABLE} {@code Mutability}, all of its contents are
  *       themselves deeply immutable too (i.e. have frozen {@code Mutability}s).
  *   <li>If a value has the special {@link #SHALLOW_IMMUTABLE} {@code Mutability}, its contents may
@@ -95,14 +94,14 @@ import java.util.List;
  * {@code #SHALLOW_IMMUTABLE} instance. This knowledge is used by {@link
  * StarlarkMutable#isImmutable} to prune traversals of a compound value.
  *
- * <p>There is a special API for freezing individual values rather than whole {@code
- * StarlarkThread}s. Because this API makes it easier to violate the above invariants, you should
- * avoid using it if at all possible; at the moment it is only used for serialization. Under this
- * API, you may call {@link Freezable#unsafeShallowFreeze} to reset a value's {@code Mutability}
- * pointer to be {@link #IMMUTABLE}. This operation has no effect on the {@code Mutability} itself.
- * It is up to the caller to preserve or restore the above invariants by ensuring that any deeply
- * contained values are also frozen. For safety and explicitness, this operation is disallowed
- * unless the {@code Mutability}'s {@link #allowsUnsafeShallowFreeze} method returns true.
+ * <p>There is a special API for freezing individual values rather than whole {@code Environment}s.
+ * Because this API makes it easier to violate the above invariants, you should avoid using it if at
+ * all possible; at the moment it is only used for serialization. Under this API, you may call
+ * {@link Freezable#unsafeShallowFreeze} to reset a value's {@code Mutability} pointer to be {@link
+ * #IMMUTABLE}. This operation has no effect on the {@code Mutability} itself. It is up to the
+ * caller to preserve or restore the above invariants by ensuring that any deeply contained values
+ * are also frozen. For safety and explicitness, this operation is disallowed unless the {@code
+ * Mutability}'s {@link #allowsUnsafeShallowFreeze} method returns true.
  */
 public final class Mutability implements AutoCloseable {
 
@@ -120,49 +119,50 @@ public final class Mutability implements AutoCloseable {
    */
   private IdentityHashMap<Freezable, List<Location>> lockedItems;
 
-  // An optional list of values that are formatted with toString and joined with spaces to yield the
-  // "annotation", an internal name describing the purpose of this Mutability.
-  private final Object[] annotation;
+  /** For error reporting; a name for the context in which this {@code Mutability} is used. */
+  private final Formattable annotation;
 
   /** Controls access to {@link Freezable#unsafeShallowFreeze}. */
   private final boolean allowsUnsafeShallowFreeze;
 
-  private Mutability(Object[] annotation, boolean allowsUnsafeShallowFreeze) {
+  private Mutability(Formattable annotation, boolean allowsUnsafeShallowFreeze) {
     this.isFrozen = false;
     // Seems unlikely that we'll often lock more than 10 things at once.
     this.lockedItems = new IdentityHashMap<>(10);
-    this.annotation = annotation;
+    this.annotation = Preconditions.checkNotNull(annotation);
     this.allowsUnsafeShallowFreeze = allowsUnsafeShallowFreeze;
   }
 
   /**
    * Creates a {@code Mutability}.
    *
-   * @param annotation a list of objects whose toString representations are joined with spaces to
-   *     yield the annotation, an internal name describing the purpose of this Mutability.
+   * @param pattern is a {@link Printer#format} pattern used to lazily produce a string name
+   *     for error reporting
+   * @param arguments are the optional {@link Printer#format} arguments to produce that string
    */
-  public static Mutability create(Object... annotation) {
-    return new Mutability(annotation, /*allowsUnsafeShallowFreeze=*/ false);
+  public static Mutability create(String pattern, Object... arguments) {
+    return new Mutability(
+        Printer.formattable(pattern, arguments),
+        /*allowsUnsafeShallowFreeze=*/ false);
   }
 
   /**
    * Creates a {@code Mutability} whose objects can be individually frozen; see docstrings for
    * {@link Mutability} and {@link Freezable#unsafeShallowFreeze}.
    */
-  public static Mutability createAllowingShallowFreeze(Object... annotation) {
-    return new Mutability(annotation, /*allowsUnsafeShallowFreeze=*/ true);
+  public static Mutability createAllowingShallowFreeze(String pattern, Object... arguments) {
+    return new Mutability(
+        Printer.formattable(pattern, arguments),
+        /*allowsUnsafeShallowFreeze=*/ true);
   }
 
-  /** Returns the Mutability's "annotation", an internal name describing its purpose. */
   public String getAnnotation() {
-    // The annotation string is computed when needed, typically never,
-    // to avoid the performance penalty of materializing it eagerly.
-    return Joiner.on(" ").join(annotation);
+    return annotation.toString();
   }
 
   @Override
   public String toString() {
-    return (isFrozen ? "(" : "[") + getAnnotation() + (isFrozen ? ")" : "]");
+    return String.format(isFrozen ? "(%s)" : "[%s]", annotation);
   }
 
   public boolean isFrozen() {
@@ -287,9 +287,9 @@ public final class Mutability implements AutoCloseable {
   }
 
   /**
-   * An object that refers to a {@link Mutability} to decide whether to allow mutation. All {@link
-   * Freezable} Skylark objects created within a given {@link StarlarkThread} will share the same
-   * {@code Mutability} as that {@code StarlarkThread}.
+   * An object that refers to a {@link Mutability} to decide whether to allow mutation. All
+   * {@link Freezable} Skylark objects created within a given {@link Environment} will share the
+   * same {@code Mutability} as that {@code Environment}.
    */
   public interface Freezable {
     /**
@@ -355,11 +355,11 @@ public final class Mutability implements AutoCloseable {
       throw new MutabilityException("trying to mutate a frozen object");
     }
 
-    // Consider an {@link StarlarkThread} e1, in which is created {@link StarlarkFunction} f1, that
+    // Consider an {@link Environment} e1, in which is created {@link UserDefinedFunction} f1, that
     // closes over some variable v1 bound to list l1. If somehow, via the magic of callbacks, f1 or
-    // l1 is passed as an argument to some function f2 evaluated in {@link StarlarkThread} e2 while
-    // e1 is still mutable, then e2, being a different {@link StarlarkThread}, should not be allowed
-    // to mutate objects from e1. It's a bug, that shouldn't happen in our current code base, so we
+    // l1 is passed as an argument to some function f2 evaluated in {@link Environment} e2 while e1
+    // is still mutable, then e2, being a different {@link Environment}, should not be allowed to
+    // mutate objects from e1. It's a bug, that shouldn't happen in our current code base, so we
     // throw an IllegalArgumentException. If in the future such situations are allowed to happen,
     // then we should throw a MutabilityException instead.
     if (!object.mutability().equals(mutability)) {
@@ -380,7 +380,7 @@ public final class Mutability implements AutoCloseable {
   /**
    * A {@code Mutability} indicating that a value is deeply immutable.
    *
-   * <p>It is not associated with any particular {@link StarlarkThread}.
+   * <p>It is not associated with any particular {@link Environment}.
    */
   public static final Mutability IMMUTABLE = create("IMMUTABLE").freeze();
 
@@ -395,7 +395,7 @@ public final class Mutability implements AutoCloseable {
   // TODO(bazel-team): We might be able to remove this instance, and instead have tuples and other
   // immutable types store the same Mutability as other values in that environment. Then we can
   // simplify the Mutability invariant, and implement deep-immutability checking in constant time
-  // for values whose StarlarkThreads have been frozen.
+  // for values whose Environments have been frozen.
   //
   // This would also affect structs (SkylarkInfo). Maybe they would implement an interface similar
   // to StarlarkMutable, or the relevant methods could be worked into SkylarkValue.

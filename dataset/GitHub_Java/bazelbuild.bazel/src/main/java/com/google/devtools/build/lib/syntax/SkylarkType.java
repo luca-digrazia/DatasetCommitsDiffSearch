@@ -21,10 +21,18 @@ import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Interner;
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
+import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
+import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
+import java.lang.reflect.Method;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.lang.reflect.WildcardType;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -149,7 +157,7 @@ public abstract class SkylarkType {
   // by declaring its type as TOP instead of NONE, even though at runtime,
   // we reject None from all types but NONE, and in particular from e.g. lists of Files.
   // TODO(bazel-team): resolve this inconsistency, one way or the other.
-  @AutoCodec public static final Simple NONE = Simple.forClass(NoneType.class);
+  @AutoCodec public static final Simple NONE = Simple.forClass(Runtime.NoneType.class);
 
   /** The STRING type, for strings */
   @AutoCodec public static final Simple STRING = Simple.forClass(String.class);
@@ -164,18 +172,18 @@ public abstract class SkylarkType {
   @AutoCodec
   public static final SkylarkFunctionType FUNCTION = new SkylarkFunctionType("unknown", TOP);
 
-  /** The DICT type, that contains Dict */
-  @AutoCodec public static final Simple DICT = Simple.forClass(Dict.class);
+  /** The DICT type, that contains SkylarkDict */
+  @AutoCodec public static final Simple DICT = Simple.forClass(SkylarkDict.class);
 
   /** The SEQUENCE type, that contains lists and tuples */
   // TODO(bazel-team): this was added for backward compatibility with the BUILD language,
   // that doesn't make a difference between list and tuple, so that functions can be declared
   // that keep not making the difference. Going forward, though, we should investigate whether
   // we ever want to use this type, and if not, make sure no existing client code uses it.
-  @AutoCodec public static final Simple SEQUENCE = Simple.forClass(Sequence.class);
+  @AutoCodec public static final Simple SEQUENCE = Simple.forClass(SkylarkList.class);
 
-  /** The LIST type, that contains all StarlarkList-s */
-  @AutoCodec public static final Simple LIST = Simple.forClass(StarlarkList.class);
+  /** The LIST type, that contains all MutableList-s */
+  @AutoCodec public static final Simple LIST = Simple.forClass(MutableList.class);
 
   /** The TUPLE type, that contains all Tuple-s */
   @AutoCodec public static final Simple TUPLE = Simple.forClass(Tuple.class);
@@ -183,14 +191,13 @@ public abstract class SkylarkType {
   /** The STRING_PAIR type, that contains Tuple-s of size 2 containing only Strings. */
   @AutoCodec public static final SkylarkType STRING_PAIR = new StringPairType();
 
-  /** The STRING_LIST type, a StarlarkList of strings */
+  /** The STRING_LIST type, a MutableList of strings */
   @AutoCodec public static final SkylarkType STRING_LIST = Combination.of(LIST, STRING);
 
-  /** The INT_LIST type, a StarlarkList of integers */
+  /** The INT_LIST type, a MutableList of integers */
   @AutoCodec public static final SkylarkType INT_LIST = Combination.of(LIST, INT);
 
-  /** The SET type, that contains all SkylarkNestedSets, and the generic combinator for them */
-  // TODO(adonovan): eliminate? It appears to be only an optimization.
+  /** The SET type, that contains all SkylarkNestedSet-s, and the generic combinator for them */
   @AutoCodec public static final Simple SET = Simple.forClass(SkylarkNestedSet.class);
 
   private static class StringPairType extends SkylarkType {
@@ -344,7 +351,7 @@ public abstract class SkylarkType {
   public static class Combination extends SkylarkType {
     // For the moment, we can only combine a Simple type with a Simple type,
     // and the first one has to be a Java generic class,
-    // and in practice actually one of Sequence or SkylarkNestedSet
+    // and in practice actually one of SkylarkList or SkylarkNestedSet
     private final SkylarkType genericType; // actually always a Simple, for now.
     private final SkylarkType argType; // not always Simple
 
@@ -547,12 +554,12 @@ public abstract class SkylarkType {
     public static SkylarkType of(SkylarkType t1, SkylarkType t2) {
       return of(ImmutableList.of(t1, t2));
     }
+    public static SkylarkType of(Class<?> t1, Class<?> t2) {
+      return of(Simple.forClass(t1), Simple.forClass(t2));
+    }
   }
 
-  // TODO(adonovan): eliminate this function: a value may belong to many types.
-  // This function is used to infer the type to use for a SkylarkNestedSet from its first
-  // element, but this may be unsound in general (e.g. in the presence of sum types).
-  static SkylarkType of(Object object) {
+  public static SkylarkType of(Object object) {
     SkylarkType type = of(object.getClass());
     if (type.canBeCastTo(Tuple.class)) {
       if (STRING_PAIR.contains(object)) {
@@ -563,7 +570,7 @@ public abstract class SkylarkType {
   }
 
   public static SkylarkType of(Class<?> type) {
-    if (SkylarkNestedSet.class.isAssignableFrom(type)) { // just an optimization
+    if (SkylarkNestedSet.class.isAssignableFrom(type)) {
       return SET;
     } else if (BaseFunction.class.isAssignableFrom(type)) {
       return new SkylarkFunctionType("unknown", TOP);
@@ -571,9 +578,6 @@ public abstract class SkylarkType {
       return Simple.forClass(type);
     }
   }
-
-  // TODO(adonovan): these functions abuse overloading and look like sum type constructors.
-  // Give them better names such as genericOf(generic, argument)? Or rethink the API.
 
   public static SkylarkType of(SkylarkType t1, SkylarkType t2) {
     return Combination.of(t1, t2);
@@ -633,11 +637,47 @@ public abstract class SkylarkType {
 
   // Utility functions regarding types
 
+  public static SkylarkType typeOf(Object value) {
+    if (value == null) {
+      return BOTTOM;
+    } else if (value instanceof SkylarkNestedSet) {
+      return of(SET, ((SkylarkNestedSet) value).getContentType());
+    } else {
+      return Simple.forClass(value.getClass());
+    }
+  }
+
   public static SkylarkType getGenericArgType(Object value) {
     if (value instanceof SkylarkNestedSet) {
       return ((SkylarkNestedSet) value).getContentType();
     } else {
       return TOP;
+    }
+  }
+
+  private static boolean isTypeAllowedInSkylark(Object object) {
+    if (object instanceof NestedSet<?>) {
+      return false;
+    } else if (object instanceof List<?> && !(object instanceof SkylarkList)) {
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Throws EvalException if the type of the object is not allowed to be present in Skylark.
+   */
+  static void checkTypeAllowedInSkylark(Object object, Location loc) throws EvalException {
+    // TODO(bazel-team): Unify this check with the logic in EvalUtils.getSkylarkType(). Might
+    // break some providers whose contents don't implement SkylarkValue, aren't wrapped in
+    // SkylarkList, etc.
+    if (!isTypeAllowedInSkylark(object)) {
+      throw new EvalException(
+          loc,
+          "internal error: type '"
+              + object.getClass().getSimpleName()
+              + "' is not allowed as a "
+              + "Starlark value (checkTypeAllowedInSkylark() failed)");
     }
   }
 
@@ -719,9 +759,67 @@ public abstract class SkylarkType {
     return (Map<KEY_TYPE, VALUE_TYPE>) obj;
   }
 
-  // TODO(adonovan): eliminate 4 uses outside this package and make it private.
-  // The check is trivial (instanceof) and clients can usually produce a better
-  // error in context, without prematurely constructing a description.
+  private static Class<?> getGenericTypeFromMethod(Method method) {
+    // This is where we can infer generic type information, so SkylarkNestedSets can be
+    // created in a safe way. Eventually we should probably do something with Lists and Maps too.
+    ParameterizedType t = (ParameterizedType) method.getGenericReturnType();
+    Type type = t.getActualTypeArguments()[0];
+    if (type instanceof Class) {
+      return (Class<?>) type;
+    }
+    if (type instanceof WildcardType) {
+      WildcardType wildcard = (WildcardType) type;
+      Type upperBound = wildcard.getUpperBounds()[0];
+      if (upperBound instanceof Class) {
+        // i.e. List<? extends SuperClass>
+        return (Class<?>) upperBound;
+      }
+    }
+    // It means someone annotated a method with @SkylarkCallable with no specific generic type info.
+    // We shouldn't annotate methods which return List<?> or List<T>.
+    throw new IllegalStateException("Cannot infer type from method signature " + method);
+  }
+
+  /**
+   * Converts an object retrieved from a Java method to a Skylark-compatible type.
+   */
+  static Object convertToSkylark(Object object, Method method, @Nullable Environment env) {
+    if (object instanceof NestedSet<?>) {
+      return SkylarkNestedSet.of(
+          SkylarkType.of(getGenericTypeFromMethod(method)), (NestedSet<?>) object);
+    }
+    return convertToSkylark(object, env);
+  }
+
+  /**
+   * Converts an object to a Skylark-compatible type if possible.
+   */
+  public static Object convertToSkylark(Object object, @Nullable Environment env) {
+    return convertToSkylark(object, env == null ? null : env.mutability());
+  }
+
+  /**
+   * Converts an object to a Skylark-compatible type if possible.
+   */
+  public static Object convertToSkylark(Object object, @Nullable Mutability mutability) {
+    if (object instanceof List && !(object instanceof SkylarkList)) {
+      return MutableList.copyOf(mutability, (List<?>) object);
+    }
+    if (object instanceof SkylarkValue) {
+      return object;
+    }
+    if (object instanceof Map) {
+      return SkylarkDict.<Object, Object>copyOf(mutability, (Map<?, ?>) object);
+    }
+    // TODO(bazel-team): ensure everything is a SkylarkValue at all times.
+    // Preconditions.checkArgument(EvalUtils.isSkylarkAcceptable(
+    //    object.getClass()),
+    //    "invalid object %s of class %s not convertible to a Skylark value",
+    //    object,
+    //    object.getClass());
+    return object;
+  }
+
   public static void checkType(Object object, Class<?> type, @Nullable Object description)
       throws EvalException {
     if (!type.isInstance(object)) {

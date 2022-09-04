@@ -17,18 +17,18 @@ import java.io.IOException;
 import javax.annotation.Nullable;
 
 /**
- * Syntax node for a parameter in a function definition.
+ * Syntax node for a Parameter in a function (or lambda) definition; it's a subclass of Argument,
+ * and contrasts with the class Argument.Passed of arguments in a function call.
  *
- * <p>Parameters may be of four forms, as in {@code def f(a, b=c, *args, **kwargs)}. They are
- * represented by the subclasses Mandatory, Optional, Star, and StarStar.
+ * <p>There are four concrete subclasses of Parameter: Mandatory, Optional, Star, StarStar.
  *
- * <p>See FunctionSignature for how a valid list of Parameters is organized as a signature, e.g. def
- * foo(mandatory, optional = e1, *args, mandatorynamedonly, optionalnamedonly = e2, **kw): ...
+ * <p>See FunctionSignature for how a valid list of Parameter's is organized as a signature, e.g.
+ * def foo(mandatory, optional = e1, *args, mandatorynamedonly, optionalnamedonly = e2, **kw): ...
  *
- * <p>V is the class of a defaultValue (Expression at compile-time, Object at runtime), T is the
- * class of a type (Expression at compile-time, SkylarkType at runtime).
+ * <p>V is the class of a defaultValue (Expression at compile-time, Object at runtime),
+ * T is the class of a type (Expression at compile-time, SkylarkType at runtime).
  */
-public abstract class Parameter<V, T> extends Node {
+public abstract class Parameter<V, T> extends Argument {
 
   @Nullable protected final Identifier identifier;
   @Nullable protected final T type;
@@ -36,6 +36,24 @@ public abstract class Parameter<V, T> extends Node {
   private Parameter(@Nullable Identifier identifier, @Nullable T type) {
     this.identifier = identifier;
     this.type = type;
+  }
+
+  public boolean isMandatory() {
+    return false;
+  }
+
+  public boolean isOptional() {
+    return false;
+  }
+
+  @Override
+  public boolean isStar() {
+    return false;
+  }
+
+  @Override
+  public boolean isStarStar() {
+    return false;
   }
 
   @Nullable
@@ -62,18 +80,7 @@ public abstract class Parameter<V, T> extends Node {
     return null;
   }
 
-  @Override
-  public final void prettyPrint(Appendable buffer, int indentLevel) throws IOException {
-    prettyPrint(buffer);
-  }
-
-  @Override
-  public abstract void prettyPrint(Appendable buffer) throws IOException;
-
-  /**
-   * Syntax node for a mandatory parameter, {@code f(id)}. It may be positional or keyword-only
-   * depending on its position.
-   */
+  /** mandatory parameter (positional or key-only depending on position): Ident */
   public static final class Mandatory<V, T> extends Parameter<V, T> {
 
     Mandatory(Identifier identifier) {
@@ -85,15 +92,17 @@ public abstract class Parameter<V, T> extends Node {
     }
 
     @Override
+    public boolean isMandatory() {
+      return true;
+    }
+
+    @Override
     public void prettyPrint(Appendable buffer) throws IOException {
       buffer.append(getName());
     }
   }
 
-  /**
-   * Syntax node for an optional parameter, {@code f(id=expr).}. It may be positional or
-   * keyword-only depending on its position.
-   */
+  /** optional parameter (positional or key-only depending on position): Ident = Value */
   public static final class Optional<V, T> extends Parameter<V, T> {
 
     public final V defaultValue;
@@ -114,6 +123,11 @@ public abstract class Parameter<V, T> extends Node {
     }
 
     @Override
+    public boolean isOptional() {
+      return true;
+    }
+
+    @Override
     public void prettyPrint(Appendable buffer) throws IOException {
       buffer.append(getName());
       buffer.append('=');
@@ -130,7 +144,7 @@ public abstract class Parameter<V, T> extends Node {
     }
   }
 
-  /** Syntax node for a star parameter, {@code f(*identifier)} or or {@code f(..., *, ...)}. */
+  /** extra positionals parameter (star): *identifier */
   public static final class Star<V, T> extends Parameter<V, T> {
 
     Star(@Nullable Identifier identifier, @Nullable T type) {
@@ -147,6 +161,11 @@ public abstract class Parameter<V, T> extends Node {
     }
 
     @Override
+    public boolean isStar() {
+      return true;
+    }
+
+    @Override
     public void prettyPrint(Appendable buffer) throws IOException {
       buffer.append('*');
       if (getName() != null) {
@@ -155,7 +174,7 @@ public abstract class Parameter<V, T> extends Node {
     }
   }
 
-  /** Syntax node for a parameter of the form {@code f(**identifier)}. */
+  /** extra keywords parameter (star_star): **identifier */
   public static final class StarStar<V, T> extends Parameter<V, T> {
 
     StarStar(Identifier identifier, @Nullable T type) {
@@ -167,6 +186,11 @@ public abstract class Parameter<V, T> extends Node {
     }
 
     @Override
+    public boolean isStarStar() {
+      return true;
+    }
+
+    @Override
     public void prettyPrint(Appendable buffer) throws IOException {
       buffer.append("**");
       buffer.append(getName());
@@ -175,7 +199,7 @@ public abstract class Parameter<V, T> extends Node {
 
   @Override
   @SuppressWarnings("unchecked")
-  public void accept(NodeVisitor visitor) {
+  public void accept(SyntaxTreeVisitor visitor) {
     visitor.visit((Parameter<Expression, Expression>) this);
   }
 }
