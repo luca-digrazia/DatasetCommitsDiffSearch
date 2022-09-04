@@ -33,11 +33,11 @@ public class Laplacian implements IsotropicKernel {
     /**
      * The length scale of the kernel.
      */
-    private final double sigma;
+    private double sigma;
 
     /**
      * Constructor.
-     * @param sigma The length scale of kernel.
+     * @param sigma the length scale of kernel.
      */
     public Laplacian(double sigma) {
         if (sigma <= 0) {
@@ -45,11 +45,6 @@ public class Laplacian implements IsotropicKernel {
         }
 
         this.sigma = sigma;
-    }
-
-    /** Returns the length scale of kernel. */
-    public double scale() {
-        return sigma;
     }
 
     @Override

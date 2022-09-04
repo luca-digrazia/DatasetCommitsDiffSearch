@@ -36,27 +36,13 @@ public interface IsotropicKernel extends Function {
     }
 
     /**
-     * Computes the isotropic kernel function.
+     * The isotropic kernel function.
      * @param dist The distance.
      */
     double k(double dist);
 
     /**
-     * Computes the isotropic kernel function and its gradient over hyperparameters..
-     * @param dist The distance.
-     */
-    double[] kg(double dist);
-
-    /**
-     * Computes the kernel function.
-     * This is simply for Scala convenience.
-     */
-    default double apply(double dist) {
-        return k(dist);
-    }
-
-    /**
-     * Computes the kernel matrix.
+     * Returns the kernel matrix.
      *
      * @param pdist The pairwise distance matrix.
      * @return The kernel matrix.
@@ -79,43 +65,6 @@ public interface IsotropicKernel extends Function {
         }
 
         K.uplo(UPLO.LOWER);
-        return K;
-    }
-
-    /**
-     * Computes the kernel and gradient matrices.
-     *
-     * @param pdist The pairwise distance matrix.
-     * @return the kernel and gradient matrices.
-     */
-    default Matrix[] KG(Matrix pdist) {
-        if (pdist.nrows() != pdist.ncols()) {
-            throw new IllegalArgumentException(String.format("pdist is not square: %d x %d", pdist.nrows(), pdist.ncols()));
-        }
-
-        int n = pdist.nrows();
-        int m = kg(pdist.get(0, 0)).length;
-        Matrix[] K = new Matrix[m];
-        for (int i = 0; i < m; i++) {
-            K[i] = new Matrix(n, n);
-            K[i].uplo(UPLO.LOWER);
-        }
-
-        for (int j = 0; j < n; j++) {
-            double[] kg = kg(pdist.get(j, j));
-            for (int l = 0; l < m; l++) {
-                K[l].set(j, j, kg[l]);
-            }
-
-            for (int i = j+1; i < n; i++) {
-                kg = kg(pdist.get(i, j));
-                for (int l = 0; l < m; l++) {
-                    K[l].set(i, j, kg[l]);
-                    K[l].set(j, i, kg[l]);
-                }
-            }
-        }
-
         return K;
     }
 }

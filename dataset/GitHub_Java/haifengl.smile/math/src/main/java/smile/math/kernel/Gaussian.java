@@ -36,7 +36,7 @@ public class Gaussian implements IsotropicKernel {
     /**
      * The length scale of the kernel.
      */
-    private final double sigma;
+    private double sigma;
 
     /**
      * Constructor.
@@ -48,11 +48,6 @@ public class Gaussian implements IsotropicKernel {
         }
 
         this.sigma = sigma;
-    }
-
-    /** Returns the length scale of kernel. */
-    public double scale() {
-        return sigma;
     }
 
     @Override
