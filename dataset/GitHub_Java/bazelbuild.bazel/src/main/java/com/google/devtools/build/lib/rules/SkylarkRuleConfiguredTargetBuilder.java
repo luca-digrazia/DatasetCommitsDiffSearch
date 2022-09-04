@@ -71,9 +71,9 @@ public final class SkylarkRuleConfiguredTargetBuilder {
       Map<String, Class<? extends TransitiveInfoProvider>> registeredProviderTypes)
       throws InterruptedException {
     String expectFailure = ruleContext.attributes().get("expect_failure", Type.STRING);
-    SkylarkRuleContext skylarkRuleContext = null;
     try (Mutability mutability = Mutability.create("configured target")) {
-      skylarkRuleContext = new SkylarkRuleContext(ruleContext, null);
+      SkylarkRuleContext skylarkRuleContext = new SkylarkRuleContext(ruleContext,
+          null);
       Environment env = Environment.builder(mutability)
           .setCallerLabel(ruleContext.getLabel())
           .setGlobals(
@@ -114,10 +114,6 @@ public final class SkylarkRuleConfiguredTargetBuilder {
       }
       ruleContext.ruleError("\n" + e.print());
       return null;
-    } finally {
-      if (skylarkRuleContext != null) {
-        skylarkRuleContext.nullify();
-      }
     }
   }
 

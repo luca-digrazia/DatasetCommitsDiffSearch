@@ -20,7 +20,6 @@ import com.google.devtools.build.lib.analysis.MergedConfiguredTarget.DuplicateEx
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.ClassObjectConstructor;
 import com.google.devtools.build.lib.packages.SkylarkClassObject;
-import com.google.devtools.build.lib.packages.SkylarkProviderIdentifier;
 import com.google.devtools.build.lib.rules.SkylarkApiProvider;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.SkylarkType;
@@ -87,13 +86,6 @@ public final class SkylarkProviders implements TransitiveInfoProvider {
 
   public SkylarkClassObject getDeclaredProvider(ClassObjectConstructor.Key key) {
     return declaredProviders.get(key);
-  }
-
-  public Object get(SkylarkProviderIdentifier id) {
-    if (id.isLegacy()) {
-      return getValue(id.getLegacyId());
-    }
-    return getDeclaredProvider(id.getKey());
   }
 
 
