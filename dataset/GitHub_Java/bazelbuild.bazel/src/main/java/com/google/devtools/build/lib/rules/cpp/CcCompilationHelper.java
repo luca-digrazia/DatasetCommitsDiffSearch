@@ -414,8 +414,7 @@ public final class CcCompilationHelper {
         CppFileTypes.CPP_TEXTUAL_INCLUDE.matches(privateHeader.getExecPath());
     Preconditions.checkState(isHeader || isTextualInclude);
 
-    if (ccToolchain.shouldProcessHeaders(featureConfiguration, cppConfiguration)
-        && !isTextualInclude) {
+    if (ccToolchain.shouldProcessHeaders(featureConfiguration) && !isTextualInclude) {
       compilationUnitSources.put(
           privateHeader, CppSource.create(privateHeader, label, CppSource.Type.HEADER));
     }
@@ -471,9 +470,7 @@ public final class CcCompilationHelper {
         CppFileTypes.CPP_HEADER.matches(header.getExecPath()) || header.isTreeArtifact();
     boolean isTextualInclude = CppFileTypes.CPP_TEXTUAL_INCLUDE.matches(header.getExecPath());
     publicHeaders.add(header);
-    if (isTextualInclude
-        || !isHeader
-        || !ccToolchain.shouldProcessHeaders(featureConfiguration, cppConfiguration)) {
+    if (isTextualInclude || !isHeader || !ccToolchain.shouldProcessHeaders(featureConfiguration)) {
       return;
     }
 
@@ -1287,7 +1284,7 @@ public final class CcCompilationHelper {
                 // The source action does not generate dwo when it has bitcode
                 // output (since it isn't generating a native object with debug
                 // info). In that case the LtoBackendAction will generate the dwo.
-                ccToolchain.shouldCreatePerObjectDebugInfo(featureConfiguration, cppConfiguration),
+                ccToolchain.shouldCreatePerObjectDebugInfo(featureConfiguration),
                 bitcodeOutput,
                 isGenerateDotdFile(sourceArtifact));
             break;
@@ -1517,8 +1514,7 @@ public final class CcCompilationHelper {
                 actionConstructionContext, label, gcnoFileName, configuration)
             : null;
 
-    boolean generateDwo =
-        ccToolchain.shouldCreatePerObjectDebugInfo(featureConfiguration, cppConfiguration);
+    boolean generateDwo = ccToolchain.shouldCreatePerObjectDebugInfo(featureConfiguration);
     Artifact dwoFile = generateDwo ? getDwoFile(builder.getOutputFile()) : null;
     // TODO(tejohnson): Add support for ThinLTO if needed.
     boolean bitcodeOutput =

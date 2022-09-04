@@ -125,13 +125,12 @@ public enum LinkBuildVariables {
       buildVariables.addStringVariable(FORCE_PIC.getVariableName(), "");
     }
 
-    if (!mustKeepDebug && cppConfiguration.shouldStripBinaries()) {
+    if (!mustKeepDebug && ccToolchainProvider.getShouldStripBinaries()) {
       buildVariables.addStringVariable(STRIP_DEBUG_SYMBOLS.getVariableName(), "");
     }
 
     if (isUsingLinkerNotArchiver
-        && ccToolchainProvider.shouldCreatePerObjectDebugInfo(
-            featureConfiguration, cppConfiguration)) {
+        && ccToolchainProvider.shouldCreatePerObjectDebugInfo(featureConfiguration)) {
       buildVariables.addStringVariable(IS_USING_FISSION.getVariableName(), "");
     }
 

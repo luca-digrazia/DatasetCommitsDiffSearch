@@ -80,9 +80,9 @@ public class CcToolchainFeatures implements Serializable {
    * <p>This happens for example when a flag references a variable that is not provided by the
    * action, or when a flag group implicitly references multiple variables of sequence type.
    */
-  public static class ExpansionException extends EvalException {
+  public static class ExpansionException extends RuntimeException {
     ExpansionException(String message) {
-      super(Location.BUILTIN, message);
+      super(message);
     }
   }
 
@@ -125,8 +125,7 @@ public class CcToolchainFeatures implements Serializable {
     public void expand(
         CcToolchainVariables variables,
         @Nullable ArtifactExpander expander,
-        List<String> commandLine)
-        throws ExpansionException {
+        List<String> commandLine) {
       StringBuilder flag = new StringBuilder();
       for (StringChunk chunk : chunks) {
         flag.append(chunk.expand(variables));
@@ -175,8 +174,7 @@ public class CcToolchainFeatures implements Serializable {
       public void expand(
           CcToolchainVariables variables,
           @Nullable ArtifactExpander artifactExpander,
-          List<String> commandLine)
-          throws ExpansionException {
+          List<String> commandLine) {
         commandLine.add(chunk.expand(variables));
       }
 
@@ -235,8 +233,7 @@ public class CcToolchainFeatures implements Serializable {
      * value of the entry is expanded with the given {@code variables}.
      */
     public void addEnvEntry(
-        CcToolchainVariables variables, ImmutableMap.Builder<String, String> envBuilder)
-        throws ExpansionException {
+        CcToolchainVariables variables, ImmutableMap.Builder<String, String> envBuilder) {
       StringBuilder value = new StringBuilder();
       for (StringChunk chunk : valueChunks) {
         value.append(chunk.expand(variables));
@@ -358,8 +355,7 @@ public class CcToolchainFeatures implements Serializable {
     public void expand(
         CcToolchainVariables variables,
         @Nullable ArtifactExpander expander,
-        final List<String> commandLine)
-        throws ExpansionException {
+        final List<String> commandLine) {
       if (!canBeExpanded(variables, expander)) {
         return;
       }
@@ -380,8 +376,7 @@ public class CcToolchainFeatures implements Serializable {
     }
 
     private boolean canBeExpanded(
-        CcToolchainVariables variables, @Nullable ArtifactExpander expander)
-        throws ExpansionException {
+        CcToolchainVariables variables, @Nullable ArtifactExpander expander) {
       for (String variable : expandIfAllAvailable) {
         if (!variables.isAvailable(variable, expander)) {
           return false;
@@ -431,8 +426,7 @@ public class CcToolchainFeatures implements Serializable {
     private void expandCommandLine(
         CcToolchainVariables variables,
         @Nullable ArtifactExpander expander,
-        final List<String> commandLine)
-        throws ExpansionException {
+        final List<String> commandLine) {
       expand(variables, expander, commandLine);
     }
 
@@ -563,8 +557,7 @@ public class CcToolchainFeatures implements Serializable {
         CcToolchainVariables variables,
         Set<String> enabledFeatureNames,
         @Nullable ArtifactExpander expander,
-        List<String> commandLine)
-        throws ExpansionException {
+        List<String> commandLine) {
       for (String variable : expandIfAllAvailable) {
         if (!variables.isAvailable(variable, expander)) {
           return;
@@ -718,8 +711,7 @@ public class CcToolchainFeatures implements Serializable {
         String action,
         CcToolchainVariables variables,
         Set<String> enabledFeatureNames,
-        ImmutableMap.Builder<String, String> envBuilder)
-        throws ExpansionException {
+        ImmutableMap.Builder<String, String> envBuilder) {
       if (!actions.contains(action)) {
         return;
       }
@@ -846,8 +838,7 @@ public class CcToolchainFeatures implements Serializable {
         String action,
         CcToolchainVariables variables,
         Set<String> enabledFeatureNames,
-        ImmutableMap.Builder<String, String> envBuilder)
-        throws ExpansionException {
+        ImmutableMap.Builder<String, String> envBuilder) {
       for (EnvSet envSet : envSets) {
         envSet.expandEnvironment(action, variables, enabledFeatureNames, envBuilder);
       }
@@ -859,8 +850,7 @@ public class CcToolchainFeatures implements Serializable {
         CcToolchainVariables variables,
         Set<String> enabledFeatureNames,
         @Nullable ArtifactExpander expander,
-        List<String> commandLine)
-        throws ExpansionException {
+        List<String> commandLine) {
       for (FlagSet flagSet : flagSets) {
         flagSet.expandCommandLine(action, variables, enabledFeatureNames, expander, commandLine);
       }
@@ -1102,8 +1092,7 @@ public class CcToolchainFeatures implements Serializable {
         CcToolchainVariables variables,
         Set<String> enabledFeatureNames,
         @Nullable ArtifactExpander expander,
-        List<String> commandLine)
-        throws ExpansionException {
+        List<String> commandLine) {
       for (FlagSet flagSet : flagSets) {
         flagSet.expandCommandLine(
             actionName, variables, enabledFeatureNames, expander, commandLine);
@@ -1306,14 +1295,12 @@ public class CcToolchainFeatures implements Serializable {
     }
 
     /** @return the command line for the given {@code action}. */
-    public List<String> getCommandLine(String action, CcToolchainVariables variables)
-        throws ExpansionException {
+    public List<String> getCommandLine(String action, CcToolchainVariables variables) {
       return getCommandLine(action, variables, /* expander= */ null);
     }
 
     public List<String> getCommandLine(
-        String action, CcToolchainVariables variables, @Nullable ArtifactExpander expander)
-        throws ExpansionException {
+        String action, CcToolchainVariables variables, @Nullable ArtifactExpander expander) {
       List<String> commandLine = new ArrayList<>();
       if (actionIsConfigured(action)) {
         actionConfigByActionName
@@ -1330,13 +1317,12 @@ public class CcToolchainFeatures implements Serializable {
 
     /** @return the flags expanded for the given {@code action} in per-feature buckets. */
     public ImmutableList<Pair<String, List<String>>> getPerFeatureExpansions(
-        String action, CcToolchainVariables variables) throws ExpansionException {
+        String action, CcToolchainVariables variables) {
       return getPerFeatureExpansions(action, variables, null);
     }
 
     public ImmutableList<Pair<String, List<String>>> getPerFeatureExpansions(
-        String action, CcToolchainVariables variables, @Nullable ArtifactExpander expander)
-        throws ExpansionException {
+        String action, CcToolchainVariables variables, @Nullable ArtifactExpander expander) {
       ImmutableList.Builder<Pair<String, List<String>>> perFeatureExpansions =
           ImmutableList.builder();
       if (actionIsConfigured(action)) {
@@ -1357,7 +1343,7 @@ public class CcToolchainFeatures implements Serializable {
 
     /** @return the environment variables (key/value pairs) for the given {@code action}. */
     public ImmutableMap<String, String> getEnvironmentVariables(
-        String action, CcToolchainVariables variables) throws ExpansionException {
+        String action, CcToolchainVariables variables) {
       ImmutableMap.Builder<String, String> envBuilder = ImmutableMap.builder();
       for (Feature feature : enabledFeatures) {
         feature.expandEnvironment(action, variables, enabledFeatureNames, envBuilder);

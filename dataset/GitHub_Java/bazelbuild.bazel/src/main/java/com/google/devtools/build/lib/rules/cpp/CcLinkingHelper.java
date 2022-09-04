@@ -745,7 +745,8 @@ public final class CcLinkingHelper {
                 ccToolchain.getSolibDirectory(),
                 dynamicLibrary.getArtifact(),
                 /* preserveName= */ false,
-                /* prefixConsumer= */ false);
+                /* prefixConsumer= */ false,
+                configuration);
         libraryToLinkBuilder.setDynamicLibrary(implLibraryLinkArtifact);
         libraryToLinkBuilder.setResolvedSymlinkDynamicLibrary(dynamicLibrary.getArtifact());
 
@@ -757,7 +758,8 @@ public final class CcLinkingHelper {
                   ccToolchain.getSolibDirectory(),
                   interfaceLibrary.getArtifact(),
                   /* preserveName= */ false,
-                  /* prefixConsumer= */ false);
+                  /* prefixConsumer= */ false,
+                  configuration);
           libraryToLinkBuilder.setInterfaceLibrary(libraryLinkArtifact);
           libraryToLinkBuilder.setResolvedSymlinkInterfaceLibrary(interfaceLibrary.getArtifact());
         }
