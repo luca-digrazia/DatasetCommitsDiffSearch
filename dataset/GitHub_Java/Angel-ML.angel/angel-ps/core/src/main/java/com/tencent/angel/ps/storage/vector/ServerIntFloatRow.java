@@ -317,12 +317,11 @@ public class ServerIntFloatRow extends ServerFloatRow {
 
   /**
    * Check the vector contains the index or not
-   *
    * @param index element index
    * @return true means exist
    */
   public boolean exist(int index) {
-    if (intFloatRow.isSparse()) {
+    if(intFloatRow.isSparse()) {
       return intFloatRow.getStorage().hasKey(index - startColInt);
     } else {
       return intFloatRow.get(index - startColInt) != 0.0f;
@@ -330,7 +329,7 @@ public class ServerIntFloatRow extends ServerFloatRow {
   }
 
   public float initAndGet(int index, InitFunc func) {
-    if (exist(index)) {
+    if(exist(index)) {
       return get(index);
     } else {
       float value = (float) func.action();
@@ -339,10 +338,9 @@ public class ServerIntFloatRow extends ServerFloatRow {
     }
   }
 
-  @Override
-  public void indexGet(IndexType indexType, int indexSize, ByteBuf in, ByteBuf out, InitFunc func)
+  @Override public void indexGet(IndexType indexType, int indexSize, ByteBuf in, ByteBuf out, InitFunc func)
     throws IOException {
-    if (func != null) {
+    if(func != null) {
       if (indexType == IndexType.INT) {
         for (int i = 0; i < indexSize; i++) {
           out.writeFloat(initAndGet(in.readInt(), func));
