@@ -15,6 +15,7 @@ package com.google.devtools.build.lib.actions;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifactType;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
@@ -28,9 +29,11 @@ import java.util.Map;
 import java.util.Objects;
 import javax.annotation.Nullable;
 
-/** A cache of Artifacts, keyed by Path. */
+/**
+ * A cache of Artifacts, keyed by Path.
+ */
 @ThreadSafe
-public class ArtifactFactory implements ArtifactResolver {
+public class ArtifactFactory implements ArtifactResolver, ArtifactSerializer, ArtifactDeserializer {
 
   private final Path execRoot;
   private final Path execRootParent;
@@ -46,6 +49,8 @@ public class ArtifactFactory implements ArtifactResolver {
    * execPaths in the symlink forest.
    */
   private PackageRoots.PackageRootLookup packageRoots;
+
+  private ArtifactIdRegistry artifactIdRegistry = new ArtifactIdRegistry();
 
   private static class SourceArtifactCache {
 
@@ -130,6 +135,7 @@ public class ArtifactFactory implements ArtifactResolver {
    */
   public synchronized void clear() {
     packageRoots = null;
+    artifactIdRegistry = new ArtifactIdRegistry();
     sourceArtifactCache.clear();
   }
 
@@ -155,6 +161,24 @@ public class ArtifactFactory implements ArtifactResolver {
   @Override
   public Artifact getSourceArtifact(PathFragment execPath, Root root) {
     return getSourceArtifact(execPath, root, ArtifactOwner.NULL_OWNER);
+  }
+
+  /**
+   * Only for use by BinTools! Returns an artifact for a tool at the given path
+   * fragment, relative to the exec root, creating it if not found. This method
+   * only works for normalized, relative paths.
+   */
+  public Artifact getDerivedArtifact(PathFragment execPath, Path execRoot) {
+    Preconditions.checkArgument(!execPath.isAbsolute(), execPath);
+    Preconditions.checkArgument(execPath.isNormalized(), execPath);
+    // TODO(bazel-team): Check that either BinTools do not change over the life of the Blaze server,
+    // or require that a legitimate ArtifactOwner be passed in here to allow for ownership.
+    return getArtifact(
+        execRoot.getRelative(execPath),
+        Root.execRootAsDerivedRoot(execRoot),
+        execPath,
+        ArtifactOwner.NULL_OWNER,
+        null);
   }
 
   private void validatePath(PathFragment rootRelativePath, Root root) {
@@ -413,5 +437,20 @@ public class ArtifactFactory implements ArtifactResolver {
   @VisibleForTesting  // for our own unit tests only.
   synchronized boolean isDerivedArtifact(PathFragment execPath) {
     return execPath.startsWith(derivedPathPrefix);
+  }
+
+  @Override
+  public Artifact lookupArtifactById(int artifactId) {
+    return artifactIdRegistry.lookupArtifactById(artifactId);
+  }
+
+  @Override
+  public ImmutableList<Artifact> lookupArtifactsByIds(Iterable<Integer> artifactIds) {
+    return artifactIdRegistry.lookupArtifactsByIds(artifactIds);
+  }
+
+  @Override
+  public int getArtifactId(Artifact artifact) {
+    return artifactIdRegistry.getArtifactId(artifact);
   }
 }

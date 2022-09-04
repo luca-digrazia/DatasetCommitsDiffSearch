@@ -16,7 +16,7 @@ package com.google.devtools.build.lib.analysis;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.hash.HashCode;
-import com.google.devtools.build.lib.actions.ArtifactRoot;
+import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skyframe.serialization.InjectingObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
@@ -66,7 +66,7 @@ public final class BlazeDirectories {
   private final Path localOutputPath;
   private final String productName;
 
-  @AutoCodec.Instantiator
+  @AutoCodec.Constructor
   public BlazeDirectories(ServerDirectories serverDirectories, Path workspace, String productName) {
     this.serverDirectories = serverDirectories;
     this.workspace = workspace;
@@ -171,8 +171,8 @@ public final class BlazeDirectories {
    * Returns the configuration-independent root where the build-data should be placed, given the
    * {@link BlazeDirectories} of this server instance. Nothing else should be placed here.
    */
-  public ArtifactRoot getBuildDataDirectory(String workspaceName) {
-    return ArtifactRoot.asDerivedRoot(getExecRoot(workspaceName), getOutputPath(workspaceName));
+  public Root getBuildDataDirectory(String workspaceName) {
+    return Root.asDerivedRoot(getExecRoot(workspaceName), getOutputPath(workspaceName));
   }
 
   /**

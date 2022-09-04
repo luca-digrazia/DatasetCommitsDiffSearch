@@ -20,12 +20,11 @@ import static com.google.devtools.build.lib.exec.FilesetManifest.RelativeSymlink
 import static org.junit.Assert.fail;
 
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.ArtifactRoot;
+import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -50,7 +49,7 @@ public class FilesetManifestTest {
 
   private void scratchFile(String file, String... lines) throws Exception {
     Path path = fs.getPath(file);
-    path.getParentDirectory().createDirectoryAndParents();
+    FileSystemUtils.createDirectoryAndParents(path.getParentDirectory());
     FileSystemUtils.writeLinesAs(path, StandardCharsets.UTF_8, lines);
   }
 
@@ -59,8 +58,7 @@ public class FilesetManifestTest {
     // See AnalysisUtils for the mapping from "foo" to "_foo/MANIFEST".
     scratchFile("/root/_foo/MANIFEST");
 
-    Artifact artifact =
-        new Artifact(fs.getPath("/root/foo"), ArtifactRoot.asSourceRoot(Root.fromPath(execRoot)));
+    Artifact artifact = new Artifact(fs.getPath("/root/foo"), Root.asSourceRoot(execRoot));
     FilesetManifest manifest =
         FilesetManifest.parseManifestFile(artifact, execRoot, "workspace", IGNORE);
     assertThat(manifest.getEntries()).isEmpty();
@@ -74,8 +72,7 @@ public class FilesetManifestTest {
         "workspace/bar /dir/file",
         "<some digest>");
 
-    ArtifactRoot outputRoot =
-        ArtifactRoot.asDerivedRoot(fs.getPath("/root"), fs.getPath("/root/out"));
+    Root outputRoot = Root.asDerivedRoot(fs.getPath("/root"), fs.getPath("/root/out"));
     Artifact artifact = new Artifact(fs.getPath("/root/out/foo"), outputRoot);
     FilesetManifest manifest =
         FilesetManifest.parseManifestFile(artifact, execRoot, "workspace", IGNORE);
@@ -93,8 +90,7 @@ public class FilesetManifestTest {
         "workspace/baz /dir/file",
         "<some digest>");
 
-    ArtifactRoot outputRoot =
-        ArtifactRoot.asDerivedRoot(fs.getPath("/root"), fs.getPath("/root/out"));
+    Root outputRoot = Root.asDerivedRoot(fs.getPath("/root"), fs.getPath("/root/out"));
     Artifact artifact = new Artifact(fs.getPath("/root/out/foo"), outputRoot);
     FilesetManifest manifest =
         FilesetManifest.parseManifestFile(artifact, execRoot, "workspace", IGNORE);
@@ -112,8 +108,7 @@ public class FilesetManifestTest {
         "workspace/bar /some",
         "<some digest>");
 
-    ArtifactRoot outputRoot =
-        ArtifactRoot.asDerivedRoot(fs.getPath("/root"), fs.getPath("/root/out"));
+    Root outputRoot = Root.asDerivedRoot(fs.getPath("/root"), fs.getPath("/root/out"));
     Artifact artifact = new Artifact(fs.getPath("/root/out/foo"), outputRoot);
     FilesetManifest manifest =
         FilesetManifest.parseManifestFile(artifact, execRoot, "workspace", IGNORE);
@@ -130,8 +125,7 @@ public class FilesetManifestTest {
         "workspace/bar ", // <-- Note the trailing whitespace!
         "<some digest>");
 
-    ArtifactRoot outputRoot =
-        ArtifactRoot.asDerivedRoot(fs.getPath("/root"), fs.getPath("/root/out"));
+    Root outputRoot = Root.asDerivedRoot(fs.getPath("/root"), fs.getPath("/root/out"));
     Artifact artifact = new Artifact(fs.getPath("/root/out/foo"), outputRoot);
     FilesetManifest manifest =
         FilesetManifest.parseManifestFile(artifact, execRoot, "workspace", IGNORE);
@@ -146,8 +140,7 @@ public class FilesetManifestTest {
         "notworkspace/bar /foo/bar",
         "<some digest>");
 
-    ArtifactRoot outputRoot =
-        ArtifactRoot.asDerivedRoot(fs.getPath("/root"), fs.getPath("/root/out"));
+    Root outputRoot = Root.asDerivedRoot(fs.getPath("/root"), fs.getPath("/root/out"));
     Artifact artifact = new Artifact(fs.getPath("/root/out/foo"), outputRoot);
     try {
       FilesetManifest.parseManifestFile(artifact, execRoot, "workspace", IGNORE);
@@ -169,8 +162,7 @@ public class FilesetManifestTest {
         "workspace/foo /foo/bar",
         "<some digest>");
 
-    ArtifactRoot outputRoot =
-        ArtifactRoot.asDerivedRoot(fs.getPath("/root"), fs.getPath("/root/out"));
+    Root outputRoot = Root.asDerivedRoot(fs.getPath("/root"), fs.getPath("/root/out"));
     Artifact artifact = new Artifact(fs.getPath("/root/out/foo"), outputRoot);
     try {
       FilesetManifest.parseManifestFile(artifact, execRoot, "workspace", ERROR);
@@ -190,8 +182,7 @@ public class FilesetManifestTest {
         "workspace/foo /foo/bar",
         "<some digest>");
 
-    ArtifactRoot outputRoot =
-        ArtifactRoot.asDerivedRoot(fs.getPath("/root"), fs.getPath("/root/out"));
+    Root outputRoot = Root.asDerivedRoot(fs.getPath("/root"), fs.getPath("/root/out"));
     Artifact artifact = new Artifact(fs.getPath("/root/out/foo"), outputRoot);
     FilesetManifest manifest =
         FilesetManifest.parseManifestFile(artifact, execRoot, "workspace", IGNORE);
@@ -209,8 +200,7 @@ public class FilesetManifestTest {
         "workspace/foo /foo/bar",
         "<some digest>");
 
-    ArtifactRoot outputRoot =
-        ArtifactRoot.asDerivedRoot(fs.getPath("/root"), fs.getPath("/root/out"));
+    Root outputRoot = Root.asDerivedRoot(fs.getPath("/root"), fs.getPath("/root/out"));
     Artifact artifact = new Artifact(fs.getPath("/root/out/foo"), outputRoot);
     FilesetManifest manifest =
         FilesetManifest.parseManifestFile(artifact, execRoot, "workspace", RESOLVE);
@@ -218,48 +208,6 @@ public class FilesetManifestTest {
         .containsExactly(
             PathFragment.create("out/foo/bar"), "/foo/bar",
             PathFragment.create("out/foo/foo"), "/foo/bar");
-  }
-
-  @Test
-  public void testManifestWithResolvedRelativeSymlinkWithDotSlash() throws Exception {
-    // See AnalysisUtils for the mapping from "foo" to "_foo/MANIFEST".
-    scratchFile(
-        "/root/out/_foo/MANIFEST",
-        "workspace/bar ./foo",
-        "<some digest>",
-        "workspace/foo /foo/bar",
-        "<some digest>");
-
-    ArtifactRoot outputRoot =
-        ArtifactRoot.asDerivedRoot(fs.getPath("/root"), fs.getPath("/root/out"));
-    Artifact artifact = new Artifact(fs.getPath("/root/out/foo"), outputRoot);
-    FilesetManifest manifest =
-        FilesetManifest.parseManifestFile(artifact, execRoot, "workspace", RESOLVE);
-    assertThat(manifest.getEntries())
-        .containsExactly(
-            PathFragment.create("out/foo/bar"), "/foo/bar",
-            PathFragment.create("out/foo/foo"), "/foo/bar");
-  }
-
-  @Test
-  public void testManifestWithResolvedRelativeSymlinkWithDotDotSlash() throws Exception {
-    // See AnalysisUtils for the mapping from "foo" to "_foo/MANIFEST".
-    scratchFile(
-        "/root/out/_foo/MANIFEST",
-        "workspace/bar/bar ../foo/foo",
-        "<some digest>",
-        "workspace/foo/foo /foo/bar",
-        "<some digest>");
-
-    ArtifactRoot outputRoot =
-        ArtifactRoot.asDerivedRoot(fs.getPath("/root"), fs.getPath("/root/out"));
-    Artifact artifact = new Artifact(fs.getPath("/root/out/foo"), outputRoot);
-    FilesetManifest manifest =
-        FilesetManifest.parseManifestFile(artifact, execRoot, "workspace", RESOLVE);
-    assertThat(manifest.getEntries())
-        .containsExactly(
-            PathFragment.create("out/foo/bar/bar"), "/foo/bar",
-            PathFragment.create("out/foo/foo/foo"), "/foo/bar");
   }
 
   @Test
@@ -270,8 +218,7 @@ public class FilesetManifestTest {
         "workspace/bar foo",
         "<some digest>");
 
-    ArtifactRoot outputRoot =
-        ArtifactRoot.asDerivedRoot(fs.getPath("/root"), fs.getPath("/root/out"));
+    Root outputRoot = Root.asDerivedRoot(fs.getPath("/root"), fs.getPath("/root/out"));
     Artifact artifact = new Artifact(fs.getPath("/root/out/foo"), outputRoot);
     try {
       FilesetManifest.parseManifestFile(artifact, execRoot, "workspace", RESOLVE);
@@ -295,8 +242,7 @@ public class FilesetManifestTest {
         "workspace/bar /baz",
         "<some digest>");
 
-    ArtifactRoot outputRoot =
-        ArtifactRoot.asDerivedRoot(fs.getPath("/root"), fs.getPath("/root/out"));
+    Root outputRoot = Root.asDerivedRoot(fs.getPath("/root"), fs.getPath("/root/out"));
     Artifact artifact = new Artifact(fs.getPath("/root/out/foo"), outputRoot);
     FilesetManifest manifest =
         FilesetManifest.parseManifestFile(artifact, execRoot, "workspace", IGNORE);

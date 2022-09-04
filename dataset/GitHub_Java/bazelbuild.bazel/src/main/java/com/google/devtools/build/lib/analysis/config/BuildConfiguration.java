@@ -26,6 +26,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedMap;
+import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Interner;
 import com.google.common.collect.Interners;
 import com.google.common.collect.Iterables;
@@ -33,7 +34,7 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.MutableClassToInstanceMap;
 import com.google.devtools.build.lib.actions.ActionEnvironment;
-import com.google.devtools.build.lib.actions.ArtifactRoot;
+import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.RuleContext;
@@ -1111,7 +1112,6 @@ public class BuildConfiguration implements BuildEvent {
   private final String checksum;
 
   private final ImmutableSortedMap<Class<? extends Fragment>, Fragment> fragments;
-  private final FragmentClassSet fragmentClassSet;
 
   private final ImmutableMap<String, Class<? extends Fragment>> skylarkVisibleFragments;
   private final String repositoryName;
@@ -1185,10 +1185,8 @@ public class BuildConfiguration implements BuildEvent {
       this.middleman = false;
     }
 
-    ArtifactRoot getRoot(
-        RepositoryName repositoryName,
-        String outputDirName,
-        BlazeDirectories directories,
+    Root getRoot(
+        RepositoryName repositoryName, String outputDirName, BlazeDirectories directories,
         RepositoryName mainRepositoryName) {
       // e.g., execroot/repo1
       Path execRoot = directories.getExecRoot(mainRepositoryName.strippedName());
@@ -1196,11 +1194,10 @@ public class BuildConfiguration implements BuildEvent {
       Path outputDir = execRoot.getRelative(directories.getRelativeOutputPath())
           .getRelative(outputDirName);
       if (middleman) {
-        return INTERNER.intern(ArtifactRoot.middlemanRoot(execRoot, outputDir));
+        return INTERNER.intern(Root.middlemanRoot(execRoot, outputDir));
       }
       // e.g., [[execroot/repo1]/bazel-out/config/bin]
-      return INTERNER.intern(
-          ArtifactRoot.asDerivedRoot(execRoot, outputDir.getRelative(nameFragment)));
+      return INTERNER.intern(Root.asDerivedRoot(execRoot, outputDir.getRelative(nameFragment)));
     }
   }
 
@@ -1209,16 +1206,16 @@ public class BuildConfiguration implements BuildEvent {
 
   // We intern the roots for non-main repositories, so we don't keep around thousands of copies of
   // the same root.
-  private static Interner<ArtifactRoot> INTERNER = Interners.newWeakInterner();
+  private static Interner<Root> INTERNER = Interners.newWeakInterner();
 
   // We precompute the roots for the main repository, since that's the common case.
-  private final ArtifactRoot outputDirectoryForMainRepository;
-  private final ArtifactRoot binDirectoryForMainRepository;
-  private final ArtifactRoot includeDirectoryForMainRepository;
-  private final ArtifactRoot genfilesDirectoryForMainRepository;
-  private final ArtifactRoot coverageDirectoryForMainRepository;
-  private final ArtifactRoot testlogsDirectoryForMainRepository;
-  private final ArtifactRoot middlemanDirectoryForMainRepository;
+  private final Root outputDirectoryForMainRepository;
+  private final Root binDirectoryForMainRepository;
+  private final Root includeDirectoryForMainRepository;
+  private final Root genfilesDirectoryForMainRepository;
+  private final Root coverageDirectoryForMainRepository;
+  private final Root testlogsDirectoryForMainRepository;
+  private final Root middlemanDirectoryForMainRepository;
 
   private final boolean separateGenfilesDirectory;
 
@@ -1390,7 +1387,6 @@ public class BuildConfiguration implements BuildEvent {
       String repositoryName) {
     this.directories = directories;
     this.fragments = makeFragmentsMap(fragmentsMap);
-    this.fragmentClassSet = FragmentClassSet.of(this.fragments.keySet());
 
     this.skylarkVisibleFragments = buildIndexOfSkylarkVisibleFragments();
     this.repositoryName = repositoryName;
@@ -1476,11 +1472,12 @@ public class BuildConfiguration implements BuildEvent {
    * configuration is assumed to have).
    */
   public BuildConfiguration clone(
-      FragmentClassSet fragmentClasses, RuleClassProvider ruleClassProvider) {
+      Set<Class<? extends BuildConfiguration.Fragment>> fragmentClasses,
+      RuleClassProvider ruleClassProvider) {
 
     ClassToInstanceMap<Fragment> fragmentsMap = MutableClassToInstanceMap.create();
     for (Fragment fragment : fragments.values()) {
-      if (fragmentClasses.fragmentClasses().contains(fragment.getClass())) {
+      if (fragmentClasses.contains(fragment.getClass())) {
         fragmentsMap.put(fragment.getClass(), fragment);
       }
     }
@@ -1578,18 +1575,22 @@ public class BuildConfiguration implements BuildEvent {
     return platformName;
   }
 
-  /** Returns the output directory for this build configuration. */
-  public ArtifactRoot getOutputDirectory(RepositoryName repositoryName) {
+  /**
+   * Returns the output directory for this build configuration.
+   */
+  public Root getOutputDirectory(RepositoryName repositoryName) {
     return repositoryName.isMain() || repositoryName.equals(mainRepositoryName)
         ? outputDirectoryForMainRepository
         : OutputDirectory.OUTPUT.getRoot(
             repositoryName, outputDirName, directories, mainRepositoryName);
   }
 
-  /** Returns the bin directory for this build configuration. */
+  /**
+   * Returns the bin directory for this build configuration.
+   */
   @SkylarkCallable(name = "bin_dir", structField = true, documented = false)
   @Deprecated
-  public ArtifactRoot getBinDirectory() {
+  public Root getBinDirectory() {
     return getBinDirectory(RepositoryName.MAIN);
   }
 
@@ -1599,7 +1600,7 @@ public class BuildConfiguration implements BuildEvent {
    * issue right now because it only effects Blaze's include scanning (internal) and Bazel's
    * repositories (external) but will need to be fixed.
    */
-  public ArtifactRoot getBinDirectory(RepositoryName repositoryName) {
+  public Root getBinDirectory(RepositoryName repositoryName) {
     return repositoryName.isMain() || repositoryName.equals(mainRepositoryName)
         ? binDirectoryForMainRepository
         : OutputDirectory.BIN.getRoot(
@@ -1613,22 +1614,26 @@ public class BuildConfiguration implements BuildEvent {
     return getBinDirectory().getExecPath();
   }
 
-  /** Returns the include directory for this build configuration. */
-  public ArtifactRoot getIncludeDirectory(RepositoryName repositoryName) {
+  /**
+   * Returns the include directory for this build configuration.
+   */
+  public Root getIncludeDirectory(RepositoryName repositoryName) {
     return repositoryName.isMain() || repositoryName.equals(mainRepositoryName)
         ? includeDirectoryForMainRepository
         : OutputDirectory.INCLUDE.getRoot(
             repositoryName, outputDirName, directories, mainRepositoryName);
   }
 
-  /** Returns the genfiles directory for this build configuration. */
+  /**
+   * Returns the genfiles directory for this build configuration.
+   */
   @SkylarkCallable(name = "genfiles_dir", structField = true, documented = false)
   @Deprecated
-  public ArtifactRoot getGenfilesDirectory() {
+  public Root getGenfilesDirectory() {
     return getGenfilesDirectory(RepositoryName.MAIN);
   }
 
-  public ArtifactRoot getGenfilesDirectory(RepositoryName repositoryName) {
+  public Root getGenfilesDirectory(RepositoryName repositoryName) {
     if (!separateGenfilesDirectory) {
       return getBinDirectory(repositoryName);
     }
@@ -1640,19 +1645,21 @@ public class BuildConfiguration implements BuildEvent {
   }
 
   /**
-   * Returns the directory where coverage-related artifacts and metadata files should be stored.
-   * This includes for example uninstrumented class files needed for Jacoco's coverage reporting
-   * tools.
+   * Returns the directory where coverage-related artifacts and metadata files
+   * should be stored. This includes for example uninstrumented class files
+   * needed for Jacoco's coverage reporting tools.
    */
-  public ArtifactRoot getCoverageMetadataDirectory(RepositoryName repositoryName) {
+  public Root getCoverageMetadataDirectory(RepositoryName repositoryName) {
     return repositoryName.isMain() || repositoryName.equals(mainRepositoryName)
         ? coverageDirectoryForMainRepository
         : OutputDirectory.COVERAGE.getRoot(
             repositoryName, outputDirName, directories, mainRepositoryName);
   }
 
-  /** Returns the testlogs directory for this build configuration. */
-  public ArtifactRoot getTestLogsDirectory(RepositoryName repositoryName) {
+  /**
+   * Returns the testlogs directory for this build configuration.
+   */
+  public Root getTestLogsDirectory(RepositoryName repositoryName) {
     return repositoryName.isMain() || repositoryName.equals(mainRepositoryName)
         ? testlogsDirectoryForMainRepository
         : OutputDirectory.TESTLOGS.getRoot(
@@ -1679,8 +1686,10 @@ public class BuildConfiguration implements BuildEvent {
     return OS.getCurrent() == OS.WINDOWS ? ";" : ":";
   }
 
-  /** Returns the internal directory (used for middlemen) for this build configuration. */
-  public ArtifactRoot getMiddlemanDirectory(RepositoryName repositoryName) {
+  /**
+   * Returns the internal directory (used for middlemen) for this build configuration.
+   */
+  public Root getMiddlemanDirectory(RepositoryName repositoryName) {
     return repositoryName.isMain() || repositoryName.equals(mainRepositoryName)
         ? middlemanDirectoryForMainRepository
         : OutputDirectory.MIDDLEMAN.getRoot(
@@ -1847,8 +1856,8 @@ public class BuildConfiguration implements BuildEvent {
   }
 
   /** Which fragments does this configuration contain? */
-  public FragmentClassSet fragmentClasses() {
-    return fragmentClassSet;
+  public ImmutableSortedSet<Class<? extends Fragment>> fragmentClasses() {
+    return fragments.keySet();
   }
 
   /**

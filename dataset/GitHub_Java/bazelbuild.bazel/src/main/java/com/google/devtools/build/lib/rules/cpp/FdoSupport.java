@@ -26,7 +26,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.io.ByteSource;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.ArtifactRoot;
+import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -35,13 +35,9 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.skyframe.FileValue;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
-import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.LipoMode;
 import com.google.devtools.build.skyframe.SkyFunction;
@@ -134,18 +130,14 @@ import java.util.zip.ZipFile;
  * discarded after configured targets are created.
  */
 @Immutable
-@AutoCodec
 public class FdoSupport {
-  public static final ObjectCodec<FdoSupport> CODEC = new FdoSupport_AutoCodec();
-
   /**
    * The FDO mode we are operating in.
    *
    * LIPO can only be active if this is not <code>OFF</code>, but all of the modes below can work
    * with LIPO either off or on.
    */
-  @VisibleForSerialization
-  enum FdoMode {
+  private enum FdoMode {
     /** FDO is turned off. */
     OFF,
 
@@ -180,13 +172,14 @@ public class FdoSupport {
   private final Path fdoProfile;
 
   /**
-   * Temporary directory to which the coverage ZIP file is extracted to (relative to the exec root),
-   * or {@code null} if FDO optimization is disabled. This is used to create artifacts for the
-   * extracted files.
+   * Temporary directory to which the coverage ZIP file is extracted to
+   * (relative to the exec root), or {@code null} if FDO optimization is
+   * disabled. This is used to create artifacts for the extracted files.
    *
-   * <p>Note that this root is intentionally not registered with the artifact factory.
+   * <p>Note that this root is intentionally not registered with the artifact
+   * factory.
    */
-  private final ArtifactRoot fdoRoot;
+  private final Root fdoRoot;
 
   /**
    * The relative path of the FDO root to the exec root.
@@ -234,16 +227,8 @@ public class FdoSupport {
    * @param fdoProfile path to the profile file passed to --fdo_optimize option
    * @param lipoMode value of the --lipo_mode option
    */
-  @VisibleForSerialization
-  @AutoCodec.Instantiator
-  FdoSupport(
-      FdoMode fdoMode,
-      LipoMode lipoMode,
-      ArtifactRoot fdoRoot,
-      PathFragment fdoRootExecPath,
-      PathFragment fdoInstrument,
-      Path fdoProfile,
-      FdoZipContents fdoZipContents) {
+  private FdoSupport(FdoMode fdoMode, LipoMode lipoMode, Root fdoRoot, PathFragment fdoRootExecPath,
+      PathFragment fdoInstrument, Path fdoProfile, FdoZipContents fdoZipContents) {
     this.fdoInstrument = fdoInstrument;
     this.fdoProfile = fdoProfile;
     this.fdoRoot = fdoRoot;
@@ -263,18 +248,12 @@ public class FdoSupport {
     }
   }
 
-  public ArtifactRoot getFdoRoot() {
+  public Root getFdoRoot() {
     return fdoRoot;
   }
 
   public Path getFdoProfile() {
     return fdoProfile;
-  }
-
-  @VisibleForSerialization
-  // This method only exists for serialization.
-  FdoZipContents getFdoZipContents() {
-      return gcdaFiles == null ? null : new FdoZipContents(gcdaFiles, imports);
   }
 
   /** Creates an initialized {@link FdoSupport} instance. */
@@ -302,10 +281,10 @@ public class FdoSupport {
       lipoMode = LipoMode.OFF;
     }
 
-    ArtifactRoot fdoRoot =
+    Root fdoRoot =
         (fdoProfile == null)
             ? null
-            : ArtifactRoot.asDerivedRoot(execRoot, execRoot.getRelative(productName + "-fdo"));
+            : Root.asDerivedRoot(execRoot, execRoot.getRelative(productName + "-fdo"));
 
     PathFragment fdoRootExecPath = fdoProfile == null
         ? null
@@ -320,10 +299,8 @@ public class FdoSupport {
         PrecomputedValue.dependOnBuildId(env);
       } else {
         Path path = fdoMode == FdoMode.AUTO_FDO ? getAutoFdoImportsPath(fdoProfile) : fdoProfile;
-        env.getValue(
-            FileValue.key(
-                RootedPath.toRootedPathMaybeUnderRoot(
-                    path, ImmutableList.of(Root.fromPath(execRoot)))));
+        env.getValue(FileValue.key(RootedPath.toRootedPathMaybeUnderRoot(path,
+            ImmutableList.of(execRoot))));
       }
     }
 
@@ -343,17 +320,11 @@ public class FdoSupport {
   }
 
   @Immutable
-  @AutoCodec
-  static class FdoZipContents {
-    public static final ObjectCodec<FdoZipContents> CODEC =
-        new FdoSupport_FdoZipContents_AutoCodec();
-
+  private static class FdoZipContents {
     private final ImmutableSet<PathFragment> gcdaFiles;
     private final ImmutableMultimap<PathFragment, PathFragment> imports;
 
-    @VisibleForSerialization
-    @AutoCodec.Instantiator
-    FdoZipContents(ImmutableSet<PathFragment> gcdaFiles,
+    private FdoZipContents(ImmutableSet<PathFragment> gcdaFiles,
         ImmutableMultimap<PathFragment, PathFragment> imports) {
       this.gcdaFiles = gcdaFiles;
       this.imports = imports;

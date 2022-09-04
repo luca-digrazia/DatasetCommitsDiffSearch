@@ -16,8 +16,9 @@ package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.PackageRoots;
+import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
-import com.google.devtools.build.lib.vfs.Root;
+import com.google.devtools.build.lib.vfs.Path;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -27,25 +28,25 @@ import java.util.Optional;
  * planted for execution.
  */
 public class MapAsPackageRoots implements PackageRoots {
-  private final ImmutableMap<PackageIdentifier, Root> packageRootsMap;
+  private final ImmutableMap<PackageIdentifier, Path> packageRootsMap;
 
-  MapAsPackageRoots(ImmutableMap<PackageIdentifier, Root> packageRootsMap) {
+  MapAsPackageRoots(ImmutableMap<PackageIdentifier, Path> packageRootsMap) {
     this.packageRootsMap = packageRootsMap;
   }
 
   @Override
-  public Optional<ImmutableMap<PackageIdentifier, Root>> getPackageRootsMap() {
+  public Optional<ImmutableMap<PackageIdentifier, Path>> getPackageRootsMap() {
     return Optional.of(packageRootsMap);
   }
 
   @Override
   public PackageRootLookup getPackageRootLookup() {
-    Map<Root, Root> rootMap = new HashMap<>();
+    Map<Path, Root> rootMap = new HashMap<>();
     Map<PackageIdentifier, Root> realPackageRoots = new HashMap<>();
-    for (Map.Entry<PackageIdentifier, Root> entry : packageRootsMap.entrySet()) {
+    for (Map.Entry<PackageIdentifier, Path> entry : packageRootsMap.entrySet()) {
       Root root = rootMap.get(entry.getValue());
       if (root == null) {
-        root = entry.getValue();
+        root = Root.asSourceRoot(entry.getValue());
         rootMap.put(entry.getValue(), root);
       }
       realPackageRoots.put(entry.getKey(), root);
