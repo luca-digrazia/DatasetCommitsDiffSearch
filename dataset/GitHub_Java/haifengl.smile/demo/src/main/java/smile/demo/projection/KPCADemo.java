@@ -1,20 +1,18 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.demo.projection;
 
 import java.awt.Dimension;
@@ -27,7 +25,6 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
 
-import smile.data.DataFrame;
 import smile.plot.Palette;
 import smile.plot.PlotCanvas;
 import smile.projection.KPCA;
@@ -54,18 +51,10 @@ public class KPCADemo extends ProjectionDemo {
     @Override
     public JComponent learn() {
         JPanel pane = new JPanel(new GridLayout(2, 2));
-        double[][] data;
-        int[] labels = null;
-        String[] names;
-
-        if (formula[datasetIndex] == null) {
-            data = dataset[datasetIndex].toArray();
-            names = dataset[datasetIndex].names();
-        } else {
-            DataFrame datax = formula[datasetIndex].x(dataset[datasetIndex]);
-            data = datax.toArray();
-            names = datax.names();
-            labels = formula[datasetIndex].y(dataset[datasetIndex]).toIntArray();
+        double[][] data = dataset[datasetIndex].toArray(new double[dataset[datasetIndex].size()][]);
+        String[] names = dataset[datasetIndex].toArray(new String[dataset[datasetIndex].size()]);
+        if (names[0] == null) {
+            names = null;
         }
 
         if (gamma[datasetIndex] == 0.0) {
@@ -101,7 +90,8 @@ public class KPCADemo extends ProjectionDemo {
         PlotCanvas plot = new PlotCanvas(MathEx.colMin(y), MathEx.colMax(y));
         if (names != null) {
             plot.points(y, names);
-        } else if (labels != null) {
+        } else if (dataset[datasetIndex].responseAttribute() != null) {
+            int[] labels = dataset[datasetIndex].toArray(new int[dataset[datasetIndex].size()]);
             for (int i = 0; i < y.length; i++) {
                 plot.point(pointLegend, Palette.COLORS[labels[i]], y[i]);
             }
@@ -118,7 +108,8 @@ public class KPCADemo extends ProjectionDemo {
         plot = new PlotCanvas(MathEx.colMin(y), MathEx.colMax(y));
         if (names != null) {
             plot.points(y, names);
-        } else if (labels != null) {
+        } else if (dataset[datasetIndex].responseAttribute() != null) {
+            int[] labels = dataset[datasetIndex].toArray(new int[dataset[datasetIndex].size()]);
             for (int i = 0; i < y.length; i++) {
                 plot.point(pointLegend, Palette.COLORS[labels[i]], y[i]);
             }
@@ -135,7 +126,8 @@ public class KPCADemo extends ProjectionDemo {
         plot = new PlotCanvas(MathEx.colMin(y), MathEx.colMax(y));
         if (names != null) {
             plot.points(y, names);
-        } else if (labels != null) {
+        } else if (dataset[datasetIndex].responseAttribute() != null) {
+            int[] labels = dataset[datasetIndex].toArray(new int[dataset[datasetIndex].size()]);
             for (int i = 0; i < y.length; i++) {
                 plot.point(pointLegend, Palette.COLORS[labels[i]], y[i]);
             }
@@ -154,7 +146,8 @@ public class KPCADemo extends ProjectionDemo {
         plot = new PlotCanvas(MathEx.colMin(y), MathEx.colMax(y));
         if (names != null) {
             plot.points(y, names);
-        } else if (labels != null) {
+        } else if (dataset[datasetIndex].responseAttribute() != null) {
+            int[] labels = dataset[datasetIndex].toArray(new int[dataset[datasetIndex].size()]);
             for (int i = 0; i < y.length; i++) {
                 plot.point(pointLegend, Palette.COLORS[labels[i]], y[i]);
             }

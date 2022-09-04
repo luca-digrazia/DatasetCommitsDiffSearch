@@ -1,20 +1,18 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.demo.projection;
 
 import java.awt.BorderLayout;
@@ -30,11 +28,10 @@ import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 
-import org.apache.commons.csv.CSVFormat;
 import smile.classification.FLD;
-import smile.data.DataFrame;
-import smile.data.formula.Formula;
-import smile.io.DatasetReader;
+import smile.data.AttributeDataset;
+import smile.data.NominalAttribute;
+import smile.data.parser.DelimitedTextParser;
 import smile.plot.Palette;
 import smile.plot.PlotCanvas;
 import smile.math.MathEx;
@@ -51,8 +48,7 @@ public class LDADemo extends JPanel implements Runnable, ActionListener {
         "pendigits.txt"
     };
 
-    static Formula formula = Formula.lhs("class");
-    static DataFrame[] dataset = new DataFrame[datasetName.length];
+    static AttributeDataset[] dataset = new AttributeDataset[datasetName.length];
     static int datasetIndex = 0;
 
     JPanel optionPane;
@@ -92,17 +88,21 @@ public class LDADemo extends JPanel implements Runnable, ActionListener {
      * the clusters.
      */
     public JComponent learn() {
-        double[][] data = formula.x(dataset[datasetIndex]).toArray();
-        String[] names = formula.x(dataset[datasetIndex]).names();
+        double[][] data = dataset[datasetIndex].toArray(new double[dataset[datasetIndex].size()][]);
 
-        int[] labels = formula.y(dataset[datasetIndex]).toIntArray();
-        int min = MathEx.min(labels);
-        for (int i = 0; i < labels.length; i++) {
-            labels[i] -= min;
+        String[] names = dataset[datasetIndex].toArray(new String[dataset[datasetIndex].size()]);
+        if (names[0] == null) {
+            names = null;
+        }
+        
+        int[] label = dataset[datasetIndex].toArray(new int[dataset[datasetIndex].size()]);
+        int min = MathEx.min(label);
+        for (int i = 0; i < label.length; i++) {
+            label[i] -= min;
         }
 
         long clock = System.currentTimeMillis();
-        FLD lda = FLD.fit(data, labels, MathEx.unique(labels).length > 3 ? 3 : 2, 1E-4);
+        FLD lda = new FLD(data, label, MathEx.unique(label).length > 3 ? 3 : 2);
         System.out.format("Learn LDA from %d samples in %dms\n", data.length, System.currentTimeMillis()-clock);
 
         double[][] y = lda.project(data);
@@ -110,7 +110,8 @@ public class LDADemo extends JPanel implements Runnable, ActionListener {
         PlotCanvas plot = new PlotCanvas(MathEx.colMin(y), MathEx.colMax(y));
         if (names != null) {
             plot.points(y, names);
-        } else if (labels != null) {
+        } else if (dataset[datasetIndex].responseAttribute() != null) {
+            int[] labels = dataset[datasetIndex].toArray(new int[dataset[datasetIndex].size()]);
             for (int i = 0; i < y.length; i++) {
                 plot.point(pointLegend, Palette.COLORS[labels[i]], y[i]);
             }
@@ -146,10 +147,20 @@ public class LDADemo extends JPanel implements Runnable, ActionListener {
             datasetIndex = datasetBox.getSelectedIndex();
 
             if (dataset[datasetIndex] == null) {
-                CSVFormat format = CSVFormat.DEFAULT.withDelimiter('\t').withFirstRecordAsHeader();
+                DelimitedTextParser parser = new DelimitedTextParser();
+                parser.setDelimiter("[\t]+");
+                if (datasetIndex == 0) {
+                    parser.setColumnNames(true);
+                }
+                if (datasetIndex == 0) {
+                    parser.setResponseIndex(new NominalAttribute("class"), 4);
+                }
+                if (datasetIndex == 1) {
+                    parser.setResponseIndex(new NominalAttribute("class"), 16);
+                }
 
                 try {
-                    dataset[datasetIndex] = DatasetReader.csv(smile.util.Paths.getTestData(datasource[datasetIndex]), format);
+                    dataset[datasetIndex] = parser.parse(datasetName[datasetIndex], smile.data.parser.IOUtils.getTestDataFile(datasource[datasetIndex]));
                 } catch (Exception ex) {
                     JOptionPane.showMessageDialog(null, "Failed to load dataset.", "ERROR", JOptionPane.ERROR_MESSAGE);
                     System.out.println(ex);

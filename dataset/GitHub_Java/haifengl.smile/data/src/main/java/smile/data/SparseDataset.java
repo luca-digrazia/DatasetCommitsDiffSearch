@@ -41,23 +41,14 @@ import smile.math.matrix.SparseMatrix;
  * @author Haifeng Li
  */
 public interface SparseDataset extends Dataset<SparseArray> {
-    /** Returns the number of nonzero entries. */
-    int nz();
-
-    /** Returns the number of nonzero entries in column j. */
-    int nz(int j);
-
-    /**
-     * Returns the number of rows.
-     */
-    default int nrows() {
-        return size();
-    }
 
     /**
      * Returns the number of columns.
      */
     int ncols();
+
+    /** Returns the number of nonzero entries. */
+    int length();
 
     /**
      * Returns the value at entry (i, j).
@@ -117,33 +108,7 @@ public interface SparseDataset extends Dataset<SparseArray> {
     /**
      * Convert into Harwell-Boeing column-compressed sparse matrix format.
      */
-    default SparseMatrix toMatrix() {
-        int nz = nz();
-        int ncols = ncols();
-
-        int[] pos = new int[ncols];
-        int[] colIndex = new int[ncols + 1];
-        for (int i = 0; i < ncols; i++) {
-            colIndex[i + 1] = colIndex[i] + nz(i);
-        }
-
-        int nrows = size();
-        int[] rowIndex = new int[nz];
-        double[] x = new double[nz];
-
-        for (int i = 0; i < nrows; i++) {
-            for (SparseArray.Entry e : get(i)) {
-                int j = e.i;
-                int k = colIndex[j] + pos[j];
-
-                rowIndex[k] = i;
-                x[k] = e.x;
-                pos[j]++;
-            }
-        }
-
-        return new SparseMatrix(nrows, ncols, x, rowIndex, colIndex);
-    }
+    SparseMatrix toSparseMatrix();
 
     /**
      * Returns a default implementation of SparseDataset from a collection.

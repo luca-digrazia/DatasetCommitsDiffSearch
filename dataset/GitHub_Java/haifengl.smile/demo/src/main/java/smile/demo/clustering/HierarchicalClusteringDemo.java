@@ -1,24 +1,24 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
 
 package smile.demo.clustering;
 
 import java.awt.Dimension;
 import java.awt.GridLayout;
+
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JFrame;
@@ -26,10 +26,18 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 
 import smile.clustering.HierarchicalClustering;
-import smile.clustering.linkage.*;
-import smile.plot.swing.Canvas;
-import smile.plot.swing.Dendrogram;
-import smile.plot.swing.ScatterPlot;
+import smile.clustering.linkage.CompleteLinkage;
+import smile.clustering.linkage.SingleLinkage;
+import smile.clustering.linkage.UPGMALinkage;
+import smile.clustering.linkage.UPGMCLinkage;
+import smile.clustering.linkage.WPGMALinkage;
+import smile.clustering.linkage.WPGMCLinkage;
+import smile.clustering.linkage.WardLinkage;
+import smile.plot.Palette;
+import smile.plot.PlotCanvas;
+import smile.math.MathEx;
+import smile.plot.Dendrogram;
+import smile.plot.ScatterPlot;
 
 /**
  *
@@ -58,34 +66,39 @@ public class HierarchicalClusteringDemo extends ClusteringDemo {
     public JComponent learn() {
         long clock = System.currentTimeMillis();
         double[][] data = dataset[datasetIndex];
-        Linkage linkage;
+        int n = data.length;
+        double[][] proximity = new double[n][];
+        for (int i = 0; i < n; i++) {
+            proximity[i] = new double[i+1];
+            for (int j = 0; j < i; j++)
+                proximity[i][j] = MathEx.distance(data[i], data[j]);
+        }
+        HierarchicalClustering hac = null;
         switch (linkageBox.getSelectedIndex()) {
             case 0:
-                linkage = SingleLinkage.of(data);
+                hac = new HierarchicalClustering(new SingleLinkage(proximity));
                 break;
             case 1:
-                linkage = CompleteLinkage.of(data);
+                hac = new HierarchicalClustering(new CompleteLinkage(proximity));
                 break;
             case 2:
-                linkage = UPGMALinkage.of(data);
+                hac = new HierarchicalClustering(new UPGMALinkage(proximity));
                 break;
             case 3:
-                linkage = WPGMALinkage.of(data);
+                hac = new HierarchicalClustering(new WPGMALinkage(proximity));
                 break;
             case 4:
-                linkage = UPGMCLinkage.of(data);
+                hac = new HierarchicalClustering(new UPGMCLinkage(proximity));
                 break;
             case 5:
-                linkage = WPGMCLinkage.of(data);
+                hac = new HierarchicalClustering(new WPGMCLinkage(proximity));
                 break;
             case 6:
-                linkage = WardLinkage.of(data);
+                hac = new HierarchicalClustering(new WardLinkage(proximity));
                 break;
             default:
                 throw new IllegalStateException("Unsupported Linkage");
         }
-
-        HierarchicalClustering hac = HierarchicalClustering.fit(linkage);
         System.out.format("Hierarchical clusterings %d samples in %dms\n", dataset[datasetIndex].length, System.currentTimeMillis()-clock);
 
         int[] membership = hac.partition(clusterNumber);
@@ -94,13 +107,25 @@ public class HierarchicalClusteringDemo extends ClusteringDemo {
             clusterSize[membership[i]]++;
         }
 
-        JPanel pane = new JPanel(new GridLayout(1, 2));
-        Canvas plot = ScatterPlot.of(dataset[datasetIndex], membership).canvas();
-        pane.add(plot.panel());
+        JPanel pane = new JPanel(new GridLayout(1, 3));
+        PlotCanvas plot = ScatterPlot.plot(dataset[datasetIndex], pointLegend);
+        plot.setTitle("Data");
+        pane.add(plot);
 
-        plot = new Dendrogram(hac.getTree(), hac.getHeight()).canvas();
+        for (int k = 0; k < clusterNumber; k++) {
+            double[][] cluster = new double[clusterSize[k]][];
+            for (int i = 0, j = 0; i < dataset[datasetIndex].length; i++) {
+                if (membership[i] == k) {
+                    cluster[j++] = dataset[datasetIndex][i];
+                }
+            }
+
+            plot.points(cluster, pointLegend, Palette.COLORS[k % Palette.COLORS.length]);
+        }
+
+        plot = Dendrogram.plot("Dendrogram", hac.getTree(), hac.getHeight());
         plot.setTitle("Dendrogram");
-        pane.add(plot.panel());
+        pane.add(plot);
         return pane;
     }
 

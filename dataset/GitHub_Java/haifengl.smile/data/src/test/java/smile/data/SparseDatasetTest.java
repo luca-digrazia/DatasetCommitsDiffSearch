@@ -53,7 +53,7 @@ public class SparseDatasetTest {
         }
 
         SparseDataset lil = SparseDataset.of(rows);
-        sm = lil.toMatrix();
+        sm = lil.toSparseMatrix();
     }
 
     @BeforeClass
@@ -94,9 +94,9 @@ public class SparseDatasetTest {
      * Test of size method, of class SparseMatrix.
      */
     @Test
-    public void testLength() {
-        System.out.println("length");
-        assertEquals(7, sm.length());
+    public void testNvals() {
+        System.out.println("nvals");
+        assertEquals(7, sm.size());
     }
 
     /**
@@ -120,22 +120,14 @@ public class SparseDatasetTest {
             SparseDataset data = SparseDataset.from(smile.util.Paths.getTestData("text/kos.txt"), 1);
             assertEquals(3430, data.size());
             assertEquals(6906, data.ncols());
-            assertEquals(353160, data.nz());
+            assertEquals(353160, data.length());
             assertEquals(2.0, data.get(0, 60), 1E-7);
             assertEquals(1.0, data.get(1, 1062), 1E-7);
             assertEquals(0.0, data.get(1, 1063), 1E-7);
             assertEquals(1.0, data.get(3429, 6821), 1E-7);
-
-            SparseMatrix sm = data.toMatrix();
-            assertEquals(3430, sm.nrows());
-            assertEquals(6906, sm.ncols());
-            assertEquals(353160, sm.length());
-            assertEquals(2.0, sm.get(0, 60), 1E-7);
-            assertEquals(1.0, sm.get(1, 1062), 1E-7);
-            assertEquals(0.0, sm.get(1, 1063), 1E-7);
-            assertEquals(1.0, sm.get(3429, 6821), 1E-7);
         } catch (Exception ex) {
-            assertTrue(String.format("Unexpected exception: %s", ex), false);
+            System.err.println(ex);
+            assertTrue(false);
         }
     }
 }

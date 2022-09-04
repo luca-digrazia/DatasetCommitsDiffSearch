@@ -1,27 +1,27 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
 
 package smile.demo.stat.distribution;
 
 import java.awt.GridLayout;
+
 import javax.swing.JFrame;
 import javax.swing.JPanel;
+
 import smile.math.MathEx;
-import smile.math.matrix.Matrix;
 import smile.plot.Histogram;
 import smile.plot.PlotCanvas;
 import smile.plot.Surface;
@@ -51,35 +51,35 @@ public class MultivariateGaussianMixtureDemo extends JPanel {
 
         double[][] data = new double[3000][];
 
-        MultivariateGaussianDistribution g1 = new MultivariateGaussianDistribution(mu1, Matrix.of(sigma1));
+        MultivariateGaussianDistribution g1 = new MultivariateGaussianDistribution(mu1, sigma1);
         double[][] data1 = new double[500][];
         for (int i = 0; i < data1.length; i++) {
             data[i] = g1.rand();
             data1[i] = data[i];
         }
 
-        MultivariateGaussianDistribution g2 = new MultivariateGaussianDistribution(mu2, Matrix.of(sigma2));
+        MultivariateGaussianDistribution g2 = new MultivariateGaussianDistribution(mu2, sigma2);
         double[][] data2 = new double[1000][];
         for (int i = 0; i < data2.length; i++) {
             data[500+i] = g2.rand();
             data2[i] = data[500+i];
         }
 
-        MultivariateGaussianDistribution g3 = new MultivariateGaussianDistribution(mu3, Matrix.of(sigma3));
+        MultivariateGaussianDistribution g3 = new MultivariateGaussianDistribution(mu3, sigma3);
         double[][] data3 = new double[1000][];
         for (int i = 0; i < data3.length; i++) {
             data[1500+i] = g3.rand();
             data3[i] = data[1500+i];
         }
 
-        MultivariateGaussianDistribution g4 = new MultivariateGaussianDistribution(mu4, Matrix.of(sigma4));
+        MultivariateGaussianDistribution g4 = new MultivariateGaussianDistribution(mu4, sigma4);
         double[][] data4 = new double[500][];
         for (int i = 0; i < data4.length; i++) {
             data[2500+i] = g4.rand();
             data4[i] = data[2500+i];
         }
 
-        MultivariateGaussianMixture mixture = MultivariateGaussianMixture.fit(4, data);
+        MultivariateGaussianMixture mixture = new MultivariateGaussianMixture(data, 4);
 
         int n = 40;
         int m = 40;
@@ -118,46 +118,46 @@ public class MultivariateGaussianMixtureDemo extends JPanel {
 
         double[][] data = new double[3000][];
 
-        MultivariateGaussianDistribution g1 = new MultivariateGaussianDistribution(mu1, Matrix.of(sigma1));
+        MultivariateGaussianDistribution g1 = new MultivariateGaussianDistribution(mu1, sigma1);
         double[][] data1 = new double[500][];
         for (int i = 0; i < data1.length; i++) {
             data[i] = g1.rand();
             data1[i] = data[i];
         }
 
-        MultivariateGaussianDistribution g2 = new MultivariateGaussianDistribution(mu2, Matrix.of(sigma2));
+        MultivariateGaussianDistribution g2 = new MultivariateGaussianDistribution(mu2, sigma2);
         double[][] data2 = new double[1000][];
         for (int i = 0; i < data2.length; i++) {
             data[500+i] = g2.rand();
             data2[i] = data[500+i];
         }
 
-        MultivariateGaussianDistribution g3 = new MultivariateGaussianDistribution(mu3, Matrix.of(sigma3));
+        MultivariateGaussianDistribution g3 = new MultivariateGaussianDistribution(mu3, sigma3);
         double[][] data3 = new double[1000][];
         for (int i = 0; i < data3.length; i++) {
             data[1500+i] = g3.rand();
             data3[i] = data[1500+i];
         }
 
-        MultivariateGaussianDistribution g4 = new MultivariateGaussianDistribution(mu4, Matrix.of(sigma4));
+        MultivariateGaussianDistribution g4 = new MultivariateGaussianDistribution(mu4, sigma4);
         double[][] data4 = new double[500][];
         for (int i = 0; i < data4.length; i++) {
             data[2500+i] = g4.rand();
             data4[i] = data[2500+i];
         }
 
-        System.out.println(MultivariateGaussianDistribution.fit(data1));
-        System.out.println(MultivariateGaussianDistribution.fit(data2));
-        System.out.println(MultivariateGaussianDistribution.fit(data3));
-        System.out.println(MultivariateGaussianDistribution.fit(data4));
+        System.out.println(new MultivariateGaussianDistribution(data1));
+        System.out.println(new MultivariateGaussianDistribution(data2));
+        System.out.println(new MultivariateGaussianDistribution(data3));
+        System.out.println(new MultivariateGaussianDistribution(data4));
 
-        MultivariateGaussianMixture mixture = MultivariateGaussianMixture.fit(4, data);
+        MultivariateGaussianMixture mixture = new MultivariateGaussianMixture(data, 4);
         System.out.println(mixture);
 
-        mixture = MultivariateGaussianMixture.fit(6, data);
+        mixture = new MultivariateGaussianMixture(data, 6);
         System.out.println(mixture);
 
-        mixture = MultivariateGaussianMixture.fit(data);
+        mixture = new MultivariateGaussianMixture(data);
         System.out.println(mixture);
 
         double[] mu100 = new double[20];
@@ -175,7 +175,6 @@ public class MultivariateGaussianMixtureDemo extends JPanel {
         System.out.println(MathEx.sd(data100));
 
         JFrame frame = new JFrame("Norm of Samples of Gaussian Mixture of Dimension 100");
-        frame.setSize(1000, 1000);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setLocationRelativeTo(null);
         frame.getContentPane().add(Histogram.plot(data100, 100));

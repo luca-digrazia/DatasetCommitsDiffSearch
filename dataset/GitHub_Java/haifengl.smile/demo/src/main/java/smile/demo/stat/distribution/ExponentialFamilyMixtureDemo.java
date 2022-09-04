@@ -1,18 +1,17 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
 
 package smile.demo.stat.distribution;
@@ -59,11 +58,23 @@ public class ExponentialFamilyMixtureDemo extends JPanel {
         for (int i = 1000; i < 2000; i++)
             data[i] = gamma.rand();
 
-        ExponentialFamilyMixture mixture = ExponentialFamilyMixture.fit(data,
-                new Mixture.Component(0.25, new GaussianDistribution(0.0, 1.0)),
-                new Mixture.Component(0.25, new ExponentialDistribution(1.0)),
-                new Mixture.Component(0.5, new GammaDistribution(1.0, 2.0))
-                );
+        List<Mixture.Component> m = new ArrayList<>();
+        Mixture.Component c = new Mixture.Component();
+        c.priori = 0.25;
+        c.distribution = new GaussianDistribution(0.0, 1.0);
+        m.add(c);
+
+        c = new Mixture.Component();
+        c.priori = 0.25;
+        c.distribution = new ExponentialDistribution(1.0);
+        m.add(c);
+
+        c = new Mixture.Component();
+        c.priori = 0.5;
+        c.distribution = new GammaDistribution(1.0, 2.0);
+        m.add(c);
+
+        ExponentialFamilyMixture mixture = new ExponentialFamilyMixture(m, data);
 
         PlotCanvas canvas = Histogram.plot(data, 50);
         canvas.setTitle("Mixture of Gaussian, Exponential, and Gamma");
@@ -104,15 +115,26 @@ public class ExponentialFamilyMixtureDemo extends JPanel {
         for (int i = 1000; i < 2000; i++)
             data[i] = gamma.rand();
 
-        ExponentialFamilyMixture mixture = ExponentialFamilyMixture.fit(data,
-                new Mixture.Component(0.25, new GaussianDistribution(0.0, 1.0)),
-                new Mixture.Component(0.25, new ExponentialDistribution(1.0)),
-                new Mixture.Component(0.5, new GammaDistribution(1.0, 2.0))
-        );
+        List<Mixture.Component> m = new ArrayList<>();
+        Mixture.Component c = new Mixture.Component();
+        c.priori = 0.25;
+        c.distribution = new GaussianDistribution(0.0, 1.0);
+        m.add(c);
+
+        c = new Mixture.Component();
+        c.priori = 0.25;
+        c.distribution = new ExponentialDistribution(1.0);
+        m.add(c);
+
+        c = new Mixture.Component();
+        c.priori = 0.25;
+        c.distribution = new GammaDistribution(1.0, 2.0);
+        m.add(c);
+
+        ExponentialFamilyMixture mixture = new ExponentialFamilyMixture(m, data);
         System.out.println(mixture);
 
         JFrame frame = new JFrame("Mixture of Exponential Family Distributions");
-        frame.setSize(1000, 1000);
         PlotCanvas canvas = Histogram.plot(data, 50);
         frame.add(canvas);
 

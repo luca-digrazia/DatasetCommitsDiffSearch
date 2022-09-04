@@ -1,18 +1,17 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
 
 package smile.demo.stat.distribution;
@@ -28,9 +27,9 @@ import javax.swing.JSlider;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 
-import smile.plot.swing.Canvas;
+import smile.plot.PlotCanvas;
 import smile.math.MathEx;
-import smile.plot.swing.Surface;
+import smile.plot.Surface;
 import smile.stat.distribution.MultivariateGaussianDistribution;
 
 /**
@@ -40,7 +39,7 @@ import smile.stat.distribution.MultivariateGaussianDistribution;
 @SuppressWarnings("serial")
 public class MultivariateGaussianDistributionDemo extends JPanel implements ChangeListener {
     private JPanel optionPane;
-    private Canvas pdf;
+    private PlotCanvas pdf;
     private JSlider sigma1Slider;
     private JSlider sigma2Slider;
     private double[] mu = {0.0, 0.0};
@@ -93,9 +92,9 @@ public class MultivariateGaussianDistributionDemo extends JPanel implements Chan
             }
         }
 
-        pdf = new Surface(z).canvas();
+        pdf = Surface.plot(z);
         pdf.setTitle("Multivariate Gaussian");
-        add(pdf.panel(), BorderLayout.CENTER);
+        add(pdf, BorderLayout.CENTER);
     }
 
     @Override
@@ -117,10 +116,7 @@ public class MultivariateGaussianDistributionDemo extends JPanel implements Chan
                 }
             }
 
-            pdf = new Surface(z).canvas();
-            pdf.setTitle("Multivariate Gaussian");
-            add(pdf.panel(), BorderLayout.CENTER);
-            repaint();
+            pdf.repaint();
         }
     }
 
@@ -131,7 +127,6 @@ public class MultivariateGaussianDistributionDemo extends JPanel implements Chan
 
     public static void main(String[] args) {
         JFrame frame = new JFrame("MultivariateGaussian Distribution");
-        frame.setSize(1000, 1000);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setLocationRelativeTo(null);
         frame.getContentPane().add(new MultivariateGaussianDistributionDemo());

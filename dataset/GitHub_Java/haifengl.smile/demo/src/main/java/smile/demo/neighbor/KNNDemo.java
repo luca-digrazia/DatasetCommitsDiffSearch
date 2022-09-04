@@ -1,20 +1,18 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.demo.neighbor;
 
 import java.awt.BorderLayout;
@@ -37,7 +35,7 @@ import javax.swing.JPanel;
 import javax.swing.JSlider;
 import javax.swing.JTextField;
 
-import smile.plot.swing.Canvas;
+import smile.plot.PlotCanvas;
 import smile.math.MathEx;
 import smile.math.distance.EuclideanDistance;
 import smile.neighbor.CoverTree;
@@ -46,7 +44,7 @@ import smile.neighbor.LSH;
 import smile.neighbor.LinearSearch;
 import smile.neighbor.MPLSH;
 import smile.neighbor.Neighbor;
-import smile.plot.swing.BarPlot;
+import smile.plot.BarPlot;
 
 /**
  *
@@ -55,7 +53,7 @@ import smile.plot.swing.BarPlot;
 @SuppressWarnings("serial")
 public class KNNDemo extends JPanel implements Runnable, ActionListener {
 
-    private String[] label = {"Naive", "KD-Tree", "Cover Tree", "LSH"};
+    private String[] label = {"Naive", "KD-Tree", "Cover Tree", "LSH", "MPLSH"};
     private JPanel optionPane;
     private JPanel canvas;
     private JButton startButton;
@@ -192,7 +190,7 @@ public class KNNDemo extends JPanel implements Runnable, ActionListener {
         for (int i = 0; i < train.length; i++) {
             train[i] = data[perm[i]];
         }
-        mplsh.fit(kdtree, train, 1.5 * radius);
+        mplsh.learn(kdtree, train, 1.5 * radius);
         int mplshBuild = (int) (System.currentTimeMillis() - time);
 
         double lshRecall = 0.0;
@@ -214,7 +212,6 @@ public class KNNDemo extends JPanel implements Runnable, ActionListener {
         lshRecall /= 1000;
         System.out.format("The recall of LSH is %.1f%%\n", lshRecall * 100);
 
-        /*
         double mplshRecall = 0.0;
         time = System.currentTimeMillis();
         for (int i = 0; i < 1000; i++) {
@@ -233,20 +230,17 @@ public class KNNDemo extends JPanel implements Runnable, ActionListener {
         int mplshSearch = (int) (System.currentTimeMillis() - time);
         mplshRecall /= 1000;
         System.out.format("The recall of MPLSH is %.1f%%\n", mplshRecall * 100);
-         */
 
         canvas.removeAll();
-        double[] buildTime = {naiveBuild, kdtreeBuild, coverBuild, lshBuild};
-        Canvas build = BarPlot.of(buildTime).canvas();
+        double[] buildTime = {naiveBuild, kdtreeBuild, coverBuild, lshBuild, mplshBuild};
+        PlotCanvas build = BarPlot.plot(buildTime, label);
         build.setTitle("Build Time");
-        build.setAxisLabels(label);
-        canvas.add(build.panel());
+        canvas.add(build);
 
-        double[] searchTime = {naiveSearch, kdtreeSearch, coverSearch, lshSearch};
-        Canvas search = BarPlot.of(searchTime).canvas();
+        double[] searchTime = {naiveSearch, kdtreeSearch, coverSearch, lshSearch, mplshSearch};
+        PlotCanvas search = BarPlot.plot(searchTime, label);
         search.setTitle("Search Time");
-        search.setAxisLabels(label);
-        canvas.add(search.panel());
+        canvas.add(search);
         validate();
 
         startButton.setEnabled(true);

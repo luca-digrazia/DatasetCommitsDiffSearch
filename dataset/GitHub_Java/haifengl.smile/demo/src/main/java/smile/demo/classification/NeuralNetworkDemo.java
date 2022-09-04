@@ -1,18 +1,17 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
 
 package smile.demo.classification;
@@ -24,10 +23,7 @@ import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JTextField;
 
-import smile.base.mlp.Layer;
-import smile.base.mlp.OutputFunction;
-import smile.base.mlp.OutputLayer;
-import smile.classification.MLP;
+import smile.classification.NeuralNetwork;
 import smile.math.MathEx;
 
 /**
@@ -77,21 +73,19 @@ public class NeuralNetworkDemo extends ClassificationDemo {
             return null;
         }
 
-        double[][] data = formula.x(dataset[datasetIndex]).toArray();
-        int[] label = formula.y(dataset[datasetIndex]).toIntArray();
+        double[][] data = dataset[datasetIndex].toArray(new double[dataset[datasetIndex].size()][]);
+        int[] label = dataset[datasetIndex].toArray(new int[dataset[datasetIndex].size()]);
         
         int k = MathEx.max(label) + 1;
-        MLP net;
+        NeuralNetwork net = null;
         if (k == 2) {
-            net = new MLP(2, Layer.sigmoid(units), Layer.mle(1, OutputFunction.SIGMOID));
+            net = new NeuralNetwork(NeuralNetwork.ErrorFunction.CROSS_ENTROPY, NeuralNetwork.ActivationFunction.LOGISTIC_SIGMOID, data[0].length, units, 1);
         } else {
-            net = new MLP(2, Layer.sigmoid(units), Layer.mle(k, OutputFunction.SOFTMAX));
+            net = new NeuralNetwork(NeuralNetwork.ErrorFunction.CROSS_ENTROPY, NeuralNetwork.ActivationFunction.SOFTMAX, data[0].length, units, k);
         }
         
         for (int i = 0; i < epochs; i++) {
-            for (int j = 0; j < data.length; j++) {
-                net.update(data[j], label[j]);
-            }
+            net.learn(data, label);
         }
 
         int[] pred = new int[label.length];

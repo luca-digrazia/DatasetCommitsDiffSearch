@@ -1,18 +1,17 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
 
 package smile.demo.stat.distribution;
@@ -31,11 +30,12 @@ import javax.swing.JSlider;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 
-import smile.plot.swing.Histogram;
-import smile.plot.swing.Canvas;
-import smile.plot.swing.Line;
-import smile.plot.swing.LinePlot;
-import smile.plot.swing.QQPlot;
+import smile.math.MathEx;
+import smile.plot.Histogram;
+import smile.plot.PlotCanvas;
+import smile.plot.Line;
+import smile.plot.LinePlot;
+import smile.plot.QQPlot;
 import smile.stat.distribution.ExponentialDistribution;
 
 /**
@@ -46,10 +46,10 @@ import smile.stat.distribution.ExponentialDistribution;
 public class ExponentialDistributionDemo extends JPanel implements ChangeListener {
     private JPanel optionPane;
     private JPanel canvas;
-    private Canvas pdf;
-    private Canvas cdf;
-    private Canvas histogram;
-    private Canvas qqplot;
+    private PlotCanvas pdf;
+    private PlotCanvas cdf;
+    private PlotCanvas histogram;
+    private PlotCanvas qqplot;
     private JSlider lambdaSlider;
     private double lambda = 1;
 
@@ -61,7 +61,7 @@ public class ExponentialDistributionDemo extends JPanel implements ChangeListene
             labelTable.put(new Integer(i), new JLabel(String.valueOf(i/10)));
         }
 
-        lambdaSlider = new JSlider(0, 50, (int) Math.round(lambda * 10));
+        lambdaSlider = new JSlider(0, 50, (int) MathEx.round(lambda * 10));
         lambdaSlider.addChangeListener(this);
         lambdaSlider.setLabelTable(labelTable);
         lambdaSlider.setMajorTickSpacing(10);
@@ -90,26 +90,26 @@ public class ExponentialDistributionDemo extends JPanel implements ChangeListene
             q[i][1] = dist.cdf(p[i][0]);
         }
 
-        pdf = LinePlot.of(p, Color.BLUE).canvas();
+        pdf = LinePlot.plot(p, Line.Style.SOLID, Color.BLUE);
         pdf.setTitle("PDF");
-        canvas.add(pdf.panel());
+        canvas.add(pdf);
 
-        cdf = LinePlot.of(q, Color.BLUE).canvas();
+        cdf = LinePlot.plot(q, Line.Style.SOLID, Color.BLUE);
         cdf.setTitle("CDF");
-        canvas.add(cdf.panel());
+        canvas.add(cdf);
 
         double[] data = new double[500];
         for (int i = 0; i < data.length; i++) {
             data[i] = dist.rand();
         }
 
-        histogram = Histogram.of(data, 20, true).canvas();
+        histogram = Histogram.plot(data, 20);
         histogram.setTitle("Histogram");
-        canvas.add(histogram.panel());
+        canvas.add(histogram);
 
-        qqplot = QQPlot.of(data, dist).canvas();
+        qqplot = QQPlot.plot(data, dist);
         qqplot.setTitle("Q-Q Plot");
-        canvas.add(qqplot.panel());
+        canvas.add(qqplot);
     }
 
     @Override
@@ -130,10 +130,10 @@ public class ExponentialDistributionDemo extends JPanel implements ChangeListene
             }
 
             pdf.clear();
-            pdf.add(LinePlot.of(p, Color.BLUE));
+            pdf.line(p, Line.Style.SOLID, Color.BLUE);
 
             cdf.clear();
-            cdf.add(LinePlot.of(q, Color.BLUE));
+            cdf.line(q, Line.Style.SOLID, Color.BLUE);
 
             double[] data = new double[500];
             for (int i = 0; i < data.length; i++) {
@@ -141,10 +141,10 @@ public class ExponentialDistributionDemo extends JPanel implements ChangeListene
             }
 
             histogram.clear();
-            histogram.add(Histogram.of(data, 20, true));
+            histogram.histogram(data, 20, Color.BLUE);
 
             qqplot.clear();
-            qqplot.add(QQPlot.of(data, dist));
+            qqplot.add(new QQPlot(data, dist));
             canvas.repaint();
         }
     }
@@ -156,7 +156,6 @@ public class ExponentialDistributionDemo extends JPanel implements ChangeListene
 
     public static void main(String[] args) {
         JFrame frame = new JFrame("Exponential Distribution");
-        frame.setSize(1000, 1000);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setLocationRelativeTo(null);
         frame.getContentPane().add(new ExponentialDistributionDemo());
