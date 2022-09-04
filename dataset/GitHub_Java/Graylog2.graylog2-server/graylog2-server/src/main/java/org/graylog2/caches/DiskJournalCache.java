@@ -28,7 +28,6 @@ import org.graylog2.utilities.MessageToJsonSerializer;
 import org.mapdb.Atomic;
 import org.mapdb.DB;
 import org.mapdb.DBMaker;
-import org.mapdb.Store;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,8 +46,6 @@ import java.util.concurrent.TimeUnit;
  * @author Bernd Ahlers <bernd@torch.sh>
  */
 public abstract class DiskJournalCache implements InputCache, OutputCache {
-    private static final float NO_COMPACT_DB_SIZE = (float) (50 * 1024 * 1024);
-
     private final Logger LOG = LoggerFactory.getLogger(DiskJournalCache.class);
 
     private final DB db;
@@ -57,8 +54,6 @@ public abstract class DiskJournalCache implements InputCache, OutputCache {
     private final ScheduledExecutorService commitService;
     private final MessageToJsonSerializer serializer;
     private final Object modificationLock = new Object();
-    private final Store store;
-    private final float compactSizePercentageWatermark;
 
     public static class Input extends DiskJournalCache {
         @Inject
@@ -87,29 +82,28 @@ public abstract class DiskJournalCache implements InputCache, OutputCache {
     @Inject
     public DiskJournalCache(final Configuration config, final MessageToJsonSerializer serializer) throws IOException {
         // Ensure the spool directory exists.
-        Files.createDirectories(new File(config.getMessageCacheSpoolDir()).toPath());
+        Files.createDirectories(new File(config.getCacheSpoolDir()).toPath());
 
         this.db = DBMaker.newFileDB(getDbFile(config)).mmapFileEnable().checksumEnable().closeOnJvmShutdown().make();
-        this.store = Store.forDB(this.db);
         this.queue = db.getQueue("messages");
         this.counter = db.getAtomicLong("counter");
         this.commitService = Executors.newSingleThreadScheduledExecutor(
                 new ThreadFactoryBuilder().setNameFormat("disk-journal-cache-%d").build()
         );
         this.serializer = serializer;
-        this.compactSizePercentageWatermark = config.getMessageCacheCompactionWatermark();
 
         /* Commit and compact the database to flush existing data in the transaction log and to reduce the file
          * size of the database.
          */
-        commit();
-        compact(0);
+        LOG.debug("Committing {}", getDbFileName());
+        db.commit();
+        LOG.debug("Compacting {}", getDbFileName());
+        db.compact();
 
         this.commitService.scheduleWithFixedDelay(new Runnable() {
             @Override
             public void run() {
                 commit();
-                compact(compactSizePercentageWatermark);
             }
         }, 0, 1000, TimeUnit.MILLISECONDS);
     }
@@ -200,41 +194,13 @@ public abstract class DiskJournalCache implements InputCache, OutputCache {
             return;
         }
         if (LOG.isDebugEnabled()) {
-            LOG.debug("Committing {} (entries {})", getDbFileName(), size());
+            LOG.debug("Committing {} (size {})", getDbFileName(), size());
         }
         db.commit();
     }
 
-    private void compact(final float watermark) {
-        if (db.isClosed()) {
-            return;
-        }
-        final long currSize = store.getCurrSize();
-
-        if (isReadyToCompact(store, watermark)) {
-            db.compact();
-
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("Compacted db {} (freed up {} bytes)", getDbFileName(), (currSize - store.getCurrSize()));
-            }
-        }
-    }
-
-    private boolean isReadyToCompact(Store dbStore, final float watermark) {
-        final float currSize = (float) dbStore.getCurrSize();
-
-        if (currSize < NO_COMPACT_DB_SIZE) {
-            return false;
-        }
-
-        final float freeSize = (float) dbStore.getFreeSize();
-        final float percentFree = (freeSize * 100.0f) / currSize;
-
-        return percentFree >= watermark;
-    }
-
     private File getDbFile(final Configuration config) {
-        return new File(config.getMessageCacheSpoolDir(), getDbFileName()).getAbsoluteFile();
+        return new File(config.getCacheSpoolDir(), getDbFileName()).getAbsoluteFile();
     }
 
     protected abstract String getDbFileName();
