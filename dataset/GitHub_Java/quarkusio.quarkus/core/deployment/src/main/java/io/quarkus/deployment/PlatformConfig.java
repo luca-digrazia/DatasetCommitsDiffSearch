@@ -15,13 +15,13 @@ public class PlatformConfig {
     /**
      * groupId of the platform to use
      */
-    @ConfigItem(defaultValue = "io.quarkus.platform")
+    @ConfigItem(defaultValue = "io.quarkus")
     String groupId;
 
     /**
      * artifactId of the platform to use
      */
-    @ConfigItem(defaultValue = "quarkus-bom")
+    @ConfigItem(defaultValue = "quarkus-universe-bom")
     String artifactId;
 
     /**
