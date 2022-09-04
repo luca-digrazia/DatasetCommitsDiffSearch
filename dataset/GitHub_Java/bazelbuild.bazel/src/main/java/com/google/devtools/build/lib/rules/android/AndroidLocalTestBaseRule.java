@@ -13,33 +13,36 @@
 // limitations under the License.package com.google.devtools.build.lib.rules.android;
 package com.google.devtools.build.lib.rules.android;
 
-import static com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition.HOST;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_KEYED_STRING_DICT;
-import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
+import static com.google.devtools.build.lib.packages.Type.BOOLEAN;
+import static com.google.devtools.build.lib.packages.Type.STRING;
+import static com.google.devtools.build.lib.packages.Type.STRING_DICT;
+import static com.google.devtools.build.lib.packages.Type.STRING_LIST;
 import static com.google.devtools.build.lib.rules.android.AndroidRuleClasses.getAndroidSdkLabel;
-import static com.google.devtools.build.lib.syntax.Type.STRING;
-import static com.google.devtools.build.lib.syntax.Type.STRING_DICT;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
+import com.google.devtools.build.lib.analysis.config.ExecutionTransitionFactory;
 import com.google.devtools.build.lib.packages.RuleClass;
-import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
+import com.google.devtools.build.lib.rules.android.databinding.DataBinding;
 import com.google.devtools.build.lib.rules.config.ConfigFeatureFlagProvider;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
-import com.google.devtools.build.lib.rules.java.Jvm;
 import com.google.devtools.build.lib.util.FileTypeSet;
 
 /** Base rule definition for android_local_test */
 public class AndroidLocalTestBaseRule implements RuleDefinition {
 
   @Override
-  public RuleClass build(Builder builder, RuleDefinitionEnvironment environment) {
+  public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment environment) {
     return builder
-        .requiresConfigurationFragments(JavaConfiguration.class, Jvm.class)
+        .requiresConfigurationFragments(
+            JavaConfiguration.class,
+            AndroidLocalTestConfiguration.class,
+            AndroidConfiguration.class)
 
         // Update documentation for inherited attributes
 
@@ -51,7 +54,7 @@ public class AndroidLocalTestBaseRule implements RuleDefinition {
         <p>
         The list of allowed rules in <code>deps</code> are <code>android_library</code>,
         <code>aar_import</code>, <code>java_import</code>, <code>java_library</code>,
-        <code>java_lite_proto_library</code>, and <code>proto_library</code>.
+        and <code>java_lite_proto_library</code>.
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
 
         /* <!-- #BLAZE_RULE($android_local_test_base).ATTRIBUTE(srcs) -->
@@ -87,17 +90,17 @@ public class AndroidLocalTestBaseRule implements RuleDefinition {
                 .allowedFileTypes()
                 .nonconfigurable("defines an aspect of configuration")
                 .mandatoryProviders(ImmutableList.of(ConfigFeatureFlagProvider.id())))
-        .add(AndroidFeatureFlagSetProvider.getWhitelistAttribute(environment))
+        .add(AndroidFeatureFlagSetProvider.getAllowlistAttribute(environment))
         // TODO(b/38314524): Move $android_resources_busybox and :android_sdk to a separate
         // rule so they're not defined in multiple places
         .add(
             attr("$android_resources_busybox", LABEL)
-                .cfg(HOST)
+                .cfg(ExecutionTransitionFactory.create())
                 .exec()
                 .value(environment.getToolsLabel(AndroidRuleClasses.DEFAULT_RESOURCES_BUSYBOX)))
         .add(
             attr(":android_sdk", LABEL)
-                .allowedRuleClasses("android_sdk", "filegroup")
+                .allowedRuleClasses("android_sdk")
                 .value(
                     getAndroidSdkLabel(environment.getToolsLabel(AndroidRuleClasses.DEFAULT_SDK))))
         /* <!-- #BLAZE_RULE($android_local_test_base).ATTRIBUTE(test_class) -->
@@ -130,31 +133,47 @@ public class AndroidLocalTestBaseRule implements RuleDefinition {
         the libraries under test have a <code>minSdkVersion</code> tag in them.
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
         .add(attr("manifest", LABEL).allowedFileTypes(FileTypeSet.ANY_FILE))
-        /* <!-- #BLAZE_RULE($android_local_test_base).ATTRIBUTE(resource_files) -->
-        The list of test resources to be packaged. This is typically a <code>glob</code>
-        of all files under the <code>res</code> directory.
-        <p>
-        Generated files (from genrules) can be referenced by
-        <a href="../build-ref.html#labels">Label</a> here as well. The only restriction is that
-        the generated outputs must be under the same "<code>res</code>" directory as any other
-        resource files that are included. It is rare to need this.
-        </p>
+        /* <!-- #BLAZE_RULE($android_local_test_base).ATTRIBUTE(custom_package) -->
+        Java package in which the R class will be generated. By default the package is inferred
+        from the directory where the BUILD file containing the rule is. If you use this attribute,
+        you will likely need to use <code>test_class</code> as well.
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-        .add(attr("resource_files", LABEL_LIST).allowedFileTypes(FileTypeSet.ANY_FILE))
-        /* <!-- #BLAZE_RULE($android_local_test_base).ATTRIBUTE(assets_dir) -->
-        The string giving the path to the files in <code>assets</code>.
-        The pair <code>assets</code> and <code>assets_dir</code> describe packaged
-        assets and either both attributes should be provided or neither of them.
+        .add(attr("custom_package", STRING))
+        /* <!-- #BLAZE_RULE($android_resource_support).ATTRIBUTE(enable_data_binding) -->
+        If true, this rule processes
+        <a href="https://developer.android.com/topic/libraries/data-binding/index.html">data
+        binding</a> references used in data-binding enabled dependencies used by this test. Without
+        this setting, data-binding dependencies won't have necessary binary-level code generation,
+        and may produce build failures.
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-        .add(attr("assets_dir", STRING))
-        /* <!-- #BLAZE_RULE($android_local_test_base).ATTRIBUTE(assets) -->
-        The list of test assets to be packaged. This is typically a <code>glob</code> of all files
-        under the <code>assets</code> directory. You can also reference other rules (any rule that
-        produces files) or exported files in the other packages, as long as all those files are
-        under the <code>assets_dir</code> directory in the corresponding package. It is rare to
-        need this.
+        .add(attr("enable_data_binding", BOOLEAN))
+        // The javac annotation processor from Android's data binding library that turns
+        // processed XML expressions into Java code.
+        .add(
+            attr(DataBinding.DATABINDING_ANNOTATION_PROCESSOR_ATTR, LABEL)
+                .cfg(ExecutionTransitionFactory.create())
+                .value(
+                    environment.getToolsLabel("//tools/android:databinding_annotation_processor")))
+        .add(
+            attr(DataBinding.DATABINDING_EXEC_PROCESSOR_ATTR, LABEL)
+                .cfg(ExecutionTransitionFactory.create())
+                .exec()
+                .value(environment.getToolsLabel("//tools/android:databinding_exec")))
+        /* <!-- #BLAZE_RULE($android_local_test_base).ATTRIBUTE(nocompress_extensions) -->
+        A list of file extensions to leave uncompressed in the resource apk.
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-        .add(attr("assets", LABEL_LIST).allowedFileTypes(FileTypeSet.ANY_FILE))
+        .add(attr("nocompress_extensions", STRING_LIST))
+        /* <!-- #BLAZE_RULE($android_local_test_base).ATTRIBUTE(resource_configuration_filters) -->
+        A list of resource configuration filters, such as 'en' that will limit the resources in the
+        apk to only the ones in the 'en' configuration.
+        <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
+        .add(attr("resource_configuration_filters", STRING_LIST))
+        /* <!-- #BLAZE_RULE($android_local_test_base).ATTRIBUTE(densities) -->
+        Densities to filter for when building the apk. A corresponding compatible-screens
+        section will also be added to the manifest if it does not already contain a
+        superset StarlarkListing.
+        <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
+        .add(attr("densities", STRING_LIST))
         .build();
   }
 
