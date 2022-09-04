@@ -34,8 +34,6 @@ public class ExtractorFactory {
         switch (type) {
             case REGEX:
                 return new RegexExtractor(id, title, cursorStrategy, sourceField, targetField, extractorConfig, creatorUserId);
-            case SUBSTRING:
-                return new SubstringExtractor(id, title, cursorStrategy, sourceField, targetField, extractorConfig, creatorUserId);
             default:
                 throw new NoSuchExtractorException();
         }
