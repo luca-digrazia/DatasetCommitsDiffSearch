@@ -1,9 +1,9 @@
 package io.quarkus.devtools.project.buildfile;
 
-import static com.google.common.base.Preconditions.checkNotNull;
 import static io.quarkus.devtools.project.extensions.Extensions.findInList;
 import static io.quarkus.devtools.project.extensions.Extensions.toCoords;
 import static io.quarkus.devtools.project.extensions.Extensions.toKey;
+import static java.util.Objects.requireNonNull;
 import static java.util.stream.Collectors.toList;
 
 import io.quarkus.bootstrap.model.AppArtifactCoords;
@@ -19,18 +19,17 @@ import java.nio.file.Path;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.atomic.LongAdder;
 import java.util.stream.Collectors;
 import org.apache.maven.model.Dependency;
 
-public abstract class BuildFile<T> implements ExtensionManager {
+public abstract class BuildFile implements ExtensionManager {
 
     private final Path projectFolderPath;
     private final QuarkusPlatformDescriptor platformDescriptor;
 
     public BuildFile(final Path projectFolderPath, final QuarkusPlatformDescriptor platformDescriptor) {
-        this.projectFolderPath = checkNotNull(projectFolderPath, "projectPath is required");
-        this.platformDescriptor = checkNotNull(platformDescriptor, "platformDescriptor is required");
+        this.projectFolderPath = requireNonNull(projectFolderPath, "projectPath is required");
+        this.platformDescriptor = requireNonNull(platformDescriptor, "platformDescriptor is required");
     }
 
     @Override
@@ -45,20 +44,19 @@ public abstract class BuildFile<T> implements ExtensionManager {
         }
         this.refreshData();
         final Set<AppArtifactKey> existingKeys = getDependenciesKeys();
-        final LongAdder counter = new LongAdder();
-        coords.stream()
+        final List<AppArtifactCoords> installed = coords.stream()
                 .distinct()
                 .filter(a -> !existingKeys.contains(a.getKey()))
-                .forEach(e -> {
+                .filter(e -> {
                     try {
                         addDependencyInBuildFile(e);
-                        counter.increment();
+                        return true;
                     } catch (IOException ex) {
                         throw new UncheckedIOException(ex);
                     }
-                });
+                }).collect(toList());
         this.writeToDisk();
-        return new InstallResult(counter.intValue());
+        return new InstallResult(installed);
     }
 
     @Override
@@ -74,20 +72,19 @@ public abstract class BuildFile<T> implements ExtensionManager {
     public final UninstallResult uninstall(Collection<AppArtifactKey> keys) throws IOException {
         this.refreshData();
         final Set<AppArtifactKey> existingKeys = getDependenciesKeys();
-        final LongAdder counter = new LongAdder();
-        keys.stream()
+        final List<AppArtifactKey> uninstalled = keys.stream()
                 .distinct()
                 .filter(existingKeys::contains)
-                .forEach(k -> {
+                .filter(k -> {
                     try {
                         removeDependencyFromBuildFile(k);
-                        counter.increment();
+                        return true;
                     } catch (IOException ex) {
                         throw new UncheckedIOException(ex);
                     }
-                });
+                }).collect(toList());
         this.writeToDisk();
-        return new UninstallResult(counter.intValue());
+        return new UninstallResult(uninstalled);
     }
 
     protected abstract void addDependencyInBuildFile(AppArtifactCoords coords) throws IOException;

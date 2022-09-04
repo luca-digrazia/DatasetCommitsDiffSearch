@@ -1,5 +1,6 @@
 package io.quarkus.devtools.project.compress;
 
+import io.quarkus.devtools.project.QuarkusProject;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -28,21 +29,22 @@ public final class QuarkusProjectCompress {
     private QuarkusProjectCompress() {
     }
 
-    public static void zip(final Path quarkusProjectFolderPath, final Path targetZipPath, final boolean includeProjectFolder)
+    public static void zip(final QuarkusProject quarkusProject, final Path targetZipPath, final boolean includeProjectFolder)
             throws IOException {
-        zip(quarkusProjectFolderPath, targetZipPath, includeProjectFolder, null);
+        zip(quarkusProject, targetZipPath, includeProjectFolder, null);
     }
 
-    public static void zip(final Path quarkusProjectFolderPath, final Path targetZipPath, final boolean includeProjectFolder,
+    public static void zip(final QuarkusProject quarkusProject, final Path targetZipPath, final boolean includeProjectFolder,
             final Long withSpecificFilesTime) throws IOException {
         try (final ZipArchiveOutputStream zaos = new ZipArchiveOutputStream(Files.newOutputStream(targetZipPath))) {
-            Files.walk(quarkusProjectFolderPath)
-                    .filter((path) -> includeProjectFolder || !quarkusProjectFolderPath.equals(path))
+            final Path projectFolderPath = quarkusProject.getProjectFolderPath();
+            Files.walk(projectFolderPath)
+                    .filter((path) -> includeProjectFolder || !projectFolderPath.equals(path))
                     .forEach((path) -> {
                         try {
-                            String entryName = quarkusProjectFolderPath.relativize(path).toString().replace('\\', '/');
+                            String entryName = projectFolderPath.relativize(path).toString().replace('\\', '/');
                             if (includeProjectFolder) {
-                                entryName = quarkusProjectFolderPath.getFileName() + "/" + entryName;
+                                entryName = projectFolderPath.getFileName() + "/" + entryName;
                             }
                             int unixMode;
                             if (Files.isDirectory(path)) {

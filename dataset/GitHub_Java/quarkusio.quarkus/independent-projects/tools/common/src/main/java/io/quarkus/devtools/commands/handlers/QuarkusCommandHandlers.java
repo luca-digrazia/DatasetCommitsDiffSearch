@@ -2,12 +2,12 @@ package io.quarkus.devtools.commands.handlers;
 
 import static io.quarkus.platform.tools.ConsoleMessageFormats.nok;
 
-import com.google.common.collect.ImmutableList;
 import io.quarkus.bootstrap.model.AppArtifactCoords;
 import io.quarkus.dependencies.Extension;
 import io.quarkus.devtools.commands.data.QuarkusCommandInvocation;
 import io.quarkus.devtools.commands.data.SelectionResult;
 import io.quarkus.devtools.project.extensions.Extensions;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -23,7 +23,7 @@ final class QuarkusCommandHandlers {
 
     static List<AppArtifactCoords> computeCoordsFromQuery(final QuarkusCommandInvocation invocation,
             final Set<String> extensionsQuery) {
-        final ImmutableList.Builder<AppArtifactCoords> builder = ImmutableList.builder();
+        final ArrayList<AppArtifactCoords> builder = new ArrayList<>();
         for (String query : extensionsQuery) {
             if (query.contains(":")) {
                 builder.add(AppArtifactCoords.fromString(query));
@@ -41,10 +41,10 @@ final class QuarkusCommandHandlers {
                     Set<Extension> candidates = result.getExtensions();
                     if (candidates.isEmpty()) {
                         // No matches at all.
-                        invocation.log().info(nok(" Cannot find a dependency matching '" + query + "', maybe a typo?"));
+                        invocation.log().info(nok("Cannot find a dependency matching '" + query + "', maybe a typo?"));
                         return null;
                     } else {
-                        sb.append(nok(" Multiple extensions matching '")).append(query).append("'");
+                        sb.append(nok("Multiple extensions matching '")).append(query).append("'");
                         result.getExtensions()
                                 .forEach(extension -> sb.append(System.lineSeparator()).append("     * ")
                                         .append(extension.managementKey()));
@@ -56,7 +56,7 @@ final class QuarkusCommandHandlers {
                 }
             }
         }
-        return builder.build();
+        return builder;
     }
 
     /**
