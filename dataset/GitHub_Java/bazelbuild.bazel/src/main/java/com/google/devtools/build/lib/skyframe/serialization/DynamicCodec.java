@@ -33,18 +33,18 @@ import sun.reflect.ReflectionFactory;
  *
  * <p>TODO(shahan): replace Unsafe with VarHandle once it's available.
  */
-public class DynamicCodec implements ObjectCodec<Object> {
+public class DynamicCodec<T> implements ObjectCodec<T> {
 
-  private final Class<?> type;
-  private final Constructor<?> constructor;
+  private final Class<T> type;
+  private final Constructor<T> constructor;
   private final ImmutableSortedMap<Field, Long> offsets;
   private final ObjectCodec.MemoizationStrategy strategy;
 
-  public DynamicCodec(Class<?> type) throws ReflectiveOperationException {
+  public DynamicCodec(Class<T> type) throws ReflectiveOperationException {
     this(type, ObjectCodec.MemoizationStrategy.MEMOIZE_BEFORE);
   }
 
-  public DynamicCodec(Class<?> type, ObjectCodec.MemoizationStrategy strategy)
+  public DynamicCodec(Class<T> type, ObjectCodec.MemoizationStrategy strategy)
       throws ReflectiveOperationException {
     this.type = type;
     this.constructor = getConstructor(type);
@@ -53,7 +53,7 @@ public class DynamicCodec implements ObjectCodec<Object> {
   }
 
   @Override
-  public Class<?> getEncodedClass() {
+  public Class<T> getEncodedClass() {
     return type;
   }
 
@@ -63,7 +63,7 @@ public class DynamicCodec implements ObjectCodec<Object> {
   }
 
   @Override
-  public void serialize(SerializationContext context, Object obj, CodedOutputStream codedOut)
+  public void serialize(SerializationContext context, T obj, CodedOutputStream codedOut)
       throws SerializationException, IOException {
     for (Map.Entry<Field, Long> entry : offsets.entrySet()) {
       serializeField(context, codedOut, obj, entry.getKey().getType(), entry.getValue());
@@ -133,9 +133,9 @@ public class DynamicCodec implements ObjectCodec<Object> {
   }
 
   @Override
-  public Object deserialize(DeserializationContext context, CodedInputStream codedIn)
+  public T deserialize(DeserializationContext context, CodedInputStream codedIn)
       throws SerializationException, IOException {
-    Object instance;
+    T instance;
     try {
       instance = constructor.newInstance();
     } catch (ReflectiveOperationException e) {
@@ -225,10 +225,13 @@ public class DynamicCodec implements ObjectCodec<Object> {
     return offsets.build();
   }
 
-  private static Constructor<?> getConstructor(Class<?> type) throws ReflectiveOperationException {
-    Constructor<?> constructor =
-        ReflectionFactory.getReflectionFactory()
-            .newConstructorForSerialization(type, Object.class.getDeclaredConstructor());
+  @SuppressWarnings("unchecked")
+  private static <T> Constructor<T> getConstructor(Class<T> type)
+      throws ReflectiveOperationException {
+    Constructor<T> constructor =
+        (Constructor<T>)
+            ReflectionFactory.getReflectionFactory()
+                .newConstructorForSerialization(type, Object.class.getDeclaredConstructor());
     constructor.setAccessible(true);
     return constructor;
   }
