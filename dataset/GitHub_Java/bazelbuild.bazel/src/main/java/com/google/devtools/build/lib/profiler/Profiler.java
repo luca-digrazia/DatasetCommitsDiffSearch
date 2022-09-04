@@ -20,7 +20,6 @@ import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.clock.Clock;
-import com.google.devtools.build.lib.collect.Extrema;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.profiler.PredicateBasedStatRecorder.RecorderAndPredicate;
@@ -37,6 +36,7 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -145,12 +145,12 @@ public final class Profiler {
   /** A task that was very slow. */
   public static final class SlowTask implements Comparable<SlowTask> {
     final long durationNanos;
-    final String description;
+    final Object object;
     ProfilerTask type;
 
     private SlowTask(TaskData taskData) {
       this.durationNanos = taskData.duration;
-      this.description = taskData.description;
+      this.object = taskData.object;
       this.type = taskData.type;
     }
 
@@ -171,7 +171,7 @@ public final class Profiler {
     }
 
     public String getDescription() {
-      return description;
+      return toDescription(object);
     }
 
     public ProfilerTask getType() {
@@ -196,9 +196,10 @@ public final class Profiler {
     int[] counts; // number of invocations per ProfilerTask type
     long[] durations; // time spend in the task per ProfilerTask type
     final ProfilerTask type;
-    final String description;
+    final Object object;
 
-    TaskData(long startTime, TaskData parent, ProfilerTask eventType, String description) {
+    TaskData(long startTime, TaskData parent,
+             ProfilerTask eventType, Object object) {
       threadId = Thread.currentThread().getId();
       counts = null;
       durations = null;
@@ -206,7 +207,7 @@ public final class Profiler {
       parentId = (parent == null  ? 0 : parent.id);
       this.startTime = startTime;
       this.type = eventType;
-      this.description = Preconditions.checkNotNull(description);
+      this.object = Preconditions.checkNotNull(object);
     }
 
     /**
@@ -225,7 +226,7 @@ public final class Profiler {
 
     @Override
     public String toString() {
-      return "Thread " + threadId + ", task " + id + ", type " + type + ", " + description;
+      return "Thread " + threadId + ", task " + id + ", type " + type + ", " + object;
     }
   }
 
@@ -263,12 +264,12 @@ public final class Profiler {
       return get().isEmpty();
     }
 
-    public void push(ProfilerTask eventType, String description) {
-      get().add(create(clock.nanoTime(), eventType, description));
+    public void push(ProfilerTask eventType, Object object) {
+      get().add(create(clock.nanoTime(), eventType, object));
     }
 
-    public TaskData create(long startTime, ProfilerTask eventType, String description) {
-      return new TaskData(startTime, peek(), eventType, description);
+    public TaskData create(long startTime, ProfilerTask eventType, Object object) {
+      return new TaskData(startTime, peek(), eventType, object);
     }
 
     @Override
@@ -284,6 +285,12 @@ public final class Profiler {
     }
   }
 
+  private static String toDescription(Object object) {
+    return (object instanceof Describable)
+        ? ((Describable) object).describe()
+        : object.toString();
+  }
+
   /**
    * Implements datastore for object description indices. Intended to be used only by the
    * Profiler.save() method.
@@ -295,24 +302,21 @@ public final class Profiler {
 
     ObjectDescriber() { }
 
-    int getDescriptionIndex(String description) {
-      Integer index = descMap.get(description);
+    int getDescriptionIndex(Object object) {
+      Integer index = descMap.get(object);
       return (index != null) ? index : -1;
     }
 
-    String memoizeDescription(String description) {
-      Integer oldIndex = descMap.put(description, indexCounter++);
+    String getDescription(Object object) {
+      String description = toDescription(object);
+
+      Integer oldIndex = descMap.put(object, indexCounter++);
       // Do not use Preconditions class below due to the rather expensive
       // toString() calls used in the message.
       if (oldIndex != null) {
-        throw new IllegalStateException(
-            description
-                + "' @ "
-                + System.identityHashCode(description)
-                + " already had description index "
-                + oldIndex
-                + " while assigning index "
-                + descMap.get(description));
+        throw new IllegalStateException(" Object '" + description + "' @ "
+            + System.identityHashCode(object) + " already had description index "
+            + oldIndex + " while assigning index " + descMap.get(object));
       } else if (description.length() > 20000) {
         // Note size 64k byte limitation in DataOutputStream#writeUTF().
         description = description.substring(0, 20000);
@@ -328,40 +332,51 @@ public final class Profiler {
   /**
    * Aggregator class that keeps track of the slowest tasks of the specified type.
    *
-   * <p><code>extremaAggregators</p> is sharded so that all threads need not compete for the same
-   * lock if they do the same operation at the same time. Access to an individual {@link Extrema}
-   * is synchronized on the {@link Extrema} instance itself.
+   * <p><code>priorityQueues</p> is sharded so that all threads need not compete for the same
+   * lock if they do the same operation at the same time. Access to the individual queues is
+   * synchronized on the queue objects themselves.
    */
   private static final class SlowestTaskAggregator {
     private static final int SHARDS = 16;
     private final int size;
 
     @SuppressWarnings({"unchecked", "rawtypes"})
-    private final Extrema<SlowTask>[] extremaAggregators = new Extrema[SHARDS];
+    private final PriorityQueue<SlowTask>[] priorityQueues = new PriorityQueue[SHARDS];
 
     SlowestTaskAggregator(int size) {
       this.size = size;
 
       for (int i = 0; i < SHARDS; i++) {
-        extremaAggregators[i] = Extrema.max(size);
+        priorityQueues[i] = new PriorityQueue<>(size + 1);
       }
     }
 
     // @ThreadSafe
     void add(TaskData taskData) {
-      Extrema<SlowTask> extrema =
-          extremaAggregators[(int) (Thread.currentThread().getId() % SHARDS)];
-      synchronized (extrema) {
-        extrema.aggregate(new SlowTask(taskData));
+      PriorityQueue<SlowTask> queue =
+          priorityQueues[(int) (Thread.currentThread().getId() % SHARDS)];
+      synchronized (queue) {
+        if (queue.size() == size) {
+          // Optimization: check if we are faster than the fastest element. If we are, we would
+          // be the ones to fall off the end of the queue, therefore, we can safely return early.
+          if (queue.peek().getDurationNanos() > taskData.duration) {
+            return;
+          }
+
+          queue.add(new SlowTask(taskData));
+          queue.remove();
+        } else {
+          queue.add(new SlowTask(taskData));
+        }
       }
     }
 
     // @ThreadSafe
     void clear() {
       for (int i = 0; i < SHARDS; i++) {
-        Extrema<SlowTask> extrema = extremaAggregators[i];
-        synchronized (extrema) {
-          extrema.clear();
+        PriorityQueue<SlowTask> queue = priorityQueues[i];
+        synchronized (queue) {
+          queue.clear();
         }
       }
     }
@@ -369,16 +384,19 @@ public final class Profiler {
     // @ThreadSafe
     Iterable<SlowTask> getSlowestTasks() {
       // This is slow, but since it only happens during the end of the invocation, it's OK
-      Extrema<SlowTask> mergedExtrema = Extrema.max(size);
+      PriorityQueue<SlowTask> merged = new PriorityQueue<>(size * SHARDS);
       for (int i = 0; i < SHARDS; i++) {
-        Extrema<SlowTask> extrema = extremaAggregators[i];
-        synchronized (extrema) {
-          for (SlowTask task : extrema.getExtremeElements()) {
-            mergedExtrema.aggregate(task);
-          }
+        PriorityQueue<SlowTask> queue = priorityQueues[i];
+        synchronized (queue) {
+          merged.addAll(queue);
         }
       }
-      return mergedExtrema.getExtremeElements();
+
+      while (merged.size() > size) {
+        merged.remove();
+      }
+
+      return merged;
     }
   }
 
@@ -639,7 +657,7 @@ public final class Profiler {
         // To save space (and improve performance), convert all description
         // strings to the canonical object and use IdentityHashMap to assign
         // unique numbers for each string.
-        int descIndex = describer.getDescriptionIndex(data.description);
+        int descIndex = describer.getDescriptionIndex(data.object);
         VarInt.putVarInt(descIndex + 1, sink); // Add 1 to avoid encoding negative values.
 
         // Save types using their ordinal() value
@@ -659,7 +677,7 @@ public final class Profiler {
         this.out.writeInt(sink.position());
         this.out.write(sink.array(), 0, sink.position());
         if (describer.isUnassigned(descIndex)) {
-          this.out.writeUTF(describer.memoizeDescription(data.description));
+          this.out.writeUTF(describer.getDescription(data.object));
         }
       }
       this.out.flush();
@@ -698,24 +716,24 @@ public final class Profiler {
   }
 
   /**
-   * Adds task directly to the main queue bypassing task stack. Used for simple tasks that are known
-   * to not have any subtasks.
+   * Adds task directly to the main queue bypassing task stack. Used for simple
+   * tasks that are known to not have any subtasks.
    *
    * @param startTime task start time (obtained through {@link Profiler#nanoTimeMaybe()})
    * @param duration task duration
    * @param type task type
-   * @param description task description. May be stored until end of build.
+   * @param object object associated with that task. Can be String object that
+   *               describes it.
    */
-  private void logTask(long startTime, long duration, ProfilerTask type, String description) {
-    Preconditions.checkNotNull(description);
+  private void logTask(long startTime, long duration, ProfilerTask type, Object object) {
+    Preconditions.checkNotNull(object);
     Preconditions.checkState(startTime > 0, "startTime was %s", startTime);
     if (duration < 0) {
       // See note in Clock#nanoTime, which is used by Profiler#nanoTimeMaybe.
       duration = 0;
     }
 
-    tasksHistograms[type.ordinal()].addStat(
-        (int) TimeUnit.NANOSECONDS.toMillis(duration), description);
+    tasksHistograms[type.ordinal()].addStat((int) TimeUnit.NANOSECONDS.toMillis(duration), object);
     // Store instance fields as local variables so they are not nulled out from under us by #clear.
     TaskStack localStack = taskStack;
     Queue<TaskData> localQueue = taskQueue;
@@ -730,7 +748,7 @@ public final class Profiler {
       parent.aggregateChild(type, duration);
     }
     if (wasTaskSlowEnoughToRecord(type, duration)) {
-      TaskData data = localStack.create(startTime, type, description);
+      TaskData data = localStack.create(startTime, type, object);
       data.duration = duration;
       if (out != null) {
         localQueue.add(data);
@@ -745,17 +763,19 @@ public final class Profiler {
   }
 
   /**
-   * Used externally to submit simple task (one that does not have any subtasks). Depending on the
-   * minDuration attribute of the task type, task may be just aggregated into the parent task and
-   * not stored directly.
+   * Used externally to submit simple task (one that does not have any subtasks).
+   * Depending on the minDuration attribute of the task type, task may be
+   * just aggregated into the parent task and not stored directly.
    *
-   * @param startTime task start time (obtained through {@link Profiler#nanoTimeMaybe()})
+   * @param startTime task start time (obtained through {@link
+   *        Profiler#nanoTimeMaybe()})
    * @param type task type
-   * @param description task description. May be stored until the end of the build.
+   * @param object object associated with that task. Can be String object that
+   *               describes it.
    */
-  public void logSimpleTask(long startTime, ProfilerTask type, String description) {
+  public void logSimpleTask(long startTime, ProfilerTask type, Object object) {
     if (isActive() && isProfiling(type)) {
-      logTask(startTime, clock.nanoTime() - startTime, type, description);
+      logTask(startTime, clock.nanoTime() - startTime, type, object);
     }
   }
 
@@ -769,12 +789,12 @@ public final class Profiler {
    * @param startTimeNanos task start time
    * @param stopTimeNanos task stop time
    * @param type task type
-   * @param description task description. May be stored until the end of the build.
+   * @param object object associated with that task. Can be String object that describes it.
    */
   public void logSimpleTask(
-      long startTimeNanos, long stopTimeNanos, ProfilerTask type, String description) {
+      long startTimeNanos, long stopTimeNanos, ProfilerTask type, Object object) {
     if (isActive() && isProfiling(type)) {
-      logTask(startTimeNanos, stopTimeNanos - startTimeNanos, type, description);
+      logTask(startTimeNanos, stopTimeNanos - startTimeNanos, type, object);
     }
   }
 
@@ -786,42 +806,46 @@ public final class Profiler {
    * @param startTimeNanos task start time (obtained through {@link Profiler#nanoTimeMaybe()})
    * @param duration the duration of the task
    * @param type task type
-   * @param description task description. May be stored until the end of the build.
+   * @param object object associated with that task. Can be String object that describes it.
    */
   public void logSimpleTaskDuration(
-      long startTimeNanos, Duration duration, ProfilerTask type, String description) {
+      long startTimeNanos, Duration duration, ProfilerTask type, Object object) {
     if (isActive() && isProfiling(type)) {
-      logTask(startTimeNanos, duration.toNanos(), type, description);
-    }
-  }
-
-  /** Used to log "events" - tasks with zero duration. */
-  public void logEvent(ProfilerTask type, String description) {
-    if (isActive() && isProfiling(type)) {
-      logTask(clock.nanoTime(), 0, type, description);
+      logTask(startTimeNanos, duration.toNanos(), type, object);
     }
   }
 
   /**
-   * Records the beginning of the task specified by the parameters. This method should always be
-   * followed by completeTask() invocation to mark the end of task execution (usually ensured by try
-   * {} finally {} block). Failure to do so will result in task stack corruption.
+   * Used to log "events" - tasks with zero duration.
+   */
+  public void logEvent(ProfilerTask type, Object object) {
+    if (isActive() && isProfiling(type)) {
+      logTask(clock.nanoTime(), 0, type, object);
+    }
+  }
+
+  /**
+   * Records the beginning of the task specified by the parameters. This method
+   * should always be followed by completeTask() invocation to mark the end of
+   * task execution (usually ensured by try {} finally {} block). Failure to do
+   * so will result in task stack corruption.
    *
-   * <p>Use of this method allows to support nested task monitoring. For tasks that are known to not
-   * have any subtasks, logSimpleTask() should be used instead.
+   * Use of this method allows to support nested task monitoring. For tasks that
+   * are known to not have any subtasks, logSimpleTask() should be used instead.
    *
    * @param type predefined task type - see ProfilerTask for available types.
-   * @param description task description. May be stored until the end of the build.
+   * @param object object associated with that task. Can be String object that
+   *               describes it.
    */
-  public void startTask(ProfilerTask type, String description) {
+  public void startTask(ProfilerTask type, Object object) {
     // ProfilerInfo.allTasksById is supposed to be an id -> Task map, but it is in fact a List,
     // which means that we cannot drop tasks to which we had already assigned ids. Therefore,
     // non-leaf tasks must not have a minimum duration. However, we don't quite consistently
     // enforce this, and Blaze only works because we happen not to add child tasks to those parent
     // tasks that have a minimum duration.
-    Preconditions.checkNotNull(description);
+    Preconditions.checkNotNull(object);
     if (isActive() && isProfiling(type)) {
-      taskStack.push(type, description);
+      taskStack.push(type, object);
     }
   }
 
@@ -862,8 +886,10 @@ public final class Profiler {
     }
   }
 
-  /** Convenience method to log phase marker tasks. */
-  public void markPhase(ProfilePhase phase) throws InterruptedException {
+  /**
+   * Convenience method to log phase marker tasks.
+   */
+  public void markPhase(ProfilePhase phase) {
     MemoryProfiler.instance().markPhase(phase);
     if (isActive() && isProfiling(ProfilerTask.PHASE)) {
       Preconditions.checkState(taskStack.isEmpty(), "Phase tasks must not be nested");

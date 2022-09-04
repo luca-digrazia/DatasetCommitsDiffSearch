@@ -27,15 +27,13 @@ import com.google.devtools.build.lib.actions.ActionStartedEvent;
 import com.google.devtools.build.lib.actions.Actions;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.CachedActionEvent;
-import com.google.devtools.build.lib.actions.SpawnMetrics;
 import com.google.devtools.build.lib.clock.Clock;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Objects;
 import java.util.PriorityQueue;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.atomic.AtomicInteger;
 import javax.annotation.concurrent.ThreadSafe;
 
 /**
@@ -44,18 +42,17 @@ import javax.annotation.concurrent.ThreadSafe;
  * <p>After instantiation, this object needs to be registered on the event bus to work.
  */
 @ThreadSafe
-public class CriticalPathComputer {
+public abstract class CriticalPathComputer<C extends AbstractCriticalPathComponent<C>,
+                                           A extends AggregatedCriticalPath<C>> {
+
   /** Number of top actions to record. */
   static final int SLOWEST_COMPONENTS_SIZE = 30;
-
-  private final AtomicInteger idGenerator = new AtomicInteger();
   // outputArtifactToComponent is accessed from multiple event handlers.
-  protected final ConcurrentMap<Artifact, CriticalPathComponent> outputArtifactToComponent =
-      Maps.newConcurrentMap();
+  protected final ConcurrentMap<Artifact, C> outputArtifactToComponent = Maps.newConcurrentMap();
   private final ActionKeyContext actionKeyContext;
 
   /** Maximum critical path found. */
-  private CriticalPathComponent maxCriticalPath;
+  private C maxCriticalPath;
   private final Clock clock;
   protected final boolean discardActions;
 
@@ -65,10 +62,14 @@ public class CriticalPathComputer {
    * <p>This data is a useful metric when running non highly incremental builds, where multiple
    * tasks could run un parallel and critical path would only record the longest path.
    */
-  private final PriorityQueue<CriticalPathComponent> slowestComponents =
-      new PriorityQueue<>(
-          SLOWEST_COMPONENTS_SIZE,
-          (o1, o2) -> Long.compare(o1.getElapsedTimeNanos(), o2.getElapsedTimeNanos()));
+  private final PriorityQueue<C> slowestComponents = new PriorityQueue<>(SLOWEST_COMPONENTS_SIZE,
+      new Comparator<C>() {
+        @Override
+        public int compare(C o1, C o2) {
+          return Long.compare(o1.getElapsedTimeNanos(), o2.getElapsedTimeNanos());
+        }
+      }
+  );
 
   private final Object lock = new Object();
 
@@ -86,12 +87,7 @@ public class CriticalPathComputer {
    * @param relativeStartNanos time when the action started to run in nanos. Only mean to be used
    * for computing time differences.
    */
-  public CriticalPathComponent createComponent(Action action, long relativeStartNanos) {
-    int id = idGenerator.getAndIncrement();
-    return discardActions
-        ? new ActionDiscardingCriticalPathComponent(id, action, relativeStartNanos)
-        : new CriticalPathComponent(id, action, relativeStartNanos);
-  }
+  protected abstract C createComponent(Action action, long relativeStartNanos);
 
   /**
    * Return the critical path stats for the current command execution.
@@ -99,20 +95,7 @@ public class CriticalPathComputer {
    * <p>This method allows us to calculate lazily the aggregate statistics of the critical path,
    * avoiding the memory and cpu penalty for doing it for all the actions executed.
    */
-  public AggregatedCriticalPath aggregate() {
-    ImmutableList.Builder<CriticalPathComponent> components = ImmutableList.builder();
-    CriticalPathComponent maxCriticalPath = getMaxCriticalPath();
-    if (maxCriticalPath == null) {
-      return new AggregatedCriticalPath(Duration.ZERO, SpawnMetrics.EMPTY, components.build());
-    }
-    CriticalPathComponent child = maxCriticalPath;
-    while (child != null) {
-      components.add(child);
-      child = child.getChild();
-    }
-    return new AggregatedCriticalPath(
-        maxCriticalPath.getAggregatedElapsedTime(), SpawnMetrics.EMPTY, components.build());
-  }
+  public abstract A aggregate();
 
   /**
    * Record an action that has started to run.
@@ -137,8 +120,7 @@ public class CriticalPathComputer {
   @AllowConcurrentEvents
   public void middlemanAction(ActionMiddlemanEvent event) {
     Action action = event.getAction();
-    CriticalPathComponent component =
-        tryAddComponent(createComponent(action, event.getNanoTimeStart()));
+    C component = tryAddComponent(createComponent(action, event.getNanoTimeStart()));
     finalizeActionStat(event.getNanoTimeStart(), action, component);
   }
 
@@ -148,11 +130,10 @@ public class CriticalPathComputer {
    *
    * @return The component to be used for updating the time stats.
    */
-  private CriticalPathComponent tryAddComponent(CriticalPathComponent newComponent) {
+  private C tryAddComponent(C newComponent) {
     Action newAction = Preconditions.checkNotNull(newComponent.maybeGetAction(), newComponent);
     Artifact primaryOutput = newAction.getPrimaryOutput();
-    CriticalPathComponent storedComponent =
-        outputArtifactToComponent.putIfAbsent(primaryOutput, newComponent);
+    C storedComponent = outputArtifactToComponent.putIfAbsent(primaryOutput, newComponent);
 
     if (storedComponent != null) {
       Action oldAction = storedComponent.maybeGetAction();
@@ -198,7 +179,7 @@ public class CriticalPathComputer {
       if (output == primaryOutput) {
         continue;
       }
-      CriticalPathComponent old = outputArtifactToComponent.putIfAbsent(output, storedComponent);
+      C old = outputArtifactToComponent.putIfAbsent(output, storedComponent);
       // If two actions run concurrently maybe we find a component by primary output but we are
       // the first updating the rest of the outputs.
       Preconditions.checkState(old == null || old == storedComponent,
@@ -216,8 +197,7 @@ public class CriticalPathComputer {
   @AllowConcurrentEvents
   public void actionCached(CachedActionEvent event) {
     Action action = event.getAction();
-    CriticalPathComponent component
-        = tryAddComponent(createComponent(action, event.getNanoTimeStart()));
+    C component = tryAddComponent(createComponent(action, event.getNanoTimeStart()));
     finalizeActionStat(event.getNanoTimeStart(), action, component);
   }
 
@@ -229,13 +209,13 @@ public class CriticalPathComputer {
   @AllowConcurrentEvents
   public void actionComplete(ActionCompletionEvent event) {
     Action action = event.getAction();
-    CriticalPathComponent component = Preconditions.checkNotNull(
+    C component = Preconditions.checkNotNull(
         outputArtifactToComponent.get(action.getPrimaryOutput()));
     finalizeActionStat(event.getRelativeActionStartTime(), action, component);
   }
 
   /** Maximum critical path component found during the build. */
-  protected CriticalPathComponent getMaxCriticalPath() {
+  protected C getMaxCriticalPath() {
     synchronized (lock) {
       return maxCriticalPath;
     }
@@ -244,8 +224,8 @@ public class CriticalPathComputer {
   /**
    * The list of slowest individual components, ignoring the time to build dependencies.
    */
-  public ImmutableList<CriticalPathComponent> getSlowestComponents() {
-    ArrayList<CriticalPathComponent> list;
+  public ImmutableList<C> getSlowestComponents() {
+    ArrayList<C> list;
     synchronized (lock) {
       list = new ArrayList<>(slowestComponents);
       Collections.sort(list, slowestComponents.comparator());
@@ -253,8 +233,8 @@ public class CriticalPathComputer {
     return ImmutableList.copyOf(list).reverse();
   }
 
-  private void finalizeActionStat(
-      long startTimeNanos, Action action, CriticalPathComponent component) {
+  private void finalizeActionStat(long startTimeNanos, Action action, C component) {
+
     for (Artifact input : action.getInputs()) {
       addArtifactDependency(component, input);
     }
@@ -286,7 +266,7 @@ public class CriticalPathComputer {
     }
   }
 
-  private boolean isBiggestCriticalPath(CriticalPathComponent newCriticalPath) {
+  private boolean isBiggestCriticalPath(C newCriticalPath) {
     synchronized (lock) {
       return maxCriticalPath == null
           || maxCriticalPath
@@ -299,8 +279,8 @@ public class CriticalPathComputer {
   /**
    * If "input" is a generated artifact, link its critical path to the one we're building.
    */
-  private void addArtifactDependency(CriticalPathComponent actionStats, Artifact input) {
-    CriticalPathComponent depComponent = outputArtifactToComponent.get(input);
+  private void addArtifactDependency(C actionStats, Artifact input) {
+    C depComponent = outputArtifactToComponent.get(input);
     if (depComponent != null) {
       Action action = depComponent.maybeGetAction();
       if (depComponent.isRunning && action != null) {

@@ -158,13 +158,13 @@ public class AutoProfiler implements AutoCloseable {
   }
 
   /**
-   * Returns an {@link AutoProfiler} that, when closed, records the elapsed time using {@link
-   * Profiler}.
+   * Returns an {@link AutoProfiler} that, when closed, records the elapsed time using
+   * {@link Profiler}.
    *
    * <p>The returned {@link AutoProfiler} is thread-safe.
    */
-  public static AutoProfiler profiled(String description, ProfilerTask profilerTaskType) {
-    return create(new ProfilingElapsedTimeReceiver(description, profilerTaskType));
+  public static AutoProfiler profiled(Object object, ProfilerTask profilerTaskType) {
+    return create(new ProfilingElapsedTimeReceiver(object, profilerTaskType));
   }
 
   /**
@@ -333,12 +333,12 @@ public class AutoProfiler implements AutoCloseable {
 
   private static class ProfilingElapsedTimeReceiver implements ElapsedTimeReceiver {
     private final long startTimeNanos;
-    private final String description;
+    private final Object object;
     private final ProfilerTask profilerTaskType;
 
-    private ProfilingElapsedTimeReceiver(String description, ProfilerTask profilerTaskType) {
+    private ProfilingElapsedTimeReceiver(Object object, ProfilerTask profilerTaskType) {
       this.startTimeNanos = Profiler.nanoTimeMaybe();
-      this.description = description;
+      this.object = object;
       this.profilerTaskType = profilerTaskType;
     }
 
@@ -347,7 +347,7 @@ public class AutoProfiler implements AutoCloseable {
       if (elapsedTimeNanos > 0) {
         Profiler.instance()
             .logSimpleTaskDuration(
-                startTimeNanos, Duration.ofNanos(elapsedTimeNanos), profilerTaskType, description);
+                startTimeNanos, Duration.ofNanos(elapsedTimeNanos), profilerTaskType, object);
       }
     }
   }

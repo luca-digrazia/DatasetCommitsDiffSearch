@@ -30,7 +30,6 @@ import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ServerDirectories;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
-import com.google.devtools.build.lib.analysis.skylark.SkylarkActionFactory;
 import com.google.devtools.build.lib.analysis.test.CoverageReportActionFactory;
 import com.google.devtools.build.lib.buildeventstream.PathConverter;
 import com.google.devtools.build.lib.buildtool.BuildRequestOptions;
@@ -408,8 +407,6 @@ public final class BlazeRuntime {
 
     if (options.memoryProfilePath != null) {
       Path memoryProfilePath = env.getWorkingDirectory().getRelative(options.memoryProfilePath);
-      MemoryProfiler.instance()
-          .setStableMemoryParameters(options.memoryProfileStableHeapParameters);
       try {
         MemoryProfiler.instance().start(memoryProfilePath.getOutputStream());
       } catch (IOException e) {
@@ -980,21 +977,16 @@ public final class BlazeRuntime {
     String productName = startupOptions.productName.toLowerCase(Locale.US);
 
     PathFragment workspaceDirectory = startupOptions.workspaceDirectory;
-    PathFragment outputUserRoot = startupOptions.outputUserRoot;
     PathFragment installBase = startupOptions.installBase;
     PathFragment outputBase = startupOptions.outputBase;
 
     maybeForceJNIByGettingPid(installBase); // Must be before first use of JNI.
 
-    // From the point of view of the Java program --install_base, --output_base, and
-    // --output_user_root are mandatory options, despite the comment in their declarations.
+    // From the point of view of the Java program --install_base and --output_base
+    // are mandatory options, despite the comment in their declarations.
     if (installBase == null || !installBase.isAbsolute()) { // (includes "" default case)
       throw new IllegalArgumentException(
           "Bad --install_base option specified: '" + installBase + "'");
-    }
-    if (outputUserRoot != null && !outputUserRoot.isAbsolute()) { // (includes "" default case)
-      throw new IllegalArgumentException(
-          "Bad --output_user_root option specified: '" + outputUserRoot + "'");
     }
     if (outputBase != null && !outputBase.isAbsolute()) { // (includes "" default case)
       throw new IllegalArgumentException(
@@ -1017,7 +1009,6 @@ public final class BlazeRuntime {
     Path.setFileSystemForSerialization(fs);
     SubprocessBuilder.setSubprocessFactory(subprocessFactoryImplementation());
 
-    Path outputUserRootPath = fs.getPath(outputUserRoot);
     Path installBasePath = fs.getPath(installBase);
     Path outputBasePath = fs.getPath(outputBase);
     Path workspaceDirectoryPath = null;
@@ -1026,8 +1017,7 @@ public final class BlazeRuntime {
     }
 
     ServerDirectories serverDirectories =
-        new ServerDirectories(
-            installBasePath, outputBasePath, outputUserRootPath, startupOptions.installMD5);
+        new ServerDirectories(installBasePath, outputBasePath, startupOptions.installMD5);
     Clock clock = BlazeClock.instance();
     BlazeRuntime.Builder runtimeBuilder =
         new BlazeRuntime.Builder()
@@ -1074,44 +1064,9 @@ public final class BlazeRuntime {
     runtime.initWorkspace(directories, binTools);
     CustomExitCodePublisher.setAbruptExitStatusFileDir(serverDirectories.getOutputBase());
 
-    // Most static initializers for @SkylarkSignature-containing classes have already run by this
-    // point, but this will pick up the stragglers.
-    initSkylarkBuiltinsRegistry();
-
     AutoProfiler.setClock(runtime.getClock());
     BugReport.setRuntime(runtime);
     return runtime;
-  }
-
-  /**
-   * Configures the Skylark builtins registry.
-   *
-   * <p>Any class containing {@link SkylarkSignature}-annotated fields should call
-   * {@link SkylarkSignatureProcessor#configureSkylarkFunctions} on itself. This serves two
-   * purposes: 1) it initializes those fields for use, and 2) it registers them with the Skylark
-   * builtins registry object
-   * ({@link com.google.devtools.build.lib.syntax.Runtime#getBuiltinRegistry}). Unfortunately
-   * there's some technical debt here: The registry object is static and the registration occurs
-   * inside static initializer blocks.
-   *
-   * <p>The registry supports concurrent read/write access, but read access is not actually
-   * efficient (lockless) until write access is disallowed by calling its
-   * {@link com.google.devtools.build.lib.syntax.Runtime.BuiltinRegistry#freeze freeze} method.
-   * We want to freeze before the build begins, but not before all classes have had a chance to run
-   * their static initializers.
-   *
-   * <p>Therefore, this method first ensures that the initializers have run, and then explicitly
-   * freezes the registry. It ensures initialization by calling a no-op static method on the class.
-   * Only classes whose initializers have been observed to cause {@code BuiltinRegistry} to throw an
-   * exception need to be included here, since that indicates that their initialization did not
-   * happen by this point in time.
-   *
-   * <p>Unit tests don't need to worry about registry freeze exceptions, since the registry isn't
-   * frozen at all for them. They just pay the cost of extra synchronization on every access.
-   */
-  private static void initSkylarkBuiltinsRegistry() {
-    SkylarkActionFactory.forceStaticInitialization();
-    com.google.devtools.build.lib.syntax.Runtime.getBuiltinRegistry().freeze();
   }
 
   private static String maybeGetPidString() {
