@@ -1,7 +1,5 @@
 package io.quarkus.devtools.codestarts.quarkus;
 
-import static io.quarkus.devtools.codestarts.quarkus.QuarkusCodestartData.QuarkusDataKey.*;
-import static io.quarkus.platform.tools.ToolsUtils.readQuarkusProperties;
 import static java.util.Collections.singletonList;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -12,7 +10,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -28,16 +25,12 @@ import org.junit.jupiter.params.provider.MethodSource;
 import com.google.common.collect.Sets;
 
 import io.quarkus.devtools.PlatformAwareTestBase;
+import io.quarkus.devtools.ProjectTestUtil;
 import io.quarkus.devtools.codestarts.Codestart;
 import io.quarkus.devtools.codestarts.CodestartProjectDefinition;
 import io.quarkus.devtools.codestarts.quarkus.QuarkusCodestartCatalog.Tag;
-import io.quarkus.devtools.codestarts.quarkus.QuarkusCodestartData.QuarkusDataKey;
+import io.quarkus.devtools.codestarts.quarkus.QuarkusCodestartData.DataKey;
 import io.quarkus.devtools.project.BuildTool;
-import io.quarkus.devtools.testing.SnapshotTesting;
-import io.quarkus.devtools.testing.WrapperRunner;
-import io.quarkus.platform.descriptor.QuarkusPlatformDescriptor;
-import io.quarkus.platform.tools.ToolsConstants;
-import io.quarkus.platform.tools.ToolsUtils;
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class QuarkusCodestartRunIT extends PlatformAwareTestBase {
@@ -47,11 +40,19 @@ class QuarkusCodestartRunIT extends PlatformAwareTestBase {
     private static final Set<String> EXCLUDED = Sets.newHashSet(
             "azure-functions-http-example", "commandmode-example");
 
-    private static final Set<String> RUN_ALONE = Sets.newHashSet("resteasy-reactive-example", "picocli-example");
+    private static final Set<String> RUN_ALONE = Sets.newHashSet("resteasy-reactive-example");
 
     @BeforeAll
     static void setUp() throws IOException {
-        SnapshotTesting.deleteTestDirectory(testDirPath.toFile());
+        ProjectTestUtil.delete(testDirPath.toFile());
+    }
+
+    private Map<String, Object> getTestInputData() {
+        return getTestInputData(null);
+    }
+
+    private Map<String, Object> getTestInputData(final Map<String, Object> override) {
+        return QuarkusCodestartGenerationTest.getTestInputData(getPlatformDescriptor(), override);
     }
 
     @Test
@@ -110,9 +111,9 @@ class QuarkusCodestartRunIT extends PlatformAwareTestBase {
     @Test
     public void generateCustomizedRESTEasyProjectRun() throws Exception {
         final HashMap<String, Object> data = new HashMap<>();
-        data.put(QuarkusDataKey.PROJECT_PACKAGE_NAME.key(), "com.test.andy");
-        data.put(QuarkusDataKey.RESTEASY_EXAMPLE_RESOURCE_CLASS_NAME.key(), "AndyEndpoint");
-        data.put(QuarkusDataKey.RESTEASY_EXAMPLE_RESOURCE_PATH.key(), "/andy");
+        data.put(DataKey.PROJECT_PACKAGE_NAME.getKey(), "com.test.andy");
+        data.put(DataKey.RESTEASY_EXAMPLE_RESOURCE_CLASS_NAME.getKey(), "AndyEndpoint");
+        data.put(DataKey.RESTEASY_EXAMPLE_RESOURCE_PATH.getKey(), "/andy");
         final String buildTool = "maven";
         final String language = "java";
         final List<String> codestarts = singletonList("resteasy-example");
@@ -123,9 +124,9 @@ class QuarkusCodestartRunIT extends PlatformAwareTestBase {
     @Test
     public void generateCustomizedSpringWebProjectRun() throws Exception {
         final HashMap<String, Object> data = new HashMap<>();
-        data.put(QuarkusDataKey.PROJECT_PACKAGE_NAME.key(), "com.test.spring.web");
-        data.put(QuarkusDataKey.SPRING_WEB_EXAMPLE_RESOURCE_CLASS_NAME.key(), "SpringWebEndpoint");
-        data.put(QuarkusDataKey.SPRING_WEB_EXAMPLE_RESOURCE_PATH.key(), "/springweb");
+        data.put(DataKey.PROJECT_PACKAGE_NAME.getKey(), "com.test.spring.web");
+        data.put(DataKey.SPRING_WEB_EXAMPLE_RESOURCE_CLASS_NAME.getKey(), "SpringWebEndpoint");
+        data.put(DataKey.SPRING_WEB_EXAMPLE_RESOURCE_PATH.getKey(), "/springweb");
         final String buildTool = "maven";
         final String language = "java";
         final List<String> codestarts = singletonList("spring-web-example");
@@ -136,8 +137,8 @@ class QuarkusCodestartRunIT extends PlatformAwareTestBase {
     @Test
     public void generateCustomizedCommandModeProjectRun() throws Exception {
         final HashMap<String, Object> data = new HashMap<>();
-        data.put(QuarkusDataKey.PROJECT_PACKAGE_NAME.key(), "com.test.andy");
-        data.put(QuarkusDataKey.COMMANDMODE_EXAMPLE_RESOURCE_CLASS_NAME.key(), "AndyCommando");
+        data.put(DataKey.PROJECT_PACKAGE_NAME.getKey(), "com.test.andy");
+        data.put(DataKey.COMMANDMODE_EXAMPLE_RESOURCE_CLASS_NAME.getKey(), "AndyCommando");
         final String buildTool = "maven";
         final String language = "java";
         final List<String> codestarts = Collections.emptyList();
@@ -162,6 +163,7 @@ class QuarkusCodestartRunIT extends PlatformAwareTestBase {
                 .addCodestarts(codestarts)
                 .addCodestart(language)
                 .addData(data)
+                .putData(DataKey.JAVA_VERSION.getKey(), System.getProperty("java.specification.version"))
                 .build();
         final CodestartProjectDefinition projectDefinition = getCatalog().createProject(input);
         Path projectDir = testDirPath.resolve(name);
@@ -170,41 +172,6 @@ class QuarkusCodestartRunIT extends PlatformAwareTestBase {
         final int result = WrapperRunner.run(projectDir,
                 WrapperRunner.Wrapper.fromBuildtool(buildToolName));
         assertThat(result).isZero();
-    }
-
-    private Map<String, Object> getTestInputData() {
-        return getTestInputData(null);
-    }
-
-    private Map<String, Object> getTestInputData(final Map<String, Object> override) {
-        return getTestInputData(getPlatformDescriptor(), override);
-    }
-
-    private static Map<String, Object> getTestInputData(final QuarkusPlatformDescriptor descriptor,
-            final Map<String, Object> override) {
-        final HashMap<String, Object> data = new HashMap<>();
-        final Properties quarkusProp = readQuarkusProperties(descriptor);
-        data.put(PROJECT_GROUP_ID.key(), "org.test");
-        data.put(PROJECT_ARTIFACT_ID.key(), "test-codestart");
-        data.put(PROJECT_VERSION.key(), "1.0.0-codestart");
-        data.put(BOM_GROUP_ID.key(), descriptor.getBomGroupId());
-        data.put(BOM_ARTIFACT_ID.key(), descriptor.getBomArtifactId());
-        data.put(BOM_VERSION.key(), descriptor.getBomVersion());
-        data.put(QUARKUS_VERSION.key(), descriptor.getQuarkusVersion());
-        data.put(QUARKUS_MAVEN_PLUGIN_GROUP_ID.key(), ToolsUtils.getMavenPluginGroupId(quarkusProp));
-        data.put(QUARKUS_MAVEN_PLUGIN_ARTIFACT_ID.key(), ToolsUtils.getMavenPluginArtifactId(quarkusProp));
-        data.put(QUARKUS_MAVEN_PLUGIN_VERSION.key(), ToolsUtils.getMavenPluginVersion(quarkusProp));
-        data.put(QUARKUS_GRADLE_PLUGIN_ID.key(), ToolsUtils.getMavenPluginGroupId(quarkusProp));
-        data.put(QUARKUS_GRADLE_PLUGIN_VERSION.key(), ToolsUtils.getGradlePluginVersion(quarkusProp));
-        data.put(JAVA_VERSION.key(), System.getProperty("java.specification.version"));
-        data.put(KOTLIN_VERSION.key(), quarkusProp.getProperty(ToolsConstants.PROP_KOTLIN_VERSION));
-        data.put(SCALA_VERSION.key(), quarkusProp.getProperty(ToolsConstants.PROP_SCALA_VERSION));
-        data.put(SCALA_MAVEN_PLUGIN_VERSION.key(), quarkusProp.getProperty(ToolsConstants.PROP_SCALA_PLUGIN_VERSION));
-        data.put(MAVEN_COMPILER_PLUGIN_VERSION.key(), quarkusProp.getProperty(ToolsConstants.PROP_COMPILER_PLUGIN_VERSION));
-        data.put(MAVEN_SUREFIRE_PLUGIN_VERSION.key(), quarkusProp.getProperty(ToolsConstants.PROP_SUREFIRE_PLUGIN_VERSION));
-        if (override != null)
-            data.putAll(override);
-        return data;
     }
 
     private String genName(String buildtool, String language, List<String> codestarts) {
@@ -249,6 +216,6 @@ class QuarkusCodestartRunIT extends PlatformAwareTestBase {
     }
 
     private boolean isRunAloneExample(Codestart c) {
-        return c.containsTag(Tag.SINGLETON_EXAMPLE.key()) || RUN_ALONE.contains(c.getName());
+        return c.containsTag(Tag.SINGLETON_EXAMPLE.getKey()) || RUN_ALONE.contains(c.getName());
     }
 }
