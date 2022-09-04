@@ -81,17 +81,6 @@ public class CachedLocalSpawnRunnerTest {
   private final SpawnExecutionPolicy simplePolicy =
       new SpawnExecutionPolicy() {
         @Override
-        public int getId() {
-          return 0;
-        }
-
-        @Override
-        public void prefetchInputs(Iterable<ActionInput> inputs) {
-          // CachedLocalSpawnRunner should never prefetch itself, though the nested SpawnRunner may.
-          throw new UnsupportedOperationException();
-        }
-
-        @Override
         public void lockOutputFiles() throws InterruptedException {
           throw new UnsupportedOperationException();
         }
@@ -99,11 +88,6 @@ public class CachedLocalSpawnRunnerTest {
         @Override
         public ActionInputFileCache getActionInputFileCache() {
           return fakeFileCache;
-        }
-
-        @Override
-        public ArtifactExpander getArtifactExpander() {
-          throw new UnsupportedOperationException();
         }
 
         @Override
@@ -123,7 +107,7 @@ public class CachedLocalSpawnRunnerTest {
         }
 
         @Override
-        public void report(ProgressStatus state, String name) {
+        public void report(ProgressStatus state) {
           // TODO(ulfjack): Test that the right calls are made.
         }
       };

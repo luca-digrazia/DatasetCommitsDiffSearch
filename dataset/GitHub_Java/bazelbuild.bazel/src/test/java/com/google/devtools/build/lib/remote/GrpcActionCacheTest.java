@@ -280,11 +280,7 @@ public class GrpcActionCacheTest {
       this.responseObserver = responseObserver;
       this.contents = contents;
       try {
-        chunker =
-            new Chunker.Builder()
-                .chunkSize(chunkSizeBytes)
-                .addInput(contents.getBytes(UTF_8))
-                .build();
+        chunker = Chunker.from(contents.getBytes(UTF_8), chunkSizeBytes);
       } catch (IOException e) {
         fail("An error occurred:" + e);
       }

@@ -106,7 +106,7 @@ final class RemoteSpawnStrategy implements SpawnActionContext {
     } else if (GrpcActionCache.isRemoteCacheOptions(remoteOptions)) {
       remoteCache =
           new GrpcActionCache(
-              GrpcUtils.createChannel(remoteOptions.remoteCache, channelOptions),
+              RemoteUtils.createChannel(remoteOptions.remoteCache, channelOptions),
               channelOptions,
               remoteOptions);
     } else {
@@ -117,18 +117,11 @@ final class RemoteSpawnStrategy implements SpawnActionContext {
     if (remoteCache != null && GrpcRemoteExecutor.isRemoteExecutionOptions(remoteOptions)) {
       workExecutor =
           new GrpcRemoteExecutor(
-              GrpcUtils.createChannel(remoteOptions.remoteExecutor, channelOptions),
+              RemoteUtils.createChannel(remoteOptions.remoteExecutor, channelOptions),
               channelOptions,
               remoteOptions);
     } else {
       workExecutor = null;
-    }
-  }
-
-  /** Release resources associated with this spawn strategy. */
-  public void close() {
-    if (remoteCache != null) {
-      remoteCache.close();
     }
   }
 
@@ -297,7 +290,13 @@ final class RemoteSpawnStrategy implements SpawnActionContext {
                 verboseFailures, spawn.getArguments(), spawn.getEnvironment(), cwd);
         throw new UserExecException(message + ": Exit " + result.getExitCode());
       }
-    } catch (RetryException e) {
+    } catch (IOException e) {
+      throw new UserExecException("Unexpected IO error.", e);
+    } catch (InterruptedException e) {
+      eventHandler.handle(Event.warn(mnemonic + " remote work interrupted (" + e + ")"));
+      Thread.currentThread().interrupt();
+      throw e;
+    } catch (StatusRuntimeException e) {
       String stackTrace = "";
       if (verboseFailures) {
         stackTrace = "\n" + Throwables.getStackTraceAsString(e);
@@ -306,7 +305,7 @@ final class RemoteSpawnStrategy implements SpawnActionContext {
       if (remoteOptions.remoteLocalFallback) {
         execLocally(spawn, actionExecutionContext, remoteCache, actionKey);
       } else {
-        throw new UserExecException(e.getCause());
+        throw new UserExecException(e);
       }
     } catch (CacheNotFoundException e) {
       // TODO(olaola): handle this exception by reuploading / reexecuting the action remotely.
@@ -316,8 +315,6 @@ final class RemoteSpawnStrategy implements SpawnActionContext {
       } else {
         throw new UserExecException(e);
       }
-    } catch (IOException e) {
-      throw new UserExecException("Unexpected IO error.", e);
     } catch (UnsupportedOperationException e) {
       eventHandler.handle(
           Event.warn(mnemonic + " unsupported operation for action cache (" + e + ")"));

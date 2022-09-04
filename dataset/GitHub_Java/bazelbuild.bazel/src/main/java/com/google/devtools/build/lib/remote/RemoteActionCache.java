@@ -58,14 +58,15 @@ interface RemoteActionCache {
    */
   // TODO(olaola): will need to amend to include the TreeNodeRepository for updating.
   void download(ActionResult result, Path execRoot, FileOutErr outErr)
-      throws IOException, InterruptedException, CacheNotFoundException;
+      throws IOException, CacheNotFoundException;
+
   /**
    * Attempts to look up the given action in the remote cache and return its result, if present.
    * Returns {@code null} if there is no such entry. Note that a successful result from this method
    * does not guarantee the availability of the corresponding output files in the remote cache.
    */
   @Nullable
-  ActionResult getCachedActionResult(ActionKey actionKey) throws IOException, InterruptedException;
+  ActionResult getCachedActionResult(ActionKey actionKey);
 
   /**
    * Upload the result of a locally executed action to the cache by uploading any necessary files,
@@ -73,7 +74,4 @@ interface RemoteActionCache {
    */
   void upload(ActionKey actionKey, Path execRoot, Collection<Path> files, FileOutErr outErr)
       throws IOException, InterruptedException;
-
-  /** Release resources associated with the cache. The cache may not be used after calling this. */
-  void close();
 }

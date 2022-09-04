@@ -53,13 +53,13 @@ final class RemoteSpawnRunner implements SpawnRunner {
   private final Platform platform;
 
   private final GrpcRemoteExecutor executor;
-  private final GrpcRemoteCache remoteCache;
+  private final GrpcActionCache remoteCache;
 
   RemoteSpawnRunner(
       Path execRoot,
       RemoteOptions options,
       GrpcRemoteExecutor executor,
-      GrpcRemoteCache remoteCache) {
+      GrpcActionCache remoteCache) {
     this.execRoot = execRoot;
     this.options = options;
     if (options.experimentalRemotePlatformOverride != null) {
@@ -98,7 +98,8 @@ final class RemoteSpawnRunner implements SpawnRunner {
               spawn.getOutputFiles(),
               Digests.computeDigest(command),
               repository.getMerkleDigest(inputRoot),
-              Spawns.getTimeoutSeconds(spawn));
+              // TODO(olaola): set sensible local and remote timouts.
+              Spawns.getTimeoutSeconds(spawn, 120));
 
       ActionKey actionKey = Digests.computeActionKey(action);
       ActionResult result =
@@ -143,9 +144,7 @@ final class RemoteSpawnRunner implements SpawnRunner {
     if (platform != null) {
       action.setPlatform(platform);
     }
-    if (timeoutSeconds > 0) {
-      action.setTimeout(Duration.newBuilder().setSeconds(timeoutSeconds));
-    }
+    action.setTimeout(Duration.newBuilder().setSeconds(timeoutSeconds));
     return action.build();
   }
 

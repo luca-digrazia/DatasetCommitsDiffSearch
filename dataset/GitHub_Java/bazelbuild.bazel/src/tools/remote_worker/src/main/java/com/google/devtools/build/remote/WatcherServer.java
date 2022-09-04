@@ -81,19 +81,16 @@ final class WatcherServer extends WatcherImplBase {
   private final SimpleBlobStoreActionCache cache;
   private final RemoteWorkerOptions workerOptions;
   private final ConcurrentHashMap<String, ExecuteRequest> operationsCache;
-  private final Path sandboxPath;
 
   public WatcherServer(
       Path workPath,
       SimpleBlobStoreActionCache cache,
       RemoteWorkerOptions workerOptions,
-      ConcurrentHashMap<String, ExecuteRequest> operationsCache,
-      Path sandboxPath) {
+      ConcurrentHashMap<String, ExecuteRequest> operationsCache) {
     this.workPath = workPath;
     this.cache = cache;
     this.workerOptions = workerOptions;
     this.operationsCache = operationsCache;
-    this.sandboxPath = sandboxPath;
   }
 
   private Map<String, String> getEnvironmentVariables(
@@ -157,62 +154,44 @@ final class WatcherServer extends WatcherImplBase {
       String pathString)
       throws IllegalArgumentException {
     String container = dockerContainer(action);
-    if (container != null) {
-      // Run command inside a docker container.
-      ArrayList<String> newCommandLineElements = new ArrayList<>(commandLineElements.length);
-      newCommandLineElements.add("docker");
-      newCommandLineElements.add("run");
-
-      long uid = getUid();
-      if (uid >= 0) {
-        newCommandLineElements.add("-u");
-        newCommandLineElements.add(Long.toString(uid));
-      }
-
-      String dockerPathString = pathString + "-docker";
-      newCommandLineElements.add("-v");
-      newCommandLineElements.add(pathString + ":" + dockerPathString);
-      newCommandLineElements.add("-w");
-      newCommandLineElements.add(dockerPathString);
-
-      for (Map.Entry<String, String> entry : environmentVariables.entrySet()) {
-        String key = entry.getKey();
-        String value = entry.getValue();
-
-        newCommandLineElements.add("-e");
-        newCommandLineElements.add(key + "=" + value);
-      }
-
-      newCommandLineElements.add(container);
-
-      newCommandLineElements.addAll(Arrays.asList(commandLineElements));
-
-      return new Command(newCommandLineElements.toArray(new String[0]), null, new File(pathString));
-    } else if (sandboxPath != null) {
-      // Run command with sandboxing.
-      ArrayList<String> newCommandLineElements = new ArrayList<>(commandLineElements.length);
-      newCommandLineElements.add(sandboxPath.getPathString());
-      if (workerOptions.sandboxingBlockNetwork) {
-        newCommandLineElements.add("-N");
-      }
-      for (String writablePath : workerOptions.sandboxingWritablePaths) {
-        newCommandLineElements.add("-w");
-        newCommandLineElements.add(writablePath);
-      }
-      for (String tmpfsDir : workerOptions.sandboxingTmpfsDirs) {
-        newCommandLineElements.add("-e");
-        newCommandLineElements.add(tmpfsDir);
-      }
-      newCommandLineElements.add("--");
-      newCommandLineElements.addAll(Arrays.asList(commandLineElements));
-      return new Command(
-          newCommandLineElements.toArray(new String[0]),
-          environmentVariables,
-          new File(pathString));
-    } else {
-      // Just run the command.
+    if (container == null) {
+      // Was not asked to Dockerize.
       return new Command(commandLineElements, environmentVariables, new File(pathString));
     }
+
+    // Run command inside a docker container.
+    ArrayList<String> newCommandLineElements = new ArrayList<>();
+    newCommandLineElements.add("docker");
+    newCommandLineElements.add("run");
+
+    long uid = getUid();
+    if (uid >= 0) {
+      newCommandLineElements.add("-u");
+      newCommandLineElements.add(Long.toString(uid));
+    }
+
+    String dockerPathString = pathString + "-docker";
+    newCommandLineElements.add("-v");
+    newCommandLineElements.add(pathString + ":" + dockerPathString);
+    newCommandLineElements.add("-w");
+    newCommandLineElements.add(dockerPathString);
+
+    for (Map.Entry<String, String> entry : environmentVariables.entrySet()) {
+      String key = entry.getKey();
+      String value = entry.getValue();
+
+      newCommandLineElements.add("-e");
+      newCommandLineElements.add(key + "=" + value);
+    }
+
+    newCommandLineElements.add(container);
+
+    newCommandLineElements.addAll(Arrays.asList(commandLineElements));
+
+    return new Command(
+        newCommandLineElements.toArray(new String[newCommandLineElements.size()]),
+        null,
+        new File(pathString));
   }
 
   public ActionResult execute(Action action, Path execRoot)
@@ -294,7 +273,6 @@ final class WatcherServer extends WatcherImplBase {
     return timeoutSeconds > 0 && wallTimeMillis / 1000.0 > timeoutSeconds;
   }
 
-  @Override
   public void watch(Request wr, StreamObserver<ChangeBatch> responseObserver) {
     final String opName = wr.getTarget();
     if (!operationsCache.containsKey(opName)) {
@@ -304,7 +282,6 @@ final class WatcherServer extends WatcherImplBase {
                   .setCode(Code.NOT_FOUND.getNumber())
                   .setMessage("Operation not found: " + opName)
                   .build()));
-      return;
     }
     ExecuteRequest request = operationsCache.get(opName);
     Path tempRoot = workPath.getRelative("build-" + opName);
@@ -313,9 +290,7 @@ final class WatcherServer extends WatcherImplBase {
       logger.log(
           FINE,
           "Work received has {0} input files and {1} output files.",
-          new Object[] {
-            request.getTotalInputFileCount(), request.getAction().getOutputFilesCount()
-          });
+          new int[] {request.getTotalInputFileCount(), request.getAction().getOutputFilesCount()});
       ActionResult result = execute(request.getAction(), tempRoot);
       responseObserver.onNext(
           ChangeBatch.newBuilder()
@@ -338,21 +313,7 @@ final class WatcherServer extends WatcherImplBase {
       logger.log(WARNING, "Cache miss on {0}.", e.getMissingDigest());
       responseObserver.onError(StatusUtils.notFoundError(e.getMissingDigest()));
     } catch (StatusRuntimeException e) {
-      // In particular, command DEADLINE_EXCEEDED errors should go in the Operation.error field to
-      // distinguish them from gRPC request DEADLINE_EXCEEDED.
-      responseObserver.onNext(
-          ChangeBatch.newBuilder()
-              .addChanges(
-                  Change.newBuilder()
-                      .setState(Change.State.EXISTS)
-                      .setData(
-                          Any.pack(
-                              Operation.newBuilder()
-                                  .setName(opName)
-                                  .setError(StatusProto.fromThrowable(e))
-                                  .build()))
-                      .build())
-              .build());
+      responseObserver.onError(e);
     } catch (IllegalArgumentException e) {
       responseObserver.onError(
           StatusProto.toStatusRuntimeException(
