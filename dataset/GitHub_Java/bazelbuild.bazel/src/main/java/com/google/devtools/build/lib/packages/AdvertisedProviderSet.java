@@ -20,42 +20,45 @@ import java.util.ArrayList;
 import java.util.Objects;
 
 /**
- * Captures the set of providers rules and aspects can advertise. It is either of:
- *
+ * Captures the the set of providers rules and aspects can advertise.
+ * It is either of:
  * <ul>
- *   <li>a set of native and Starlark providers
- *   <li>"can have any provider" set that alias rules have.
+ *    <li>a set of native and skylark providers</li>
+ *    <li>"can have any provider" set that alias rules have.</li>
  * </ul>
  *
- * <p>Native providers should in theory only contain subclasses of {@link
- * com.google.devtools.build.lib.analysis.TransitiveInfoProvider}, but our current dependency
- * structure does not allow a reference to that class here.
+ * <p>
+ * Native providers should in theory only contain subclasses of
+ * {@link com.google.devtools.build.lib.analysis.TransitiveInfoProvider}, but
+ * our current dependency structure does not allow a reference to that class here.
+ * </p>
  */
 @Immutable
 public final class AdvertisedProviderSet {
   private final boolean canHaveAnyProvider;
   private final ImmutableSet<Class<?>> nativeProviders;
-  private final ImmutableSet<StarlarkProviderIdentifier> skylarkProviders;
+  private final ImmutableSet<SkylarkProviderIdentifier> skylarkProviders;
 
-  private AdvertisedProviderSet(
-      boolean canHaveAnyProvider,
+  private AdvertisedProviderSet(boolean canHaveAnyProvider,
       ImmutableSet<Class<?>> nativeProviders,
-      ImmutableSet<StarlarkProviderIdentifier> skylarkProviders) {
+      ImmutableSet<SkylarkProviderIdentifier> skylarkProviders) {
     this.canHaveAnyProvider = canHaveAnyProvider;
     this.nativeProviders = nativeProviders;
     this.skylarkProviders = skylarkProviders;
   }
 
   public static final AdvertisedProviderSet ANY =
-      new AdvertisedProviderSet(
-          true, ImmutableSet.<Class<?>>of(), ImmutableSet.<StarlarkProviderIdentifier>of());
+      new AdvertisedProviderSet(true,
+          ImmutableSet.<Class<?>>of(),
+          ImmutableSet.<SkylarkProviderIdentifier>of());
   public static final AdvertisedProviderSet EMPTY =
-      new AdvertisedProviderSet(
-          false, ImmutableSet.<Class<?>>of(), ImmutableSet.<StarlarkProviderIdentifier>of());
+      new AdvertisedProviderSet(false,
+          ImmutableSet.<Class<?>>of(),
+          ImmutableSet.<SkylarkProviderIdentifier>of());
 
   public static AdvertisedProviderSet create(
       ImmutableSet<Class<?>> nativeProviders,
-      ImmutableSet<StarlarkProviderIdentifier> skylarkProviders) {
+      ImmutableSet<SkylarkProviderIdentifier> skylarkProviders) {
     if (nativeProviders.isEmpty() && skylarkProviders.isEmpty()) {
       return EMPTY;
     }
@@ -108,8 +111,10 @@ public final class AdvertisedProviderSet {
     return nativeProviders;
   }
 
-  /** Get all advertised Starlark providers. */
-  public ImmutableSet<StarlarkProviderIdentifier> getSkylarkProviders() {
+  /**
+   * Get all advertised Skylark providers.
+   */
+  public ImmutableSet<SkylarkProviderIdentifier> getSkylarkProviders() {
     return skylarkProviders;
   }
 
@@ -130,9 +135,9 @@ public final class AdvertisedProviderSet {
 
   /**
    * Returns {@code true} if this provider set can have any provider, or if it advertises the
-   * specific Starlark provider requested.
+   * specific skylark provider requested.
    */
-  public boolean advertises(StarlarkProviderIdentifier skylarkProvider) {
+  public boolean advertises(SkylarkProviderIdentifier skylarkProvider) {
     if (canHaveAnyProvider()) {
       return true;
     }
@@ -143,8 +148,7 @@ public final class AdvertisedProviderSet {
   public static class Builder {
     private boolean canHaveAnyProvider;
     private final ArrayList<Class<?>> nativeProviders;
-    private final ArrayList<StarlarkProviderIdentifier> skylarkProviders;
-
+    private final ArrayList<SkylarkProviderIdentifier> skylarkProviders;
     private Builder() {
       nativeProviders = new ArrayList<>();
       skylarkProviders = new ArrayList<>();
@@ -182,17 +186,17 @@ public final class AdvertisedProviderSet {
     }
 
     public Builder addSkylark(String providerName) {
-      skylarkProviders.add(StarlarkProviderIdentifier.forLegacy(providerName));
+      skylarkProviders.add(SkylarkProviderIdentifier.forLegacy(providerName));
       return this;
     }
 
-    public Builder addSkylark(StarlarkProviderIdentifier id) {
+    public Builder addSkylark(SkylarkProviderIdentifier id) {
       skylarkProviders.add(id);
       return this;
     }
 
     public Builder addSkylark(Provider.Key id) {
-      skylarkProviders.add(StarlarkProviderIdentifier.forKey(id));
+      skylarkProviders.add(SkylarkProviderIdentifier.forKey(id));
       return this;
     }
   }
