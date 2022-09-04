@@ -15,17 +15,12 @@
  */
 package org.androidannotations.handler;
 
-import static com.sun.codemodel.JExpr.lit;
-import static com.sun.codemodel.JMod.FINAL;
-import static com.sun.codemodel.JMod.PUBLIC;
-import static com.sun.codemodel.JMod.STATIC;
-
-import java.lang.annotation.Annotation;
-
-import javax.annotation.processing.ProcessingEnvironment;
-import javax.lang.model.element.Element;
-import javax.lang.model.element.VariableElement;
-
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JExpression;
+import com.sun.codemodel.JFieldVar;
+import com.sun.codemodel.JMethod;
+import com.sun.codemodel.JVar;
 import org.androidannotations.helper.APTCodeModelHelper;
 import org.androidannotations.helper.AnnotationHelper;
 import org.androidannotations.helper.BundleHelper;
@@ -34,13 +29,15 @@ import org.androidannotations.holder.GeneratedClassHolder;
 import org.androidannotations.model.AnnotationElements;
 import org.androidannotations.process.IsValid;
 
-import com.sun.codemodel.JBlock;
-import com.sun.codemodel.JClass;
-import com.sun.codemodel.JDefinedClass;
-import com.sun.codemodel.JExpression;
-import com.sun.codemodel.JFieldVar;
-import com.sun.codemodel.JMethod;
-import com.sun.codemodel.JVar;
+import javax.annotation.processing.ProcessingEnvironment;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.VariableElement;
+import java.lang.annotation.Annotation;
+
+import static com.sun.codemodel.JExpr.lit;
+import static com.sun.codemodel.JMod.FINAL;
+import static com.sun.codemodel.JMod.PUBLIC;
+import static com.sun.codemodel.JMod.STATIC;
 
 public abstract class ExtraParameterHandler extends BaseAnnotationHandler<GeneratedClassHolder> {
 
@@ -51,7 +48,7 @@ public abstract class ExtraParameterHandler extends BaseAnnotationHandler<Genera
 	public ExtraParameterHandler(Class<? extends Annotation> targetClass, Class<? extends Annotation> methodAnnotationClass, ProcessingEnvironment processingEnvironment) {
 		super(targetClass, processingEnvironment);
 		this.methodAnnotationClass = methodAnnotationClass;
-		annotationHelper = new AnnotationHelper(processingEnv);
+		this.annotationHelper = new AnnotationHelper(processingEnv);
 	}
 
 	@Override
@@ -67,10 +64,6 @@ public abstract class ExtraParameterHandler extends BaseAnnotationHandler<Genera
 	}
 
 	public JExpression getExtraValue(VariableElement parameter, JVar intent, JVar extras, JBlock block, JMethod annotatedMethod, GeneratedClassHolder holder) {
-		return getExtraValue(parameter, intent, extras, block, annotatedMethod, holder.getGeneratedClass(), holder);
-	}
-
-	public JExpression getExtraValue(VariableElement parameter, JVar intent, JVar extras, JBlock block, JMethod annotatedMethod, JDefinedClass generatedClass, GeneratedClassHolder holder) {
 		String parameterName = parameter.getSimpleName().toString();
 		JClass parameterClass = codeModelHelper.typeMirrorToJClass(parameter.asType(), holder);
 
@@ -80,16 +73,16 @@ public abstract class ExtraParameterHandler extends BaseAnnotationHandler<Genera
 		}
 
 		BundleHelper bundleHelper = new BundleHelper(annotationHelper, parameter.asType());
-		JExpression restoreMethodCall = bundleHelper.getExpressionToRestoreFromIntentOrBundle(parameterClass, intent, extras, getStaticExtraField(generatedClass, extraKey, holder), annotatedMethod);
+		JExpression restoreMethodCall = bundleHelper.getExpressionToRestoreFromIntentOrBundle(parameterClass, intent, extras, getStaticExtraField(holder, extraKey), annotatedMethod);
 
 		return block.decl(parameterClass, parameterName, restoreMethodCall);
 	}
 
-	private JFieldVar getStaticExtraField(JDefinedClass generatedClass, String extraName, GeneratedClassHolder holder) {
+	private JFieldVar getStaticExtraField(GeneratedClassHolder holder, String extraName) {
 		String staticFieldName = CaseHelper.camelCaseToUpperSnakeCase(null, extraName, "Extra");
-		JFieldVar staticExtraField = generatedClass.fields().get(staticFieldName);
+		JFieldVar staticExtraField = holder.getGeneratedClass().fields().get(staticFieldName);
 		if (staticExtraField == null) {
-			staticExtraField = generatedClass.field(PUBLIC | STATIC | FINAL, holder.classes().STRING, staticFieldName, lit(extraName));
+			staticExtraField = holder.getGeneratedClass().field(PUBLIC | STATIC | FINAL, holder.classes().STRING, staticFieldName, lit(extraName));
 		}
 		return staticExtraField;
 	}
