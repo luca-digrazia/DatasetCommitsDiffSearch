@@ -213,19 +213,11 @@ public interface QueryEnvironment<T> {
       throws QueryException, InterruptedException;
 
   /**
-   * Creates a Uniquifier for use in a {@code QueryExpression}. Note that the usage of this
+   * Creates a Uniquifier for use in a {@code QueryExpression}. Note that the usage of this an
    * uniquifier should not be used for returning unique results to the parent callback. It should
    * only be used to avoid processing the same elements multiple times within this QueryExpression.
    */
   Uniquifier<T> createUniquifier();
-
-  /**
-   * Creates a {@link MinDepthUniquifier} for use in a {@code QueryExpression}. Note that the usage
-   * of this uniquifier should not be used for returning unique results to the parent callback. It
-   * should only be used to try to avoid processing the same elements multiple times at the same
-   * depth bound within this QueryExpression.
-   */
-  MinDepthUniquifier<T> createMinDepthUniquifier();
 
   void reportBuildFileError(QueryExpression expression, String msg) throws QueryException;
 

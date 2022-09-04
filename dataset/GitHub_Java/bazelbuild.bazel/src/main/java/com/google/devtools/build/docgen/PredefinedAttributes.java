@@ -15,6 +15,7 @@ package com.google.devtools.build.docgen;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableMap.Builder;
 import com.google.common.io.ByteStreams;
 import com.google.common.io.Files;
 import java.io.IOException;
@@ -66,7 +67,7 @@ public class PredefinedAttributes {
 
   private static ImmutableMap<String, RuleDocumentationAttribute> generateAttributeMap(
       String commonType, ImmutableList<String> filenames) {
-    ImmutableMap.Builder<String, RuleDocumentationAttribute> builder =
+    Builder<String, RuleDocumentationAttribute> builder =
         ImmutableMap.<String, RuleDocumentationAttribute>builder();
     for (String filename : filenames) {
       String name = Files.getNameWithoutExtension(filename);
