@@ -24,7 +24,7 @@ import java.util.concurrent.TimeUnit;
 
 public class ConstraintMessage {
 
-    private static final Cache<Pair<Path, ? extends ConstraintDescriptor<?>>, String> PREFIX_CACHE =
+    private static final Cache<Pair<Path, ? extends ConstraintDescriptor<?>>, String> MESSAGES_CACHE =
             CacheBuilder.newBuilder()
             .expireAfterWrite(1, TimeUnit.HOURS)
             .build();
@@ -38,27 +38,27 @@ public class ConstraintMessage {
     public static String getMessage(ConstraintViolation<?> v, Invocable invocable) {
         final Pair<Path, ? extends ConstraintDescriptor<?>> of =
                 Pair.of(v.getPropertyPath(), v.getConstraintDescriptor());
-        final String cachePrefix = PREFIX_CACHE.getIfPresent(of);
-        if (cachePrefix == null) {
-            final String prefix = calculatePrefix(v, invocable);
-            PREFIX_CACHE.put(of, prefix);
-            return prefix + v.getMessage();
+        final String cachedMessage = MESSAGES_CACHE.getIfPresent(of);
+        if (cachedMessage == null) {
+            final String message = calculateMessage(v, invocable);
+            MESSAGES_CACHE.put(of, message);
+            return message;
         }
-        return cachePrefix + v.getMessage();
+        return cachedMessage;
     }
 
-    private static String calculatePrefix(ConstraintViolation<?> v, Invocable invocable) {
+    private static String calculateMessage(ConstraintViolation<?> v, Invocable invocable) {
         final Optional<String> returnValueName = getMethodReturnValueName(v);
         if (returnValueName.isPresent()) {
             final String name = isValidationMethod(v) ?
                     StringUtils.substringBeforeLast(returnValueName.get(), ".") : returnValueName.get();
-            return name + " ";
+            return name + " " + v.getMessage();
         }
 
         // Take the message specified in a ValidationMethod annotation if it
         // is what caused the violation
         if (isValidationMethod(v)) {
-            return "";
+            return v.getMessage();
         }
 
         final Optional<String> entity = isRequestEntity(v, invocable);
@@ -67,14 +67,17 @@ public class ConstraintMessage {
             // if the request entity is simple (eg. byte[], String, etc), the entity
             // string will be empty, so prepend a message about the request body
             final String prefix = Strings.isNullOrEmpty(entity.get()) ? "The request body" : entity.get();
-            return prefix + " " ;
+            return prefix + " " + v.getMessage();
         }
 
         // Check if the violation occurred on a *Param annotation and if so,
         // return a human friendly error (eg. "Query param xxx may not be null")
         final Optional<String> memberName = getMemberName(v, invocable);
-        return memberName.map(s -> s + " ").orElseGet(() -> v.getPropertyPath() + " ");
+        if (memberName.isPresent()) {
+            return memberName.get() + " " + v.getMessage();
+        }
 
+        return v.getPropertyPath() + " " + v.getMessage();
     }
 
     /**
@@ -88,11 +91,14 @@ public class ConstraintMessage {
         }
         final List<Parameter> parameters = invocable.getParameters();
 
-        if (parent.getKind() == ElementKind.PARAMETER) {
-            final Parameter param = parameters.get(parent.as(Path.ParameterNode.class).getParameterIndex());
-            if (param.getSource().equals(Parameter.Source.UNKNOWN)) {
-                return Optional.of(Joiner.on('.').join(Iterables.skip(violation.getPropertyPath(), 2)));
-            }
+        switch (parent.getKind()) {
+            case PARAMETER:
+                final Parameter param = parameters.get(parent.as(Path.ParameterNode.class).getParameterIndex());
+                if (param.getSource().equals(Parameter.Source.UNKNOWN)) {
+                    return Optional.of(Joiner.on('.').join(Iterables.skip(violation.getPropertyPath(), 2)));
+                }
+            default:
+                break;
         }
 
         return Optional.empty();
