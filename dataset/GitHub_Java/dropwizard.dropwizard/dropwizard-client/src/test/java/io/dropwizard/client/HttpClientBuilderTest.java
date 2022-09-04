@@ -22,7 +22,6 @@ import org.apache.http.config.Registry;
 import org.apache.http.config.RegistryBuilder;
 import org.apache.http.config.SocketConfig;
 import org.apache.http.conn.DnsResolver;
-import org.apache.http.conn.routing.HttpRoutePlanner;
 import org.apache.http.conn.socket.ConnectionSocketFactory;
 import org.apache.http.conn.socket.PlainConnectionSocketFactory;
 import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
@@ -30,17 +29,14 @@ import org.apache.http.impl.DefaultConnectionReuseStrategy;
 import org.apache.http.impl.NoConnectionReuseStrategy;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.DefaultConnectionKeepAliveStrategy;
-import org.apache.http.impl.conn.DefaultRoutePlanner;
 import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
 import org.apache.http.impl.conn.SystemDefaultDnsResolver;
-import org.apache.http.impl.conn.SystemDefaultRoutePlanner;
 import org.apache.http.message.BasicHeader;
 import org.apache.http.message.BasicListHeaderIterator;
 import org.apache.http.protocol.HTTP;
 import org.apache.http.protocol.HttpContext;
 import org.junit.Before;
 import org.junit.Test;
-import sun.net.spi.DefaultProxySelector;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -54,7 +50,6 @@ import static org.mockito.MockitoAnnotations.initMocks;
 
 public class HttpClientBuilderTest {
     private final Class<?> httpClientBuilderClass;
-    private final Class<?> httpClientClass;
     private final Registry<ConnectionSocketFactory> registry = RegistryBuilder.<ConnectionSocketFactory>create()
             .register("http", PlainConnectionSocketFactory.getSocketFactory())
             .register("https", SSLConnectionSocketFactory.getSocketFactory())
@@ -66,7 +61,6 @@ public class HttpClientBuilderTest {
 
     public HttpClientBuilderTest() throws ClassNotFoundException {
         this.httpClientBuilderClass = Class.forName("org.apache.http.impl.client.HttpClientBuilder");
-        this.httpClientClass = Class.forName("org.apache.http.impl.client.InternalHttpClient");
     }
 
     @Before
@@ -224,15 +218,6 @@ public class HttpClientBuilderTest {
         assertThat(((RequestConfig) spyHttpClientBuilderField("defaultRequestConfig", apacheBuilder)).getConnectTimeout())
                 .isEqualTo(500);
     }
-    
-    @Test
-    public void setsTheConnectionRequestTimeout() throws Exception {
-    	configuration.setConnectionRequestTimeout(Duration.milliseconds(123));
-    	
-    	assertThat(builder.using(configuration).createClient(apacheBuilder, connectionManager, "test")).isNotNull();
-    	assertThat(((RequestConfig) spyHttpClientBuilderField("defaultRequestConfig", apacheBuilder)).getConnectionRequestTimeout())
-        		.isEqualTo(123);
-    }
 
     @Test
     public void disablesNaglesAlgorithm() throws Exception {
@@ -247,27 +232,6 @@ public class HttpClientBuilderTest {
 
         assertThat(((RequestConfig) spyHttpClientBuilderField("defaultRequestConfig", apacheBuilder))
                 .isStaleConnectionCheckEnabled()).isFalse();
-    }
-
-    @Test
-    public void usesTheDefaultRoutePlanner() throws Exception {
-        final CloseableHttpClient httpClient = builder.using(configuration)
-                .createClient(apacheBuilder, connectionManager, "test");
-
-        assertThat(httpClient).isNotNull();
-        assertThat(spyHttpClientBuilderField("routePlanner", apacheBuilder)).isNull();
-        assertThat(spyHttpClientField("routePlanner", httpClient)).isInstanceOf(DefaultRoutePlanner.class);
-    }
-
-    @Test
-    public void usesACustomRoutePlanner() throws Exception {
-        final HttpRoutePlanner routePlanner = new SystemDefaultRoutePlanner(new DefaultProxySelector());
-        final CloseableHttpClient httpClient = builder.using(configuration).using(routePlanner)
-                .createClient(apacheBuilder, connectionManager, "test");
-
-        assertThat(httpClient).isNotNull();
-        assertThat(spyHttpClientBuilderField("routePlanner", apacheBuilder)).isSameAs(routePlanner);
-        assertThat(spyHttpClientField("routePlanner", httpClient)).isSameAs(routePlanner);
     }
 
     @Test
@@ -314,7 +278,7 @@ public class HttpClientBuilderTest {
         assertThat(builder.using(HttpClientMetricNameStrategies.HOST_AND_METHOD)
                 .createClient(apacheBuilder, connectionManager, "test"))
                 .isNotNull();
-        assertThat(FieldUtils.getField(InstrumentedHttpRequestExecutor.class,
+        assertThat(FieldUtils.getField(InstrumentedHttpRequestExecutor.class, 
                 "metricNameStrategy", true)
                 .get(spyHttpClientBuilderField("requestExec", apacheBuilder)))
                 .isSameAs(HttpClientMetricNameStrategies.HOST_AND_METHOD);
@@ -324,7 +288,7 @@ public class HttpClientBuilderTest {
     public void usesMethodOnlyHttpClientMetricNameStrategyByDefault() throws Exception {
         assertThat(builder.createClient(apacheBuilder, connectionManager, "test"))
                 .isNotNull();
-        assertThat(FieldUtils.getField(InstrumentedHttpRequestExecutor.class,
+        assertThat(FieldUtils.getField(InstrumentedHttpRequestExecutor.class, 
                 "metricNameStrategy", true)
                 .get(spyHttpClientBuilderField("requestExec", apacheBuilder)))
                 .isSameAs(HttpClientMetricNameStrategies.METHOD_ONLY);
@@ -332,11 +296,6 @@ public class HttpClientBuilderTest {
 
     private Object spyHttpClientBuilderField(final String fieldName, final Object obj) throws Exception {
         final Field field = FieldUtils.getField(httpClientBuilderClass, fieldName, true);
-        return field.get(obj);
-    }
-
-    private Object spyHttpClientField(final String fieldName, final Object obj) throws Exception {
-        final Field field = FieldUtils.getField(httpClientClass, fieldName, true);
         return field.get(obj);
     }
 }
