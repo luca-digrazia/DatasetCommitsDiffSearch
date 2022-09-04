@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.analysis;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.CompletionContext;
@@ -46,7 +45,7 @@ public class AspectCompleteEvent
   private final NestedSet<Cause> rootCauses;
   private final Collection<BuildEventId> postedAfter;
   private final CompletionContext completionContext;
-  private final ImmutableMap<String, ArtifactsInOutputGroup> artifactOutputGroups;
+  private final NestedSet<ArtifactsInOutputGroup> artifactOutputGroups;
   private final BuildEventId configurationEventId;
 
   private AspectCompleteEvent(
@@ -54,7 +53,7 @@ public class AspectCompleteEvent
       AspectDescriptor descriptor,
       NestedSet<Cause> rootCauses,
       CompletionContext completionContext,
-      ImmutableMap<String, ArtifactsInOutputGroup> artifactOutputGroups,
+      NestedSet<ArtifactsInOutputGroup> artifactOutputGroups,
       BuildEventId configurationEventId) {
     this.label = label;
     this.descriptor = descriptor;
@@ -74,7 +73,7 @@ public class AspectCompleteEvent
   public static AspectCompleteEvent createSuccessful(
       AspectValue value,
       CompletionContext completionContext,
-      ImmutableMap<String, ArtifactsInOutputGroup> artifacts,
+      NestedSet<ArtifactsInOutputGroup> artifacts,
       BuildEventId configurationEventId) {
     return new AspectCompleteEvent(
         value.getKey().getLabel(),
@@ -93,7 +92,7 @@ public class AspectCompleteEvent
       CompletionContext ctx,
       NestedSet<Cause> rootCauses,
       BuildEventId configurationEventId,
-      ImmutableMap<String, ArtifactsInOutputGroup> outputs) {
+      NestedSet<ArtifactsInOutputGroup> outputs) {
     Preconditions.checkArgument(!rootCauses.isEmpty());
     return new AspectCompleteEvent(
         value.getKey().getLabel(),
@@ -136,7 +135,7 @@ public class AspectCompleteEvent
   public ReportedArtifacts reportedArtifacts() {
     ImmutableSet.Builder<NestedSet<Artifact>> builder = ImmutableSet.builder();
     if (artifactOutputGroups != null) {
-      for (ArtifactsInOutputGroup artifactsInGroup : artifactOutputGroups.values()) {
+      for (ArtifactsInOutputGroup artifactsInGroup : artifactOutputGroups.toList()) {
         builder.add(artifactsInGroup.getArtifacts());
       }
     }
@@ -151,12 +150,12 @@ public class AspectCompleteEvent
         BuildEventStreamProtos.TargetComplete.newBuilder();
     builder.setSuccess(!failed());
     if (artifactOutputGroups != null) {
-      artifactOutputGroups.forEach(
-          (outputGroup, artifactsInGroup) ->
-              builder.addOutputGroup(
-                  OutputGroup.newBuilder()
-                      .setName(outputGroup)
-                      .addFileSets(namer.apply(artifactsInGroup.getArtifacts().toNode()))));
+      for (ArtifactsInOutputGroup artifactsInGroup : artifactOutputGroups.toList()) {
+        OutputGroup.Builder groupBuilder = OutputGroup.newBuilder();
+        groupBuilder.setName(artifactsInGroup.getOutputGroup());
+        groupBuilder.addFileSets(namer.apply(artifactsInGroup.getArtifacts().toNode()));
+        builder.addOutputGroup(groupBuilder.build());
+      }
     }
     return GenericBuildEvent.protoChaining(this).setCompleted(builder.build()).build();
   }
