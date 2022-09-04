@@ -8,6 +8,7 @@ import static org.hibernate.cfg.AvailableSettings.USE_QUERY_CACHE;
 import static org.hibernate.cfg.AvailableSettings.USE_SECOND_LEVEL_CACHE;
 
 import java.io.IOException;
+import java.lang.reflect.Modifier;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -39,6 +40,7 @@ import org.eclipse.microprofile.metrics.MetricType;
 import org.hibernate.MultiTenancyStrategy;
 import org.hibernate.annotations.Proxy;
 import org.hibernate.boot.archive.scan.spi.ClassDescriptor;
+import org.hibernate.bytecode.internal.bytebuddy.BytecodeProviderImpl;
 import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.dialect.DB297Dialect;
 import org.hibernate.dialect.DerbyTenSevenDialect;
@@ -50,6 +52,7 @@ import org.hibernate.internal.util.collections.ArrayHelper;
 import org.hibernate.jpa.boot.internal.ParsedPersistenceXmlDescriptor;
 import org.hibernate.loader.BatchFetchStyle;
 import org.hibernate.proxy.HibernateProxy;
+import org.hibernate.proxy.pojo.bytebuddy.ByteBuddyProxyHelper;
 import org.hibernate.tool.hbm2ddl.MultipleLinesSqlCommandExtractor;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
@@ -401,15 +404,19 @@ public final class HibernateOrmProcessor {
             }
             proxyAnnotations.put(i.target().asClass().name().toString(), proxyClass.asClass().name().toString());
         }
-        try (ProxyBuildingHelper proxyHelper = new ProxyBuildingHelper(Thread.currentThread().getContextClassLoader())) {
+        try {
+
+            final BytecodeProviderImpl bytecodeProvider = new BytecodeProviderImpl();
+            final ByteBuddyProxyHelper byteBuddyProxyHelper = bytecodeProvider.getByteBuddyProxyHelper();
+
             for (String entity : entityClassNames) {
                 Set<Class<?>> proxyInterfaces = new HashSet<>();
                 proxyInterfaces.add(HibernateProxy.class); //always added
-                Class<?> mappedClass = proxyHelper.uninitializedClass(entity);
+                Class<?> mappedClass = Class.forName(entity, false, Thread.currentThread().getContextClassLoader());
                 String proxy = proxyAnnotations.get(entity);
                 if (proxy != null) {
-                    proxyInterfaces.add(proxyHelper.uninitializedClass(proxy));
-                } else if (!proxyHelper.isProxiable(mappedClass)) {
+                    proxyInterfaces.add(Class.forName(proxy, false, Thread.currentThread().getContextClassLoader()));
+                } else if (!isProxiable(mappedClass)) {
                     //if there is no @Proxy we need to make sure the actual class is proxiable
                     continue;
                 }
@@ -421,10 +428,10 @@ public final class HibernateOrmProcessor {
                     }
                     proxy = proxyAnnotations.get(subclassName);
                     if (proxy != null) {
-                        proxyInterfaces.add(proxyHelper.uninitializedClass(proxy));
+                        proxyInterfaces.add(Class.forName(proxy, false, Thread.currentThread().getContextClassLoader()));
                     }
                 }
-                DynamicType.Unloaded<?> proxyDef = proxyHelper.buildUnloadedProxy(mappedClass,
+                DynamicType.Unloaded<?> proxyDef = byteBuddyProxyHelper.buildUnloadedProxy(mappedClass,
                         toArray(proxyInterfaces));
 
                 for (Entry<TypeDescription, byte[]> i : proxyDef.getAllTypes().entrySet()) {
@@ -435,8 +442,23 @@ public final class HibernateOrmProcessor {
                         new PreGeneratedProxies.ProxyClassDetailsHolder(proxyDef.getTypeDescription().getName(),
                                 proxyInterfaces.stream().map(Class::getName).collect(Collectors.toSet())));
             }
+
+        } catch (ClassNotFoundException e) {
+            throw new RuntimeException(e);
         }
         return preGeneratedProxies;
+    }
+
+    private boolean isProxiable(Class<?> mappedClass) {
+        if (Modifier.isFinal(mappedClass.getModifiers())) {
+            return false;
+        }
+        try {
+            mappedClass.getDeclaredConstructor();
+        } catch (NoSuchMethodException e) {
+            return false;
+        }
+        return true;
     }
 
     private static Class[] toArray(final Set<Class<?>> interfaces) {
