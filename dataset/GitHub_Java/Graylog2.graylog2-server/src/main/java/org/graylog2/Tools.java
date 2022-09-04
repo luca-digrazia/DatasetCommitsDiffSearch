@@ -29,10 +29,6 @@ import java.util.Date;
 import java.util.Properties;
 import java.util.Timer;
 import java.util.TimerTask;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.InflaterInputStream;
 
@@ -55,16 +51,11 @@ public final class Tools {
      * @return PID
      * @throws Exception
      */
-    public static String getPID() {
+    public static String getPID() throws Exception {
         byte[] bo = new byte[100];
         String[] cmd = {"bash", "-c", "echo $PPID"};
-        try {
-            Process p = Runtime.getRuntime().exec(cmd);
-            p.getInputStream().read(bo);
-        } catch (IOException e) {
-            Log.emerg("Could not determine own PID! " + e.toString());
-            return "unknown";
-        }
+        Process p = Runtime.getRuntime().exec(cmd);
+        p.getInputStream().read(bo);
         return new String(bo).trim();
     }
 
@@ -211,15 +202,4 @@ public final class Tools {
 		Timer timer = new Timer();
 		timer.schedule(task, new Date(), 60000);
 	}
-
-    public static String getLocalHostname() {
-        InetAddress addr = null;
-        try {
-            addr = InetAddress.getLocalHost();
-        } catch (UnknownHostException ex) {
-            return "Unknown";
-        }
-
-        return addr.getHostName();
-    }
 }
