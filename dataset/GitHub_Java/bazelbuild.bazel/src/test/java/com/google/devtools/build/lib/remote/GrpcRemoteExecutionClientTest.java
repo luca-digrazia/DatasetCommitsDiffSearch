@@ -238,7 +238,7 @@ public class GrpcRemoteExecutionClientTest {
             RemoteModule.createExecuteRetrier(remoteOptions, retryService),
             DIGEST_UTIL,
             logDir,
-            /* filesToDownload= */ ImmutableSet.of());
+            /* topLevelOutputs= */ ImmutableSet.of());
 
     inputDigest = fakeFileCache.createScratchInput(simpleSpawn.getInputFiles().get(0), "xyz");
     command =
