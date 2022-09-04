@@ -14,8 +14,6 @@
 package com.google.devtools.build.android.desugar;
 
 import static com.google.common.base.Preconditions.checkNotNull;
-import static org.objectweb.asm.Opcodes.ACC_STATIC;
-import static org.objectweb.asm.Opcodes.ACC_SYNTHETIC;
 import static org.objectweb.asm.Opcodes.ASM5;
 import static org.objectweb.asm.Opcodes.INVOKESTATIC;
 import static org.objectweb.asm.Opcodes.INVOKEVIRTUAL;
@@ -90,10 +88,6 @@ public class TryWithResourcesRewriter extends ClassVisitor {
           .put("(Ljava/io/PrintWriter;)V", "(Ljava/lang/Throwable;Ljava/io/PrintWriter;)V")
           .build();
 
-  static final String CLOSE_RESOURCE_METHOD_NAME = "$closeResource";
-  static final String CLOSE_RESOURCE_METHOD_DESC =
-      "(Ljava/lang/Throwable;Ljava/lang/AutoCloseable;)V";
-
   private final ClassLoader classLoader;
   private final Set<String> visitedExceptionTypes;
   private final AtomicInteger numOfTryWithResourcesInvoked;
@@ -135,38 +129,22 @@ public class TryWithResourcesRewriter extends ClassVisitor {
       // collect exception types.
       Collections.addAll(visitedExceptionTypes, exceptions);
     }
-    if (isSyntheticCloseResourceMethod(access, name, desc)) {
-      return null; // Discard this method.
-    }
-
     MethodVisitor visitor = super.cv.visitMethod(access, name, desc, signature, exceptions);
     return visitor == null || shouldCurrentClassBeIgnored
         ? visitor
-        : new TryWithResourceVisitor(internalName, name + desc, visitor, classLoader);
-  }
-
-  private boolean isSyntheticCloseResourceMethod(int access, String name, String desc) {
-    return BitFlags.isSet(access, ACC_SYNTHETIC | ACC_STATIC)
-        && CLOSE_RESOURCE_METHOD_NAME.equals(name)
-        && CLOSE_RESOURCE_METHOD_DESC.equals(desc);
+        : new TryWithResourceVisitor(internalName + "." + name + desc, visitor, classLoader);
   }
 
   private class TryWithResourceVisitor extends MethodVisitor {
 
     private final ClassLoader classLoader;
     /** For debugging purpose. Enrich exception information. */
-    private final String internalName;
-
     private final String methodSignature;
 
     public TryWithResourceVisitor(
-        String internalName,
-        String methodSignature,
-        MethodVisitor methodVisitor,
-        ClassLoader classLoader) {
+        String methodSignature, MethodVisitor methodVisitor, ClassLoader classLoader) {
       super(ASM5, methodVisitor);
       this.classLoader = classLoader;
-      this.internalName = internalName;
       this.methodSignature = methodSignature;
     }
 
@@ -180,17 +158,6 @@ public class TryWithResourcesRewriter extends ClassVisitor {
 
     @Override
     public void visitMethodInsn(int opcode, String owner, String name, String desc, boolean itf) {
-      if (isCallToSyntheticCloseResource(opcode, owner, name, desc)) {
-        // Rewrite the call to the runtime library.
-        super.visitMethodInsn(
-            opcode,
-            THROWABLE_EXTENSION_INTERNAL_NAME,
-            "closeResource",
-            "(Ljava/lang/Throwable;Ljava/lang/Object;)V",
-            itf);
-        return;
-      }
-
       if (!isMethodCallTargeted(opcode, owner, name, desc)) {
         super.visitMethodInsn(opcode, owner, name, desc, itf);
         return;
@@ -199,23 +166,6 @@ public class TryWithResourcesRewriter extends ClassVisitor {
       visitedExceptionTypes.add(checkNotNull(owner)); // owner extends Throwable.
       super.visitMethodInsn(
           INVOKESTATIC, THROWABLE_EXTENSION_INTERNAL_NAME, name, METHOD_DESC_MAP.get(desc), false);
-    }
-
-    private boolean isCallToSyntheticCloseResource(
-        int opcode, String owner, String name, String desc) {
-      if (opcode != INVOKESTATIC) {
-        return false;
-      }
-      if (!internalName.equals(owner)) {
-        return false;
-      }
-      if (!CLOSE_RESOURCE_METHOD_NAME.equals(name)) {
-        return false;
-      }
-      if (!CLOSE_RESOURCE_METHOD_DESC.equals(desc)) {
-        return false;
-      }
-      return true;
     }
 
     private boolean isMethodCallTargeted(int opcode, String owner, String name, String desc) {
@@ -234,8 +184,7 @@ public class TryWithResourcesRewriter extends ClassVisitor {
         return throwableClass.isAssignableFrom(klass);
       } catch (ClassNotFoundException e) {
         throw new AssertionError(
-            "Failed to load class when desugaring method " + internalName + "." + methodSignature,
-            e);
+            "Failed to load class when desugaring method " + methodSignature, e);
       }
     }
   }
