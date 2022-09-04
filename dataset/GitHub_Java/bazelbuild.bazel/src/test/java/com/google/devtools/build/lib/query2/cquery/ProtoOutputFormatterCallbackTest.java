@@ -20,6 +20,7 @@ import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
 import com.google.common.collect.Iterables;
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.analysis.AnalysisProtos;
+import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.config.TransitionFactories;
 import com.google.devtools.build.lib.analysis.util.MockRule;
 import com.google.devtools.build.lib.events.Event;
@@ -44,7 +45,7 @@ import org.junit.Test;
 /**
  * Test for cquery's proto output format.
  *
- * <p>TODO(blaze-configurability): refactor all cquery output format tests to consolidate duplicate
+ * <p>TODO(juliexxia): refactor all cquery output format tests to consolidate duplicate
  * infrastructure.
  */
 public class ProtoOutputFormatterCallbackTest extends ConfiguredTargetQueryTest {
@@ -143,7 +144,7 @@ public class ProtoOutputFormatterCallbackTest extends ConfiguredTargetQueryTest 
     // Assert checksum from proto is proper checksum.
     AnalysisProtos.ConfiguredTarget myRuleProto =
         Iterables.getOnlyElement(getOutput("//test:my_rule").getResultsList());
-    KeyedConfiguredTarget myRule = Iterables.getOnlyElement(eval("//test:my_rule"));
+    ConfiguredTarget myRule = Iterables.getOnlyElement(eval("//test:my_rule"));
 
     assertThat(myRuleProto.getConfiguration().getChecksum())
         .isEqualTo(myRule.getConfigurationChecksum());
@@ -215,7 +216,7 @@ public class ProtoOutputFormatterCallbackTest extends ConfiguredTargetQueryTest 
     Set<String> targetPatternSet = new LinkedHashSet<>();
     expression.collectTargetPatterns(targetPatternSet);
     helper.setQuerySettings(Setting.NO_IMPLICIT_DEPS);
-    PostAnalysisQueryEnvironment<KeyedConfiguredTarget> env =
+    PostAnalysisQueryEnvironment<ConfiguredTarget> env =
         ((ConfiguredTargetQueryHelper) helper).getPostAnalysisQueryEnvironment(targetPatternSet);
 
     ProtoOutputFormatterCallback callback =
