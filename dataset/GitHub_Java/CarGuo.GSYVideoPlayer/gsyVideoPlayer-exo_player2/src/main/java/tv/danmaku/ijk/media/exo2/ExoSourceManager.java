@@ -3,13 +3,12 @@ package tv.danmaku.ijk.media.exo2;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.net.Uri;
-
-import androidx.annotation.Nullable;
-
 import android.text.TextUtils;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+
 import com.google.android.exoplayer2.C;
-import com.google.android.exoplayer2.Format;
 import com.google.android.exoplayer2.MediaItem;
 import com.google.android.exoplayer2.ext.rtmp.RtmpDataSourceFactory;
 import com.google.android.exoplayer2.extractor.DefaultExtractorsFactory;
@@ -37,9 +36,9 @@ import com.google.android.exoplayer2.upstream.cache.ContentMetadata;
 import com.google.android.exoplayer2.upstream.cache.LeastRecentlyUsedCacheEvictor;
 import com.google.android.exoplayer2.upstream.cache.SimpleCache;
 import com.google.android.exoplayer2.util.Util;
-import com.google.common.base.Ascii;
 
 import java.io.File;
+import java.util.Locale;
 import java.util.Map;
 import java.util.NavigableSet;
 
@@ -54,7 +53,7 @@ public class ExoSourceManager {
 
     private static final long DEFAULT_MAX_SIZE = 512 * 1024 * 1024;
 
-    public static final int TYPE_RTMP = 14;
+    public static final int TYPE_RTMP = 100;
 
     private static Cache mCache;
     /**
@@ -70,11 +69,11 @@ public class ExoSourceManager {
     private static int sHttpConnectTimeout = -1;
 
 
-    private static boolean s = false;
+    private static final boolean s = false;
 
-    private Context mAppContext;
+    private final Context mAppContext;
 
-    private Map<String, String> mMapHeadData;
+    private final Map<String, String> mMapHeadData;
 
     private String mDataSource;
 
@@ -123,12 +122,7 @@ public class ExoSourceManager {
             } catch (RawResourceDataSource.RawResourceDataSourceException e) {
                 e.printStackTrace();
             }
-            DataSource.Factory factory = new DataSource.Factory() {
-                @Override
-                public DataSource createDataSource() {
-                    return rawResourceDataSource;
-                }
-            };
+            DataSource.Factory factory = () -> rawResourceDataSource;
             return new ProgressiveMediaSource.Factory(
                     factory).createMediaSource(mediaItem);
 
@@ -189,8 +183,8 @@ public class ExoSourceManager {
 
     @SuppressLint("WrongConstant")
     @C.ContentType
-    public static int inferContentType(String fileName, @Nullable String overrideExtension) {
-        fileName = Ascii.toLowerCase(fileName);
+    public static int inferContentType(@NonNull String fileName, @Nullable String overrideExtension) {
+        fileName = fileName.toLowerCase(Locale.US);
         if (fileName.startsWith("rtmp:")) {
             return TYPE_RTMP;
         } else {
@@ -235,10 +229,6 @@ public class ExoSourceManager {
 
     /**
      * Cache需要release之后才能clear
-     *
-     * @param context
-     * @param cacheDir
-     * @param url
      */
     public static void clearCache(Context context, File cacheDir, String url) {
         try {
@@ -273,8 +263,7 @@ public class ExoSourceManager {
 
     public static String buildCacheKey(String url) {
         DataSpec dataSpec = new DataSpec(Uri.parse(url));
-        String key = CacheKeyFactory.DEFAULT.buildCacheKey(dataSpec);
-        return key;
+        return CacheKeyFactory.DEFAULT.buildCacheKey(dataSpec);
     }
 
     public static boolean cachePreView(Context context, File cacheDir, String url) {
@@ -369,21 +358,19 @@ public class ExoSourceManager {
         if (mMapHeadData != null && mMapHeadData.size() > 0) {
             allowCrossProtocolRedirects = "true".equals(mMapHeadData.get("allowCrossProtocolRedirects"));
         }
-        DataSource.Factory dataSourceFactory;
+        HttpDataSource.BaseFactory dataSourceFactory;
         if (sExoMediaSourceInterceptListener != null) {
             dataSourceFactory = sExoMediaSourceInterceptListener.getHttpDataSourceFactory(uerAgent, preview ? null : new DefaultBandwidthMeter.Builder(mAppContext).build(),
                     connectTimeout,
-                    readTimeout, mMapHeadData, allowCrossProtocolRedirects);
+                    readTimeout, allowCrossProtocolRedirects);
         } else {
-            dataSourceFactory = new DefaultHttpDataSource.Factory()
-                    .setAllowCrossProtocolRedirects(allowCrossProtocolRedirects)
-                    .setConnectTimeoutMs(connectTimeout)
-                    .setReadTimeoutMs(readTimeout)
-                    .setTransferListener(preview ? null : new DefaultBandwidthMeter.Builder(mAppContext).build());
-            if (mMapHeadData != null && mMapHeadData.size() > 0) {
-                for (Map.Entry<String, String> header : mMapHeadData.entrySet()) {
-                    ((DefaultHttpDataSource.Factory) dataSourceFactory).setDefaultRequestProperties(mMapHeadData);
-                }
+            dataSourceFactory = new DefaultHttpDataSourceFactory(uerAgent, preview ? null : new DefaultBandwidthMeter.Builder(mAppContext).build(),
+                    connectTimeout,
+                    readTimeout, allowCrossProtocolRedirects);
+        }
+        if (mMapHeadData != null && mMapHeadData.size() > 0) {
+            for (Map.Entry<String, String> header : mMapHeadData.entrySet()) {
+                dataSourceFactory.getDefaultRequestProperties().set(header.getKey(), header.getValue());
             }
         }
         return dataSourceFactory;
@@ -391,8 +378,6 @@ public class ExoSourceManager {
 
     /**
      * 根据缓存块判断是否缓存成功
-     *
-     * @param cache
      */
     private static boolean resolveCacheState(Cache cache, String url) {
         boolean isCache = true;
