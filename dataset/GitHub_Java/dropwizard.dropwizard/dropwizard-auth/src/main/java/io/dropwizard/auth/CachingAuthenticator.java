@@ -3,20 +3,17 @@ package io.dropwizard.auth;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
-import com.codahale.metrics.caffeine.MetricsStatsCounter;
 import com.github.benmanes.caffeine.cache.CacheLoader;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.CaffeineSpec;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.github.benmanes.caffeine.cache.stats.CacheStats;
-import com.github.benmanes.caffeine.cache.stats.StatsCounter;
 
 import java.security.Principal;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletionException;
 import java.util.function.Predicate;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static com.codahale.metrics.MetricRegistry.name;
@@ -71,23 +68,6 @@ public class CachingAuthenticator<C, P extends Principal> implements Authenticat
                                 final Authenticator<C, P> authenticator,
                                 final Caffeine<Object, Object> builder,
                                 final boolean cacheNegativeResult) {
-        this(metricRegistry, authenticator, builder, cacheNegativeResult, () -> new MetricsStatsCounter(metricRegistry, name(CachingAuthenticator.class)));
-    }
-
-    /**
-     * Creates a new cached authenticator.
-     *
-     * @param metricRegistry      the application's registry of metrics
-     * @param authenticator       the underlying authenticator
-     * @param builder             a {@link Caffeine}
-     * @param cacheNegativeResult the boolean to enable negative cache
-     * @param supplier            a {@link Supplier<StatsCounter>}
-     */
-    public CachingAuthenticator(final MetricRegistry metricRegistry,
-                                final Authenticator<C, P> authenticator,
-                                final Caffeine<Object, Object> builder,
-                                final boolean cacheNegativeResult,
-                                final Supplier<StatsCounter> supplier) {
         this.cacheMisses = metricRegistry.meter(name(authenticator.getClass(), "cache-misses"));
         this.gets = metricRegistry.timer(name(authenticator.getClass(), "gets"));
         CacheLoader<C, Optional<P>> loader;
@@ -107,9 +87,7 @@ public class CachingAuthenticator<C, P extends Principal> implements Authenticat
                 return optPrincipal;
             };
         }
-        this.cache = builder
-                .recordStats(supplier)
-                .build(loader);
+        this.cache = builder.recordStats().build(loader);
     }
 
     @Override
