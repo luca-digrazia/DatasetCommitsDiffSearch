@@ -104,10 +104,6 @@ public abstract class AndroidBuildViewTestCase extends BuildViewTestCase {
         target.getProvider(FileProvider.class).getFilesToBuild(), "_unsigned.apk");
   }
 
-  protected SpawnAction getFinalUnsignedApkAction(ConfiguredTarget target) {
-    return getGeneratingSpawnAction(getFinalUnsignedApk(target));
-  }
-
   protected Artifact getResourceApk(ConfiguredTarget target) {
     Artifact resourceApk =
         getFirstArtifactEndingWith(

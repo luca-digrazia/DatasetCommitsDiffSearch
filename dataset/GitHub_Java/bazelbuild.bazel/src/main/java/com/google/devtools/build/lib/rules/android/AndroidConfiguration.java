@@ -438,13 +438,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
         help = "Use SingleJar to combine all ProGuard library jars.")
     public boolean useSingleJarForProguardLibraryJars;
 
-    @Option(name = "experimental_android_compress_java_resources",
-        defaultValue = "false",
-        category = "undocumented",
-        implicitRequirements = "--use_singlejar_apkbuilder",
-        help = "Compress Java resources in APKs")
-    public boolean compressJavaResources;
-
     @Override
     public void addAllLabels(Multimap<String, Label> labelMap) {
       if (androidCrosstoolTop != null) {
@@ -528,7 +521,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
   private final boolean useSingleJarForMultidex;
   private final ResourceFilter resourceFilter;
   private final boolean useSingleJarForProguardLibraryJars;
-  private final boolean compressJavaResources;
 
   AndroidConfiguration(Options options, Label androidSdk) {
     this.sdk = androidSdk;
@@ -560,7 +552,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     this.useSingleJarForProguardLibraryJars = options.useSingleJarForProguardLibraryJars;
     this.useRexToCompressDexFiles = options.useRexToCompressDexFiles;
     this.resourceFilter = options.resourceFilter;
-    this.compressJavaResources = options.compressJavaResources;
   }
 
   public String getCpu() {
@@ -670,10 +661,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
 
   public boolean useSingleJarForProguardLibraryJars() {
     return useSingleJarForProguardLibraryJars;
-  }
-
-  boolean compressJavaResources() {
-    return compressJavaResources;
   }
 
   @Override
