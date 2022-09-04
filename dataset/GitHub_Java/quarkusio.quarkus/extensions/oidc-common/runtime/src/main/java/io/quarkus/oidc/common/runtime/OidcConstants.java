@@ -2,8 +2,6 @@ package io.quarkus.oidc.common.runtime;
 
 public final class OidcConstants {
 
-    public static final String WELL_KNOWN_CONFIGURATION = "/.well-known/openid-configuration";
-
     public static final String CLIENT_ASSERTION = "client_assertion";
     public static final String CLIENT_ASSERTION_TYPE = "client_assertion_type";
     public static final String JWT_BEARER_CLIENT_ASSERTION_TYPE = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
@@ -41,7 +39,6 @@ public final class OidcConstants {
     public static final String CODE_FLOW_STATE = "state";
     public static final String CODE_FLOW_REDIRECT_URI = "redirect_uri";
 
-    public static final String EXCHANGE_GRANT = "urn:ietf:params:oauth:grant-type:token-exchange";
-
     public static final String EXPIRES_IN = "expires_in";
+
 }
