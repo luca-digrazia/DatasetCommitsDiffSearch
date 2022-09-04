@@ -25,6 +25,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
@@ -79,7 +80,8 @@ public class RClassGenerator {
    * Builds bytecode and writes out R.class file, and R$inner.class files for provided package and
    * symbols.
    */
-  public void write(String packageName, FieldInitializers symbolsToWrite) throws IOException {
+  public void write(String packageName, Map<ResourceType, Set<String>> symbolsToWrite)
+      throws IOException {
     writeClasses(packageName, initializers.filter(symbolsToWrite));
   }
   
@@ -101,7 +103,7 @@ public class RClassGenerator {
     // At least create the outFolder that was requested. However, if there are no symbols, don't
     // create the R.class and inner class files (no need to have an empty class).
     Files.createDirectories(packageDir);
-     
+    
     if (Iterables.isEmpty(initializersToWrite)) {
       return;
     }
@@ -122,11 +124,12 @@ public class RClassGenerator {
     writeConstructor(classWriter);
     // Build the R.class w/ the inner classes, then later build the individual R$inner.class.
     for (Entry<ResourceType, Collection<FieldInitializer>> entry : initializersToWrite) {
-      String innerClassName = rClassName + "$" + entry.getKey().toString();
+      final String resourceType = entry.getKey().toString();
+      String innerClassName = rClassName + "$" + resourceType;
       classWriter.visitInnerClass(
           innerClassName,
           rClassName,
-          entry.getKey().toString(),
+          resourceType,
           Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL | Opcodes.ACC_STATIC);
     }
     classWriter.visitEnd();

@@ -44,7 +44,7 @@ public class AndroidResourceClassWriter implements Flushable, AndroidResourceSym
   public static AndroidResourceClassWriter of(
       AndroidFrameworkAttrIdProvider androidIdProvider, Path outputBasePath, String packageName) {
     return new AndroidResourceClassWriter(
-        PlaceholderIdFieldInitializerBuilder.from(androidIdProvider), outputBasePath, packageName);
+        new PlaceholderIdFieldInitializerBuilder(androidIdProvider), outputBasePath, packageName);
   }
   
   private final Path outputBasePath;

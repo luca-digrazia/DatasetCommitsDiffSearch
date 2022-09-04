@@ -14,7 +14,6 @@
 package com.google.devtools.build.android.resources;
 
 import com.android.resources.ResourceType;
-import com.google.common.base.MoreObjects;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.MultimapBuilder;
 import com.google.common.collect.SortedSetMultimap;
@@ -22,12 +21,9 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.SortedSet;
+import java.util.Set;
 
-/**
- * Represents a collection of resource symbols and values suitable for writing java sources and
- * classes.
- */
+/** A wrapper for a {@link Collection} of {@link FieldInitializer}s. */
 public class FieldInitializers
     implements Iterable<Entry<ResourceType, Collection<FieldInitializer>>> {
 
@@ -44,22 +40,10 @@ public class FieldInitializers
   }
 
   public Iterable<Entry<ResourceType, Collection<FieldInitializer>>> filter(
-      FieldInitializers fieldsToWrite) {
+      Map<ResourceType, Set<String>> symbolsToWrite) {
     final SortedSetMultimap<ResourceType, FieldInitializer> initializersToWrite =
         MultimapBuilder.enumKeys(ResourceType.class).treeSetValues().build();
-
-    // Create a map to filter with.
-    final SortedSetMultimap<ResourceType, String> symbolsToWrite =
-        MultimapBuilder.enumKeys(ResourceType.class).treeSetValues().build();
-    for (Entry<ResourceType, Collection<FieldInitializer>> entry :
-        fieldsToWrite.initializers.entrySet()) {
-      for (FieldInitializer initializer : entry.getValue()) {
-        final SortedSet<String> fieldNames = symbolsToWrite.get(entry.getKey());
-        initializer.addTo(fieldNames);
-      }
-    }
-
-    for (Entry<ResourceType, Collection<String>> entry : symbolsToWrite.asMap().entrySet()) {
+    for (Entry<ResourceType, Set<String>> entry : symbolsToWrite.entrySet()) {
       // Resource type may be missing if resource overriding eliminates resources at the binary
       // level, which were originally present at the library level.
       if (initializers.containsKey(entry.getKey())) {
@@ -76,12 +60,5 @@ public class FieldInitializers
   @Override
   public Iterator<Entry<ResourceType, Collection<FieldInitializer>>> iterator() {
     return initializers.entrySet().iterator();
-  }
-
-  @Override
-  public String toString() {
-    return MoreObjects.toStringHelper(FieldInitializers.class)
-        .add("initializers", initializers)
-        .toString();
   }
 }

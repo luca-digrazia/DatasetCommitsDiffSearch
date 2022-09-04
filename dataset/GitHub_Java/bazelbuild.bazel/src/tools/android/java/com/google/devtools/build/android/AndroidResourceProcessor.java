@@ -31,6 +31,7 @@ import com.android.io.StreamException;
 import com.android.repository.Revision;
 import com.android.utils.ILogger;
 import com.android.utils.StdLogger;
+import com.android.utils.StdLogger.Level;
 import com.android.xml.AndroidManifest;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ArrayListMultimap;
@@ -495,8 +496,9 @@ public class AndroidResourceProcessor {
     ListeningExecutorService executorService = MoreExecutors.listeningDecorator(
         Executors.newFixedThreadPool(numThreads));
     try (Closeable closeable = ExecutorServiceCloser.createWith(executorService)) {
+      StdLogger iLogger = new StdLogger(Level.INFO);
       for (Entry<String, ListenableFuture<ResourceSymbols>> entry :
-          ResourceSymbols.loadFrom(libraries, executorService, appPackageName).entries()) {
+          ResourceSymbols.loadFrom(libraries, executorService, iLogger, appPackageName).entries()) {
         libMap.put(entry.getKey(), entry.getValue().get());
       }
       if (primaryRTxt != null && Files.exists(primaryRTxt)) {
@@ -545,8 +547,7 @@ public class AndroidResourceProcessor {
     RClassGenerator classWriter =
         RClassGenerator.fromSymbols(classesOut, fullSymbolValues, finalFields);
     for (String packageName : libMap.keySet()) { 
-      classWriter.write(
-          packageName, ResourceSymbols.merge(libMap.get(packageName)).asInitializers());
+      classWriter.write(packageName, ResourceSymbols.merge(libMap.get(packageName)).asFilterMap());
     }
     if (appPackageName != null) {
       // Unlike the R.java generation, we also write the app's R.class file so that the class
