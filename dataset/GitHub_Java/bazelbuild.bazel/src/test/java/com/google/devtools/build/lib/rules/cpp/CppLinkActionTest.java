@@ -41,6 +41,7 @@ import com.google.devtools.build.lib.analysis.util.ActionTester;
 import com.google.devtools.build.lib.analysis.util.ActionTester.ActionCombinationFactory;
 import com.google.devtools.build.lib.analysis.util.AnalysisMock;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
+import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
@@ -51,7 +52,6 @@ import com.google.devtools.build.lib.rules.cpp.CppActionConfigs.CppPlatform;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkingMode;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
-import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.testutil.TestUtils;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.Pair;
@@ -86,11 +86,6 @@ public class CppLinkActionTest extends BuildViewTestCase {
           }
 
           @Override
-          public StarlarkSemantics getSkylarkSemantics() {
-            return StarlarkSemantics.DEFAULT_SEMANTICS;
-          }
-
-          @Override
           public Artifact getDerivedArtifact(PathFragment rootRelativePath, ArtifactRoot root) {
             return CppLinkActionTest.this.getDerivedArtifact(
                 rootRelativePath, root, ActionsTestUtil.NULL_ARTIFACT_OWNER);
@@ -122,11 +117,8 @@ public class CppLinkActionTest extends BuildViewTestCase {
                     ImmutableSet.of(),
                     "dynamic_library_linker_tool",
                     /* supportsEmbeddedRuntimes= */ true,
-                    /* supportsInterfaceSharedLibraries= */ false,
-                    /* doNotSplitLinkingCmdline= */ true))
-            .addAll(
-                CppActionConfigs.getFeaturesToAppearLastInFeaturesList(
-                    ImmutableSet.of(), /* doNotSplitLinkingCmdline= */ true))
+                    /* supportsInterfaceSharedLibraries= */ false))
+            .addAll(CppActionConfigs.getFeaturesToAppearLastInFeaturesList(ImmutableSet.of()))
             .add(linkCppStandardLibrary)
             .build();
 
@@ -289,7 +281,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
     assertThat(getLibfooArguments()).doesNotContain("-Wl,-whole-archive");
   }
 
-  private List<String> getLibfooArguments() throws Exception {
+  private List<String> getLibfooArguments() throws LabelSyntaxException {
     ConfiguredTarget configuredTarget = getConfiguredTarget("//x:libfoo.so");
     CppLinkAction linkAction = (CppLinkAction) getGeneratingAction(configuredTarget, "x/libfoo.so");
     return linkAction.getArguments();
@@ -1093,11 +1085,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testSplitExecutableLinkCommandStatic() throws Exception {
-    getAnalysisMock()
-        .ccSupport()
-        .setupCrosstool(mockToolsConfig, MockCcSupport.DO_NOT_SPLIT_LINKING_CMDLINE_FEATURE);
-
+  public void testSplitExecutableLinkCommand() throws Exception {
     RuleContext ruleContext = createDummyRuleContext();
 
     CppLinkAction linkAction = createLinkBuilder(ruleContext, LinkTargetType.EXECUTABLE).build();
@@ -1110,86 +1098,5 @@ public class CppLinkActionTest extends BuildViewTestCase {
     assertThat(linkCommandLine).contains("path.a-2.params");
 
     assertThat(result.second).contains("-lcpp_standard_library");
-  }
-
-  private String removeOutDirectory(String s) {
-    return s.replace("blaze-out", "").replace("bazel-out", "");
-  }
-
-  @Test
-  public void testSplitExecutableLinkCommandDynamicWithNoSplitting() throws Exception {
-    getAnalysisMock()
-        .ccSupport()
-        .setupCrosstool(mockToolsConfig, MockCcSupport.DO_NOT_SPLIT_LINKING_CMDLINE_FEATURE);
-    RuleContext ruleContext = createDummyRuleContext();
-
-    FeatureConfiguration featureConfiguration = getMockFeatureConfiguration(ruleContext);
-
-    CppLinkAction linkAction =
-        createLinkBuilder(
-                ruleContext,
-                LinkTargetType.DYNAMIC_LIBRARY,
-                "dummyRuleContext/out.so",
-                ImmutableList.of(),
-                ImmutableList.of(),
-                featureConfiguration)
-            .setLibraryIdentifier("library")
-            .build();
-    Pair<List<String>, List<String>> result = linkAction.getLinkCommandLine().splitCommandline();
-
-    assertThat(
-            result.first.stream()
-                .map(x -> removeOutDirectory(x))
-                .collect(ImmutableList.toImmutableList()))
-        .containsExactly(
-            "crosstool/gcc_tool", "@/k8-fastbuild/bin/dummyRuleContext/out.so-2.params")
-        .inOrder();
-    assertThat(
-            result.second.stream()
-                .map(x -> removeOutDirectory(x))
-                .collect(ImmutableList.toImmutableList()))
-        .containsExactly(
-            "-shared",
-            "-o",
-            "/k8-fastbuild/bin/dummyRuleContext/out.so",
-            "-Wl,-S",
-            "--sysroot=/usr/grte/v1")
-        .inOrder();
-  }
-
-  @Test
-  @Deprecated
-  // TODO(b/113358321): Remove once #7670 is finished.
-  public void testSplitExecutableLinkCommandDynamicWithSplitting() throws Exception {
-    RuleContext ruleContext = createDummyRuleContext();
-
-    FeatureConfiguration featureConfiguration = getMockFeatureConfiguration(ruleContext);
-
-    CppLinkAction linkAction =
-        createLinkBuilder(
-                ruleContext,
-                LinkTargetType.DYNAMIC_LIBRARY,
-                "dummyRuleContext/out.so",
-                ImmutableList.of(),
-                ImmutableList.of(),
-                featureConfiguration)
-            .setLibraryIdentifier("library")
-            .build();
-    Pair<List<String>, List<String>> result = linkAction.getLinkCommandLine().splitCommandline();
-
-    assertThat(
-            result.first.stream()
-                .map(x -> removeOutDirectory(x))
-                .collect(ImmutableList.toImmutableList()))
-        .containsExactly(
-            "crosstool/gcc_tool",
-            "-shared",
-            "-o",
-            "/k8-fastbuild/bin/dummyRuleContext/out.so",
-            "-Wl,-S",
-            "--sysroot=/usr/grte/v1",
-            "@/k8-fastbuild/bin/dummyRuleContext/out.so-2.params")
-        .inOrder();
-    assertThat(result.second).isEmpty();
   }
 }

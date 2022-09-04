@@ -130,6 +130,8 @@ public abstract class StarlarkSemantics {
 
   public abstract boolean experimentalStarlarkConfigTransitions();
 
+  public abstract String experimentalTransitionWhitelistLocation();
+
   public abstract boolean incompatibleBzlDisallowLoadAfterStatement();
 
   public abstract boolean incompatibleDepsetIsNotIterable();
@@ -186,8 +188,6 @@ public abstract class StarlarkSemantics {
 
   public abstract boolean incompatibleUseToolchainProvidersInJavaCommon();
 
-  public abstract boolean incompatibleDoNotSplitLinkingCmdline();
-
   /** Returns a {@link Builder} initialized with the values of this instance. */
   public abstract Builder toBuilder();
 
@@ -211,6 +211,7 @@ public abstract class StarlarkSemantics {
           .experimentalPlatformsApi(false)
           .experimentalRestrictNamedParams(false)
           .experimentalStarlarkConfigTransitions(false)
+          .experimentalTransitionWhitelistLocation("")
           .incompatibleUseToolchainProvidersInJavaCommon(false)
           .incompatibleBzlDisallowLoadAfterStatement(false)
           .incompatibleDepsetIsNotIterable(false)
@@ -239,7 +240,6 @@ public abstract class StarlarkSemantics {
           .incompatibleRequireFeatureConfigurationForPic(true)
           .incompatibleStricArgumentOrdering(true)
           .internalSkylarkFlagTestCanary(false)
-          .incompatibleDoNotSplitLinkingCmdline(false)
           .build();
 
   /** Builder for {@link StarlarkSemantics}. All fields are mandatory. */
@@ -262,6 +262,8 @@ public abstract class StarlarkSemantics {
     public abstract Builder experimentalRestrictNamedParams(boolean value);
 
     public abstract Builder experimentalStarlarkConfigTransitions(boolean value);
+
+    public abstract Builder experimentalTransitionWhitelistLocation(String value);
 
     public abstract Builder incompatibleBzlDisallowLoadAfterStatement(boolean value);
 
@@ -318,8 +320,6 @@ public abstract class StarlarkSemantics {
     public abstract Builder incompatibleUseToolchainProvidersInJavaCommon(boolean value);
 
     public abstract Builder internalSkylarkFlagTestCanary(boolean value);
-
-    public abstract Builder incompatibleDoNotSplitLinkingCmdline(boolean value);
 
     public abstract StarlarkSemantics build();
   }

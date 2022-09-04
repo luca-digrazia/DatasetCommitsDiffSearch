@@ -61,7 +61,6 @@ import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.rules.proto.ProtoInfo;
 import com.google.devtools.build.lib.shell.ShellUtils;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.util.Pair;
@@ -81,8 +80,6 @@ public class CppHelper {
 
   static final PathFragment OBJS = PathFragment.create("_objs");
   static final PathFragment PIC_OBJS = PathFragment.create("_pic_objs");
-  static final PathFragment DOTD_FILES = PathFragment.create("_dotd");
-  static final PathFragment PIC_DOTD_FILES = PathFragment.create("_pic_dotd");
 
   // TODO(bazel-team): should this use Link.SHARED_LIBRARY_FILETYPES?
   public static final FileTypeSet SHARED_LIBRARY_FILETYPES =
@@ -368,11 +365,6 @@ public class CppHelper {
   }
 
   /** Returns the directory where object files are created. */
-  private static PathFragment getDotdDirectory(Label ruleLabel, boolean usePic) {
-    return AnalysisUtils.getUniqueDirectory(ruleLabel, usePic ? PIC_DOTD_FILES : DOTD_FILES);
-  }
-
-  /** Returns the directory where object files are created. */
   public static PathFragment getObjDirectory(Label ruleLabel) {
     return getObjDirectory(ruleLabel, false);
   }
@@ -514,18 +506,16 @@ public class CppHelper {
 
   /** Returns whether binaries must be compiled with position independent code. */
   public static boolean usePicForBinaries(
-      CcToolchainProvider toolchain,
-      CppConfiguration cppConfiguration,
-      FeatureConfiguration featureConfiguration) {
+      CcToolchainProvider toolchain, FeatureConfiguration featureConfiguration) {
     // TODO(b/124030770): Please do not use this feature without contacting the C++ rules team at
     // bazel-team@google.com. The feature will be removed in a later Bazel release and it might
     // break you. Contact us so we can find alternatives for your build.
     if (featureConfiguration.getRequestedFeatures().contains("coptnopic")) {
       return false;
     }
-    return cppConfiguration.forcePic()
-        || (toolchain.usePicForDynamicLibraries(cppConfiguration, featureConfiguration)
-            && cppConfiguration.getCompilationMode() != CompilationMode.OPT);
+    return toolchain.getCppConfiguration().forcePic()
+        || (toolchain.usePicForDynamicLibraries(featureConfiguration)
+            && toolchain.getCppConfiguration().getCompilationMode() != CompilationMode.OPT);
   }
 
   /**
@@ -743,17 +733,6 @@ public class CppHelper {
         getObjDirectory(label, usePic).getRelative(outputName), sourceTreeArtifact.getRoot());
   }
 
-  /** Returns the corresponding dotd files TreeArtifact given the source TreeArtifact. */
-  public static SpecialArtifact getDotdOutputTreeArtifact(
-      ActionConstructionContext actionConstructionContext,
-      Label label,
-      Artifact sourceTreeArtifact,
-      String outputName,
-      boolean usePic) {
-    return actionConstructionContext.getTreeArtifact(
-        getDotdDirectory(label, usePic).getRelative(outputName), sourceTreeArtifact.getRoot());
-  }
-
   public static String getArtifactNameForCategory(
       RuleErrorConsumer ruleErrorConsumer,
       CcToolchainProvider toolchain,
@@ -930,11 +909,5 @@ public class CppHelper {
     return ruleContext.attributes().has("$grep_includes")
         ? ruleContext.getPrerequisiteArtifact("$grep_includes", Mode.HOST)
         : null;
-  }
-
-  public static boolean doNotSplitLinkingCmdLine(
-      StarlarkSemantics starlarkSemantics, CcToolchainProvider ccToolchain) {
-    return starlarkSemantics.incompatibleDoNotSplitLinkingCmdline()
-        || ccToolchain.doNotSplitLinkingCmdline();
   }
 }

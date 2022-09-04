@@ -379,8 +379,8 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
         "load(':rule.bzl', 'crule')",
         "cc_toolchain_alias(name='alias')",
         "crule(name='r')");
-    scratch.overwriteFile("tools/build_defs/cc/BUILD");
-    scratch.overwriteFile(
+    scratch.file("tools/build_defs/cc/BUILD");
+    scratch.file(
         "tools/build_defs/cc/action_names.bzl",
         ResourceLoader.readFromResources(
             TestConstants.BAZEL_REPO_PATH + "tools/build_defs/cc/action_names.bzl"));
@@ -788,10 +788,6 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
 
   @Test
   public void testParamFileLinkVariables() throws Exception {
-    AnalysisMock.get()
-        .ccSupport()
-        .setupCrosstool(
-            mockToolsConfig, "feature {", "  name: 'do_not_split_linking_cmdline'", "}");
     assertThat(
             commandLineForVariables(
                 CppActionNames.CPP_LINK_EXECUTABLE,
@@ -800,7 +796,7 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
                 "cc_toolchain = toolchain,",
                 "param_file = 'foo/bar/params',",
                 ")"))
-        .contains("@foo/bar/params");
+        .contains("-Wl,@foo/bar/params");
   }
 
   @Test
@@ -1068,7 +1064,7 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
         "    defines = ['DEP2'],",
         ")",
         "crule(name='r')");
-    scratch.overwriteFile("tools/build_defs/cc/BUILD", "");
+    scratch.file("tools/build_defs/cc/BUILD", "");
     scratch.file(
         "tools/build_defs/cc/rule.bzl",
         "def _impl(ctx):",
@@ -1147,7 +1143,7 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
         "load('//tools/build_defs/cc:rule.bzl', 'crule')",
         "licenses(['notice'])",
         "crule(name='r')");
-    scratch.overwriteFile("tools/build_defs/cc/BUILD", "");
+    scratch.file("tools/build_defs/cc/BUILD", "");
     scratch.file(
         "tools/build_defs/cc/rule.bzl",
         "def _impl(ctx):",
@@ -1169,7 +1165,7 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
         "load('//tools/build_defs/cc:rule.bzl', 'crule')",
         "licenses(['notice'])",
         "crule(name='r')");
-    scratch.overwriteFile("tools/build_defs/cc/BUILD", "");
+    scratch.file("tools/build_defs/cc/BUILD", "");
     scratch.file(
         "tools/build_defs/cc/rule.bzl",
         "def _impl(ctx):",
@@ -1335,7 +1331,7 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
         ")");
     scratch.file("a/lib.a", "");
     scratch.file("a/lib.so", "");
-    scratch.overwriteFile("tools/build_defs/cc/BUILD", "");
+    scratch.file("tools/build_defs/cc/BUILD", "");
     scratch.file(
         "tools/build_defs/cc/rule.bzl",
         "top_linking_context_smoke = cc_common.create_linking_context(libraries_to_link=[],",
@@ -1490,7 +1486,7 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
 
   private void loadCcToolchainConfigLib() throws IOException {
     scratch.appendFile("tools/cpp/BUILD", "");
-    scratch.overwriteFile(
+    scratch.file(
         "tools/cpp/cc_toolchain_config_lib.bzl",
         ResourceLoader.readFromResources(
             TestConstants.BAZEL_REPO_PATH + "tools/cpp/cc_toolchain_config_lib.bzl"));

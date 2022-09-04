@@ -450,10 +450,7 @@ public class CcToolchainProviderHelper {
     CppToolchainInfo toolchainInfo =
         getCppToolchainInfo(
             ruleContext,
-            cppConfiguration.disableLegacyCrosstoolFields(),
-            cppConfiguration.disableGenruleCcToolchainDependency(),
-            cppConfiguration.getTransformedCpuFromOptions(),
-            cppConfiguration.getCompilerFromOptions(),
+            cppConfiguration,
             attributes,
             ccSkyframeSupportValue,
             toolchain,
@@ -697,15 +694,12 @@ public class CcToolchainProviderHelper {
   /** Finds an appropriate {@link CppToolchainInfo} for this target. */
   private static CppToolchainInfo getCppToolchainInfo(
       RuleContext ruleContext,
-      boolean disableLegacyCrosstoolFields,
-      boolean disableGenruleCcToolchainDependency,
-      String cpuFromOptions,
-      String compilerFromOptions,
+      CppConfiguration cppConfiguration,
       CcToolchainAttributesProvider attributes,
       CcSkyframeSupportValue ccSkyframeSupportValue,
       CToolchain toolchainFromCcToolchainAttribute,
       CrosstoolRelease crosstoolFromCcToolchainSuiteProtoAttribute)
-      throws RuleErrorException, InterruptedException {
+      throws RuleErrorException {
 
     CcToolchainConfigInfo configInfo = attributes.getCcToolchainConfigInfo();
 
@@ -714,8 +708,8 @@ public class CcToolchainProviderHelper {
         return CppToolchainInfo.create(
             ruleContext.getLabel(),
             configInfo,
-            disableLegacyCrosstoolFields,
-            disableGenruleCcToolchainDependency);
+            cppConfiguration.disableLegacyCrosstoolFields(),
+            cppConfiguration.disableGenruleCcToolchainDependency());
       } catch (EvalException e) {
         throw ruleContext.throwWithRuleError(e.getMessage());
       }
@@ -728,8 +722,7 @@ public class CcToolchainProviderHelper {
           getToolchainFromAttributes(
               ruleContext,
               attributes,
-              cpuFromOptions,
-              compilerFromOptions,
+              cppConfiguration,
               crosstoolFromCcToolchainSuiteProtoAttribute,
               ccSkyframeSupportValue);
     }
@@ -738,19 +731,14 @@ public class CcToolchainProviderHelper {
     try {
       toolchain =
           CppToolchainInfo.addLegacyFeatures(
-              toolchain,
-              ruleContext
-                  .getAnalysisEnvironment()
-                  .getSkylarkSemantics()
-                  .incompatibleDoNotSplitLinkingCmdline(),
-              CppToolchainInfo.getToolsDirectory(attributes.getCcToolchainLabel()));
+              toolchain, CppToolchainInfo.getToolsDirectory(attributes.getCcToolchainLabel()));
       CcToolchainConfigInfo ccToolchainConfigInfo =
           CcToolchainConfigInfo.fromToolchain(ruleContext, toolchain);
       return CppToolchainInfo.create(
           attributes.getCcToolchainLabel(),
           ccToolchainConfigInfo,
-          disableLegacyCrosstoolFields,
-          disableGenruleCcToolchainDependency);
+          cppConfiguration.disableLegacyCrosstoolFields(),
+          cppConfiguration.disableGenruleCcToolchainDependency());
     } catch (EvalException e) {
       throw ruleContext.throwWithRuleError(e.getMessage());
     }
@@ -774,23 +762,23 @@ public class CcToolchainProviderHelper {
   }
 
   private static void reportInvalidOptions(RuleContext ruleContext, CppToolchainInfo toolchain) {
-    CppConfiguration cppConfiguration = ruleContext.getFragment(CppConfiguration.class);
-    if (cppConfiguration.fissionIsActiveForCurrentCompilationMode()
+    CppOptions options = ruleContext.getConfiguration().getOptions().get(CppOptions.class);
+    CppConfiguration config = ruleContext.getFragment(CppConfiguration.class);
+    if (options.fissionModes.contains(config.getCompilationMode())
         && !toolchain.supportsFission()) {
       ruleContext.ruleWarning(
           "Fission is not supported by this crosstool.  Please use a "
               + "supporting crosstool to enable fission");
     }
-    if (cppConfiguration.buildTestDwpIsActivated()
-        && !(toolchain.supportsFission()
-            && cppConfiguration.fissionIsActiveForCurrentCompilationMode())) {
+    if (options.buildTestDwp
+        && !(toolchain.supportsFission() && config.fissionIsActiveForCurrentCompilationMode())) {
       ruleContext.ruleWarning(
           "Test dwp file requested, but Fission is not enabled.  To generate a "
               + "dwp for the test executable, use '--fission=yes' with a toolchain that supports "
               + "Fission to build statically.");
     }
 
-    if (cppConfiguration.getLibcTopLabel() != null && toolchain.getDefaultSysroot() == null) {
+    if (config.getLibcTopLabel() != null && toolchain.getDefaultSysroot() == null) {
       ruleContext.ruleError(
           "The selected toolchain "
               + toolchain.getToolchainIdentifier()
@@ -802,8 +790,7 @@ public class CcToolchainProviderHelper {
   private static CToolchain getToolchainFromAttributes(
       RuleContext ruleContext,
       CcToolchainAttributesProvider attributes,
-      String cpuFromOptions,
-      String compilerFromOptions,
+      CppConfiguration cppConfiguration,
       CrosstoolRelease crosstoolFromCcToolchainSuiteProtoAttribute,
       CcSkyframeSupportValue ccSkyframeSupportValue)
       throws RuleErrorException {
@@ -821,8 +808,8 @@ public class CcToolchainProviderHelper {
           attributes.getToolchainIdentifier(),
           attributes.getCpu(),
           attributes.getCompiler(),
-          cpuFromOptions,
-          compilerFromOptions,
+          cppConfiguration.getTransformedCpuFromOptions(),
+          cppConfiguration.getCompilerFromOptions(),
           crosstoolRelease);
     } catch (InvalidConfigurationException e) {
       ruleContext.throwWithRuleError(

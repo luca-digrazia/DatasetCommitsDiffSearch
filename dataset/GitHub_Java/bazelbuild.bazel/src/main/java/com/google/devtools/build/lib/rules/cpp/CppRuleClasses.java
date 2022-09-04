@@ -387,16 +387,6 @@ public class CppRuleClasses {
   /** A feature marking that the target needs to link its deps in --whole-archive block. */
   public static final String LEGACY_WHOLE_ARCHIVE = "legacy_whole_archive";
 
-  /**
-   * TODO(b/113358321): This feature should be enabled for CROSSTOOLs that work without linking
-   * command line splitting. Eventually when every CROSSTOOL works without linking command line
-   * splitting, this feature can be deleted. The flag --incompatible_do_not_split_linking_cmdline
-   * will activate the same code path even if this feature is not present. See GitHub issue #7670.
-   */
-  public static final String DO_NOT_SPLIT_LINKING_CMDLINE = "do_not_split_linking_cmdline";
-
-  public static final String COMPIILER_PARAM_FILE = "compiler_param_file";
-
   /** Ancestor for all rules that do include scanning. */
   public static final class CcIncludeScanningRule implements RuleDefinition {
     @Override
@@ -404,7 +394,7 @@ public class CppRuleClasses {
       return builder
           .add(
               attr("$grep_includes", LABEL)
-                  .cfg(HostTransition.createFactory())
+                  .cfg(HostTransition.INSTANCE)
                   .value(env.getToolsLabel("//tools/cpp:grep-includes")))
           .build();
     }

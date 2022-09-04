@@ -153,6 +153,18 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
   public boolean experimentalStarlarkConfigTransitions;
 
   @Option(
+      name = "experimental_transition_whitelist_location",
+      defaultValue = "",
+      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+      effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
+      metadataTags = {OptionMetadataTag.EXPERIMENTAL},
+      help =
+          "If not empty, turns on whitelist checking for starlark-defined split transitions "
+              + "using package groups from the specified location. If empty, starlark-defined split"
+              + "transitions are enabled in all locations.")
+  public String experimentalTransitionWhitelistLocation;
+
+  @Option(
       name = "incompatible_bzl_disallow_load_after_statement",
       defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
@@ -540,21 +552,6 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
               + " target.")
   public boolean incompatibleUseToolchainProvidersInJavaCommon;
 
-  @Option(
-      name = "incompatible_do_not_split_linking_cmdline",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.BUILD_TIME_OPTIMIZATION,
-      effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
-      metadataTags = {
-        OptionMetadataTag.INCOMPATIBLE_CHANGE,
-        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-      },
-      help =
-          "When true, Bazel no longer modifies command line flags used for linking, and also "
-              + "doesn't selectively decide which flags go to the param file and which don't.  "
-              + "See https://github.com/bazelbuild/bazel/issues/7670 for details.")
-  public boolean incompatibleDoNotSplitLinkingCmdline;
-
   /** Constructs a {@link StarlarkSemantics} object corresponding to this set of option values. */
   public StarlarkSemantics toSkylarkSemantics() {
     return StarlarkSemantics.builder()
@@ -568,6 +565,7 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
         .experimentalPlatformsApi(experimentalPlatformsApi)
         .experimentalRestrictNamedParams(experimentalRestrictNamedParams)
         .experimentalStarlarkConfigTransitions(experimentalStarlarkConfigTransitions)
+        .experimentalTransitionWhitelistLocation(experimentalTransitionWhitelistLocation)
         .incompatibleBzlDisallowLoadAfterStatement(incompatibleBzlDisallowLoadAfterStatement)
         .incompatibleDepsetIsNotIterable(incompatibleDepsetIsNotIterable)
         .incompatibleDepsetUnion(incompatibleDepsetUnion)
@@ -598,7 +596,6 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
         .incompatibleUseToolchainProvidersInJavaCommon(
             incompatibleUseToolchainProvidersInJavaCommon)
         .internalSkylarkFlagTestCanary(internalSkylarkFlagTestCanary)
-        .incompatibleDoNotSplitLinkingCmdline(incompatibleDoNotSplitLinkingCmdline)
         .build();
   }
 }

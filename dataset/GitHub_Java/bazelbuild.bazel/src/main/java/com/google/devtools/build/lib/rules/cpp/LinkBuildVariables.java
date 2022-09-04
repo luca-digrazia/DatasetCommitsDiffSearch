@@ -100,7 +100,6 @@ public enum LinkBuildVariables {
       String thinltoMergedObjectFile,
       boolean mustKeepDebug,
       CcToolchainProvider ccToolchainProvider,
-      CppConfiguration cppConfiguration,
       FeatureConfiguration featureConfiguration,
       boolean useTestOnlyFlags,
       boolean isLtoIndexing,
@@ -224,7 +223,7 @@ public enum LinkBuildVariables {
 
     if (featureConfiguration.isEnabled(CppRuleClasses.FDO_INSTRUMENT)) {
       Preconditions.checkArgument(fdoContext.getBranchFdoProfile() == null);
-      String fdoInstrument = cppConfiguration.getFdoInstrument();
+      String fdoInstrument = ccToolchainProvider.getCppConfiguration().getFdoInstrument();
       Preconditions.checkNotNull(fdoInstrument);
       buildVariables.addStringVariable("fdo_instrument_path", fdoInstrument);
     }
@@ -238,7 +237,7 @@ public enum LinkBuildVariables {
       opts.addAll(
           featureConfiguration.getCommandLine(
               CppActionNames.LTO_INDEXING, buildVariables.build(), /* expander= */ null));
-      opts.addAll(cppConfiguration.getLtoIndexOptions());
+      opts.addAll(ccToolchainProvider.getCppConfiguration().getLtoIndexOptions());
       userLinkFlagsWithLtoIndexingIfNeeded = opts.build();
     }
 
@@ -258,7 +257,6 @@ public enum LinkBuildVariables {
             isUsingLinkerNotArchiver,
             featureConfiguration,
             ccToolchainProvider,
-            cppConfiguration,
             useTestOnlyFlags,
             isCreatingSharedLibrary,
             userLinkFlags));
@@ -272,13 +270,13 @@ public enum LinkBuildVariables {
       boolean isUsingLinkerNotArchiver,
       FeatureConfiguration featureConfiguration,
       CcToolchainProvider ccToolchainProvider,
-      CppConfiguration cppConfiguration,
       boolean useTestOnlyFlags,
       boolean isCreatingSharedLibrary,
       Iterable<String> userLinkFlags) {
     if (!isUsingLinkerNotArchiver) {
       return ImmutableList.of();
     }
+    CppConfiguration cppConfiguration = ccToolchainProvider.getCppConfiguration();
     boolean sharedLinkopts =
         isCreatingSharedLibrary
             || Iterables.contains(userLinkFlags, "-shared")
