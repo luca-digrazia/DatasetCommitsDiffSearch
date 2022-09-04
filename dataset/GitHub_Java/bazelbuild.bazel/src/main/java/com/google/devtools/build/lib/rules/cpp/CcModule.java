@@ -1847,7 +1847,7 @@ public abstract class CcModule
     }
     try {
       RuleContext ruleContext = actions.getRuleContext();
-      CompilationInfo compilationInfo = helper.compile(ruleContext);
+      CompilationInfo compilationInfo = helper.compile(ruleContext, ruleContext::ruleError);
       return Tuple.of(
           compilationInfo.getCcCompilationContext(), compilationInfo.getCcCompilationOutputs());
     } catch (RuleErrorException e) {
