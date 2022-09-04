@@ -561,6 +561,7 @@ public class PackageFunction implements SkyFunction {
     ImmutableList<SkylarkImport> imports = buildFileAST.getImports();
     Map<String, Extension> importMap = Maps.newHashMapWithExpectedSize(imports.size());
     ImmutableList.Builder<SkylarkFileDependency> fileDependencies = ImmutableList.builder();
+    ImmutableMap<String, Label> importPathMap;
 
     // Find the labels corresponding to the load statements.
     Label labelForCurrBuildFile;
@@ -570,8 +571,15 @@ public class PackageFunction implements SkyFunction {
       // Shouldn't happen; the Label is well-formed by construction.
       throw new IllegalStateException(e);
     }
-    ImmutableMap<String, Label> importPathMap =
-        SkylarkImportLookupFunction.getLabelsForLoadStatements(imports, labelForCurrBuildFile);
+    try {
+      importPathMap = SkylarkImportLookupFunction.findLabelsForLoadStatements(
+          imports, labelForCurrBuildFile, env);
+      if (importPathMap == null) {
+        return null;
+      }
+    } catch (SkylarkImportFailedException e) {
+      throw propagateSkylarkImportFailedException(packageId, e);
+    }
 
     // Look up and load the imports.
     ImmutableCollection<Label> importLabels = importPathMap.values();
