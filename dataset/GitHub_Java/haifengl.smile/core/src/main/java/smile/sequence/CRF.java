@@ -15,7 +15,6 @@
  *******************************************************************************/
 package smile.sequence;
 
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -59,7 +58,7 @@ import smile.util.MulticoreExecutor;
  *
  * @author Haifeng Li
  */
-public class CRF implements SequenceLabeler<double[]>, Serializable {
+public class CRF implements SequenceLabeler<double[]> {
     private static final Logger logger = LoggerFactory.getLogger(CRF.class);
 
     /**
@@ -108,7 +107,7 @@ public class CRF implements SequenceLabeler<double[]>, Serializable {
     /**
      * Regression tree based potential function.
      */
-    class TreePotentialFunction implements Serializable {
+    class TreePotentialFunction {
 
         /**
          * Constructor.
@@ -161,7 +160,7 @@ public class CRF implements SequenceLabeler<double[]>, Serializable {
     /**
      * Dynamic programming table entry in forward-backward algorithm.
      */
-    class TrellisNode implements Serializable {
+    class TrellisNode {
 
         /**
          * Forward variable.
