@@ -35,9 +35,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ForkJoinPool;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -57,7 +56,7 @@ public class Main {
     }
   }
 
-  static int runWithArgs(String... args) throws ExecutionException, InterruptedException {
+  static int runWithArgs(String... args) {
     LcovMergerFlags flags = null;
     try {
       flags = LcovMergerFlags.parseFlags(args);
@@ -77,9 +76,11 @@ public class Main {
             parseFiles(
                 getTracefiles(flags, filesInCoverageDir),
                 LcovParser::parse,
-                flags.parseParallelism()),
+                flags.parseSequentially()),
             parseFiles(
-                getGcovInfoFiles(filesInCoverageDir), GcovParser::parse, flags.parseParallelism()));
+                getGcovInfoFiles(filesInCoverageDir),
+                GcovParser::parse,
+                flags.parseSequentially()));
 
     if (flags.sourcesToReplaceFile() != null) {
       coverage.maybeReplaceSourceFileNames(getMapFromFile(flags.sourcesToReplaceFile()));
@@ -284,12 +285,11 @@ public class Main {
     return mapBuilder.build();
   }
 
-  static Coverage parseFiles(List<File> files, Parser parser, int parallelism)
-      throws ExecutionException, InterruptedException {
-    if (parallelism == 1) {
+  static Coverage parseFiles(List<File> files, Parser parser, boolean parseSequentially) {
+    if (parseSequentially) {
       return parseFilesSequentially(files, parser);
     } else {
-      return parseFilesInParallel(files, parser, parallelism);
+      return parseFilesInParallel(files, parser);
     }
   }
 
@@ -312,31 +312,29 @@ public class Main {
     return coverage;
   }
 
-  static Coverage parseFilesInParallel(List<File> files, Parser parser, int parallelism)
-      throws ExecutionException, InterruptedException {
-    ForkJoinPool pool = new ForkJoinPool(parallelism);
-    return pool.submit(
-            () ->
-                files.parallelStream()
-                    .map(
-                        file -> {
-                          try (FileInputStream inputStream = new FileInputStream(file)) {
-                            logger.log(Level.INFO, "Parsing file " + file);
-                            return Coverage.create(parser.parse(inputStream));
-                          } catch (IOException e) {
-                            logger.log(
-                                Level.SEVERE,
-                                "File "
-                                    + file.getAbsolutePath()
-                                    + " could not be parsed due to: "
-                                    + e.getMessage());
-                            System.exit(1);
-                          }
-                          return null;
-                        })
-                    .reduce(Coverage::merge)
-                    .orElse(Coverage.create()))
-        .get();
+  static Coverage parseFilesInParallel(List<File> files, Parser parser) {
+    return files.stream()
+        .parallel()
+        .map(
+            file -> {
+              try (FileInputStream inputStream = new FileInputStream(file)) {
+                logger.log(Level.INFO, "Parsing file " + file);
+                return parser.parse(inputStream);
+              } catch (IOException e) {
+                logger.log(
+                    Level.SEVERE,
+                    "File "
+                        + file.getAbsolutePath()
+                        + " could not be parsed due to: "
+                        + e.getMessage());
+                System.exit(1);
+              }
+              return null;
+            })
+        .filter(Objects::nonNull)
+        .map(Coverage::create)
+        .reduce(Coverage::merge)
+        .orElse(Coverage.create());
   }
 
   /**
