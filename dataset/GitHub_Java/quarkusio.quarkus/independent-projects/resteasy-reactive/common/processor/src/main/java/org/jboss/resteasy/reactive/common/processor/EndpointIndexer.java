@@ -474,13 +474,6 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM, METHOD
             if (sseElementTypeAnnotation != null) {
                 sseElementType = sseElementTypeAnnotation.value().asString();
             }
-            if (((produces != null) && (produces.length == 1) && MediaType.SERVER_SENT_EVENTS.equals(produces[0]))
-                    && (sseElementType == null)) {
-                String[] defaultProducesForType = applyAdditionalDefaults(nonAsyncReturnType);
-                if (defaultProducesForType.length == 1) {
-                    sseElementType = defaultProducesForType[0];
-                }
-            }
             Set<String> nameBindingNames = nameBindingNames(info, classNameBindings);
             boolean blocking = defaultBlocking;
             AnnotationInstance blockingAnnotation = getInheritableAnnotation(info, BLOCKING);
@@ -635,15 +628,7 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM, METHOD
         if (annotation == null) {
             return null;
         }
-
-        String[] originalStrings;
-        AnnotationValue value = annotation.value();
-        if (value == null) {
-            originalStrings = new String[] { MediaType.WILDCARD };
-        } else {
-            originalStrings = value.asStringArray();
-        }
-
+        String[] originalStrings = annotation.value().asStringArray();
         if (originalStrings.length > 0) {
             List<String> result = new ArrayList<>(originalStrings.length);
             for (String s : originalStrings) {

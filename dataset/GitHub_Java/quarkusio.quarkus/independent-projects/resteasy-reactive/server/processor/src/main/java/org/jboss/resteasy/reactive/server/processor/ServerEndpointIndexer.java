@@ -8,8 +8,11 @@ import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNa
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.JSONP_JSON_STRING;
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.JSONP_JSON_STRUCTURE;
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.JSONP_JSON_VALUE;
+import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.MULTI_VALUED_MAP;
 
 import io.quarkus.gizmo.MethodCreator;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -33,13 +36,18 @@ import org.jboss.resteasy.reactive.common.processor.AdditionalReaders;
 import org.jboss.resteasy.reactive.common.processor.AdditionalWriters;
 import org.jboss.resteasy.reactive.common.processor.EndpointIndexer;
 import org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames;
+import org.jboss.resteasy.reactive.server.core.parameters.ParameterExtractor;
 import org.jboss.resteasy.reactive.server.core.parameters.converters.ListConverter;
+import org.jboss.resteasy.reactive.server.core.parameters.converters.LocalDateParamConverter;
+import org.jboss.resteasy.reactive.server.core.parameters.converters.OptionalConverter;
 import org.jboss.resteasy.reactive.server.core.parameters.converters.ParameterConverterSupplier;
 import org.jboss.resteasy.reactive.server.core.parameters.converters.PathSegmentParamConverter;
 import org.jboss.resteasy.reactive.server.core.parameters.converters.SetConverter;
 import org.jboss.resteasy.reactive.server.core.parameters.converters.SortedSetConverter;
+import org.jboss.resteasy.reactive.server.model.HandlerChainCustomizer;
 import org.jboss.resteasy.reactive.server.model.ServerMethodParameter;
 import org.jboss.resteasy.reactive.server.model.ServerResourceMethod;
+import org.jboss.resteasy.reactive.server.processor.scanning.MethodScanner;
 import org.jboss.resteasy.reactive.server.providers.serialisers.ServerFormUrlEncodedProvider;
 import org.jboss.resteasy.reactive.server.providers.serialisers.jsonp.ServerJsonArrayHandler;
 import org.jboss.resteasy.reactive.server.providers.serialisers.jsonp.ServerJsonObjectHandler;
@@ -50,11 +58,13 @@ public class ServerEndpointIndexer
         extends EndpointIndexer<ServerEndpointIndexer, ServerIndexedParameter, ServerResourceMethod> {
     private final MethodCreator initConverters;
     protected final EndpointInvokerFactory endpointInvokerFactory;
+    protected final List<MethodScanner> methodScanners;
 
     protected ServerEndpointIndexer(AbstractBuilder builder) {
         super(builder);
         this.initConverters = builder.initConverters;
         this.endpointInvokerFactory = builder.endpointInvokerFactory;
+        this.methodScanners = new ArrayList<>(builder.methodScanners);
     }
 
     protected void addWriterForType(AdditionalWriters additionalWriters, Type paramType) {
@@ -84,6 +94,9 @@ public class ServerEndpointIndexer
             additionalReaders.add(ServerJsonObjectHandler.class, APPLICATION_JSON, javax.json.JsonObject.class);
         } else if (dotName.equals(JSONP_JSON_STRUCTURE)) {
             additionalReaders.add(ServerJsonStructureHandler.class, APPLICATION_JSON, javax.json.JsonStructure.class);
+        } else if (dotName.equals(MULTI_VALUED_MAP)) {
+            additionalReaders.add(ServerFormUrlEncodedProvider.class, APPLICATION_FORM_URLENCODED,
+                    MultivaluedMap.class);
         }
     }
 
@@ -93,8 +106,40 @@ public class ServerEndpointIndexer
     }
 
     @Override
-    protected ServerResourceMethod createResourceMethod() {
-        return new ServerResourceMethod();
+    protected boolean handleCustomParameter(Map<DotName, AnnotationInstance> anns, ServerIndexedParameter builder,
+            Type paramType, boolean field, Map<String, Object> methodContext) {
+        for (MethodScanner i : methodScanners) {
+            ParameterExtractor res = i.handleCustomParameter(paramType, anns, field, methodContext);
+            if (res != null) {
+                builder.setType(ParameterType.CUSTOM);
+                builder.setCustomerParameterExtractor(res);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Override
+    protected ServerResourceMethod createResourceMethod(MethodInfo methodInfo, Map<String, Object> methodContext) {
+        ServerResourceMethod serverResourceMethod = new ServerResourceMethod();
+        List<HandlerChainCustomizer> methodCustomizers = new ArrayList<>();
+        for (MethodScanner i : methodScanners) {
+            List<HandlerChainCustomizer> scanned = i.scan(methodInfo, methodContext);
+            if (scanned != null) {
+                methodCustomizers.addAll(scanned);
+            }
+        }
+        serverResourceMethod.setHandlerChainCustomizers(methodCustomizers);
+        return serverResourceMethod;
+    }
+
+    @Override
+    protected boolean handleBeanParam(ClassInfo actualEndpointInfo, Type paramType, MethodParameter[] methodParameters, int i) {
+        ClassInfo beanParamClassInfo = index.getClassByName(paramType.name());
+        InjectableBean injectableBean = scanInjectableBean(beanParamClassInfo,
+                actualEndpointInfo,
+                existingConverters, additionalReaders, injectableBeans, hasRuntimeConverters);
+        return injectableBean.isFormParamRequired();
     }
 
     @Override
@@ -133,7 +178,7 @@ public class ServerEndpointIndexer
                     additionalReaders,
                     annotations, field.type(), field.toString(), true, hasRuntimeConverters,
                     // We don't support annotation-less path params in injectable beans: only annotations
-                    Collections.emptySet(), field.name());
+                    Collections.emptySet(), field.name(), new HashMap<>());
             if ((result.getType() != null) && (result.getType() != ParameterType.BEAN)) {
                 //BODY means no annotation, so for fields not injectable
                 fieldExtractors.put(field, result);
@@ -191,11 +236,13 @@ public class ServerEndpointIndexer
 
     protected MethodParameter createMethodParameter(ClassInfo currentClassInfo, ClassInfo actualEndpointInfo, boolean encoded,
             Type paramType, ServerIndexedParameter parameterResult, String name, String defaultValue, ParameterType type,
-            String elementType, boolean single) {
+            String elementType, boolean single, String signature) {
         ParameterConverterSupplier converter = parameterResult.getConverter();
         return new ServerMethodParameter(name,
-                elementType, toClassName(paramType, currentClassInfo, actualEndpointInfo, index), type, single,
-                converter, defaultValue, parameterResult.isObtainedAsCollection(), encoded);
+                elementType, toClassName(paramType, currentClassInfo, actualEndpointInfo, index),
+                type, single, signature,
+                converter, defaultValue, parameterResult.isObtainedAsCollection(), parameterResult.isOptional(), encoded,
+                parameterResult.getCustomerParameterExtractor());
     }
 
     protected void handleOtherParam(Map<String, String> existingConverters, String errorLocation, boolean hasRuntimeConverters,
@@ -204,16 +251,18 @@ public class ServerEndpointIndexer
                 existingConverters, errorLocation, hasRuntimeConverters));
     }
 
-    protected void handleMultiMapParam(AdditionalReaders additionalReaders, ServerIndexedParameter builder) {
-        additionalReaders.add(ServerFormUrlEncodedProvider.class, APPLICATION_FORM_URLENCODED,
-                MultivaluedMap.class);
-    }
-
     protected void handleSortedSetParam(Map<String, String> existingConverters, String errorLocation,
             boolean hasRuntimeConverters, ServerIndexedParameter builder, String elementType) {
         ParameterConverterSupplier converter = extractConverter(elementType, index,
                 existingConverters, errorLocation, hasRuntimeConverters);
         builder.setConverter(new SortedSetConverter.SortedSetSupplier(converter));
+    }
+
+    protected void handleOptionalParam(Map<String, String> existingConverters, String errorLocation,
+            boolean hasRuntimeConverters, ServerIndexedParameter builder, String elementType) {
+        ParameterConverterSupplier converter = extractConverter(elementType, index,
+                existingConverters, errorLocation, hasRuntimeConverters);
+        builder.setConverter(new OptionalConverter.OptionalSupplier(converter));
     }
 
     protected void handleSetParam(Map<String, String> existingConverters, String errorLocation, boolean hasRuntimeConverters,
@@ -234,16 +283,26 @@ public class ServerEndpointIndexer
         builder.setConverter(new PathSegmentParamConverter.Supplier());
     }
 
+    protected void handleLocalDateParam(ServerIndexedParameter builder) {
+        builder.setConverter(new LocalDateParamConverter.Supplier());
+    }
+
     protected ParameterConverterSupplier extractConverter(String elementType, IndexView indexView,
             Map<String, String> existingConverters, String errorLocation, boolean hasRuntimeConverters) {
         return null;
     }
 
+    @SuppressWarnings("unchecked")
     public static class AbstractBuilder<B extends EndpointIndexer.Builder<ServerEndpointIndexer, B, ServerResourceMethod>>
             extends EndpointIndexer.Builder<ServerEndpointIndexer, B, ServerResourceMethod> {
 
         private MethodCreator initConverters;
         private EndpointInvokerFactory endpointInvokerFactory = new ReflectionEndpointInvokerFactory();
+        private List<MethodScanner> methodScanners = new ArrayList<>();
+
+        public EndpointInvokerFactory getEndpointInvokerFactory() {
+            return endpointInvokerFactory;
+        }
 
         public B setEndpointInvokerFactory(EndpointInvokerFactory endpointInvokerFactory) {
             this.endpointInvokerFactory = endpointInvokerFactory;
@@ -256,6 +315,16 @@ public class ServerEndpointIndexer
 
         public B setInitConverters(MethodCreator initConverters) {
             this.initConverters = initConverters;
+            return (B) this;
+        }
+
+        public B addMethodScanner(MethodScanner methodScanner) {
+            this.methodScanners.add(methodScanner);
+            return (B) this;
+        }
+
+        public B addMethodScanners(Collection<MethodScanner> methodScanners) {
+            this.methodScanners.addAll(methodScanners);
             return (B) this;
         }
 
