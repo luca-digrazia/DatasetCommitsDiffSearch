@@ -22,11 +22,11 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import org.eclipse.microprofile.reactive.messaging.Incoming;
 import org.eclipse.microprofile.reactive.messaging.Outgoing;
-import org.jboss.jandex.*;
+import org.jboss.jandex.DotName;
+import org.jboss.jandex.MethodInfo;
 import org.jboss.logging.Logger;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
@@ -44,8 +44,6 @@ import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import io.quarkus.smallrye.reactivemessaging.runtime.SmallRyeReactiveMessagingLifecycle;
 import io.quarkus.smallrye.reactivemessaging.runtime.SmallRyeReactiveMessagingTemplate;
-import io.smallrye.reactive.messaging.annotations.Emitter;
-import io.smallrye.reactive.messaging.annotations.Stream;
 
 /**
  *
@@ -53,12 +51,10 @@ import io.smallrye.reactive.messaging.annotations.Stream;
  */
 public class SmallRyeReactiveMessagingProcessor {
 
-    private static final Logger LOGGER = Logger.getLogger("io.quarkus.smallrye-reactive-messaging.deployment.processor");
+    private static final Logger LOGGER = Logger.getLogger("io.quarkus.scheduler.deployment.processor");
 
     static final DotName NAME_INCOMING = DotName.createSimple(Incoming.class.getName());
     static final DotName NAME_OUTGOING = DotName.createSimple(Outgoing.class.getName());
-    static final DotName NAME_STREAM = DotName.createSimple(Stream.class.getName());
-    static final DotName NAME_EMITTER = DotName.createSimple(Emitter.class.getName());
 
     @BuildStep
     AdditionalBeanBuildItem beans() {
@@ -67,7 +63,6 @@ public class SmallRyeReactiveMessagingProcessor {
 
     @BuildStep
     BeanDeploymentValidatorBuildItem beanDeploymentValidator(BuildProducer<MediatorBuildItem> mediatorMethods,
-            BuildProducer<EmitterBuildItem> emitterFields,
             BuildProducer<FeatureBuildItem> feature) {
 
         feature.produce(new FeatureBuildItem(FeatureBuildItem.SMALLRYE_REACTIVE_MESSAGING));
@@ -83,24 +78,15 @@ public class SmallRyeReactiveMessagingProcessor {
                 for (BeanInfo bean : validationContext.get(Key.BEANS)) {
                     if (bean.isClassBean()) {
                         // TODO: add support for inherited business methods
-                        ClassInfo ci = bean.getTarget()
-                                .orElseThrow(() -> new IllegalStateException("Target expected")).asClass();
-                        for (MethodInfo method : ci.methods()) {
+                        for (MethodInfo method : bean.getTarget()
+                                .get()
+                                .asClass()
+                                .methods()) {
                             if (annotationStore.hasAnnotation(method, NAME_INCOMING)
                                     || annotationStore.hasAnnotation(method, NAME_OUTGOING)) {
                                 // TODO: validate method params and return type?
                                 mediatorMethods.produce(new MediatorBuildItem(bean, method));
                                 LOGGER.debugf("Found mediator business method %s declared on %s", method, bean);
-                            }
-                        }
-
-                        for (FieldInfo field : ci.fields()) {
-                            if (annotationStore.hasAnnotation(field, NAME_STREAM)) {
-                                if (field.type().name().equals(NAME_EMITTER)) {
-                                    String name = annotationStore.getAnnotation(field, NAME_STREAM).value().asString();
-                                    LOGGER.debugf("Emitter field '%s'  detected, stream name: '%s'", field.name(), name);
-                                    emitterFields.produce(new EmitterBuildItem(name));
-                                }
                             }
                         }
                     }
@@ -119,7 +105,6 @@ public class SmallRyeReactiveMessagingProcessor {
     @Record(STATIC_INIT)
     public void build(SmallRyeReactiveMessagingTemplate template, BeanContainerBuildItem beanContainer,
             List<MediatorBuildItem> mediatorMethods,
-            List<EmitterBuildItem> emitterFields,
             BuildProducer<ReflectiveClassBuildItem> reflectiveClass) {
         /*
          * IMPLEMENTATION NOTE/FUTURE IMPROVEMENTS: It would be possible to replace the reflection completely and use Jandex and
@@ -139,8 +124,7 @@ public class SmallRyeReactiveMessagingProcessor {
                         .getIdentifier());
             }
         }
-        template.registerMediators(beanClassToBeanId, beanContainer.getValue(),
-                emitterFields.stream().map(EmitterBuildItem::getName).collect(Collectors.toList()));
+        template.registerMediators(beanClassToBeanId, beanContainer.getValue());
     }
 
 }

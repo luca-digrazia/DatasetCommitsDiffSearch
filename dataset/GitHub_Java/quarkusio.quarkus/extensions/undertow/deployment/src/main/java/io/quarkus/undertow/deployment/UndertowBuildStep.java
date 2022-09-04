@@ -106,7 +106,6 @@ import io.quarkus.deployment.builditem.ObjectSubstitutionBuildItem;
 import io.quarkus.deployment.builditem.ServiceStartBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
 import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
-import io.quarkus.deployment.builditem.substrate.RuntimeReinitializedClassBuildItem;
 import io.quarkus.deployment.builditem.substrate.SubstrateConfigBuildItem;
 import io.quarkus.deployment.builditem.substrate.SubstrateResourceBuildItem;
 import io.quarkus.deployment.recording.RecorderContext;
@@ -176,12 +175,6 @@ public class UndertowBuildStep {
                 .addRuntimeInitializedClass("io.undertow.server.protocol.ajp.AjpServerResponseConduit")
                 .addRuntimeInitializedClass("io.undertow.server.protocol.ajp.AjpServerRequestConduit")
                 .build();
-    }
-
-    @BuildStep
-    void runtimeReinit(BuildProducer<RuntimeReinitializedClassBuildItem> producer) {
-        producer.produce(new RuntimeReinitializedClassBuildItem("org.wildfly.common.net.HostName"));
-        producer.produce(new RuntimeReinitializedClassBuildItem("org.wildfly.common.os.Process"));
     }
 
     @BuildStep

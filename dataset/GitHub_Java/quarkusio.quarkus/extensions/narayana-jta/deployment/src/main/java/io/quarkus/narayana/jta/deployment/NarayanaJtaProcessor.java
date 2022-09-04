@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.narayana.jta.deployment;
 
 import static io.quarkus.deployment.annotations.ExecutionTime.RUNTIME_INIT;
@@ -21,9 +37,9 @@ import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.substrate.RuntimeInitializedClassBuildItem;
+import io.quarkus.narayana.jta.runtime.NarayanaJtaConfiguration;
 import io.quarkus.narayana.jta.runtime.NarayanaJtaProducers;
-import io.quarkus.narayana.jta.runtime.NarayanaJtaRecorder;
-import io.quarkus.narayana.jta.runtime.TransactionManagerConfiguration;
+import io.quarkus.narayana.jta.runtime.NarayanaJtaTemplate;
 import io.quarkus.narayana.jta.runtime.interceptor.TransactionalInterceptorMandatory;
 import io.quarkus.narayana.jta.runtime.interceptor.TransactionalInterceptorNever;
 import io.quarkus.narayana.jta.runtime.interceptor.TransactionalInterceptorNotSupported;
@@ -45,11 +61,11 @@ class NarayanaJtaProcessor {
     /**
      * The transactions configuration.
      */
-    TransactionManagerConfiguration transactions;
+    NarayanaJtaConfiguration transactions;
 
     @BuildStep(providesCapabilities = Capabilities.TRANSACTIONS)
     @Record(RUNTIME_INIT)
-    public void build(NarayanaJtaRecorder recorder, BuildProducer<FeatureBuildItem> feature) {
+    public void build(NarayanaJtaTemplate tt, BuildProducer<FeatureBuildItem> feature) {
         feature.produce(new FeatureBuildItem(FeatureBuildItem.NARAYANA_JTA));
         additionalBeans.produce(new AdditionalBeanBuildItem(NarayanaJtaProducers.class));
         runtimeInit.produce(new RuntimeInitializedClassBuildItem(
@@ -71,8 +87,8 @@ class NarayanaJtaProcessor {
 
         //we want to force Arjuna to init at static init time
         Properties defaultProperties = PropertiesFactory.getDefaultProperties();
-        recorder.setDefaultProperties(defaultProperties);
-        recorder.setNodeName(transactions);
-        recorder.setDefaultTimeout(transactions);
+        tt.setDefaultProperties(defaultProperties);
+        tt.setNodeName(transactions);
+
     }
 }

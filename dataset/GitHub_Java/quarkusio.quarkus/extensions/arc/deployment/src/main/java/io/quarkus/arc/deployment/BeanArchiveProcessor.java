@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.arc.deployment;
 
 import java.util.ArrayList;
@@ -45,7 +61,7 @@ public class BeanArchiveProcessor {
     @Inject
     BuildProducer<GeneratedClassBuildItem> generatedClass;
 
-    @BuildStep(loadsApplicationClasses = true)
+    @BuildStep
     public BeanArchiveIndexBuildItem build() throws Exception {
 
         // First build an index from application archives
@@ -61,23 +77,20 @@ public class BeanArchiveProcessor {
         Set<DotName> additionalIndex = new HashSet<>();
         for (String beanClass : additionalBeans) {
             IndexingUtil.indexClass(beanClass, additionalBeanIndexer, applicationIndex, additionalIndex,
-                    Thread.currentThread().getContextClassLoader());
+                    ArcAnnotationProcessor.class.getClassLoader());
         }
         Set<DotName> generatedClassNames = new HashSet<>();
-        for (GeneratedBeanBuildItem generatedBeanClass : generatedBeans) {
-            IndexingUtil.indexClass(generatedBeanClass.getName(), additionalBeanIndexer, applicationIndex, additionalIndex,
-                    Thread.currentThread().getContextClassLoader(),
-                    generatedBeanClass.getData());
-            generatedClassNames.add(DotName.createSimple(generatedBeanClass.getName().replace('/', '.')));
-            generatedClass.produce(new GeneratedClassBuildItem(true, generatedBeanClass.getName(), generatedBeanClass.getData(),
-                    generatedBeanClass.getSource()));
+        for (GeneratedBeanBuildItem beanClass : generatedBeans) {
+            IndexingUtil.indexClass(beanClass.getName(), additionalBeanIndexer, applicationIndex, additionalIndex,
+                    ArcAnnotationProcessor.class.getClassLoader(),
+                    beanClass.getData());
+            generatedClassNames.add(DotName.createSimple(beanClass.getName().replace('/', '.')));
+            generatedClass.produce(new GeneratedClassBuildItem(true, beanClass.getName(), beanClass.getData()));
         }
 
         // Finally, index ArC/CDI API built-in classes
         return new BeanArchiveIndexBuildItem(
-                BeanArchives.buildBeanArchiveIndex(Thread.currentThread().getContextClassLoader(), applicationIndex,
-                        additionalBeanIndexer.complete()),
-                generatedClassNames,
+                BeanArchives.buildBeanArchiveIndex(applicationIndex, additionalBeanIndexer.complete()), generatedClassNames,
                 additionalBeans);
     }
 
