@@ -61,7 +61,7 @@ public class Desugar {
         converter = ExistingPathConverter.class,
         abbrev = 'i',
         help =
-            "Input jars with classes to desugar (required, the n-th input is paired"
+            "Input Jar or directory with classes to desugar (required, the n-th input is paired"
                 + " with the n-th output).")
     public List<Path> inputJars;
 
@@ -74,7 +74,7 @@ public class Desugar {
         effectTags = {OptionEffectTag.UNKNOWN},
         converter = ExistingPathConverter.class,
         help =
-            "Ordered classpath jars to resolve symbols in the --input jars, like "
+            "Ordered classpath (Jar or directory) to resolve symbols in the --input Jar, like "
                 + "javac's -cp flag.")
     public List<Path> classpath;
 
@@ -87,7 +87,7 @@ public class Desugar {
         effectTags = {OptionEffectTag.UNKNOWN},
         converter = ExistingPathConverter.class,
         help =
-            "Bootclasspath that was used to compile the --input jars with, like javac's "
+            "Bootclasspath that was used to compile the --input Jar with, like javac's "
                 + "-bootclasspath flag (required).")
     public List<Path> bootclasspath;
 
@@ -476,7 +476,7 @@ public class Desugar {
           classpathProvider,
           options.inputJars.get(i),
           options.outputJars.get(i),
-          options.desugarCoreLibs ? options.desugaredLibConfig : null);
+          options.desugaredLibConfig);
     }
   }
 
