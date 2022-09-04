@@ -129,7 +129,6 @@ public class Persisted {
 
             try {
                 if (!v.validate(fields.get(field))) {
-                    LOG.info("Validation failure: [{}] on field [{}]", v.getClass().getCanonicalName(), field);
                     return false;
                 }
             } catch(Exception e) {

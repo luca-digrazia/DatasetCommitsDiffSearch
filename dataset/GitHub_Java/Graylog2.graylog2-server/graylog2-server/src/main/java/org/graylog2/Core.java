@@ -21,7 +21,6 @@
 package org.graylog2;
 
 import org.glassfish.grizzly.http.server.HttpServer;
-import org.graylog2.indexer.IndexRangeManager;
 import org.graylog2.plugin.Tools;
 
 import java.io.IOException;
@@ -44,6 +43,7 @@ import org.graylog2.plugin.initializers.Initializer;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.gelf.GELFChunkManager;
 import org.graylog2.plugin.outputs.MessageOutput;
+import org.graylog2.streams.StreamCache;
 
 import com.google.common.collect.Lists;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -231,7 +231,8 @@ public class Core implements GraylogServer {
 
         gelfChunkManager.start();
         BlacklistCache.initialize(this);
-
+        StreamCache.initialize(this);
+        
         // Set up deflector.
         LOG.info("Setting up deflector.");
         deflector = new Deflector(this);

@@ -50,18 +50,19 @@ import org.slf4j.LoggerFactory;
  *
  * @author Lennart Koopmann <lennart@torch.sh>
  */
-public class StreamImpl extends Persisted implements Stream {
+public class StreamImpl extends Persisted implements Stream, Persistable {
 
     private static final Logger LOG = LoggerFactory.getLogger(StreamImpl.class);
+
 
     private static final String COLLECTION = "streams";
 
     public StreamImpl(Map<String, Object> fields, Core core) {
-    	super(core, fields);
+    	super(COLLECTION, core, fields, validations());
     }
 
     protected StreamImpl(ObjectId id, Map<String, Object> fields, Core core) {
-    	super(core, id, fields);
+    	super(COLLECTION, core, id, fields, validations());
     }
     
     @SuppressWarnings("unchecked")
@@ -125,10 +126,6 @@ public class StreamImpl extends Persisted implements Stream {
 	@Override
 	public List<StreamRule> getStreamRules() {
 		// TODO Auto-generated method stub
-
-        // TODO: PUT REGEX MATCHERS AT THE END
-        // TODO: CONVERT TO INTS AS GOOD AS POSSIBLE IN CACHE
-
 		return null;
 	}
 
@@ -162,12 +159,7 @@ public class StreamImpl extends Persisted implements Stream {
         return this.id.toString() + ":" + this.getTitle();
     }
 
-    @Override
-    public String getCollectionName() {
-        return COLLECTION;
-    }
-
-    @Override
+	@Override
 	public ObjectId getId() {
 		return this.id;
 	}
@@ -190,17 +182,12 @@ public class StreamImpl extends Persisted implements Stream {
 		return result;
 	}
 
-    protected Map<String, Validator> getValidations() {
+    private static Map<String, Validator> validations() {
         return new HashMap<String, Validator>() {{
             put("title", new FilledStringValidator());
             put("creator_user_id", new FilledStringValidator());
             put("created_at", new DateValidator());
         }};
-    }
-
-    @Override
-    protected Map<String, Validator> getEmbeddedValidations(String key) {
-        return Maps.newHashMap();
     }
 
 }
