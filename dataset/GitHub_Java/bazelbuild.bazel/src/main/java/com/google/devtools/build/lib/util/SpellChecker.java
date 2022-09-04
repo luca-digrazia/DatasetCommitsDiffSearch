@@ -14,6 +14,8 @@
 
 package com.google.devtools.build.lib.util;
 
+import javax.annotation.Nullable;
+
 /**
  * Class that provides functions to do spell checking, i.e. detect typos
  * and make suggestions.
@@ -70,5 +72,39 @@ public final class SpellChecker {
     }
     int result = row[s2.length()];
     return result <= maxEditDistance ? result : -1;
+  }
+
+  /**
+   * Find in words which string is the most similar to input (according to
+   * the edit distance, ignoring case) - or null if no string is similar
+   * enough. In case of equality, the first one in words wins.
+   */
+  @Nullable
+  public static String suggest(String input, Iterable<String> words) {
+    String best = null;
+    // Heuristic: the expected number of typos depends on the length of the word.
+    int bestDistance = Math.min(5, (input.length() + 1) / 2);
+    input = input.toLowerCase();
+    for (String candidate : words) {
+      int d = editDistance(input, candidate.toLowerCase(), bestDistance);
+      if (d >= 0 && d < bestDistance) {
+        bestDistance = d;
+        best = candidate;
+      }
+    }
+    return best;
+  }
+
+  /**
+   * Return a string to be used at the end of an error message. It is either an empty string, or a
+   * spelling suggestion, e.g. " (did you mean 'x'?)".
+   */
+  public static String didYouMean(String input, Iterable<String> words) {
+    String suggestion = suggest(input, words);
+    if (suggestion == null) {
+      return "";
+    } else {
+      return " (did you mean '" + suggestion + "'?)";
+    }
   }
 }
