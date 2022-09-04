@@ -559,11 +559,6 @@ public class DevMojo extends AbstractMojo {
                     for (Xpp3Dom argConfiguration : compilerPluginArgsConfiguration.getChildren()) {
                         compilerPluginArgs.add(argConfiguration.getValue());
                     }
-                    // compilerArgs can also take a value without using arg
-                    if (compilerPluginArgsConfiguration.getValue() != null
-                            && !compilerPluginArgsConfiguration.getValue().isEmpty()) {
-                        compilerPluginArgs.add(compilerPluginArgsConfiguration.getValue().trim());
-                    }
                     devModeContext.setCompilerOptions(compilerPluginArgs);
                     break;
                 }
@@ -634,10 +629,7 @@ public class DevMojo extends AbstractMojo {
             }
 
             outputDirectory.mkdirs();
-            // if the --enable-preview flag was set, then we need to enable it when launching dev mode as well
-            if (devModeContext.isEnablePreview()) {
-                args.add(DevModeContext.ENABLE_PREVIEW_FLAG);
-            }
+
             args.add("-jar");
             args.add(tempFile.getAbsolutePath());
 
