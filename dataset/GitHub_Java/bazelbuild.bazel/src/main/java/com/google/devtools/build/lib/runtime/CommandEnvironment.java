@@ -91,7 +91,6 @@ public class CommandEnvironment {
   private final Set<String> visibleActionEnv = new TreeSet<>();
   private final Set<String> visibleTestEnv = new TreeSet<>();
   private final Map<String, String> repoEnv = new TreeMap<>();
-  private final Map<String, String> repoEnvFromOptions = new TreeMap<>();
   private final TimestampGranularityMonitor timestampGranularityMonitor;
   private final Thread commandThread;
   private final Command command;
@@ -102,7 +101,6 @@ public class CommandEnvironment {
   private final Duration waitTime;
   private final long commandStartTime;
   private final ImmutableList<Any> commandExtensions;
-  private final ImmutableList.Builder<Any> responseExtensions = ImmutableList.builder();
 
   private OutputService outputService;
   private TopDownActionCache topDownActionCache;
@@ -182,6 +180,7 @@ public class CommandEnvironment {
         Preconditions.checkNotNull(
             options.getOptions(CommonCommandOptions.class),
             "CommandEnvironment needs its options provider to have CommonCommandOptions loaded.");
+    Path workspacePath = directories.getWorkspace();
     Path workingDirectory;
     try {
       workingDirectory = computeWorkingDirectory(commandOptions);
@@ -189,7 +188,7 @@ public class CommandEnvironment {
       // We'll exit very soon, but set the working directory to something reasonable so remainder of
       // setup can finish.
       this.blazeModuleEnvironment.exit(e);
-      workingDirectory = directories.getWorkingDirectory();
+      workingDirectory = workspacePath;
     }
     this.workingDirectory = workingDirectory;
     if (getWorkspace() != null) {
@@ -204,14 +203,12 @@ public class CommandEnvironment {
     this.commandExtensions = ImmutableList.copyOf(commandExtensions);
     // If this command supports --package_path we initialize the package locator scoped
     // to the command environment
-    if (commandHasPackageOptions(command) && directories.getWorkspace() != null) {
+    if (commandHasPackageOptions(command) && workspacePath != null) {
       this.packageLocator =
           workspace
               .getSkyframeExecutor()
               .createPackageLocator(
-                  reporter,
-                  options.getOptions(PackageOptions.class).packagePath,
-                  directories.getWorkspace());
+                  reporter, options.getOptions(PackageOptions.class).packagePath, workingDirectory);
     } else {
       this.packageLocator = null;
     }
@@ -247,15 +244,10 @@ public class CommandEnvironment {
       }
     }
 
-    for (Map.Entry<String, String> entry : commandOptions.repositoryEnvironment) {
-      String name = entry.getKey();
-      String value = entry.getValue();
-      if (value == null) {
-        value = System.getenv(name);
-      }
-      if (value != null) {
+    CoreOptions configOpts = options.getOptions(CoreOptions.class);
+    if (configOpts != null) {
+      for (Map.Entry<String, String> entry : configOpts.repositoryEnvironment) {
         repoEnv.put(entry.getKey(), entry.getValue());
-        repoEnvFromOptions.put(entry.getKey(), entry.getValue());
       }
     }
   }
@@ -327,10 +319,6 @@ public class CommandEnvironment {
 
   public Clock getClock() {
     return getRuntime().getClock();
-  }
-
-  public Thread getCommandThread() {
-    return commandThread;
   }
 
   public OptionsProvider getStartupOptionsProvider() {
@@ -520,7 +508,7 @@ public class CommandEnvironment {
    * Callers should certainly not make this assumption. The Path returned may be null.
    */
   public Path getWorkspace() {
-    return getDirectories().getWorkingDirectory();
+    return getDirectories().getWorkspace();
   }
 
   public String getWorkspaceName() {
@@ -713,7 +701,6 @@ public class CommandEnvironment {
                 options.getOptions(BuildLanguageOptions.class),
                 getCommandId(),
                 clientEnv,
-                repoEnvFromOptions,
                 timestampGranularityMonitor,
                 options);
   }
@@ -833,20 +820,5 @@ public class CommandEnvironment {
    */
   public ImmutableList<Any> getCommandExtensions() {
     return commandExtensions;
-  }
-
-  /**
-   * Returns the {@linkplain
-   * com.google.devtools.build.lib.server.CommandProtos.RunResponse#getCommandExtensions extensions}
-   * to be passed to the client for this command.
-   *
-   * <p>Extensions are arbitrary messages containing additional execution results.
-   */
-  public ImmutableList<Any> getResponseExtensions() {
-    return responseExtensions.build();
-  }
-
-  public void addResponseExtensions(Iterable<Any> extensions) {
-    responseExtensions.addAll(extensions);
   }
 }
