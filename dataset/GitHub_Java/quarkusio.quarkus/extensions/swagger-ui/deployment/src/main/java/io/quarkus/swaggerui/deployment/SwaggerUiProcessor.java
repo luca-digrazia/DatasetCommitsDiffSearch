@@ -118,8 +118,7 @@ public class SwaggerUiProcessor {
                     throw new RuntimeException(e);
                 }
             }
-            Handler<RoutingContext> handler = recorder.handler(cached.cachedDirectory,
-                    httpRootPathBuildItem.adjustPath(swaggerUiConfig.path));
+            Handler<RoutingContext> handler = recorder.handler(cached.cachedDirectory, swaggerUiConfig.path);
             routes.produce(new RouteBuildItem(swaggerUiConfig.path, handler));
             routes.produce(new RouteBuildItem(swaggerUiConfig.path + "/*", handler));
             displayableEndpoints.produce(new NotFoundPageDisplayableEndpointBuildItem(swaggerUiConfig.path + "/"));
