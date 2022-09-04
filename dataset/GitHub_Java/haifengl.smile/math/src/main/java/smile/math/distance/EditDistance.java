@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.math.distance;
 
@@ -61,7 +61,7 @@ public class EditDistance implements Metric<String> {
     /**
      * Cost matrix. Because Java automatically initialize arrays, it
      * takes O(mn) to declare this cost matrix every time before
-     * calculate edit distance. But the whole point of Berghel and Roach
+     * calculate edit distance. But the whole point of Berghel & Roach
      * algorithm is to calculate fewer cells than O(mn). Therefore,
      * we create this cost matrix here. Therefore, the methods using
      * this cost matrix is not multi-thread safe.
@@ -170,13 +170,12 @@ public class EditDistance implements Metric<String> {
      * it is NOT multi-thread safe for unit cost edit distance.
      */
     public double d(char[] x, char[] y) {
-        if (weight != null) {
+        if (weight != null)
             return weightedEdit(x, y);
-        } else if (FKP == null || x.length == 1 || y.length == 1) {
+        else if (FKP == null || x.length == 1 || y.length == 1)
             return damerau ? damerau(x, y) : levenshtein(x, y);
-        } else {
+        else
             return br(x, y);
-        }
     }
 
     /**
