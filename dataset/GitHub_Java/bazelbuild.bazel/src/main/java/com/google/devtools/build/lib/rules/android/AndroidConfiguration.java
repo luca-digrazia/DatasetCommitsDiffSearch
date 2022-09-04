@@ -37,7 +37,8 @@ import com.google.devtools.build.lib.rules.cpp.CppConfiguration.DynamicMode;
 import com.google.devtools.build.lib.rules.cpp.CppOptions.DynamicModeConverter;
 import com.google.devtools.build.lib.rules.cpp.CppOptions.LibcTopLabelConverter;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.skylarkbuildapi.android.AndroidConfigurationApi;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.common.options.Converters;
 import com.google.devtools.common.options.EnumConverter;
 import com.google.devtools.common.options.Option;
@@ -49,9 +50,13 @@ import javax.annotation.Nullable;
 
 /** Configuration fragment for Android rules. */
 @AutoCodec
+@SkylarkModule(
+  name = "android",
+  doc = "A configuration fragment for Android.",
+  category = SkylarkModuleCategory.CONFIGURATION_FRAGMENT
+)
 @Immutable
-public class AndroidConfiguration extends BuildConfiguration.Fragment
-    implements AndroidConfigurationApi {
+public class AndroidConfiguration extends BuildConfiguration.Fragment {
   /**
    * Converter for {@link
    * com.google.devtools.build.lib.rules.android.AndroidConfiguration.ConfigurationDistinguisher}
@@ -836,19 +841,17 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
     )
     public boolean checkForMigrationTag;
 
-    // TODO(eaftan): enable this by default and delete it
+    // TODO(eaftan): this is enabled by default, delete it after the next blaze release and removing
+    // from the global blazerc
     @Option(
-      name = "experimental_one_version_enforcement_use_transitive_jars_for_binary_under_test",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = {
-        OptionEffectTag.BAZEL_INTERNAL_CONFIGURATION,
-        OptionEffectTag.ACTION_COMMAND_LINES
-      },
-      help =
-          "If enabled, one version enforcement for android_test uses the binary_under_test's "
-              + "transitive classpath, otherwise it uses the deploy jar"
-    )
+        name = "experimental_one_version_enforcement_use_transitive_jars_for_binary_under_test",
+        defaultValue = "false",
+        documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+        effectTags = {
+          OptionEffectTag.BAZEL_INTERNAL_CONFIGURATION,
+          OptionEffectTag.ACTION_COMMAND_LINES
+        },
+        help = "No-op. Kept here for backwards compatibility.")
     public boolean oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest;
 
     @Override
@@ -873,8 +876,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
       host.manifestMerger = manifestMerger;
       host.androidAaptVersion = androidAaptVersion;
       host.allowAndroidLibraryDepsWithoutSrcs = allowAndroidLibraryDepsWithoutSrcs;
-      host.oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest =
-          oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest;
       return host;
     }
   }
@@ -933,7 +934,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
   private final AndroidRobolectricTestDeprecationLevel robolectricTestDeprecationLevel;
   private final boolean decoupleDataProcessing;
   private final boolean checkForMigrationTag;
-  private final boolean oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest;
 
   AndroidConfiguration(Options options) throws InvalidConfigurationException {
     this.enableAndroidCpuMakeVariable = options.enableAndroidCpuMakeVariable;
@@ -974,8 +974,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
     this.robolectricTestDeprecationLevel = options.robolectricTestDeprecationLevel;
     this.decoupleDataProcessing = options.decoupleDataProcessing;
     this.checkForMigrationTag = options.checkForMigrationTag;
-    this.oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest =
-        options.oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest;
 
     if (incrementalDexingShardsAfterProguard < 0) {
       throw new InvalidConfigurationException(
@@ -1028,8 +1026,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
       boolean fixedResourceNeverlinking,
       AndroidRobolectricTestDeprecationLevel robolectricTestDeprecationLevel,
       boolean decoupleDataProcessing,
-      boolean checkForMigrationTag,
-      boolean oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest) {
+      boolean checkForMigrationTag) {
     this.enableAndroidCpuMakeVariable = enableAndroidCpuMakeVariable;
     this.sdk = sdk;
     this.cpu = cpu;
@@ -1065,8 +1062,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
     this.robolectricTestDeprecationLevel = robolectricTestDeprecationLevel;
     this.decoupleDataProcessing = decoupleDataProcessing;
     this.checkForMigrationTag = checkForMigrationTag;
-    this.oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest =
-        oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest;
   }
 
   public String getCpu() {
@@ -1074,10 +1069,11 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
   }
 
   @SkylarkConfigurationField(
-      name = "android_sdk_label",
-      doc = "Returns the target denoted by the value of the --android_sdk flag",
-      defaultLabel = AndroidRuleClasses.DEFAULT_SDK,
-      defaultInToolRepository = true)
+    name = "android_sdk_label",
+    doc = "Returns the target denoted by the value of the --android_sdk flag",
+    defaultLabel = AndroidRuleClasses.DEFAULT_SDK,
+    defaultInToolRepository = true
+  )
   public Label getSdk() {
     return sdk;
   }
@@ -1219,10 +1215,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
 
   public boolean checkForMigrationTag() {
     return checkForMigrationTag;
-  }
-
-  public boolean getOneVersionEnforcementUseTransitiveJarsForBinaryUnderTest() {
-    return oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest;
   }
 
   @Override
