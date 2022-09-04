@@ -14,8 +14,6 @@
 
 package com.google.devtools.common.options;
 
-import static java.util.Map.Entry.comparingByKey;
-
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
@@ -23,6 +21,7 @@ import com.google.common.collect.ListMultimap;
 import com.google.devtools.common.options.OptionPriority.PriorityCategory;
 import com.google.devtools.common.options.OptionsParser.ConstructionException;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -279,8 +278,11 @@ public abstract class OptionValueDescription {
 
     @Override
     public String getSourceString() {
-      return parsedOptions.asMap().entrySet().stream()
-          .sorted(comparingByKey())
+      return parsedOptions
+          .asMap()
+          .entrySet()
+          .stream()
+          .sorted(Comparator.comparing(Map.Entry::getKey))
           .map(Map.Entry::getValue)
           .flatMap(Collection::stream)
           .map(ParsedOptionDescription::getSource)
@@ -293,7 +295,7 @@ public abstract class OptionValueDescription {
       // Sort the results by option priority and return them in a new list. The generic type of
       // the list is not known at runtime, so we can't use it here.
       return optionValues.asMap().entrySet().stream()
-          .sorted(comparingByKey())
+          .sorted(Comparator.comparing(Map.Entry::getKey))
           .map(Map.Entry::getValue)
           .flatMap(Collection::stream)
           .collect(ImmutableList.toImmutableList());
@@ -317,8 +319,11 @@ public abstract class OptionValueDescription {
 
     @Override
     public ImmutableList<ParsedOptionDescription> getCanonicalInstances() {
-      return parsedOptions.asMap().entrySet().stream()
-          .sorted(comparingByKey())
+      return parsedOptions
+          .asMap()
+          .entrySet()
+          .stream()
+          .sorted(Comparator.comparing(Map.Entry::getKey))
           .map(Map.Entry::getValue)
           .flatMap(Collection::stream)
           // Only provide the options that aren't implied elsewhere.
