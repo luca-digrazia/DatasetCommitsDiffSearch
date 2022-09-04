@@ -36,6 +36,8 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.ExtendedEventHandler.Postable;
 import com.google.devtools.build.lib.events.Location;
+import com.google.devtools.build.lib.events.StoredEventHandler;
+import com.google.devtools.build.lib.packages.AstParseResult;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
 import com.google.devtools.build.lib.packages.BuildFileNotFoundException;
 import com.google.devtools.build.lib.packages.CachingPackageLocator;
@@ -96,7 +98,7 @@ public class PackageFunction implements SkyFunction {
   private final PackageFactory packageFactory;
   private final CachingPackageLocator packageLocator;
   private final Cache<PackageIdentifier, LoadedPackageCacheEntry> packageFunctionCache;
-  private final Cache<PackageIdentifier, StarlarkFile> fileSyntaxCache;
+  private final Cache<PackageIdentifier, AstParseResult> astCache;
   private final AtomicBoolean showLoadingProgress;
   private final AtomicInteger numPackagesLoaded;
   @Nullable private final PackageProgressReceiver packageProgress;
@@ -114,7 +116,7 @@ public class PackageFunction implements SkyFunction {
       CachingPackageLocator pkgLocator,
       AtomicBoolean showLoadingProgress,
       Cache<PackageIdentifier, LoadedPackageCacheEntry> packageFunctionCache,
-      Cache<PackageIdentifier, StarlarkFile> fileSyntaxCache,
+      Cache<PackageIdentifier, AstParseResult> astCache,
       AtomicInteger numPackagesLoaded,
       @Nullable SkylarkImportLookupFunction skylarkImportLookupFunctionForInlining,
       @Nullable PackageProgressReceiver packageProgress,
@@ -129,7 +131,7 @@ public class PackageFunction implements SkyFunction {
     this.packageLocator = pkgLocator;
     this.showLoadingProgress = showLoadingProgress;
     this.packageFunctionCache = packageFunctionCache;
-    this.fileSyntaxCache = fileSyntaxCache;
+    this.astCache = astCache;
     this.numPackagesLoaded = numPackagesLoaded;
     this.packageProgress = packageProgress;
     this.actionOnIOExceptionReadingBuildFile = actionOnIOExceptionReadingBuildFile;
@@ -142,7 +144,7 @@ public class PackageFunction implements SkyFunction {
       CachingPackageLocator pkgLocator,
       AtomicBoolean showLoadingProgress,
       Cache<PackageIdentifier, LoadedPackageCacheEntry> packageFunctionCache,
-      Cache<PackageIdentifier, StarlarkFile> fileSyntaxCache,
+      Cache<PackageIdentifier, AstParseResult> astCache,
       AtomicInteger numPackagesLoaded,
       @Nullable SkylarkImportLookupFunction skylarkImportLookupFunctionForInlining) {
     this(
@@ -150,7 +152,7 @@ public class PackageFunction implements SkyFunction {
         pkgLocator,
         showLoadingProgress,
         packageFunctionCache,
-        fileSyntaxCache,
+        astCache,
         numPackagesLoaded,
         skylarkImportLookupFunctionForInlining,
         /*packageProgress=*/ null,
@@ -410,8 +412,7 @@ public class PackageFunction implements SkyFunction {
     RuleVisibility defaultVisibility = PrecomputedValue.DEFAULT_VISIBILITY.get(env);
     StarlarkSemantics starlarkSemantics = PrecomputedValue.STARLARK_SEMANTICS.get(env);
     BlacklistedPackagePrefixesValue blacklistedPackagePrefixes =
-        (BlacklistedPackagePrefixesValue)
-            env.getValue(BlacklistedPackagePrefixesValue.key(packageId.getRepository()));
+        (BlacklistedPackagePrefixesValue) env.getValue(BlacklistedPackagePrefixesValue.key());
     if (env.valuesMissing()) {
       return null;
     }
@@ -1071,7 +1072,7 @@ public class PackageFunction implements SkyFunction {
         for (SkyKey includeGlobKey : includesGlobKeys) {
           // TODO(bazel-team): NestedSet expansion here is suboptimal.
           boolean foundMatch = false;
-          for (PathFragment match : getGlobMatches(includeGlobKey, globValueMap).toList()) {
+          for (PathFragment match : getGlobMatches(includeGlobKey, globValueMap)) {
             matches.add(match.getPathString());
             foundMatch = true;
           }
@@ -1177,9 +1178,9 @@ public class PackageFunction implements SkyFunction {
     }
     try (SilentCloseable c =
         Profiler.instance().profile(ProfilerTask.CREATE_PACKAGE, packageId.toString())) {
-      StarlarkFile file = fileSyntaxCache.getIfPresent(packageId);
+      AstParseResult astParseResult = astCache.getIfPresent(packageId);
       Path inputFile = buildFilePath.asPath();
-      if (file == null) {
+      if (astParseResult == null) {
         if (showLoadingProgress.get()) {
           env.getListener().handle(Event.progress("Loading package: " + packageId));
         }
@@ -1206,8 +1207,12 @@ public class PackageFunction implements SkyFunction {
           // See the javadoc for ActionOnIOExceptionReadingBuildFile.
         }
         input = ParserInput.create(buildFileBytes, inputFile.asFragment());
-        file = PackageFactory.parseBuildFile(packageId, input, preludeStatements);
-        fileSyntaxCache.put(packageId, file);
+        StoredEventHandler astParsingEventHandler = new StoredEventHandler();
+        StarlarkFile ast =
+            PackageFactory.parseBuildFile(
+                packageId, input, preludeStatements, astParsingEventHandler);
+        astParseResult = new AstParseResult(ast, astParsingEventHandler);
+        astCache.put(packageId, astParseResult);
       }
       SkylarkImportResult importResult;
       try {
@@ -1216,14 +1221,14 @@ public class PackageFunction implements SkyFunction {
                 buildFilePath,
                 packageId,
                 repositoryMapping,
-                file,
+                astParseResult.ast,
                 /* workspaceChunk = */ -1,
                 env,
                 skylarkImportLookupFunctionForInlining);
       } catch (NoSuchPackageException e) {
         throw new PackageFunctionException(e, Transience.PERSISTENT);
       } catch (InterruptedException e) {
-        fileSyntaxCache.invalidate(packageId);
+        astCache.invalidate(packageId);
         throw e;
       }
       if (importResult == null) {
@@ -1236,7 +1241,7 @@ public class PackageFunction implements SkyFunction {
       // packageFunctionCache, so future Skyframe restarts don't need to parse the AST again.
       //
       // Therefore, it is safe to invalidate the astCache entry for this packageId here.
-      fileSyntaxCache.invalidate(packageId);
+      astCache.invalidate(packageId);
       GlobberWithSkyframeGlobDeps globberWithSkyframeGlobDeps =
           makeGlobber(inputFile, packageId, blacklistedGlobPrefixes, packageRoot, env);
       long startTimeNanos = BlazeClock.nanoTime();
@@ -1246,7 +1251,7 @@ public class PackageFunction implements SkyFunction {
               repositoryMapping,
               packageId,
               buildFilePath,
-              file,
+              astParseResult,
               importResult.importMap,
               importResult.fileDependencies,
               defaultVisibility,
