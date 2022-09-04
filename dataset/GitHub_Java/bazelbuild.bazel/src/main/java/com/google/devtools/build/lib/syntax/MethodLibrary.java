@@ -34,6 +34,7 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.EvalUtils.ComparisonException;
 import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
+import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics.FlagIdentifier;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -49,7 +50,7 @@ import javax.annotation.Nullable;
 
 /** A helper class containing built in functions for the Skylark language. */
 @SkylarkGlobalLibrary
-class MethodLibrary {
+public class MethodLibrary {
 
   @SkylarkCallable(
       name = "min",
@@ -170,9 +171,9 @@ class MethodLibrary {
               + "<pre class=\"language-python\">sorted([3, 5, 4]) == [3, 4, 5]</pre>",
       parameters = {
         @Param(
-            name = "iterable",
+            name = "self",
             type = Object.class,
-            doc = "The iterable sequence to sort.",
+            doc = "This collection.",
             // TODO(cparsons): This parameter should be positional-only.
             legacyNamed = true),
         @Param(
@@ -193,14 +194,14 @@ class MethodLibrary {
       useLocation = true,
       useStarlarkThread = true)
   public MutableList<?> sorted(
-      Object iterable,
+      Object self,
       final Object key,
       Boolean reverse,
       final Location loc,
       final StarlarkThread thread)
       throws EvalException, InterruptedException {
 
-    ArrayList<?> list = new ArrayList<>(EvalUtils.toCollection(iterable, loc, thread));
+    ArrayList<?> list = new ArrayList<>(EvalUtils.toCollection(self, loc, thread));
     if (key == Runtime.NONE) {
       try {
         Collections.sort(list, EvalUtils.SKYLARK_COMPARATOR);
@@ -492,7 +493,7 @@ class MethodLibrary {
       useLocation = true)
   public Integer convertToInt(Object x, Object base, Location loc) throws EvalException {
     if (x instanceof String) {
-      if (base == Starlark.UNBOUND) {
+      if (base == Runtime.UNBOUND) {
         base = 10;
       } else if (!(base instanceof Integer)) {
         throw new EvalException(
@@ -500,7 +501,7 @@ class MethodLibrary {
       }
       return fromString((String) x, loc, (Integer) base);
     } else {
-      if (base != Starlark.UNBOUND) {
+      if (base != Runtime.UNBOUND) {
         throw new EvalException(loc, "int() can't convert non-string with explicit base");
       }
       if (x instanceof Boolean) {
@@ -793,7 +794,7 @@ class MethodLibrary {
       throws EvalException, InterruptedException {
     Object result = EvalUtils.getAttr(thread, loc, obj, name);
     if (result == null) {
-      if (defaultValue != Starlark.UNBOUND) {
+      if (defaultValue != Runtime.UNBOUND) {
         return defaultValue;
       }
       throw EvalUtils.getMissingFieldException(obj, name, loc, thread.getSemantics(), "attribute");
@@ -823,6 +824,7 @@ class MethodLibrary {
     if (object instanceof ClassObject) {
       fields.addAll(((ClassObject) object).getFieldNames());
     }
+    fields.addAll(Runtime.getBuiltinRegistry().getFunctionNames(object.getClass()));
     fields.addAll(CallUtils.getMethodNames(thread.getSemantics(), object.getClass()));
     return MutableList.copyOf(thread, fields);
   }
@@ -1244,4 +1246,9 @@ class MethodLibrary {
               + "Any value can be converted to a boolean using the "
               + "<a href=\"globals.html#bool\">bool</a> function.")
   static final class BoolModule implements SkylarkValue {} // (documentation only)
+
+  /** Adds bindings for all the builtin functions of this class to the given map builder. */
+  public static void addBindingsToBuilder(ImmutableMap.Builder<String, Object> builder) {
+    Runtime.setupSkylarkLibrary(builder, new MethodLibrary());
+  }
 }

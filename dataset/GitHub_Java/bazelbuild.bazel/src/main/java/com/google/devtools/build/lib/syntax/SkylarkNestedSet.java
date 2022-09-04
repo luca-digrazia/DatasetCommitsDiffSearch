@@ -28,6 +28,7 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
+import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
 import java.util.Collection;
 import javax.annotation.Nullable;
 
@@ -44,49 +45,48 @@ import javax.annotation.Nullable;
  * <p>TODO(bazel-team): Decide whether this restriction is still useful.
  */
 @SkylarkModule(
-    name = "depset",
-    category = SkylarkModuleCategory.BUILTIN,
-    doc =
-        "<p>A specialized data structure that supports efficient merge operations and has a"
-            + " defined traversal order. Commonly used for accumulating data from transitive"
-            + " dependencies in rules and aspects. For more information see <a"
-            + " href=\"../depsets.md\">here</a>."
-            + " <p>Depsets are not implemented as hash sets and do"
-            + " not support fast membership tests. If you need a general set datatype, you can"
-            + " simulate one using a dictionary where all keys map to <code>True</code>."
-            + "<p>Depsets are immutable. They should be created using their <a"
-            + " href=\"globals.html#depset\">constructor function</a> and merged or augmented with"
-            + " other depsets via the <code>transitive</code> argument. There are other deprecated"
-            + " methods (<code>|</code> and <code>+</code> operators, <code>union</code> method)"
-            + " that will eventually go away."
-            + "<p>The <code>order</code> parameter determines the"
-            + " kind of traversal that is done to convert the depset to an iterable. There are"
-            + " four possible values:"
-            + "<ul><li><code>\"default\"</code> (formerly"
-            + " <code>\"stable\"</code>): Order is unspecified (but"
-            + " deterministic).</li>"
-            + "<li><code>\"postorder\"</code> (formerly"
-            + " <code>\"compile\"</code>): A left-to-right post-ordering. Precisely, this"
-            + " recursively traverses all children leftmost-first, then the direct elements"
-            + " leftmost-first.</li>"
-            + "<li><code>\"preorder\"</code> (formerly"
-            + " <code>\"naive_link\"</code>): A left-to-right pre-ordering. Precisely, this"
-            + " traverses the direct elements leftmost-first, then recursively traverses the"
-            + " children leftmost-first.</li>"
-            + "<li><code>\"topological\"</code> (formerly"
-            + " <code>\"link\"</code>): A topological ordering from the root down to the leaves."
-            + " There is no left-to-right guarantee.</li>"
-            + "</ul>"
-            + "<p>Two depsets may only be merged if"
-            + " either both depsets have the same order, or one of them has"
-            + " <code>\"default\"</code> order. In the latter case the resulting depset's order"
-            + " will be the same as the other's order."
-            + "<p>Depsets may contain duplicate values but"
-            + " these will be suppressed when iterating (using <code>to_list()</code>). Duplicates"
-            + " may interfere with the ordering semantics.")
+  name = "depset",
+  category = SkylarkModuleCategory.BUILTIN,
+  doc =
+      "<p>A specialized data structure that supports efficient merge operations and has a defined "
+          + "traversal order. Commonly used for accumulating data from transitive dependencies in "
+          + "rules and aspects. For more information see <a href=\"../depsets.md\">here</a>."
+          + "<p>"
+          + "Depsets are not implemented as hash sets and do not support fast membership tests. If "
+          + "you need a general set datatype, you can simulate one using a dictionary where all "
+          + "keys map to <code>True</code>."
+          + "<p>"
+          + "Depsets are immutable. They should be created using their "
+          + "<a href=\"globals.html#depset\">constructor function</a> and merged or augmented with "
+          + "other depsets via the <code>transitive</code> argument. There are other deprecated "
+          + "methods (<code>|</code> and <code>+</code> operators, <code>union</code> method) that "
+          + "will eventually go away."
+          + "<p>"
+          + "The <code>order</code> parameter determines the kind of traversal that is done to "
+          + "convert the depset to an iterable. There are four possible values:"
+          + "<ul>"
+          + "<li><code>\"default\"</code> (formerly <code>\"stable\"</code>): Order is unspecified "
+          + "(but deterministic).</li>"
+          + "<li><code>\"postorder\"</code> (formerly <code>\"compile\"</code>): A left-to-right "
+          + "post-ordering. Precisely, this recursively traverses all children leftmost-first, "
+          + "then the direct elements leftmost-first.</li>"
+          + "<li><code>\"preorder\"</code> (formerly <code>\"naive_link\"</code>): A left-to-right "
+          + "pre-ordering. Precisely, this traverses the direct elements leftmost-first, then "
+          + "recursively traverses the children leftmost-first.</li>"
+          + "<li><code>\"topological\"</code> (formerly <code>\"link\"</code>): A topological "
+          + "ordering from the root down to the leaves. There is no left-to-right guarantee.</li>"
+          + "</ul>"
+          + "<p>"
+          + "Two depsets may only be merged if either both depsets have the same order, or one of "
+          + "them has <code>\"default\"</code> order. In the latter case the resulting depset's "
+          + "order will be the same as the other's order."
+          + "<p>"
+          + "Depsets may contain duplicate values but these will be suppressed when iterating "
+          + "(using <code>to_list()</code>). Duplicates may interfere with the ordering semantics."
+)
 @Immutable
 @AutoCodec
-public final class SkylarkNestedSet implements SkylarkValue {
+public final class SkylarkNestedSet implements SkylarkValue, SkylarkQueryable {
   private final SkylarkType contentType;
   private final NestedSet<?> set;
   @Nullable private final ImmutableList<Object> items;
@@ -129,10 +129,10 @@ public final class SkylarkNestedSet implements SkylarkValue {
             contentType, nestedSet.contentType, /*lastInsertedType=*/ null, loc);
         transitiveItemsBuilder.add(nestedSet.set);
       }
-    } else if (item instanceof Sequence) {
+    } else if (item instanceof SkylarkList) {
       SkylarkType lastInsertedType = null;
       // TODO(bazel-team): we should check ImmutableList here but it screws up genrule at line 43
-      for (Object object : (Sequence) item) {
+      for (Object object : (SkylarkList) item) {
         SkylarkType elemType = SkylarkType.of(object);
         contentType = getTypeAfterInsert(contentType, elemType, lastInsertedType, loc);
         lastInsertedType = elemType;
@@ -163,7 +163,7 @@ public final class SkylarkNestedSet implements SkylarkValue {
 
   static SkylarkNestedSet of(Order order, Object item, Location loc) throws EvalException {
     // TODO(adonovan): rethink this API. TOP is a pessimistic type for item, and it's wrong
-    // (should be BOTTOM) if item is an empty SkylarkNestedSet or Sequence.
+    // (should be BOTTOM) if item is an empty SkylarkNestedSet or SkylarkList.
     return of(order, SkylarkType.TOP, item, loc, null);
   }
 
@@ -345,7 +345,7 @@ public final class SkylarkNestedSet implements SkylarkValue {
   // TODO(b/140932420): Better noneable handling should prevent instanceof checking.
   public static <T> NestedSet<T> getSetFromNoneableParam(
       Object depsetOrNone, Class<T> expectedType, String fieldName) throws EvalException {
-    if (depsetOrNone == Starlark.NONE) {
+    if (depsetOrNone == Runtime.NONE) {
       return NestedSetBuilder.<T>emptySet(Order.STABLE_ORDER);
     }
     if (depsetOrNone instanceof SkylarkNestedSet) {
@@ -398,6 +398,11 @@ public final class SkylarkNestedSet implements SkylarkValue {
     printer.append(")");
   }
 
+  @Override
+  public final boolean containsKey(Object key, Location loc) throws EvalException {
+    return set.toList().contains(key);
+  }
+
   @SkylarkCallable(
       name = "union",
       doc =
@@ -436,10 +441,9 @@ public final class SkylarkNestedSet implements SkylarkValue {
               + "on the depset and vice versa.",
       useStarlarkThread = true,
       useLocation = true)
-  public StarlarkList<Object> toList(Location location, StarlarkThread thread)
-      throws EvalException {
+  public MutableList<Object> toList(Location location, StarlarkThread thread) throws EvalException {
     try {
-      return StarlarkList.copyOf(thread, this.toCollection());
+      return MutableList.copyOf(thread, this.toCollection());
     } catch (NestedSetDepthException exception) {
       throw new EvalException(
           location,

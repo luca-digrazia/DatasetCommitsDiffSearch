@@ -45,18 +45,18 @@ import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
 import com.google.devtools.build.lib.skylarkbuildapi.SkylarkActionFactoryApi;
-import com.google.devtools.build.lib.syntax.Depset;
-import com.google.devtools.build.lib.syntax.Dict;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
-import com.google.devtools.build.lib.syntax.Printer;
-import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.Runtime;
+import com.google.devtools.build.lib.syntax.SkylarkDict;
+import com.google.devtools.build.lib.syntax.SkylarkList;
+import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
@@ -120,7 +120,7 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
     context.checkMutable("actions.declare_file");
 
     PathFragment fragment;
-    if (Starlark.NONE.equals(sibling)) {
+    if (Runtime.NONE.equals(sibling)) {
       fragment = ruleContext.getPackageDirectory().getRelative(PathFragment.create(filename));
     } else {
       PathFragment original = ((Artifact) sibling).getRootRelativePath();
@@ -142,7 +142,7 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
     context.checkMutable("actions.declare_directory");
     PathFragment fragment;
 
-    if (Starlark.NONE.equals(sibling)) {
+    if (Runtime.NONE.equals(sibling)) {
       fragment = ruleContext.getPackageDirectory().getRelative(PathFragment.create(filename));
     } else {
       PathFragment original = ((Artifact) sibling).getRootRelativePath();
@@ -180,7 +180,7 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
 
     Artifact result;
     PathFragment rootRelativePath;
-    if (Starlark.NONE.equals(sibling)) {
+    if (Runtime.NONE.equals(sibling)) {
       rootRelativePath = ruleContext.getPackageDirectory().getRelative(filename);
     } else {
       PathFragment original = ((Artifact) sibling).getRootRelativePath();
@@ -204,10 +204,10 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
   public void doNothing(String mnemonic, Object inputs, Location location) throws EvalException {
     context.checkMutable("actions.do_nothing");
     NestedSet<Artifact> inputSet =
-        inputs instanceof Depset
-            ? ((Depset) inputs).getSetFromParam(Artifact.class, "inputs")
+        inputs instanceof SkylarkNestedSet
+            ? ((SkylarkNestedSet) inputs).getSetFromParam(Artifact.class, "inputs")
             : NestedSetBuilder.<Artifact>compileOrder()
-                .addAll(((Sequence<?>) inputs).getContents(Artifact.class, "inputs"))
+                .addAll(((SkylarkList<?>) inputs).getContents(Artifact.class, "inputs"))
                 .build();
     Action action =
         new PseudoAction<>(
@@ -267,7 +267,7 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
       action =
           new ParameterFileWriteAction(
               ruleContext.getActionOwner(),
-              NestedSetBuilder.wrap(Order.STABLE_ORDER, args.getDirectoryArtifacts()),
+              args.getDirectoryArtifacts(),
               (Artifact) output,
               args.build(),
               args.getParameterFileType(),
@@ -280,7 +280,7 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
 
   @Override
   public void run(
-      Sequence<?> outputs,
+      SkylarkList<?> outputs,
       Object inputs,
       Object unusedInputsList,
       Object executableUnchecked,
@@ -297,7 +297,7 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
     context.checkMutable("actions.run");
     StarlarkAction.Builder builder = new StarlarkAction.Builder();
 
-    Sequence<?> argumentsList = ((Sequence) arguments);
+    SkylarkList<?> argumentsList = ((SkylarkList) arguments);
     buildCommandLine(builder, argumentsList);
     if (executableUnchecked instanceof Artifact) {
       Artifact executable = (Artifact) executableUnchecked;
@@ -366,7 +366,7 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
 
   @Override
   public void runShell(
-      Sequence<?> outputs,
+      SkylarkList<?> outputs,
       Object inputs,
       Object toolsUnchecked,
       Object arguments,
@@ -378,11 +378,11 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
       Object executionRequirementsUnchecked,
       Object inputManifestsUnchecked,
       Location location,
-      StarlarkThread thread)
+      StarlarkSemantics semantics)
       throws EvalException {
     context.checkMutable("actions.run_shell");
 
-    Sequence<?> argumentList = (Sequence) arguments;
+    SkylarkList<?> argumentList = (SkylarkList) arguments;
     StarlarkAction.Builder builder = new StarlarkAction.Builder();
     buildCommandLine(builder, argumentList);
 
@@ -407,15 +407,15 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
           builder.addTool(provider);
         }
       }
-    } else if (commandUnchecked instanceof Sequence) {
-      if (thread.getSemantics().incompatibleRunShellCommandString()) {
+    } else if (commandUnchecked instanceof SkylarkList) {
+      if (semantics.incompatibleRunShellCommandString()) {
         throw new EvalException(
             location,
             "'command' must be of type string. passing a sequence of strings as 'command'"
                 + " is deprecated. To temporarily disable this check,"
                 + " set --incompatible_objc_framework_cleanup=false.");
       }
-      Sequence<?> commandList = (Sequence) commandUnchecked;
+      SkylarkList<?> commandList = (SkylarkList) commandUnchecked;
       if (argumentList.size() > 0) {
         throw new EvalException(location,
             "'arguments' must be empty if 'command' is a sequence of strings");
@@ -438,7 +438,7 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
     registerStarlarkAction(
         outputs,
         inputs,
-        /*unusedInputsList=*/ Starlark.NONE,
+        /*unusedInputsList=*/ Runtime.NONE,
         toolsUnchecked,
         mnemonicUnchecked,
         progressMessage,
@@ -450,7 +450,7 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
         builder);
   }
 
-  private static void buildCommandLine(SpawnAction.Builder builder, Sequence<?> argumentsList)
+  private static void buildCommandLine(SpawnAction.Builder builder, SkylarkList<?> argumentsList)
       throws EvalException {
     List<String> stringArgs = new ArrayList<>();
     for (Object value : argumentsList) {
@@ -482,7 +482,7 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
    * <p>{@code builder} should have either executable or a command set.
    */
   private void registerStarlarkAction(
-      Sequence<?> outputs,
+      SkylarkList<?> outputs,
       Object inputs,
       Object unusedInputsList,
       Object toolsUnchecked,
@@ -496,13 +496,14 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
       StarlarkAction.Builder builder)
       throws EvalException {
     Iterable<Artifact> inputArtifacts;
-    if (inputs instanceof Sequence) {
-      inputArtifacts = ((Sequence<?>) inputs).getContents(Artifact.class, "inputs");
+    if (inputs instanceof SkylarkList) {
+      inputArtifacts = ((SkylarkList<?>) inputs).getContents(Artifact.class, "inputs");
       builder.addInputs(inputArtifacts);
     } else {
-      NestedSet<Artifact> inputSet = ((Depset) inputs).getSetFromParam(Artifact.class, "inputs");
+      NestedSet<Artifact> inputSet =
+          ((SkylarkNestedSet) inputs).getSetFromParam(Artifact.class, "inputs");
       builder.addTransitiveInputs(inputSet);
-      inputArtifacts = inputSet.toList();
+      inputArtifacts = inputSet;
     }
 
     List<Artifact> outputArtifacts = outputs.getContents(Artifact.class, "outputs");
@@ -511,7 +512,7 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
     }
     builder.addOutputs(outputArtifacts);
 
-    if (unusedInputsList != Starlark.NONE) {
+    if (unusedInputsList != Runtime.NONE) {
       if (!starlarkSemantics.experimentalStarlarkUnusedInputsList()) {
         throw new EvalException(
             location,
@@ -531,12 +532,12 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
       }
     }
 
-    if (toolsUnchecked != Starlark.UNBOUND) {
+    if (toolsUnchecked != Runtime.UNBOUND) {
       Iterable<?> toolsIterable;
-      if (toolsUnchecked instanceof Sequence) {
-        toolsIterable = ((Sequence<?>) toolsUnchecked).getContents(Object.class, "tools");
+      if (toolsUnchecked instanceof SkylarkList) {
+        toolsIterable = ((SkylarkList<?>) toolsUnchecked).getContents(Object.class, "tools");
       } else {
-        toolsIterable = ((Depset) toolsUnchecked).getSet().toList();
+        toolsIterable = ((SkylarkNestedSet) toolsUnchecked).getSet();
       }
       for (Object toolUnchecked : toolsIterable) {
         if (toolUnchecked instanceof Artifact) {
@@ -604,12 +605,13 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
 
     String mnemonic = getMnemonic(mnemonicUnchecked);
     builder.setMnemonic(mnemonic);
-    if (envUnchecked != Starlark.NONE) {
+    if (envUnchecked != Runtime.NONE) {
       builder.setEnvironment(
           ImmutableMap.copyOf(
-              Dict.castSkylarkDictOrNoneToDict(envUnchecked, String.class, String.class, "env")));
+              SkylarkDict.castSkylarkDictOrNoneToDict(
+                  envUnchecked, String.class, String.class, "env")));
     }
-    if (progressMessage != Starlark.NONE) {
+    if (progressMessage != Runtime.NONE) {
       builder.setProgressMessageNonLazy((String) progressMessage);
     }
     if (Starlark.truth(useDefaultShellEnv)) {
@@ -623,10 +625,9 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
             starlarkSemantics.experimentalAllowTagsPropagation());
     builder.setExecutionInfo(executionInfo);
 
-    if (inputManifestsUnchecked != Starlark.NONE) {
-      for (RunfilesSupplier supplier :
-          Sequence.castSkylarkListOrNoneToList(
-              inputManifestsUnchecked, RunfilesSupplier.class, "runfiles suppliers")) {
+    if (inputManifestsUnchecked != Runtime.NONE) {
+      for (RunfilesSupplier supplier : SkylarkList.castSkylarkListOrNoneToList(
+          inputManifestsUnchecked, RunfilesSupplier.class, "runfiles suppliers")) {
         builder.addRunfilesSupplier(supplier);
       }
     }
@@ -635,7 +636,7 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
   }
 
   private String getMnemonic(Object mnemonicUnchecked) {
-    String mnemonic = mnemonicUnchecked == Starlark.NONE ? "Action" : (String) mnemonicUnchecked;
+    String mnemonic = mnemonicUnchecked == Runtime.NONE ? "Action" : (String) mnemonicUnchecked;
     if (ruleContext.getConfiguration().getReservedActionMnemonics().contains(mnemonic)) {
       mnemonic = mangleMnemonic(mnemonic);
     }
@@ -650,7 +651,7 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
   public void expandTemplate(
       FileApi template,
       FileApi output,
-      Dict<?, ?> substitutionsUnchecked,
+      SkylarkDict<?, ?> substitutionsUnchecked,
       Boolean executable,
       Location location)
       throws EvalException {
@@ -698,7 +699,7 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
   }
 
   @Override
-  public void repr(Printer printer) {
+  public void repr(SkylarkPrinter printer) {
     printer.append("actions for");
     context.repr(printer);
   }
