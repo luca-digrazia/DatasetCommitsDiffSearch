@@ -50,20 +50,9 @@ import java.util.EnumSet;
 import java.util.EventListener;
 import java.util.Map;
 
-/*
- * A factory for creating instances of {@link org.eclipse.jetty.server.Server} and configuring Servlets
- * 
- * Registers {@link com.yammer.metrics.core.HealthCheck}s, both default and user defined
- * 
- * Creates instances of {@link org.eclipse.jetty.server.Connector},
- * configured by {@link com.yammer.dropwizard.config.HttpConfiguration} for external and admin port
- * 
- * Registers {@link org.eclipse.jetty.server.Handler}s for admin and service Servlets.
- * {@link TaskServlet} 
- * {@link AdminServlet}
- * {@link com.sun.jersey.spi.container.servlet.ServletContainer} with all resources in {@link DropwizardResourceConfig} 
- * 
- * */
+// TODO: 11/7/11 <coda> -- document ServerFactory
+// TODO: 11/7/11 <coda> -- document ServerFactory
+
 public class ServerFactory {
     private static final Logger LOGGER = LoggerFactory.getLogger(ServerFactory.class);
 
@@ -325,7 +314,7 @@ public class ServerFactory {
         handler.addServlet(new ServletHolder(new TaskServlet(env.getTasks())), "/tasks/*");
         handler.addServlet(new ServletHolder(new AdminServlet()), "/*");
 
-        if (config.getAdminPort() != 0 && config.getAdminPort() == config.getPort()) {
+        if (config.getAdminPort() == config.getPort()) {
             handler.setContextPath("/admin");
             handler.setConnectorNames(new String[]{"main"});
         } else {
