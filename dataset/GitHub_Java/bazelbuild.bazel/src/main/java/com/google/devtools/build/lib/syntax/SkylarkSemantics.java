@@ -45,7 +45,6 @@ public abstract class SkylarkSemantics {
   public abstract boolean incompatibleDepsetUnion();
 
   public abstract boolean incompatibleDisableGlobTracking();
-  public abstract boolean incompatibleDisableObjcProviderResources();
 
   public abstract boolean incompatibleDisallowDictPlus();
   public abstract boolean incompatibleDisallowToplevelIfStatement();
@@ -80,7 +79,6 @@ public abstract class SkylarkSemantics {
           .incompatibleDepsetIsNotIterable(false)
           .incompatibleDepsetUnion(false)
           .incompatibleDisableGlobTracking(true)
-          .incompatibleDisableObjcProviderResources(false)
           .incompatibleDisallowDictPlus(false)
           .incompatibleDisallowToplevelIfStatement(true)
           .incompatibleDisallowUncalledSetConstructor(true)
@@ -104,7 +102,6 @@ public abstract class SkylarkSemantics {
     public abstract Builder incompatibleDepsetUnion(boolean value);
 
     public abstract Builder incompatibleDisableGlobTracking(boolean value);
-    public abstract Builder incompatibleDisableObjcProviderResources(boolean value);
 
     public abstract Builder incompatibleDisallowDictPlus(boolean value);
     public abstract Builder incompatibleDisallowToplevelIfStatement(boolean value);

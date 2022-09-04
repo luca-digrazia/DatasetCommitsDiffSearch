@@ -14,67 +14,73 @@
 
 package com.google.devtools.build.lib.bazel.repository;
 
+import com.google.common.base.Preconditions;
+import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
+import com.google.devtools.build.lib.bazel.repository.downloader.HttpDownloader;
 import com.google.devtools.build.lib.bazel.rules.workspace.GitRepositoryRule;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier.RepositoryName;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.skyframe.FileValue;
-import com.google.devtools.build.lib.skyframe.RepositoryValue;
+import com.google.devtools.build.lib.rules.repository.RepositoryDirectoryValue;
+import com.google.devtools.build.lib.rules.repository.RepositoryFunction;
+import com.google.devtools.build.lib.skyframe.PrecomputedValue;
+import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.skyframe.SkyFunctionException;
+import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
-import com.google.devtools.build.skyframe.SkyFunctionName;
-import com.google.devtools.build.skyframe.SkyKey;
-import com.google.devtools.build.skyframe.SkyValue;
-
 import java.io.IOException;
+import java.util.Map;
 
 /**
  * Clones a Git repository.
  */
 public class GitRepositoryFunction extends RepositoryFunction {
-  @Override
-  public SkyValue compute(SkyKey skyKey, Environment env) throws SkyFunctionException {
-    RepositoryName repositoryName = (RepositoryName) skyKey.argument();
-    Rule rule = RepositoryFunction.getRule(repositoryName, GitRepositoryRule.NAME, env);
-    if (rule == null) {
-      return null;
-    }
 
-    Path outputDirectory = getExternalRepositoryDirectory().getRelative(rule.getName());
-    FileValue directoryValue = createDirectory(outputDirectory, env, rule);
-    if (directoryValue == null) {
-      return null;
-    }
+  protected HttpDownloader downloader;
 
-    try {
-      HttpDownloadValue value = (HttpDownloadValue) env.getValueOrThrow(
-          GitCloneFunction.key(rule, outputDirectory), IOException.class);
-      if (value == null) {
-        return null;
-      }
-    } catch (IOException e) {
-      throw new RepositoryFunctionException(e, Transience.TRANSIENT);
-    }
-
-    return RepositoryValue.create(directoryValue);
+  public GitRepositoryFunction(HttpDownloader httpDownloader) {
+    Preconditions.checkNotNull(httpDownloader);
+    this.downloader = httpDownloader;
   }
 
-  protected FileValue createDirectory(Path path, Environment env, Rule rule)
-      throws RepositoryFunctionException {
+  @Override
+  public boolean isLocal(Rule rule) {
+    return false;
+  }
+
+  @Override
+  public RepositoryDirectoryValue.Builder fetch(Rule rule, Path outputDirectory,
+      BlazeDirectories directories, Environment env, Map<String, String> markerData)
+      throws InterruptedException, RepositoryFunctionException {
+    // Deprecation in favor of the Skylark variant.
+    SkylarkSemantics skylarkSemantics = PrecomputedValue.SKYLARK_SEMANTICS.get(env);
+    if (skylarkSemantics == null) {
+      return null;
+    }
+    if (skylarkSemantics.incompatibleRemoveNativeGitRepository()) {
+      throw new RepositoryFunctionException(
+          new EvalException(null,
+              "The native git_repository rule is deprecated."
+              + " load(\"@bazel_tools//tools/build_defs/repo:git.bzl\", \"git_repository\") for a"
+              + " replacement."
+              + "\nUse --incompatible_remove_native_git_repository=false to temporarily continue"
+              + " using the native rule."),
+          Transience.PERSISTENT);
+    }
+
+    createDirectory(outputDirectory, rule);
+    GitCloner.clone(rule, outputDirectory, env.getListener(), clientEnvironment, downloader);
+    return RepositoryDirectoryValue.builder().setPath(outputDirectory);
+  }
+
+  protected static void createDirectory(Path path, Rule rule) throws RepositoryFunctionException {
     try {
       FileSystemUtils.createDirectoryAndParents(path);
     } catch (IOException e) {
       throw new RepositoryFunctionException(new IOException("Could not create directory for "
           + rule.getName() + ": " + e.getMessage()), Transience.TRANSIENT);
     }
-    return getRepositoryDirectory(path, env);
-  }
-
-  @Override
-  public SkyFunctionName getSkyFunctionName() {
-    return SkyFunctionName.create(GitRepositoryRule.NAME.toUpperCase());
   }
 
   @Override
