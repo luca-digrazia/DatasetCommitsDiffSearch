@@ -102,7 +102,6 @@ class FunctionCreatorImpl implements FunctionCreator {
          * @param handle The handle that may be a parent handle
          * @return The substituted handler
          */
-        @Override
         ResultHandle resolve(ResultHandle handle) {
             // resolve any captures of captures.
             if (handle == null || handle.getResultType() == ResultHandle.ResultType.CONSTANT) return handle;
@@ -131,7 +130,6 @@ class FunctionCreatorImpl implements FunctionCreator {
             }
         }
 
-        @Override
         ResultHandle[] resolve(ResultHandle... handle) {
             ResultHandle[] ret = new ResultHandle[handle.length];
             for (int i = 0; i < handle.length; ++i) {
@@ -140,12 +138,10 @@ class FunctionCreatorImpl implements FunctionCreator {
             return ret;
         }
 
-        @Override
         MethodCreatorImpl getMethod() {
             return method;
         }
 
-        @Override
         public ResultHandle invokeSpecialMethod(MethodDescriptor descriptor, ResultHandle object, ResultHandle... args) {
             final ClassCreator ownersCreator = getMethod().getOwner().getMethod().getClassCreator();
             if (descriptor.getDeclaringClass().equals(ownersCreator.getSuperClass())) {

@@ -1,12 +1,12 @@
-/**
- * Copyright 2015-2017 Red Hat, Inc, and individual contributors.
- * <p>
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -66,7 +66,7 @@ import org.eclipse.microprofile.rest.client.ext.ResponseExceptionMapper;
 import org.jboss.logging.Logger;
 import org.jboss.resteasy.client.jaxrs.ResteasyClient;
 import org.jboss.resteasy.client.jaxrs.ResteasyClientBuilder;
-import org.jboss.resteasy.specimpl.ResteasyUriBuilder;
+import org.jboss.resteasy.spi.ResteasyUriBuilder;
 
 
 /**
@@ -74,11 +74,10 @@ import org.jboss.resteasy.specimpl.ResteasyUriBuilder;
  */
 class RestClientBuilderImpl implements RestClientBuilder {
 
-    private static final Logger LOGGER = Logger.getLogger(RestClientBuilderImpl.class);
-
     private static final String RESTEASY_PROPERTY_PREFIX = "resteasy.";
 
     private static final String DEFAULT_MAPPER_PROP = "microprofile.rest.client.disable.default.mapper";
+    private static final Logger log = Logger.getLogger("org.jboss.shamrock.restclient");
 
     RestClientBuilderImpl() {
         ClientBuilder availableBuilder = ClientBuilder.newBuilder();
@@ -347,9 +346,9 @@ class RestClientBuilderImpl implements RestClientBuilder {
                 Method builderMethod = ResteasyClientBuilder.class.getMethod(builderMethodName, unwrapPrimitiveType(value));
                 builderMethod.invoke(builderDelegate, value);
             } catch (NoSuchMethodException e) {
-                LOGGER.warnf("ResteasyClientBuilder method %s not found", builderMethodName);
+                log.warnf("ResteasyClientBuilder method %s not found", builderMethodName);
             } catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
-                LOGGER.errorf(e, "Unable to invoke ResteasyClientBuilder method %s", builderMethodName);
+                log.errorf(e, "Unable to invoke ResteasyClientBuilder method %s", builderMethodName);
             }
         }
         this.builderDelegate.property(name, value);
@@ -389,7 +388,7 @@ class RestClientBuilderImpl implements RestClientBuilder {
     }
 
     @Override
-    public RestClientBuilder register(Class<?> aClass, Class<?>[] classes) {
+    public RestClientBuilder register(Class<?> aClass, Class<?>... classes) {
         this.register(newInstanceOf(aClass), classes);
         return this;
     }
@@ -444,7 +443,7 @@ class RestClientBuilderImpl implements RestClientBuilder {
     }
 
     @Override
-    public RestClientBuilder register(Object o, Class<?>[] classes) {
+    public RestClientBuilder register(Object o, Class<?>... classes) {
 
         // local
         for (Class<?> aClass : classes) {
@@ -487,7 +486,7 @@ class RestClientBuilderImpl implements RestClientBuilder {
     public void registerLocalProviderInstance(Object provider, Map<Class<?>, Integer> contracts) {
         for (Object registered : getLocalProviderInstances()) {
             if (registered == provider) {
-                System.out.println("Provider already registered " + provider.getClass().getName());
+                log.infof("Provider already registered: %s", provider.getClass());
                 return;
             }
         }
