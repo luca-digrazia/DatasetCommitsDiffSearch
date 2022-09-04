@@ -19,13 +19,12 @@ package org.graylog2.bundles;
 import com.google.common.collect.Iterators;
 import org.bson.types.ObjectId;
 import org.graylog2.bindings.providers.BundleExporterProvider;
-import org.graylog2.bindings.providers.BundleImporterProvider;
+import org.graylog2.bindings.providers.BundleReceipeProvider;
 import org.graylog2.bindings.providers.MongoJackObjectMapperProvider;
 import org.graylog2.database.MongoConnection;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.users.User;
 import org.mongojack.DBCursor;
-import org.mongojack.DBQuery;
 import org.mongojack.JacksonDBCollection;
 import org.mongojack.WriteResult;
 import org.slf4j.Logger;
@@ -39,28 +38,28 @@ import java.util.Set;
 @Singleton
 public class BundleService {
     private static final Logger LOG = LoggerFactory.getLogger(BundleService.class);
-    private static final String COLLECTION_NAME = "content_packs";
+    private static final String COLLECTION_NAME = "config_bundles";
 
     private final JacksonDBCollection<ConfigurationBundle, ObjectId> dbCollection;
-    private final BundleImporterProvider bundleImporterProvider;
+    private final BundleReceipeProvider bundleReceipeProvider;
     private final BundleExporterProvider bundleExporterProvider;
 
     @Inject
     public BundleService(
             final MongoJackObjectMapperProvider mapperProvider,
             final MongoConnection mongoConnection,
-            final BundleImporterProvider bundleImporterProvider,
+            final BundleReceipeProvider bundleReceipeProvider,
             final BundleExporterProvider bundleExporterProvider) {
         this(JacksonDBCollection.wrap(mongoConnection.getDatabase().getCollection(COLLECTION_NAME),
                         ConfigurationBundle.class, ObjectId.class, mapperProvider.get()),
-                bundleImporterProvider, bundleExporterProvider);
+                bundleReceipeProvider, bundleExporterProvider);
     }
 
     public BundleService(final JacksonDBCollection<ConfigurationBundle, ObjectId> dbCollection,
-                         final BundleImporterProvider bundleImporterProvider,
+                         final BundleReceipeProvider bundleReceipeProvider,
                          final BundleExporterProvider bundleExporterProvider) {
         this.dbCollection = dbCollection;
-        this.bundleImporterProvider = bundleImporterProvider;
+        this.bundleReceipeProvider = bundleReceipeProvider;
         this.bundleExporterProvider = bundleExporterProvider;
     }
 
@@ -70,13 +69,6 @@ public class BundleService {
         if (bundle == null) {
             throw new NotFoundException();
         }
-
-        return bundle;
-    }
-
-    public ConfigurationBundle findByNameAndCategory(final String name, final String category) {
-        final DBQuery.Query query = DBQuery.is("name", name).is("category", category);
-        final ConfigurationBundle bundle = dbCollection.findOne(query);
 
         return bundle;
     }
@@ -113,8 +105,8 @@ public class BundleService {
     public void applyConfigurationBundle(final ConfigurationBundle bundle, User actingUser) {
         final String userName = actingUser.getName();
 
-        final BundleImporter bundleImporter = bundleImporterProvider.get();
-        bundleImporter.runImport(bundle, userName);
+        final BundleReceipe bundleReceipe = bundleReceipeProvider.get();
+        bundleReceipe.cook(bundle, userName);
     }
 
     public ConfigurationBundle exportConfigurationBundle(final ExportBundle exportBundle) {

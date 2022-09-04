@@ -22,7 +22,7 @@ import org.hibernate.validator.constraints.NotBlank;
 
 import javax.validation.constraints.NotNull;
 import java.util.Collections;
-import java.util.Set;
+import java.util.List;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ExportBundle {
@@ -36,16 +36,16 @@ public class ExportBundle {
     private String category;
     @JsonProperty
     @NotNull
-    private Set<String> inputs = Collections.emptySet();
+    private List<String> inputs = Collections.emptyList();
     @JsonProperty
     @NotNull
-    private Set<String> streams = Collections.emptySet();
+    private List<String> streams = Collections.emptyList();
     @JsonProperty
     @NotNull
-    private Set<String> outputs = Collections.emptySet();
+    private List<String> outputs = Collections.emptyList();
     @JsonProperty
     @NotNull
-    private Set<String> dashboards = Collections.emptySet();
+    private List<String> dashboards = Collections.emptyList();
 
     public String getName() {
         return name;
@@ -71,35 +71,35 @@ public class ExportBundle {
         this.category = category;
     }
 
-    public Set<String> getInputs() {
+    public List<String> getInputs() {
         return inputs;
     }
 
-    public void setInputs(Set<String> inputs) {
+    public void setInputs(List<String> inputs) {
         this.inputs = inputs;
     }
 
-    public Set<String> getStreams() {
+    public List<String> getStreams() {
         return streams;
     }
 
-    public void setStreams(Set<String> streams) {
+    public void setStreams(List<String> streams) {
         this.streams = streams;
     }
 
-    public Set<String> getOutputs() {
+    public List<String> getOutputs() {
         return outputs;
     }
 
-    public void setOutputs(Set<String> outputs) {
+    public void setOutputs(List<String> outputs) {
         this.outputs = outputs;
     }
 
-    public Set<String> getDashboards() {
+    public List<String> getDashboards() {
         return dashboards;
     }
 
-    public void setDashboards(Set<String> dashboards) {
+    public void setDashboards(List<String> dashboards) {
         this.dashboards = dashboards;
     }
 }
