@@ -692,11 +692,6 @@ public abstract class CcModule
             .map(actionConfig -> CcToolchainConfigInfo.actionConfigToProto(actionConfig))
             .collect(ImmutableList.toImmutableList()));
 
-    ImmutableSet<String> actionConfigNames =
-        actionConfigList.stream()
-            .map(actionConfig -> actionConfig.getActionName())
-            .collect(ImmutableSet.toImmutableSet());
-
     ImmutableList.Builder<ArtifactNamePattern> artifactNamePatternBuilder = ImmutableList.builder();
     for (Object artifactNamePattern : artifactNamePatterns) {
       checkRightSkylarkInfoProvider(
@@ -818,8 +813,7 @@ public abstract class CcModule
               gccToolPath,
               arToolPath,
               stripToolPath,
-              /* supportsInterfaceSharedLibraries= */ false,
-              actionConfigNames)) {
+              /* supportsInterfaceSharedLibraries= */ false)) {
         legacyActionConfigBuilder.add(new ActionConfig(actionConfig));
       }
       legacyActionConfigBuilder.addAll(actionConfigList);

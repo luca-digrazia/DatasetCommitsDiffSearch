@@ -701,22 +701,11 @@ public interface CcModuleApi<
             type = Object.class),
         @Param(
             name = "defines",
-            doc =
-                "Set of defines needed to compile this target. Each define is a string. Propagated"
-                    + " transitively to dependents.",
+            doc = "Set of defines needed to compile this target. Each define is a string",
             positional = false,
             named = true,
             defaultValue = "unbound",
-            type = Object.class),
-        @Param(
-            name = "local_defines",
-            doc =
-                "Set of defines needed to compile this target. Each define is a string. Not"
-                    + " propagated transitively to dependents.",
-            positional = false,
-            named = true,
-            defaultValue = "unbound",
-            type = Object.class),
+            type = Object.class)
       })
   CompilationContextT createCcCompilationContext(
       Object headers,
@@ -724,8 +713,7 @@ public interface CcModuleApi<
       Object includes,
       Object quoteIncludes,
       Object frameworkIncludes,
-      Object defines,
-      Object localDefines)
+      Object defines)
       throws EvalException;
 
   // TODO(b/65151735): Remove when cc_flags is entirely set from features.

@@ -185,7 +185,6 @@ public class CppLinkstampCompileHelper {
             additionalLinkstampDefines,
             ccToolchainProvider,
             fdoBuildStamp,
-            codeCoverageEnabled),
-        /* localDefines= */ ImmutableList.of());
+            codeCoverageEnabled));
   }
 }
