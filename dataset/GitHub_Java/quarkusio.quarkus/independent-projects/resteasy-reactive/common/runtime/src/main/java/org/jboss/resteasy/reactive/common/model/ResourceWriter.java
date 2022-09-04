@@ -5,7 +5,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
-import javax.ws.rs.Priorities;
 import javax.ws.rs.RuntimeType;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.ext.MessageBodyWriter;
@@ -19,7 +18,6 @@ public class ResourceWriter {
     private List<String> mediaTypeStrings = new ArrayList<>();
     private RuntimeType constraint;
     private boolean builtin = true;
-    private Integer priority = Priorities.USER;
     private volatile List<MediaType> mediaTypes;
     private volatile ServerMediaType serverMediaType;
     private volatile MessageBodyWriter<?> instance;
@@ -57,14 +55,6 @@ public class ResourceWriter {
 
     public void setBuiltin(boolean builtin) {
         this.builtin = builtin;
-    }
-
-    public Integer getPriority() {
-        return priority;
-    }
-
-    public void setPriority(Integer priority) {
-        this.priority = priority;
     }
 
     public MessageBodyWriter<?> instance() {
@@ -121,9 +111,8 @@ public class ResourceWriter {
     /**
      * The comparison for now is simple:
      * 1) Application provided writers come first
-     * 2) Writers higher priority come first (same as writer interceptors)
-     * 3) Then the more specific the media type, the higher the priority
-     * 4) Finally we compare the number of media types
+     * 2) Then the more specific the media type, the higher the priority
+     * 3) Finally we compare the number of media types
      */
     public static class ResourceWriterComparator implements Comparator<ResourceWriter> {
 
@@ -134,11 +123,6 @@ public class ResourceWriter {
             int builtInCompare = Boolean.compare(o1.isBuiltin(), o2.isBuiltin());
             if (builtInCompare != 0) {
                 return builtInCompare;
-            }
-
-            int priorityCompare = Integer.compare(o2.getPriority(), o1.getPriority());
-            if (priorityCompare != 0) {
-                return priorityCompare;
             }
 
             List<MediaType> mediaTypes1 = o1.mediaTypes();
@@ -157,7 +141,7 @@ public class ResourceWriter {
                 return mediaTypeCompare;
             }
 
-            // done to make the sorting result deterministic
+            // TODO: not sure if this makes sense but was added to make the sorting more deterministic
             return Integer.compare(mediaTypes1.size(), mediaTypes2.size());
         }
     }
