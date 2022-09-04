@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.syntax;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableList.Builder;
-import com.google.devtools.build.lib.events.EventHandler;
 
 /**
  * A helper class for calling Skylark functions from Java.
@@ -24,27 +23,26 @@ public class SkylarkCallbackFunction {
 
   private final BaseFunction callback;
   private final FuncallExpression ast;
-  private final SkylarkSemantics skylarkSemantics;
+  private final Environment funcallEnv;
 
   public SkylarkCallbackFunction(
-      BaseFunction callback, FuncallExpression ast, SkylarkSemantics skylarkSemantics) {
+      BaseFunction callback, FuncallExpression ast, Environment funcallEnv) {
     this.callback = callback;
     this.ast = ast;
-    this.skylarkSemantics = skylarkSemantics;
+    this.funcallEnv = funcallEnv;
   }
 
   public ImmutableList<String> getParameterNames() {
     return callback.signature.getSignature().getNames();
   }
 
-  public Object call(EventHandler eventHandler, ClassObject ctx, Object... arguments)
+  public Object call(ClassObject ctx, Object... arguments)
       throws EvalException, InterruptedException {
     try (Mutability mutability = Mutability.create("callback %s", callback)) {
-      Environment env =
-          Environment.builder(mutability)
-              .setSemantics(skylarkSemantics)
-              .setEventHandler(eventHandler)
-              .build();
+      Environment env = Environment.builder(mutability)
+          .setSemantics(funcallEnv.getSemantics())
+          .setEventHandler(funcallEnv.getEventHandler())
+          .build();
       return callback.call(buildArgumentList(ctx, arguments), null, ast, env);
     } catch (ClassCastException | IllegalArgumentException e) {
       throw new EvalException(ast.getLocation(), e.getMessage());

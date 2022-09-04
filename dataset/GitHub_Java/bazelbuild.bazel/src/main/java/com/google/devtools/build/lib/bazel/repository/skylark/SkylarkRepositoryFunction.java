@@ -19,17 +19,13 @@ import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.bazel.repository.downloader.HttpDownloader;
-import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.rules.repository.RepositoryDirectoryValue;
 import com.google.devtools.build.lib.rules.repository.RepositoryFunction;
-import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.Runtime;
-import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
@@ -58,34 +54,16 @@ public class SkylarkRepositoryFunction extends RepositoryFunction {
     if (declareEnvironmentDependencies(markerData, env, getEnviron(rule)) == null) {
       return null;
     }
-    SkylarkSemantics skylarkSemantics = PrecomputedValue.SKYLARK_SEMANTICS.get(env);
-    if (skylarkSemantics == null) {
-      return null;
-    }
     try (Mutability mutability = Mutability.create("skylark repository")) {
+      // This Skylark environment ignores command line flags.
       com.google.devtools.build.lib.syntax.Environment buildEnv =
           com.google.devtools.build.lib.syntax.Environment.builder(mutability)
-              .setSemantics(skylarkSemantics)
+              .useDefaultSemantics()
               .setEventHandler(env.getListener())
               .build();
       SkylarkRepositoryContext skylarkRepositoryContext =
           new SkylarkRepositoryContext(
               rule, outputDirectory, env, clientEnvironment, httpDownloader, markerData);
-
-      // Since restarting a repository function can be really expensive, we first ensure that
-      // all label-arguments can be resolved to paths.
-      try {
-        skylarkRepositoryContext.enforceLabelAttributes();
-      } catch (EvalException e) {
-        if (e instanceof RepositoryMissingDependencyException) {
-          // Missing values are expected; just restart before we actually start the rule
-          return null;
-        }
-        // Other EvalExceptions indicate labels not referring to existing files. This is fine,
-        // as long as they are never resolved to files in the execution of the rule; we allow
-        // non-strict rules. So now we have to start evaluating the actual rule, even if that
-        // means the rule might get restarted for legitimate reasons.
-      }
 
       // This has side-effect, we don't care about the output.
       // Also we do a lot of stuff in there, maybe blocking operations and we should certainly make
@@ -98,8 +76,13 @@ public class SkylarkRepositoryFunction extends RepositoryFunction {
               null,
               buildEnv);
       if (retValue != Runtime.NONE) {
-        env.getListener()
-            .handle(Event.info("Repository rule '" + rule.getName() + "' returned: " + retValue));
+        throw new RepositoryFunctionException(
+            new EvalException(
+                rule.getLocation(),
+                "Call to repository rule "
+                    + rule.getName()
+                    + " returned a non-None value, None expected."),
+            Transience.PERSISTENT);
       }
     } catch (EvalException e) {
       if (e.getCause() instanceof RepositoryMissingDependencyException) {
@@ -121,7 +104,7 @@ public class SkylarkRepositoryFunction extends RepositoryFunction {
           new IOException(rule + " must create a directory"), Transience.TRANSIENT);
     }
 
-    if (!outputDirectory.getRelative(Label.WORKSPACE_FILE_NAME).exists()) {
+    if (!outputDirectory.getRelative("WORKSPACE").exists()) {
       createWorkspaceFile(outputDirectory, rule.getTargetKind(), rule.getName());
     }
 
