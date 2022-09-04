@@ -17,6 +17,7 @@ import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
+import com.google.devtools.build.lib.skyframe.AspectValue.AspectKey;
 import com.google.devtools.build.skyframe.CycleInfo;
 import com.google.devtools.build.skyframe.SkyKey;
 import org.junit.Test;
@@ -58,7 +59,7 @@ public class ConfiguredTargetCycleReporterTest extends BuildViewTestCase {
                 + "target //foo:c");
 
     SkyKey aspectKey =
-        AspectValueKey.AspectKey.createAspectKey(
+        AspectKey.createAspectKey(
             makeLabel("//foo:a"),
             ctKey,
             ImmutableList.of(),
@@ -71,7 +72,7 @@ public class ConfiguredTargetCycleReporterTest extends BuildViewTestCase {
                 + "target //foo:c");
 
     SkyKey starlarkAspectKey =
-        AspectValueKey.createSkylarkAspectKey(
+        AspectValue.createSkylarkAspectKey(
             makeLabel("//foo:a"),
             targetConfig,
             targetConfig,
