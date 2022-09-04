@@ -25,8 +25,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.List;
 
 /**
  * A Class for filtering the output of /showIncludes from MSVC compiler.
@@ -41,9 +40,11 @@ public class ShowIncludesFilter {
 
   private FilterShowIncludesOutputStream filterShowIncludesOutputStream;
   private final String sourceFileName;
+  private final String workspaceName;
 
-  public ShowIncludesFilter(String sourceFileName) {
+  public ShowIncludesFilter(String sourceFileName, String workspaceName) {
     this.sourceFileName = sourceFileName;
+    this.workspaceName = workspaceName;
   }
 
   /**
@@ -57,7 +58,7 @@ public class ShowIncludesFilter {
     private static final int NEWLINE = '\n';
     // "Note: including file:" in 14 languages,
     // cl.exe will print different prefix according to the locale configured for MSVC.
-    private static final ImmutableList<String> SHOW_INCLUDES_PREFIXES =
+    private static final List<String> SHOW_INCLUDES_PREFIXES =
         ImmutableList.of(
             new String(
                 new byte[] {
@@ -148,14 +149,13 @@ public class ShowIncludesFilter {
                 StandardCharsets.UTF_8) // Spanish
             );
     private final String sourceFileName;
-    // Grab everything under the execroot base so that external repository header files are covered
-    // in the sibling repository layout.
-    private static final Pattern EXECROOT_BASE_HEADER_PATTERN =
-        Pattern.compile(".*execroot\\\\(?<headerPath>.*)");
+    private final String execRootSuffix;
 
-    public FilterShowIncludesOutputStream(OutputStream out, String sourceFileName) {
+    public FilterShowIncludesOutputStream(
+        OutputStream out, String sourceFileName, String workspaceName) {
       super(out);
       this.sourceFileName = sourceFileName;
+      this.execRootSuffix = "execroot\\" + workspaceName + "\\";
     }
 
     @Override
@@ -167,13 +167,9 @@ public class ShowIncludesFilter {
         for (String prefix : SHOW_INCLUDES_PREFIXES) {
           if (line.startsWith(prefix)) {
             line = line.substring(prefix.length()).trim();
-            Matcher m = EXECROOT_BASE_HEADER_PATTERN.matcher(line);
-            if (m.matches()) {
-              // Prefix the matched header path with "..\". This way, external repo header paths are
-              // resolved to "<execroot>\..\<repo name>\<path>", and main repo file paths are
-              // resolved to "<execroot>\..\<main repo>\<path>", which is nicely normalized to
-              // "<execroot>\<path>".
-              line = "..\\" + m.group("headerPath");
+            int index = line.indexOf(execRootSuffix);
+            if (index != -1) {
+              line = line.substring(index + execRootSuffix.length());
             }
             dependencies.add(line);
             prefixMatched = true;
@@ -218,7 +214,7 @@ public class ShowIncludesFilter {
 
   public FilterOutputStream getFilteredOutputStream(OutputStream outputStream) {
     filterShowIncludesOutputStream =
-        new FilterShowIncludesOutputStream(outputStream, sourceFileName);
+        new FilterShowIncludesOutputStream(outputStream, sourceFileName, workspaceName);
     return filterShowIncludesOutputStream;
   }
 
