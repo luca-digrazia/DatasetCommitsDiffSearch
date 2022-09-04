@@ -179,10 +179,7 @@ final class WorkerSpawnRunner implements SpawnRunner {
 
     SandboxInputs inputFiles =
         helpers.processInputFiles(
-            context.getInputMapping(PathFragment.EMPTY_FRAGMENT),
-            spawn,
-            context.getArtifactExpander(),
-            execRoot);
+            context.getInputMapping(), spawn, context.getArtifactExpander(), execRoot);
     SandboxOutputs outputs = helpers.getOutputs(spawn);
 
     WorkerProtocolFormat protocolFormat = Spawns.getWorkerProtocolFormat(spawn);
