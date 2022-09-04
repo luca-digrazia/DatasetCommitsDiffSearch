@@ -56,6 +56,7 @@ import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.cpp.CppCompileAction;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMapAction;
 import com.google.devtools.build.lib.rules.cpp.LinkerInput;
+import com.google.devtools.build.lib.rules.objc.ObjcCommandLineOptions.ObjcCrosstoolMode;
 import com.google.devtools.build.lib.rules.objc.ObjcProvider.Key;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.OptionsParsingException;
@@ -139,7 +140,7 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
 
   @Test
   public void testObjcPlusPlusCompileDarwin() throws Exception {
-    useConfiguration(
+    useConfiguration(ObjcCrosstoolMode.ALL,
         "--cpu=darwin_x86_64",
         "--macos_minimum_os=9.10.11",
         // TODO(b/36126423): Darwin should imply macos, so the
@@ -403,9 +404,7 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
   static Iterable<String> iquoteArgs(ObjcProvider provider, BuildConfiguration configuration) {
     return Interspersing.beforeEach(
         "-iquote",
-        Iterables.transform(
-            ObjcCommon.userHeaderSearchPaths(provider, configuration),
-            PathFragment::getSafePathString));
+        PathFragment.safePathStrings(ObjcCommon.userHeaderSearchPaths(provider, configuration)));
   }
 
   @Test
@@ -1756,7 +1755,9 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
 
   @Test
   public void testObjcProtoLibraryDoesNotCrash() throws Exception {
-    useConfiguration("--crosstool_top=" + MockObjcSupport.DEFAULT_OSX_CROSSTOOL);
+    useConfiguration(
+        "--crosstool_top=" + MockObjcSupport.DEFAULT_OSX_CROSSTOOL,
+        "--experimental_objc_crosstool=all");
     scratch.file(
         "x/BUILD",
         "objc_library(",
@@ -1778,7 +1779,9 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
 
   @Test
   public void testLegacyObjcProtoLibraryDoesNotCrash() throws Exception {
-    useConfiguration("--crosstool_top=" + MockObjcSupport.DEFAULT_OSX_CROSSTOOL);
+    useConfiguration(
+        "--crosstool_top=" + MockObjcSupport.DEFAULT_OSX_CROSSTOOL,
+        "--experimental_objc_crosstool=all");
     scratch.file(
         "x/BUILD",
         "objc_library(",
@@ -1799,7 +1802,9 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
 
   @Test
   public void testObjcImportDoesNotCrash() throws Exception {
-    useConfiguration("--crosstool_top=" + MockObjcSupport.DEFAULT_OSX_CROSSTOOL);
+    useConfiguration(
+        "--crosstool_top=" + MockObjcSupport.DEFAULT_OSX_CROSSTOOL,
+        "--experimental_objc_crosstool=all");
     scratch.file(
         "x/BUILD",
         "objc_library(",
@@ -1883,6 +1888,7 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
   public void testSysrootArgSpecifiedWithGrteTopFlag() throws Exception {
     MockObjcSupport.setup(mockToolsConfig, "default_grte_top : '//x'");
     useConfiguration(
+        ObjcCrosstoolMode.ALL,
         "--cpu=ios_x86_64",
         "--ios_cpu=x86_64");
     scratch.file(
@@ -1913,6 +1919,7 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
         "  }",
         "}");
     useConfiguration(
+        ObjcCrosstoolMode.ALL,
         "--cpu=ios_x86_64",
         "--ios_cpu=x86_64");
     scratch.file(
