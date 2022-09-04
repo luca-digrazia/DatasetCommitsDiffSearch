@@ -89,9 +89,7 @@ public class BazelJ2ObjcLibraryTest extends J2ObjcLibraryTest {
 
     String execPath = j2objcLibraryTarget.getConfiguration().getBinDirectory(RepositoryName.MAIN)
         .getExecPath() + "/";
-    assertThat(
-            Iterables.transform(
-                provider.get(ObjcProvider.INCLUDE), PathFragment::getSafePathString))
+    assertThat(PathFragment.safePathStrings(provider.get(ObjcProvider.INCLUDE)))
         .containsExactly(execPath + "java/com/google/dummy/test/_j2objc/test");
   }
 
@@ -126,12 +124,9 @@ public class BazelJ2ObjcLibraryTest extends J2ObjcLibraryTest {
 
     String execPath = target.getConfiguration().getBinDirectory(RepositoryName.MAIN)
         .getExecPath() + "/";
-    assertThat(
-            Iterables.transform(
-                provider.get(ObjcProvider.INCLUDE), PathFragment::getSafePathString))
-        .containsExactly(
-            execPath + "java/com/google/test/_j2objc/test/" + genfilesFragment,
-            execPath + "java/com/google/test/_j2objc/test");
+    assertThat(PathFragment.safePathStrings(provider.get(ObjcProvider.INCLUDE))).containsExactly(
+        execPath + "java/com/google/test/_j2objc/test/" + genfilesFragment,
+        execPath + "java/com/google/test/_j2objc/test");
   }
 
   @Test
@@ -531,9 +526,7 @@ public class BazelJ2ObjcLibraryTest extends J2ObjcLibraryTest {
 
     String execPath =
         objcTarget.getConfiguration().getBinDirectory(RepositoryName.MAIN).getExecPath() + "/";
-    assertThat(
-            Iterables.transform(
-                provider.get(ObjcProvider.INCLUDE), PathFragment::getSafePathString))
+    assertThat(PathFragment.safePathStrings(provider.get(ObjcProvider.INCLUDE)))
         .containsExactly(execPath + "java/com/google/dummy/test/_j2objc/test");
   }
 
@@ -576,9 +569,7 @@ public class BazelJ2ObjcLibraryTest extends J2ObjcLibraryTest {
 
     String execPath =
         objcTarget.getConfiguration().getBinDirectory(RepositoryName.MAIN).getExecPath() + "/";
-    assertThat(
-            Iterables.transform(
-                provider.get(ObjcProvider.INCLUDE), PathFragment::getSafePathString))
+    assertThat(PathFragment.safePathStrings(provider.get(ObjcProvider.INCLUDE)))
         .containsExactly(execPath + "app/_j2objc/dummyOne", execPath + "app/_j2objc/dummyTwo");
   }
 
