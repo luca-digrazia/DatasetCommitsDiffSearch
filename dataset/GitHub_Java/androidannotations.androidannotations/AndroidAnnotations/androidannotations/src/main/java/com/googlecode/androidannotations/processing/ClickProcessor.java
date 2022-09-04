@@ -28,10 +28,9 @@ import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.VariableElement;
 
 import com.googlecode.androidannotations.annotations.Click;
-import com.googlecode.androidannotations.helper.AnnotationHelper;
+import com.googlecode.androidannotations.helper.IdAnnotationHelper;
 import com.googlecode.androidannotations.processing.EBeansHolder.Classes;
 import com.googlecode.androidannotations.rclass.IRClass;
-import com.googlecode.androidannotations.rclass.IRClass.Res;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JDefinedClass;
@@ -46,14 +45,12 @@ import com.sun.codemodel.JVar;
  * @author Mathieu Boniface
  * @author Pierre-Yves
  */
-public class ClickProcessor implements DecoratingElementProcessor {
+public class ClickProcessor implements ElementProcessor {
 
-	private final AnnotationHelper helper;
-	private final IRClass rClass;
+	private final IdAnnotationHelper helper;
 
 	public ClickProcessor(ProcessingEnvironment processingEnv, IRClass rClass) {
-		this.rClass = rClass;
-		helper = new AnnotationHelper(processingEnv);
+		helper = new IdAnnotationHelper(processingEnv, getTarget(), rClass);
 	}
 
 	@Override
@@ -62,7 +59,9 @@ public class ClickProcessor implements DecoratingElementProcessor {
 	}
 
 	@Override
-	public void process(Element element, JCodeModel codeModel, EBeanHolder holder) {
+	public void process(Element element, JCodeModel codeModel, EBeansHolder activitiesHolder) {
+
+		EBeanHolder holder = activitiesHolder.getEnclosingEBeanHolder(element);
 		Classes classes = holder.classes();
 
 		String methodName = element.getSimpleName().toString();
@@ -72,14 +71,15 @@ public class ClickProcessor implements DecoratingElementProcessor {
 
 		boolean hasViewParameter = parameters.size() == 1;
 
-		List<JFieldRef> idsRefs = helper.extractAnnotationFieldRefs(holder, element, getTarget(), rClass.get(Res.ID), true);
+		Click annotation = element.getAnnotation(Click.class);
+		List<JFieldRef> idsRefs = helper.extractFieldRefsFromAnnotationValues(element, annotation.value(), "Clicked", holder);
 
 		JDefinedClass onClickListenerClass = codeModel.anonymousClass(classes.VIEW_ON_CLICK_LISTENER);
 		JMethod onClickMethod = onClickListenerClass.method(JMod.PUBLIC, codeModel.VOID, "onClick");
 		onClickMethod.annotate(Override.class);
 		JVar onClickViewParam = onClickMethod.param(classes.VIEW, "view");
 
-		JExpression activityRef = holder.generatedClass.staticRef("this");
+		JExpression activityRef = holder.eBean.staticRef("this");
 		JInvocation clickCall = onClickMethod.body().invoke(activityRef, methodName);
 
 		if (hasViewParameter) {
