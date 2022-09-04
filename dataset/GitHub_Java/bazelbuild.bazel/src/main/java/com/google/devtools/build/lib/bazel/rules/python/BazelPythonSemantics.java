@@ -49,23 +49,18 @@ import com.google.devtools.build.lib.rules.python.PyCommon;
 import com.google.devtools.build.lib.rules.python.PyRuntimeInfo;
 import com.google.devtools.build.lib.rules.python.PythonConfiguration;
 import com.google.devtools.build.lib.rules.python.PythonSemantics;
-import com.google.devtools.build.lib.rules.python.PythonUtils;
 import com.google.devtools.build.lib.rules.python.PythonVersion;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.function.Predicate;
 import javax.annotation.Nullable;
 
 /** Functionality specific to the Python rules in Bazel. */
 public class BazelPythonSemantics implements PythonSemantics {
 
-  public static final Runfiles.EmptyFilesSupplier GET_INIT_PY_FILES =
-      new PythonUtils.GetInitPyFiles((Predicate<PathFragment> & Serializable) source -> false);
   private static final Template STUB_TEMPLATE =
       Template.forResource(BazelPythonSemantics.class, "python_stub_template.txt");
   public static final InstrumentationSpec PYTHON_COLLECTION_SPEC = new InstrumentationSpec(
@@ -73,11 +68,6 @@ public class BazelPythonSemantics implements PythonSemantics {
       "srcs", "deps", "data");
 
   public static final PathFragment ZIP_RUNFILES_DIRECTORY_NAME = PathFragment.create("runfiles");
-
-  @Override
-  public Runfiles.EmptyFilesSupplier getEmptyRunfilesSupplier() {
-    return GET_INIT_PY_FILES;
-  }
 
   @Override
   public String getSrcsVersionDocURL() {
@@ -141,6 +131,14 @@ public class BazelPythonSemantics implements PythonSemantics {
     return result;
   }
 
+  /**
+   * Returns an artifact next to the executable file with ".temp" suffix. Used only if we're
+   * building a zip.
+   */
+  public Artifact getPythonIntermediateStubArtifact(RuleContext ruleContext, Artifact executable) {
+    return ruleContext.getRelatedArtifact(executable.getRootRelativePath(), ".temp");
+  }
+
   private static String boolToLiteral(boolean value) {
     return value ? "True" : "False";
   }
@@ -177,7 +175,7 @@ public class BazelPythonSemantics implements PythonSemantics {
                 Substitution.of(
                     "%main%", common.determineMainExecutableSource(/*withWorkspaceName=*/ true)),
                 Substitution.of("%python_binary%", pythonBinary),
-                Substitution.of("%imports%", Joiner.on(":").join(common.getImports().toList())),
+                Substitution.of("%imports%", Joiner.on(":").join(common.getImports())),
                 Substitution.of("%workspace_name%", ruleContext.getWorkspaceName()),
                 Substitution.of("%is_zipfile%", boolToLiteral(isForZipFile)),
                 Substitution.of(
@@ -310,7 +308,7 @@ public class BazelPythonSemantics implements PythonSemantics {
 
     if (!ruleContext.hasErrors()) {
       // Create the stub file that's needed by the python zip file.
-      Artifact stubFileForZipFile = common.getPythonIntermediateStubArtifact(executable);
+      Artifact stubFileForZipFile = getPythonIntermediateStubArtifact(ruleContext, executable);
       createStubFile(ruleContext, stubFileForZipFile, common, /* isForZipFile= */ true);
 
       createPythonZipAction(
@@ -359,13 +357,13 @@ public class BazelPythonSemantics implements PythonSemantics {
     // Creating __init__.py files under each directory
     argv.add("__init__.py=");
     argv.addDynamicString(getZipRunfilesPath("__init__.py", workspaceName) + "=");
-    for (String path : runfilesSupport.getRunfiles().getEmptyFilenames().toList()) {
+    for (String path : runfilesSupport.getRunfiles().getEmptyFilenames()) {
       argv.addDynamicString(getZipRunfilesPath(path, workspaceName) + "=");
     }
 
     // Read each runfile from execute path, add them into zip file at the right runfiles path.
     // Filter the executable file, cause we are building it.
-    for (Artifact artifact : runfilesSupport.getRunfilesArtifacts().toList()) {
+    for (Artifact artifact : runfilesSupport.getRunfilesArtifacts()) {
       if (!artifact.equals(executable) && !artifact.equals(zipFile)) {
         argv.addDynamicString(
             getZipRunfilesPath(artifact.getRunfilesPath(), workspaceName)

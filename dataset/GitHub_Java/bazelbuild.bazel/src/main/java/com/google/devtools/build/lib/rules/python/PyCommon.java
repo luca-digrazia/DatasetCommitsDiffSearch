@@ -13,7 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.python;
 
-import static com.google.devtools.build.lib.syntax.Starlark.NONE;
+import static com.google.devtools.build.lib.syntax.Runtime.NONE;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
@@ -665,9 +665,7 @@ public final class PyCommon {
       return false;
     }
     String errorTemplate =
-        ruleContext.getLabel()
-            + ": "
-            + "This target is being built for Python %s but (transitively) includes Python %s-only "
+        "This target is being built for Python %s but (transitively) includes Python %s-only "
             + "sources. You can get diagnostic information about which dependencies introduce this "
             + "version requirement by running the `find_requirements` aspect. For more info see "
             + "the documentation for the `srcs_version` attribute: "
@@ -860,34 +858,9 @@ public final class PyCommon {
     addPyExtraActionPseudoAction();
   }
 
-  /** @return an artifact next to the executable file with a given suffix. */
-  private Artifact getArtifactWithExtension(Artifact executable, String extension) {
-    // On Windows, the Python executable has .exe extension on Windows,
-    // On Linux, the Python executable has no extension.
-    // We can't use ruleContext#getRelatedArtifact because it would mangle files with dots in the
-    // name on non-Windows platforms.
-    PathFragment pathFragment = executable.getRootRelativePath();
-    String fileName = executable.getFilename();
-    if (OS.getCurrent() == OS.WINDOWS) {
-      Preconditions.checkArgument(fileName.endsWith(".exe"));
-      fileName = fileName.substring(0, fileName.length() - 4) + extension;
-    } else {
-      fileName = fileName + extension;
-    }
-    return ruleContext.getDerivedArtifact(pathFragment.replaceName(fileName), executable.getRoot());
-  }
-
-  /** Returns an artifact next to the executable file with ".zip" suffix. */
+  /** @return An artifact next to the executable file with ".zip" suffix */
   public Artifact getPythonZipArtifact(Artifact executable) {
-    return getArtifactWithExtension(executable, ".zip");
-  }
-
-  /**
-   * Returns an artifact next to the executable file with ".temp" suffix. Used only if we're
-   * building a zip.
-   */
-  public Artifact getPythonIntermediateStubArtifact(Artifact executable) {
-    return getArtifactWithExtension(executable, ".temp");
+    return ruleContext.getRelatedArtifact(executable.getRootRelativePath(), ".zip");
   }
 
   /** Returns an artifact next to the executable file with no suffix. Only called for Windows. */
@@ -920,7 +893,7 @@ public final class PyCommon {
                 ruleContext,
                 semantics.getCoverageInstrumentationSpec(),
                 METADATA_COLLECTOR,
-                filesToBuild.toList(),
+                filesToBuild,
                 /* reportedToActualSources= */ NestedSetBuilder.create(Order.STABLE_ORDER)))
         // Python targets are not really compilable. The best we can do is make sure that all
         // generated source files are ready.
@@ -943,8 +916,7 @@ public final class PyCommon {
       }
       Iterable<Artifact> pySrcs =
           FileType.filter(
-              src.getProvider(FileProvider.class).getFilesToBuild().toList(),
-              PyRuleClasses.PYTHON_SOURCE);
+              src.getProvider(FileProvider.class).getFilesToBuild(), PyRuleClasses.PYTHON_SOURCE);
       Iterables.addAll(sourceFiles, pySrcs);
       if (Iterables.isEmpty(pySrcs)) {
         ruleContext.attributeWarning("srcs",
@@ -986,27 +958,24 @@ public final class PyCommon {
   }
 
   /**
-   * Creates a {@link PseudoAction} that is only used for providing information to the blaze
-   * extra_action feature.
+   * Creates a {@link PseudoAction} that is only used for providing
+   * information to the blaze extra_action feature.
    */
   public static Action makePyExtraActionPseudoAction(
       ActionOwner owner,
-      List<Artifact> sources,
-      NestedSet<Artifact> dependencies,
+      Iterable<Artifact> sources,
+      Iterable<Artifact> dependencies,
       Artifact output) {
 
     PythonInfo info =
         PythonInfo.newBuilder()
             .addAllSourceFile(Artifact.toExecPaths(sources))
-            .addAllDepFile(Artifact.toExecPaths(dependencies.toList()))
+            .addAllDepFile(Artifact.toExecPaths(dependencies))
             .build();
 
     return new PyPseudoAction(
         owner,
-        NestedSetBuilder.<Artifact>stableOrder()
-            .addAll(sources)
-            .addTransitive(dependencies)
-            .build(),
+        NestedSetBuilder.wrap(Order.STABLE_ORDER, Iterables.concat(sources, dependencies)),
         ImmutableList.of(output),
         "Python",
         PYTHON_INFO,
