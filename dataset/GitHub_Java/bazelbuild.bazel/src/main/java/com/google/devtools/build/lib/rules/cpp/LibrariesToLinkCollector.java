@@ -119,7 +119,7 @@ public class LibrariesToLinkCollector {
     private final ImmutableSet<String> librarySearchDirectories;
     private final ImmutableSet<String> runtimeLibrarySearchDirectories;
 
-    private CollectedLibrariesToLink(
+    public CollectedLibrariesToLink(
         SequenceBuilder librariesToLink,
         ImmutableSet<LinkerInput> expandedLinkerInputs,
         ImmutableSet<String> librarySearchDirectories,
@@ -471,9 +471,7 @@ public class LibrariesToLinkCollector {
               LibraryToLinkValue.forObjectFile(
                   effectiveObjectFilePath(inputArtifact, input.isFake()), inputIsWholeArchive));
         }
-        if (!input.isLinkstamp()) {
-          expandedLinkerInputsBuilder.add(input);
-        }
+        expandedLinkerInputsBuilder.add(input);
       } else {
         librariesToLink.addValue(
             LibraryToLinkValue.forStaticLibrary(
