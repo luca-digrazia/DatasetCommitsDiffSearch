@@ -58,8 +58,7 @@ public final class BazelAnalysisMock extends AnalysisMock {
             "local_repository(name = 'local_config_xcode', path = '/local_config_xcode')",
             "local_repository(name = 'com_google_protobuf', path = '/protobuf')",
             "bind(name = 'android/sdk', actual='@bazel_tools//tools/android:sdk')",
-            "bind(name = 'tools/python', actual='//tools/python')",
-            "register_toolchains('@bazel_tools//tools/cpp:all')"));
+            "bind(name = 'tools/python', actual='//tools/python')"));
   }
 
   @Override
@@ -265,16 +264,15 @@ public final class BazelAnalysisMock extends AnalysisMock {
         .add("    processor_class = 'android.databinding.annotationprocessor.ProcessDataBinding')")
         .add("sh_binary(name = 'jarjar_bin', srcs = ['empty.sh'])")
         .add("sh_binary(name = 'instrumentation_test_check', srcs = ['empty.sh'])")
-        .add("package_group(name = 'android_device_whitelist', packages = ['//...'])")
-        .add("android_tools_defaults_jar(name = 'android_jar')");
+        .add("package_group(name = 'android_device_whitelist', packages = ['//...'])");
 
     return androidBuildContents.build();
   }
 
   @Override
   public void setupMockWorkspaceFiles(Path embeddedBinariesRoot) throws IOException {
-    embeddedBinariesRoot.createDirectoryAndParents();
     Path jdkWorkspacePath = embeddedBinariesRoot.getRelative("jdk.WORKSPACE");
+    FileSystemUtils.createDirectoryAndParents(jdkWorkspacePath.getParentDirectory());
     FileSystemUtils.writeContentAsLatin1(jdkWorkspacePath, "");
   }
 
