@@ -154,12 +154,7 @@ public abstract class SearchResource extends RestResource {
         final Set<IndexRangeSummary> result = Sets.newHashSetWithExpectedSize(indexRanges.size());
 
         for (IndexRange indexRange : indexRanges) {
-            result.add(IndexRangeSummary.create(
-                    indexRange.indexName(),
-                    indexRange.begin(),
-                    indexRange.end(),
-                    indexRange.calculatedAt(),
-                    indexRange.calculationDuration()));
+            result.add(IndexRangeSummary.create(indexRange.getIndexName(), indexRange.getCalculatedAt(), indexRange.getStart(), indexRange.getCalculationTookMs()));
         }
 
         return result;
