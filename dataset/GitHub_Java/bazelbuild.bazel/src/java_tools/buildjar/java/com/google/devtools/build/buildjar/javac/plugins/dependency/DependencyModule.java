@@ -20,7 +20,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.collect.FluentIterable;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Ordering;
 import com.google.devtools.build.buildjar.JarOwner;
 import com.google.devtools.build.buildjar.javac.plugins.BlazeJavaCompilerPlugin;
@@ -80,7 +79,6 @@ public final class DependencyModule {
   private final Set<String> usedClasspath;
   private final Map<String, Deps.Dependency> explicitDependenciesMap;
   private final Map<String, Deps.Dependency> implicitDependenciesMap;
-  private final ImmutableSet<String> platformJars;
   Set<String> requiredClasspath;
   private final FixMessage fixMessage;
   private final Set<String> exemptGenerators;
@@ -92,7 +90,6 @@ public final class DependencyModule {
       Map<String, JarOwner> indirectJarsToTargets,
       boolean strictClasspathMode,
       Set<String> depsArtifacts,
-      ImmutableSet<String> platformJars,
       String ruleKind,
       String targetLabel,
       String outputDepsProtoFile,
@@ -108,7 +105,6 @@ public final class DependencyModule {
     this.outputDepsProtoFile = outputDepsProtoFile;
     this.explicitDependenciesMap = new HashMap<>();
     this.implicitDependenciesMap = new HashMap<>();
-    this.platformJars = platformJars;
     this.usedClasspath = new HashSet<>();
     this.fixMessage = fixMessage;
     this.exemptGenerators = exemptGenerators;
@@ -204,11 +200,6 @@ public final class DependencyModule {
   /** Returns the map collecting precise implicit dependency information. */
   public Map<String, Deps.Dependency> getImplicitDependenciesMap() {
     return implicitDependenciesMap;
-  }
-
-  /** Returns the jars in the platform classpath. */
-  public ImmutableSet<String> getPlatformJars() {
-    return platformJars;
   }
 
   /** Adds a package to the set of packages built by this target. */
@@ -316,7 +307,6 @@ public final class DependencyModule {
     private final Map<String, JarOwner> directJarsToTargets = new HashMap<>();
     private final Map<String, JarOwner> indirectJarsToTargets = new HashMap<>();
     private final Set<String> depsArtifacts = new HashSet<>();
-    private ImmutableSet<String> platformJars = ImmutableSet.of();
     private String ruleKind;
     private String targetLabel;
     private String outputDepsProtoFile;
@@ -355,7 +345,6 @@ public final class DependencyModule {
           indirectJarsToTargets,
           strictClasspathMode,
           depsArtifacts,
-          platformJars,
           ruleKind,
           targetLabel,
           outputDepsProtoFile,
@@ -452,12 +441,6 @@ public final class DependencyModule {
      */
     public Builder addDepsArtifacts(Collection<String> depsArtifacts) {
       this.depsArtifacts.addAll(depsArtifacts);
-      return this;
-    }
-
-    /** Sets the platform classpath entries. */
-    public Builder setPlatformJars(ImmutableSet<String> platformJars) {
-      this.platformJars = platformJars;
       return this;
     }
 

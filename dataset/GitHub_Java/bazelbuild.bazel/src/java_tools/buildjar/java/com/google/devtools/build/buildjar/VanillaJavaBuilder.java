@@ -23,6 +23,8 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.buildjar.jarhelper.JarCreator;
 import com.google.devtools.build.buildjar.javac.JavacOptions;
 import com.google.devtools.build.buildjar.proto.JavaCompilation.Manifest;
+import com.google.devtools.build.buildjar.resourcejar.ResourceJarBuilder;
+import com.google.devtools.build.buildjar.resourcejar.ResourceJarOptions;
 import com.google.devtools.build.lib.view.proto.Deps;
 import com.google.devtools.build.lib.worker.WorkerProtocol.WorkRequest;
 import com.google.devtools.build.lib.worker.WorkerProtocol.WorkResponse;
@@ -195,12 +197,6 @@ public class VanillaJavaBuilder implements Closeable {
     }
 
     for (Diagnostic<? extends JavaFileObject> diagnostic : diagnosticCollector.getDiagnostics()) {
-      String code = diagnostic.getCode();
-      if (code.startsWith("compiler.note.deprecated")
-          || code.startsWith("compiler.note.unchecked")
-          || code.equals("compiler.warn.sun.proprietary")) {
-        continue;
-      }
       StringBuilder message = new StringBuilder();
       if (diagnostic.getSource() != null) {
         message.append(diagnostic.getSource().getName());
@@ -296,6 +292,17 @@ public class VanillaJavaBuilder implements Closeable {
     jar.setNormalize(true);
     jar.setCompression(optionsParser.compressJar());
     jar.addDirectory(optionsParser.getClassDir());
+    // TODO(cushon): kill this once resource jar creation is decoupled from JavaBuilder
+    try (ResourceJarBuilder resourceBuilder =
+        new ResourceJarBuilder(
+            ResourceJarOptions.builder()
+                .setMessages(ImmutableList.copyOf(optionsParser.getMessageFiles()))
+                .setResourceJars(ImmutableList.copyOf(optionsParser.getResourceJars()))
+                .setResources(ImmutableList.copyOf(optionsParser.getResourceFiles()))
+                .setClasspathResources(ImmutableList.copyOf(optionsParser.getRootResourceFiles()))
+                .build())) {
+      resourceBuilder.build(jar);
+    }
     jar.execute();
   }
 

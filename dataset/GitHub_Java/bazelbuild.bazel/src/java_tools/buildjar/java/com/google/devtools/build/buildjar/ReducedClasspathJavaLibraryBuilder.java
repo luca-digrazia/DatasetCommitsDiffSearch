@@ -19,7 +19,6 @@ import com.google.devtools.build.buildjar.javac.BlazeJavacResult;
 import com.google.devtools.build.buildjar.javac.FormattedDiagnostic;
 import com.google.devtools.build.buildjar.javac.JavacRunner;
 import java.io.IOException;
-import java.nio.file.Path;
 
 /**
  * A variant of SimpleJavaLibraryBuilder that attempts to reduce the compile-time classpath right
@@ -43,7 +42,7 @@ public class ReducedClasspathJavaLibraryBuilder extends SimpleJavaLibraryBuilder
       throws IOException {
     // Minimize classpath, but only if we're actually compiling some sources (some invocations of
     // JavaBuilder are only building resource jars).
-    ImmutableList<Path> compressedClasspath = build.getClassPath();
+    ImmutableList<String> compressedClasspath = build.getClassPath();
     if (!build.getSourceFiles().isEmpty()) {
       compressedClasspath =
           build.getDependencyModule().computeStrictClasspath(build.getClassPath());
@@ -52,16 +51,6 @@ public class ReducedClasspathJavaLibraryBuilder extends SimpleJavaLibraryBuilder
     // Compile!
     BlazeJavacResult result =
         javacRunner.invokeJavac(build.toBlazeJavacArguments(compressedClasspath));
-
-    result =
-        result.withStatistics(
-            result
-                .statistics()
-                .toBuilder()
-                .transitiveClasspathLength(build.getClassPath().size())
-                .reducedClasspathLength(compressedClasspath.size())
-                .transitiveClasspathFallback(false)
-                .build());
 
     // If javac errored out because of missing entries on the classpath, give it another try.
     // TODO(bazel-team): check performance impact of additional retries.
@@ -73,9 +62,6 @@ public class ReducedClasspathJavaLibraryBuilder extends SimpleJavaLibraryBuilder
 
       // Fall back to the regular compile, but add extra checks to catch transitive uses
       result = javacRunner.invokeJavac(build.toBlazeJavacArguments(build.getClassPath()));
-      result =
-          result.withStatistics(
-              result.statistics().toBuilder().transitiveClasspathFallback(true).build());
     }
     return result;
   }

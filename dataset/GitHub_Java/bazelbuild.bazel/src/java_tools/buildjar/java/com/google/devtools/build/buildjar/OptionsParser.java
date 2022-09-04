@@ -61,6 +61,10 @@ public final class OptionsParser {
 
   private final List<String> sourceFiles = new ArrayList<>();
   private final List<String> sourceJars = new ArrayList<>();
+  private final List<String> messageFiles = new ArrayList<>();
+  private final List<String> resourceFiles = new ArrayList<>();
+  private final List<String> resourceJars = new ArrayList<>();
+  private final List<String> rootResourceFiles = new ArrayList<>();
 
   private final List<String> classPath = new ArrayList<>();
   private final List<String> sourcePath = new ArrayList<>();
@@ -155,25 +159,37 @@ public final class OptionsParser {
         case "--source_jars":
           collectFlagArguments(sourceJars, argQueue, "-");
           break;
-        case "--classpath":
-          collectFlagArguments(classPath, argQueue, "-");
+        case "--messages":
+          collectFlagArguments(messageFiles, argQueue, "-");
           break;
+        case "--resources":
+          collectFlagArguments(resourceFiles, argQueue, "-");
+          break;
+        case "--resource_jars":
+          collectFlagArguments(resourceJars, argQueue, "-");
+          break;
+        case "--classpath_resources":
+          collectFlagArguments(rootResourceFiles, argQueue, "-");
+          break;
+        case "--classpath":
+          collectClassPathArguments(classPath, argQueue);
+          break;
+          // TODO(#970): Consider wether we want to use --sourcepath for resolving of #970.
         case "--sourcepath":
-          // TODO(#970): Consider whether we want to use --sourcepath for resolving of #970.
-          collectFlagArguments(sourcePath, argQueue, "-");
+          collectClassPathArguments(sourcePath, argQueue);
           break;
         case "--bootclasspath":
-          collectFlagArguments(bootClassPath, argQueue, "-");
+          collectClassPathArguments(bootClassPath, argQueue);
           break;
         case "--processorpath":
-          collectFlagArguments(processorPath, argQueue, "-");
+          collectClassPathArguments(processorPath, argQueue);
           break;
         case "--processors":
           collectProcessorArguments(processorNames, argQueue, "-");
           break;
         case "--extclasspath":
         case "--extdir":
-          collectFlagArguments(extClassPath, argQueue, "-");
+          collectClassPathArguments(extClassPath, argQueue);
           break;
         case "--output":
           outputJar = getArgument(argQueue, arg);
@@ -293,6 +309,17 @@ public final class OptionsParser {
   private static final Splitter CLASSPATH_SPLITTER =
       Splitter.on(File.pathSeparatorChar).trimResults().omitEmptyStrings();
 
+  // TODO(cushon): stop splitting classpaths once cl/127006119 is released
+  private static void collectClassPathArguments(Collection<String> output, Deque<String> args) {
+    for (String arg = args.pollFirst(); arg != null; arg = args.pollFirst()) {
+      if (arg.startsWith("-")) {
+        args.addFirst(arg);
+        break;
+      }
+      Iterables.addAll(output, CLASSPATH_SPLITTER.split(arg));
+    }
+  }
+
   /**
    * Collects the arguments for the --processors command line flag until it finds a flag that starts
    * with the terminatorPrefix.
@@ -383,6 +410,22 @@ public final class OptionsParser {
 
   public List<String> getSourceJars() {
     return sourceJars;
+  }
+
+  public List<String> getMessageFiles() {
+    return messageFiles;
+  }
+
+  public List<String> getResourceFiles() {
+    return resourceFiles;
+  }
+
+  public List<String> getResourceJars() {
+    return resourceJars;
+  }
+
+  public List<String> getRootResourceFiles() {
+    return rootResourceFiles;
   }
 
   public List<String> getClassPath() {
