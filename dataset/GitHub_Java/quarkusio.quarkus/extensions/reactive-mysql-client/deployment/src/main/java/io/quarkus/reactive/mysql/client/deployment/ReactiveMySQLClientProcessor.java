@@ -1,33 +1,25 @@
 package io.quarkus.reactive.mysql.client.deployment;
 
-import javax.inject.Singleton;
-
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
-import io.quarkus.arc.deployment.SyntheticBeanBuildItem;
+import io.quarkus.arc.deployment.BeanContainerBuildItem;
 import io.quarkus.datasource.common.runtime.DatabaseKind;
 import io.quarkus.datasource.runtime.DataSourcesBuildTimeConfig;
 import io.quarkus.datasource.runtime.DataSourcesRuntimeConfig;
 import io.quarkus.datasource.runtime.LegacyDataSourcesRuntimeConfig;
-import io.quarkus.deployment.Feature;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
-import io.quarkus.deployment.builditem.ExtensionSslNativeSupportBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.ServiceStartBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
-import io.quarkus.reactive.datasource.deployment.VertxPoolBuildItem;
 import io.quarkus.reactive.datasource.runtime.DataSourceReactiveBuildTimeConfig;
 import io.quarkus.reactive.datasource.runtime.DataSourceReactiveRuntimeConfig;
 import io.quarkus.reactive.mysql.client.runtime.DataSourceReactiveMySQLConfig;
 import io.quarkus.reactive.mysql.client.runtime.LegacyDataSourceReactiveMySQLConfig;
 import io.quarkus.reactive.mysql.client.runtime.MySQLPoolProducer;
 import io.quarkus.reactive.mysql.client.runtime.MySQLPoolRecorder;
-import io.quarkus.runtime.RuntimeValue;
-import io.quarkus.smallrye.health.deployment.spi.HealthBuildItem;
 import io.quarkus.vertx.deployment.VertxBuildItem;
-import io.vertx.mysqlclient.MySQLPool;
 
 @SuppressWarnings("deprecation")
 class ReactiveMySQLClientProcessor {
@@ -39,13 +31,10 @@ class ReactiveMySQLClientProcessor {
 
     @BuildStep
     @Record(ExecutionTime.RUNTIME_INIT)
-    ServiceStartBuildItem build(BuildProducer<FeatureBuildItem> feature,
-            BuildProducer<MySQLPoolBuildItem> mysqlPool,
-            BuildProducer<VertxPoolBuildItem> vertxPool,
+    ServiceStartBuildItem build(BuildProducer<FeatureBuildItem> feature, BuildProducer<MySQLPoolBuildItem> mysqlPool,
             MySQLPoolRecorder recorder,
             VertxBuildItem vertx,
-            BuildProducer<SyntheticBeanBuildItem> syntheticBeans, ShutdownContextBuildItem shutdown,
-            BuildProducer<ExtensionSslNativeSupportBuildItem> sslNativeSupport,
+            BeanContainerBuildItem beanContainer, ShutdownContextBuildItem shutdown,
             DataSourcesBuildTimeConfig dataSourcesBuildTimeConfig, DataSourcesRuntimeConfig dataSourcesRuntimeConfig,
             DataSourceReactiveBuildTimeConfig dataSourceReactiveBuildTimeConfig,
             DataSourceReactiveRuntimeConfig dataSourceReactiveRuntimeConfig,
@@ -53,7 +42,7 @@ class ReactiveMySQLClientProcessor {
             LegacyDataSourcesRuntimeConfig legacyDataSourcesRuntimeConfig,
             LegacyDataSourceReactiveMySQLConfig legacyDataSourceReactiveMySQLConfig) {
 
-        feature.produce(new FeatureBuildItem(Feature.REACTIVE_MYSQL_CLIENT));
+        feature.produce(new FeatureBuildItem(FeatureBuildItem.REACTIVE_MYSQL_CLIENT));
         // Make sure the MySQLPoolProducer is initialized before the StartupEvent is fired
         ServiceStartBuildItem serviceStart = new ServiceStartBuildItem("reactive-mysql-client");
 
@@ -67,28 +56,11 @@ class ReactiveMySQLClientProcessor {
 
         boolean isLegacy = !dataSourcesBuildTimeConfig.defaultDataSource.dbKind.isPresent();
 
-        RuntimeValue<MySQLPool> mySqlPool = recorder.configureMySQLPool(vertx.getVertx(),
+        mysqlPool.produce(new MySQLPoolBuildItem(recorder.configureMySQLPool(vertx.getVertx(), beanContainer.getValue(),
                 dataSourcesRuntimeConfig, dataSourceReactiveRuntimeConfig, dataSourceReactiveMySQLConfig,
                 legacyDataSourcesRuntimeConfig, legacyDataSourceReactiveMySQLConfig, isLegacy,
-                shutdown);
-        mysqlPool.produce(new MySQLPoolBuildItem(mySqlPool));
-
-        // Synthetic bean for MySQLPool
-        syntheticBeans.produce(SyntheticBeanBuildItem.configure(MySQLPool.class).scope(Singleton.class).runtimeValue(mySqlPool)
-                .setRuntimeInit().done());
-
-        boolean isDefault = true; // assume always the default pool for now
-        vertxPool.produce(new VertxPoolBuildItem(mySqlPool, DatabaseKind.MYSQL, isDefault));
-
-        // Enable SSL support by default
-        sslNativeSupport.produce(new ExtensionSslNativeSupportBuildItem(Feature.REACTIVE_MYSQL_CLIENT));
+                shutdown)));
 
         return serviceStart;
-    }
-
-    @BuildStep
-    HealthBuildItem addHealthCheck(DataSourcesBuildTimeConfig dataSourcesBuildTimeConfig) {
-        return new HealthBuildItem("io.quarkus.reactive.mysql.client.runtime.health.ReactiveMySQLDataSourceHealthCheck",
-                dataSourcesBuildTimeConfig.healthEnabled);
     }
 }
