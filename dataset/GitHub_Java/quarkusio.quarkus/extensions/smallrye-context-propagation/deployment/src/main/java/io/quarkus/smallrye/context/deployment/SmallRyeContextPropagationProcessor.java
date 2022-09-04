@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.smallrye.context.deployment;
 
 import java.io.IOException;
@@ -18,7 +34,7 @@ import io.quarkus.deployment.builditem.ExecutorBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.util.ServiceUtil;
 import io.quarkus.smallrye.context.runtime.SmallRyeContextPropagationProvider;
-import io.quarkus.smallrye.context.runtime.SmallRyeContextPropagationRecorder;
+import io.quarkus.smallrye.context.runtime.SmallRyeContextPropagationTemplate;
 
 /**
  * The deployment processor for MP-CP applications
@@ -34,11 +50,11 @@ class SmallRyeContextPropagationProcessor {
 
     @BuildStep
     @Record(ExecutionTime.STATIC_INIT)
-    void buildStatic(SmallRyeContextPropagationRecorder recorder)
+    void buildStatic(SmallRyeContextPropagationTemplate template)
             throws ClassNotFoundException, IOException {
         List<ThreadContextProvider> discoveredProviders = new ArrayList<>();
         List<ContextManagerExtension> discoveredExtensions = new ArrayList<>();
-        for (Class<?> provider : ServiceUtil.classesNamedIn(SmallRyeContextPropagationRecorder.class.getClassLoader(),
+        for (Class<?> provider : ServiceUtil.classesNamedIn(SmallRyeContextPropagationTemplate.class.getClassLoader(),
                 "META-INF/services/" + ThreadContextProvider.class.getName())) {
             try {
                 discoveredProviders.add((ThreadContextProvider) provider.newInstance());
@@ -47,7 +63,7 @@ class SmallRyeContextPropagationProcessor {
                         e);
             }
         }
-        for (Class<?> extension : ServiceUtil.classesNamedIn(SmallRyeContextPropagationRecorder.class.getClassLoader(),
+        for (Class<?> extension : ServiceUtil.classesNamedIn(SmallRyeContextPropagationTemplate.class.getClassLoader(),
                 "META-INF/services/" + ContextManagerExtension.class.getName())) {
             try {
                 discoveredExtensions.add((ContextManagerExtension) extension.newInstance());
@@ -57,17 +73,17 @@ class SmallRyeContextPropagationProcessor {
             }
         }
 
-        recorder.configureStaticInit(discoveredProviders, discoveredExtensions);
+        template.configureStaticInit(discoveredProviders, discoveredExtensions);
     }
 
     @BuildStep
     @Record(ExecutionTime.RUNTIME_INIT)
-    void build(SmallRyeContextPropagationRecorder recorder,
+    void build(SmallRyeContextPropagationTemplate template,
             BeanContainerBuildItem beanContainer,
             ExecutorBuildItem executorBuildItem,
             BuildProducer<FeatureBuildItem> feature) {
         feature.produce(new FeatureBuildItem(FeatureBuildItem.SMALLRYE_CONTEXT_PROPAGATION));
 
-        recorder.configureRuntime(beanContainer.getValue(), executorBuildItem.getExecutorProxy());
+        template.configureRuntime(beanContainer.getValue(), executorBuildItem.getExecutorProxy());
     }
 }
