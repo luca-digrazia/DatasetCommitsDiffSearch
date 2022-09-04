@@ -1,5 +1,5 @@
-/**
- * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
+/*
+ * Copyright 2013 TORCH UG
  *
  * This file is part of Graylog2.
  *
@@ -15,35 +15,43 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
  */
 package models;
 
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
+import com.google.inject.assistedinject.Assisted;
+import com.google.inject.assistedinject.AssistedInject;
 import lib.APIException;
-import lib.Api;
-import lib.ExclusiveInputException;
-import models.api.requests.InputLaunchRequest;
+import lib.ApiClient;
+import lib.timeranges.InvalidRangeParametersException;
+import lib.timeranges.RelativeRange;
+import models.api.requests.AddStaticFieldRequest;
 import models.api.responses.EmptyResponse;
 import models.api.responses.MessageSummaryResponse;
+import models.api.responses.metrics.GaugeResponse;
 import models.api.responses.system.InputSummaryResponse;
-import models.api.responses.system.InputTypeSummaryResponse;
-import models.api.responses.system.InputTypesResponse;
 import models.api.results.MessageResult;
 import org.joda.time.DateTime;
-import play.Logger;
+import org.slf4j.LoggerFactory;
+import play.mvc.Http;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
 public class Input {
 
+    private static final org.slf4j.Logger log = LoggerFactory.getLogger(Input.class);
+
+    public interface Factory {
+        Input fromSummaryResponse(InputSummaryResponse input, Node node);
+    }
+
+    private final ApiClient api;
+    private final UniversalSearch.Factory searchFactory;
+    private final Node node;
     private final String type;
     private final String id;
     private final String persistId;
@@ -52,29 +60,22 @@ public class Input {
     private final User creatorUser;
     private final DateTime startedAt;
     private final Map<String, Object> attributes;
+    private final Map<String, String> staticFields;
 
-    public Input(InputSummaryResponse is) {
-        this(
-                is.type,
-                is.inputId,
-                is.persistId,
-                is.name,
-                is.title,
-                is.startedAt,
-                User.load(is.creatorUserId),
-                is.attributes
-        );
-    }
-
-    public Input(String type, String id, String persistId, String name, String title, String startedAt, User creatorUser, Map<String, Object> attributes) {
-        this.type = type;
-        this.id = id;
-        this.persistId = persistId;
-        this.name = name;
-        this.title = title;
-        this.startedAt = DateTime.parse(startedAt);
-        this.creatorUser = creatorUser;
-        this.attributes = attributes;
+    @AssistedInject
+    private Input(ApiClient api, UniversalSearch.Factory searchFactory, UserService userService, @Assisted InputSummaryResponse is, @Assisted Node node) {
+        this.api = api;
+        this.searchFactory = searchFactory;
+        this.node = node;
+        this.type = is.type;
+        this.id = is.inputId;
+        this.persistId = is.persistId;
+        this.name = is.name;
+        this.title = is.title;
+        this.startedAt = DateTime.parse(is.startedAt);
+        this.creatorUser = userService.load(is.creatorUserId);
+        this.attributes = is.attributes;
+        this.staticFields = is.staticFields;
 
         // We might get a double parsed from JSON here. Make sure to round it to Integer. (would be .0 anyways)
         for (Map.Entry<String, Object> e : attributes.entrySet()) {
@@ -84,52 +85,19 @@ public class Input {
         }
     }
 
-    public static Map<String, String> getTypes(Node node) throws IOException, APIException {
-        return Api.get(node, "system/inputs/types", InputTypesResponse.class).types;
-    }
-
-    public static InputTypeSummaryResponse getTypeInformation(Node node, String type) throws IOException, APIException {
-        return Api.get(node, "system/inputs/types/" + type, InputTypeSummaryResponse.class);
-    }
-
-    public static Map<String, InputTypeSummaryResponse> getAllTypeInformation(Node node) throws IOException, APIException {
-        Map<String, InputTypeSummaryResponse> types = Maps.newHashMap();
-
-        List<InputTypeSummaryResponse> bools = Lists.newArrayList();
-        for (String type : getTypes(node).keySet()) {
-            InputTypeSummaryResponse itr = getTypeInformation(node, type);
-            types.put(itr.type, itr);
-        }
-
-        return types;
-    }
-
-    public static void launch(Node node, String title, String type, Map<String, Object> configuration, String userId, boolean isExclusive) throws IOException, APIException, ExclusiveInputException {
-        if (isExclusive) {
-            for (Input input : node.getInputs()) {
-                if(input.getType().equals(type)) {
-                    throw new ExclusiveInputException();
-                }
-            }
-        }
-
-        InputLaunchRequest request = new InputLaunchRequest();
-        request.title = title;
-        request.type = type;
-        request.configuration = configuration;
-        request.creatorUserId = userId;
-
-        Api.post(node, "system/inputs", request, 202, EmptyResponse.class);
-    }
-
-    public static void terminate(Node node, String inputId) throws IOException, APIException {
-        Api.delete(node, "/system/inputs/" + inputId, 202, EmptyResponse.class);
+    public void terminate(Node node) throws IOException, APIException {
+        node.terminateInput(id);
     }
 
     public MessageResult getRecentlyReceivedMessage(String nodeId) throws IOException, APIException {
         String query = "gl2_source_node:" + nodeId + " AND gl2_source_input:" + id;
 
-        UniversalSearch search = new UniversalSearch(query, 60*60*24);
+        UniversalSearch search = null;
+        try {
+            search = searchFactory.queryWithRange(query, new RelativeRange(60 * 60 * 24));
+        } catch (InvalidRangeParametersException e) {
+            return null; // cannot happen(tm)
+        }
         List<MessageSummaryResponse> messages = search.search().getMessages();
 
         MessageSummaryResponse result;
@@ -168,6 +136,83 @@ public class Input {
 
     public DateTime getStartedAt() {
         return startedAt;
+    }
+
+    public Map<String, String> getStaticFields() {
+        return staticFields;
+    }
+
+    public void addStaticField(String key, String value) throws APIException, IOException {
+        api.post().node(node)
+                .path("/system/inputs/{0}/staticfields", id)
+                .body(new AddStaticFieldRequest(key, value))
+                .expect(Http.Status.CREATED)
+                .execute();
+    }
+
+    public void removeStaticField(String key) throws APIException, IOException {
+        api.delete().node(node)
+                .path("/system/inputs/{0}/staticfields/{1}", id, key)
+                .expect(Http.Status.NO_CONTENT)
+                .execute();
+    }
+
+    public long getConnections() {
+        return getGaugeValue("open_connections");
+    }
+
+    public long getTotalConnections() {
+        return getGaugeValue("total_connections");
+    }
+
+    public long getReadBytes() {
+        return getGaugeValue(buildNetworkIOMetricName("read_bytes", false));
+    }
+
+    public long getWrittenBytes() {
+        return getGaugeValue(buildNetworkIOMetricName("written_bytes", false));
+    }
+
+    public long getTotalReadBytes() {
+        return getGaugeValue(buildNetworkIOMetricName("read_bytes", true));
+    }
+
+    public long getTotalWrittenBytes() {
+        return getGaugeValue(buildNetworkIOMetricName("written_bytes", true));
+    }
+
+    private String buildNetworkIOMetricName(String base, boolean total) {
+        StringBuilder metricName = new StringBuilder(base).append("_");
+
+        if (total) {
+            metricName.append("total");
+        } else {
+            metricName.append("1sec");
+        }
+
+        return metricName.toString();
+    }
+
+    private Long getGaugeValue(String name) {
+        try {
+            GaugeResponse response = api.get(GaugeResponse.class)
+                .node(node)
+                .path("/system/metrics/{0}.{1}.{2}", type, id, name)
+                .expect(200, 404)
+                .execute();
+
+            if (response == null) {
+                return -1L;
+            } else {
+                return (Long) response.value;
+            }
+        } catch (APIException e) {
+            log.error("Unable to read throughput info of input [{}]", this.id, e);
+        } catch (IOException e) {
+            log.error("Unexpected exception", e);
+        }
+
+        return -1L;
     }
 
     public Map<String, Object> getAttributes() {
