@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.android;
 
+import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Predicates.not;
 import static java.util.stream.Collectors.toList;
 
@@ -370,12 +371,14 @@ public class AndroidCompiledDataDeserializer implements AndroidDataDeserializer 
 
     /** Indicates if a reference can be inlined in a styleable. */
     public boolean shouldInline(FullyQualifiedName reference) {
-      // Only inline if it's in the current package.
-      if (!reference.isInPackage(packageName.orElse(FullyQualifiedName.DEFAULT_PACKAGE))) {
-        return false;
-      }
-
-      return InlineStatus.INLINEABLE.equals(qualifiedReferenceInlineStatus.get(reference));
+      return checkNotNull(
+                  qualifiedReferenceInlineStatus.get(reference),
+                  "%s reference is unsatisfied. Available names: %s",
+                  reference,
+                  qualifiedReferenceInlineStatus.keySet())
+              .equals(InlineStatus.INLINEABLE)
+          // Only inline if it's in the current package.
+          && reference.isInPackage(packageName.orElse(FullyQualifiedName.DEFAULT_PACKAGE));
     }
 
     /** Update the reference's inline state. */
