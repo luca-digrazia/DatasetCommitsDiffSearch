@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2011 Pierre-Yves Ricau (py.ricau at gmail.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -26,7 +26,6 @@ import com.googlecode.androidannotations.helper.IdAnnotationHelper;
 import com.googlecode.androidannotations.helper.IdValidatorHelper;
 import com.googlecode.androidannotations.model.AnnotationElements;
 import com.googlecode.androidannotations.rclass.IRClass;
-import com.googlecode.androidannotations.rclass.IRClass.Res;
 
 public class TouchValidator implements ElementValidator {
 
@@ -47,20 +46,12 @@ public class TouchValidator implements ElementValidator {
 
 		IsValid valid = new IsValid();
 
-		validatorHelper.enclosingElementHasEnhancedViewSupportAnnotation(element, validatedElements, valid);
+		validatorHelper.idListenerMethod(element, validatedElements, valid);
 
-		validatorHelper.idsExists(element, Res.ID, valid);
-
-		validatorHelper.isNotPrivate(element, valid);
-
-		validatorHelper.doesntThrowException((ExecutableElement) element, valid);
-
-		validatorHelper.uniqueId(element, validatedElements, valid);
-		
 		ExecutableElement executableElement = (ExecutableElement) element;
 
 		validatorHelper.returnTypeIsVoidOrBoolean(executableElement, valid);
-
+		
 		validatorHelper.hasOneMotionEventOrTwoMotionEventViewParameters(executableElement, valid);
 
 		return valid.isValid();

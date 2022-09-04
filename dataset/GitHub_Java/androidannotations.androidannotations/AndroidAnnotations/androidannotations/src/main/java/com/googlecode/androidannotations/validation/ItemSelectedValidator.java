@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2011 Pierre-Yves Ricau (py.ricau at gmail.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -26,7 +26,6 @@ import com.googlecode.androidannotations.helper.IdAnnotationHelper;
 import com.googlecode.androidannotations.helper.IdValidatorHelper;
 import com.googlecode.androidannotations.model.AnnotationElements;
 import com.googlecode.androidannotations.rclass.IRClass;
-import com.googlecode.androidannotations.rclass.IRClass.Res;
 
 /**
  * @author Pierre-Yves Ricau
@@ -34,7 +33,7 @@ import com.googlecode.androidannotations.rclass.IRClass.Res;
 public class ItemSelectedValidator implements ElementValidator {
 
 	private IdValidatorHelper validatorHelper;
-
+	
 	public ItemSelectedValidator(ProcessingEnvironment processingEnv, IRClass rClass) {
 		IdAnnotationHelper annotationHelper = new IdAnnotationHelper(processingEnv, getTarget(), rClass);
 		validatorHelper = new IdValidatorHelper(annotationHelper);
@@ -49,23 +48,15 @@ public class ItemSelectedValidator implements ElementValidator {
 	public boolean validate(Element element, AnnotationElements validatedElements) {
 
 		IsValid valid = new IsValid();
-
-		validatorHelper.enclosingElementHasEnhancedViewSupportAnnotation(element, validatedElements, valid);
-
-		validatorHelper.idsExists(element, Res.ID, valid);
-
-		validatorHelper.isNotPrivate(element, valid);
-
-		validatorHelper.doesntThrowException((ExecutableElement) element, valid);
-
-		validatorHelper.uniqueId(element, validatedElements, valid);
 		
+		validatorHelper.idListenerMethod(element, validatedElements, valid);
+
 		ExecutableElement executableElement = (ExecutableElement) element;
 
 		validatorHelper.returnTypeIsVoid(executableElement, valid);
 
 		validatorHelper.hasOneOrTwoParametersAndFirstIsBoolean(executableElement, valid);
-
+		
 		return valid.isValid();
 	}
 }
