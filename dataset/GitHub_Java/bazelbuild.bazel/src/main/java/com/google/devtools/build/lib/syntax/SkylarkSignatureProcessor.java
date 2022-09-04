@@ -22,6 +22,7 @@ import com.google.devtools.build.lib.syntax.BuiltinFunction.ExtraArgKind;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -69,6 +70,7 @@ public class SkylarkSignatureProcessor {
         annotation.parameters(),
         annotation.extraPositionals(),
         annotation.extraKeywords(),
+        /*defaultValues=*/ null,
         paramDoc,
         enforcedTypesList);
   }
@@ -80,6 +82,7 @@ public class SkylarkSignatureProcessor {
    *
    * @param name the name of the function
    * @param annotation the annotation
+   * @param defaultValues an optional list of default values
    * @param paramDoc an optional list into which to store documentation strings
    * @param enforcedTypesList an optional list into which to store effective types to enforce
    */
@@ -88,6 +91,7 @@ public class SkylarkSignatureProcessor {
   // TODO(bazel-team): use AutoValue to declare a value type to use as return value?
   public static FunctionSignature.WithValues<Object, SkylarkType> getSignatureForCallable(
       String name, SkylarkSignature annotation,
+      @Nullable Iterable<Object> defaultValues,
       @Nullable List<String> paramDoc, @Nullable List<SkylarkType> enforcedTypesList) {
 
     Preconditions.checkArgument(name.equals(annotation.name()),
@@ -96,14 +100,10 @@ public class SkylarkSignatureProcessor {
     if (annotation.doc().isEmpty() && documented) {
       throw new RuntimeException(String.format("function %s is undocumented", name));
     }
-    return getSignatureForCallable(
-        name,
-        documented,
+    return getSignatureForCallable(name, documented,
         annotation.parameters(),
         annotation.extraPositionals(),
-        annotation.extraKeywords(),
-        paramDoc,
-        enforcedTypesList);
+        annotation.extraKeywords(), defaultValues, paramDoc, enforcedTypesList);
   }
 
   private static boolean isParamNamed(Param param) {
@@ -114,17 +114,21 @@ public class SkylarkSignatureProcessor {
       String name, boolean documented,
       Param[] parameters,
       @Nullable Param extraPositionals, @Nullable Param extraKeywords,
+      @Nullable Iterable<Object> defaultValues,
       @Nullable List<String> paramDoc, @Nullable List<SkylarkType> enforcedTypesList) {
     ArrayList<Parameter<Object, SkylarkType>> paramList = new ArrayList<>();
     HashMap<String, SkylarkType> enforcedTypes =
         enforcedTypesList == null ? null : new HashMap<>();
 
     HashMap<String, String> doc = new HashMap<>();
+
+    Iterator<Object> defaultValuesIterator = defaultValues == null
+        ? null : defaultValues.iterator();
     try {
       boolean named = false;
       for (Param param : parameters) {
         boolean mandatory = param.defaultValue() != null && param.defaultValue().isEmpty();
-        Object defaultValue = mandatory ? null : getDefaultValue(param);
+        Object defaultValue = mandatory ? null : getDefaultValue(param, defaultValuesIterator);
         if (isParamNamed(param) && !param.positional() && !named) {
           named = true;
           @Nullable Param starParam = null;
@@ -219,9 +223,7 @@ public class SkylarkSignatureProcessor {
       return new Parameter.Star<>(Identifier.of(param.name()), officialType);
     } else if (mandatory) {
       return new Parameter.Mandatory<>(Identifier.of(param.name()), officialType);
-    } else if (defaultValue != null
-        && !defaultValue.equals(Runtime.UNBOUND)
-        && enforcedType != null) {
+    } else if (defaultValue != null && enforcedType != null) {
       Preconditions.checkArgument(enforcedType.contains(defaultValue),
           "In function '%s', parameter '%s' has default value %s that isn't of enforced type %s",
           name, param.name(), Printer.repr(defaultValue), enforcedType);
@@ -229,12 +231,15 @@ public class SkylarkSignatureProcessor {
     return new Parameter.Optional<>(Identifier.of(param.name()), officialType, defaultValue);
   }
 
-  static Object getDefaultValue(Param param) {
-    return getDefaultValue(param.name(), param.defaultValue());
+  static Object getDefaultValue(Param param, Iterator<Object> iterator) {
+    return getDefaultValue(param.name(), param.defaultValue(), iterator);
   }
 
-  static Object getDefaultValue(String paramName, String paramDefaultValue) {
-    if (paramDefaultValue.isEmpty()) {
+  static Object getDefaultValue(
+      String paramName, String paramDefaultValue, Iterator<Object> iterator) {
+    if (iterator != null) {
+      return iterator.next();
+    } else if (paramDefaultValue.isEmpty()) {
       return Runtime.NONE;
     } else {
       try {
@@ -251,7 +256,7 @@ public class SkylarkSignatureProcessor {
                   .setEventHandler(Environment.FAIL_FAST_HANDLER)
                   .build()
                   .update("unbound", Runtime.UNBOUND);
-          defaultValue = BuildFileAST.eval(ParserInput.fromLines(paramDefaultValue), env);
+          defaultValue = BuildFileAST.eval(env, paramDefaultValue);
           defaultValueCache.put(paramDefaultValue, defaultValue);
           return defaultValue;
         }
@@ -326,6 +331,7 @@ public class SkylarkSignatureProcessor {
             }
             Class<?> nameSpace = function.getObjectType();
             if (nameSpace != null) {
+              Preconditions.checkState(!(function instanceof BuiltinFunction.Factory));
               builtins.registerFunction(nameSpace, function);
             }
           }

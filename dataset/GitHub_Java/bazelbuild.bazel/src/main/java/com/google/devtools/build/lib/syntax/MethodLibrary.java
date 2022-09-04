@@ -109,7 +109,7 @@ public class MethodLibrary {
       Iterable<?> items = (args.size() == 1) ? EvalUtils.toIterable(args.get(0), loc, env) : args;
       return maxOrdering.max(items);
     } catch (NoSuchElementException ex) {
-      throw new EvalException(loc, "expected at least one item", ex);
+      throw new EvalException(loc, "expected at least one item");
     }
   }
 
@@ -485,8 +485,8 @@ public class MethodLibrary {
           } catch (NumberFormatException | ArithmeticException e) {
             throw new EvalException(
                 loc,
-                Printer.format("invalid literal for int() with base %d: %r", base, stringForErrors),
-                e);
+                Printer.format(
+                    "invalid literal for int() with base %d: %r", base, stringForErrors));
           }
         }
 
@@ -562,7 +562,7 @@ public class MethodLibrary {
             return tuple;
           } catch (ConversionException e) {
             throw new EvalException(
-                loc, String.format("cannot convert item #%d to a sequence", pos), e);
+                loc, String.format("cannot convert item #%d to a sequence", pos));
           }
         }
       };

@@ -246,7 +246,16 @@ public class EvalExceptionWithStackTrace extends EvalException {
       return Joiner.on(System.lineSeparator()).join(output);
     }
 
-    /** Returns the string representation of the given element. */
+    /**
+     * Returns the location of the given element or Location.BUILTIN if the element is null.
+     */
+    private Location getLocation(StackFrame element) {
+      return (element == null) ? Location.BUILTIN : element.getLocation();
+    }
+
+    /**
+     * Returns the string representation of the given element.
+     */
     protected String print(StackFrame element) {
       // Similar to Python, the first (most-recent) entry in the stack frame is printed only once.
       // Consequently, we skip it here.
@@ -262,11 +271,6 @@ public class EvalExceptionWithStackTrace extends EvalException {
           getLine(location),
           printFunction(element.getLabel()),
           element.getCause().getLabel());
-    }
-
-    /** Returns the location of the given element or Location.BUILTIN if the element is null. */
-    private Location getLocation(StackFrame element) {
-      return (element == null) ? Location.BUILTIN : element.getLocation();
     }
 
     private String printFunction(String func) {

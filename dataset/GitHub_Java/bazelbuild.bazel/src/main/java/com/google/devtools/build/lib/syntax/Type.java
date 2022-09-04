@@ -15,23 +15,23 @@
 package com.google.devtools.build.lib.syntax;
 
 import com.google.common.base.Joiner;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Lists;
+import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.syntax.Printer.BasePrinter;
 import com.google.devtools.build.lib.util.LoggingUtil;
 import com.google.devtools.build.lib.util.StringCanonicalizer;
-
-import java.util.Collection;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Set;
-import java.util.TreeMap;
 import java.util.logging.Level;
-
 import javax.annotation.Nullable;
 
 /**
@@ -63,29 +63,29 @@ public abstract class Type<T> {
    * {@link com.google.devtools.build.lib.packages.BuildType#selectableConvert}.
    *
    * @param x the build-interpreter value to convert.
-   * @param what a string description of what x is for; should be included in
-   *    any exception thrown.  Grammatically, must describe a syntactic
+   * @param what an object having a toString describing what x is for; should be included in
+   *    any exception thrown.  Grammatically, must produce a string describe a syntactic
    *    construct, e.g. "attribute 'srcs' of rule foo".
    * @param context the label of the current BUILD rule; must be non-null if resolution of
    *    package-relative label strings is required
    * @throws ConversionException if there was a problem performing the type conversion
    */
-  public abstract T convert(Object x, String what, @Nullable Object context)
+  public abstract T convert(Object x, Object what, @Nullable Object context)
       throws ConversionException;
   // TODO(bazel-team): Check external calls (e.g. in PackageFactory), verify they always want
   // this over selectableConvert.
 
   /**
-   * Equivalent to {@link #convert(Object, String, Object)} where the label is {@code null}.
+   * Equivalent to {@link #convert(Object, Object, Object)} where the label is {@code null}.
    * Useful for converting values to types that do not involve the type {@code LABEL}
    * and hence do not require the label of the current package.
    */
-  public final T convert(Object x, String what) throws ConversionException {
+  public final T convert(Object x, Object what) throws ConversionException {
     return convert(x, what, null);
   }
 
   /**
-   * Like {@link #convert(Object, String, Object)}, but converts skylark {@code None}
+   * Like {@link #convert(Object, Object, Object)}, but converts skylark {@code None}
    * to given {@code defaultValue}.
    */
   @Nullable public final T convertOptional(Object x,
@@ -98,7 +98,7 @@ public abstract class Type<T> {
   }
 
   /**
-   * Like {@link #convert(Object, String, Object)}, but converts skylark {@code None}
+   * Like {@link #convert(Object, Object, Object)}, but converts skylark {@code None}
    * to java {@code null}.
    */
   @Nullable public final T convertOptional(Object x, String what, @Nullable Object context)
@@ -107,7 +107,7 @@ public abstract class Type<T> {
   }
 
   /**
-   * Like {@link #convert(Object, String)}, but converts skylark {@code NONE} to java {@code null}.
+   * Like {@link #convert(Object, Object)}, but converts skylark {@code NONE} to java {@code null}.
    */
   @Nullable public final T convertOptional(Object x, String what) throws ConversionException {
     return convertOptional(x, what, null);
@@ -125,26 +125,55 @@ public abstract class Type<T> {
   public abstract T getDefaultValue();
 
   /**
-   * Flatten the an instance of the type if the type is a composite one.
+   * Function accepting a (potentially null) {@link Label} and an arbitrary context object. Used by
+   * {@link #visitLabels}.
+   */
+  public interface LabelVisitor<C> {
+    void visit(@Nullable Label label, @Nullable C context);
+  }
+
+  /**
+   * Invokes {@code visitor.visit(label, context)} for each {@link Label} {@code label} associated
+   * with {@code value}, which is assumed an instance of this {@link Type}.
    *
-   * <p>This is used to support reliable label visitation in
-   * {@link com.google.devtools.build.lib.packages.AbstractAttributeMapper#visitLabels}. To preserve
-   * that reliability, every type should faithfully define its own instance of this method. In other
+   * <p>This is used to support reliable label visitation in {@link
+   * com.google.devtools.build.lib.packages.AbstractAttributeMapper#visitLabels}. To preserve that
+   * reliability, every type should faithfully define its own instance of this method. In other
    * words, be careful about defining default instances in base types that get auto-inherited by
    * their children. Keep all definitions as explicit as possible.
    */
-  public abstract Collection<? extends Object> flatten(Object value);
+  public abstract <C> void visitLabels(LabelVisitor<C> visitor, Object value, @Nullable C context);
 
-  /**
-   * {@link #flatten} return value for types that don't contain labels.
-   */
-  protected static final Collection<Object> NOT_COMPOSITE_TYPE = ImmutableList.of();
+  /** Classifications of labels by their usage. */
+  public enum LabelClass {
+    /** Used for types which are not labels. */
+    NONE,
+    /** Used for types which use labels to declare a dependency. */
+    DEPENDENCY,
+    /**
+     * Used for types which use labels to reference another target but do not declare a dependency,
+     * in cases where doing so would cause a dependency cycle.
+     */
+    NONDEP_REFERENCE,
+    /** Used for types which use labels to declare an output path. */
+    OUTPUT,
+    /**
+     * Used for types which contain Fileset entries, which contain labels but do not produce
+     * normal dependencies.
+     */
+    FILESET_ENTRY
+  }
+
+  /** Returns the class of labels contained by this type, if any. */
+  public LabelClass getLabelClass() {
+    return LabelClass.NONE;
+  }
 
   /**
    * Implementation of concatenation for this type (e.g. "val1 + val2"). Returns null to
-   * designate concatenation isn't supported.
+   * indicate concatenation isn't supported.
    */
-  public T concat(Iterable<T> elements) {
+  public T concat(@SuppressWarnings("unused") Iterable<T> elements) {
     return null;
   }
 
@@ -162,52 +191,32 @@ public abstract class Type<T> {
     throw new UnsupportedOperationException(msg);
   }
 
-  /**
-   * The type of an integer.
-   */
-  public static final Type<Integer> INTEGER = new IntegerType();
+  /** The type of an integer. */
+  @AutoCodec public static final Type<Integer> INTEGER = new IntegerType();
 
-  /**
-   * The type of a string.
-   */
-  public static final Type<String> STRING = new StringType();
+  /** The type of a string. */
+  @AutoCodec public static final Type<String> STRING = new StringType();
 
-  /**
-   * The type of a boolean.
-   */
-  public static final Type<Boolean> BOOLEAN = new BooleanType();
+  /** The type of a boolean. */
+  @AutoCodec public static final Type<Boolean> BOOLEAN = new BooleanType();
 
-  /**
-   *  The type of a list of not-yet-typed objects.
-   */
-  public static final ObjectListType OBJECT_LIST = new ObjectListType();
+  /** The type of a list of not-yet-typed objects. */
+  @AutoCodec public static final ObjectListType OBJECT_LIST = new ObjectListType();
 
-  /**
-   *  The type of a list of {@linkplain #STRING strings}.
-   */
-  public static final ListType<String> STRING_LIST = ListType.create(STRING);
+  /** The type of a list of {@linkplain #STRING strings}. */
+  @AutoCodec public static final ListType<String> STRING_LIST = ListType.create(STRING);
 
-  /**
-   *  The type of a list of {@linkplain #INTEGER strings}.
-   */
-  public static final ListType<Integer> INTEGER_LIST = ListType.create(INTEGER);
+  /** The type of a list of {@linkplain #INTEGER strings}. */
+  @AutoCodec public static final ListType<Integer> INTEGER_LIST = ListType.create(INTEGER);
 
-  /**
-   *  The type of a dictionary of {@linkplain #STRING strings}.
-   */
+  /** The type of a dictionary of {@linkplain #STRING strings}. */
+  @AutoCodec
   public static final DictType<String, String> STRING_DICT = DictType.create(STRING, STRING);
 
-  /**
-   * The type of a dictionary of {@linkplain #STRING_LIST label lists}.
-   */
+  /** The type of a dictionary of {@linkplain #STRING_LIST label lists}. */
+  @AutoCodec
   public static final DictType<String, List<String>> STRING_LIST_DICT =
       DictType.create(STRING, STRING_LIST);
-
-  /**
-   * The type of a dictionary of {@linkplain #STRING strings}, where each entry
-   * maps to a single string value.
-   */
-  public static final DictType<String, String> STRING_DICT_UNARY = DictType.create(STRING, STRING);
 
   /**
    *  For ListType objects, returns the type of the elements of the list; for
@@ -224,19 +233,19 @@ public abstract class Type<T> {
    *  an explanatory error message.
    */
   public static class ConversionException extends EvalException {
-    private static String message(Type<?> type, Object value, String what) {
-      StringBuilder builder = new StringBuilder();
-      builder.append("expected value of type '").append(type).append("'");
+    private static String message(Type<?> type, Object value, @Nullable Object what) {
+      BasePrinter printer = Printer.getPrinter();
+      printer.append("expected value of type '").append(type.toString()).append("'");
       if (what != null) {
-        builder.append(" for ").append(what);
+        printer.append(" for ").append(what.toString());
       }
-      builder.append(", but got ");
-      Printer.write(builder, value);
-      builder.append(" (").append(EvalUtils.getDataTypeName(value)).append(")");
-      return builder.toString();
+      printer.append(", but got ");
+      printer.repr(value);
+      printer.append(" (").append(EvalUtils.getDataTypeName(value)).append(")");
+      return printer.toString();
     }
 
-    public ConversionException(Type<?> type, Object value, String what) {
+    public ConversionException(Type<?> type, Object value, @Nullable Object what) {
       super(null, message(type, value, what));
     }
 
@@ -264,8 +273,7 @@ public abstract class Type<T> {
     }
 
     @Override
-    public Collection<Object> flatten(Object value) {
-      return NOT_COMPOSITE_TYPE;
+    public <T> void visitLabels(LabelVisitor<T> visitor, Object value, T context) {
     }
 
     @Override
@@ -274,7 +282,7 @@ public abstract class Type<T> {
     }
 
     @Override
-    public Object convert(Object x, String what, Object context) {
+    public Object convert(Object x, Object what, Object context) {
       return x;
     }
   }
@@ -291,8 +299,7 @@ public abstract class Type<T> {
     }
 
     @Override
-    public Collection<Object> flatten(Object value) {
-      return NOT_COMPOSITE_TYPE;
+    public <T> void visitLabels(LabelVisitor<T> visitor, Object value, T context) {
     }
 
     @Override
@@ -301,7 +308,7 @@ public abstract class Type<T> {
     }
 
     @Override
-    public Integer convert(Object x, String what, Object context)
+    public Integer convert(Object x, Object what, Object context)
         throws ConversionException {
       if (!(x instanceof Integer)) {
         throw new ConversionException(this, x, what);
@@ -331,8 +338,7 @@ public abstract class Type<T> {
     }
 
     @Override
-    public Collection<Object> flatten(Object value) {
-      return NOT_COMPOSITE_TYPE;
+    public <T> void visitLabels(LabelVisitor<T> visitor, Object value, T context) {
     }
 
     @Override
@@ -342,7 +348,7 @@ public abstract class Type<T> {
 
     // Conversion to boolean must also tolerate integers of 0 and 1 only.
     @Override
-    public Boolean convert(Object x, String what, Object context)
+    public Boolean convert(Object x, Object what, Object context)
         throws ConversionException {
       if (x instanceof Boolean) {
         return (Boolean) x;
@@ -382,8 +388,7 @@ public abstract class Type<T> {
     }
 
     @Override
-    public Collection<Object> flatten(Object value) {
-      return NOT_COMPOSITE_TYPE;
+    public <T> void visitLabels(LabelVisitor<T> visitor, Object value, T context) {
     }
 
     @Override
@@ -392,7 +397,7 @@ public abstract class Type<T> {
     }
 
     @Override
-    public String convert(Object x, String what, Object context)
+    public String convert(Object x, Object what, Object context)
         throws ConversionException {
       if (!(x instanceof String)) {
         throw new ConversionException(this, x, what);
@@ -428,14 +433,40 @@ public abstract class Type<T> {
 
     private final Map<KeyT, ValueT> empty = ImmutableMap.of();
 
-    public static <KEY, VALUE> DictType<KEY, VALUE> create(
-        Type<KEY> keyType, Type<VALUE> valueType) {
-      return new DictType<>(keyType, valueType);
+    private final LabelClass labelClass;
+
+    @Override
+    public <T> void visitLabels(LabelVisitor<T> visitor, Object value, T context) {
+      for (Map.Entry<KeyT, ValueT> entry : cast(value).entrySet()) {
+        keyType.visitLabels(visitor, entry.getKey(), context);
+        valueType.visitLabels(visitor, entry.getValue(), context);
+      }
     }
 
-    private DictType(Type<KeyT> keyType, Type<ValueT> valueType) {
+    public static <KEY, VALUE> DictType<KEY, VALUE> create(
+        Type<KEY> keyType, Type<VALUE> valueType) {
+      LabelClass keyLabelClass = keyType.getLabelClass();
+      LabelClass valueLabelClass = valueType.getLabelClass();
+      Preconditions.checkArgument(
+          keyLabelClass == LabelClass.NONE
+              || valueLabelClass == LabelClass.NONE
+              || keyLabelClass == valueLabelClass,
+          "A DictType's keys and values must be the same class of label if both contain labels, "
+              + "but the key type %s contains %s labels, while "
+              + "the value type %s contains %s labels.",
+          keyType,
+          keyLabelClass,
+          valueType,
+          valueLabelClass);
+      LabelClass labelClass = (keyLabelClass != LabelClass.NONE) ? keyLabelClass : valueLabelClass;
+
+      return new DictType<>(keyType, valueType, labelClass);
+    }
+
+    protected DictType(Type<KeyT> keyType, Type<ValueT> valueType, LabelClass labelClass) {
       this.keyType = keyType;
       this.valueType = valueType;
+      this.labelClass = labelClass;
     }
 
     public Type<KeyT> getKeyType() {
@@ -444,6 +475,11 @@ public abstract class Type<T> {
 
     public Type<ValueT> getValueType() {
       return valueType;
+    }
+
+    @Override
+    public LabelClass getLabelClass() {
+      return labelClass;
     }
 
     @SuppressWarnings("unchecked")
@@ -458,16 +494,16 @@ public abstract class Type<T> {
     }
 
     @Override
-    public Map<KeyT, ValueT> convert(Object x, String what, Object context)
+    public Map<KeyT, ValueT> convert(Object x, Object what, Object context)
         throws ConversionException {
       if (!(x instanceof Map<?, ?>)) {
-        throw new ConversionException(String.format(
-            "Expected a map for dictionary but got a %s", x.getClass().getName())); 
+        throw new ConversionException(this, x, what);
       }
-      // Order the keys so the return value will be independent of insertion order.
-      Map<KeyT, ValueT> result = new TreeMap<>();
       Map<?, ?> o = (Map<?, ?>) x;
-      for (Entry<?, ?> elem : o.entrySet()) {
+      // It's possible that #convert() calls transform non-equal keys into equal ones so we can't
+      // just use ImmutableMap.Builder() here (that throws on collisions).
+      LinkedHashMap<KeyT, ValueT> result = new LinkedHashMap<>();
+      for (Map.Entry<?, ?> elem : o.entrySet()) {
         result.put(
             keyType.convert(elem.getKey(), "dict key element", context),
             valueType.convert(elem.getValue(), "dict value element", context));
@@ -478,16 +514,6 @@ public abstract class Type<T> {
     @Override
     public Map<KeyT, ValueT> getDefaultValue() {
       return empty;
-    }
-
-    @Override
-    public Collection<Object> flatten(Object value) {
-      ImmutableList.Builder<Object> result = ImmutableList.builder();
-      for (Map.Entry<KeyT, ValueT> entry : cast(value).entrySet()) {
-        result.addAll(keyType.flatten(entry.getKey()));
-        result.addAll(valueType.flatten(entry.getValue()));
-      }
-      return result.build();
     }
   }
 
@@ -518,17 +544,28 @@ public abstract class Type<T> {
     }
 
     @Override
+    public LabelClass getLabelClass() {
+      return elemType.getLabelClass();
+    }
+
+    @Override
     public List<ElemT> getDefaultValue() {
       return empty;
     }
 
     @Override
-    public Collection<Object> flatten(Object value) {
-      ImmutableList.Builder<Object> labels = ImmutableList.builder();
-      for (ElemT entry : cast(value)) {
-        labels.addAll(elemType.flatten(entry));
+    public <T> void visitLabels(LabelVisitor<T> visitor, Object value, T context) {
+      List<ElemT> elems = cast(value);
+      // Hot code path. Optimize for lists with O(1) access to avoid iterator garbage.
+      if (elems instanceof ImmutableList || elems instanceof ArrayList) {
+        for (int i = 0; i < elems.size(); i++) {
+          elemType.visitLabels(visitor, elems.get(i), context);
+        }
+      } else {
+        for (ElemT elem : elems) {
+          elemType.visitLabels(visitor, elem, context);
+        }
       }
-      return labels.build();
     }
 
     @Override
@@ -537,16 +574,20 @@ public abstract class Type<T> {
     }
 
     @Override
-    public List<ElemT> convert(Object x, String what, Object context)
+    public List<ElemT> convert(Object x, Object what, Object context)
         throws ConversionException {
-      if (!(x instanceof Iterable<?>)) {
+      Iterable<?> iterable;
+      try {
+        iterable = EvalUtils.toIterableStrict(x, null, null);
+      } catch (EvalException ex) {
         throw new ConversionException(this, x, what);
       }
       int index = 0;
-      Iterable<?> iterable = (Iterable<?>) x;
-      List<ElemT> result = Lists.newArrayListWithExpectedSize(Iterables.size(iterable));
+      List<ElemT> result = new ArrayList<>(Iterables.size(iterable));
+      ListConversionContext conversionContext = new ListConversionContext(what);
       for (Object elem : iterable) {
-        ElemT converted = elemType.convert(elem, "element " + index + " of " + what, context);
+        conversionContext.update(index);
+        ElemT converted = elemType.convert(elem, conversionContext, context);
         if (converted != null) {
           result.add(converted);
         } else {
@@ -558,11 +599,7 @@ public abstract class Type<T> {
         }
         ++index;
       }
-      if (x instanceof GlobList<?>) {
-        return new GlobList<>(((GlobList<?>) x).getCriteria(), result);
-      } else {
-        return result;
-      }
+      return result;
     }
 
     @Override
@@ -592,6 +629,30 @@ public abstract class Type<T> {
       }
       return tags;
     }
+
+    /**
+     * Provides a {@link #toString()} description of the context of the value in a list being
+     * converted. This is preferred over a raw string to avoid uselessly constructing strings which
+     * are never used. This class is mutable (the index is updated).
+     */
+    private static class ListConversionContext {
+      private final Object what;
+      private int index = 0;
+
+      ListConversionContext(Object what) {
+        this.what = what;
+      }
+
+      void update(int index) {
+        this.index = index;
+      }
+
+      @Override
+      public String toString() {
+        return "element " + index + " of " + what;
+      }
+
+    }
   }
 
   /** Type for lists of arbitrary objects */
@@ -605,10 +666,10 @@ public abstract class Type<T> {
 
     @Override
     @SuppressWarnings("unchecked")
-    public List<Object> convert(Object x, String what, Object context)
+    public List<Object> convert(Object x, Object what, Object context)
         throws ConversionException {
       if (x instanceof SkylarkList) {
-        return ((SkylarkList) x).getList();
+        return ((SkylarkList) x).getImmutableList();
       } else if (x instanceof List) {
         return (List<Object>) x;
       } else if (x instanceof Iterable) {
@@ -618,9 +679,4 @@ public abstract class Type<T> {
       }
     }
   }
-
-  /**
-   * The type of a general list.
-   */
-  public static final ListType<Object> LIST = new ListType<>(new ObjectType());
 }

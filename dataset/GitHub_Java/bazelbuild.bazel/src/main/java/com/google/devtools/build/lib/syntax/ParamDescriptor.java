@@ -17,9 +17,7 @@ package com.google.devtools.build.lib.syntax;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.skylarkinterface.Param;
-import com.google.devtools.build.lib.syntax.StarlarkSemantics.FlagIdentifier;
 import java.util.Arrays;
-import javax.annotation.Nullable;
 
 /** A value class for storing {@link Param} metadata to avoid using Java proxies. */
 public final class ParamDescriptor {
@@ -36,18 +34,6 @@ public final class ParamDescriptor {
   // type of a given parameter to be determined only once, as it is an expensive operation.
   private final SkylarkType skylarkType;
 
-  // The next two fields relate to toggling this parameter via semantic flag -- they will
-  // be null if and only if this parameter is enabled, and will otherwise contain information
-  // about what to do with the disabled parameter. (If the parameter is 'disabled', it will be
-  // treated as unusable from Starlark.)
-
-  // The value of this disabled parameter (as interpreted in Starlark) will be passed to the Java
-  // method.
-  @Nullable private final String valueOverride;
-  // The flag responsible for disabling this parameter. If a user attempts to use this disabled
-  // parameter from Starlark, this identifier can be used to create the appropriate error message.
-  @Nullable private final FlagIdentifier flagResponsibleForDisable;
-
   private ParamDescriptor(
       String name,
       String defaultValue,
@@ -56,24 +42,21 @@ public final class ParamDescriptor {
       Class<?> generic1,
       boolean noneable,
       boolean named,
+      boolean legacyNamed,
       boolean positional,
-      SkylarkType skylarkType,
-      @Nullable String valueOverride,
-      @Nullable FlagIdentifier flagResponsibleForDisable) {
+      SkylarkType skylarkType) {
     this.name = name;
     this.defaultValue = defaultValue;
     this.type = type;
     this.allowedTypes = allowedTypes;
     this.generic1 = generic1;
     this.noneable = noneable;
-    this.named = named;
+    this.named = named || legacyNamed;
     this.positional = positional;
     this.skylarkType = skylarkType;
-    this.valueOverride = valueOverride;
-    this.flagResponsibleForDisable = flagResponsibleForDisable;
   }
 
-  static ParamDescriptor of(Param param, StarlarkSemantics starlarkSemantics) {
+  static ParamDescriptor of(Param param) {
     ImmutableList<ParamTypeDescriptor> allowedTypes =
         Arrays.stream(param.allowedTypes())
             .map(ParamTypeDescriptor::of)
@@ -81,20 +64,6 @@ public final class ParamDescriptor {
     Class<?> type = param.type();
     Class<?> generic = param.generic1();
     boolean noneable = param.noneable();
-
-    boolean isParamEnabledWithCurrentSemantics =
-        starlarkSemantics.isFeatureEnabledBasedOnTogglingFlags(
-            param.enableOnlyWithFlag(), param.disableWithFlag());
-
-    String valueOverride = null;
-    FlagIdentifier flagResponsibleForDisable = FlagIdentifier.NONE;
-    if (!isParamEnabledWithCurrentSemantics) {
-      valueOverride = param.valueWhenDisabled();
-      flagResponsibleForDisable =
-          param.enableOnlyWithFlag() != FlagIdentifier.NONE
-              ? param.enableOnlyWithFlag()
-              : param.disableWithFlag();
-    }
     return new ParamDescriptor(
         param.name(),
         param.defaultValue(),
@@ -102,18 +71,10 @@ public final class ParamDescriptor {
         allowedTypes,
         generic,
         noneable,
-        isNamed(param, starlarkSemantics),
+        param.named(),
+        param.legacyNamed(),
         param.positional(),
-        getType(type, generic, allowedTypes, noneable),
-        valueOverride,
-        flagResponsibleForDisable);
-  }
-
-  private static boolean isNamed(Param param, StarlarkSemantics starlarkSemantics) {
-    if (param.named()) {
-      return true;
-    }
-    return param.legacyNamed() && !starlarkSemantics.experimentalRestrictNamedParams();
+        getType(type, generic, allowedTypes, noneable));
   }
 
   /** @see Param#name() */
@@ -183,38 +144,5 @@ public final class ParamDescriptor {
 
   SkylarkType getSkylarkType() {
     return skylarkType;
-  }
-
-  /** Returns true if this parameter is disabled under the current skylark semantic flags. */
-  public boolean isDisabledInCurrentSemantics() {
-    return valueOverride != null;
-  }
-
-  /**
-   * Returns the value the parameter should take, given that the parameter is disabled under the
-   * current skylark semantics.
-   *
-   * @throws IllegalStateException if invoked when {@link #isDisabledInCurrentSemantics()} is false
-   */
-  public String getValueOverride() {
-    Preconditions.checkState(
-        isDisabledInCurrentSemantics(),
-        "parameter is not disabled under the current semantic flags. getValueOverride should be "
-            + "called only if isParameterDisabled is true");
-    return valueOverride;
-  }
-
-  /**
-   * Returns the flag responsible for disabling this parameter, given that the parameter is disabled
-   * under the current skylark semantics.
-   *
-   * @throws IllegalStateException if invoked when {@link #isDisabledInCurrentSemantics()} is false
-   */
-  public FlagIdentifier getFlagResponsibleForDisable() {
-    Preconditions.checkState(
-        isDisabledInCurrentSemantics(),
-        "parameter is not disabled under the current semantic flags. getFlagResponsibleForDisable "
-            + " should be called only if isParameterDisabled is true");
-    return flagResponsibleForDisable;
   }
 }

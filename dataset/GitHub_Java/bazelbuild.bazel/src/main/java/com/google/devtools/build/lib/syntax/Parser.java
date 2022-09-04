@@ -539,7 +539,7 @@ public class Parser {
     try {
       Argument.validateFuncallArguments(arguments);
     } catch (Argument.ArgumentException e) {
-      reportError(e.getLocation(), e.getMessage());
+      reportError(lexer.createLocation(token.left, token.right), e.getMessage());
     }
     return arguments;
   }
