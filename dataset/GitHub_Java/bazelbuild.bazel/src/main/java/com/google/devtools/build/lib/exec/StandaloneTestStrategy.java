@@ -23,8 +23,6 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.ArtifactPathResolver;
-import com.google.devtools.build.lib.actions.EnvironmentalExecException;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.actions.ExecutionStrategy;
@@ -34,7 +32,6 @@ import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.actions.SpawnContinuation;
 import com.google.devtools.build.lib.actions.SpawnResult;
-import com.google.devtools.build.lib.actions.TestExecException;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.test.TestActionContext;
 import com.google.devtools.build.lib.analysis.test.TestResult;
@@ -95,14 +92,20 @@ public class StandaloneTestStrategy extends TestStrategy {
 
   @Override
   public TestRunnerSpawn createTestRunnerSpawn(
-      TestRunnerAction action, ActionExecutionContext actionExecutionContext) throws ExecException {
-    if (action.getExecutionSettings().getInputManifest() == null) {
-      throw new TestExecException("cannot run local tests with --nobuild_runfile_manifests");
-    }
+      TestRunnerAction action, ActionExecutionContext actionExecutionContext)
+      throws ExecException, InterruptedException {
     Path execRoot = actionExecutionContext.getExecRoot();
-    ArtifactPathResolver pathResolver = actionExecutionContext.getPathResolver();
-    Path runfilesDir = pathResolver.convertPath(action.getExecutionSettings().getRunfilesDir());
-    Path tmpDir = pathResolver.convertPath(tmpDirRoot.getChild(TestStrategy.getTmpDirName(action)));
+    Path runfilesDir =
+        getLocalRunfilesDirectory(
+            action,
+            actionExecutionContext,
+            binTools,
+            action.getLocalShellEnvironment(),
+            action.isEnableRunfiles());
+    Path tmpDir =
+        actionExecutionContext
+            .getPathResolver()
+            .convertPath(tmpDirRoot.getChild(TestStrategy.getTmpDirName(action)));
     Map<String, String> env = setupEnvironment(
         action, actionExecutionContext.getClientEnv(), execRoot, runfilesDir, tmpDir);
     if (executionOptions.splitXmlGeneration) {
@@ -286,7 +289,7 @@ public class StandaloneTestStrategy extends TestStrategy {
       Spawn spawn,
       ActionExecutionContext actionExecutionContext,
       Path execRoot)
-      throws IOException, InterruptedException {
+      throws ExecException, IOException, InterruptedException {
     ResolvedPaths resolvedPaths = testAction.resolve(execRoot);
     Path out = actionExecutionContext.getInputPath(testAction.getTestLog());
     Path err = resolvedPaths.getTestStderr();
@@ -298,19 +301,17 @@ public class StandaloneTestStrategy extends TestStrategy {
               Reporter.outErrForReporter(actionExecutionContext.getEventHandler()), out);
     }
     long startTimeMillis = actionExecutionContext.getClock().currentTimeMillis();
-    SpawnContinuation spawnContinuation =
-        actionExecutionContext
-            .getContext(SpawnActionContext.class)
-            .beginExecution(spawn, actionExecutionContext.withFileOutErr(testOutErr));
     return new BazelTestAttemptContinuation(
-        testAction,
-        actionExecutionContext,
-        spawn,
-        resolvedPaths,
-        testOutErr,
-        streamed,
-        startTimeMillis,
-        spawnContinuation);
+            testAction,
+            actionExecutionContext,
+            spawn,
+            resolvedPaths,
+            testOutErr,
+            streamed,
+            startTimeMillis,
+            SpawnContinuation.ofBeginExecution(
+                spawn, actionExecutionContext.withFileOutErr(testOutErr)))
+        .execute();
   }
 
   /** In rare cases, we might write something to stderr. Append it to the real test.log. */
@@ -442,7 +443,8 @@ public class StandaloneTestStrategy extends TestStrategy {
     }
 
     @Override
-    public TestAttemptContinuation beginExecution() throws InterruptedException, IOException {
+    public TestAttemptContinuation beginExecution()
+        throws InterruptedException, IOException, ExecException {
       prepareFileSystem(testAction, actionExecutionContext.getExecRoot(), tmpDir, workingDirectory);
       return beginTestAttempt(testAction, spawn, actionExecutionContext, execRoot);
     }
@@ -504,7 +506,8 @@ public class StandaloneTestStrategy extends TestStrategy {
     }
 
     @Override
-    public TestAttemptContinuation execute() throws InterruptedException, ExecException {
+    public TestAttemptContinuation execute()
+        throws InterruptedException, IOException, ExecException {
       // We have two protos to represent test attempts:
       // 1. com.google.devtools.build.lib.view.test.TestStatus.TestResultData represents both failed
       //    attempts and finished tests. Bazel stores this to disk to persist cached test result
@@ -553,19 +556,15 @@ public class StandaloneTestStrategy extends TestStrategy {
       }
       long endTimeMillis = actionExecutionContext.getClock().currentTimeMillis();
 
-      try {
-        if (!fileOutErr.hasRecordedOutput()) {
-          // Make sure that the test.log exists.
-          FileSystemUtils.touchFile(fileOutErr.getOutputPath());
-        }
-        // Append any error output to the test.log. This is very rare.
-        appendStderr(fileOutErr);
-        fileOutErr.close();
-        if (streamed != null) {
-          streamed.close();
-        }
-      } catch (IOException e) {
-        throw new EnvironmentalExecException(e);
+      if (!fileOutErr.hasRecordedOutput()) {
+        // Make sure that the test.log exists.
+        FileSystemUtils.touchFile(fileOutErr.getOutputPath());
+      }
+      // Append any error output to the test.log. This is very rare.
+      appendStderr(fileOutErr);
+      fileOutErr.close();
+      if (streamed != null) {
+        streamed.close();
       }
 
       // SpawnActionContext guarantees the first entry to correspond to the spawn passed in (there
@@ -600,16 +599,21 @@ public class StandaloneTestStrategy extends TestStrategy {
         // We treat all failures to generate the test.xml here as catastrophic, and won't rerun
         // the test if this fails. We redirect the output to a temporary file.
         FileOutErr xmlSpawnOutErr = actionExecutionContext.getFileOutErr().childOutErr();
+        SpawnContinuation xmlContinuation;
         try {
-          SpawnContinuation xmlContinuation =
+          xmlContinuation =
               spawnActionContext.beginExecution(
                   xmlGeneratingSpawn, actionExecutionContext.withFileOutErr(xmlSpawnOutErr));
-          return new BazelXmlCreationContinuation(
-              resolvedPaths, xmlSpawnOutErr, builder, spawnResults, xmlContinuation);
-        } catch (InterruptedException e) {
-          closeSuppressed(e, xmlSpawnOutErr);
+        } catch (ExecException | InterruptedException e) {
+          xmlSpawnOutErr.close();
           throw e;
         }
+        if (!xmlContinuation.isDone()) {
+          return new BazelXmlCreationContinuation(
+              resolvedPaths, xmlSpawnOutErr, builder, spawnResults, xmlContinuation);
+        }
+        spawnResults = new ArrayList<>(spawnResults);
+        spawnResults.addAll(xmlContinuation.get());
       }
 
       TestCase details = parseTestResult(xmlOutputPath);
@@ -660,7 +664,8 @@ public class StandaloneTestStrategy extends TestStrategy {
     }
 
     @Override
-    public TestAttemptContinuation execute() throws InterruptedException, ExecException {
+    public TestAttemptContinuation execute()
+        throws InterruptedException, IOException, ExecException {
       SpawnContinuation nextContinuation;
       try {
         nextContinuation = spawnContinuation.execute();

@@ -48,7 +48,6 @@ import com.google.devtools.build.lib.actions.ParameterFile;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.RunfilesSupplier;
 import com.google.devtools.build.lib.actions.Spawn;
-import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.actions.SpawnContinuation;
 import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
@@ -328,11 +327,12 @@ public class JavaCompileAction extends AbstractAction
     } catch (CommandLineExpansionException e) {
       throw new ActionExecutionException(e, this, /*catastrophe=*/ false);
     }
-    SpawnContinuation spawnContinuation =
-        actionExecutionContext
-            .getContext(SpawnActionContext.class)
-            .beginExecution(spawn, actionExecutionContext);
-    return new JavaActionContinuation(actionExecutionContext, reducedClasspath, spawnContinuation);
+    JavaActionContinuation continuation =
+        new JavaActionContinuation(
+            actionExecutionContext,
+            reducedClasspath,
+            SpawnContinuation.ofBeginExecution(spawn, actionExecutionContext));
+    return continuation.execute();
   }
 
   @Override
@@ -591,12 +591,11 @@ public class JavaCompileAction extends AbstractAction
         } catch (CommandLineExpansionException e) {
           throw new ActionExecutionException(e, JavaCompileAction.this, /*catastrophe=*/ false);
         }
-        SpawnContinuation fallbackContinuation =
-            actionExecutionContext
-                .getContext(SpawnActionContext.class)
-                .beginExecution(spawn, actionExecutionContext);
         return new JavaFallbackActionContinuation(
-            actionExecutionContext, results, fallbackContinuation);
+                actionExecutionContext,
+                results,
+                SpawnContinuation.ofBeginExecution(spawn, actionExecutionContext))
+            .execute();
       } catch (IOException e) {
         throw toActionExecutionException(
             new EnvironmentalExecException(e), actionExecutionContext.getVerboseFailures());
