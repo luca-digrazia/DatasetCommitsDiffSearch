@@ -43,7 +43,6 @@ public class QuickvaluesWidget extends DashboardWidget {
     private final Searches searches;
 
     private final Boolean showPieChart;
-    private final Boolean showDataTable;
 
     public QuickvaluesWidget(MetricRegistry metricRegistry, Searches searches, String id, String description, int cacheTime, Map<String, Object> config, String query, TimeRange timeRange, String creatorUserId) throws InvalidWidgetConfigurationException {
         super(metricRegistry, Type.QUICKVALUES, id, description, cacheTime, config, creatorUserId);
@@ -60,7 +59,6 @@ public class QuickvaluesWidget extends DashboardWidget {
         this.streamId = (String) config.get("stream_id");
 
         this.showPieChart = config.get("show_pie_chart") != null && Boolean.parseBoolean(String.valueOf(config.get("show_pie_chart")));
-        this.showDataTable = !config.containsKey("show_data_table") || Boolean.parseBoolean(String.valueOf(config.get("show_data_table")));
     }
 
     public String getQuery() {
@@ -77,8 +75,7 @@ public class QuickvaluesWidget extends DashboardWidget {
                 .put("query", query)
                 .put("timerange", timeRange.getPersistedConfig())
                 .put("field", field)
-                .put("show_pie_chart", showPieChart)
-                .put("show_data_table", showDataTable);
+                .put("show_pie_chart", showPieChart);
 
         if (!isNullOrEmpty(streamId)) {
             persistedConfig.put("stream_id", streamId);
