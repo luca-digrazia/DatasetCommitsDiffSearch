@@ -11,7 +11,6 @@ import java.util.zip.GZIPOutputStream;
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.Marshaller;
 
-import org.eclipse.microprofile.config.ConfigProvider;
 import org.junit.jupiter.api.Test;
 
 import io.quarkus.it.rest.TestResource;
@@ -34,8 +33,7 @@ public class JaxRSTestCase {
 
     @Test
     public void testConfigInjectionOfPort() {
-        String host = ConfigProvider.getConfig().getOptionalValue("quarkus.http.host", String.class).orElse("0.0.0.0");
-        RestAssured.when().get("/test/config/host").then().body(is(host));
+        RestAssured.when().get("/test/config/host").then().body(is("0.0.0.0"));
     }
 
     @Test
