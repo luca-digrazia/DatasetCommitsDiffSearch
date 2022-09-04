@@ -19,11 +19,12 @@ import static com.google.common.truth.Truth.assertWithMessage;
 import com.google.common.collect.ImmutableList;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
-import com.google.devtools.build.lib.analysis.ConfigurationCollectionFactory;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ServerDirectories;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.runtime.BlazeCommandDispatcher.ShutdownBlazeServerException;
+import com.google.devtools.build.lib.analysis.config.BuildOptions;
+import com.google.devtools.build.lib.analysis.config.CoreOptions;
+import com.google.devtools.build.lib.analysis.test.TestConfiguration;
+import com.google.devtools.build.lib.bazel.rules.DefaultBuildOptionsForDiffing;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.testutil.TestUtils;
@@ -31,9 +32,11 @@ import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.io.OutErr;
 import com.google.devtools.common.options.Option;
+import com.google.devtools.common.options.OptionDocumentationCategory;
+import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
-import com.google.devtools.common.options.OptionsProvider;
+import com.google.devtools.common.options.OptionsParsingResult;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.BrokenBarrierException;
@@ -51,7 +54,6 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-import org.mockito.Mockito;
 
 /** Tests of CommandEnvironment's command-interrupting exit functionality. */
 @RunWith(JUnit4.class)
@@ -61,7 +63,12 @@ public final class CommandInterruptionTest {
   public static class WaitOptions extends OptionsBase {
     public WaitOptions() {}
 
-    @Option(name = "expect_interruption", defaultValue = "false")
+    @Option(
+      name = "expect_interruption",
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.NO_OP},
+      defaultValue = "false"
+    )
     public boolean expectInterruption;
   }
 
@@ -85,15 +92,15 @@ public final class CommandInterruptionTest {
     }
 
     @Override
-    public ExitCode exec(CommandEnvironment env, OptionsProvider options) {
+    public BlazeCommandResult exec(CommandEnvironment env, OptionsParsingResult options) {
       CommandState commandState = new CommandState(
           env, options.getOptions(WaitOptions.class).expectInterruption, isTestShuttingDown);
       commandStateHandoff.getAndSet(null).set(commandState);
-      return commandState.waitForExitCodeFromTest();
+      return BlazeCommandResult.exitCode(commandState.waitForExitCodeFromTest());
     }
 
     @Override
-    public void editOptions(CommandEnvironment env, OptionsParser optionsParser) {}
+    public void editOptions(OptionsParser optionsParser) {}
 
     /**
      * Runs an instance of this command on the given executor, waits for it to start and returns a
@@ -106,8 +113,10 @@ public final class CommandInterruptionTest {
       if (!commandStateHandoff.compareAndSet(null, newHandoff)) {
         throw new AssertionError("Another command is already starting at this time?!");
       }
-      executor.submit(
-          new RunCommandThroughDispatcher(dispatcher, newHandoff, expectInterruption));
+      @SuppressWarnings("unused") // static analysis wants us to check future return values
+      Future<?> ignoredCommandResult =
+          executor.submit(
+              new RunCommandThroughDispatcher(dispatcher, newHandoff, expectInterruption));
       return newHandoff.get();
     }
   }
@@ -115,11 +124,11 @@ public final class CommandInterruptionTest {
   /** Callable to run the above command on a different thread. */
   private static final class RunCommandThroughDispatcher implements Callable<Integer> {
     private final BlazeCommandDispatcher dispatcher;
-    private final Future<CommandState> commandStateHandoff;
+    private final SettableFuture<CommandState> commandStateHandoff;
     private final boolean expectInterruption;
 
     public RunCommandThroughDispatcher(
-        BlazeCommandDispatcher dispatcher, Future<CommandState> commandStateHandoff,
+        BlazeCommandDispatcher dispatcher, SettableFuture<CommandState> commandStateHandoff,
         boolean expectInterruption) {
       this.dispatcher = dispatcher;
       this.commandStateHandoff = commandStateHandoff;
@@ -127,17 +136,36 @@ public final class CommandInterruptionTest {
     }
 
     @Override
-    public Integer call()
-        throws ShutdownBlazeServerException, InterruptedException, ExecutionException {
-      int result = dispatcher.exec(
-          ImmutableList.of(
-              "snooze",
-              expectInterruption ? "--expect_interruption" : "--noexpect_interruption"),
-          BlazeCommandDispatcher.LockingMode.ERROR_OUT,
-          "CommandInterruptionTest",
-          OutErr.SYSTEM_OUT_ERR);
-      // TODO(mstaib): replace with Futures.getDone when Bazel uses Guava 20.0
-      commandStateHandoff.get().completeWithExitCode(result);
+    public Integer call() throws Exception {
+      int result;
+      try {
+        result = dispatcher.exec(
+            ImmutableList.of(
+                "snooze",
+                expectInterruption ? "--expect_interruption" : "--noexpect_interruption"),
+            "CommandInterruptionTest",
+            OutErr.SYSTEM_OUT_ERR).getExitCode().getNumericExitCode();
+      } catch (Exception throwable) {
+        if (commandStateHandoff.isDone()) {
+          commandStateHandoff.get().completeWithFailure(throwable);
+        } else {
+          commandStateHandoff.setException(
+              new IllegalStateException(
+                  "The command failed with an exception before WaitForCompletionCommand started.",
+                  throwable));
+        }
+        throw throwable;
+      }
+
+      if (commandStateHandoff.isDone()) {
+        commandStateHandoff.get().completeWithExitCode(result);
+      } else {
+        commandStateHandoff.setException(
+            new IllegalStateException(
+                "The command failed with exit code "
+                    + result
+                    + " before WaitForCompletionCommand started."));
+      }
       return result;
     }
   }
@@ -188,6 +216,22 @@ public final class CommandInterruptionTest {
     }
 
     /**
+     * Marks the Future associated with this CommandState as having failed with the given exit code,
+     * then waits at the barrier for the test thread to catch up.
+     */
+    private void completeWithFailure(Throwable throwable) {
+      result.setException(throwable);
+      if (!isTestShuttingDown.get()) {
+        // Wait at the barrier for the test to assert on status, unless the test is shutting down.
+        try {
+          barrier.await();
+        } catch (InterruptedException | BrokenBarrierException ex) {
+          // this is fine, we're only doing this for the test thread's benefit anyway
+        }
+      }
+    }
+
+    /**
      * Waits for an exit code to come from the test, either INTERRUPTED via thread interruption, or
      * a test-specified exit code via requestExitWith(). If expectInterruption was set,
      * a single interruption will be ignored.
@@ -215,7 +259,7 @@ public final class CommandInterruptionTest {
           // the same time.
         }
 
-        if (exitCode == SENTINEL) {
+        if (SENTINEL.equals(exitCode)) {
           // The test just wants us to go wait at the barrier for an assertion.
           try {
             barrier.await();
@@ -278,13 +322,20 @@ public final class CommandInterruptionTest {
     public void assertNotFinishedYet()
         throws InterruptedException, ExecutionException, BrokenBarrierException {
       synchronizeWithCommand();
-      assertWithMessage("The command should not have been finished, but it was.")
-          .that(result.isDone()).isFalse();
+      if (result.isDone()) {
+        try {
+          throw new AssertionError(
+              "The command should not have been finished, but it finished with exit code "
+              + result.get());
+        } catch (Throwable ex) {
+          throw new AssertionError("The command should not have been finished, but it threw", ex);
+        }
+      }
     }
 
     /** Asserts that both commands were executed on the same thread. */
     public void assertOnSameThreadAs(CommandState other) {
-      assertThat(thread).isSameAs(other.thread);
+      assertThat(thread).isSameInstanceAs(other.thread);
     }
   }
 
@@ -300,32 +351,44 @@ public final class CommandInterruptionTest {
     isTestShuttingDown = new AtomicBoolean(false);
     String productName = TestConstants.PRODUCT_NAME;
     ServerDirectories serverDirectories =
-        new ServerDirectories(scratch.dir("install"), scratch.dir("output"));
+        new ServerDirectories(
+            scratch.dir("install"), scratch.dir("output"), scratch.dir("user_root"));
     BlazeRuntime runtime =
         new BlazeRuntime.Builder()
+            .setFileSystem(scratch.getFileSystem())
             .setProductName(productName)
             .setServerDirectories(serverDirectories)
             .setStartupOptionsProvider(
-                OptionsParser.newOptionsParser(BlazeServerStartupOptions.class))
+                OptionsParser.builder().optionsClasses(BlazeServerStartupOptions.class).build())
             .addBlazeModule(
                 new BlazeModule() {
                   @Override
                   public void initializeRuleClasses(ConfiguredRuleClassProvider.Builder builder) {
                     // Can't create a Skylark environment without a tools repository!
                     builder.setToolsRepository(TestConstants.TOOLS_REPOSITORY);
-                    // Can't create a runtime without a configuration collection factory!
-                    builder.setConfigurationCollectionFactory(
-                        Mockito.mock(ConfigurationCollectionFactory.class));
                     // Can't create a defaults package without the base options in there!
-                    builder.addConfigurationOptions(BuildConfiguration.Options.class);
+                    builder.addConfigurationOptions(CoreOptions.class);
+                    builder.addConfigurationOptions(TestConfiguration.TestOptions.class);
+                  }
+                })
+            .addBlazeModule(
+                new BlazeModule() {
+                  @Override
+                  public BuildOptions getDefaultBuildOptions(BlazeRuntime runtime) {
+                    return DefaultBuildOptionsForDiffing.getDefaultBuildOptionsForFragments(
+                        runtime.getRuleClassProvider().getConfigurationOptions());
                   }
                 })
             .build();
     snooze = new WaitForCompletionCommand(isTestShuttingDown);
     dispatcher = new BlazeCommandDispatcher(runtime, snooze);
     BlazeDirectories blazeDirectories =
-        new BlazeDirectories(serverDirectories, scratch.dir("workspace"), productName);
-    runtime.initWorkspace(blazeDirectories, /*bintools=*/ null);
+        new BlazeDirectories(
+            serverDirectories,
+            scratch.dir("workspace"),
+            /* defaultSystemJavabase= */ null,
+            productName);
+    runtime.initWorkspace(blazeDirectories, /* binTools= */ null);
   }
 
   @After
@@ -386,7 +449,7 @@ public final class CommandInterruptionTest {
   public void exitForbidsNullExitCode() throws Exception {
     CommandState command = snooze.runIn(executor, dispatcher, /*expectInterruption=*/ false);
     try {
-      command.getModuleEnvironment().exit(new AbruptExitException(null));
+      command.getModuleEnvironment().exit(new AbruptExitException("", null));
       throw new AssertionError(
           "It shouldn't be allowed to pass an AbruptExitException with null ExitCode to exit()!");
     } catch (NullPointerException expected) {
@@ -399,16 +462,16 @@ public final class CommandInterruptionTest {
   @Test
   public void callingExitOnceInterruptsAndOverridesExitCode() throws Exception {
     CommandState command = snooze.runIn(executor, dispatcher, /*expectInterruption=*/ false);
-    command.getModuleEnvironment().exit(new AbruptExitException(ExitCode.NO_TESTS_FOUND));
+    command.getModuleEnvironment().exit(new AbruptExitException("", ExitCode.NO_TESTS_FOUND));
     command.assertFinishedWith(ExitCode.NO_TESTS_FOUND);
   }
 
   @Test
   public void callingExitSecondTimeNeitherInterruptsNorReOverridesExitCode() throws Exception {
     CommandState command = snooze.runIn(executor, dispatcher, /*expectInterruption=*/ true);
-    command.getModuleEnvironment().exit(new AbruptExitException(ExitCode.NO_TESTS_FOUND));
+    command.getModuleEnvironment().exit(new AbruptExitException("", ExitCode.NO_TESTS_FOUND));
     command.assertNotFinishedYet();
-    command.getModuleEnvironment().exit(new AbruptExitException(ExitCode.ANALYSIS_FAILURE));
+    command.getModuleEnvironment().exit(new AbruptExitException("", ExitCode.ANALYSIS_FAILURE));
     command.assertNotFinishedYet();
     command.requestExitWith(ExitCode.SUCCESS);
     command.assertFinishedWith(ExitCode.NO_TESTS_FOUND);
@@ -417,7 +480,7 @@ public final class CommandInterruptionTest {
   @Test
   public void abruptExitCodesDontOverrideInfrastructureFailures() throws Exception {
     CommandState command = snooze.runIn(executor, dispatcher, /*expectInterruption=*/ true);
-    command.getModuleEnvironment().exit(new AbruptExitException(ExitCode.NO_TESTS_FOUND));
+    command.getModuleEnvironment().exit(new AbruptExitException("", ExitCode.NO_TESTS_FOUND));
     command.assertNotFinishedYet();
     command.requestExitWith(ExitCode.BLAZE_INTERNAL_ERROR);
     command.assertFinishedWith(ExitCode.BLAZE_INTERNAL_ERROR);
@@ -431,7 +494,7 @@ public final class CommandInterruptionTest {
     CommandState newCommandOnSameThread =
         snooze.runIn(executor, dispatcher, /*expectInterruption=*/ false);
     firstCommand.assertOnSameThreadAs(newCommandOnSameThread);
-    firstCommand.getModuleEnvironment().exit(new AbruptExitException(ExitCode.RUN_FAILURE));
+    firstCommand.getModuleEnvironment().exit(new AbruptExitException("", ExitCode.RUN_FAILURE));
     newCommandOnSameThread.assertNotFinishedYet();
     newCommandOnSameThread.requestExitWith(ExitCode.SUCCESS);
   }

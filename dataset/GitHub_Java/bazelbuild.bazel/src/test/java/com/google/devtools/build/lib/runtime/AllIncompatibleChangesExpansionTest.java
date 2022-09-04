@@ -15,7 +15,7 @@
 package com.google.devtools.build.lib.runtime;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
@@ -207,10 +207,10 @@ public class AllIncompatibleChangesExpansionTest {
     // Check that all-expansion behaves just like any other expansion flag and can be filtered
     // by invocation policy.
     InvocationPolicy.Builder invocationPolicyBuilder = InvocationPolicy.newBuilder();
-    invocationPolicyBuilder
-        .addFlagPoliciesBuilder()
+    invocationPolicyBuilder.addFlagPoliciesBuilder()
         .setFlagName("incompatible_A")
-        .setUseDefault(UseDefault.getDefaultInstance());
+        .setUseDefault(UseDefault.getDefaultInstance())
+        .build();
     InvocationPolicy policy = invocationPolicyBuilder.build();
     InvocationPolicyEnforcer enforcer = new InvocationPolicyEnforcer(policy);
 

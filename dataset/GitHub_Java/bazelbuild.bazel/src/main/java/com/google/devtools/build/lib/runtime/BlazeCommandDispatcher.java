@@ -53,6 +53,7 @@ import com.google.devtools.common.options.OptionsParsingResult;
 import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -306,12 +307,13 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
     }
 
     BlazeCommandResult result = BlazeCommandResult.exitCode(ExitCode.BLAZE_INTERNAL_ERROR);
+    PrintStream savedOut = System.out;
+    PrintStream savedErr = System.err;
     boolean afterCommandCalled = false;
-    Reporter reporter = env.getReporter();
-    try (OutErr.SystemPatcher systemOutErrPatcher = reporter.getOutErr().getSystemPatcher()) {
+    try {
       // Temporary: there are modules that output events during beforeCommand, but the reporter
       // isn't setup yet. Add the stored event handler to catch those events.
-      reporter.addHandler(storedEventHandler);
+      env.getReporter().addHandler(storedEventHandler);
       for (BlazeModule module : runtime.getBlazeModules()) {
         try (SilentCloseable closeable = Profiler.instance().profile(module + ".beforeCommand")) {
           module.beforeCommand(env);
@@ -326,7 +328,7 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
           earlyExitCode = e.getExitCode();
         }
       }
-      reporter.removeHandler(storedEventHandler);
+      env.getReporter().removeHandler(storedEventHandler);
 
       // Setup stdout / stderr.
       outErr = tee(outErr, env.getOutputListeners());
@@ -344,6 +346,7 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
                 commandName, firstContactTime, false, true, env.getCommandId().toString()));
       }
 
+      Reporter reporter = env.getReporter();
       try (SilentCloseable closeable = Profiler.instance().profile("setup event handler")) {
         BlazeCommandEventHandler.Options eventHandlerOptions =
             options.getOptions(BlazeCommandEventHandler.Options.class);
@@ -360,11 +363,11 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
         }
 
         if (!commandAnnotation.binaryStdOut()) {
-          outErr = bufferOut(outErr);
+          outErr = bufferOut(outErr, eventHandlerOptions.experimentalUi);
         }
 
         if (!commandAnnotation.binaryStdErr()) {
-          outErr = bufferErr(outErr);
+          outErr = bufferErr(outErr, eventHandlerOptions.experimentalUi);
         }
 
         if (!commonOptions.verbosity.equals(lastLogVerbosityLevel)) {
@@ -452,9 +455,11 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
         }
       }
 
-      // While a Blaze command is active, direct all errors to the client's event handler (and
-      // out/err streams).
-      systemOutErrPatcher.start();
+      // While a Blaze command is active, direct all errors to the client's
+      // event handler (and out/err streams).
+      OutErr reporterOutErr = reporter.getOutErr();
+      System.setOut(new PrintStream(reporterOutErr.getOutputStream(), /*autoflush=*/ true));
+      System.setErr(new PrintStream(reporterOutErr.getErrorStream(), /*autoflush=*/ true));
 
       try (SilentCloseable closeable = Profiler.instance().profile("CommandEnv.beforeCommand")) {
         // Notify the BlazeRuntime, so it can do some initial setup.
@@ -489,10 +494,11 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
           env.setupPackageCache(options);
         } catch (InterruptedException e) {
           Thread.currentThread().interrupt();
-          reporter.handle(Event.error("command interrupted while setting up package cache"));
+          env.getReporter()
+              .handle(Event.error("command interrupted while setting up package cache"));
           earlyExitCode = ExitCode.INTERRUPTED;
         } catch (AbruptExitException e) {
-          reporter.handle(Event.error(e.getMessage()));
+          env.getReporter().handle(Event.error(e.getMessage()));
           earlyExitCode = e.getExitCode();
         }
         if (!earlyExitCode.equals(ExitCode.SUCCESS)) {
@@ -547,6 +553,8 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
       Flushables.flushQuietly(outErr.getOutputStream());
       Flushables.flushQuietly(outErr.getErrorStream());
 
+      System.setOut(savedOut);
+      System.setErr(savedErr);
       env.getTimestampGranularityMonitor().waitForTimestampGranularity(outErr);
     }
   }
@@ -573,13 +581,23 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
     return BlazeCommandResult.exitCode(earlyExitCode);
   }
 
-  private OutErr bufferOut(OutErr outErr) {
-    OutputStream wrappedOut = new BufferedOutputStream(outErr.getOutputStream());
+  private OutErr bufferOut(OutErr outErr, boolean fully) {
+    OutputStream wrappedOut;
+    if (fully) {
+      wrappedOut = new BufferedOutputStream(outErr.getOutputStream());
+    } else {
+      wrappedOut = new LineBufferedOutputStream(outErr.getOutputStream());
+    }
     return OutErr.create(wrappedOut, outErr.getErrorStream());
   }
 
-  private OutErr bufferErr(OutErr outErr) {
-    OutputStream wrappedErr = new BufferedOutputStream(outErr.getErrorStream());
+  private OutErr bufferErr(OutErr outErr, boolean fully) {
+    OutputStream wrappedErr;
+    if (fully) {
+      wrappedErr = new BufferedOutputStream(outErr.getErrorStream());
+    } else {
+      wrappedErr = new LineBufferedOutputStream(outErr.getErrorStream());
+    }
     return OutErr.create(outErr.getOutputStream(), wrappedErr);
   }
 
@@ -646,8 +664,19 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
       OutErr outErr, BlazeCommandEventHandler.Options eventOptions) {
     Path workspacePath = runtime.getWorkspace().getDirectories().getWorkspace();
     PathFragment workspacePathFragment = workspacePath == null ? null : workspacePath.asFragment();
-    return new ExperimentalEventHandler(
-        outErr, eventOptions, runtime.getClock(), workspacePathFragment);
+    EventHandler eventHandler;
+    if (eventOptions.experimentalUi) {
+      // The experimental event handler is not to be rate limited, so don't wrap it in a
+      // RateLimitingEventHandler.
+      return new ExperimentalEventHandler(
+          outErr, eventOptions, runtime.getClock(), workspacePathFragment);
+    } else if ((eventOptions.useColor() || eventOptions.useCursorControl())) {
+      eventHandler = new FancyTerminalEventHandler(outErr, eventOptions, workspacePathFragment);
+    } else {
+      eventHandler = new BlazeCommandEventHandler(outErr, eventOptions, workspacePathFragment);
+    }
+
+    return RateLimitingEventHandler.create(eventHandler, eventOptions.showProgressRateLimit);
   }
 
   /**

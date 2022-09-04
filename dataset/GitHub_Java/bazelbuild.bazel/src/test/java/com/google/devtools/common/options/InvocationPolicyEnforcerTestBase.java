@@ -21,6 +21,7 @@ import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.In
 import java.io.ByteArrayOutputStream;
 import java.util.Arrays;
 import java.util.List;
+import java.util.logging.Level;
 import org.junit.Before;
 import org.junit.BeforeClass;
 
@@ -55,21 +56,22 @@ public class InvocationPolicyEnforcerTestBase {
     policyProto.writeTo(out);
     String policyBase64 = BaseEncoding.base64().encode(out.toByteArray());
 
-    OptionsParser startupOptionsParser = OptionsParser.newOptionsParser(
-        BlazeServerStartupOptions.class);
+    OptionsParser startupOptionsParser =
+        OptionsParser.builder().optionsClasses(BlazeServerStartupOptions.class).build();
     String policyOption = "--invocation_policy=" + policyBase64;
     startupOptionsParser.parse(policyOption);
 
     return new InvocationPolicyEnforcer(
         InvocationPolicyParser.parsePolicy(
-            startupOptionsParser.getOptions(BlazeServerStartupOptions.class).invocationPolicy));
+            startupOptionsParser.getOptions(BlazeServerStartupOptions.class).invocationPolicy),
+        Level.INFO);
   }
 
   OptionsParser parser;
 
   @Before
   public final void setParser() throws Exception  {
-    parser = OptionsParser.newOptionsParser(TestOptions.class);
+    parser = OptionsParser.builder().optionsClasses(TestOptions.class).build();
   }
 
   @BeforeClass

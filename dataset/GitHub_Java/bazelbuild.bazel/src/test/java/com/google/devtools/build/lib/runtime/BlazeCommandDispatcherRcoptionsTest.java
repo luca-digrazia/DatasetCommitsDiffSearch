@@ -25,8 +25,10 @@ import com.google.devtools.build.lib.analysis.ServerDirectories;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.CoreOptions;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
+import com.google.devtools.build.lib.bazel.rules.DefaultBuildOptionsForDiffing;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.testutil.TestConstants;
+import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.io.RecordingOutErr;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
@@ -77,7 +79,7 @@ public class BlazeCommandDispatcherRcoptionsTest {
     public BlazeCommandResult exec(CommandEnvironment env, OptionsParsingResult options) {
       FooOptions fooOptions = options.getOptions(FooOptions.class);
       env.getReporter().getOutErr().printOut("" + fooOptions.numOption);
-      return BlazeCommandResult.success();
+      return BlazeCommandResult.exitCode(ExitCode.SUCCESS);
     }
 
     @Override
@@ -98,7 +100,7 @@ public class BlazeCommandDispatcherRcoptionsTest {
       env.getReporter()
           .getOutErr()
           .printOut("" + fooOptions.numOption + " " + fooOptions.stringOption);
-      return BlazeCommandResult.success();
+      return BlazeCommandResult.exitCode(ExitCode.SUCCESS);
     }
 
     @Override
@@ -154,7 +156,7 @@ public class BlazeCommandDispatcherRcoptionsTest {
                 new BlazeModule() {
                   @Override
                   public BuildOptions getDefaultBuildOptions(BlazeRuntime runtime) {
-                    return BuildOptions.getDefaultBuildOptionsForFragments(
+                    return DefaultBuildOptionsForDiffing.getDefaultBuildOptionsForFragments(
                         runtime.getRuleClassProvider().getConfigurationOptions());
                   }
                 })
