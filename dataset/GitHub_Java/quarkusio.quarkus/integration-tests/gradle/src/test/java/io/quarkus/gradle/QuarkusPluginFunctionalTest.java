@@ -32,6 +32,16 @@ public class QuarkusPluginFunctionalTest extends QuarkusGradleWrapperTestBase {
     }
 
     @Test
+    public void canRunListExtensions() throws Exception {
+        createProject(SourceType.JAVA);
+
+        BuildResult build = runGradleWrapper(projectRoot, "listExtensions");
+
+        assertThat(build.getTasks().get(":listExtensions")).isEqualTo(BuildResult.SUCCESS_OUTCOME);
+        assertThat(build.getOutput()).contains("Quarkus - Core");
+    }
+
+    @Test
     public void canGenerateConfig() throws Exception {
         createProject(SourceType.JAVA);
 
@@ -75,7 +85,7 @@ public class QuarkusPluginFunctionalTest extends QuarkusGradleWrapperTestBase {
         assertThat(firstBuild.getTasks().get(":quarkusBuild")).isEqualTo(BuildResult.SUCCESS_OUTCOME);
 
         final File applicationProperties = projectRoot.toPath().resolve("src/main/resources/application.properties").toFile();
-        Files.write(applicationProperties.toPath(), "quarkus.http.port=8888".getBytes());
+        DevModeTestUtils.filter(applicationProperties, ImmutableMap.of("# Configuration file", "quarkus.http.port=8888"));
 
         BuildResult secondBuild = runGradleWrapper(projectRoot, "quarkusBuild", "--stacktrace");
         assertThat(secondBuild.getTasks().get(":quarkusBuild")).isEqualTo(BuildResult.SUCCESS_OUTCOME);
