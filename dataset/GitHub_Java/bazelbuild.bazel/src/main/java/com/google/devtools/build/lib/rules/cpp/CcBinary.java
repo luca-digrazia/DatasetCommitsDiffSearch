@@ -313,6 +313,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
   public static void init(
       CppSemantics semantics, RuleConfiguredTargetBuilder ruleBuilder, RuleContext ruleContext)
       throws InterruptedException, RuleErrorException {
+    CcCommon.checkRuleLoadedThroughMacro(ruleContext);
     semantics.validateDeps(ruleContext);
     if (ruleContext.attributes().isAttributeValueExplicitlySpecified("dynamic_deps")) {
       if (!ruleContext
@@ -1192,12 +1193,9 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     builder
         .setFilesToBuild(filesToBuild)
         .addNativeDeclaredProvider(
-            CcInfo.builder()
-                .setCcCompilationContext(ccCompilationContext)
-                .setCcNativeLibraryInfo(
-                    new CcNativeLibraryInfo(
-                        collectTransitiveCcNativeLibraries(ruleContext, libraries)))
-                .build())
+            CcInfo.builder().setCcCompilationContext(ccCompilationContext).build())
+        .addNativeDeclaredProvider(
+            new CcNativeLibraryProvider(collectTransitiveCcNativeLibraries(ruleContext, libraries)))
         .addNativeDeclaredProvider(instrumentedFilesProvider)
         .addOutputGroup(OutputGroupInfo.VALIDATION, headerTokens)
         .addOutputGroups(outputGroups);
@@ -1209,8 +1207,9 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       RuleContext ruleContext, List<LibraryToLink> libraries) {
     NestedSetBuilder<LibraryToLink> builder = NestedSetBuilder.linkOrder();
     builder.addAll(libraries);
-    for (CcInfo dep : ruleContext.getPrerequisites("deps", CcInfo.PROVIDER)) {
-      builder.addTransitive(dep.getCcNativeLibraryInfo().getTransitiveCcNativeLibraries());
+    for (CcNativeLibraryProvider dep :
+        ruleContext.getPrerequisites("deps", CcNativeLibraryProvider.PROVIDER)) {
+      builder.addTransitive(dep.getTransitiveCcNativeLibraries());
     }
     return builder.build();
   }
