@@ -20,6 +20,7 @@ import com.google.common.eventbus.Subscribe;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionResultReceivedEvent;
 import com.google.devtools.build.lib.buildtool.BuildRequest;
+import com.google.devtools.build.lib.buildtool.ExecutionFinishedEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.BuildCompleteEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.ExecutionStartingEvent;
 import com.google.devtools.build.lib.clock.BlazeClock;
@@ -30,7 +31,6 @@ import com.google.devtools.build.lib.exec.ExecutorBuilder;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
-import com.google.devtools.build.lib.skyframe.ExecutionFinishedEvent;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -140,7 +140,7 @@ public class BuildSummaryStatsModule extends BlazeModule {
 
       String spawnSummary = spawnStats.getSummary();
       if (statsSummary) {
-        reporter.handle(Event.info(spawnSummary));
+        reporter.handle(Event.info(spawnStats.getSummary()));
         reporter.handle(
             Event.info(
                 String.format(

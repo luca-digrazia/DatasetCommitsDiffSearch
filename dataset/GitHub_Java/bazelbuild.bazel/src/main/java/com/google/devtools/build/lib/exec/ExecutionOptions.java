@@ -19,10 +19,8 @@ import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.analysis.config.PerLabelOptions;
 import com.google.devtools.build.lib.util.OptionsUtils;
 import com.google.devtools.build.lib.util.RegexFilter;
-import com.google.devtools.build.lib.util.ResourceConverter;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.BoolOrEnumConverter;
-import com.google.devtools.common.options.Converters.AssignmentConverter;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionEffectTag;
@@ -31,7 +29,6 @@ import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParsingException;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Options affecting the execution phase of a build.
@@ -52,62 +49,6 @@ import java.util.Map;
 public class ExecutionOptions extends OptionsBase {
 
   public static final ExecutionOptions DEFAULTS = Options.getDefaults(ExecutionOptions.class);
-
-  @Option(
-      name = "spawn_strategy",
-      defaultValue = "",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      help =
-          "Specify how spawn actions are executed by default. "
-              + "'standalone' means run all of them locally without any kind of sandboxing. "
-              + "'sandboxed' means to run them in a sandboxed environment with limited privileges "
-              + "(details depend on platform support).")
-  public String spawnStrategy;
-
-  @Option(
-      name = "genrule_strategy",
-      defaultValue = "",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      help =
-          "Specify how to execute genrules. This flag will be phased out. Instead, use "
-              + "--spawn_strategy=<value> to control all actions or --strategy=Genrule=<value> "
-              + "to control genrules only.")
-  public String genruleStrategy;
-
-  @Option(
-      name = "strategy",
-      allowMultiple = true,
-      converter = AssignmentConverter.class,
-      defaultValue = "",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      help =
-          "Specify how to distribute compilation of other spawn actions. "
-              + "Example: 'Javac=local' means to spawn Java compilation locally. "
-              + "'JavaIjar=sandboxed' means to spawn Java Ijar actions in a sandbox. ")
-  public List<Map.Entry<String, String>> strategy;
-
-  @Option(
-      name = "strategy_regexp",
-      allowMultiple = true,
-      converter = RegexFilterAssignmentConverter.class,
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      defaultValue = "",
-      help =
-          "Override which spawn strategy should be used to execute spawn actions that have "
-              + "descriptions matching a certain regex_filter. See --per_file_copt for details on"
-              + "regex_filter matching. "
-              + "The first regex_filter that matches the description is used. "
-              + "This option overrides other flags for specifying strategy. "
-              + "Example: --strategy_regexp=//foo.*\\.cc,-//foo/bar=local means to run actions "
-              + "using local strategy if their descriptions match //foo.*.cc but not //foo/bar. "
-              + "Example: --strategy_regexp='Compiling.*/bar=local "
-              + " --strategy_regexp=Compiling=sandboxed will run 'Compiling //foo/bar/baz' with "
-              + "the 'local' strategy, but reversing the order would run it with 'sandboxed'. ")
-  public List<Map.Entry<RegexFilter, String>> strategyByRegexp;
 
   @Option(
       name = "materialize_param_files",
@@ -309,18 +250,15 @@ public class ExecutionOptions extends OptionsBase {
   public boolean localMemoryEstimate;
 
   @Option(
-      name = "local_test_jobs",
-      defaultValue = "auto",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      help =
-          "The max number of local test jobs to run concurrently. "
-              + "Takes "
-              + ResourceConverter.FLAG_SYNTAX
-              + ". 0 means local resources will limit the number of local test jobs to run "
-              + "concurrently instead. Setting this greater than the value for --jobs "
-              + "is ineffectual.",
-      converter = LocalTestJobsConverter.class)
+    name = "local_test_jobs",
+    defaultValue = "0",
+    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+    effectTags = {OptionEffectTag.UNKNOWN},
+    help =
+        "The max number of local test jobs to run concurrently. "
+            + "0 means local resources will limit the number of local test jobs to run "
+            + "concurrently instead. Setting this greater than the value for --jobs is ineffectual."
+  )
   public int localTestJobs;
 
   public boolean usingLocalTestJobs() {
@@ -446,13 +384,6 @@ public class ExecutionOptions extends OptionsBase {
     public String getTypeDescription() {
       return "a positive integer, the string \"default\", or test_regex@attempts. "
           + "This flag may be passed more than once";
-    }
-  }
-
-  /** Converter for --local_test_jobs, which takes {@value FLAG_SYNTAX} */
-  public static class LocalTestJobsConverter extends ResourceConverter {
-    public LocalTestJobsConverter() throws OptionsParsingException {
-      super(/* autoSupplier= */ () -> 0, /* minValue= */ 0, /* maxValue= */ Integer.MAX_VALUE);
     }
   }
 
