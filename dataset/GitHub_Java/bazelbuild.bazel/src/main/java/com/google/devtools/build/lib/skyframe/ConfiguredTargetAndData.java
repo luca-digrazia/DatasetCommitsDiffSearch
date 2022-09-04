@@ -55,21 +55,32 @@ public class ConfiguredTargetAndData {
             + " ConfiguredTarget's label %s is not equal to Target's label %s",
         configuredTarget.getLabel(),
         target.getLabel());
-    BuildConfigurationValue.Key innerConfigurationKey = configuredTarget.getConfigurationKey();
-    if (configuration == null) {
+    BuildConfiguration innerConfiguration = configuredTarget.getConfiguration();
+    if (configuration != innerConfiguration) {
+      Preconditions.checkNotNull(configuration, configuredTarget);
+      Preconditions.checkNotNull(innerConfiguration, configuredTarget);
+      // We can't always assert that configurations are equal, because fragments, which are used in
+      // the equality check, don't implement .equals(), so two configurations constructed from the
+      // same options may end up unequal.
       Preconditions.checkState(
-          innerConfigurationKey == null,
-          "Non-null configuration key for %s but configuration is null (%s)",
+          configuration.checksum().equals(innerConfiguration.checksum()),
+          "Configuration checksums don't match: %s %s (%s %s)",
+          configuration.checksum(),
+          innerConfiguration.checksum(),
           configuredTarget,
           target);
-    } else {
-      BuildConfigurationValue.Key configurationKey = BuildConfigurationValue.key(configuration);
       Preconditions.checkState(
-          innerConfigurationKey.equals(configurationKey),
-          "Configurations don't match: %s %s %s (%s %s)",
-          configurationKey,
-          innerConfigurationKey,
-          configuration,
+          configuration.getOptions().equals(innerConfiguration.getOptions()),
+          "Configuration options don't match: %s %s (%s %s)",
+          configuration.getOptions(),
+          innerConfiguration.getOptions(),
+          configuredTarget,
+          target);
+      Preconditions.checkState(
+          configuration.fragmentClasses().equals(innerConfiguration.fragmentClasses()),
+          "Configuration classes don't match: %s %s (%s %s)",
+          configuration.fragmentClasses(),
+          innerConfiguration.fragmentClasses(),
           configuredTarget,
           target);
     }
