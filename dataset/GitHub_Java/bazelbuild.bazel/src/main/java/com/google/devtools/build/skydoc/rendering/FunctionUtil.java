@@ -17,14 +17,15 @@ package com.google.devtools.build.skydoc.rendering;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.syntax.Printer;
+import com.google.devtools.build.lib.syntax.Printer.BasePrinter;
 import com.google.devtools.build.lib.syntax.StarlarkFunction;
 import com.google.devtools.build.skydoc.rendering.proto.StardocOutputProtos.FunctionParamInfo;
 import com.google.devtools.build.skydoc.rendering.proto.StardocOutputProtos.StarlarkFunctionInfo;
-import com.google.devtools.starlark.common.DocstringUtils;
-import com.google.devtools.starlark.common.DocstringUtils.DocstringInfo;
-import com.google.devtools.starlark.common.DocstringUtils.DocstringParseError;
-import com.google.devtools.starlark.common.DocstringUtils.ParameterDoc;
+import com.google.devtools.skylark.common.DocstringUtils;
+import com.google.devtools.skylark.common.DocstringUtils.DocstringInfo;
+import com.google.devtools.skylark.common.DocstringUtils.DocstringParseError;
+import com.google.devtools.skylark.common.DocstringUtils.ParameterDoc;
 import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
@@ -79,7 +80,14 @@ public final class FunctionUtil {
     if (defaultValue == null) {
       paramBuilder.setMandatory(true);
     } else {
-      paramBuilder.setDefaultValue(Starlark.repr(defaultValue)).setMandatory(false);
+      BasePrinter printer = Printer.getSimplifiedPrinter();
+      printer.repr(defaultValue);
+      String defaultValueString = printer.toString();
+
+      if (defaultValueString.isEmpty()) {
+        defaultValueString = "{unknown object}";
+      }
+      paramBuilder.setDefaultValue(defaultValueString).setMandatory(false);
     }
     return paramBuilder.build();
   }

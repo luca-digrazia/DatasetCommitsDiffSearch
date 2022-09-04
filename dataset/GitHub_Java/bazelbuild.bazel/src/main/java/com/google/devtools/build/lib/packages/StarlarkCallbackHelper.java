@@ -69,8 +69,11 @@ public class StarlarkCallbackHelper {
   // Instead, make them supply a map.
   public Object call(EventHandler eventHandler, ClassObject ctx, Object... arguments)
       throws EvalException, InterruptedException {
-    try (Mutability mu = Mutability.create("callback", callback)) {
-      StarlarkThread thread = new StarlarkThread(mu, starlarkSemantics);
+    try (Mutability mutability = Mutability.create("callback", callback)) {
+      StarlarkThread thread =
+          StarlarkThread.builder(mutability)
+              .setSemantics(starlarkSemantics)
+              .build();
       thread.setPrintHandler(Event.makeDebugPrintHandler(eventHandler));
       context.storeInThread(thread);
       return Starlark.call(
@@ -79,7 +82,7 @@ public class StarlarkCallbackHelper {
           buildArgumentList(ctx, arguments),
           /*kwargs=*/ ImmutableMap.of());
     } catch (ClassCastException | IllegalArgumentException e) { // TODO(adonovan): investigate
-      throw new EvalException(e);
+      throw new EvalException(null, e.getMessage());
     }
   }
 

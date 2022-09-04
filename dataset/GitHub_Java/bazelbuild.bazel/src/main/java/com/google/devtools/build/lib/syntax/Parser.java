@@ -250,7 +250,7 @@ final class Parser {
           token.kind == TokenKind.INDENT
               ? "indentation error"
               : "syntax error at '" + tokenString(token.kind, token.value) + "': " + message;
-      reportError(token.start, msg);
+      reportError(token.left, msg);
       recoveryMode = true;
     }
   }
@@ -282,7 +282,7 @@ final class Parser {
     while (!terminatingTokens.contains(token.kind)) {
       nextToken();
     }
-    int end = token.end;
+    int end = token.right;
     // read past the synchronization token
     nextToken();
     return end;
@@ -298,13 +298,13 @@ final class Parser {
     // EOF must be in the set to prevent an infinite loop
     Preconditions.checkState(terminatingTokens.contains(TokenKind.EOF));
     // read past the problematic token
-    int previous = token.end;
+    int previous = token.right;
     nextToken();
     int current = previous;
     while (!terminatingTokens.contains(token.kind)) {
       nextToken();
       previous = current;
-      current = token.end;
+      current = token.right;
     }
     return previous;
   }
@@ -350,11 +350,11 @@ final class Parser {
         error = "keyword '" + token.kind + "' not supported";
         break;
     }
-    reportError(token.start, error);
+    reportError(token.left, error);
   }
 
   private int nextToken() {
-    int prev = token.start;
+    int prev = token.left;
     if (token.kind != TokenKind.EOF) {
       lexer.nextToken();
     }
@@ -473,7 +473,7 @@ final class Parser {
       }
       if (hasStarStar) {
         // TODO(adonovan): move this to validation pass too.
-        reportError(token.start, "unexpected tokens after **kwargs argument");
+        reportError(token.left, "unexpected tokens after **kwargs argument");
         break;
       }
       Argument arg = parseArgument();
@@ -564,7 +564,7 @@ final class Parser {
       expect(TokenKind.COMMA);
       if (EXPR_LIST_TERMINATOR_SET.contains(token.kind)) {
         if (!trailingCommaAllowed) {
-          reportError(token.start, "Trailing comma is allowed only in parenthesized tuples.");
+          reportError(token.left, "Trailing comma is allowed only in parenthesized tuples.");
         }
         break;
       }
@@ -599,10 +599,10 @@ final class Parser {
   private StringLiteral parseStringLiteral() {
     Preconditions.checkState(token.kind == TokenKind.STRING);
     StringLiteral literal =
-        new StringLiteral(locs, token.start, intern((String) token.value), token.end);
+        new StringLiteral(locs, token.left, intern((String) token.value), token.right);
     nextToken();
     if (token.kind == TokenKind.STRING) {
-      reportError(token.start, "Implicit string concatenation is forbidden, use the + operator");
+      reportError(token.left, "Implicit string concatenation is forbidden, use the + operator");
     }
     return literal;
   }
@@ -620,7 +620,7 @@ final class Parser {
       case INT:
         {
           IntegerLiteral literal =
-              new IntegerLiteral(locs, token.raw, token.start, (Integer) token.value);
+              new IntegerLiteral(locs, token.raw, token.left, (Integer) token.value);
           nextToken();
           return literal;
         }
@@ -683,7 +683,7 @@ final class Parser {
 
       default:
         {
-          int start = token.start;
+          int start = token.left;
           syntaxError("expected expression");
           int end = syncTo(EXPR_TERMINATOR_SET);
           return makeErrorExpression(start, end);
@@ -888,7 +888,7 @@ final class Parser {
 
   private Identifier parseIdent() {
     if (token.kind != TokenKind.IDENTIFIER) {
-      int start = token.start;
+      int start = token.left;
       int end = expect(TokenKind.IDENTIFIER);
       return makeErrorExpression(start, end);
     }
@@ -927,7 +927,7 @@ final class Parser {
       // are not associative.
       if (lastOp != null && operatorPrecedence.get(prec).contains(TokenKind.EQUALS_EQUALS)) {
         reportError(
-            token.start,
+            token.left,
             String.format(
                 "Operator '%s' is not associative with operator '%s'. Use parens.", lastOp, op));
       }
@@ -956,7 +956,7 @@ final class Parser {
 
   // Parses a non-tuple expression ("test" in Python terminology).
   private Expression parseTest() {
-    int start = token.start;
+    int start = token.left;
     Expression expr = parseTest(0);
     if (token.kind == TokenKind.IF) {
       nextToken();
@@ -1014,15 +1014,15 @@ final class Parser {
     expect(TokenKind.LPAREN);
     if (token.kind != TokenKind.STRING) {
       // error: module is not a string literal.
-      StringLiteral module = new StringLiteral(locs, token.start, "", token.end);
+      StringLiteral module = new StringLiteral(locs, token.left, "", token.right);
       expect(TokenKind.STRING);
-      return new LoadStatement(locs, loadOffset, module, ImmutableList.of(), token.end);
+      return new LoadStatement(locs, loadOffset, module, ImmutableList.of(), token.right);
     }
 
     StringLiteral module = parseStringLiteral();
     if (token.kind == TokenKind.RPAREN) {
       syntaxError("expected at least one symbol to load");
-      return new LoadStatement(locs, loadOffset, module, ImmutableList.of(), token.end);
+      return new LoadStatement(locs, loadOffset, module, ImmutableList.of(), token.right);
     }
     expect(TokenKind.COMMA);
 
@@ -1056,7 +1056,7 @@ final class Parser {
     }
 
     String name = (String) token.value;
-    int nameOffset = token.start + (token.kind == TokenKind.STRING ? 1 : 0);
+    int nameOffset = token.left + (token.kind == TokenKind.STRING ? 1 : 0);
     Identifier local = new Identifier(locs, name, nameOffset);
 
     Identifier original;
@@ -1074,7 +1074,7 @@ final class Parser {
         syntaxError("expected string");
         return;
       }
-      original = new Identifier(locs, (String) token.value, token.start + 1);
+      original = new Identifier(locs, (String) token.value, token.left + 1);
     }
     nextToken();
     symbols.add(new LoadStatement.Binding(local, original));
@@ -1166,12 +1166,12 @@ final class Parser {
   // for_stmt = FOR IDENTIFIER IN expr ':' suite
   private ForStatement parseForStatement() {
     int forOffset = expect(TokenKind.FOR);
-    Expression vars = parseForLoopVariables();
+    Expression lhs = parseForLoopVariables();
     expect(TokenKind.IN);
     Expression collection = parseExpression();
     expect(TokenKind.COLON);
-    List<Statement> body = parseSuite();
-    return new ForStatement(locs, forOffset, vars, collection, body);
+    List<Statement> block = parseSuite();
+    return new ForStatement(locs, forOffset, lhs, collection, block);
   }
 
   // def_stmt = DEF IDENTIFIER '(' arguments ')' ':' suite
@@ -1304,7 +1304,7 @@ final class Parser {
       }
       if (hasStarStar) {
         // TODO(adonovan): move this to validation pass too.
-        reportError(token.start, "unexpected tokens after kwarg");
+        reportError(token.left, "unexpected tokens after kwarg");
         break;
       }
 
@@ -1326,7 +1326,7 @@ final class Parser {
     if (token.kind == TokenKind.NEWLINE) {
       expect(TokenKind.NEWLINE);
       if (token.kind != TokenKind.INDENT) {
-        reportError(token.start, "expected an indented block");
+        reportError(token.left, "expected an indented block");
         return list;
       }
       expect(TokenKind.INDENT);

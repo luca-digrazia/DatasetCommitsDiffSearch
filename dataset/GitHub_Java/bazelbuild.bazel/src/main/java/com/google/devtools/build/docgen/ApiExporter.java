@@ -20,13 +20,13 @@ import com.google.devtools.build.docgen.builtin.BuiltinProtos.Callable;
 import com.google.devtools.build.docgen.builtin.BuiltinProtos.Param;
 import com.google.devtools.build.docgen.builtin.BuiltinProtos.Type;
 import com.google.devtools.build.docgen.builtin.BuiltinProtos.Value;
-import com.google.devtools.build.docgen.starlark.StarlarkBuiltinDoc;
 import com.google.devtools.build.docgen.starlark.StarlarkConstructorMethodDoc;
 import com.google.devtools.build.docgen.starlark.StarlarkMethodDoc;
+import com.google.devtools.build.docgen.starlark.StarlarkModuleDoc;
 import com.google.devtools.build.docgen.starlark.StarlarkParamDoc;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.build.lib.skylarkinterface.StarlarkBuiltin;
-import com.google.devtools.build.lib.skylarkinterface.StarlarkInterfaceUtils;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkInterfaceUtils;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.syntax.BuiltinCallable;
 import com.google.devtools.build.lib.syntax.CallUtils;
 import com.google.devtools.build.lib.syntax.Starlark;
@@ -50,12 +50,12 @@ public class ApiExporter {
 
   private static void appendTypes(
       Builtins.Builder builtins,
-      Map<String, StarlarkBuiltinDoc> types,
+      Map<String, StarlarkModuleDoc> types,
       List<RuleDocumentation> nativeRules)
       throws BuildEncyclopediaDocException {
 
-    for (Entry<String, StarlarkBuiltinDoc> modEntry : types.entrySet()) {
-      StarlarkBuiltinDoc mod = modEntry.getValue();
+    for (Entry<String, StarlarkModuleDoc> modEntry : types.entrySet()) {
+      StarlarkModuleDoc mod = modEntry.getValue();
 
       Type.Builder type = Type.newBuilder();
       type.setName(mod.getName());
@@ -113,13 +113,13 @@ public class ApiExporter {
       if (obj instanceof StarlarkCallable) {
         value = valueFromCallable((StarlarkCallable) obj);
       } else {
-        StarlarkBuiltin typeModule = StarlarkInterfaceUtils.getStarlarkBuiltin(obj.getClass());
+        SkylarkModule typeModule = SkylarkInterfaceUtils.getSkylarkModule(obj.getClass());
         if (typeModule != null) {
           Method selfCallMethod =
-              CallUtils.getSelfCallMethod(StarlarkSemantics.DEFAULT, obj.getClass());
+              CallUtils.getSelfCallMethod(StarlarkSemantics.DEFAULT_SEMANTICS, obj.getClass());
           if (selfCallMethod != null) {
             // selfCallMethod may be from a subclass of the annotated method.
-            SkylarkCallable annotation = StarlarkInterfaceUtils.getSkylarkCallable(selfCallMethod);
+            SkylarkCallable annotation = SkylarkInterfaceUtils.getSkylarkCallable(selfCallMethod);
             value = valueFromAnnotation(annotation);
           } else {
             value.setName(entry.getKey());

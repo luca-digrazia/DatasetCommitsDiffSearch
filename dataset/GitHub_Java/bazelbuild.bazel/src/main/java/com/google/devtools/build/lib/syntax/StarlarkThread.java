@@ -56,9 +56,9 @@ import javax.annotation.Nullable;
  *
  * <p>One creates an StarlarkThread using the {@link #builder} function, before evaluating code in
  * it with {@link StarlarkFile#eval}, or with {@link StarlarkFile#exec} (where the AST was obtained
- * by passing a {@link Resolver} constructed from the StarlarkThread to {@link StarlarkFile#parse}.
- * When the computation is over, the frozen StarlarkThread can still be queried with {@link
- * #lookup}.
+ * by passing a {@link ValidationEnvironment} constructed from the StarlarkThread to {@link
+ * StarlarkFile#parse}. When the computation is over, the frozen StarlarkThread can still be queried
+ * with {@link #lookup}.
  */
 public final class StarlarkThread {
 
@@ -245,7 +245,6 @@ public final class StarlarkThread {
      *
      * <p>The exception explains the reason for the inequality, including all unequal bindings.
      */
-    // TODO(adonovan): move this function into the relevant test.
     public void checkStateEquals(Object obj) {
       if (this == obj) {
         return;
@@ -277,12 +276,18 @@ public final class StarlarkThread {
         if (value.equals(otherValue)) {
           continue;
         }
-        if (value.getClass() == otherValue.getClass()
-            && value.getClass().getSimpleName().equals("Depset")) {
-          // Unsoundly assume all depsets are equal.
-          // We can't compare {x,y}.toCollection() without an
-          // upwards dependency.
-          continue;
+        if (value instanceof Depset) {
+          if (otherValue instanceof Depset) {
+            // Widen to Object to avoid static checker warning
+            // about Collection.equals(Collection). We may assume
+            // these collections have the same class, even if we
+            // can't assume its equality is List-like or Set-like.
+            Object x = ((Depset) value).toCollection();
+            Object y = ((Depset) otherValue).toCollection();
+            if (x.equals(y)) {
+              continue;
+            }
+          }
         } else if (value instanceof Dict) {
           if (otherValue instanceof Dict) {
             @SuppressWarnings("unchecked")
