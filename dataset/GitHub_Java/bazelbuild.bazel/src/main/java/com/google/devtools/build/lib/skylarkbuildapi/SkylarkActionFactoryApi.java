@@ -73,9 +73,8 @@ public interface SkylarkActionFactoryApi extends SkylarkValue {
             positional = false,
             named = true,
             defaultValue = "None")
-      },
-      useLocation = true)
-  public FileApi declareFile(String filename, Object sibling, Location loc) throws EvalException;
+      })
+  public FileApi declareFile(String filename, Object sibling) throws EvalException;
 
   @SkylarkCallable(
       name = "declare_directory",
@@ -100,34 +99,6 @@ public interface SkylarkActionFactoryApi extends SkylarkValue {
             defaultValue = "None")
       })
   public FileApi declareDirectory(String filename, Object sibling) throws EvalException;
-
-  @SkylarkCallable(
-      name = "declare_symlink",
-      doc =
-          "Declares that the rule or aspect creates a symlink with the given name in the current "
-              + "package. You must create an action that generates this symlink. Bazel will never "
-              + "dereference this symlink and will transfer it verbatim to sandboxes or remote "
-              + "executors.",
-      parameters = {
-        @Param(
-            name = "filename",
-            type = String.class,
-            doc =
-                "If no 'sibling' provided, path of the new symlink, relative "
-                    + "to the current package. Otherwise a base name for a file "
-                    + "('sibling' defines a directory)."),
-        @Param(
-            name = "sibling",
-            doc = "A file that lives in the same directory as the newly declared symlink.",
-            type = FileApi.class,
-            noneable = true,
-            positional = false,
-            named = true,
-            defaultValue = "None")
-      },
-      useLocation = true)
-  public FileApi declareSymlink(String filename, Object sibling, Location location)
-      throws EvalException;
 
   @SkylarkCallable(
       name = "do_nothing",
@@ -155,19 +126,6 @@ public interface SkylarkActionFactoryApi extends SkylarkValue {
       },
       useLocation = true)
   public void doNothing(String mnemonic, Object inputs, Location location) throws EvalException;
-
-  @SkylarkCallable(
-      name = "symlink",
-      doc =
-          "Creates a symlink in the file system. If the output file is a regular file, the "
-              + "symlink must point to a file. If the output is an unresolved symlink, a dangling "
-              + "symlink is allowed.",
-      parameters = {
-        @Param(name = "output", type = FileApi.class, doc = "The output path.", named = true),
-        @Param(name = "target", type = String.class, doc = "The target.", named = true),
-      },
-      useLocation = true)
-  public void symlink(FileApi output, String targetPath, Location location) throws EvalException;
 
   @SkylarkCallable(
       name = "write",
