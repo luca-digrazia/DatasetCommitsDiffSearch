@@ -18,7 +18,7 @@ import android.database.sqlite.SQLiteDatabase;
  * @author Tony Green
  * @since 1.1
  */
-public class DataSupport {
+public abstract class DataSupport {
 
 	/**
 	 * The identify of each model. LitePal will generate the value
@@ -66,42 +66,6 @@ public class DataSupport {
 	 * value of model.
 	 */
 	private List<String> fieldsToSetToDefault;
-
-	public static ClusterQuery select(String... columns) {
-		ClusterQuery cQuery = new ClusterQuery();
-		cQuery.mColumns = columns;
-		return cQuery;
-	}
-
-	public static ClusterQuery where(String... conditions) {
-		ClusterQuery cQuery = new ClusterQuery();
-		cQuery.mConditions = conditions;
-		return cQuery;
-	}
-
-	public static ClusterQuery group(String args) {
-		ClusterQuery cQuery = new ClusterQuery();
-		cQuery.mGroupBy = args;
-		return cQuery;
-	}
-
-	public static ClusterQuery having(String options) {
-		ClusterQuery cQuery = new ClusterQuery();
-		cQuery.mHaving = options;
-		return cQuery;
-	}
-
-	public static ClusterQuery order(String args) {
-		ClusterQuery cQuery = new ClusterQuery();
-		cQuery.mOrderBy = args;
-		return cQuery;
-	}
-
-	public static ClusterQuery limit(int value) {
-		ClusterQuery cQuery = new ClusterQuery();
-		cQuery.mLimit = String.valueOf(value);
-		return cQuery;
-	}
 
 	/**
 	 * Finds the record by a specific id.
@@ -449,13 +413,6 @@ public class DataSupport {
 	 */
 	public void setToDefault(String fieldName) {
 		getFieldsToSetToDefault().add(fieldName);
-	}
-
-	/**
-	 * Disable developers to create instance of DataSupport directly. They
-	 * should inherit this class with subclasses and operate on them.
-	 */
-	protected DataSupport() {
 	}
 
 	/**
