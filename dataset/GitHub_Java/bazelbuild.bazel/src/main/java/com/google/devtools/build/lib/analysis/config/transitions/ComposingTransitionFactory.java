@@ -97,4 +97,7 @@ public abstract class ComposingTransitionFactory<T> implements TransitionFactory
   public boolean isSplit() {
     return transitionFactory1().isSplit() || transitionFactory2().isSplit();
   }
+
+  // TODO(https://github.com/bazelbuild/bazel/issues/7814): Move ComposingTransition here and make
+  // it private.
 }
