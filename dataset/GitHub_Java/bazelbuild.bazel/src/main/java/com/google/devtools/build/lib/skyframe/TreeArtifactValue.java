@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.FileArtifactValue;
 import com.google.devtools.build.lib.actions.cache.DigestUtils;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.util.BigIntegerFingerprint;
 import com.google.devtools.build.lib.vfs.Dirent;
 import com.google.devtools.build.lib.vfs.Dirent.Type;
 import com.google.devtools.build.lib.vfs.Path;
@@ -32,7 +31,6 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Symlinks;
 import com.google.devtools.build.skyframe.SkyValue;
 import java.io.IOException;
-import java.math.BigInteger;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Map;
@@ -55,7 +53,6 @@ public class TreeArtifactValue implements SkyValue {
 
   private final byte[] digest;
   private final Map<TreeFileArtifact, FileArtifactValue> childData;
-  private BigInteger valueFingerprint;
 
   @AutoCodec.VisibleForSerialization
   TreeArtifactValue(byte[] digest, Map<TreeFileArtifact, FileArtifactValue> childData) {
@@ -102,16 +99,6 @@ public class TreeArtifactValue implements SkyValue {
 
   Map<TreeFileArtifact, FileArtifactValue> getChildValues() {
     return childData;
-  }
-
-  @Override
-  public BigInteger getValueFingerprint() {
-    if (valueFingerprint == null) {
-      BigIntegerFingerprint fp = new BigIntegerFingerprint();
-      fp.addBytes(digest);
-      valueFingerprint = fp.getFingerprint();
-    }
-    return valueFingerprint;
   }
 
   @Override
