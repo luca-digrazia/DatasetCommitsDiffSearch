@@ -3,7 +3,6 @@ package org.jboss.resteasy.reactive.server.core;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.function.Function;
 import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.ext.ExceptionMapper;
@@ -11,7 +10,6 @@ import org.jboss.logging.Logger;
 import org.jboss.resteasy.reactive.common.model.ResourceExceptionMapper;
 import org.jboss.resteasy.reactive.server.spi.ResteasyReactiveAsyncExceptionMapper;
 import org.jboss.resteasy.reactive.server.spi.ResteasyReactiveExceptionMapper;
-import org.jboss.resteasy.reactive.spi.BeanFactory;
 
 public class ExceptionMapping {
 
@@ -58,7 +56,8 @@ public class ExceptionMapping {
         } else {
             log.error("Request failed ", throwable);
         }
-        context.handleUnmappedException(throwable);
+        // FIXME: configurable? stack trace?
+        context.setResult(Response.serverError().build());
     }
 
     /**
@@ -103,25 +102,7 @@ public class ExceptionMapping {
     }
 
     public <T extends Throwable> void addExceptionMapper(Class<T> exceptionClass, ResourceExceptionMapper<T> mapper) {
-        ResourceExceptionMapper<? extends Throwable> existing = mappers.get(exceptionClass);
-        if (existing != null) {
-            if (existing.getPriority() < mapper.getPriority()) {
-                //already a higher priority mapper
-                return;
-            }
-        }
         mappers.put(exceptionClass, mapper);
     }
 
-    public Map<Class<? extends Throwable>, ResourceExceptionMapper<? extends Throwable>> getMappers() {
-        return mappers;
-    }
-
-    public void initializeDefaultFactories(Function<String, BeanFactory<?>> factoryCreator) {
-        for (Map.Entry<Class<? extends Throwable>, ResourceExceptionMapper<? extends Throwable>> entry : mappers.entrySet()) {
-            if (entry.getValue().getFactory() == null) {
-                entry.getValue().setFactory((BeanFactory) factoryCreator.apply(entry.getValue().getClassName()));
-            }
-        }
-    }
 }

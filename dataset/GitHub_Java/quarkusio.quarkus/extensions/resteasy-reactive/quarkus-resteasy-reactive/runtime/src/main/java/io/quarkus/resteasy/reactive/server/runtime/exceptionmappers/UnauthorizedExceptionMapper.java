@@ -8,18 +8,17 @@ import org.jboss.resteasy.reactive.server.spi.AsyncExceptionMapperContext;
 import org.jboss.resteasy.reactive.server.spi.ResteasyReactiveAsyncExceptionMapper;
 
 import io.quarkus.resteasy.reactive.server.runtime.QuarkusResteasyReactiveRequestContext;
-import io.quarkus.security.AuthenticationFailedException;
+import io.quarkus.security.UnauthorizedException;
 
-public class AuthenticationFailedExceptionMapper
-        implements ResteasyReactiveAsyncExceptionMapper<AuthenticationFailedException> {
+public class UnauthorizedExceptionMapper implements ResteasyReactiveAsyncExceptionMapper<UnauthorizedException> {
 
     @Override
-    public Response toResponse(AuthenticationFailedException exception) {
+    public Response toResponse(UnauthorizedException exception) {
         throw new IllegalStateException("This should never have been called");
     }
 
     @Override
-    public void asyncResponse(AuthenticationFailedException exception, AsyncExceptionMapperContext ctx) {
+    public void asyncResponse(UnauthorizedException exception, AsyncExceptionMapperContext ctx) {
         responseFromAuthenticator((QuarkusResteasyReactiveRequestContext) ctx.serverRequestContext());
     }
 }

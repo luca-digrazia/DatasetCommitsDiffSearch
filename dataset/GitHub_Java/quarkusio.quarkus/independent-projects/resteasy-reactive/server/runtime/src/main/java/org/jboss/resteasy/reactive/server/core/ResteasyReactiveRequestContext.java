@@ -287,10 +287,6 @@ public abstract class ResteasyReactiveRequestContext
         return this;
     }
 
-    public void handleUnmappedException(Throwable throwable) {
-        setResult(Response.serverError().build());
-    }
-
     public RuntimeResource getTarget() {
         return target;
     }
@@ -585,7 +581,7 @@ public abstract class ResteasyReactiveRequestContext
     }
 
     protected void handleUnrecoverableError(Throwable throwable) {
-        log.error("Request failed", throwable);
+        ResteasyReactiveRequestContext.log.error("Request failed", throwable);
         if (serverResponse().headWritten()) {
             serverRequest().closeConnection();
         } else {
