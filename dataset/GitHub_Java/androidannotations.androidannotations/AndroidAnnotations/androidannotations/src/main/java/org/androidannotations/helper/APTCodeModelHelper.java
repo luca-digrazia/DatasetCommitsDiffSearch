@@ -82,7 +82,7 @@ public class APTCodeModelHelper {
             if (bound == null) {
                 bound = wildcardType.getSuperBound();
                 if (bound == null) {
-                    return holder.classes().OBJECT.wildcard();
+                    throw new IllegalArgumentException("There are should be 'extends' or 'super' in the wildcard");
                 }
                 return superWildcard(typeMirrorToJClass(bound, holder));
             }
@@ -147,6 +147,7 @@ public class APTCodeModelHelper {
 		JMethod method = holder.getGeneratedClass().method(JMod.PUBLIC, returnType, methodName);
 		method.annotate(Override.class);
 
+        System.out.println(executableType.getTypeVariables());
         for (TypeVariable typeParameter : executableType.getTypeVariables()) {
             TypeMirror bound = typeParameter.getUpperBound();
             JClass jClassBounds = typeMirrorToJClass(bound, holder);
