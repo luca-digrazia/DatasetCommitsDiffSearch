@@ -557,7 +557,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_BINARY_UNSIGNED_APK);
     Artifact zipAlignedApk =
         ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_BINARY_APK);
-    Artifact signingKey = AndroidCommon.getApkDebugSigningKey(ruleContext);
+    Artifact signingKey = androidSemantics.getApkDebugSigningKey(ruleContext);
     FilesToRunProvider resourceExtractor =
         ruleContext.getExecutablePrerequisite("$resource_extractor", Mode.HOST);
 
@@ -593,7 +593,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         ImmutableList.<Artifact>builder().add(zipAlignedApk).addAll(apksUnderTest).build(),
         dataDeps);
 
-    Artifact debugKeystore = AndroidCommon.getApkDebugSigningKey(ruleContext);
+    Artifact debugKeystore = androidSemantics.getApkDebugSigningKey(ruleContext);
     Artifact apkManifest =
         ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.APK_MANIFEST);
     createApkManifestAction(
@@ -1480,7 +1480,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
    */
   public static boolean shouldRegenerate(RuleContext ruleContext,
       ResourceDependencies resourceDeps) {
-    return Iterables.size(resourceDeps.getResourceContainers()) > 1
+    return Iterables.size(resourceDeps.getResources()) > 1
         || ResourceFilter.hasFilters(ruleContext)
         || ruleContext.attributes().isAttributeValueExplicitlySpecified("nocompress_extensions");
   }

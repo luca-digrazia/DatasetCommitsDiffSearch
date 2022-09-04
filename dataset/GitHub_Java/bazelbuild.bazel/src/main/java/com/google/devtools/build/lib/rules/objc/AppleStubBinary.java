@@ -22,10 +22,11 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.ConfigurationMakeVariableContext;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
+import com.google.devtools.build.lib.analysis.MakeVariableExpander;
+import com.google.devtools.build.lib.analysis.MakeVariableExpander.ExpansionException;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
@@ -33,13 +34,11 @@ import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.Builder;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
-import com.google.devtools.build.lib.analysis.stringtemplate.ExpansionException;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
-import com.google.devtools.build.lib.rules.apple.XcodeConfigProvider;
 import com.google.devtools.build.lib.util.StringUtil;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
@@ -82,7 +81,7 @@ public class AppleStubBinary implements RuleConfiguredTargetFactory {
     }
 
     @Override
-    public String lookupVariable(String var) throws ExpansionException {
+    public String lookupMakeVariable(String var) throws ExpansionException {
       if (var.equals("SDKROOT")) {
         return "__BAZEL_XCODE_SDKROOT__";
       }
@@ -91,7 +90,7 @@ public class AppleStubBinary implements RuleConfiguredTargetFactory {
       }
       // Intentionally do not call super, because we only want to allow these specific variables and
       // discard any that might be inherited from toolchains and other contexts.
-      throw new ExpansionException("$(" + var + ") not defined");
+      throw new MakeVariableExpander.ExpansionException("$(" + var + ") not defined");
     }
   }
 
@@ -105,7 +104,7 @@ public class AppleStubBinary implements RuleConfiguredTargetFactory {
 
   @Override
   public final ConfiguredTarget create(RuleContext ruleContext)
-      throws InterruptedException, RuleErrorException, ActionConflictException {
+      throws InterruptedException, RuleErrorException {
     MultiArchSplitTransitionProvider.validateMinimumOs(ruleContext);
     PlatformType platformType = MultiArchSplitTransitionProvider.getPlatformType(ruleContext);
 
@@ -119,15 +118,14 @@ public class AppleStubBinary implements RuleConfiguredTargetFactory {
     Artifact outputArtifact =
         ObjcRuleClasses.intermediateArtifacts(ruleContext).combinedArchitectureBinary();
 
-    registerActions(ruleContext, platform, outputArtifact);
+    registerActions(ruleContext, appleConfiguration, platform, outputArtifact);
 
     NestedSetBuilder<Artifact> filesToBuild =
         NestedSetBuilder.<Artifact>stableOrder().add(outputArtifact);
     RuleConfiguredTargetBuilder targetBuilder =
         ObjcRuleClasses.ruleConfiguredTarget(ruleContext, filesToBuild.build());
 
-    ObjcProvider.Builder objcProviderBuilder =
-        new ObjcProvider.Builder(ruleContext.getAnalysisEnvironment().getSkylarkSemantics());
+    ObjcProvider.Builder objcProviderBuilder = new ObjcProvider.Builder();
     for (ObjcProvider depProvider : configurationToDepsMap.values()) {
       objcProviderBuilder.addTransitiveAndPropagate(depProvider);
     }
@@ -138,7 +136,7 @@ public class AppleStubBinary implements RuleConfiguredTargetFactory {
     targetBuilder.addNativeDeclaredProvider(objcProvider);
 
     targetBuilder.addNativeDeclaredProvider(
-        new AppleExecutableBinaryInfo(outputArtifact, objcProvider));
+        new AppleExecutableBinaryProvider(outputArtifact, objcProvider));
 
     return targetBuilder.build();
   }
@@ -150,6 +148,7 @@ public class AppleStubBinary implements RuleConfiguredTargetFactory {
   /** Registers the actions that copy the stub binary to the target's output. */
   private static void registerActions(
       RuleContext ruleContext,
+      AppleConfiguration appleConfiguration,
       ApplePlatform platform,
       Artifact outputBinary)
       throws RuleErrorException {
@@ -161,8 +160,7 @@ public class AppleStubBinary implements RuleConfiguredTargetFactory {
             .build();
 
     ruleContext.registerAction(
-        ObjcRuleClasses.spawnAppleEnvActionBuilder(
-                XcodeConfigProvider.fromRuleContext(ruleContext), platform)
+        ObjcRuleClasses.spawnAppleEnvActionBuilder(appleConfiguration, platform)
             .setExecutable(xcrunwrapper(ruleContext))
             .addCommandLine(copyCommandLine)
             .setMnemonic("CopyStubExecutable")
@@ -190,7 +188,8 @@ public class AppleStubBinary implements RuleConfiguredTargetFactory {
 
     makeVariableContext.validatePathRoot(pathString);
 
-    if (!PathFragment.isNormalized(pathString)) {
+    PathFragment pathFragment = PathFragment.create(pathString);
+    if (!pathFragment.isNormalized()) {
       throw ruleContext.throwWithAttributeError(
           AppleStubBinaryRule.XCENV_BASED_PATH_ATTR, PATH_NOT_NORMALIZED_ERROR);
     }

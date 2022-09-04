@@ -68,7 +68,7 @@ import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkIndexable;
 import com.google.devtools.build.lib.syntax.SkylarkList;
-import com.google.devtools.build.lib.syntax.SkylarkSemantics;
+import com.google.devtools.build.lib.syntax.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.syntax.Type.LabelClass;
@@ -181,7 +181,7 @@ public final class SkylarkRuleContext implements SkylarkValue {
   private FragmentCollection fragments;
   private FragmentCollection hostFragments;
   private AspectDescriptor aspectDescriptor;
-  private final SkylarkSemantics skylarkSemantics;
+  private final SkylarkSemanticsOptions skylarkSemantics;
 
   private SkylarkDict<String, String> makeVariables;
   private SkylarkRuleAttributesCollection attributesCollection;
@@ -200,7 +200,7 @@ public final class SkylarkRuleContext implements SkylarkValue {
    */
   public SkylarkRuleContext(RuleContext ruleContext,
       @Nullable AspectDescriptor aspectDescriptor,
-      SkylarkSemantics skylarkSemantics)
+      SkylarkSemanticsOptions skylarkSemantics)
       throws EvalException, InterruptedException {
     this.actionFactory = new SkylarkActionFactory(this, skylarkSemantics, ruleContext);
     this.ruleContext = Preconditions.checkNotNull(ruleContext);

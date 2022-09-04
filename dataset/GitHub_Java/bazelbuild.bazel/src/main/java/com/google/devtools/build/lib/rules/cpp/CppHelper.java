@@ -132,17 +132,12 @@ public class CppHelper {
   /**
    * Returns the malloc implementation for the given target.
    */
-  public static TransitiveInfoCollection mallocForTarget(
-      RuleContext ruleContext, String mallocAttrName) {
+  public static TransitiveInfoCollection mallocForTarget(RuleContext ruleContext) {
     if (ruleContext.getFragment(CppConfiguration.class).customMalloc() != null) {
       return ruleContext.getPrerequisite(":default_malloc", Mode.TARGET);
     } else {
-      return ruleContext.getPrerequisite(mallocAttrName, Mode.TARGET);
+      return ruleContext.getPrerequisite("malloc", Mode.TARGET);
     }
-  }
-
-  public static TransitiveInfoCollection mallocForTarget(RuleContext ruleContext) {
-    return mallocForTarget(ruleContext, "malloc");
   }
 
   /**

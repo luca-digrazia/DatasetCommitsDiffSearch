@@ -26,8 +26,6 @@ import com.google.devtools.build.lib.analysis.Runfiles.Builder;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.RunfilesSupport;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
-import com.google.devtools.build.lib.analysis.actions.LauncherFileWriteAction;
-import com.google.devtools.build.lib.analysis.actions.LauncherFileWriteAction.LaunchInfo;
 import com.google.devtools.build.lib.analysis.actions.ParameterFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction;
@@ -35,6 +33,7 @@ import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction.Su
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction.Template;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector.InstrumentationSpec;
+import com.google.devtools.build.lib.bazel.rules.NativeLauncherUtil;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -45,6 +44,8 @@ import com.google.devtools.build.lib.rules.python.PythonSemantics;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -202,13 +203,21 @@ public class BazelPythonSemantics implements PythonSemantics {
   private static Artifact createWindowsExeLauncher(
       RuleContext ruleContext, String pythonBinary, Artifact pythonLauncher)
       throws InterruptedException {
-    LaunchInfo launchInfo =
-        LaunchInfo.builder()
-            .addKeyValuePair("binary_type", "Python")
-            .addKeyValuePair("workspace_name", ruleContext.getWorkspaceName())
-            .addKeyValuePair("python_bin_path", pythonBinary)
-            .build();
-    LauncherFileWriteAction.createAndRegister(ruleContext, pythonLauncher, launchInfo);
+    ByteArrayOutputStream launchInfo = new ByteArrayOutputStream();
+    try {
+      NativeLauncherUtil.writeLaunchInfo(launchInfo, "binary_type", "Python");
+      NativeLauncherUtil.writeLaunchInfo(
+          launchInfo, "workspace_name", ruleContext.getWorkspaceName());
+      NativeLauncherUtil.writeLaunchInfo(launchInfo, "python_bin_path", pythonBinary);
+
+      NativeLauncherUtil.writeDataSize(launchInfo);
+    } catch (IOException e) {
+      ruleContext.ruleError(e.getMessage());
+      throw new InterruptedException();
+    }
+
+    NativeLauncherUtil.createNativeLauncherActions(ruleContext, pythonLauncher, launchInfo);
+
     return pythonLauncher;
   }
 
@@ -276,7 +285,7 @@ public class BazelPythonSemantics implements PythonSemantics {
 
     // Read each runfile from execute path, add them into zip file at the right runfiles path.
     // Filter the executable file, cause we are building it.
-    for (Artifact artifact : runfilesSupport.getRunfilesArtifacts()) {
+    for (Artifact artifact : runfilesSupport.getRunfilesArtifactsWithoutMiddlemen()) {
       if (!artifact.equals(executable) && !artifact.equals(zipFile)) {
         argv.addDynamicString(
             getZipRunfilesPath(artifact.getRunfilesPath(), workspaceName)

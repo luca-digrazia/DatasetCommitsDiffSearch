@@ -804,18 +804,8 @@ public final class ApplicationManifest {
 
     ResourceFilter resourceFilter = ResourceFilter.fromRuleContext(ruleContext);
 
-    List<String> uncompressedExtensions;
-    if (ruleContext.getRule().isAttrDefined(
-        AndroidRuleClasses.NOCOMPRESS_EXTENSIONS_ATTR, Type.STRING_LIST)) {
-      uncompressedExtensions =
-          ruleContext
-              .getExpander()
-              .withDataLocations()
-              .tokenized(AndroidRuleClasses.NOCOMPRESS_EXTENSIONS_ATTR);
-    } else {
-      // This code is also used by android_test, which doesn't have this attribute.
-      uncompressedExtensions = ImmutableList.of();
-    }
+    List<String> uncompressedExtensions =
+        ruleContext.getExpander().withDataLocations().tokenized("nocompress_extensions");
 
     ImmutableList.Builder<String> additionalAaptOpts = ImmutableList.builder();
 

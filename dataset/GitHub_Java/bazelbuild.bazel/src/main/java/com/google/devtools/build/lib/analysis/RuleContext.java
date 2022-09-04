@@ -63,7 +63,6 @@ import com.google.devtools.build.lib.packages.Attribute.SplitTransition;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.ConfigurationFragmentPolicy;
-import com.google.devtools.build.lib.packages.ConfiguredAttributeMapper;
 import com.google.devtools.build.lib.packages.FileTarget;
 import com.google.devtools.build.lib.packages.FilesetEntry;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction;
@@ -251,7 +250,7 @@ public final class RuleContext extends TargetContext
   public Root getMiddlemanDirectory() {
     return getConfiguration().getMiddlemanDirectory(rule.getRepository());
   }
-
+  
   public Rule getRule() {
     return rule;
   }
@@ -748,8 +747,7 @@ public final class RuleContext extends TargetContext
     Attribute attributeDefinition = attributes().getAttributeDefinition(attributeName);
     @SuppressWarnings("unchecked") // Attribute.java doesn't have the BuildOptions symbol.
     SplitTransition<BuildOptions> transition =
-        (SplitTransition<BuildOptions>) attributeDefinition.getSplitTransition(
-            ConfiguredAttributeMapper.of(rule, configConditions));
+        (SplitTransition<BuildOptions>) attributeDefinition.getSplitTransition(rule);
     List<ConfiguredTarget> deps = targetMap.get(attributeName);
 
     List<BuildOptions> splitOptions = transition.split(getConfiguration().getOptions());

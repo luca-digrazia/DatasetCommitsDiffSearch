@@ -40,7 +40,6 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
-import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import java.util.List;
 import javax.annotation.Nullable;
@@ -512,17 +511,9 @@ public class JavaSkylarkCommon {
     ConfiguredTarget javaToolchainConfigTarget =
         (ConfiguredTarget) skylarkRuleContext.getAttr().getValue(javaToolchainAttr);
     JavaToolchainProvider toolchain = getJavaToolchainProvider(javaToolchainConfigTarget);
-    ImmutableList<String> javacOptsFromAttr;
-    if (ruleContext.getRule().isAttrDefined("javacopts", Type.STRING_LIST)) {
-      javacOptsFromAttr = ruleContext.getExpander().withDataLocations().tokenized("javacopts");
-    } else {
-      // This can also be called from Skylark rules that may or may not have an appropriate
-      // javacopts attribute.
-      javacOptsFromAttr = ImmutableList.of();
-    }
     return ImmutableList.copyOf(Iterables.concat(
         toolchain.getJavacOptions(),
-        javacOptsFromAttr));
+        ruleContext.getExpander().withDataLocations().tokenized("javacopts")));
   }
 
   @SkylarkCallable(

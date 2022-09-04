@@ -47,7 +47,6 @@ public class ApkActionsBuilder {
   private Artifact signedApk;
   private boolean zipalignApk = false;
   private Artifact signingKey;
-  private String artifactLocation;
 
   private final String apkName;
 
@@ -135,12 +134,6 @@ public class ApkActionsBuilder {
     return this;
   }
 
-  /** Sets the output APK instead of creating with a static/standard path. */
-  public ApkActionsBuilder setArtifactLocationDirectory(String artifactLocation) {
-    this.artifactLocation = artifactLocation;
-    return this;
-  }
-
   /** Registers the actions needed to build the requested APKs in the rule context. */
   public void registerActions(RuleContext ruleContext) {
     boolean useSingleJarApkBuilder =
@@ -151,7 +144,7 @@ public class ApkActionsBuilder {
     Artifact intermediateUnsignedApk =
         unsignedApk != null
             ? unsignedApk
-            : getApkArtifact(ruleContext, "unsigned_" + signedApk.getFilename());
+            : AndroidBinary.getDxArtifact(ruleContext, "unsigned_" + signedApk.getFilename());
     if (useSingleJarApkBuilder) {
       buildApk(ruleContext, intermediateUnsignedApk);
     } else {
@@ -163,7 +156,8 @@ public class ApkActionsBuilder {
       // Zipalignment is performed before signing. So if a zipaligned APK is requested, we need an
       // intermediate zipaligned-but-not-signed apk artifact.
       if (zipalignApk) {
-        apkToSign = getApkArtifact(ruleContext, "zipaligned_" + signedApk.getFilename());
+        apkToSign =
+            AndroidBinary.getDxArtifact(ruleContext, "zipaligned_" + signedApk.getFilename());
         zipalignApk(ruleContext, intermediateUnsignedApk, apkToSign);
       }
       signApk(ruleContext, apkToSign, signedApk);
@@ -241,8 +235,8 @@ public class ApkActionsBuilder {
 
   /** Registers generating actions for {@code outApk} that build an unsigned APK using SingleJar. */
   private void buildApk(RuleContext ruleContext, Artifact outApk) {
-    Artifact compressedApk = getApkArtifact(ruleContext, "compressed_" + outApk.getFilename());
-
+    Artifact compressedApk =
+        AndroidBinary.getDxArtifact(ruleContext, "compressed_" + outApk.getFilename());
     SpawnAction.Builder compressedApkActionBuilder =
         new SpawnAction.Builder()
             .setMnemonic("ApkBuilder")
@@ -301,7 +295,7 @@ public class ApkActionsBuilder {
     if (javaResourceZip != null) {
       // The javaResourceZip contains many files that are unwanted in the APK such as .class files.
       Artifact extractedJavaResourceZip =
-          getApkArtifact(ruleContext, "extracted_" + javaResourceZip.getFilename());
+          AndroidBinary.getDxArtifact(ruleContext, "extracted_" + javaResourceZip.getFilename());
       ruleContext.registerAction(
           new SpawnAction.Builder()
               .setExecutable(resourceExtractor)
@@ -417,15 +411,6 @@ public class ApkActionsBuilder {
           .addTransitiveInputs(JavaHelper.getHostJavabaseInputs(ruleContext));
     } else {
       builder.setExecutable(singleJar);
-    }
-  }
-
-  private Artifact getApkArtifact(RuleContext ruleContext, String baseName) {
-    if (artifactLocation != null) {
-      return ruleContext.getUniqueDirectoryArtifact(artifactLocation, baseName,
-          ruleContext.getBinOrGenfilesDirectory());
-    } else {
-      return AndroidBinary.getDxArtifact(ruleContext, baseName);
     }
   }
 }
