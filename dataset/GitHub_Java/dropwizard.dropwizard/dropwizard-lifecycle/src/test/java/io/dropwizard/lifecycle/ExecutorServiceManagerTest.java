@@ -5,19 +5,24 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyZeroInteractions;
 import static org.mockito.Mockito.when;
 
 import java.util.concurrent.ExecutorService;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import io.dropwizard.util.Duration;
 
 public class ExecutorServiceManagerTest {
 
     private static final Duration TEST_DURATION = Duration.seconds(1L);
-    private final ExecutorService exec = mock(ExecutorService.class);
+    private final ExecutorService exec;
+
+    public ExecutorServiceManagerTest() {
+        // This is called before every test
+        this.exec = mock(ExecutorService.class);
+    }
 
     @Test
     public void testAccessors() {
@@ -41,7 +46,7 @@ public class ExecutorServiceManagerTest {
 
         test.start();
 
-        verifyNoInteractions(this.exec);
+        verifyZeroInteractions(this.exec);
 
         test.stop();
 
@@ -58,7 +63,7 @@ public class ExecutorServiceManagerTest {
 
         test.start();
 
-        verifyNoInteractions(this.exec);
+        verifyZeroInteractions(this.exec);
 
         test.stop();
 

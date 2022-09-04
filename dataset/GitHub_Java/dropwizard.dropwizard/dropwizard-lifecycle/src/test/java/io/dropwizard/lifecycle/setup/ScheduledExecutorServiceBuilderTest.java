@@ -1,41 +1,35 @@
 package io.dropwizard.lifecycle.setup;
 
-import com.codahale.metrics.InstrumentedThreadFactory;
-import com.codahale.metrics.MetricRegistry;
-import io.dropwizard.lifecycle.ExecutorServiceManager;
-import io.dropwizard.util.Duration;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
-import javax.annotation.Nullable;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import org.junit.After;
+import org.junit.Test;
+import org.mockito.ArgumentCaptor;
+
+import io.dropwizard.lifecycle.ExecutorServiceManager;
+import io.dropwizard.util.Duration;
 
 public class ScheduledExecutorServiceBuilderTest {
 
     private static final Duration DEFAULT_SHUTDOWN_PERIOD = Duration.seconds(5L);
 
     private final LifecycleEnvironment le;
-
-    @Nullable
     private ScheduledExecutorService execTracker;
 
     public ScheduledExecutorServiceBuilderTest() {
         this.execTracker = null;
         this.le = mock(LifecycleEnvironment.class);
-        when(le.getMetricRegistry()).thenReturn(new MetricRegistry());
     }
 
-    @AfterEach
-    void tearDown() {
+    @After
+    public void tearDown() {
         if (this.execTracker != null) {
             this.execTracker.shutdownNow();
 
@@ -53,7 +47,7 @@ public class ScheduledExecutorServiceBuilderTest {
     }
 
     @Test
-    void testBasicInvocation() {
+    public void testBasicInvocation() {
         final String poolName = this.getClass().getSimpleName();
 
         final ScheduledExecutorServiceBuilder test = new ScheduledExecutorServiceBuilder(this.le,
@@ -65,7 +59,6 @@ public class ScheduledExecutorServiceBuilderTest {
 
         final ScheduledThreadPoolExecutor castedExec = (ScheduledThreadPoolExecutor) this.execTracker;
         assertThat(castedExec.getRemoveOnCancelPolicy()).isFalse();
-        assertThat(castedExec.getThreadFactory()).isInstanceOf(InstrumentedThreadFactory.class);
 
         final ArgumentCaptor<ExecutorServiceManager> esmCaptor = ArgumentCaptor.forClass(ExecutorServiceManager.class);
         verify(this.le).manage(esmCaptor.capture());
@@ -77,7 +70,7 @@ public class ScheduledExecutorServiceBuilderTest {
     }
 
     @Test
-    void testRemoveOnCancelTrue() {
+    public void testRemoveOnCancelTrue() {
         final String poolName = this.getClass().getSimpleName();
 
         final ScheduledExecutorServiceBuilder test = new ScheduledExecutorServiceBuilder(this.le,
@@ -100,7 +93,7 @@ public class ScheduledExecutorServiceBuilderTest {
     }
 
     @Test
-    void testRemoveOnCancelFalse() {
+    public void testRemoveOnCancelFalse() {
         final String poolName = this.getClass().getSimpleName();
 
         final ScheduledExecutorServiceBuilder test = new ScheduledExecutorServiceBuilder(this.le,
@@ -123,7 +116,7 @@ public class ScheduledExecutorServiceBuilderTest {
     }
 
     @Test
-    void testPredefinedThreadFactory() {
+    public void testPredefinedThreadFactory() {
         final ThreadFactory tfactory = mock(ThreadFactory.class);
         final String poolName = this.getClass().getSimpleName();
 
@@ -136,7 +129,7 @@ public class ScheduledExecutorServiceBuilderTest {
 
         final ScheduledThreadPoolExecutor castedExec = (ScheduledThreadPoolExecutor) this.execTracker;
         assertThat(castedExec.getRemoveOnCancelPolicy()).isFalse();
-        assertThat(castedExec.getThreadFactory()).isInstanceOf(InstrumentedThreadFactory.class);
+        assertThat(castedExec.getThreadFactory()).isSameAs(tfactory);
 
         final ArgumentCaptor<ExecutorServiceManager> esmCaptor = ArgumentCaptor.forClass(ExecutorServiceManager.class);
         verify(this.le).manage(esmCaptor.capture());

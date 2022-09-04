@@ -1,20 +1,18 @@
 package io.dropwizard.lifecycle.setup;
 
-import io.dropwizard.lifecycle.ExecutorServiceManager;
-import io.dropwizard.util.Duration;
-
-import java.util.Locale;
-import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionHandler;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.atomic.AtomicLong;
+
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
+
+import io.dropwizard.lifecycle.ExecutorServiceManager;
+import io.dropwizard.util.Duration;
 
 public class ScheduledExecutorServiceBuilder {
 
-    private static final AtomicLong COUNT = new AtomicLong(0);
     private final LifecycleEnvironment environment;
     private final String nameFormat;
     private int poolSize;
@@ -34,18 +32,7 @@ public class ScheduledExecutorServiceBuilder {
     }
 
     public ScheduledExecutorServiceBuilder(LifecycleEnvironment environment, String nameFormat, boolean useDaemonThreads) {
-        this(environment, nameFormat, buildThreadFactory(nameFormat, useDaemonThreads));
-    }
-
-    private static ThreadFactory buildThreadFactory(String nameFormat, boolean daemon) {
-        return r -> {
-            final Thread thread = Executors.defaultThreadFactory().newThread(r);
-            if (nameFormat != null) {
-                thread.setName(String.format(Locale.ROOT, nameFormat, COUNT.incrementAndGet()));
-            }
-            thread.setDaemon(daemon);
-            return thread;
-        };
+        this(environment, nameFormat, new ThreadFactoryBuilder().setNameFormat(nameFormat).setDaemon(useDaemonThreads).build());
     }
 
     public ScheduledExecutorServiceBuilder threads(int threads) {
@@ -69,7 +56,7 @@ public class ScheduledExecutorServiceBuilder {
     }
 
     public ScheduledExecutorServiceBuilder removeOnCancelPolicy(boolean removeOnCancel) {
-        this.removeOnCancel = removeOnCancel;
+        this.removeOnCancel = Boolean.valueOf(removeOnCancel);
         return this;
     }
 
