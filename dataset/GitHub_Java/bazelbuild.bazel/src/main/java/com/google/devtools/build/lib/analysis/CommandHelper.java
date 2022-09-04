@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.actions.RunfilesSupplier;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.util.OS;
@@ -138,7 +137,7 @@ public final class CommandHelper {
   /**
    * Output executable files from the 'tools' attribute.
    */
-  private final NestedSet<Artifact> resolvedTools;
+  private final SkylarkList<Artifact> resolvedTools;
 
   /**
    * Creates a {@link CommandHelper}.
@@ -155,7 +154,7 @@ public final class CommandHelper {
 
     this.ruleContext = ruleContext;
 
-    NestedSetBuilder<Artifact> resolvedToolsBuilder = NestedSetBuilder.stableOrder();
+    ImmutableList.Builder<Artifact> resolvedToolsBuilder = ImmutableList.builder();
     ImmutableList.Builder<RunfilesSupplier> toolsRunfilesBuilder = ImmutableList.builder();
     Map<Label, Collection<Artifact>> tempLabelMap = new HashMap<>();
 
@@ -168,7 +167,7 @@ public final class CommandHelper {
         Label label = AliasProvider.getDependencyLabel(dep);
         MiddlemanProvider toolMiddleman = dep.getProvider(MiddlemanProvider.class);
         if (toolMiddleman != null) {
-          resolvedToolsBuilder.addTransitive(toolMiddleman.getMiddlemanArtifact());
+          resolvedToolsBuilder.addAll(toolMiddleman.getMiddlemanArtifact());
           // It is not obviously correct to skip potentially adding getFilesToRun of the
           // FilesToRunProvider. However, for all tools that we know of that provide a middleman,
           // the middleman is equivalent to the list of files coming out of getFilesToRun().
@@ -183,8 +182,9 @@ public final class CommandHelper {
           continue;
         }
 
-        NestedSet<Artifact> files = tool.getFilesToRun();
-        resolvedToolsBuilder.addTransitive(files);
+        // TODO(djasper): This is flattening the NestedSet coming out of getFilesToRun(). Don't.
+        Iterable<Artifact> files = tool.getFilesToRun();
+        resolvedToolsBuilder.addAll(files);
         Artifact executableArtifact = tool.getExecutable();
         // If the label has an executable artifact add that to the multimaps.
         if (executableArtifact != null) {
@@ -198,7 +198,7 @@ public final class CommandHelper {
       }
     }
 
-    this.resolvedTools = resolvedToolsBuilder.build();
+    this.resolvedTools = SkylarkList.createImmutable(resolvedToolsBuilder.build());
     this.toolsRunfilesSuppliers = SkylarkList.createImmutable(toolsRunfilesBuilder.build());
     ImmutableMap.Builder<Label, ImmutableCollection<Artifact>> labelMapBuilder =
         ImmutableMap.builder();
@@ -208,7 +208,7 @@ public final class CommandHelper {
     this.labelMap = labelMapBuilder.build();
   }
 
-  public NestedSet<Artifact> getResolvedTools() {
+  public SkylarkList<Artifact> getResolvedTools() {
     return resolvedTools;
   }
 
