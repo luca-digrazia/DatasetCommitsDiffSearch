@@ -1,9 +1,8 @@
 package com.yammer.dropwizard.testing;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.yammer.dropwizard.json.ObjectMapperFactory;
+import com.yammer.dropwizard.json.Json;
+import org.codehaus.jackson.JsonNode;
+import org.codehaus.jackson.type.TypeReference;
 
 import java.io.IOException;
 
@@ -24,7 +23,7 @@ import static com.yammer.dropwizard.testing.FixtureHelpers.fixture;
  * </code></pre>
  */
 public class JsonHelpers {
-    private static final ObjectMapper MAPPER = new ObjectMapperFactory().build();
+    private static final Json JSON = new Json();
 
     private JsonHelpers() { /* singleton */ }
 
@@ -35,8 +34,8 @@ public class JsonHelpers {
      * @return {@code object} as a JSON string
      * @throws IllegalArgumentException if there is an error encoding {@code object}
      */
-    public static String asJson(Object object) throws IOException {
-        return MAPPER.writeValueAsString(object);
+    public static String asJson(Object object) throws IllegalArgumentException {
+        return JSON.writeValueAsString(object);
     }
 
     /**
@@ -49,7 +48,7 @@ public class JsonHelpers {
      * @throws IOException if there is an error reading {@code json} as an instance of {@code T}
      */
     public static <T> T fromJson(String json, Class<T> klass) throws IOException {
-        return MAPPER.readValue(json, klass);
+        return JSON.readValue(json, klass);
     }
 
     /**
@@ -62,7 +61,7 @@ public class JsonHelpers {
      * @throws IOException if there is an error reading {@code json} as an instance of {@code T}
      */
     public static <T> T fromJson(String json, TypeReference<T> reference) throws IOException {
-        return MAPPER.readValue(json, reference);
+        return JSON.readValue(json, reference);
     }
 
     /**
@@ -73,6 +72,6 @@ public class JsonHelpers {
      * @throws IOException if there is an error parsing {@code filename}
      */
     public static String jsonFixture(String filename) throws IOException {
-        return MAPPER.writeValueAsString(MAPPER.readValue(fixture(filename), JsonNode.class));
+        return JSON.writeValueAsString(JSON.readValue(fixture(filename), JsonNode.class));
     }
 }
