@@ -178,12 +178,14 @@ public final class ParameterFileWriteAction extends AbstractFileWriteAction {
   }
 
   @Override
-  protected void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp)
+  protected String computeKey(ActionKeyContext actionKeyContext)
       throws CommandLineExpansionException {
-    fp.addString(GUID);
-    fp.addString(String.valueOf(makeExecutable));
-    fp.addString(type.toString());
-    fp.addString(charset.toString());
-    commandLine.addToFingerprint(actionKeyContext, fp);
+    Fingerprint f = new Fingerprint();
+    f.addString(GUID);
+    f.addString(String.valueOf(makeExecutable));
+    f.addString(type.toString());
+    f.addString(charset.toString());
+    commandLine.addToFingerprint(actionKeyContext, f);
+    return f.hexDigestAndReset();
   }
 }

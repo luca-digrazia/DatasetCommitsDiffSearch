@@ -102,6 +102,25 @@ public final class CustomCommandLine extends CommandLine {
     abstract void addToFingerprint(ActionKeyContext actionKeyContext, Fingerprint fingerprint);
   }
 
+  /** Deprecated. Do not use. TODO(b/64841073): Remove this */
+  @Deprecated
+  public abstract static class CustomMultiArgv extends StandardArgvFragment {
+
+    @Override
+    void eval(ImmutableList.Builder<String> builder) {
+      builder.addAll(argv());
+    }
+
+    public abstract Iterable<String> argv();
+
+    @Override
+    final void addToFingerprint(ActionKeyContext actionKeyContext, Fingerprint fingerprint) {
+      for (String arg : argv()) {
+        fingerprint.addString(arg);
+      }
+    }
+  }
+
   /**
    * An ArgvFragment that expands a collection of objects in a user-specified way.
    *
@@ -993,6 +1012,13 @@ public final class CustomCommandLine extends CommandLine {
      */
     public Builder addExecPaths(@CompileTimeConstant String arg, VectorArg<Artifact> vectorArg) {
       return addVectorArgInternal(arg, vectorArg);
+    }
+
+    public Builder addCustomMultiArgv(@Nullable CustomMultiArgv arg) {
+      if (arg != null) {
+        arguments.add(arg);
+      }
+      return this;
     }
 
     /**
