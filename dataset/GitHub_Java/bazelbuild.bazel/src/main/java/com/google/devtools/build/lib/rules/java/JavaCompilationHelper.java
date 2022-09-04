@@ -25,6 +25,7 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.AnalysisUtils;
+import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
@@ -40,6 +41,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration.JavaClasspathMode;
+import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
@@ -58,6 +60,7 @@ public final class JavaCompilationHelper {
   private final RuleContext ruleContext;
   private final JavaToolchainProvider javaToolchain;
   private final JavaRuntimeInfo hostJavabase;
+  private final Iterable<Artifact> jacocoInstrumentation;
   private final JavaTargetAttributes.Builder attributes;
   private JavaTargetAttributes builtAttributes;
   private final ImmutableList<String> customJavacOpts;
@@ -80,11 +83,13 @@ public final class JavaCompilationHelper {
       JavaTargetAttributes.Builder attributes,
       JavaToolchainProvider javaToolchainProvider,
       JavaRuntimeInfo hostJavabase,
+      Iterable<Artifact> jacocoInstrumentation,
       ImmutableList<Artifact> additionalJavaBaseInputs,
       boolean disableStrictDeps) {
     this.ruleContext = ruleContext;
     this.javaToolchain = Preconditions.checkNotNull(javaToolchainProvider);
     this.hostJavabase = Preconditions.checkNotNull(hostJavabase);
+    this.jacocoInstrumentation = jacocoInstrumentation;
     this.attributes = attributes;
     this.customJavacOpts = javacOpts;
     this.customJavacJvmOpts = javaToolchain.getJvmOptions();
@@ -102,7 +107,8 @@ public final class JavaCompilationHelper {
       ImmutableList<String> javacOpts,
       JavaTargetAttributes.Builder attributes,
       JavaToolchainProvider javaToolchainProvider,
-      JavaRuntimeInfo hostJavabase) {
+      JavaRuntimeInfo hostJavabase,
+      Iterable<Artifact> jacocoInstrumentation) {
     this(
         ruleContext,
         semantics,
@@ -110,6 +116,7 @@ public final class JavaCompilationHelper {
         attributes,
         javaToolchainProvider,
         hostJavabase,
+        jacocoInstrumentation,
         ImmutableList.<Artifact>of(),
         false);
   }
@@ -125,7 +132,8 @@ public final class JavaCompilationHelper {
         javacOpts,
         attributes,
         JavaToolchainProvider.from(ruleContext),
-        JavaRuntimeInfo.forHost(ruleContext));
+        JavaRuntimeInfo.forHost(ruleContext),
+        getInstrumentationJars(ruleContext));
   }
 
   public JavaCompilationHelper(
@@ -142,6 +150,7 @@ public final class JavaCompilationHelper {
         attributes,
         JavaToolchainProvider.from(ruleContext),
         JavaRuntimeInfo.forHost(ruleContext),
+        getInstrumentationJars(ruleContext),
         additionalJavaBaseInputs,
         disableStrictDeps);
   }
@@ -233,6 +242,7 @@ public final class JavaCompilationHelper {
     builder.setOutputDepsProto(getOutputDepsProtoPath(outputJar));
     builder.setAdditionalOutputs(attributes.getAdditionalOutputs());
     builder.setMetadata(instrumentationMetadataJar);
+    builder.setInstrumentationJars(jacocoInstrumentation);
     builder.setSourceFiles(attributes.getSourceFiles());
     builder.setSourceJars(attributes.getSourceJars());
     builder.setJavacOpts(customJavacOpts);
@@ -821,6 +831,17 @@ public final class JavaCompilationHelper {
   private ImmutableList<Artifact> getTranslations() {
     translationsFrozen = true;
     return ImmutableList.copyOf(translations);
+  }
+
+  /** Returns the instrumentation jar in the given semantics. */
+  public static Iterable<Artifact> getInstrumentationJars(RuleContext ruleContext) {
+    TransitiveInfoCollection instrumentationTarget =
+        ruleContext.getPrerequisite("$jacoco_instrumentation", Mode.HOST);
+    if (instrumentationTarget == null) {
+      return ImmutableList.<Artifact>of();
+    }
+    return FileType.filter(
+        instrumentationTarget.getProvider(FileProvider.class).getFilesToBuild(), JavaSemantics.JAR);
   }
 
   /**
