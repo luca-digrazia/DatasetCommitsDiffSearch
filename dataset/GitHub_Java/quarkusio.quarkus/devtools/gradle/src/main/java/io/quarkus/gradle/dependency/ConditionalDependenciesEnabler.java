@@ -7,7 +7,6 @@ import java.nio.file.FileSystem;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -26,7 +25,6 @@ import org.gradle.api.artifacts.ResolvedArtifact;
 import io.quarkus.bootstrap.BootstrapConstants;
 import io.quarkus.bootstrap.model.AppArtifactCoords;
 import io.quarkus.bootstrap.model.AppArtifactKey;
-import io.quarkus.bootstrap.util.BootstrapUtils;
 import io.quarkus.bootstrap.util.ZipUtils;
 
 public class ConditionalDependenciesEnabler {
@@ -193,21 +191,20 @@ public class ConditionalDependenciesEnabler {
         }
         AppArtifactCoords deploymentModule = AppArtifactCoords
                 .fromString(extensionProperties.getProperty(BootstrapConstants.PROP_DEPLOYMENT_ARTIFACT));
-        final List<Dependency> conditionalDependencies;
+        List<Dependency> conditionalDependencies = new ArrayList<>();
         if (extensionProperties.containsKey(BootstrapConstants.CONDITIONAL_DEPENDENCIES)) {
-            final String[] deps = BootstrapUtils
-                    .splitByWhitespace(extensionProperties.getProperty(BootstrapConstants.CONDITIONAL_DEPENDENCIES));
-            conditionalDependencies = new ArrayList<>(deps.length);
-            for (String conditionalDep : deps) {
+            String conditionalDeps = extensionProperties.get(BootstrapConstants.CONDITIONAL_DEPENDENCIES).toString();
+            for (String conditionalDep : conditionalDeps.split(",")) {
                 conditionalDependencies.add(DependencyUtils.create(project.getDependencies(), conditionalDep));
             }
-        } else {
-            conditionalDependencies = Collections.emptyList();
         }
-
-        final AppArtifactKey[] constraints = BootstrapUtils
-                .parseDependencyCondition(extensionProperties.getProperty(BootstrapConstants.DEPENDENCY_CONDITION));
-        return new ExtensionDependency(exentionId, deploymentModule, conditionalDependencies,
-                constraints == null ? Collections.emptyList() : Arrays.asList(constraints));
+        List<AppArtifactKey> constraints = new ArrayList<>();
+        if (extensionProperties.containsKey(BootstrapConstants.DEPENDENCY_CONDITION)) {
+            String constraintDeps = extensionProperties.getProperty(BootstrapConstants.DEPENDENCY_CONDITION);
+            for (String constraint : constraintDeps.split(",")) {
+                constraints.add(AppArtifactKey.fromString(constraint));
+            }
+        }
+        return new ExtensionDependency(exentionId, deploymentModule, conditionalDependencies, constraints);
     }
 }
