@@ -80,9 +80,7 @@ public class BuildTimeGenerator {
         Iterator<ShamrockSetup> loader = ServiceLoader.load(ShamrockSetup.class, cl).iterator();
         SetupContextImpl setupContext = new SetupContextImpl();
         while (loader.hasNext()) {
-            final ShamrockSetup setup = loader.next();
-            log.log(Level.FINE, "Loading Shamrock setup extension: " + setup.getClass());
-            setup.setup(setupContext);
+            loader.next().setup(setupContext);
         }
         setupContext.resourceProcessors.sort(Comparator.comparingInt(ResourceProcessor::getPriority));
         this.processors = Collections.unmodifiableList(setupContext.resourceProcessors);
