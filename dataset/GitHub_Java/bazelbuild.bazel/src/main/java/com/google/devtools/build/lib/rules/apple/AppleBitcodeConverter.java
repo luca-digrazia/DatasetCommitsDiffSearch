@@ -15,12 +15,10 @@
 package com.google.devtools.build.lib.rules.apple;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.rules.apple.AppleCommandLineOptions.AppleBitcodeMode;
 import com.google.devtools.common.options.Converter;
 import com.google.devtools.common.options.OptionsParsingException;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -28,7 +26,7 @@ import java.util.Map;
  * platform type and the bitcode mode to apply to builds targeting that platform.
  */
 public final class AppleBitcodeConverter
-    implements Converter<List<Map.Entry<ApplePlatform.PlatformType, AppleBitcodeMode>>> {
+    implements Converter<Map.Entry<ApplePlatform.PlatformType, AppleBitcodeMode>> {
   /** Used to convert Bitcode mode strings to their enum value. */
   private static final AppleBitcodeMode.Converter MODE_CONVERTER = new AppleBitcodeMode.Converter();
 
@@ -46,8 +44,8 @@ public final class AppleBitcodeConverter
       "Apple Bitcode mode must be in the form " + TYPE_DESCRIPTION;
 
   @Override
-  public ImmutableList<Map.Entry<ApplePlatform.PlatformType, AppleBitcodeMode>> convert(
-      String input) throws OptionsParsingException {
+  public Map.Entry<ApplePlatform.PlatformType, AppleBitcodeMode> convert(String input)
+      throws OptionsParsingException {
     ApplePlatform.PlatformType platformType;
     AppleBitcodeMode mode;
 
@@ -67,7 +65,7 @@ public final class AppleBitcodeConverter
       mode = convertAppleBitcodeMode(modeName);
     }
 
-    return ImmutableList.of(Maps.immutableEntry(platformType, mode));
+    return Maps.immutableEntry(platformType, mode);
   }
 
   @Override
