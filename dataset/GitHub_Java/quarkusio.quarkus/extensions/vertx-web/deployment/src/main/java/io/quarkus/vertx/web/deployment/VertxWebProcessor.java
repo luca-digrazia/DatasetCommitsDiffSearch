@@ -273,9 +273,6 @@ class VertxWebProcessor {
                 String[] produces = producesValue.asStringArray();
                 String[] consumes = consumesValue.asStringArray();
 
-                AnnotationValue typeValue = route.value(VALUE_TYPE);
-                Route.HandlerType routeHandlerType = typeValue == null ? Route.HandlerType.NORMAL
-                        : Route.HandlerType.from(typeValue.asEnum());
                 HttpMethod[] methods = Arrays.stream(methodsValue.asEnumArray()).map(HttpMethod::valueOf)
                         .toArray(HttpMethod[]::new);
                 Integer order = orderValue.asInt();
@@ -295,12 +292,9 @@ class VertxWebProcessor {
                         }
                         path = prefixedPath.toString();
                     } else {
-                        if (routeHandlerType != Route.HandlerType.FAILURE) {
-                            // De-camel-case the name and then join the segments with hyphens
-                            path = pathValue != null ? pathValue.asString() : dashify(businessMethod.getMethod().name());
-                        }
+                        path = pathValue != null ? pathValue.asString() : dashify(businessMethod.getMethod().name());
                     }
-                    if (path != null && !path.startsWith(SLASH)) {
+                    if (!path.startsWith(SLASH)) {
                         path = SLASH + path;
                     }
                 } else {
@@ -314,20 +308,22 @@ class VertxWebProcessor {
                     consumes = baseConsumes;
                 }
 
+                AnnotationValue typeValue = route.value(VALUE_TYPE);
                 HandlerType handlerType = HandlerType.NORMAL;
                 if (typeValue != null) {
-                    switch (routeHandlerType) {
-                        case NORMAL:
+                    String typeString = typeValue.asEnum();
+                    switch (typeString) {
+                        case "NORMAL":
                             handlerType = HandlerType.NORMAL;
                             break;
-                        case BLOCKING:
+                        case "BLOCKING":
                             handlerType = HandlerType.BLOCKING;
                             break;
-                        case FAILURE:
+                        case "FAILURE":
                             handlerType = HandlerType.FAILURE;
                             break;
                         default:
-                            throw new IllegalStateException("Unknown type " + routeHandlerType);
+                            throw new IllegalStateException("Unknown type " + typeString);
                     }
                 }
 
@@ -388,6 +384,8 @@ class VertxWebProcessor {
         }
 
         detectConflictingRoutes(matchers);
+
+        recorder.clearCacheOnShutdown(shutdown);
     }
 
     @BuildStep(onlyIf = IsDevelopment.class)
@@ -520,7 +518,7 @@ class VertxWebProcessor {
                 + HashUtil.sha1(sigBuilder.toString() + hashSuffix);
 
         ClassCreator invokerCreator = ClassCreator.builder().classOutput(classOutput).className(generatedName)
-                .superClass(RouteHandler.class).build();
+                .interfaces(RouteHandler.class).build();
 
         // Initialized state
         FieldCreator beanField = invokerCreator.getFieldCreator("bean", InjectableBean.class)
@@ -556,7 +554,7 @@ class VertxWebProcessor {
             FieldCreator containerField, FieldCreator validatorField) {
         MethodCreator constructor = invokerCreator.getMethodCreator("<init>", void.class);
         // Invoke super()
-        constructor.invokeSpecialMethod(Methods.ROUTE_HANDLER_CONSTRUCTOR, constructor.getThis());
+        constructor.invokeSpecialMethod(Methods.OBJECT_CONSTRUCTOR, constructor.getThis());
 
         ResultHandle containerHandle = constructor
                 .invokeStaticMethod(Methods.ARC_CONTAINER);
