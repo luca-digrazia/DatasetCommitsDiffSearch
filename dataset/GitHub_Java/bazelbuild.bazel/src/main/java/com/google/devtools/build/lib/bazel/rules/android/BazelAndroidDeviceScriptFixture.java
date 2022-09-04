@@ -1,4 +1,4 @@
-// Copyright 2017 The Bazel Authors. All rights reserved.
+// Copyright 2019 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,12 +14,11 @@
 
 package com.google.devtools.build.lib.bazel.rules.android;
 
-import com.google.devtools.build.lib.bazel.rules.java.BazelJavaSemantics;
-import com.google.devtools.build.lib.rules.android.AarImport;
+import com.google.devtools.build.lib.rules.android.AndroidDeviceScriptFixture;
 
-/** Implementation of {@code aar_import} with Bazel semantics. */
-public class BazelAarImport extends AarImport {
-  public BazelAarImport() {
-    super(BazelJavaSemantics.INSTANCE, BazelAndroidSemantics.INSTANCE);
+/** Implementation of {@code android_device_script_fixture} with Bazel semantics. */
+public class BazelAndroidDeviceScriptFixture extends AndroidDeviceScriptFixture {
+  public BazelAndroidDeviceScriptFixture() {
+    super(BazelAndroidSemantics.INSTANCE);
   }
 }
