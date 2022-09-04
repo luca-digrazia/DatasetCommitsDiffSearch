@@ -22,6 +22,7 @@ import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.collect.compacthashset.CompactHashSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadHostile;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
@@ -35,10 +36,10 @@ import java.util.Set;
  * <p>Despite the "list" name, it is an error for the same element to appear multiple times in the
  * list. Users are responsible for not trying to add the same element to a GroupedList twice.
  *
- * <p>Groups are implemented as lists to minimize memory use. However, {@link #equals} is defined to
- * treat groups as unordered.
+ * <p>Groups are implemented as lists to minimize memory use. However, {@link #equals} is defined
+ * to treat groups as unordered.
  */
-public class GroupedList<T> implements Iterable<List<T>> {
+public class GroupedList<T> implements Iterable<Collection<T>> {
   // Total number of items in the list. At least elements.size(), but might be larger if there are
   // any nested lists.
   private int size = 0;
@@ -109,9 +110,11 @@ public class GroupedList<T> implements Iterable<List<T>> {
 
   // Use with caution as there are no checks in place for the integrity of the resulting object
   // (no de-duping).
-  public void appendGroup(List<? extends T> group) {
+  public void appendGroup(Collection<? extends T> group) {
     // Do a check to make sure we don't have lists here. Note that if group is empty,
     // Iterables.getFirst will return null, and null is not instanceof List.
+    Preconditions.checkState(!(Iterables.getFirst(group, null) instanceof List),
+        "Cannot make grouped list of lists: %s", group);
     switch (group.size()) {
       case 0:
         return;
@@ -122,8 +125,6 @@ public class GroupedList<T> implements Iterable<List<T>> {
         elements.add(group);
         break;
     }
-    Preconditions.checkState(
-        !(group.get(0) instanceof List), "Cannot make grouped list of lists: %s", group);
     size += group.size();
   }
 
@@ -392,7 +393,7 @@ public class GroupedList<T> implements Iterable<List<T>> {
    * iterator is needed here because, to optimize memory, we store single-element lists as elements
    * internally, and so they must be wrapped before they're returned.
    */
-  private class GroupedIterator implements Iterator<List<T>> {
+  private class GroupedIterator implements Iterator<Collection<T>> {
     private final Iterator<Object> iter = elements.iterator();
 
     @Override
@@ -402,7 +403,7 @@ public class GroupedList<T> implements Iterable<List<T>> {
 
     @SuppressWarnings("unchecked") // Cast of Object to List<T> or T.
     @Override
-    public List<T> next() {
+    public Collection<T> next() {
       Object obj = iter.next();
       if (obj instanceof List) {
         return (List<T>) obj;
@@ -412,7 +413,7 @@ public class GroupedList<T> implements Iterable<List<T>> {
   }
 
   @Override
-  public Iterator<List<T>> iterator() {
+  public Iterator<Collection<T>> iterator() {
     return new GroupedIterator();
   }
 
@@ -473,7 +474,7 @@ public class GroupedList<T> implements Iterable<List<T>> {
      * goes in a group of its own.
      */
     public void add(E elt) {
-      elements.add(Preconditions.checkNotNull(elt, "Null add of elt: %s", this));
+      elements.add(Preconditions.checkNotNull(elt, "%s %s", elt, this));
       if (currentGroup == null) {
         groupedList.add(elt);
       } else {
@@ -499,6 +500,16 @@ public class GroupedList<T> implements Iterable<List<T>> {
     public void startGroup() {
       Preconditions.checkState(currentGroup == null, this);
       currentGroup = new ArrayList<>();
+    }
+
+    /**
+     * Starts a group with an initial capacity. All elements added until {@link #endGroup} will be
+     * in the same group. Each call of startGroup must be paired with a following {@link #endGroup}
+     * call. Any duplicate elements added to this group will be silently deduplicated.
+     */
+    public void startGroup(int expectedGroupSize) {
+      Preconditions.checkState(currentGroup == null, this);
+      currentGroup = new ArrayList<>(expectedGroupSize);
     }
 
     /** Ends a group started with {@link #startGroup}. */
