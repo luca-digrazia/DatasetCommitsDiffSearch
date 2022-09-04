@@ -116,6 +116,7 @@ public final class CcCommon {
 
   public static final ImmutableSet<String> ALL_LINK_ACTIONS =
       ImmutableSet.of(
+          Link.LinkTargetType.INTERFACE_DYNAMIC_LIBRARY.getActionName(),
           Link.LinkTargetType.DYNAMIC_LIBRARY.getActionName(),
           Link.LinkTargetType.NODEPS_DYNAMIC_LIBRARY.getActionName(),
           LinkTargetType.EXECUTABLE.getActionName());
@@ -704,7 +705,6 @@ public final class CcCommon {
       ImmutableSet<String> requestedFeatures,
       ImmutableSet<String> unsupportedFeatures,
       CcToolchainProvider toolchain) {
-    ImmutableSet.Builder<String> allRequestedFeaturesBuilder = ImmutableSet.builder();
     ImmutableSet.Builder<String> unsupportedFeaturesBuilder = ImmutableSet.builder();
     unsupportedFeaturesBuilder.addAll(unsupportedFeatures);
     unsupportedFeaturesBuilder.addAll(ruleContext.getDisabledFeatures());
@@ -717,13 +717,8 @@ public final class CcCommon {
     if (toolchain.getCcCompilationContextInfo().getCppModuleMap() == null) {
       unsupportedFeaturesBuilder.add(CppRuleClasses.MODULE_MAPS);
     }
-    if (toolchain.supportsEmbeddedRuntimes()) {
-      allRequestedFeaturesBuilder.add(CppRuleClasses.STATIC_LINK_CPP_RUNTIMES);
-    } else {
-      unsupportedFeaturesBuilder.add(CppRuleClasses.STATIC_LINK_CPP_RUNTIMES);
-    }
-
     ImmutableSet<String> allUnsupportedFeatures = unsupportedFeaturesBuilder.build();
+    ImmutableSet.Builder<String> allRequestedFeaturesBuilder = ImmutableSet.builder();
 
     // If STATIC_LINK_MSVCRT feature isn't specified by user, we add DYNAMIC_LINK_MSVCRT_* feature
     // according to compilation mode.
